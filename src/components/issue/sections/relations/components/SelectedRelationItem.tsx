@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { X, User, Circle, Clock, CheckCircle2, XCircle, AlertCircle, ArrowUp } from "lucide-react";
+import { X, Circle, Clock, CheckCircle2, XCircle, AlertCircle, ArrowUp } from "lucide-react";
 import type { RelationItem, IssueRelationType } from "../types/relation";
 import { cn } from "@/lib/utils";
 import { ISSUE_TYPE_CONFIG, type IssueType } from "@/constants/issue-types";
@@ -180,18 +180,7 @@ export function SelectedRelationItem({
 
       {/* Assignee */}
       <div className="flex items-center w-6 mr-2 flex-shrink-0">
-        {item.assignee ? (
-          <Avatar className="h-5 w-5">
-            <AvatarImage src={item.assignee.image || undefined} />
-            <AvatarFallback className="text-xs bg-collab-600 text-white border-none">
-              {item.assignee.name?.charAt(0)?.toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-        ) : (
-          <div className="h-5 w-5 rounded-full bg-collab-800 border border-collab-600 flex items-center justify-center">
-            <User className="h-2.5 w-2.5 text-collab-500" />
-          </div>
-        )}
+        <UserAvatar user={item.assignee} size="sm" />
       </div>
 
       {/* Relation Type Selector */}

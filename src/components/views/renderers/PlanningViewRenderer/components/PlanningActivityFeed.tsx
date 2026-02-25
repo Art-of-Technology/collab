@@ -16,7 +16,7 @@ import {
   Filter
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Button } from '@/components/ui/button';
 import { IssueDetailModal } from '@/components/issue/IssueDetailModal';
 import type { IssueMovement, MovementType } from '../types';
@@ -246,11 +246,7 @@ function TimelineItem({ activity, isFirst, isLast, onOpenModal }: TimelineItemPr
           {/* User */}
           {activity.userName && (
             <div className="flex items-center gap-1">
-              <Avatar className="h-4 w-4">
-                <AvatarFallback className="bg-collab-600 text-[8px] text-collab-500">
-                  {activity.userName.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
+              <UserAvatar user={{ name: activity.userName }} size="xs" />
               <span className="text-[10px] text-collab-500/60">{activity.userName}</span>
             </div>
           )}

@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, Shield, UserCheck } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 
 async function getUsers() {
   const users = await prisma.user.findMany({
@@ -88,12 +88,7 @@ export default async function AdminUsersPage() {
                 className="flex items-center justify-between p-3 rounded-lg border border-collab-700 hover:bg-collab-700/50 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <Avatar className="h-9 w-9">
-                    {user.image && <AvatarImage src={user.image} />}
-                    <AvatarFallback className="bg-collab-700 text-white text-sm">
-                      {user.name?.charAt(0)?.toUpperCase() || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar user={user} size="lg" />
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-white">{user.name || 'Unknown'}</span>

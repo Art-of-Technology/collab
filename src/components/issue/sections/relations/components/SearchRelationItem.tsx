@@ -1,7 +1,7 @@
 "use client";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Check, User, Circle, Clock, CheckCircle2, XCircle, AlertCircle, ArrowUp, ArrowDown, ChevronRight } from "lucide-react";
+import { UserAvatar } from '@/components/ui/user-avatar';
+import { Check, Circle, Clock, CheckCircle2, XCircle, AlertCircle, ArrowUp, ArrowDown, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import type { SearchRelationItemProps } from "../types/relation";
 import { cn } from "@/lib/utils";
@@ -175,18 +175,7 @@ export function SearchRelationItem({
 
       {/* Assignee */}
       <div className="flex items-center w-6 mr-2 flex-shrink-0">
-        {item.assignee ? (
-          <Avatar className="h-5 w-5">
-            <AvatarImage src={item.assignee.image || undefined} />
-            <AvatarFallback className="text-xs bg-collab-600 text-white border-none">
-              {item.assignee.name?.charAt(0)?.toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-        ) : (
-          <div className="h-5 w-5 rounded-full bg-collab-800 border border-collab-600 flex items-center justify-center">
-            <User className="h-2.5 w-2.5 text-collab-500" />
-          </div>
-        )}
+        <UserAvatar user={item.assignee} size="sm" />
       </div>
 
       {/* Updated Date */}

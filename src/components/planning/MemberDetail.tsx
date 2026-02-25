@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { X, CheckCircle2, Clock, Eye, AlertTriangle, ListTodo, AlertCircle } from 'lucide-react';
@@ -236,12 +236,7 @@ export function MemberDetail({ member, onClose, onIssueClick }: MemberDetailProp
           <X className="h-4 w-4" />
         </Button>
 
-        <Avatar className="h-10 w-10">
-          <AvatarImage src={user.image || undefined} />
-          <AvatarFallback className="bg-collab-600 text-collab-50 text-sm font-medium">
-            {user.name.charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar user={user} size="lg" className="h-10 w-10" />
 
         <div className="flex-1 min-w-0">
           <h2 className="text-[15px] font-semibold text-collab-50 truncate">{user.name}</h2>

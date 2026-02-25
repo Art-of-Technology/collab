@@ -3,14 +3,13 @@
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { 
   Calendar,
   Clock,
   Plus,
   MoreHorizontal,
   Flag,
-  User,
   Filter,
   Settings,
   Eye,
@@ -347,18 +346,7 @@ export default function TimelineViewRenderer({
 
                         {/* Assignee */}
                         <div className="flex items-center gap-2">
-                          {issue.assignee ? (
-                            <Avatar className="h-6 w-6">
-                              <AvatarImage src={issue.assignee.image} />
-                              <AvatarFallback className="text-xs bg-collab-700 text-collab-400">
-                                {issue.assignee.name?.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
-                          ) : (
-                            <div className="h-6 w-6 rounded-full bg-collab-700 flex items-center justify-center">
-                              <User className="h-3 w-3 text-collab-500" />
-                            </div>
-                          )}
+                        <UserAvatar user={issue.assignee} size="md" />
                         </div>
 
                         {/* Actions */}

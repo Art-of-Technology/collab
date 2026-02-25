@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Input } from "@/components/ui/input";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useUsersForNewConversation, useCreateConversation } from '@/hooks/queries/useMessage';
@@ -79,12 +79,7 @@ export default function NewMessageUI({ initialUsers }: NewMessageUIProps) {
               className="w-full text-left h-auto justify-start p-0"
             >
               <div className="flex items-center gap-3 p-4 hover:bg-muted transition-colors w-full">
-                <Avatar>
-                  <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
-                  <AvatarFallback>
-                    {user.name?.charAt(0).toUpperCase() || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={user} size="lg" />
                 <div>
                   <p className="font-medium">{user.name}</p>
                   <p className="text-sm text-muted-foreground">

@@ -196,13 +196,7 @@ export default function Navbar({
     const displayImage = userImage || session?.user?.image;
 
     return (
-      <Avatar className="h-6 w-6 sm:h-10 sm:w-10">
-        {displayImage ? (
-          <AvatarImage src={displayImage} alt={displayName || "User"} />
-        ) : (
-          <AvatarFallback className="text-[8px] sm:text-sm">{getInitials(displayName)}</AvatarFallback>
-        )}
-      </Avatar>
+      <UserAvatar user={{ name: displayName, image: displayImage }} size="md" className="sm:h-10 sm:w-10" />
     );
   };
 
@@ -365,15 +359,7 @@ export default function Navbar({
                                   {notification.sender.useCustomAvatar ? (
                                     <CustomAvatar user={notification.sender} size="sm" />
                                   ) : (
-                                    <Avatar className="h-8 w-8">
-                                      <AvatarImage
-                                        src={notification.sender.image || undefined}
-                                        alt={notification.sender.name || "User"}
-                                      />
-                                  <AvatarFallback className="bg-collab-700 text-white text-xs">
-                                        {getInitials(notification.sender.name || "U")}
-                                      </AvatarFallback>
-                                    </Avatar>
+                                    <UserAvatar user={notification.sender} size="lg" />
                                   )}
 
                                   {/* Notification Content */}

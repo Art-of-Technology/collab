@@ -7,7 +7,7 @@ import { NoteType, NoteScope } from "@prisma/client";
 import { NOTE_TYPE_CONFIGS } from "@/lib/note-types";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Button } from "@/components/ui/button";
 
 interface PinnedNote {
@@ -175,12 +175,7 @@ export function PinnedNotesSection({
                     <div className="flex items-center gap-3 mt-1.5">
                       {/* Author avatar */}
                       <div className="flex items-center gap-1.5">
-                        <Avatar className="h-4 w-4 ring-1 ring-collab-700">
-                          <AvatarImage src={note.author.image || undefined} />
-                          <AvatarFallback className="text-[8px] bg-collab-900 text-collab-500">
-                            {note.author.name?.charAt(0)?.toUpperCase() || "?"}
-                          </AvatarFallback>
-                        </Avatar>
+                        <UserAvatar user={note.author} size="xs" className="ring-1 ring-collab-700" />
                         <span className="text-[10px] text-collab-500">{note.author.name}</span>
                       </div>
 

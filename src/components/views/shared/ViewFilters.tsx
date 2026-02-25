@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSession } from "next-auth/react";
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -517,12 +517,7 @@ export default function ViewFilters({
                       <User className="h-3 w-3 text-collab-500" />
                     </div>
                   ) : (
-                    <Avatar className="w-5 h-5">
-                      <AvatarImage src={assignee.avatar} />
-                      <AvatarFallback className="text-xs bg-collab-700 text-collab-400">
-                        {assignee.name?.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
+                    <UserAvatar user={{ name: assignee.name, image: assignee.avatar }} size="sm" />
                   )}
                   <span className="text-xs text-white">{assignee.name}</span>
                 </div>
@@ -715,12 +710,7 @@ function OwnerSelector({
         >
           {selectedUser ? (
             <>
-              <Avatar className="h-3.5 w-3.5">
-                <AvatarImage src={selectedUser.image} alt={selectedUser.name} />
-                <AvatarFallback className="text-xs font-medium">
-                  {selectedUser.name?.charAt(0) || "U"}
-                </AvatarFallback>
-              </Avatar>
+              <UserAvatar user={selectedUser} size="xs" />
               <span className="text-collab-400 text-xs truncate max-w-[80px]">{selectedUser.name}</span>
             </>
           ) : (
@@ -776,12 +766,7 @@ function OwnerSelector({
               }`}
               onClick={() => onChange?.(member.id)}
             >
-              <Avatar className="h-5 w-5">
-                <AvatarImage src={member.image} alt={member.name} />
-                <AvatarFallback className="text-xs font-medium">
-                  {member.name?.charAt(0) || "U"}
-                </AvatarFallback>
-              </Avatar>
+              <UserAvatar user={member} size="sm" />
               <span className={`text-collab-400 flex-1 ${member.id === currentUserId ? 'font-medium' : ''}`}>
                 {member.name}{member.id === currentUserId ? " (You)" : ""}
               </span>

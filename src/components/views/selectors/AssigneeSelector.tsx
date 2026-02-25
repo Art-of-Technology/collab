@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { UserX, Check } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { GlobalFilterSelector, FilterOption } from "@/components/ui/GlobalFilterSelector";
 import { cn } from "@/lib/utils";
@@ -65,12 +65,7 @@ export function AssigneeSelector({
           {assignee.useCustomAvatar ? (
             <CustomAvatar user={assignee} size="sm" />
           ) : (
-            <Avatar className="h-3.5 w-3.5">
-              {assignee.image && <AvatarImage src={assignee.image} alt={assignee.name} />}
-              <AvatarFallback className="text-xs font-medium">
-                {assignee.name?.charAt(0) || "U"}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar user={assignee} size="xs" />
           )}
           <span className="text-collab-400 text-xs truncate max-w-[80px]">{assignee.name}</span>
         </>
@@ -86,12 +81,7 @@ export function AssigneeSelector({
               {assignee.useCustomAvatar ? (
                 <CustomAvatar user={assignee} size="sm" className="border border-collab-700" />
               ) : (
-                <Avatar className="h-3.5 w-3.5 border border-collab-700">
-                  {assignee.image && <AvatarImage src={assignee.image} alt={assignee.name} />}
-                  <AvatarFallback className="text-xs font-medium bg-collab-600 text-white">
-                    {assignee.name?.charAt(0) || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={assignee} size="xs" className="border border-collab-700" />
               )}
             </div>
           ))}
@@ -116,12 +106,7 @@ export function AssigneeSelector({
         {assignee.useCustomAvatar ? (
           <CustomAvatar user={assignee} size="sm" />
         ) : (
-          <Avatar className="h-5 w-5">
-            {assignee.image && <AvatarImage src={assignee.image} alt={assignee.name} />}
-            <AvatarFallback className="text-xs font-medium">
-              {assignee.name?.charAt(0) || "U"}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar user={assignee} size="sm" />
         )}
         <span className={cn("text-collab-400 flex-1", option.isPrioritized && "font-medium")}>
           {assignee.name}

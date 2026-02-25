@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Button } from '@/components/ui/button';
 import { ChevronRight, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -54,12 +54,7 @@ export function WeekViewMemberRow({
           onClick={onToggle}
           className="w-full px-3 py-3 flex items-center gap-3 hover:bg-collab-800 transition-colors text-left h-auto justify-start rounded-none"
         >
-          <Avatar className="h-8 w-8 flex-shrink-0">
-            <AvatarImage src={member.userImage} />
-            <AvatarFallback className="bg-collab-600 text-collab-50 text-xs font-medium">
-              {member.userName.charAt(0).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar user={{ name: member.userName, image: member.userImage }} size="lg" className="flex-shrink-0" />
           
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">

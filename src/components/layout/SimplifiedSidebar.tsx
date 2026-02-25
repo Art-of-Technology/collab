@@ -32,7 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { useCurrentUser } from "@/hooks/queries/useUser";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { useProjects } from "@/hooks/queries/useProjects";
@@ -161,12 +161,7 @@ export default function SimplifiedSidebar({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="p-1 rounded-lg hover:bg-collab-800 transition-colors">
-                <Avatar className="h-8 w-8 ring-1 ring-collab-700">
-                  <AvatarImage src={userData?.image || undefined} />
-                  <AvatarFallback className="text-xs bg-collab-800 text-collab-400">
-                    {userData?.name?.charAt(0) || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={userData} size="lg" className="ring-1 ring-collab-700" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 bg-collab-900 border-collab-700">
@@ -390,12 +385,7 @@ export default function SimplifiedSidebar({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-collab-800 transition-colors group">
-              <Avatar className="h-8 w-8 ring-1 ring-collab-700">
-                <AvatarImage src={userData?.image || undefined} />
-                <AvatarFallback className="text-xs bg-collab-800 text-collab-400">
-                  {userData?.name?.charAt(0) || "U"}
-                </AvatarFallback>
-              </Avatar>
+              <UserAvatar user={userData} size="lg" className="ring-1 ring-collab-700" />
               <div className="flex-1 text-left min-w-0">
                 <p className="text-sm text-white truncate">{userData?.name || "User"}</p>
               </div>

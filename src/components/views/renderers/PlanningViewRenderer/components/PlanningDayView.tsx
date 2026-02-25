@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Button } from '@/components/ui/button';
 import {
   ChevronDown,
@@ -490,12 +490,7 @@ function MemberCard({
         onClick={onToggle}
         className="w-full px-4 py-3 flex items-center gap-3 hover:bg-collab-800 transition-colors h-auto rounded-none"
       >
-        <Avatar className="h-8 w-8 flex-shrink-0">
-          <AvatarImage src={member.userImage} />
-          <AvatarFallback className="bg-collab-600 text-collab-50 text-xs font-medium">
-            {member.userName.charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar user={{ name: member.userName, image: member.userImage }} size="lg" className="flex-shrink-0" />
         
         {/* Name */}
         <div className="flex items-center gap-2 min-w-0">

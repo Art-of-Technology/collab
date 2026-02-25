@@ -7,7 +7,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, UserX, Search } from "lucide-react";
@@ -103,12 +103,7 @@ export function IssueReporterSelector({
               {selectedUser.useCustomAvatar ? (
                 <CustomAvatar user={selectedUser} size="sm" />
               ) : (
-                <Avatar className="h-3.5 w-3.5">
-                  {selectedUser.image && <AvatarImage src={selectedUser.image} alt={selectedUser.name} />}
-                  <AvatarFallback className="text-xs font-medium">
-                    {selectedUser.name?.charAt(0) || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={selectedUser} size="xs" />
               )}
               <span className="text-collab-400 text-xs truncate max-w-[80px]">{selectedUser.name}</span>
             </>
@@ -178,12 +173,7 @@ export function IssueReporterSelector({
               {user.useCustomAvatar ? (
                 <CustomAvatar user={user} size="sm" />
               ) : (
-                <Avatar className="h-5 w-5">
-                  {user.image && <AvatarImage src={user.image} alt={user.name} />}
-                  <AvatarFallback className="text-xs font-medium">
-                    {user.name?.charAt(0) || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={user} size="sm" />
               )}
               <span className={cn("text-collab-400 flex-1", user.id === currentUserId && 'font-medium')}>
                 {user.name}{user.id === currentUserId ? " (You)" : ""}

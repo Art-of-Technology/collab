@@ -24,7 +24,7 @@ import {
 import { VersionBadge } from "@/components/notes/VersionBadge";
 import { VersionDiff } from "@/components/notes/VersionDiff";
 import { RestoreVersionDialog } from "@/components/notes/RestoreVersionDialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
 import { stripHtmlTags } from "@/lib/html-sanitizer";
 import { NoteVersionChangeType } from "@prisma/client";
@@ -241,12 +241,7 @@ export function VersionHistoryPanel({
                     <div className="px-4 py-3 border-b border-collab-700">
                       <h4 className="text-sm font-semibold text-collab-50">{selectedVersion.title}</h4>
                       <div className="flex items-center gap-2 mt-1">
-                        <Avatar className="h-4 w-4">
-                          <AvatarImage src={selectedVersion.author.image || undefined} />
-                          <AvatarFallback className="text-[8px] bg-collab-600 text-collab-500">
-                            {selectedVersion.author.name?.[0] || "U"}
-                          </AvatarFallback>
-                        </Avatar>
+                        <UserAvatar user={selectedVersion.author} size="xs" />
                         <span className="text-[10px] text-collab-500/60">
                           {selectedVersion.author.name || selectedVersion.author.email || "Unknown"}
                         </span>
@@ -390,12 +385,7 @@ function VersionListItem({
         <div className="flex items-center gap-3 mt-1.5">
           {/* Author avatar */}
           <div className="flex items-center gap-1.5">
-            <Avatar className="h-4 w-4">
-              <AvatarImage src={version.author.image || undefined} />
-              <AvatarFallback className="text-[8px] bg-collab-600 text-collab-500">
-                {version.author.name?.[0] || "U"}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar user={version.author} size="xs" />
             <span className="text-[10px] text-collab-500/60">
               {version.author.name || version.author.email || "Unknown"}
             </span>

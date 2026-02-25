@@ -10,7 +10,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useMention } from "@/context/MentionContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { cn } from "@/lib/utils";
@@ -91,12 +91,7 @@ export default function NotificationPopover() {
                   !notification.read && "bg-violet-500/5"
                 )}
               >
-                <Avatar className="h-7 w-7 flex-shrink-0 mt-0.5 ring-1 ring-white/[0.06]">
-                  <AvatarImage src={notification.sender?.image || undefined} />
-                  <AvatarFallback className="text-[10px] bg-white/[0.06] text-white/50">
-                    {notification.sender?.name?.charAt(0) || "?"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={notification.sender} size="lg" className="h-7 w-7 flex-shrink-0 mt-0.5 ring-1 ring-white/[0.06]" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-white/70 line-clamp-2">
                     <span className="font-medium text-white/80">

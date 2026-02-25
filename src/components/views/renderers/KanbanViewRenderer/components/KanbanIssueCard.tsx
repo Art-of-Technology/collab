@@ -3,11 +3,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import {
   MessageSquare,
   ArrowRight,
-  User,
   ArrowDown,
   Minus,
   ArrowUp,
@@ -149,18 +148,7 @@ const KanbanIssueCard = React.memo(({
               {/* Assignee Avatar - Only show if enabled */}
               {showAssignee && (
                 <div className="flex-shrink-0">
-                  {issue.assignee ? (
-                    <Avatar className="h-5 w-5">
-                      <AvatarImage src={issue.assignee.image} />
-                      <AvatarFallback className="text-[10px] bg-collab-700 text-collab-400 font-medium">
-                        {issue.assignee.name?.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
-                  ) : (
-                    <div className="h-5 w-5 rounded-full bg-collab-700 flex items-center justify-center">
-                      <User className="h-2.5 w-2.5 text-collab-500" />
-                    </div>
-                  )}
+                  <UserAvatar user={issue.assignee} size="sm" />
                 </div>
               )}
             </div>

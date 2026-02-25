@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { cn } from "@/lib/utils";
 import { useCreateConversation, useSendMessage } from "@/hooks/queries/useMessage";
@@ -91,12 +91,7 @@ export default function StartConversationForm({ users = [], recipient }: StartCo
                 onClick={() => setSelectedUser(user)}
                 className="w-full text-left p-4 hover:bg-muted/50 transition-colors flex items-center gap-3 h-auto justify-start"
               >
-                <Avatar className="border-2 border-primary/10">
-                  <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    {user.name?.charAt(0).toUpperCase() || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={user} size="lg" className="h-10 w-10 border-2 border-primary/10" />
                 <div>
                   <p className="font-medium">{user.name}</p>
                   <p className="text-sm text-muted-foreground">{user.role || "Developer"}</p>
@@ -113,12 +108,7 @@ export default function StartConversationForm({ users = [], recipient }: StartCo
           <Card className="mb-6 border-border/40 bg-card/95 shadow-lg">
             <CardContent className="p-4">
               <div className="flex items-center gap-3 mb-4">
-                <Avatar className="border-2 border-primary/10">
-                  <AvatarImage src={selectedUser.image || undefined} alt={selectedUser.name || "User"} />
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    {selectedUser.name?.charAt(0).toUpperCase() || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={selectedUser} size="lg" className="h-10 w-10 border-2 border-primary/10" />
                 <div>
                   <p className="font-medium">{selectedUser.name}</p>
                   <p className="text-sm text-muted-foreground">{selectedUser.role || "Developer"}</p>

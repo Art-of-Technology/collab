@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, X, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -169,12 +169,7 @@ export function StandupMode({ members, onClose, onIssueClick }: StandupModeProps
         <div className="w-full max-w-2xl">
           {/* Member info */}
           <div className="flex flex-col items-center gap-3 mb-8">
-            <Avatar className="h-16 w-16">
-              <AvatarImage src={member.user.image || undefined} />
-              <AvatarFallback className="bg-collab-600 text-collab-50 text-xl font-medium">
-                {member.user.name.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar user={member.user} size="lg" className="h-16 w-16" />
             <h2 className="text-xl font-semibold text-collab-50">{member.user.name}</h2>
             <span className="text-[13px] text-collab-500/60">
               {currentIndex + 1} of {members.length} members

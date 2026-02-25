@@ -26,7 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCommandSearch } from "@/hooks/queries/useCommandSearch";
 import { useProjects } from "@/hooks/queries/useProjects";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { NewIssueModal } from "@/components/issue";
 import CreateViewModal from "@/components/modals/CreateViewModal";
 import CreateProjectModal from "@/components/modals/CreateProjectModal";
@@ -336,12 +336,7 @@ export default function ChatBar() {
                                 result.metadata?.user?.useCustomAvatar ? (
                                   <CustomAvatar user={result.metadata.user} size="sm" className="h-5 w-5 shrink-0" />
                                 ) : (
-                                  <Avatar className="h-5 w-5 shrink-0">
-                                    <AvatarImage src={result.metadata?.user?.image || ""} />
-                                    <AvatarFallback className="text-[8px] bg-white/[0.06] text-white/50">
-                                      {result.title?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
-                                    </AvatarFallback>
-                                  </Avatar>
+                                  <UserAvatar user={result.metadata?.user} size="sm" className="shrink-0" />
                                 )
                               ) : (
                                 <span className="text-white/30">{getResultIcon(result.type)}</span>

@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ExternalLink, X, User, Circle, Clock, CheckCircle2, XCircle, AlertCircle, ArrowUp, ArrowDown, Shield, ShieldAlert, Link2, Copy, ChevronDown, ChevronRight } from "lucide-react";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { ExternalLink, X, Circle, Clock, CheckCircle2, XCircle, AlertCircle, ArrowUp, ArrowDown, Shield, ShieldAlert, Link2, Copy, ChevronDown, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 import type { RelationItemProps } from "../types/relation";
@@ -241,18 +241,7 @@ export function RelationItem({
 
             {/* Desktop: Assignee */}
             <div className="hidden md:flex items-center w-6 mr-2 flex-shrink-0">
-              {item.assignee ? (
-                <Avatar className="h-5 w-5">
-                  <AvatarImage src={item.assignee.image || undefined} />
-                  <AvatarFallback className="text-xs bg-collab-600 text-white border-none">
-                    {item.assignee.name?.charAt(0)?.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-              ) : (
-                <div className="h-5 w-5 rounded-full bg-collab-800 border border-collab-600 flex items-center justify-center">
-                  <User className="h-2.5 w-2.5 text-collab-500" />
-                </div>
-              )}
+              <UserAvatar user={item.assignee} size="sm" />
             </div>
 
             {/* Desktop: Updated Date */}
@@ -368,19 +357,12 @@ export function RelationItem({
                 {/* Assignee */}
                 {item.assignee ? (
                   <div className="flex items-center gap-1.5">
-                    <Avatar className="h-5 w-5">
-                      <AvatarImage src={item.assignee.image || undefined} />
-                      <AvatarFallback className="text-xs bg-collab-600 text-white border-none">
-                        {item.assignee.name?.charAt(0)?.toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                    <UserAvatar user={item.assignee} size="sm" />
                     <span className="text-xs text-collab-400">{item.assignee.name}</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5">
-                    <div className="h-5 w-5 rounded-full bg-collab-800 border border-collab-600 flex items-center justify-center">
-                      <User className="h-2.5 w-2.5 text-collab-500" />
-                    </div>
+                    <UserAvatar user={null} size="sm" />
                     <span className="text-xs text-collab-500">Unassigned</span>
                   </div>
                 )}

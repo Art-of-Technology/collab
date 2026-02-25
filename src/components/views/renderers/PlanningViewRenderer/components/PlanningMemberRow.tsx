@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -205,12 +205,7 @@ export function PlanningMemberRow({
         className="w-full px-4 py-3 flex items-center gap-3 hover:bg-collab-800 transition-colors h-auto rounded-none"
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <Avatar className="h-9 w-9 flex-shrink-0">
-            <AvatarImage src={member.userImage} />
-            <AvatarFallback className="bg-collab-700 text-white text-sm">
-              {member.userName.charAt(0).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar user={{ name: member.userName, image: member.userImage }} size="lg" className="h-9 w-9 flex-shrink-0" />
           
           <div className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-2">

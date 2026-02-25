@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import {
   MessageSquare,
   ArrowRight,
@@ -278,12 +278,7 @@ export default function TableViewRenderer({
                   <div className="col-span-2">
                     {issue.assignee ? (
                       <div className="flex items-center gap-2">
-                        <Avatar className="h-6 w-6">
-                          <AvatarImage src={issue.assignee.image} />
-                          <AvatarFallback className="text-xs">
-                            {issue.assignee.name?.charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
+                        <UserAvatar user={issue.assignee} size="md" />
                         <span className="text-sm text-white truncate">
                           {issue.assignee.name}
                         </span>

@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 
 import {
   Loader2,
@@ -1177,12 +1177,7 @@ export function IssueDetailContent({
                     <>
                       <span className="hidden sm:inline">by</span>
                       <div className="flex items-center gap-1">
-                        <Avatar className="h-4 w-4">
-                          <AvatarImage src={createdByUser?.image} />
-                          <AvatarFallback className="text-[10px] bg-collab-600 text-collab-400">
-                            {createdByUser?.name?.charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
+                        <UserAvatar user={createdByUser} size="xs" />
                         <span className="hidden sm:inline">{createdByUser?.name}</span>
                       </div>
                     </>

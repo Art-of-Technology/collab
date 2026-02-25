@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { useSession } from "next-auth/react";
 import { Label } from "@/components/ui/label";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
@@ -279,12 +279,7 @@ export default function CreatePostForm() {
     return currentUser.useCustomAvatar ? (
       <CustomAvatar user={currentUser} size="sm" />
     ) : (
-      <Avatar className="h-8 w-8">
-        <AvatarImage src={session?.user?.image || undefined} alt={session?.user?.name || "User"} />
-        <AvatarFallback className="bg-primary/10 text-primary">
-          {session?.user?.name?.charAt(0).toUpperCase() || "U"}
-        </AvatarFallback>
-      </Avatar>
+      <UserAvatar user={{ name: session?.user?.name, image: session?.user?.image }} size="lg" />
     );
   };
 

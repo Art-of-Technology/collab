@@ -16,7 +16,7 @@ import {
   Type,
   Sparkles,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import type { ActivityTimelineItem } from "@/hooks/queries/useUnifiedTimeline";
 
 interface ActivityItemProps {
@@ -228,12 +228,7 @@ export default function ActivityItem({
         <span className="text-xs text-collab-500">
           {format(new Date(item.createdAt), "h:mm a")}
         </span>
-        <Avatar className="h-7 w-7 ring-1 ring-collab-700">
-          <AvatarImage src={item.user.image || undefined} />
-          <AvatarFallback className="text-xs bg-collab-800 text-collab-500">
-            {item.user.name?.charAt(0) || "?"}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar user={item.user} size="lg" className="ring-1 ring-collab-700" />
       </div>
     </div>
   );

@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useToast } from "@/hooks/use-toast";
 import { NoteSharePermission } from "@prisma/client";
 import { getNoteSharePermissionOptions } from "@/lib/note-types";
@@ -310,14 +310,7 @@ export function ShareNoteDialog({
                     className="p-3 flex items-center justify-between gap-3"
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={share.user.image || undefined} />
-                        <AvatarFallback>
-                          {share.user.name?.[0] ||
-                            share.user.email?.[0] ||
-                            "?"}
-                        </AvatarFallback>
-                      </Avatar>
+                      <UserAvatar user={share.user} size="lg" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
                           {share.user.name || "Unknown"}

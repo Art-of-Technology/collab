@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -339,12 +339,7 @@ export default function FeatureRequestsList({
                   <div className="flex items-center gap-4 text-xs text-collab-500/60">
                     {/* Author */}
                     <div className="flex items-center gap-1.5">
-                      <Avatar className="h-4 w-4">
-                        <AvatarImage src={request.author.image || undefined} />
-                        <AvatarFallback className="text-[8px] bg-collab-600 text-collab-500">
-                          {request.author.name?.charAt(0)?.toUpperCase() || "?"}
-                        </AvatarFallback>
-                      </Avatar>
+                      <UserAvatar user={request.author} size="xs" />
                       <span className="text-collab-500">
                         {request.author.id === currentUserId ? "You" : request.author.name}
                       </span>

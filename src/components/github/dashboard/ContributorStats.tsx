@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Users,
@@ -170,14 +170,7 @@ export function ContributorStats({
                   )}
 
                   {/* Avatar */}
-                  <Avatar className="h-10 w-10">
-                    {contributor.avatar && (
-                      <AvatarImage src={contributor.avatar} alt={contributor.name} />
-                    )}
-                    <AvatarFallback className="bg-collab-700 text-collab-50">
-                      {getInitials(contributor.name)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar user={{ name: contributor.name, image: contributor.avatar }} size="lg" className="h-10 w-10" />
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">

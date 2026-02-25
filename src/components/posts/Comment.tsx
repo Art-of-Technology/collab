@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
 import { PencilIcon, TrashIcon, XMarkIcon, CheckIcon } from "@heroicons/react/24/outline";
@@ -182,12 +182,7 @@ export function Comment({
         {hasCustomAvatar ? (
           <CustomAvatar user={comment.author} size="sm" />
         ) : (
-          <Avatar className="h-7 w-7">
-            <AvatarImage src={comment.author.image || undefined} alt={comment.author.name || "User"} />
-            <AvatarFallback>
-              {comment.author.name?.charAt(0).toUpperCase() || "U"}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar user={comment.author} size="lg" className="h-7 w-7" />
         )}
         <div className="flex-1">
           <div className="rounded-lg">

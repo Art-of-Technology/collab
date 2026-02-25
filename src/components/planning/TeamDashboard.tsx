@@ -19,7 +19,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -385,12 +385,7 @@ function MemberSelector({ members, selectedId, onSelect }: MemberSelectorProps) 
             )}
           >
             <div className="relative">
-              <Avatar className="h-5 w-5">
-                <AvatarImage src={member.user.image || undefined} />
-                <AvatarFallback className="text-[10px] bg-collab-600">
-                  {member.user.name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
+              <UserAvatar user={member.user} size="sm" />
               {/* Red dot inside the container, positioned properly */}
               {member.hasBlockers && !isSelected && (
                 <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-collab-700" />
@@ -826,12 +821,7 @@ export function TeamDashboard({
         {/* Member Badge - Simple name display */}
         {selectedMember && (
           <div className="px-4 py-2 border-b border-collab-700 bg-collab-950 flex items-center gap-3">
-            <Avatar className="h-7 w-7">
-              <AvatarImage src={selectedMember.user.image || undefined} />
-              <AvatarFallback className="text-xs bg-collab-600">
-                {selectedMember.user.name.charAt(0)}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar user={selectedMember.user} size="lg" />
             <span className="text-sm font-medium text-collab-50">{selectedMember.user.name}</span>
           </div>
         )}

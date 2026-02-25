@@ -13,7 +13,7 @@ import {
   Send,
   Loader2,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PostTimelineItem } from "@/hooks/queries/useUnifiedTimeline";
@@ -149,12 +149,7 @@ export default function PostItem({ item }: PostItemProps) {
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-center gap-2 mb-2">
-            <Avatar className="h-6 w-6 ring-1 ring-collab-700">
-              <AvatarImage src={item.user.image || undefined} />
-              <AvatarFallback className="text-[10px] bg-collab-900 text-collab-500">
-                {item.user.name?.charAt(0) || "?"}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar user={item.user} size="md" className="ring-1 ring-collab-700" />
             <span className="text-sm text-collab-400 font-medium">
               {item.user.name || "Someone"}
             </span>
@@ -224,12 +219,7 @@ export default function PostItem({ item }: PostItemProps) {
               {/* Comment Input */}
               {currentUser && (
                 <div className="flex items-start gap-3 mb-4">
-                  <Avatar className="h-7 w-7 ring-1 ring-collab-700">
-                    <AvatarImage src={currentUser.image || undefined} />
-                    <AvatarFallback className="text-[10px] bg-collab-900 text-collab-500">
-                      {currentUser.name?.charAt(0) || "?"}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar user={currentUser} size="lg" className="ring-1 ring-collab-700" />
                   <div className="flex-1 flex gap-2">
                     <input
                       type="text"
@@ -269,12 +259,7 @@ export default function PostItem({ item }: PostItemProps) {
                 <div className="space-y-3">
                   {comments.slice(0, 5).map((comment: any) => (
                     <div key={comment.id} className="flex items-start gap-3">
-                      <Avatar className="h-6 w-6 ring-1 ring-collab-700">
-                        <AvatarImage src={comment.author?.image || undefined} />
-                        <AvatarFallback className="text-[9px] bg-collab-900 text-collab-500">
-                          {comment.author?.name?.charAt(0) || "?"}
-                        </AvatarFallback>
-                      </Avatar>
+                      <UserAvatar user={comment.author} size="md" className="ring-1 ring-collab-700" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-medium text-collab-400">

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { ChevronRight, AlertTriangle, CheckCircle2, Clock, Eye, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MemberActivity } from './types';
@@ -90,12 +90,7 @@ export function MemberCard({ member, isExpanded, onToggle, onClick }: MemberCard
         className="w-full px-4 py-3 flex items-center gap-3 h-auto justify-start rounded-none"
       >
         {/* Avatar */}
-        <Avatar className="h-9 w-9 flex-shrink-0">
-          <AvatarImage src={user.image || undefined} />
-          <AvatarFallback className="bg-collab-600 text-collab-50 text-sm font-medium">
-            {user.name.charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar user={user} size="lg" className="h-9 w-9 flex-shrink-0" />
 
         {/* Name and warnings */}
         <div className="flex items-center gap-2 min-w-0 flex-shrink-0">

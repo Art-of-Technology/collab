@@ -8,7 +8,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Input } from "@/components/ui/input";
 import { Loader2, UserX, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -98,12 +98,7 @@ export function IssueAssigneeSelector({
         {user.useCustomAvatar ? (
           <CustomAvatar user={user} size="sm" />
         ) : (
-          <Avatar className="h-6 w-6">
-            {user.image && <AvatarImage src={user.image} alt={user.name} />}
-            <AvatarFallback className="text-xs font-medium">
-              {user.name?.charAt(0) || "U"}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar user={user} size="md" />
         )}
         <span className="text-sm font-medium">{user.name}</span>
       </div>
@@ -141,12 +136,7 @@ export function IssueAssigneeSelector({
               {selectedUser.useCustomAvatar ? (
                 <CustomAvatar user={selectedUser} size="sm" />
               ) : (
-                <Avatar className="h-3.5 w-3.5">
-                  {selectedUser.image && <AvatarImage src={selectedUser.image} alt={selectedUser.name} />}
-                  <AvatarFallback className="text-xs font-medium">
-                    {selectedUser.name?.charAt(0) || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={selectedUser} size="xs" />
               )}
               <span className="text-collab-400 text-xs truncate max-w-[80px]">{selectedUser.name}</span>
             </>
@@ -215,12 +205,7 @@ export function IssueAssigneeSelector({
               {user.useCustomAvatar ? (
                 <CustomAvatar user={user} size="sm" />
               ) : (
-                <Avatar className="h-5 w-5">
-                  {user.image && <AvatarImage src={user.image} alt={user.name} />}
-                  <AvatarFallback className="text-xs font-medium">
-                    {user.name?.charAt(0) || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={user} size="sm" />
               )}
               <span className={`text-collab-400 flex-1 ${user.id === currentUserId ? 'font-medium' : ''}`}>
                 {user.name}{user.id === currentUserId ? " (You)" : ""}

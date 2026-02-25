@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { VersionBadge } from "@/components/notes/VersionBadge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
 import { NoteVersionChangeType } from "@prisma/client";
 
@@ -166,12 +166,7 @@ export function VersionDiff({
       <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
         <div className="flex items-center gap-2">
           <span>From:</span>
-          <Avatar className="h-4 w-4">
-            <AvatarImage src={data.from.author.image || undefined} />
-            <AvatarFallback className="text-[8px]">
-              {data.from.author.name?.[0] || "U"}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar user={data.from.author} size="xs" />
           <span>{data.from.author.name}</span>
           <span className="text-muted-foreground/60">
             {format(new Date(data.from.createdAt), "MMM d, h:mm a")}
@@ -179,12 +174,7 @@ export function VersionDiff({
         </div>
         <div className="flex items-center gap-2">
           <span>To:</span>
-          <Avatar className="h-4 w-4">
-            <AvatarImage src={data.to.author.image || undefined} />
-            <AvatarFallback className="text-[8px]">
-              {data.to.author.name?.[0] || "U"}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar user={data.to.author} size="xs" />
           <span>{data.to.author.name}</span>
           <span className="text-muted-foreground/60">
             {format(new Date(data.to.createdAt), "MMM d, h:mm a")}

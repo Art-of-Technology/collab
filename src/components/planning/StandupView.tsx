@@ -17,7 +17,7 @@ import {
   Timer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { MemberActivity, SimpleIssue, CompletedIssue, BlockedIssue } from './types';
@@ -389,12 +389,7 @@ function MemberStandup({ member, onIssueClick }: MemberStandupProps) {
     <div className="h-full flex flex-col">
       {/* Member Header - Clean, without summary stats */}
       <div className="flex items-center gap-4 mb-8">
-        <Avatar className="h-16 w-16 ring-2 ring-collab-600">
-          <AvatarImage src={user.image || undefined} />
-          <AvatarFallback className="bg-collab-600 text-xl text-collab-50">
-            {user.name.charAt(0)}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar user={user} size="lg" className="h-16 w-16 ring-2 ring-collab-600 [&_.text-white]:text-xl" />
         <h2 className="text-2xl font-semibold text-collab-50">{user.name}</h2>
       </div>
 
@@ -627,12 +622,7 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
                 idx === currentIndex ? 'scale-110' : 'opacity-60 hover:opacity-100'
               )}
             >
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={member.user.image || undefined} />
-                <AvatarFallback className="text-xs bg-collab-600">
-                  {member.user.name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
+              <UserAvatar user={member.user} size="lg" />
               {member.hasBlockers && (
                 <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border border-collab-950" />
               )}

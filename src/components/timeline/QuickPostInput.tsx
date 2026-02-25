@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Send, Loader2 } from "lucide-react";
 import { useCurrentUser } from "@/hooks/queries/useUser";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useToast } from "@/hooks/use-toast";
 
 interface QuickPostInputProps {
@@ -63,12 +63,7 @@ export default function QuickPostInput({ workspaceId }: QuickPostInputProps) {
   return (
     <div className="bg-collab-800 border border-collab-700 rounded-2xl p-5">
       <div className="flex items-start gap-4">
-        <Avatar className="h-10 w-10 ring-2 ring-collab-700 flex-shrink-0">
-          <AvatarImage src={user?.image || undefined} />
-          <AvatarFallback className="text-sm bg-collab-900 text-collab-500">
-            {user?.name?.charAt(0) || "?"}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar user={user} size="lg" className="ring-2 ring-collab-700 flex-shrink-0" />
 
         <div className="flex-1 min-w-0">
           <textarea
