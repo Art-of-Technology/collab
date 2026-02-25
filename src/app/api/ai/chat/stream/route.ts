@@ -122,7 +122,7 @@ export async function POST(req: Request) {
         // NOTE: defer_loading removed — it hides ALL tool definitions from Claude
         // unless a tool_search_tool_* is also present in the tools array.
       },
-
+    ];
     // Add web search if enabled
     if (webSearchEnabled) {
       tools.push({
