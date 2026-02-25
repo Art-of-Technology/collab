@@ -104,7 +104,7 @@ export function ViewFiltersSelector({
             "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
             "text-collab-400 focus:outline-none bg-collab-800",
             disabled && "opacity-50 cursor-not-allowed",
-            activeFilterCount > 0 && "border-[#f59e0b]/30 bg-amber-500/5"
+            activeFilterCount > 0 && "border-amber-500/30 bg-amber-500/5"
           )}
         >
           <Filter className={cn(
@@ -144,7 +144,7 @@ export function ViewFiltersSelector({
                 filterValues.map(filterValue => (
                   <div
                     key={`${filterKey}-${filterValue}`}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 border border-[#f59e0b]/30 rounded text-xs"
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-xs"
                   >
                     <span className="text-amber-500">{filterKey}:</span>
                     <span className="text-collab-50">{filterValue}</span>

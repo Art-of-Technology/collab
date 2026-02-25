@@ -86,7 +86,7 @@ export function CommentActions({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="bg-collab-700 border-collab-600">
             {onEdit && (
-              <DropdownMenuItem onClick={onEdit} className="text-[#ccc] hover:bg-collab-600">
+              <DropdownMenuItem onClick={onEdit} className="text-collab-400 hover:bg-collab-600">
                 <Edit className="h-3 w-3 mr-2" />
                 Edit
               </DropdownMenuItem>

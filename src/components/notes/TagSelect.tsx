@@ -210,7 +210,7 @@ export function TagSelect({ value, onChange, workspaceId }: TagSelectProps) {
           </div>
 
           {/* Tags list */}
-          <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#27272b] scrollbar-track-transparent p-1">
+          <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-collab-700 scrollbar-track-transparent p-1">
             {/* Clear all option */}
             {value.length > 0 && (
               <div

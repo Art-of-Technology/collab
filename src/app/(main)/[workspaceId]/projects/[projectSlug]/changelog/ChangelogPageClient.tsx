@@ -365,7 +365,7 @@ ${bugs.map((b) => `- ${b.aiTitle || b.issue.title}`).join('\n') || 'No bug fixes
                     GitHub Releases
                   </h2>
                   <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
-                    <div className="divide-y divide-[#1f1f1f]">
+                    <div className="divide-y divide-collab-700">
                       {releases.slice(0, 10).map((release) => (
                         <ReleaseRow key={release.id} release={release} />
                       ))}
@@ -414,11 +414,11 @@ function VersionCard({ version }: { version: Version }) {
   const getEnvColor = (env: string) => {
     switch (env) {
       case 'production':
-        return 'bg-green-700/10 text-green-400 border-[#238636]/30';
+        return 'bg-green-700/10 text-green-400 border-green-600/30';
       case 'staging':
-        return 'bg-yellow-700/10 text-orange-400 border-[#9e6a03]/30';
+        return 'bg-yellow-700/10 text-orange-400 border-amber-700/30';
       default:
-        return 'bg-blue-500/10 text-blue-400 border-[#1f6feb]/30';
+        return 'bg-blue-500/10 text-blue-400 border-blue-600/30';
     }
   };
 

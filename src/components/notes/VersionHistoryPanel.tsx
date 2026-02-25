@@ -291,7 +291,7 @@ export function VersionHistoryPanel({
                   </Button>
                 </div>
               )}
-              <div className="rounded-lg border border-collab-700 overflow-hidden divide-y divide-[#1f1f1f]">
+              <div className="rounded-lg border border-collab-700 overflow-hidden divide-y divide-collab-700">
                 {data?.versions.map((version, index) => (
                   <VersionListItem
                     key={version.id}
@@ -354,8 +354,8 @@ function VersionListItem({
   return (
     <div
       className={cn(
-        "group relative flex items-center gap-4 px-5 py-3.5 hover:bg-gradient-to-r hover:from-[#151518] hover:to-transparent transition-all duration-200 cursor-pointer",
-        isCompareSource && "bg-blue-500/5 border-l-2 border-l-[#3b82f6]"
+        "group relative flex items-center gap-4 px-5 py-3.5 hover:bg-gradient-to-r hover:from-collab-800 hover:to-transparent transition-all duration-200 cursor-pointer",
+        isCompareSource && "bg-blue-500/5 border-l-2 border-l-blue-500"
       )}
       onClick={onView}
     >

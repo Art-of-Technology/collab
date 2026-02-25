@@ -144,7 +144,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         className={cn(
           "prose prose-sm dark:prose-invert max-w-none",
           "text-collab-50 prose-headings:text-white prose-strong:text-white",
-          "prose-blockquote:border-l-[#444] prose-blockquote:text-gray-400",
+          "prose-blockquote:border-l-collab-600 prose-blockquote:text-gray-400",
           "prose-hr:border-collab-600",
           "prose-ul:text-collab-50 prose-ol:text-collab-50 prose-li:text-collab-50",
           "prose-a:text-blue-400 prose-a:no-underline hover:prose-a:text-blue-300",

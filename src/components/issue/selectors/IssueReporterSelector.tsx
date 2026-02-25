@@ -142,7 +142,7 @@ export function IssueReporterSelector({
           </div>
         </div>
         
-        <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
+        <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-collab-600 scrollbar-track-transparent p-1">
           <Button
             type="button"
             variant="ghost"

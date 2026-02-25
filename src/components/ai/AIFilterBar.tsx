@@ -330,7 +330,7 @@ export default function AIFilterBar({
             placeholder={placeholder}
             disabled={isProcessing}
             className={cn(
-              "flex-1 bg-transparent text-sm text-white placeholder-[#52525b]",
+              "flex-1 bg-transparent text-sm text-white placeholder-collab-500",
               "border-none outline-none focus:ring-0"
             )}
           />

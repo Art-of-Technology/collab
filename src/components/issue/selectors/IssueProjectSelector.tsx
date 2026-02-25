@@ -89,7 +89,7 @@ export function IssueProjectSelector({
           Select project
         </div>
         
-        <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent">
+        <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-collab-600 scrollbar-track-transparent">
           <Button
             type="button"
             variant="ghost"

@@ -278,7 +278,7 @@ export function PlanningMemberRow({
           )}
 
           {/* Issues by Category */}
-          <div className="divide-y divide-[#1e1e1e]">
+          <div className="divide-y divide-collab-800">
             {/* Completed */}
             {displayActivity.completed.length > 0 && (
               <div className="py-2">

@@ -88,7 +88,7 @@ export function QuickActions({ repository, projectSlug, workspaceSlug }: QuickAc
               className={`justify-start h-auto py-2 px-3 ${
                 action.variant === 'outline'
                   ? 'border-collab-600 bg-transparent hover:bg-collab-700'
-                  : 'bg-collab-700 hover:bg-[#30363d]'
+                  : 'bg-collab-700 hover:bg-collab-700'
               }`}
               onClick={action.onClick}
               asChild={action.external}

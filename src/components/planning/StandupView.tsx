@@ -634,7 +634,7 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
                 </AvatarFallback>
               </Avatar>
               {member.hasBlockers && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border border-[#09090b]" />
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border border-collab-950" />
               )}
             </Button>
           ))}

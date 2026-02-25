@@ -74,7 +74,7 @@ export function TimelineControls({
               onValueChange={onZoomChange}
               max={100}
               step={5}
-              className="w-full [&_[role=slider]]:bg-[#e6edf3] [&_[role=slider]]:border-collab-600 [&_.bg-primary]:bg-blue-600"
+              className="w-full [&_[role=slider]]:bg-collab-50 [&_[role=slider]]:border-collab-600 [&_.bg-primary]:bg-blue-600"
             />
           </div>
           <Button 

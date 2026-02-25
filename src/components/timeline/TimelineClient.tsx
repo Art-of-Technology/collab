@@ -199,7 +199,7 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             size="sm"
             onClick={() => handleFilterChange('blockers')}
             className={`h-6 px-2 text-xs border ${filter === 'blockers'
-              ? 'border-[#f85149] text-red-500 bg-red-500/10 hover:bg-red-500/10 hover:border-[#f85149]'
+              ? 'border-red-500 text-red-500 bg-red-500/10 hover:bg-red-500/10 hover:border-red-500'
               : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
               }`}
           >

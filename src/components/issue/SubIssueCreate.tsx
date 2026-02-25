@@ -46,7 +46,7 @@ export function SubIssueCreate({ onAdd }: SubIssueCreateProps) {
           }}
           onKeyDown={handleKeyDown}
           placeholder="Sub-issue title"
-          className="flex-1 bg-transparent text-sm text-collab-50 border-none outline-none placeholder-[#8b949e] font-medium"
+          className="flex-1 bg-transparent text-sm text-collab-50 border-none outline-none placeholder-collab-400 font-medium"
           autoFocus
         />
       </div>

@@ -529,7 +529,7 @@ export function ProjectDashboard({
                 New
               </Button>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-[#27272b] scrollbar-track-transparent">
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-collab-700 scrollbar-track-transparent">
               {sortedViews.map((view: View) => (
                 <ViewChip
                   key={view.id}

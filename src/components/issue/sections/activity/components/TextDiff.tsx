@@ -232,11 +232,11 @@ export function TextDiff({ oldText, newText, maxHeight = 200 }: TextDiffProps) {
               key={index}
               className={`flex ${
                 line.type === 'added' 
-                  ? 'bg-green-500/10 border-l-2 border-l-[#238636]' 
+                  ? 'bg-green-500/10 border-l-2 border-l-green-600' 
                   : line.type === 'removed'
-                  ? 'bg-red-500/20 border-l-2 border-l-[#f85149]'
+                  ? 'bg-red-500/20 border-l-2 border-l-red-500'
                   : line.type === 'modified'
-                  ? 'bg-amber-500/10 border-l-2 border-l-[#d29922]'
+                  ? 'bg-amber-500/10 border-l-2 border-l-amber-600'
                   : 'hover:bg-collab-950'
               }`}
             >

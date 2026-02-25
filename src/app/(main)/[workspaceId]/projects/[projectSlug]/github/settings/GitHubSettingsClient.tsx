@@ -306,7 +306,7 @@ export function GitHubSettingsClient({
               <tab.icon className="h-4 w-4" />
               {tab.label}
               {activeTab === tab.id && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#58a6ff]" />
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-400" />
               )}
             </Button>
           ))}
@@ -336,7 +336,7 @@ export function GitHubSettingsClient({
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-5 divide-x divide-[#1f1f1f]">
+                <div className="grid grid-cols-5 divide-x divide-collab-700">
                   <StatItem icon={GitBranch} label="Branches" value={repoData._count.branches} />
                   <StatItem icon={GitCommit} label="Commits" value={repoData._count.commits} />
                   <StatItem icon={GitPullRequest} label="PRs" value={repoData._count.pullRequests} />

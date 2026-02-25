@@ -39,7 +39,7 @@ export function GitHubSkeleton() {
               {[1, 2, 3].map((i) => (
                 <div key={i} className="relative flex items-start gap-4">
                   <div className="absolute -left-[21px] top-1">
-                    <Skeleton className="h-8 w-8 rounded-full bg-collab-700 border-2 border-[#0a0a0a]" />
+                    <Skeleton className="h-8 w-8 rounded-full bg-collab-700 border-2 border-collab-950" />
                   </div>
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center gap-2">

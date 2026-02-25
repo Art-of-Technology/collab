@@ -199,7 +199,7 @@ export default function TableViewRenderer({
             </div>
 
             {/* Table Body */}
-            <div className="divide-y divide-[#21262d]">
+            <div className="divide-y divide-collab-700">
               {sortedIssues.map((issue) => (
                 <div
                   key={issue.id}

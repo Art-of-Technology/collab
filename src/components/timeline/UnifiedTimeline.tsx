@@ -120,7 +120,7 @@ export default function UnifiedTimeline({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-6 w-6 border-2 border-collab-700 border-t-[#75757a] rounded-full animate-spin" />
+        <div className="h-6 w-6 border-2 border-collab-700 border-t-collab-500 rounded-full animate-spin" />
       </div>
     );
   }
@@ -156,7 +156,7 @@ export default function UnifiedTimeline({
       {/* Timeline */}
       {groupedItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 rounded-2xl border border-dashed border-collab-700 bg-collab-800/50">
-          <Activity className="h-12 w-12 text-[#27272b] mb-4" />
+          <Activity className="h-12 w-12 text-collab-700 mb-4" />
           <h3 className="text-sm font-medium text-collab-400 mb-1">
             No activity found
           </h3>
@@ -169,7 +169,7 @@ export default function UnifiedTimeline({
       ) : (
         <div className="relative">
           {/* Vertical timeline line */}
-          <div className="absolute left-[15px] top-6 bottom-0 w-px bg-gradient-to-b from-collab-700 via-[#1f1f22] to-transparent" />
+          <div className="absolute left-[15px] top-6 bottom-0 w-px bg-gradient-to-b from-collab-700 via-collab-700 to-transparent" />
 
           {groupedItems.map((group) => (
             <Fragment key={group.date}>

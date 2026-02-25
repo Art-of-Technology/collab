@@ -115,7 +115,7 @@ export default function DisplayDropdown({
           size="sm"
           className={isModalVariant 
             ? "h-8 px-3 bg-transparent border-collab-600 text-white hover:bg-collab-700"
-            : "h-8 px-3 text-collab-500 hover:text-white border border-collab-600 hover:border-[#3a3a3a]"
+            : "h-8 px-3 text-collab-500 hover:text-white border border-collab-600 hover:border-collab-600"
           }
         >
           <Eye className="h-4 w-4 mr-2" />

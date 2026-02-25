@@ -27,7 +27,7 @@ export function WorkspaceLimitClient({
   
   if (isError) {
     return (
-      <div className="p-6 bg-red-500/10 border border-[#f85149]/20 rounded-md text-center mb-6">
+      <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-md text-center mb-6">
         <p className="text-red-500 text-sm">Error checking workspace limits. Please try refreshing the page.</p>
       </div>
     );
@@ -35,7 +35,7 @@ export function WorkspaceLimitClient({
   
   if (!canCreateWorkspace) {
     return (
-      <div className="bg-amber-500/10 p-6 rounded-md border border-[#f59e0b]/20 mb-6">
+      <div className="bg-amber-500/10 p-6 rounded-md border border-amber-500/20 mb-6">
         <h3 className="font-medium text-amber-500 text-lg">Workspace limit reached</h3>
         <p className="text-sm text-collab-400 mt-2">
           You have reached the maximum number of workspaces ({data?.maxCount || 3}) allowed on the free plan.

@@ -85,7 +85,7 @@ export default function AIAssistantWidget() {
         className={cn(
           "fixed bottom-6 right-6 z-50",
           "flex items-center gap-2 px-4 py-3",
-          "bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed]",
+          "bg-gradient-to-r from-violet-500 to-violet-600",
           "text-white font-medium text-sm",
           "rounded-full shadow-lg shadow-purple-500/25",
           "hover:shadow-xl hover:shadow-purple-500/30",
@@ -164,7 +164,7 @@ export default function AIAssistantWidget() {
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700 bg-gradient-to-r from-[#8b5cf6]/10 to-transparent">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700 bg-gradient-to-r from-violet-500/10 to-transparent">
         <div className="flex items-center gap-2">
           <div className="p-1.5 bg-violet-500/20 rounded-lg">
             <Sparkles className="h-4 w-4 text-violet-500" />
@@ -205,7 +205,7 @@ export default function AIAssistantWidget() {
           <div className="space-y-4">
             {/* Welcome message */}
             <div className="text-center py-6">
-              <div className="mx-auto w-12 h-12 rounded-2xl bg-gradient-to-br from-[#8b5cf6]/20 to-[#7c3aed]/20 flex items-center justify-center mb-3">
+              <div className="mx-auto w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500/20 to-violet-600/20 flex items-center justify-center mb-3">
                 <Sparkles className="h-6 w-6 text-violet-500" />
               </div>
               <h3 className="text-sm font-medium text-collab-50 mb-1">

@@ -158,7 +158,7 @@ export function NoteCreationWizard({
               </div>
 
               {/* Type Cards */}
-              <div className="rounded-lg border border-collab-700 overflow-hidden divide-y divide-[#1f1f1f]">
+              <div className="rounded-lg border border-collab-700 overflow-hidden divide-y divide-collab-700">
                 {category.types.map((type) => {
                   const config = NOTE_TYPE_CONFIGS[type];
                   const Icon = config.icon;
@@ -166,7 +166,7 @@ export function NoteCreationWizard({
                     <button
                       key={type}
                       onClick={() => handleTypeSelect(type)}
-                      className="group w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gradient-to-r hover:from-[#151518] hover:to-transparent transition-all duration-200 cursor-pointer text-left"
+                      className="group w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gradient-to-r hover:from-collab-800 hover:to-transparent transition-all duration-200 cursor-pointer text-left"
                     >
                       {/* Icon */}
                       <div className="w-7 h-7 rounded-md bg-collab-800 group-hover:bg-collab-700 flex items-center justify-center flex-shrink-0 transition-colors">
@@ -235,7 +235,7 @@ export function NoteCreationWizard({
           )}
 
           {/* Scope Cards */}
-          <div className="rounded-lg border border-collab-700 overflow-hidden divide-y divide-[#1f1f1f]">
+          <div className="rounded-lg border border-collab-700 overflow-hidden divide-y divide-collab-700">
             {availableScopes.map((scope) => {
               const config = NOTE_SCOPE_CONFIGS[scope];
               const Icon = scopeIcons[scope];
@@ -245,7 +245,7 @@ export function NoteCreationWizard({
                 <button
                   key={scope}
                   onClick={() => handleScopeSelect(scope)}
-                  className="group w-full flex items-center gap-3 px-4 py-3 hover:bg-gradient-to-r hover:from-[#151518] hover:to-transparent transition-all duration-200 cursor-pointer text-left"
+                  className="group w-full flex items-center gap-3 px-4 py-3 hover:bg-gradient-to-r hover:from-collab-800 hover:to-transparent transition-all duration-200 cursor-pointer text-left"
                 >
                   {/* Icon */}
                   <div className="w-7 h-7 rounded-md bg-collab-800 group-hover:bg-collab-700 flex items-center justify-center flex-shrink-0 transition-colors">
@@ -314,12 +314,12 @@ export function NoteCreationWizard({
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto">
-                <div className="divide-y divide-[#1f1f1f]">
+                <div className="divide-y divide-collab-700">
                   {filteredProjects.map((project) => (
                     <button
                       key={project.id}
                       onClick={() => handleProjectSelect(project.id)}
-                      className="group w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gradient-to-r hover:from-[#151518] hover:to-transparent transition-all duration-200 cursor-pointer text-left"
+                      className="group w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gradient-to-r hover:from-collab-800 hover:to-transparent transition-all duration-200 cursor-pointer text-left"
                     >
                       {/* Color indicator */}
                       <div

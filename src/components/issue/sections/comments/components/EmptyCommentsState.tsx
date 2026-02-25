@@ -5,7 +5,7 @@ import { MessageSquare } from "lucide-react";
 export function EmptyCommentsState() {
   return (
     <div className="text-center py-6">
-      <MessageSquare className="h-6 w-6 mx-auto mb-2 text-[#444]" />
+      <MessageSquare className="h-6 w-6 mx-auto mb-2 text-collab-600" />
       <p className="text-collab-400 text-xs mb-1">No comments yet</p>
       <p className="text-collab-500 text-[10px]">Start the conversation</p>
     </div>

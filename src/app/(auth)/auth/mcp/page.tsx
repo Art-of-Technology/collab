@@ -135,7 +135,7 @@ export default function MCPAuthPage() {
             <p className="mt-2 text-gray-400">Sign in to connect your workspace</p>
           </div>
 
-          <Card className="bg-collab-900 border-[#222]">
+          <Card className="bg-collab-900 border-collab-700">
             <CardHeader className="text-center">
               <div className="mx-auto mb-4 w-12 h-12 bg-collab-700 rounded-xl flex items-center justify-center">
                 <Terminal className="w-6 h-6 text-green-500" />
@@ -173,7 +173,7 @@ export default function MCPAuthPage() {
   if (!clientId || !redirectUri) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-collab-950">
-        <Card className="bg-collab-900 border-[#222] max-w-md">
+        <Card className="bg-collab-900 border-collab-700 max-w-md">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center">
               <XCircle className="w-6 h-6 text-red-500" />
@@ -191,7 +191,7 @@ export default function MCPAuthPage() {
   if (!isValidRedirectUri) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-collab-950">
-        <Card className="bg-collab-900 border-[#222] max-w-md">
+        <Card className="bg-collab-900 border-collab-700 max-w-md">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center">
               <XCircle className="w-6 h-6 text-red-500" />
@@ -216,7 +216,7 @@ export default function MCPAuthPage() {
           </Link>
         </div>
 
-        <Card className="bg-collab-900 border-[#222]">
+        <Card className="bg-collab-900 border-collab-700">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 w-12 h-12 bg-collab-700 rounded-xl flex items-center justify-center">
               <Terminal className="w-6 h-6 text-green-500" />

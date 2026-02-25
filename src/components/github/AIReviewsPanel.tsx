@@ -216,7 +216,7 @@ export function AIReviewsPanel({
             disabled={requestingReview}
             size="sm"
             variant="outline"
-            className="h-7 px-2 text-xs border-[#a371f7] text-violet-400 hover:bg-violet-400/10"
+            className="h-7 px-2 text-xs border-violet-400 text-violet-400 hover:bg-violet-400/10"
           >
             {requestingReview ? (
               <>

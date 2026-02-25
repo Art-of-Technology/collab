@@ -351,7 +351,7 @@ export function GlobalFilterSelector({
             <span className="text-collab-500 text-xs">Loading...</span>
           </div>
         ) : (
-          <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#27272b] scrollbar-track-transparent p-1.5">
+          <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-collab-700 scrollbar-track-transparent p-1.5">
             {/* Clear option */}
             {allowClear && (
               <Button

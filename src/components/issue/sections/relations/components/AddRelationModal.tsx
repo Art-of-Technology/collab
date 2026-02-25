@@ -165,7 +165,7 @@ export function AddRelationModal({
               placeholder={config.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-collab-900 border-collab-700 text-collab-50 placeholder-[#8b949e] focus:border-collab-600 focus:ring-0"
+              className="pl-10 bg-collab-900 border-collab-700 text-collab-50 placeholder-collab-400 focus:border-collab-600 focus:ring-0"
             />
           </div>
 

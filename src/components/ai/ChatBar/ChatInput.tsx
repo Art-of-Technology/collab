@@ -457,7 +457,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
             className={cn(
               "rounded-lg transition-all flex items-center gap-1 px-2 py-1 h-7",
               webSearchEnabled
-                ? "bg-cyan-400/15 text-cyan-400 border border-[#1EAEDB]/40"
+                ? "bg-cyan-400/15 text-cyan-400 border border-cyan-500/40"
                 : "bg-transparent text-white/30 hover:text-white/50 hover:bg-white/[0.04] border border-transparent"
             )}
           >

@@ -101,9 +101,9 @@ function ActivityRow({ activity }: { activity: ActivityItem }) {
 function NoRepositoryState({ workspaceId, projectSlug }: { workspaceId: string; projectSlug: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-6 text-center">
-      <Github className="h-10 w-10 text-[#333] mb-3" />
+      <Github className="h-10 w-10 text-collab-600 mb-3" />
       <p className="text-sm text-collab-500 mb-1">No repository connected</p>
-      <p className="text-xs text-[#555] mb-3">
+      <p className="text-xs text-collab-500 mb-3">
         Connect a GitHub repository to see activity
       </p>
       <a

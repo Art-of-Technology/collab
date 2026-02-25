@@ -150,7 +150,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
         class: cn(
           "prose prose-sm dark:prose-invert focus:outline-none max-w-full",
           "text-collab-50 prose-headings:text-white prose-strong:text-white",
-          "prose-blockquote:border-l-[#444] prose-blockquote:text-gray-400",
+          "prose-blockquote:border-l-collab-600 prose-blockquote:text-gray-400",
           "prose-hr:border-collab-600",
           "prose-ul:text-collab-50 prose-ol:text-collab-50 prose-li:text-collab-50",
           "prose-a:text-blue-400 prose-a:no-underline hover:prose-a:text-blue-300"

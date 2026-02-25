@@ -44,7 +44,7 @@ const buttonVariants = cva(
           "bg-violet-500/10 hover:bg-violet-500/20 text-violet-500 border border-violet-500/20 hover:border-violet-500/30",
         // AI Solid - for prominent AI actions
         "ai-solid":
-          "bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] hover:from-[#7c3aed] hover:to-[#6d28d9] text-white border border-transparent shadow-lg shadow-purple-500/20",
+          "bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white border border-transparent shadow-lg shadow-purple-500/20",
         // AI Ghost - subtle AI styling
         "ai-ghost":
           "hover:bg-violet-500/10 text-collab-400 hover:text-violet-300",

@@ -121,7 +121,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
           />
         ) : (
           <div className="flex justify-center items-center py-20">
-            <div className="h-6 w-6 border-2 border-collab-700 border-t-[#75757a] rounded-full animate-spin" />
+            <div className="h-6 w-6 border-2 border-collab-700 border-t-collab-500 rounded-full animate-spin" />
           </div>
         )}
       </div>

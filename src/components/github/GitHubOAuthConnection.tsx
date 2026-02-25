@@ -324,7 +324,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
           <div className="flex flex-col items-center text-center">
             {/* Icon */}
             <div className="relative w-16 h-16 mb-5">
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#27272b] to-[#1f1f22] flex items-center justify-center">
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-collab-700 to-collab-700 flex items-center justify-center">
                 <Github className="h-8 w-8 text-collab-500" />
               </div>
             </div>

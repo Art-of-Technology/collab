@@ -571,7 +571,7 @@ export default function ProjectsGanttModal({
                         >
                           <span className={cn(
                             "text-[10px]",
-                            isToday(day) ? "text-blue-400 font-medium" : isWeekend(day) ? "text-[#444]" : "text-collab-500"
+                            isToday(day) ? "text-blue-400 font-medium" : isWeekend(day) ? "text-collab-600" : "text-collab-500"
                           )}>
                             {format(day, 'd')}
                           </span>
@@ -655,7 +655,7 @@ export default function ProjectsGanttModal({
                                     <div
                                       className={cn(
                                         "absolute h-8 rounded-md cursor-pointer transition-all hover:brightness-110 overflow-hidden",
-                                        !project.hasRealDates && "opacity-50 border border-dashed border-[#666]"
+                                        !project.hasRealDates && "opacity-50 border border-dashed border-collab-500"
                                       )}
                                       style={{
                                         left: barStyle.left,
@@ -754,7 +754,7 @@ export default function ProjectsGanttModal({
                                             <Info className="h-3 w-3" />
                                             <span>No timeline data available</span>
                                           </div>
-                                          <p className="text-[#555]">
+                                          <p className="text-collab-500">
                                             Add start/due dates to issues to see accurate project timeline
                                           </p>
                                           <div className="pt-1 border-t border-collab-600">

@@ -543,7 +543,7 @@ function MemberCard({
           )}
 
           {/* Two columns */}
-          <div className="grid grid-cols-2 divide-x divide-[#27272a]">
+          <div className="grid grid-cols-2 divide-x divide-collab-700">
             <DayColumn
               title="Yesterday"
               date={format(new Date(yesterdayDate), 'MMM d')}

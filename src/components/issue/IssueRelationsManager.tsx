@@ -292,7 +292,7 @@ export function IssueRelationsManager({
           <div className="flex items-center gap-2 text-sm font-medium text-collab-50">
             <GitBranch className="h-4 w-4" />
             <span>Relations</span>
-            <Badge variant="secondary" className="h-5 px-2 text-[10px] bg-collab-600 text-[#ccc] border-0">
+            <Badge variant="secondary" className="h-5 px-2 text-[10px] bg-collab-600 text-collab-400 border-0">
               {relationsSummary.total}
             </Badge>
           </div>
@@ -400,7 +400,7 @@ export function IssueRelationsManager({
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Link existing issue or create new..."
-              className="flex-1 h-7 text-sm bg-collab-900 border-collab-600 text-collab-50 placeholder-[#8b949e] focus:border-collab-600"
+              className="flex-1 h-7 text-sm bg-collab-900 border-collab-600 text-collab-50 placeholder-collab-400 focus:border-collab-600"
             />
             
             <Button

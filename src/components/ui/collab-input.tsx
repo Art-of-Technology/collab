@@ -577,7 +577,7 @@ export function CollabInput({
         suppressContentEditableWarning
         className={cn(
           "min-h-[80px] p-4 rounded-xl pr-20 text-sm",
-          "overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-[#27272b]",
+          "overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-collab-700",
           "border border-collab-700 focus:border-collab-600 transition-colors duration-200",
           "whitespace-pre-wrap text-collab-50 !outline-none bg-collab-900",
           isOverLimit ? "border-red-400/70" : "",

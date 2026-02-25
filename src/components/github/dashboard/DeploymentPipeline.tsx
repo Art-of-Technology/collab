@@ -233,7 +233,7 @@ export function DeploymentPipeline({ repositoryId }: DeploymentPipelineProps) {
                     </div>
 
                     {index < sortedEnvironments.length - 1 && (
-                      <ArrowRight className="h-5 w-5 text-[#30363d] mx-2 flex-shrink-0" />
+                      <ArrowRight className="h-5 w-5 text-collab-700 mx-2 flex-shrink-0" />
                     )}
                   </div>
                 ))}

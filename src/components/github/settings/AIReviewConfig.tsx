@@ -136,7 +136,7 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
               onClick={() => handleToggleEnabled(!aiReviewEnabled)}
               className={cn(
                 'relative inline-flex h-6 w-11 items-center rounded-full transition-colors p-0',
-                aiReviewEnabled ? 'bg-violet-400' : 'bg-[#30363d]'
+                aiReviewEnabled ? 'bg-violet-400' : 'bg-collab-700'
               )}
             >
               <span
@@ -163,7 +163,7 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
                 className={cn(
                   'p-4 rounded-lg border text-left transition-all h-auto',
                   !aiReviewAutoTrigger
-                    ? 'border-[#a371f7] bg-violet-400/10'
+                    ? 'border-violet-400 bg-violet-400/10'
                     : 'border-collab-600 bg-collab-900 hover:border-collab-600'
                 )}
               >
@@ -186,7 +186,7 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
                 className={cn(
                   'p-4 rounded-lg border text-left transition-all h-auto',
                   aiReviewAutoTrigger
-                    ? 'border-[#a371f7] bg-violet-400/10'
+                    ? 'border-violet-400 bg-violet-400/10'
                     : 'border-collab-600 bg-collab-900 hover:border-collab-600'
                 )}
               >

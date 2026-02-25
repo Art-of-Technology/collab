@@ -307,7 +307,7 @@ export function NoteFormEditor({
         return (
             <div className="rounded-2xl bg-collab-800 border border-collab-700 p-12">
                 <div className="flex flex-col items-center justify-center gap-3">
-                    <div className="h-6 w-6 border-2 border-collab-700 border-t-[#75757a] rounded-full animate-spin" />
+                    <div className="h-6 w-6 border-2 border-collab-700 border-t-collab-500 rounded-full animate-spin" />
                     <p className="text-sm text-collab-500">Loading context...</p>
                 </div>
             </div>

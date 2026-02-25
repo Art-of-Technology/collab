@@ -210,7 +210,7 @@ export function IssueLabelSelector({
           </div>
         </div>
 
-        <div className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
+        <div className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-collab-600 scrollbar-track-transparent p-1">
           {isLoading ? (
             <div className="px-2 py-4 text-center text-collab-500 text-xs">
               Loading labels...

@@ -145,7 +145,7 @@ function TimeMarker({ label }: { label: string }) {
           <div className="w-1.5 h-1.5 rounded-full bg-collab-600 flex-shrink-0" />
         </div>
       </div>
-      <div className="flex-1 h-px bg-gradient-to-r from-[#27272a] to-transparent" />
+      <div className="flex-1 h-px bg-gradient-to-r from-collab-700 to-transparent" />
     </div>
   );
 }
@@ -235,7 +235,7 @@ function TimelineItem({ activity, isFirst, isLast, onOpenModal }: TimelineItemPr
           {activity.fromStatus && activity.toStatus && (
             <span className="flex items-center gap-1 text-[10px]">
               <span className="text-collab-500/50">{activity.fromStatusDisplayName || activity.fromStatus}</span>
-              <ArrowRight className="h-2.5 w-2.5 text-[#27272a]" />
+              <ArrowRight className="h-2.5 w-2.5 text-collab-700" />
               <span className={config.color}>{activity.toStatusDisplayName || activity.toStatus}</span>
             </span>
           )}
@@ -396,7 +396,7 @@ export function PlanningActivityFeed({
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center max-w-sm">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-b from-[#18181b] to-[#0f0f10] flex items-center justify-center mx-auto mb-4 border border-collab-600">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-b from-collab-800 to-collab-900 flex items-center justify-center mx-auto mb-4 border border-collab-600">
             <Zap className="h-7 w-7 text-collab-500/50" />
           </div>
           <p className="text-[15px] font-medium text-collab-50 mb-2">No activity yet</p>
@@ -508,7 +508,7 @@ export function PlanningActivityFeed({
                 <div className="w-2 h-2 rounded-full bg-collab-800 border border-collab-600 flex-shrink-0" />
               </div>
             </div>
-            <div className="flex-1 h-px bg-gradient-to-r from-[#27272a] to-transparent" />
+            <div className="flex-1 h-px bg-gradient-to-r from-collab-700 to-transparent" />
           </div>
         </div>
       </div>

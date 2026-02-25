@@ -261,7 +261,7 @@ export function IssueStatusSelector({
           Change status
         </div>
         
-        <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent space-y-0.5">
+        <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-collab-600 scrollbar-track-transparent space-y-0.5">
           {statuses.length > 0 ? (
             statuses
               .sort((a, b) => a.order - b.order)

@@ -117,7 +117,7 @@ export function VersioningConfig({
                 className={cn(
                   "p-4 rounded-lg border-2 text-left transition-all h-auto",
                   config.versioningStrategy === strategy.id
-                    ? "border-blue-400 bg-[#58a6ff]/5"
+                    ? "border-blue-400 bg-blue-400/5"
                     : "border-collab-700 bg-collab-900 hover:border-collab-600"
                 )}
               >

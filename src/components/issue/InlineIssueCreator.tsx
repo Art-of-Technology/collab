@@ -593,7 +593,7 @@ export function InlineIssueCreator({
                       <div className="flex items-center gap-2 w-full">
                         <div className={cn(
                           "w-3 h-3 rounded border flex items-center justify-center flex-shrink-0",
-                          isSelected ? "bg-green-700 border-[#238636]" : "border-collab-500"
+                          isSelected ? "bg-green-700 border-green-600" : "border-collab-500"
                         )}>
                           {isSelected && <Check className="h-2 w-2 text-white" />}
                         </div>

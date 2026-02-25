@@ -531,7 +531,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
         </div>
 
         {/* Keyboard shortcuts hint */}
-        <div className="px-4 pb-2 flex items-center gap-4 text-[10px] text-[#555]">
+        <div className="px-4 pb-2 flex items-center gap-4 text-[10px] text-collab-500">
           <span>Ctrl/Cmd + Scroll to zoom</span>
           <span>Drag to pan</span>
         </div>
@@ -690,7 +690,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                           {dayWidth >= 16 && (
                             <span className={cn(
                               "text-[9px]",
-                              isCurrentDay ? "text-blue-400 font-bold" : weekend ? "text-[#444]" : "text-[#555]"
+                              isCurrentDay ? "text-blue-400 font-bold" : weekend ? "text-collab-600" : "text-collab-500"
                             )}>
                               {format(day, 'd')}
                             </span>
@@ -770,7 +770,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                                   data-bar
                                   className={cn(
                                     "absolute h-8 rounded-md cursor-pointer transition-all hover:brightness-110 hover:scale-y-105 overflow-hidden select-none",
-                                    !project.hasRealDates && "opacity-50 border border-dashed border-[#666]"
+                                    !project.hasRealDates && "opacity-50 border border-dashed border-collab-500"
                                   )}
                                   style={{
                                     left: barStyle.left,
@@ -850,7 +850,7 @@ export default function ProjectsTimelineClient({ workspaceId }: ProjectsTimeline
                                         <Info className="h-3 w-3" />
                                         <span>No timeline data</span>
                                       </div>
-                                      <p className="text-[#555] mt-1">Add dates to issues to see timeline</p>
+                                      <p className="text-collab-500 mt-1">Add dates to issues to see timeline</p>
                                     </div>
                                   )}
                                 </div>

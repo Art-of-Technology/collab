@@ -281,7 +281,7 @@ export function ActionFiltersSelector({
           Filter by actions
         </div>
         
-        <div className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent space-y-0.5">
+        <div className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-collab-600 scrollbar-track-transparent space-y-0.5">
           {/* Clear all option */}
           <Button
             type="button"

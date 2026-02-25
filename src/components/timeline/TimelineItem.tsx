@@ -122,7 +122,7 @@ export function TimelineItem({
               className={cn(
                 "absolute h-6 rounded-md flex items-center justify-between px-2 cursor-pointer transition-all duration-200",
                 "border border-collab-600 shadow-sm hover:shadow-md hover:scale-[1.02]",
-                "bg-gradient-to-r from-collab-800 to-[#2a2a2a]"
+                "bg-gradient-to-r from-collab-800 to-collab-600"
               )}
               style={{
                 left: `calc(150px + ${start * dayWidth}px)`,
