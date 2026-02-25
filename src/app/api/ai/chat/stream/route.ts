@@ -251,10 +251,15 @@ function createAnthropicStream(
         let allMessages = [...messages];
         let continueLoop = true;
         let mcpRetried = false;
-
+        let mcpFallback = false;
         // Loop to handle pause_turn (Anthropic may pause) and MCP token retry
         while (continueLoop) {
           continueLoop = false;
+
+          // Build request — strip MCP if we're in fallback mode
+          const activeTools = mcpFallback
+            ? tools.filter((t: any) => t.type !== 'mcp_toolset')
+            : tools;
 
           const requestBody: Record<string, unknown> = {
             model: ANTHROPIC_MODEL,
@@ -262,18 +267,20 @@ function createAnthropicStream(
             system: systemPrompt,
             messages: allMessages,
             stream: true,
-            tools,
-            mcp_servers: mcpServers,
+            ...(activeTools.length > 0 ? { tools: activeTools } : {}),
+            ...(mcpFallback ? {} : { mcp_servers: mcpServers }),
+          };
+
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            'x-api-key': ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+            ...(mcpFallback ? {} : { 'anthropic-beta': 'mcp-client-2025-11-20' }),
           };
 
           const response = await fetch(ANTHROPIC_API_URL, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': ANTHROPIC_API_KEY,
-              'anthropic-version': '2023-06-01',
-              'anthropic-beta': 'mcp-client-2025-11-20',
-            },
+            headers,
             body: JSON.stringify(requestBody),
           });
 
@@ -297,7 +304,20 @@ function createAnthropicStream(
               }
             }
 
-            // Send error to client
+            // MCP retry exhausted — fall back to plain chat (no MCP tools)
+            if (isMcpError && mcpRetried) {
+              console.log('[stream] MCP failed after retry — falling back to chat without MCP tools');
+              mcpFallback = true;
+              sendEvent(controller, {
+                type: 'text',
+                content: '*Workspace tools are temporarily unavailable. I can still help with general questions.*\n\n',
+              });
+              fullTextContent += '*Workspace tools are temporarily unavailable. I can still help with general questions.*\n\n';
+              continueLoop = true;
+              continue;
+            }
+
+            // Non-MCP error — send to client
             let detail = `AI service error (${response.status}).`;
             try {
               const parsed = JSON.parse(errorText);
