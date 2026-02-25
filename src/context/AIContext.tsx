@@ -11,19 +11,24 @@ import React, {
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useWorkspace } from "./WorkspaceContext";
-import type {
-  AIMessage,
-  AISuggestion,
-  AIContext as AIContextType,
-} from "@/lib/ai";
+import type { AIContext as AIContextType } from "@/lib/ai";
 import {
   buildAIContext,
   getPageContextFromPath,
   getSuggestedActions,
   getContextualPrompt,
 } from "@/lib/ai";
+import type {
+  StreamEvent,
+  ToolStartStreamEvent,
+  ToolResultStreamEvent,
+  WebSearchResultsStreamEvent,
+} from "@/lib/ai/streaming";
 
-// Agent definition (client-side)
+// ──────────────────────────────────────────
+// Types
+// ──────────────────────────────────────────
+
 export interface ClientAgent {
   slug: string;
   name: string;
@@ -35,13 +40,58 @@ export interface ClientAgent {
   isDefault: boolean;
 }
 
-interface AIProviderState {
-  // Agent state
-  currentAgent: ClientAgent | null;
-  availableAgents: ClientAgent[];
-  setCurrentAgent: (slug: string) => void;
+/** A single content block in a message — text, tool call, or tool result */
+export interface ContentBlock {
+  type: "text" | "tool_start" | "tool_input" | "tool_result" | "web_search_results";
+  /** For text blocks */
+  text?: string;
+  /** For tool_start blocks */
+  toolType?: "mcp" | "web_search";
+  toolName?: string;
+  serverName?: string;
+  toolUseId?: string;
+  /** For tool_input blocks */
+  input?: Record<string, unknown>;
+  /** For tool_result blocks */
+  isError?: boolean;
+  content?: string;
+  /** For web_search_results blocks */
+  results?: Array<{ url: string; title: string; pageAge?: string }>;
+}
 
-  // Chat bar state (replaces old widget state)
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  /** Raw text content (for persistence and simple rendering) */
+  text: string;
+  /** Structured content blocks (for rich rendering) */
+  blocks: ContentBlock[];
+  timestamp: Date;
+}
+
+/** Tracks a tool call in progress */
+export interface ActiveToolCall {
+  toolUseId: string;
+  toolName: string;
+  toolType: "mcp" | "web_search";
+  serverName?: string;
+  input?: Record<string, unknown>;
+  status: "running" | "completed" | "error";
+  result?: string;
+}
+
+export interface QuickAction {
+  id: string;
+  label: string;
+  prompt: string;
+  icon?: string;
+}
+
+interface AIProviderState {
+  // Agent (Cleo — single agent, no switching)
+  agent: ClientAgent | null;
+
+  // Chat bar state
   isExpanded: boolean;
   isFocused: boolean;
   expandChat: () => void;
@@ -50,40 +100,42 @@ interface AIProviderState {
   blurInput: () => void;
 
   // Conversation state
-  currentConversationId: string | null;
-  messages: AIMessage[];
+  conversationId: string | null;
+  messages: ChatMessage[];
   isLoading: boolean;
   isStreaming: boolean;
-  streamingContent: string;
+  streamingText: string;
+  activeToolCalls: ActiveToolCall[];
 
-  // Conversation management
+  // Web search
+  webSearchEnabled: boolean;
+  setWebSearchEnabled: (enabled: boolean) => void;
+
+  // Actions
   sendMessage: (message: string) => Promise<void>;
-  sendStreamingMessage: (message: string) => Promise<void>;
   clearConversation: () => void;
-  loadConversation: (id: string) => Promise<void>;
   startNewConversation: () => void;
 
-  // Suggestions
-  suggestions: AISuggestion[];
-  refreshSuggestions: () => void;
-  executeSuggestion: (suggestion: AISuggestion) => Promise<void>;
+  // Quick actions / suggestions
+  quickActions: QuickAction[];
+  executeQuickAction: (action: QuickAction) => void;
 
   // Context
   context: AIContextType | null;
-  getContextualPrompt: () => string;
+  getPlaceholder: () => string;
 
-  // Backward compatibility
+  // Backward compat
   isOpen: boolean;
-  isMinimized: boolean;
   openWidget: () => void;
   closeWidget: () => void;
   toggleWidget: () => void;
-  minimizeWidget: () => void;
-  expandWidget: () => void;
-  clearHistory: () => void;
 }
 
 const AIProviderContext = createContext<AIProviderState | undefined>(undefined);
+
+// ──────────────────────────────────────────
+// Provider
+// ──────────────────────────────────────────
 
 export function AIProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
@@ -91,99 +143,63 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Agent state
-  const [availableAgents, setAvailableAgents] = useState<ClientAgent[]>([]);
-  const [currentAgent, setCurrentAgentState] = useState<ClientAgent | null>(
-    null
-  );
+  // Agent state (Cleo only)
+  const [agent, setAgent] = useState<ClientAgent | null>(null);
 
-  // Chat bar state
+  // Chat state
   const [isExpanded, setIsExpanded] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
-
-  // Conversation state
-  const [currentConversationId, setCurrentConversationId] = useState<
-    string | null
-  >(null);
-  const [messages, setMessages] = useState<AIMessage[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingContent, setStreamingContent] = useState("");
+  const [streamingText, setStreamingText] = useState("");
+  const [activeToolCalls, setActiveToolCalls] = useState<ActiveToolCall[]>([]);
+
+  // Web search
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   // Suggestions
-  const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
+  const [quickActions, setQuickActions] = useState<QuickAction[]>([]);
 
-  // Context ref
+  // Refs
   const contextRef = useRef<AIContextType | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Load available agents
+  // ── Load agent (Cleo) ──
   useEffect(() => {
-    async function fetchAgents() {
+    async function fetchAgent() {
       try {
         const response = await fetch("/api/ai/agents");
         if (response.ok) {
           const data = await response.json();
-          setAvailableAgents(data.agents);
-          // Set default agent
           const defaultAgent =
-            data.agents.find((a: ClientAgent) => a.isDefault) ||
-            data.agents[0];
-          if (defaultAgent && !currentAgent) {
-            setCurrentAgentState(defaultAgent);
+            data.agents?.find((a: ClientAgent) => a.isDefault) || data.agents?.[0];
+          if (defaultAgent) {
+            setAgent(defaultAgent);
           }
         }
       } catch {
-        // Fallback agents if API fails
-        const fallbackAgents: ClientAgent[] = [
-          {
-            slug: "alex",
-            name: "Alex",
-            color: "#8b5cf6",
-            description: "General AI assistant",
-            personality: "Friendly, helpful, concise",
-            capabilities: [
-              "navigate",
-              "search",
-              "summarize",
-              "analyze",
-              "answer",
-            ],
-            isDefault: true,
-          },
-          {
-            slug: "nova",
-            name: "Nova",
-            color: "#3b82f6",
-            description: "Project manager agent",
-            personality: "Methodical, data-driven, action-oriented",
-            capabilities: [
-              "create_issue",
-              "update_issue",
-              "search",
-              "sprint_report",
-              "workload_balance",
-              "triage",
-              "assign",
-            ],
-            isDefault: false,
-          },
-        ];
-        setAvailableAgents(fallbackAgents);
-        if (!currentAgent) {
-          setCurrentAgentState(fallbackAgents[0]);
-        }
+        // Fallback
+        setAgent({
+          slug: "cleo",
+          name: "Cleo",
+          color: "#6366f1",
+          description: "Your AI-powered workspace assistant",
+          personality: "Smart, proactive, and direct",
+          capabilities: [],
+          isDefault: true,
+        });
       }
     }
-    fetchAgents();
+    fetchAgent();
   }, []);
 
-  // Build context when dependencies change
+  // ── Build context ──
   useEffect(() => {
     if (session?.user && currentWorkspace) {
       const pageContext = getPageContextFromPath(pathname);
-
       const context = buildAIContext({
         user: {
           id: session.user.id || "",
@@ -200,160 +216,54 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
 
       contextRef.current = context;
 
-      // Update suggestions
-      const newSuggestions = getSuggestedActions(context).map(
-        (action, index) => ({
-          id: `suggestion_${index}`,
-          type: "quick_action" as const,
-          title: action.label,
-          description: action.prompt,
-        })
-      );
-      setSuggestions(newSuggestions);
+      // Update quick actions based on page context
+      const actions = getSuggestedActions(context).map((action, index) => ({
+        id: `qa_${index}`,
+        label: action.label,
+        prompt: action.prompt,
+      }));
+      setQuickActions(actions);
     }
   }, [session, currentWorkspace, pathname]);
 
-  // Set current agent
-  const setCurrentAgent = useCallback(
-    (slug: string) => {
-      const agent = availableAgents.find((a) => a.slug === slug);
-      if (agent) {
-        setCurrentAgentState(agent);
-        // Clear conversation when switching agents
-        setMessages([]);
-        setCurrentConversationId(null);
-        setStreamingContent("");
-      }
-    },
-    [availableAgents]
-  );
-
-  // Chat bar actions
-  const expandChat = useCallback(() => {
-    setIsExpanded(true);
-  }, []);
-
+  // ── Chat bar actions ──
+  const expandChat = useCallback(() => setIsExpanded(true), []);
   const collapseChat = useCallback(() => {
     setIsExpanded(false);
     setIsFocused(false);
   }, []);
-
   const focusInput = useCallback(() => {
     setIsFocused(true);
     setIsExpanded(true);
-    // Focus the input element if available
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
+    setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
+  const blurInput = useCallback(() => setIsFocused(false), []);
 
-  const blurInput = useCallback(() => {
-    setIsFocused(false);
-  }, []);
-
-  // Send non-streaming message
+  // ── Send message (streaming via MCP connector) ──
   const sendMessage = useCallback(
-    async (message: string) => {
-      if (!contextRef.current || isLoading) return;
-
-      const userMessage: AIMessage = {
-        id: `msg_${Date.now()}`,
-        role: "user",
-        content: message,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, userMessage]);
-      setIsLoading(true);
-      setIsExpanded(true);
-
-      try {
-        const response = await fetch("/api/ai/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message,
-            context: contextRef.current,
-            history: messages.slice(-10),
-            agentSlug: currentAgent?.slug,
-            conversationId: currentConversationId,
-          }),
-        });
-
-        if (!response.ok) throw new Error("Failed to get AI response");
-
-        const data = await response.json();
-
-        const assistantMessage: AIMessage = {
-          id: `msg_${Date.now()}_ai`,
-          role: "assistant",
-          content: data.content,
-          timestamp: new Date(),
-          agentSlug: data.agentSlug,
-          metadata: {
-            action: data.action,
-            suggestions: data.suggestions,
-          },
-        };
-
-        setMessages((prev) => [...prev, assistantMessage]);
-
-        if (data.conversationId) {
-          setCurrentConversationId(data.conversationId);
-        }
-
-        // Handle navigation action - check both direct and nested params
-        const navigateTo = data.action?.navigateTo || data.action?.params?.navigateTo || data.action?.params?.path;
-        if (navigateTo && data.action?.type === "navigate") {
-          const fullPath = navigateTo.startsWith("/") && currentWorkspace?.slug
-            ? `/${currentWorkspace.slug}${navigateTo}`
-            : navigateTo;
-          router.push(fullPath);
-        }
-
-        if (data.suggestions?.length > 0) {
-          setSuggestions(data.suggestions);
-        }
-      } catch (error) {
-        console.error("AI chat error:", error);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `msg_${Date.now()}_error`,
-            role: "assistant",
-            content:
-              "I apologize, but I encountered an error. Please try again.",
-            timestamp: new Date(),
-            agentSlug: currentAgent?.slug,
-          },
-        ]);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [isLoading, messages, currentAgent, currentConversationId, router]
-  );
-
-  // Send streaming message
-  const sendStreamingMessage = useCallback(
     async (message: string) => {
       if (!contextRef.current || isLoading || isStreaming) return;
 
-      const userMessage: AIMessage = {
+      const userMsg: ChatMessage = {
         id: `msg_${Date.now()}`,
         role: "user",
-        content: message,
+        text: message,
+        blocks: [{ type: "text", text: message }],
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, userMessage]);
+      setMessages((prev) => [...prev, userMsg]);
       setIsLoading(true);
       setIsStreaming(true);
-      setStreamingContent("");
+      setStreamingText("");
+      setActiveToolCalls([]);
       setIsExpanded(true);
 
-      // Create abort controller for cancellation
       abortControllerRef.current = new AbortController();
+
+      // Collect blocks for the assistant message
+      const assistantBlocks: ContentBlock[] = [];
+      let fullText = "";
 
       try {
         const response = await fetch("/api/ai/chat/stream", {
@@ -362,219 +272,238 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({
             message,
             context: contextRef.current,
-            history: messages.slice(-10),
-            agentSlug: currentAgent?.slug,
-            conversationId: currentConversationId,
+            history: messages.slice(-20).map((m) => ({
+              role: m.role,
+              content: m.text,
+            })),
+            conversationId,
+            webSearchEnabled,
           }),
           signal: abortControllerRef.current.signal,
         });
 
-        if (!response.ok) throw new Error("Streaming failed");
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
         if (!response.body) throw new Error("No response body");
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let fullContent = "";
+        let buffer = "";
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const text = decoder.decode(value, { stream: true });
-          const lines = text.split("\n");
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
 
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
 
+            let event: StreamEvent;
             try {
-              const data = JSON.parse(line.slice(6));
+              event = JSON.parse(line.slice(6));
+            } catch {
+              continue;
+            }
 
-              switch (data.type) {
-                case "text":
-                  fullContent += data.content;
-                  setStreamingContent(fullContent);
-                  break;
+            switch (event.type) {
+              case "text": {
+                const text = (event as any).content as string;
+                fullText += text;
+                setStreamingText(fullText);
 
-                case "done":
-                  // Final message with metadata
-                  const assistantMessage: AIMessage = {
-                    id: `msg_${Date.now()}_ai`,
-                    role: "assistant",
-                    content: data.fullContent || fullContent,
-                    timestamp: new Date(),
-                    agentSlug: currentAgent?.slug,
-                    metadata: {
-                      action: data.action,
-                      suggestions: data.suggestions,
-                    },
-                  };
-                  setMessages((prev) => [...prev, assistantMessage]);
-                  setStreamingContent("");
-
-                  // Handle navigation action - check both direct and nested params
-                  const navigateTo = data.action?.navigateTo || data.action?.params?.navigateTo || data.action?.params?.path;
-                  if (navigateTo && data.action?.type === "navigate") {
-                    // Build full path with workspace slug
-                    const fullPath = navigateTo.startsWith("/") && currentWorkspace?.slug
-                      ? `/${currentWorkspace.slug}${navigateTo}`
-                      : navigateTo;
-                    router.push(fullPath);
-                  }
-                  if (data.suggestions?.length > 0) {
-                    setSuggestions(data.suggestions);
-                  }
-                  break;
-
-                case "conversation":
-                  if (data.conversationId) {
-                    setCurrentConversationId(data.conversationId);
-                  }
-                  break;
-
-                case "error":
-                  throw new Error(data.message);
+                // Append to last text block or create new one
+                const lastBlock = assistantBlocks[assistantBlocks.length - 1];
+                if (lastBlock?.type === "text") {
+                  lastBlock.text = (lastBlock.text || "") + text;
+                } else {
+                  assistantBlocks.push({ type: "text", text });
+                }
+                break;
               }
-            } catch (parseError) {
-              // Skip malformed events
+
+              case "tool_start": {
+                const e = event as ToolStartStreamEvent;
+                assistantBlocks.push({
+                  type: "tool_start",
+                  toolType: e.toolType,
+                  toolName: e.toolName,
+                  serverName: e.serverName,
+                  toolUseId: e.toolUseId,
+                });
+                setActiveToolCalls((prev) => [
+                  ...prev,
+                  {
+                    toolUseId: e.toolUseId,
+                    toolName: e.toolName,
+                    toolType: e.toolType,
+                    serverName: e.serverName,
+                    status: "running",
+                  },
+                ]);
+                break;
+              }
+
+              case "tool_input": {
+                const e = event as any;
+                assistantBlocks.push({
+                  type: "tool_input",
+                  toolUseId: e.toolUseId,
+                  input: e.input,
+                });
+                setActiveToolCalls((prev) =>
+                  prev.map((tc) =>
+                    tc.toolUseId === e.toolUseId ? { ...tc, input: e.input } : tc
+                  )
+                );
+                break;
+              }
+
+              case "tool_result": {
+                const e = event as ToolResultStreamEvent;
+                assistantBlocks.push({
+                  type: "tool_result",
+                  toolUseId: e.toolUseId,
+                  isError: e.isError,
+                  content: e.content,
+                });
+                setActiveToolCalls((prev) =>
+                  prev.map((tc) =>
+                    tc.toolUseId === e.toolUseId
+                      ? { ...tc, status: e.isError ? "error" : "completed", result: e.content }
+                      : tc
+                  )
+                );
+                break;
+              }
+
+              case "web_search_results": {
+                const e = event as WebSearchResultsStreamEvent;
+                assistantBlocks.push({
+                  type: "web_search_results",
+                  toolUseId: e.toolUseId,
+                  results: e.results,
+                });
+                setActiveToolCalls((prev) =>
+                  prev.map((tc) =>
+                    tc.toolUseId === e.toolUseId ? { ...tc, status: "completed" } : tc
+                  )
+                );
+                break;
+              }
+
+              case "conversation": {
+                const cid = (event as any).conversationId;
+                if (cid) setConversationId(cid);
+                break;
+              }
+
+              case "done": {
+                const doneText = (event as any).fullContent || fullText;
+
+                // Parse navigation actions from text
+                const actionMatch = doneText.match(
+                  /\[ACTION:\s*type="navigate"\s*params=(\{[^}]+\})\]/
+                );
+                if (actionMatch) {
+                  try {
+                    const params = JSON.parse(actionMatch[1]);
+                    const path = params.path;
+                    if (path && currentWorkspace?.slug) {
+                      const fullPath = path.startsWith("/")
+                        ? `/${currentWorkspace.slug}${path}`
+                        : path;
+                      router.push(fullPath);
+                    }
+                  } catch {
+                    // Skip malformed action
+                  }
+                }
+                break;
+              }
+
+              case "error": {
+                const errMsg = (event as any).message || "An error occurred.";
+                throw new Error(errMsg);
+              }
             }
           }
         }
+
+        // Build final assistant message
+        const assistantMsg: ChatMessage = {
+          id: `msg_${Date.now()}_ai`,
+          role: "assistant",
+          text: fullText,
+          blocks: assistantBlocks,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
+        setStreamingText("");
+        setActiveToolCalls([]);
       } catch (error: any) {
-        if (error.name === "AbortError") return; // User cancelled
+        if (error.name === "AbortError") return;
 
-        console.error("Streaming error:", error);
-
-        // Provide contextual error message
-        let errorMsg = "I encountered an error processing your request. Please try again.";
-        if (error.message?.includes("429") || error.message?.includes("rate")) {
-          errorMsg = "I'm receiving too many requests right now. Please wait a moment and try again.";
-        } else if (error.message?.includes("timeout") || error.message?.includes("network")) {
-          errorMsg = "There was a network issue. Please check your connection and try again.";
-        } else if (error.message?.includes("401") || error.message?.includes("auth")) {
-          errorMsg = "Your session may have expired. Please refresh the page and try again.";
+        console.error("Chat error:", error);
+        let errorMsg = "I encountered an error. Please try again.";
+        if (error.message?.includes("MCP")) {
+          errorMsg = "Failed to connect to workspace tools. Please try again.";
         }
 
         setMessages((prev) => [
           ...prev,
           {
-            id: `msg_${Date.now()}_error`,
+            id: `msg_${Date.now()}_err`,
             role: "assistant",
-            content: errorMsg,
+            text: errorMsg,
+            blocks: [{ type: "text", text: errorMsg }],
             timestamp: new Date(),
-            agentSlug: currentAgent?.slug,
           },
         ]);
-        setStreamingContent("");
+        setStreamingText("");
+        setActiveToolCalls([]);
       } finally {
         setIsLoading(false);
         setIsStreaming(false);
         abortControllerRef.current = null;
       }
     },
-    [isLoading, isStreaming, messages, currentAgent, currentConversationId, router, currentWorkspace]
+    [isLoading, isStreaming, messages, conversationId, webSearchEnabled, router, currentWorkspace]
   );
 
-  // Clear conversation
+  // ── Conversation management ──
   const clearConversation = useCallback(() => {
     setMessages([]);
-    setCurrentConversationId(null);
-    setStreamingContent("");
+    setConversationId(null);
+    setStreamingText("");
+    setActiveToolCalls([]);
   }, []);
 
-  // Load an existing conversation
-  const loadConversation = useCallback(async (id: string) => {
-    try {
-      const response = await fetch(`/api/ai/conversations/${id}`);
-      if (!response.ok) throw new Error("Failed to load conversation");
-
-      const data = await response.json();
-
-      setCurrentConversationId(id);
-      setMessages(
-        data.messages.map((m: any) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          timestamp: new Date(m.createdAt),
-          agentSlug: m.agent?.slug,
-          metadata: m.metadata,
-        }))
-      );
-
-      // Set agent from conversation
-      if (data.agent?.slug) {
-        setCurrentAgent(data.agent.slug);
-      }
-
-      setIsExpanded(true);
-    } catch (error) {
-      console.error("Error loading conversation:", error);
-    }
-  }, [setCurrentAgent]);
-
-  // Start a new conversation
   const startNewConversation = useCallback(() => {
-    setMessages([]);
-    setCurrentConversationId(null);
-    setStreamingContent("");
+    clearConversation();
     focusInput();
-  }, [focusInput]);
+  }, [clearConversation, focusInput]);
 
-  // Execute a suggestion
-  const executeSuggestion = useCallback(
-    async (suggestion: AISuggestion) => {
-      if (suggestion.action) {
-        try {
-          const response = await fetch("/api/ai/action", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: suggestion.action,
-              context: contextRef.current,
-            }),
-          });
-          if (response.ok) {
-            const result = await response.json();
-            if (result.navigateTo) {
-              router.push(result.navigateTo);
-            }
-          }
-        } catch (error) {
-          console.error("Error executing suggestion:", error);
-        }
-      } else {
-        await sendStreamingMessage(suggestion.description || suggestion.title);
-      }
+  // ── Quick actions ──
+  const executeQuickAction = useCallback(
+    (action: QuickAction) => {
+      sendMessage(action.prompt);
     },
-    [sendStreamingMessage, router]
+    [sendMessage]
   );
 
-  // Refresh suggestions
-  const refreshSuggestions = useCallback(() => {
-    if (contextRef.current) {
-      const newSuggestions = getSuggestedActions(contextRef.current).map(
-        (action, index) => ({
-          id: `suggestion_${index}`,
-          type: "quick_action" as const,
-          title: action.label,
-          description: action.prompt,
-        })
-      );
-      setSuggestions(newSuggestions);
-    }
-  }, []);
-
-  // Get contextual prompt
-  const getContextPrompt = useCallback(() => {
+  // ── Placeholder text ──
+  const getPlaceholder = useCallback(() => {
     const pageType = contextRef.current?.currentPage?.type || "other";
     return getContextualPrompt(pageType);
   }, []);
 
-  // Keyboard shortcuts
+  // ── Keyboard shortcuts ──
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl+J: Toggle chat bar
-      if ((e.metaKey || e.ctrlKey) && e.key === "j") {
+      // Cmd/Ctrl+K: Focus search/AI input
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         if (isExpanded) {
           collapseChat();
@@ -582,7 +511,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
           focusInput();
         }
       }
-      // Escape: Collapse expanded chat
+      // Escape: Collapse
       if (e.key === "Escape" && isExpanded) {
         collapseChat();
       }
@@ -592,52 +521,35 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isExpanded, collapseChat, focusInput]);
 
+  // ── Provider value ──
   const value: AIProviderState = {
-    // Agent state
-    currentAgent,
-    availableAgents,
-    setCurrentAgent,
-
-    // Chat bar state
+    agent,
     isExpanded,
     isFocused,
     expandChat,
     collapseChat,
     focusInput,
     blurInput,
-
-    // Conversation state
-    currentConversationId,
+    conversationId,
     messages,
     isLoading,
     isStreaming,
-    streamingContent,
-
-    // Conversation management
+    streamingText,
+    activeToolCalls,
+    webSearchEnabled,
+    setWebSearchEnabled,
     sendMessage,
-    sendStreamingMessage,
     clearConversation,
-    loadConversation,
     startNewConversation,
-
-    // Suggestions
-    suggestions,
-    refreshSuggestions,
-    executeSuggestion,
-
-    // Context
+    quickActions,
+    executeQuickAction,
     context: contextRef.current,
-    getContextualPrompt: getContextPrompt,
-
-    // Backward compatibility
+    getPlaceholder,
+    // Backward compat
     isOpen: isExpanded,
-    isMinimized: !isExpanded && messages.length > 0,
     openWidget: expandChat,
     closeWidget: collapseChat,
     toggleWidget: () => (isExpanded ? collapseChat() : focusInput()),
-    minimizeWidget: collapseChat,
-    expandWidget: expandChat,
-    clearHistory: clearConversation,
   };
 
   return (
@@ -647,6 +559,10 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ──────────────────────────────────────────
+// Hooks
+// ──────────────────────────────────────────
+
 export function useAI() {
   const context = useContext(AIProviderContext);
   if (context === undefined) {
@@ -655,33 +571,31 @@ export function useAI() {
   return context;
 }
 
-// Specific hooks for different use cases
-export function useAISuggestions() {
-  const { suggestions, executeSuggestion, isLoading } = useAI();
-  return { suggestions, executeSuggestion, isLoading };
-}
-
 export function useAIChat() {
   const {
     messages,
     sendMessage,
-    sendStreamingMessage,
     clearConversation,
     isLoading,
     isStreaming,
-    streamingContent,
-    currentAgent,
+    streamingText,
+    activeToolCalls,
+    agent,
   } = useAI();
   return {
     messages,
     sendMessage,
-    sendStreamingMessage,
-    clearHistory: clearConversation,
     clearConversation,
     isLoading,
     isStreaming,
-    streamingContent,
-    currentAgent,
+    streamingText,
+    activeToolCalls,
+    agent,
+    // Legacy compat
+    sendStreamingMessage: sendMessage,
+    clearHistory: clearConversation,
+    currentAgent: agent,
+    streamingContent: streamingText,
   };
 }
 
@@ -694,12 +608,9 @@ export function useAIWidget() {
     focusInput,
     blurInput,
     isOpen,
-    isMinimized,
     openWidget,
     closeWidget,
     toggleWidget,
-    minimizeWidget,
-    expandWidget,
   } = useAI();
 
   return {
@@ -709,34 +620,46 @@ export function useAIWidget() {
     collapseChat,
     focusInput,
     blurInput,
-    // Backward compat
     isOpen,
-    isMinimized,
+    isMinimized: false,
     openWidget,
     closeWidget,
     toggleWidget,
-    minimizeWidget,
-    expandWidget,
+    minimizeWidget: collapseChat,
+    expandWidget: expandChat,
   };
 }
 
+/** @deprecated Use useAI().agent instead */
 export function useAIAgents() {
-  const { currentAgent, availableAgents, setCurrentAgent } = useAI();
-  return { currentAgent, availableAgents, setCurrentAgent };
+  const { agent } = useAI();
+  return {
+    currentAgent: agent,
+    availableAgents: agent ? [agent] : [],
+    setCurrentAgent: () => {},
+  };
+}
+
+export function useAISuggestions() {
+  const { quickActions, executeQuickAction, isLoading } = useAI();
+  return {
+    suggestions: quickActions.map((a) => ({
+      id: a.id,
+      type: "quick_action" as const,
+      title: a.label,
+      description: a.prompt,
+    })),
+    executeSuggestion: (s: any) => executeQuickAction({ id: s.id, label: s.title, prompt: s.description }),
+    isLoading,
+  };
 }
 
 export function useAIConversation() {
-  const {
-    currentConversationId,
-    messages,
-    loadConversation,
-    startNewConversation,
-    clearConversation,
-  } = useAI();
+  const { conversationId, messages, startNewConversation, clearConversation } = useAI();
   return {
-    currentConversationId,
+    currentConversationId: conversationId,
     messages,
-    loadConversation,
+    loadConversation: async () => {},
     startNewConversation,
     clearConversation,
   };

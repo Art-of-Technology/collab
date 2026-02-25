@@ -8,15 +8,14 @@ import React, {
   useImperativeHandle,
   useState,
 } from "react";
-import { ArrowUp, Loader2, Paperclip, X, Globe, Mic, Square, StopCircle } from "lucide-react";
+import { ArrowUp, Loader2, Paperclip, X, Globe, Mic, StopCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { useAIAgents } from "@/hooks/useAI";
 
 interface ChatInputProps {
   value: string;
   onValueChange: (value: string) => void;
-  onSend: (message: string, files?: File[], options?: { webSearch?: boolean }) => void;
+  onSend: (message: string, files?: File[]) => void;
   isLoading: boolean;
   isStreaming: boolean;
   placeholder?: string;
@@ -25,6 +24,8 @@ interface ChatInputProps {
   onArrowKey?: (direction: "up" | "down") => void;
   onEscape?: () => void;
   hasSelectedResult?: boolean;
+  webSearchEnabled: boolean;
+  onWebSearchToggle: () => void;
 }
 
 export interface ChatInputHandle {
@@ -70,17 +71,6 @@ function ImagePreviewDialog({
   );
 }
 
-// Divider between toggles
-function ToggleDivider() {
-  return (
-    <div className="relative h-5 w-[1px] mx-0.5">
-      <div
-        className="absolute inset-0 bg-gradient-to-b from-transparent via-white/20 to-transparent rounded-full"
-      />
-    </div>
-  );
-}
-
 const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
   {
     value,
@@ -88,28 +78,26 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     onSend,
     isLoading,
     isStreaming,
-    placeholder = "Search or ask AI anything...",
+    placeholder = "Search or ask Cleo anything...",
     onFocus,
     onBlur,
     onArrowKey,
     onEscape,
     hasSelectedResult,
+    webSearchEnabled,
+    onWebSearchToggle,
   },
   ref
 ) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  // Agent selection
-  const { currentAgent, availableAgents, setCurrentAgent } = useAIAgents();
-
   // File upload state
   const [files, setFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<Record<string, string>>({});
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // Toggle states
-  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  // Recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval>>();
@@ -221,21 +209,21 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   const handleSend = useCallback(() => {
     if (isRecording) {
       setIsRecording(false);
-      onSend(`[Voice message - ${recordingTime} seconds]`, [], { webSearch: webSearchEnabled });
+      onSend(`[Voice message - ${recordingTime} seconds]`, []);
       return;
     }
 
     const trimmed = value.trim();
     if ((!trimmed && files.length === 0) || isLoading || isStreaming) return;
 
-    onSend(trimmed, files.length > 0 ? files : undefined, { webSearch: webSearchEnabled });
+    onSend(trimmed, files.length > 0 ? files : undefined);
     onValueChange("");
     setFiles([]);
     setFilePreviews({});
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [value, files, isLoading, isStreaming, isRecording, recordingTime, webSearchEnabled, onSend, onValueChange]);
+  }, [value, files, isLoading, isStreaming, isRecording, recordingTime, onSend, onValueChange]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -441,19 +429,18 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
         </div>
       </div>
 
-      {/* Options row with toggles */}
+      {/* Options row with web search toggle */}
       <div
         className={cn(
           "flex items-center gap-1 px-3 pb-2.5 pt-0.5 transition-opacity duration-200",
           isRecording ? "opacity-0 pointer-events-none" : "opacity-100"
         )}
       >
-        {/* Left side: Web Search toggle + Agent selector */}
+        {/* Left side: Web Search toggle */}
         <div className="flex items-center gap-0.5">
-          {/* Web Search toggle */}
           <button
             type="button"
-            onClick={() => setWebSearchEnabled((prev) => !prev)}
+            onClick={onWebSearchToggle}
             className={cn(
               "rounded-lg transition-all flex items-center gap-1 px-2 py-1 h-7",
               webSearchEnabled
@@ -490,72 +477,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
               )}
             </AnimatePresence>
           </button>
-
-          {availableAgents.length > 0 && (
-            <>
-              <ToggleDivider />
-
-              {/* Agent selector toggles */}
-              {availableAgents.map((agent) => {
-                const isSelected = currentAgent?.slug === agent.slug;
-                return (
-                  <button
-                    key={agent.slug}
-                    type="button"
-                    onClick={() => setCurrentAgent(agent.slug)}
-                    className={cn(
-                      "rounded-lg transition-all flex items-center gap-1 px-2 py-1 h-7",
-                      isSelected
-                        ? "border"
-                        : "bg-transparent text-white/30 hover:text-white/50 hover:bg-white/[0.04] border border-transparent"
-                    )}
-                    style={
-                      isSelected
-                        ? {
-                            backgroundColor: `${agent.color}15`,
-                            borderColor: `${agent.color}40`,
-                            color: agent.color,
-                          }
-                        : undefined
-                    }
-                  >
-                    <motion.div
-                      animate={{
-                        scale: isSelected ? 1.1 : 1,
-                      }}
-                      whileHover={{
-                        scale: 1.15,
-                        transition: { type: "spring", stiffness: 300, damping: 10 },
-                      }}
-                      transition={{ type: "spring", stiffness: 260, damping: 25 }}
-                      className="w-4 h-4 flex items-center justify-center flex-shrink-0"
-                    >
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{
-                          backgroundColor: agent.color,
-                          boxShadow: isSelected ? `0 0 8px ${agent.color}60` : undefined,
-                        }}
-                      />
-                    </motion.div>
-                    <AnimatePresence>
-                      {isSelected && (
-                        <motion.span
-                          initial={{ width: 0, opacity: 0 }}
-                          animate={{ width: "auto", opacity: 1 }}
-                          exit={{ width: 0, opacity: 0 }}
-                          transition={{ duration: 0.15 }}
-                          className="text-[11px] font-medium overflow-hidden whitespace-nowrap flex-shrink-0"
-                        >
-                          {agent.name}
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
-                  </button>
-                );
-              })}
-            </>
-          )}
         </div>
 
         {/* Right side: Keyboard shortcut hint */}

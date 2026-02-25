@@ -11,8 +11,7 @@ export type {
   AgentChatResponse,
 } from './types';
 
-export { alexAgent } from './alex';
-export { novaAgent } from './nova';
+export { cleoAgent } from './cleo';
 
 export {
   getAllAgents,

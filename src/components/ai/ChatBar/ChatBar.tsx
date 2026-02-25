@@ -62,13 +62,17 @@ export default function ChatBar() {
   const {
     isExpanded,
     messages,
-    sendStreamingMessage,
+    sendMessage,
     isLoading,
     isStreaming,
     focusInput,
     blurInput,
     collapseChat,
-    currentAgent,
+    agent,
+    webSearchEnabled,
+    setWebSearchEnabled,
+    quickActions: aiQuickActions,
+    executeQuickAction,
   } = useAI();
 
   const router = useRouter();
@@ -159,7 +163,7 @@ export default function ChatBar() {
 
   // Handle Enter — navigate to selected result, or send to AI
   const handleSend = useCallback(
-    (message: string, files?: File[], options?: { webSearch?: boolean }) => {
+    (message: string, files?: File[]) => {
       if (selectedIndex >= 0 && selectedIndex < overlayItems.length) {
         overlayItems[selectedIndex].action();
         setInputValue("");
@@ -171,15 +175,10 @@ export default function ChatBar() {
       setShowOverlay(false);
       focusInput(); // now expand into conversation mode
 
-      // Prepend web search indicator if enabled
-      const finalMessage = options?.webSearch
-        ? `[Web Search] ${message}`
-        : message;
-
       // TODO: Handle files when image upload is implemented in AI context
-      sendStreamingMessage(finalMessage);
+      sendMessage(message);
     },
-    [selectedIndex, overlayItems, sendStreamingMessage, focusInput]
+    [selectedIndex, overlayItems, sendMessage, focusInput]
   );
 
   const handleEscape = useCallback(() => {
@@ -250,7 +249,7 @@ export default function ChatBar() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [localFocused, isExpanded, focusInput, blurInput, collapseChat, handleEscape, showOverlay]);
 
-  const agentColor = currentAgent?.color || "#8b5cf6";
+  const agentColor = agent?.color || "#6366f1";
   const barFocused = localFocused || isExpanded;
 
   const handleResultClick = useCallback(
@@ -433,6 +432,35 @@ export default function ChatBar() {
                           )}
                         </button>
                       ))}
+
+                      {/* AI Quick Actions (contextual) */}
+                      {aiQuickActions.length > 0 && (
+                        <>
+                          <div className="h-px bg-white/[0.04] mx-3 my-1" />
+                          <div className="px-4 pt-1 pb-1.5">
+                            <span className="text-[10px] font-medium text-white/25 uppercase tracking-wider">
+                              Ask Cleo
+                            </span>
+                          </div>
+                          {aiQuickActions.slice(0, 4).map((action, i) => (
+                            <button
+                              key={action.id}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleResultClick(() => executeQuickAction(action))}
+                              className={cn(
+                                "flex items-center gap-2.5 w-full px-4 py-1.5 text-left",
+                                "transition-colors duration-100",
+                                selectedIndex === quickActions.length + i
+                                  ? "bg-white/[0.08]"
+                                  : "hover:bg-white/[0.04]"
+                              )}
+                            >
+                              <Sparkles className="h-3.5 w-3.5 text-indigo-400/60" />
+                              <span className="text-sm text-white/50">{action.label}</span>
+                            </button>
+                          ))}
+                        </>
+                      )}
                     </>
                   ) : null}
                 </div>
@@ -454,15 +482,17 @@ export default function ChatBar() {
             isLoading={isLoading}
             isStreaming={isStreaming}
             placeholder={
-              currentAgent
-                ? `Search or ask ${currentAgent.name}...`
-                : "Search or ask AI anything..."
+              agent
+                ? `Search or ask ${agent.name}...`
+                : "Search or ask Cleo anything..."
             }
             onFocus={handleFocus}
             onBlur={handleBlur}
             onArrowKey={handleArrowKey}
             onEscape={handleEscape}
             hasSelectedResult={selectedIndex >= 0}
+            webSearchEnabled={webSearchEnabled}
+            onWebSearchToggle={() => setWebSearchEnabled(!webSearchEnabled)}
           />
 
         </div>

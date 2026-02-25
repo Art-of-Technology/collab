@@ -2,7 +2,10 @@ import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import type { AgentDefinition, AgentAction, AgentSuggestion } from './agents/types';
 import { getAgent, getDefaultAgent } from './agents/registry';
-import { AI_TOOLS, executeTool } from './tools';
+// Tools removed — MCP connector handles tools now via stream route
+// Legacy stubs for streamResponse backward compat (method is effectively dead code)
+const AI_TOOLS: never[] = [];
+const executeTool = async (): Promise<string> => JSON.stringify({ error: true, message: 'Legacy tools removed. Use /api/ai/chat/stream with MCP connector.' });
 
 // Types for AI Assistant
 export interface AIMessage {

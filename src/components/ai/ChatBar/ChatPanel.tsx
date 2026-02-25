@@ -2,11 +2,7 @@
 
 import React, { useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  X,
-  Plus,
-  Sparkles,
-} from "lucide-react";
+import { X, Plus, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -19,17 +15,18 @@ export default function ChatPanel() {
     isExpanded,
     messages,
     isStreaming,
-    streamingContent,
-    currentAgent,
+    streamingText,
+    activeToolCalls,
+    agent,
     collapseChat,
     startNewConversation,
-    suggestions,
-    executeSuggestion,
+    quickActions,
+    executeQuickAction,
   } = useAI();
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages or streaming updates
   useEffect(() => {
     requestAnimationFrame(() => {
       if (scrollRef.current) {
@@ -44,7 +41,7 @@ export default function ChatPanel() {
         }
       }
     });
-  }, [messages, streamingContent]);
+  }, [messages, streamingText, activeToolCalls]);
 
   return (
     <AnimatePresence>
@@ -59,22 +56,22 @@ export default function ChatPanel() {
           {/* Panel header */}
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06] shrink-0">
             <div className="flex items-center gap-2.5">
-              {currentAgent && (
+              {agent && (
                 <>
                   <div
                     className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
                     style={{
-                      backgroundColor: currentAgent.color,
-                      boxShadow: `0 0 10px ${currentAgent.color}30`,
+                      backgroundColor: agent.color,
+                      boxShadow: `0 0 10px ${agent.color}30`,
                     }}
                   >
-                    {currentAgent.name[0]}
+                    {agent.name[0]}
                   </div>
                   <span className="text-xs font-medium text-white/60">
-                    {currentAgent.name}
+                    {agent.name}
                   </span>
                   <span className="text-[10px] text-white/25">
-                    {currentAgent.personality}
+                    {agent.personality}
                   </span>
                 </>
               )}
@@ -106,35 +103,35 @@ export default function ChatPanel() {
               <div className="flex flex-col items-center justify-center py-12 px-4">
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center mb-4"
-                  style={{ backgroundColor: `${currentAgent?.color || "#8b5cf6"}15` }}
+                  style={{ backgroundColor: `${agent?.color || "#6366f1"}15` }}
                 >
                   <Sparkles
                     className="h-5 w-5"
-                    style={{ color: currentAgent?.color || "#8b5cf6" }}
+                    style={{ color: agent?.color || "#6366f1" }}
                   />
                 </div>
                 <p className="text-base font-medium text-white/70 mb-1">
                   How can I help?
                 </p>
                 <p className="text-xs text-white/25 text-center max-w-xs mb-6">
-                  {currentAgent?.description || "Ask me anything about your workspace."}
+                  {agent?.description || "Ask me anything about your workspace."}
                 </p>
 
-                {/* Quick suggestions */}
-                {suggestions.length > 0 && (
+                {/* Quick actions */}
+                {quickActions.length > 0 && (
                   <div className="flex flex-wrap gap-2 justify-center max-w-sm">
-                    {suggestions.slice(0, 4).map((suggestion) => (
+                    {quickActions.slice(0, 4).map((action) => (
                       <button
-                        key={suggestion.id}
-                        onClick={() => executeSuggestion(suggestion)}
+                        key={action.id}
+                        onClick={() => executeQuickAction(action)}
                         className={cn(
                           "px-3 py-1.5 text-[11px] rounded-xl",
                           "bg-white/[0.04] border border-white/[0.06]",
                           "text-white/35 hover:text-white/60 hover:bg-white/[0.07] hover:border-white/[0.1]",
-                          "transition-all duration-200",
+                          "transition-all duration-200"
                         )}
                       >
-                        {suggestion.title}
+                        {action.label}
                       </button>
                     ))}
                   </div>
@@ -146,25 +143,18 @@ export default function ChatPanel() {
                   <AIMessage
                     key={msg.id}
                     message={msg}
-                    agentName={
-                      msg.role === "assistant"
-                        ? currentAgent?.name
-                        : undefined
-                    }
-                    agentColor={
-                      msg.role === "assistant"
-                        ? currentAgent?.color
-                        : undefined
-                    }
+                    agentName={msg.role === "assistant" ? agent?.name : undefined}
+                    agentColor={msg.role === "assistant" ? agent?.color : undefined}
                   />
                 ))}
 
                 {/* Streaming message */}
-                {isStreaming && streamingContent && (
+                {isStreaming && (
                   <StreamingMessage
-                    content={streamingContent}
-                    agentName={currentAgent?.name}
-                    agentColor={currentAgent?.color}
+                    text={streamingText}
+                    activeToolCalls={activeToolCalls}
+                    agentName={agent?.name}
+                    agentColor={agent?.color}
                   />
                 )}
               </div>

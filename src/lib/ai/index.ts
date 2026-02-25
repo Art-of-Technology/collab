@@ -1,19 +1,42 @@
-// AI Assistant Module
-// Provides AI-powered assistance for the Collab platform
+// AI Module — Cleo-powered workspace assistant
+// Uses Anthropic MCP connector for tools + web search
 
+// Streaming types and utilities
 export {
-  AgentAssistant,
-  AIAssistant,
-  createAssistant,
-  getAIAssistant,
-  resetAIAssistant,
-  type AIMessage,
-  type AIAction,
-  type AISuggestion,
-  type AIContext,
-  type AIAssistantConfig,
-} from './assistant';
+  createSSEHeaders,
+  type StreamEventType,
+  type StreamEvent,
+  type AgentStreamEvent,
+  type TextStreamEvent,
+  type ToolStartStreamEvent,
+  type ToolInputStreamEvent,
+  type ToolResultStreamEvent,
+  type WebSearchResultsStreamEvent,
+  type ConversationStreamEvent,
+  type DoneStreamEvent,
+  type ErrorStreamEvent,
+} from './streaming';
 
+// MCP token provisioning — server-only, import directly from './mcp-token'
+// Do NOT re-export here: it pulls bcrypt/node-pre-gyp into client bundles
+
+// Agent system
+export {
+  cleoAgent,
+  getAllAgents,
+  getAgent,
+  getDefaultAgent,
+  invalidateAgentCache,
+  type AgentDefinition,
+  type AgentCapability,
+  type AgentMessage,
+  type AgentAction,
+  type AgentSuggestion,
+  type AgentChatRequest,
+  type AgentChatResponse,
+} from './agents';
+
+// Context utilities (still used for page detection and suggestions)
 export {
   buildAIContext,
   buildEnrichedContext,
@@ -23,41 +46,13 @@ export {
   parseUserIntent,
 } from './context';
 
+// Legacy assistant types (kept for backward compat, tools stubbed internally)
 export {
-  executeAction,
-  executeCreateIssue,
-  executeUpdateIssue,
-  executeSearch,
-  executeNavigate,
-  executeSummarize,
-  executeAnalyze,
-  executeAssign,
-  executeSprintReport,
-  executeWorkloadBalance,
-  getAgentActions,
-  canAgentExecute,
-  validateActionParams,
-  type ActionResult,
-  type ActionExecutor,
-} from './actions';
-
-export {
-  createStreamingResponse,
-  createSSEHeaders,
-} from './streaming';
-
-export {
-  AI_TOOLS,
-  executeTool,
-} from './tools';
-
-// Re-export agent system
-export {
-  getAllAgents,
-  getAgent,
-  getDefaultAgent,
-  type AgentDefinition,
-  type AgentCapability,
-  type AgentChatRequest,
-  type AgentChatResponse,
-} from './agents';
+  createAssistant,
+  AgentAssistant,
+  type AIMessage,
+  type AIAction,
+  type AISuggestion,
+  type AIContext,
+  type AIAssistantConfig,
+} from './assistant';

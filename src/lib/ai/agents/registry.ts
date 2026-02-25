@@ -1,11 +1,9 @@
 import type { AgentDefinition } from './types';
-import { alexAgent } from './alex';
-import { novaAgent } from './nova';
+import { cleoAgent } from './cleo';
 
-// In-memory cache of code-defined agents (fallback)
+// Cleo is the single unified agent (replaces Alex + Nova)
 const CODE_AGENTS: Record<string, AgentDefinition> = {
-  alex: alexAgent,
-  nova: novaAgent,
+  cleo: cleoAgent,
 };
 
 // In-memory cache for DB-backed agents
@@ -90,7 +88,7 @@ export async function getDefaultAgent(
   prisma?: any
 ): Promise<AgentDefinition> {
   const agents = await getAllAgents(prisma);
-  return agents.find((a) => a.isDefault) ?? agents[0] ?? alexAgent;
+  return agents.find((a) => a.isDefault) ?? agents[0] ?? cleoAgent;
 }
 
 /**
