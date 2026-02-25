@@ -139,10 +139,10 @@ function TimeMarker({ label }: { label: string }) {
     <div className="flex items-center gap-3 py-2">
       <div className="w-20 flex justify-end pr-2">
         <div className="flex items-center gap-1.5">
-          <span className="text-[9px] font-medium text-[#3f3f46] uppercase tracking-wider">
+          <span className="text-[9px] font-medium text-collab-500/50 uppercase tracking-wider">
             {label}
           </span>
-          <div className="w-1.5 h-1.5 rounded-full bg-[#3f3f46] flex-shrink-0" />
+          <div className="w-1.5 h-1.5 rounded-full bg-collab-600 flex-shrink-0" />
         </div>
       </div>
       <div className="flex-1 h-px bg-gradient-to-r from-[#27272a] to-transparent" />
@@ -175,12 +175,12 @@ function TimelineItem({ activity, isFirst, isLast, onOpenModal }: TimelineItemPr
         {/* Connector line - top */}
         <div className={cn(
           "w-px flex-1 min-h-2 mr-[11px]",
-          isFirst ? "bg-transparent" : "bg-[#27272a]"
+          isFirst ? "bg-transparent" : "bg-collab-600"
         )} />
         
         {/* Time + Icon row */}
         <div className="flex items-center gap-1.5">
-          <div className="text-[10px] text-[#52525b] group-hover:text-[#71717a] transition-colors">
+          <div className="text-[10px] text-collab-500/60 group-hover:text-collab-500 transition-colors">
             {exactTime}
           </div>
           <div className={cn(
@@ -196,7 +196,7 @@ function TimelineItem({ activity, isFirst, isLast, onOpenModal }: TimelineItemPr
         {/* Connector line - bottom */}
         <div className={cn(
           "w-px flex-1 min-h-2 mr-[11px]",
-          isLast ? "bg-transparent" : "bg-[#27272a]"
+          isLast ? "bg-transparent" : "bg-collab-600"
         )} />
       </div>
 
@@ -204,20 +204,20 @@ function TimelineItem({ activity, isFirst, isLast, onOpenModal }: TimelineItemPr
       <div 
         className={cn(
           "flex-1 mb-2 px-3 py-2 rounded-lg border cursor-pointer transition-all",
-          "bg-[#0c0c0d] border-[#1f1f23]",
-          "hover:bg-[#111113] hover:border-[#27272a]"
+          "bg-collab-950 border-collab-700",
+          "hover:bg-collab-900 hover:border-collab-600"
         )}
         onClick={() => onOpenModal(activity.issueId)}
       >
         {/* Single row: Key + Title + Meta */}
         <div className="flex items-center gap-2">
           {/* Issue key */}
-          <span className="text-[10px] font-mono text-[#52525b] flex-shrink-0">
+          <span className="text-[10px] font-mono text-collab-500/60 flex-shrink-0">
             {activity.issueKey}
           </span>
           
           {/* Title */}
-          <span className="flex-1 text-[13px] text-[#e4e4e7] truncate group-hover:text-white transition-colors">
+          <span className="flex-1 text-[13px] text-collab-50 truncate group-hover:text-white transition-colors">
             {activity.title}
           </span>
           
@@ -234,7 +234,7 @@ function TimelineItem({ activity, isFirst, isLast, onOpenModal }: TimelineItemPr
           {/* Status transition */}
           {activity.fromStatus && activity.toStatus && (
             <span className="flex items-center gap-1 text-[10px]">
-              <span className="text-[#3f3f46]">{activity.fromStatusDisplayName || activity.fromStatus}</span>
+              <span className="text-collab-500/50">{activity.fromStatusDisplayName || activity.fromStatus}</span>
               <ArrowRight className="h-2.5 w-2.5 text-[#27272a]" />
               <span className={config.color}>{activity.toStatusDisplayName || activity.toStatus}</span>
             </span>
@@ -247,17 +247,17 @@ function TimelineItem({ activity, isFirst, isLast, onOpenModal }: TimelineItemPr
           {activity.userName && (
             <div className="flex items-center gap-1">
               <Avatar className="h-4 w-4">
-                <AvatarFallback className="bg-[#27272a] text-[8px] text-[#71717a]">
+                <AvatarFallback className="bg-collab-600 text-[8px] text-collab-500">
                   {activity.userName.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-[10px] text-[#52525b]">{activity.userName}</span>
+              <span className="text-[10px] text-collab-500/60">{activity.userName}</span>
             </div>
           )}
           
           {/* Project */}
           {activity.projectName && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#18181b] text-[#3f3f46]">
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-collab-800 text-collab-500/50">
               {activity.projectName}
             </span>
           )}
@@ -290,7 +290,7 @@ function FilterPill({ type, count, isActive, onClick }: FilterPillProps) {
         "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-all border h-auto",
         isActive
           ? `${config.bgColor} text-white border-transparent shadow-lg`
-          : "bg-[#0f0f10] text-[#71717a] border-[#27272a] hover:border-[#3f3f46] hover:text-[#a1a1aa]"
+          : "bg-collab-900 text-collab-500 border-collab-600 hover:border-collab-600 hover:text-collab-400"
       )}
     >
       <config.icon className="h-3 w-3" />
@@ -381,11 +381,11 @@ export function PlanningActivityFeed({
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <div className="relative w-12 h-12 mx-auto mb-4">
-            <div className="absolute inset-0 rounded-full border-2 border-[#27272a]" />
+            <div className="absolute inset-0 rounded-full border-2 border-collab-600" />
             <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-500 animate-spin" />
-            <Activity className="absolute inset-0 m-auto h-5 w-5 text-[#3f3f46]" />
+            <Activity className="absolute inset-0 m-auto h-5 w-5 text-collab-500/50" />
           </div>
-          <p className="text-[13px] text-[#52525b]">Loading timeline...</p>
+          <p className="text-[13px] text-collab-500/60">Loading timeline...</p>
         </div>
       </div>
     );
@@ -396,11 +396,11 @@ export function PlanningActivityFeed({
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center max-w-sm">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-b from-[#18181b] to-[#0f0f10] flex items-center justify-center mx-auto mb-4 border border-[#27272a]">
-            <Zap className="h-7 w-7 text-[#3f3f46]" />
+          <div className="w-16 h-16 rounded-full bg-gradient-to-b from-[#18181b] to-[#0f0f10] flex items-center justify-center mx-auto mb-4 border border-collab-600">
+            <Zap className="h-7 w-7 text-collab-500/50" />
           </div>
-          <p className="text-[15px] font-medium text-[#fafafa] mb-2">No activity yet</p>
-          <p className="text-[13px] text-[#52525b] leading-relaxed">
+          <p className="text-[15px] font-medium text-collab-50 mb-2">No activity yet</p>
+          <p className="text-[13px] text-collab-500/60 leading-relaxed">
             When team members complete, start, or update issues, their activity will appear here in real-time.
           </p>
         </div>
@@ -412,15 +412,15 @@ export function PlanningActivityFeed({
     <>
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex-shrink-0 px-6 py-4 border-b border-[#1f1f23] bg-[#09090b]">
+        <div className="flex-shrink-0 px-6 py-4 border-b border-collab-700 bg-collab-950">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center">
                 <Zap className="h-4 w-4 text-amber-400" />
               </div>
               <div>
-                <h2 className="text-[14px] font-semibold text-[#fafafa]">Activity Timeline</h2>
-                <p className="text-[11px] text-[#52525b]">{activities.length} activities</p>
+                <h2 className="text-[14px] font-semibold text-collab-50">Activity Timeline</h2>
+                <p className="text-[11px] text-collab-500/60">{activities.length} activities</p>
               </div>
             </div>
             
@@ -428,7 +428,7 @@ export function PlanningActivityFeed({
               <Button
                 variant="ghost"
                 onClick={() => setActiveFilter(null)}
-                className="flex items-center gap-1.5 text-[11px] text-[#71717a] hover:text-[#a1a1aa] px-2 py-1 rounded-md hover:bg-[#18181b] transition-colors h-auto"
+                className="flex items-center gap-1.5 text-[11px] text-collab-500 hover:text-collab-400 px-2 py-1 rounded-md hover:bg-collab-800 transition-colors h-auto"
               >
                 <Filter className="h-3 w-3" />
                 Clear filter
@@ -504,8 +504,8 @@ export function PlanningActivityFeed({
           <div className="flex items-center gap-3 pt-2 pb-6">
             <div className="w-20 flex justify-end pr-2">
               <div className="flex items-center gap-1.5">
-                <span className="text-[9px] text-[#3f3f46]">End</span>
-                <div className="w-2 h-2 rounded-full bg-[#1a1a1d] border border-[#27272a] flex-shrink-0" />
+                <span className="text-[9px] text-collab-500/50">End</span>
+                <div className="w-2 h-2 rounded-full bg-collab-800 border border-collab-600 flex-shrink-0" />
               </div>
             </div>
             <div className="flex-1 h-px bg-gradient-to-r from-[#27272a] to-transparent" />

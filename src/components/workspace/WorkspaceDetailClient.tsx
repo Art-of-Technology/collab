@@ -188,7 +188,7 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
     <div className="w-full mx-auto">
       <PageHeader
         title={
-          <Button variant="ghost" size="sm" onClick={handleBackNavigation} className="h-6 px-2 text-xs text-[#7d8590] hover:text-[#e6edf3]">
+          <Button variant="ghost" size="sm" onClick={handleBackNavigation} className="h-6 px-2 text-xs text-collab-500 hover:text-collab-50">
             <ArrowLeft className="h-3 w-3 mr-1" />
             Back to Workspaces
           </Button>

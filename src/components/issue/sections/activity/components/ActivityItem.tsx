@@ -13,7 +13,7 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
   const showChangeDetails = shouldShowChangeDetails(activity);
 
   return (
-    <div className="group flex gap-2.5 py-1.5 hover:bg-[#0d0d0d] rounded-md px-1">
+    <div className="group flex gap-2.5 py-1.5 hover:bg-collab-950 rounded-md px-1">
       <div className="flex-shrink-0">
         <CustomAvatar user={activity.user} size="xs" />
       </div>
@@ -22,10 +22,10 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
         {/* Main activity text */}
         <div className="flex items-center gap-1.5 mb-0.5">
           <ActivityIcon action={activity.action} />
-          <span className="text-xs text-[#c9d1d9]">
+          <span className="text-xs text-collab-400">
             {actionText}
           </span>
-          <span className="text-[10px] text-[#7d8590]">
+          <span className="text-[10px] text-collab-500">
             {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
           </span>
         </div>

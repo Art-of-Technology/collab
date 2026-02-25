@@ -114,11 +114,11 @@ export function PinnedNotesSection({
         variant="ghost"
         size="sm"
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-2 text-xs font-medium text-[#75757a] hover:text-[#9c9ca1] hover:bg-transparent mb-3 w-full h-7 px-0 justify-start"
+        className="flex items-center gap-2 text-xs font-medium text-collab-500 hover:text-collab-400 hover:bg-transparent mb-3 w-full h-7 px-0 justify-start"
       >
         <Pin className="h-3.5 w-3.5 text-amber-500" />
         <span>Pinned</span>
-        <span className="text-[10px] bg-[#27272b] px-1.5 py-0.5 rounded-lg text-[#75757a]">
+        <span className="text-[10px] bg-collab-600 px-1.5 py-0.5 rounded-lg text-collab-500">
           {pinnedNotes.length}
         </span>
         <ChevronRight
@@ -130,10 +130,10 @@ export function PinnedNotesSection({
       </Button>
 
       {isExpanded && (
-        <div className="rounded-2xl border border-[#1f1f22] bg-[#171719] overflow-hidden divide-y divide-[#1f1f22]">
+        <div className="rounded-2xl border border-collab-700 bg-collab-800 overflow-hidden divide-y divide-collab-700">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-[#75757a]" />
+              <Loader2 className="h-5 w-5 animate-spin text-collab-500" />
             </div>
           ) : (
             pinnedNotes.map((note) => {
@@ -145,7 +145,7 @@ export function PinnedNotesSection({
                 <Link
                   key={note.id}
                   href={`/${workspaceSlug}/notes/${note.id}`}
-                  className="group relative flex items-center gap-4 px-5 py-3.5 hover:bg-[#1f1f22] transition-all duration-200"
+                  className="group relative flex items-center gap-4 px-5 py-3.5 hover:bg-collab-700 transition-all duration-200"
                 >
                   {/* Color indicator based on scope */}
                   <div
@@ -158,14 +158,14 @@ export function PinnedNotesSection({
                     {/* Title Row */}
                     <div className="flex items-center gap-2.5">
                       <TypeIcon className={cn("h-3.5 w-3.5 flex-shrink-0", typeConfig?.color)} />
-                      <h3 className="text-sm font-medium text-[#fafafa] group-hover:text-white truncate">
+                      <h3 className="text-sm font-medium text-collab-50 group-hover:text-white truncate">
                         {note.title}
                       </h3>
                       <Pin className="h-3 w-3 text-amber-500 flex-shrink-0" />
                       {note.isAiContext && (
                         <Bot className="h-3 w-3 text-purple-400 flex-shrink-0" />
                       )}
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-[#27272b] text-[#75757a] font-medium flex-shrink-0 flex items-center gap-1">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-collab-600 text-collab-500 font-medium flex-shrink-0 flex items-center gap-1">
                         <ScopeIcon className="h-2.5 w-2.5" />
                         {note.scope.charAt(0) + note.scope.slice(1).toLowerCase()}
                       </span>
@@ -175,17 +175,17 @@ export function PinnedNotesSection({
                     <div className="flex items-center gap-3 mt-1.5">
                       {/* Author avatar */}
                       <div className="flex items-center gap-1.5">
-                        <Avatar className="h-4 w-4 ring-1 ring-[#1f1f22]">
+                        <Avatar className="h-4 w-4 ring-1 ring-collab-700">
                           <AvatarImage src={note.author.image || undefined} />
-                          <AvatarFallback className="text-[8px] bg-[#101011] text-[#75757a]">
+                          <AvatarFallback className="text-[8px] bg-collab-900 text-collab-500">
                             {note.author.name?.charAt(0)?.toUpperCase() || "?"}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="text-[10px] text-[#75757a]">{note.author.name}</span>
+                        <span className="text-[10px] text-collab-500">{note.author.name}</span>
                       </div>
 
                       {note.project && (
-                        <div className="flex items-center gap-1 text-[11px] text-[#75757a]">
+                        <div className="flex items-center gap-1 text-[11px] text-collab-500">
                           <div
                             className="h-2.5 w-2.5 rounded-full"
                             style={{ backgroundColor: note.project.color || "#6366f1" }}
@@ -194,7 +194,7 @@ export function PinnedNotesSection({
                         </div>
                       )}
 
-                      <span className="text-[10px] text-[#52525b]">
+                      <span className="text-[10px] text-collab-500/60">
                         {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
                       </span>
                     </div>

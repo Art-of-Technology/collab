@@ -27,17 +27,17 @@ export default function IssuePage() {
   if (workspaceLoading || !workspaceId || !issueParam) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-[#8b949e]" />
+        <Loader2 className="h-6 w-6 animate-spin text-collab-400" />
       </div>
     );
   }
 
   return (
-    <div className="h-full w-full overflow-hidden bg-[#0a0a0a]">
+    <div className="h-full w-full overflow-hidden bg-collab-950">
       <Suspense
         fallback={
           <div className="flex h-[80vh] items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-[#8b949e]" />
+            <Loader2 className="h-6 w-6 animate-spin text-collab-400" />
           </div>
         }
       >

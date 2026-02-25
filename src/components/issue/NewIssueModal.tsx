@@ -326,7 +326,7 @@ export default function NewIssueModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn(
-        "p-0 bg-[#0e0e0e] border-[#1a1a1a] overflow-hidden flex flex-col",
+        "p-0 bg-collab-900 border-collab-700 overflow-hidden flex flex-col",
         isFullscreen 
           ? "w-full h-[95vh] max-w-7xl mx-auto my-4 rounded-lg" 
           : "max-w-2xl max-h-[90vh]"
@@ -336,19 +336,19 @@ export default function NewIssueModal({
         </VisuallyHidden>
         
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a1a] flex-shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700 flex-shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-sm bg-purple-500 flex items-center justify-center">
               <span className="text-xs text-white font-medium">W</span>
             </div>
-            <span className="text-[#9ca3af] text-sm">New issue</span>
+            <span className="text-gray-400 text-sm">New issue</span>
           </div>
           <div className="flex items-center gap-1">
             <Button
               onClick={toggleFullscreen}
               variant="ghost"
               size="sm"
-              className="text-[#6e7681] hover:text-white p-1"
+              className="text-collab-500 hover:text-white p-1"
               title={isFullscreen ? "Minimize" : "Fullscreen"}
             >
               {isFullscreen ? (
@@ -361,7 +361,7 @@ export default function NewIssueModal({
               onClick={() => onOpenChange(false)}
               variant="ghost"
               size="sm"
-              className="text-[#6e7681] hover:text-white p-1"
+              className="text-collab-500 hover:text-white p-1"
               title="Close"
             >
               <X className="h-4 w-4" />
@@ -460,18 +460,18 @@ export default function NewIssueModal({
         </div>
 
         {/* Actions - Fixed at bottom */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-[#1a1a1a] flex-shrink-0 bg-[#0e0e0e]">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-collab-700 flex-shrink-0 bg-collab-900">
           <Button
             variant="ghost"
             type="button"
             onClick={() => setCreateMore(!createMore)}
-            className="h-auto p-0 gap-2 text-[#6e7681] hover:text-white hover:bg-transparent"
+            className="h-auto p-0 gap-2 text-collab-500 hover:text-white hover:bg-transparent"
           >
             <div className={cn(
               "w-4 h-4 rounded border flex items-center justify-center transition-colors",
               createMore
                 ? "bg-blue-500 border-blue-500"
-                : "border-[#333] hover:border-[#555]"
+                : "border-collab-600 hover:border-collab-600"
             )}>
               {createMore && <Plus className="h-2.5 w-2.5 text-white" />}
             </div>
@@ -482,7 +482,7 @@ export default function NewIssueModal({
             <Button 
               onClick={handleCreate} 
               disabled={!canCreate || creating || createIssueMutation.isPending}
-              className="bg-[#238636] hover:bg-[#2ea043] text-white border-0 h-8 px-3 text-sm font-medium"
+              className="bg-green-700 hover:bg-green-600 text-white border-0 h-8 px-3 text-sm font-medium"
             >
               {creating || createIssueMutation.isPending ? "Creating..." : "Create issue"}
             </Button>

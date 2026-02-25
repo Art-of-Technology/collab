@@ -69,7 +69,7 @@ export function TryItFormFields({
                     value={value}
                     onChange={(e) => onPathParamChange(key, e.target.value)}
                     placeholder={param?.description || `Enter ${key}`}
-                    className="mt-1 bg-[#090909] border-[#1f1f1f] text-sm"
+                    className="mt-1 bg-collab-950 border-collab-700 text-sm"
                   />
                   {helpInfo && (
                     <div className="mt-1.5 p-2 bg-blue-500/10 border border-blue-500/20 rounded text-xs">
@@ -117,7 +117,7 @@ export function TryItFormFields({
                           value={currentValue}
                           onChange={(e) => onQueryParamChange(param.name, e.target.value)}
                           placeholder={param.description || `Enter ${param.name}`}
-                          className="mt-1 bg-[#090909] border-[#1f1f1f] text-sm"
+                          className="mt-1 bg-collab-950 border-collab-700 text-sm"
                         />
                       </div>
                     );
@@ -143,7 +143,7 @@ export function TryItFormFields({
                           value={currentValue}
                           onChange={(e) => onQueryParamChange(param.name, e.target.value)}
                           placeholder={param.description || `Enter ${param.name}`}
-                          className="mt-1 bg-[#090909] border-[#1f1f1f] text-sm"
+                          className="mt-1 bg-collab-950 border-collab-700 text-sm"
                         />
                       </div>
                     );
@@ -185,7 +185,7 @@ export function TryItFormFields({
                               onFormFieldChange(field.key, value);
                             }}
                             placeholder={field.description || `Enter ${field.key}`}
-                            className="mt-1 bg-[#090909] border-[#1f1f1f] text-sm"
+                            className="mt-1 bg-collab-950 border-collab-700 text-sm"
                           />
                         </div>
                       ))}
@@ -210,7 +210,7 @@ export function TryItFormFields({
                               onFormFieldChange(field.key, value);
                             }}
                             placeholder={field.description || `Enter ${field.key}`}
-                            className="mt-1 bg-[#090909] border-[#1f1f1f] text-sm"
+                            className="mt-1 bg-collab-950 border-collab-700 text-sm"
                           />
                         </div>
                       ))}
@@ -223,7 +223,7 @@ export function TryItFormFields({
               <Textarea
                 value={requestBody}
                 onChange={(e) => onRequestBodyChange(e.target.value)}
-                className="min-h-[200px] sm:min-h-[250px] bg-[#090909] border-[#1f1f1f] font-mono text-xs"
+                className="min-h-[200px] sm:min-h-[250px] bg-collab-950 border-collab-700 font-mono text-xs"
                 placeholder="Enter JSON body..."
               />
             </TabsContent>
@@ -244,7 +244,7 @@ export function TryItFormFields({
               value={authHeader}
               onChange={(e) => onAuthHeaderChange(e.target.value)}
               placeholder="Bearer YOUR_TOKEN"
-              className="mt-1 bg-[#090909] border-[#1f1f1f] text-sm"
+              className="mt-1 bg-collab-950 border-collab-700 text-sm"
             />
             <p className="text-xs text-muted-foreground mt-1">
               {endpoint.authentication?.description || 'Bearer token authentication required'}

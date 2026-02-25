@@ -159,18 +159,18 @@ export function AppConfigEditor({
         <Button
           variant="outline"
           size="sm"
-          className="border-[#1f1f1f] hover:bg-[#1f1f1f] text-gray-300"
+          className="border-collab-700 hover:bg-collab-700 text-gray-300"
         >
           <Settings className="h-4 w-4 mr-1" />
           Configure
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-[#0a0a0a] border-[#1f1f1f] max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="bg-collab-950 border-collab-700 max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-white flex items-center gap-2">
             Configure {appName}
             {isSystemApp && (
-              <Badge className="bg-[#22c55e]/10 text-[#22c55e] border-[#22c55e]/20 text-xs">
+              <Badge className="bg-green-500/10 text-green-500 border-green-500/20 text-xs">
                 System App
               </Badge>
             )}
@@ -187,14 +187,14 @@ export function AppConfigEditor({
         ) : (
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <Tabs defaultValue="general" className="w-full">
-              <TabsList className="bg-[#1f1f1f] border-[#2f2f2f]">
-                <TabsTrigger value="general" className="data-[state=active]:bg-[#2f2f2f]">
+              <TabsList className="bg-collab-700 border-collab-600">
+                <TabsTrigger value="general" className="data-[state=active]:bg-collab-600">
                   General
                 </TabsTrigger>
-                <TabsTrigger value="oauth" className="data-[state=active]:bg-[#2f2f2f]">
+                <TabsTrigger value="oauth" className="data-[state=active]:bg-collab-600">
                   OAuth
                 </TabsTrigger>
-                <TabsTrigger value="security" className="data-[state=active]:bg-[#2f2f2f]">
+                <TabsTrigger value="security" className="data-[state=active]:bg-collab-600">
                   Security
                 </TabsTrigger>
               </TabsList>
@@ -207,7 +207,7 @@ export function AppConfigEditor({
                   <Input
                     id="name"
                     {...form.register('name')}
-                    className="bg-[#1f1f1f] border-[#2f2f2f] text-white"
+                    className="bg-collab-700 border-collab-600 text-white"
                     disabled={loading}
                   />
                   {form.formState.errors.name && (
@@ -226,7 +226,7 @@ export function AppConfigEditor({
                       id="entrypoint_url"
                       {...form.register('entrypoint_url')}
                       placeholder="https://your-app.example.com/app"
-                      className="bg-[#1f1f1f] border-[#2f2f2f] text-white flex-1"
+                      className="bg-collab-700 border-collab-600 text-white flex-1"
                       disabled={loading}
                     />
                     {form.watch('entrypoint_url') && (
@@ -234,7 +234,7 @@ export function AppConfigEditor({
                         type="button"
                         variant="outline"
                         size="icon"
-                        className="border-[#2f2f2f] hover:bg-[#2f2f2f]"
+                        className="border-collab-600 hover:bg-collab-600"
                         onClick={() => window.open(form.watch('entrypoint_url'), '_blank')}
                       >
                         <ExternalLink className="h-4 w-4" />
@@ -259,7 +259,7 @@ export function AppConfigEditor({
                     id="description"
                     {...form.register('description')}
                     placeholder="A brief description of what this app does..."
-                    className="bg-[#1f1f1f] border-[#2f2f2f] text-white resize-none"
+                    className="bg-collab-700 border-collab-600 text-white resize-none"
                     rows={3}
                     disabled={loading}
                   />
@@ -273,7 +273,7 @@ export function AppConfigEditor({
                     id="icon_url"
                     {...form.register('icon_url')}
                     placeholder="https://your-app.example.com/icon.png"
-                    className="bg-[#1f1f1f] border-[#2f2f2f] text-white"
+                    className="bg-collab-700 border-collab-600 text-white"
                     disabled={loading}
                   />
                   {form.formState.errors.icon_url && (
@@ -293,7 +293,7 @@ export function AppConfigEditor({
                     id="redirect_uris"
                     {...form.register('redirect_uris')}
                     placeholder="https://app.example.com/callback, https://dev-app.example.com/callback"
-                    className="bg-[#1f1f1f] border-[#2f2f2f] text-white resize-none"
+                    className="bg-collab-700 border-collab-600 text-white resize-none"
                     rows={3}
                     disabled={loading}
                   />
@@ -302,7 +302,7 @@ export function AppConfigEditor({
                   </p>
                 </div>
 
-                <div className="rounded-lg bg-[#1f1f1f] p-4 space-y-2">
+                <div className="rounded-lg bg-collab-700 p-4 space-y-2">
                   <h4 className="text-sm font-medium text-gray-300">Current Version</h4>
                   <div className="text-sm text-gray-500 space-y-1">
                     <p>Version: <span className="text-gray-400">{version.version}</span></p>
@@ -320,7 +320,7 @@ export function AppConfigEditor({
                     id="connect_src"
                     {...form.register('connect_src')}
                     placeholder="https://api.example.com, https://dev-api.example.com"
-                    className="bg-[#1f1f1f] border-[#2f2f2f] text-white resize-none"
+                    className="bg-collab-700 border-collab-600 text-white resize-none"
                     rows={3}
                     disabled={loading}
                   />
@@ -331,20 +331,20 @@ export function AppConfigEditor({
               </TabsContent>
             </Tabs>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-[#1f1f1f]">
+            <div className="flex justify-end gap-3 pt-4 border-t border-collab-700">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
                 disabled={loading}
-                className="border-[#2f2f2f] hover:bg-[#2f2f2f]"
+                className="border-collab-600 hover:bg-collab-600"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={loading}
-                className="bg-[#22c55e] hover:bg-[#16a34a] text-white"
+                className="bg-green-500 hover:bg-green-600 text-white"
               >
                 {loading ? (
                   <>

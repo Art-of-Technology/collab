@@ -79,12 +79,12 @@ export function TimelineItem({
     switch (status.toLowerCase()) {
       case 'completed':
       case 'done':
-        return <CheckCircle className="h-3 w-3 text-[#22c55e]" />;
+        return <CheckCircle className="h-3 w-3 text-green-500" />;
       case 'in-progress':
       case 'in progress':
-        return <Clock className="h-3 w-3 text-[#0969da]" />;
+        return <Clock className="h-3 w-3 text-blue-600" />;
       default:
-        return <Calendar className="h-3 w-3 text-[#8b949e]" />;
+        return <Calendar className="h-3 w-3 text-collab-400" />;
     }
   };
 
@@ -97,7 +97,7 @@ export function TimelineItem({
     <>
       {/* Item Label */}
       <div 
-        className="px-3 py-2 text-xs font-medium border-r border-[#333] sticky left-0 z-10 bg-[#1a1a1a]"
+        className="px-3 py-2 text-xs font-medium border-r border-collab-600 sticky left-0 z-10 bg-collab-800"
         style={{
           position: "absolute",
           top: 0,
@@ -110,7 +110,7 @@ export function TimelineItem({
       >
         <div className="flex items-center gap-2 w-full">
           {getStatusIcon(item.status)}
-          <span className="truncate text-[#e6edf3] flex-1">{item.title}</span>
+          <span className="truncate text-collab-50 flex-1">{item.title}</span>
         </div>
       </div>
 
@@ -121,8 +121,8 @@ export function TimelineItem({
             <div
               className={cn(
                 "absolute h-6 rounded-md flex items-center justify-between px-2 cursor-pointer transition-all duration-200",
-                "border border-[#333] shadow-sm hover:shadow-md hover:scale-[1.02]",
-                "bg-gradient-to-r from-[#1a1a1a] to-[#2a2a2a]"
+                "border border-collab-600 shadow-sm hover:shadow-md hover:scale-[1.02]",
+                "bg-gradient-to-r from-collab-800 to-[#2a2a2a]"
               )}
               style={{
                 left: `calc(150px + ${start * dayWidth}px)`,
@@ -134,14 +134,14 @@ export function TimelineItem({
                 boxShadow: `0 0 0 1px ${item.color || getStatusColorValue(item.status)}20`
               }}
             >
-              <span className="text-xs text-[#e6edf3] truncate flex-1 pr-2">
+              <span className="text-xs text-collab-50 truncate flex-1 pr-2">
                 {item.title}
               </span>
               
               {item.progress !== undefined && (
                 <Badge 
                   variant="secondary" 
-                  className="bg-[#333] text-[#e6edf3] text-[10px] px-1 py-0 h-4"
+                  className="bg-collab-600 text-collab-50 text-[10px] px-1 py-0 h-4"
                 >
                   {item.progress}%
                 </Badge>
@@ -160,7 +160,7 @@ export function TimelineItem({
               )}
             </div>
           </TooltipTrigger>
-          <TooltipContent className="p-0 overflow-hidden w-80 bg-[#0e0e0e] border-[#333]">
+          <TooltipContent className="p-0 overflow-hidden w-80 bg-collab-900 border-collab-600">
             <div className="p-4 space-y-3">
               {/* Header */}
               <div className="flex items-center gap-3">
@@ -172,17 +172,17 @@ export function TimelineItem({
                   }}
                 />
                 <div className="flex-1">
-                  <p className="font-medium text-[#e6edf3] text-sm">{item.title}</p>
+                  <p className="font-medium text-collab-50 text-sm">{item.title}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <Badge 
                       variant="outline" 
-                      className="bg-[#1a1a1a] text-[#8b949e] border-[#333] text-xs"
+                      className="bg-collab-800 text-collab-400 border-collab-600 text-xs"
                     >
                       {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
                     </Badge>
                     <Badge 
                       variant="outline" 
-                      className="bg-[#1a1a1a] border-[#333] text-xs"
+                      className="bg-collab-800 border-collab-600 text-xs"
                       style={{ 
                         color: item.color || getStatusColorValue(item.status),
                         borderColor: item.color || getStatusColorValue(item.status)
@@ -195,11 +195,11 @@ export function TimelineItem({
               </div>
 
               {/* Timeline Info */}
-              <div className="space-y-2 pt-2 border-t border-[#333]">
+              <div className="space-y-2 pt-2 border-t border-collab-600">
                 {item.startDate && item.dueDate ? (
-                  <div className="text-xs text-[#8b949e]">
+                  <div className="text-xs text-collab-400">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-[#e6edf3]">Timeline</span>
+                      <span className="font-medium text-collab-50">Timeline</span>
                       <span>{differenceInDays(new Date(item.dueDate), new Date(item.startDate))} days</span>
                     </div>
                     <div className="mt-1">
@@ -208,25 +208,25 @@ export function TimelineItem({
                   </div>
                 ) : item.dueDate ? (
                   <div className="text-xs">
-                    <span className="font-medium text-[#e6edf3]">Due:</span> 
-                    <span className="text-[#8b949e] ml-1">{format(new Date(item.dueDate), 'MMM d, yyyy')}</span>
+                    <span className="font-medium text-collab-50">Due:</span> 
+                    <span className="text-collab-400 ml-1">{format(new Date(item.dueDate), 'MMM d, yyyy')}</span>
                   </div>
                 ) : item.startDate ? (
                   <div className="text-xs">
-                    <span className="font-medium text-[#e6edf3]">Started:</span> 
-                    <span className="text-[#8b949e] ml-1">{format(new Date(item.startDate), 'MMM d, yyyy')}</span>
+                    <span className="font-medium text-collab-50">Started:</span> 
+                    <span className="text-collab-400 ml-1">{format(new Date(item.startDate), 'MMM d, yyyy')}</span>
                   </div>
                 ) : null}
               </div>
 
               {/* Progress */}
               {item.progress !== undefined && (
-                <div className="space-y-2 pt-2 border-t border-[#333]">
+                <div className="space-y-2 pt-2 border-t border-collab-600">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-[#e6edf3]">Progress</span>
-                    <span className="text-xs font-medium text-[#e6edf3]">{item.progress}%</span>
+                    <span className="text-xs font-medium text-collab-50">Progress</span>
+                    <span className="text-xs font-medium text-collab-50">{item.progress}%</span>
                   </div>
-                  <div className="w-full bg-[#333] rounded-full h-2">
+                  <div className="w-full bg-collab-600 rounded-full h-2">
                     <div 
                       className="h-2 rounded-full transition-all duration-500"
                       style={{ 

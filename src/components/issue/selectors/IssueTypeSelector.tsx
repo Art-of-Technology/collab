@@ -35,15 +35,15 @@ export function IssueTypeSelector({
       <div
         className={cn(
           "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs h-auto leading-tight min-h-[20px]",
-          "border border-[#2d2d30] bg-[#181818]",
-          "text-[#cccccc]"
+          "border border-collab-600 bg-collab-800",
+          "text-collab-400"
         )}
       >
         <Icon 
           className="h-3 w-3" 
           style={{ color: selectedConfig.color }}
         />
-        <span className="text-[#cccccc] text-xs">{selectedConfig.label}</span>
+        <span className="text-collab-400 text-xs">{selectedConfig.label}</span>
       </div>
     );
   }
@@ -57,8 +57,8 @@ export function IssueTypeSelector({
           disabled={disabled || readonly}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
-            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-            "text-[#cccccc] focus:outline-none bg-[#181818]",
+            "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
+            "text-collab-400 focus:outline-none bg-collab-800",
             (disabled || readonly) && "opacity-50 cursor-not-allowed"
           )}
         >
@@ -66,17 +66,17 @@ export function IssueTypeSelector({
             className="h-3 w-3"
             style={{ color: selectedConfig.color }}
           />
-          <span className="text-[#cccccc] text-xs">{selectedConfig.label}</span>
+          <span className="text-collab-400 text-xs">{selectedConfig.label}</span>
         </Button>
       </PopoverTrigger>
       
       <PopoverContent 
-        className="w-64 p-1 bg-[#1c1c1e] border-[#333] shadow-lg"
+        className="w-64 p-1 bg-collab-800 border-collab-600 shadow-lg"
         align="start"
         side="bottom"
         sideOffset={4}
       >
-        <div className="text-xs text-[#9ca3af] px-2 py-1.5 border-b border-[#333] mb-1">
+        <div className="text-xs text-gray-400 px-2 py-1.5 border-b border-collab-600 mb-1">
           Change issue type
         </div>
         
@@ -90,7 +90,7 @@ export function IssueTypeSelector({
                 key={type}
                 type="button"
                 variant="ghost"
-                className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
+                className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-collab-600 transition-colors text-left"
                 onClick={() => {
                   onChange(type);
                   setIsOpen(false);
@@ -101,11 +101,11 @@ export function IssueTypeSelector({
                   style={{ color: config.color }}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[#e6edf3] font-medium">{config.label}</div>
-                  <div className="text-xs text-[#6e7681] truncate">{config.description}</div>
+                  <div className="text-collab-50 font-medium">{config.label}</div>
+                  <div className="text-xs text-collab-500 truncate">{config.description}</div>
                 </div>
                 {value === type && (
-                  <span className="text-xs text-[#6e7681]">✓</span>
+                  <span className="text-xs text-collab-500">✓</span>
                 )}
               </Button>
             );

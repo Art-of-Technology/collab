@@ -300,7 +300,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
       return (
         <Button
           onClick={handleGitHubConnect}
-          className="h-10 px-5 bg-[#1f1f22] hover:bg-[#27272b] text-[#fafafa] border border-[#27272b] hover:border-[#3f3f46] transition-colors"
+          className="h-10 px-5 bg-collab-700 hover:bg-collab-600 text-collab-50 border border-collab-600 hover:border-collab-600 transition-colors"
         >
           <Github className="h-4 w-4 mr-2" />
           Connect GitHub Account
@@ -310,13 +310,13 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
 
     // Full card mode - shown when GitHub account is not connected
     return (
-      <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
-        <div className="px-4 sm:px-6 py-4 border-b border-[#1f1f22]">
+      <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+        <div className="px-4 sm:px-6 py-4 border-b border-collab-700">
           <div className="flex items-center gap-2">
-            <Github className="h-4 w-4 text-[#fafafa]" />
-            <h2 className="text-sm font-medium text-[#fafafa]">Connect Repository</h2>
+            <Github className="h-4 w-4 text-collab-50" />
+            <h2 className="text-sm font-medium text-collab-50">Connect Repository</h2>
           </div>
-          <p className="text-xs text-[#52525b] mt-0.5">
+          <p className="text-xs text-collab-500/60 mt-0.5">
             Link a GitHub repository to enable powerful integrations
           </p>
         </div>
@@ -325,20 +325,20 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
             {/* Icon */}
             <div className="relative w-16 h-16 mb-5">
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#27272b] to-[#1f1f22] flex items-center justify-center">
-                <Github className="h-8 w-8 text-[#75757a]" />
+                <Github className="h-8 w-8 text-collab-500" />
               </div>
             </div>
 
-            <h3 className="text-base font-medium text-[#fafafa] mb-2">
+            <h3 className="text-base font-medium text-collab-50 mb-2">
               Connect your GitHub account
             </h3>
-            <p className="text-sm text-[#75757a] mb-6 max-w-sm">
+            <p className="text-sm text-collab-500 mb-6 max-w-sm">
               Connect your GitHub account to browse repositories and enable automatic syncing.
             </p>
 
             <Button
               onClick={handleGitHubConnect}
-              className="h-10 px-6 bg-[#1f1f22] hover:bg-[#27272b] text-[#fafafa] border border-[#27272b] hover:border-[#3f3f46] transition-colors"
+              className="h-10 px-6 bg-collab-700 hover:bg-collab-600 text-collab-50 border border-collab-600 hover:border-collab-600 transition-colors"
             >
               <Github className="h-4 w-4 mr-2" />
               Connect with GitHub
@@ -350,32 +350,32 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
   }
 
   return (
-    <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
+    <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
       {/* Header */}
-      <div className="px-4 sm:px-6 py-4 border-b border-[#1f1f22]">
+      <div className="px-4 sm:px-6 py-4 border-b border-collab-700">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Github className="h-4 w-4 text-[#fafafa]" />
-            <h2 className="text-sm font-medium text-[#fafafa]">Select Repository</h2>
+            <Github className="h-4 w-4 text-collab-50" />
+            <h2 className="text-sm font-medium text-collab-50">Select Repository</h2>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <img
                 src={`https://github.com/${githubUser}.png`}
                 alt={githubUser || ''}
-                className="w-5 h-5 rounded-full ring-1 ring-[#27272b]"
+                className="w-5 h-5 rounded-full ring-1 ring-collab-600"
               />
-              <span className="text-xs text-[#9c9ca1]">@{githubUser}</span>
+              <span className="text-xs text-collab-400">@{githubUser}</span>
             </div>
             <button
               onClick={handleDisconnectGitHub}
-              className="text-xs text-[#52525b] hover:text-red-400 transition-colors"
+              className="text-xs text-collab-500/60 hover:text-red-400 transition-colors"
             >
               Disconnect
             </button>
           </div>
         </div>
-        <p className="text-xs text-[#52525b] mt-2">
+        <p className="text-xs text-collab-500/60 mt-2">
           Choose a repository to connect to this project. Webhooks will be configured automatically.
         </p>
       </div>
@@ -383,12 +383,12 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
       <div className="p-4 sm:p-5 space-y-3">
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#52525b]" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-collab-500/60" />
           <Input
             placeholder="Search repositories..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-10 pl-10 bg-[#101011] border-[#1f1f22] text-[#fafafa] placeholder:text-[#52525b] focus:border-[#3f3f46] focus-visible:ring-0"
+            className="h-10 pl-10 bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-collab-500/50 focus-visible:ring-0"
           />
         </div>
 
@@ -396,10 +396,10 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
         <div className="space-y-2">
           {loading && repositories.length === 0 ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-5 w-5 animate-spin text-[#52525b]" />
+              <Loader2 className="h-5 w-5 animate-spin text-collab-500/60" />
             </div>
           ) : filteredRepos.length === 0 ? (
-            <div className="text-center py-16 text-sm text-[#52525b]">
+            <div className="text-center py-16 text-sm text-collab-500/60">
               {searchTerm ? 'No repositories match your search' : 'No repositories found'}
             </div>
           ) : (
@@ -407,7 +407,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
               <div
                 key={repo.id}
                 className={cn(
-                  "group p-4 rounded-xl bg-[#101011] border border-[#1f1f22] hover:border-[#27272b] transition-colors",
+                  "group p-4 rounded-xl bg-collab-900 border border-collab-700 hover:border-collab-600 transition-colors",
                   repo.isConnected && "border-emerald-500/30 bg-emerald-500/5"
                 )}
               >
@@ -415,31 +415,31 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex items-start gap-3 min-w-0 flex-1">
                     {/* Repo Icon */}
-                    <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-[#1f1f22] flex items-center justify-center">
+                    <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-collab-700 flex items-center justify-center">
                       {repo.private ? (
-                        <Lock className="h-4 w-4 text-[#75757a]" />
+                        <Lock className="h-4 w-4 text-collab-500" />
                       ) : (
-                        <Github className="h-4 w-4 text-[#75757a]" />
+                        <Github className="h-4 w-4 text-collab-500" />
                       )}
                     </div>
 
                     {/* Name and badges */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-sm font-medium text-[#fafafa]">{repo.name}</h4>
+                        <h4 className="text-sm font-medium text-collab-50">{repo.name}</h4>
                         {repo.private && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#27272b] text-[#75757a] flex-shrink-0">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-collab-600 text-collab-500 flex-shrink-0">
                             Private
                           </span>
                         )}
                         {repo.language && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f1f22] text-[#9c9ca1] flex-shrink-0">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-collab-700 text-collab-400 flex-shrink-0">
                             {repo.language}
                           </span>
                         )}
                       </div>
                       {/* Description */}
-                      <p className="text-xs text-[#75757a] mt-1 line-clamp-1">
+                      <p className="text-xs text-collab-500 mt-1 line-clamp-1">
                         {repo.description || 'No description'}
                       </p>
                     </div>
@@ -450,7 +450,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
                     href={`https://github.com/${repo.full_name}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-shrink-0 p-1.5 rounded-md text-[#52525b] hover:text-[#9c9ca1] hover:bg-[#1f1f22] transition-colors"
+                    className="flex-shrink-0 p-1.5 rounded-md text-collab-500/60 hover:text-collab-400 hover:bg-collab-700 transition-colors"
                   >
                     <ExternalLink className="h-4 w-4" />
                   </a>
@@ -459,7 +459,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
                 {/* Bottom section - meta and actions */}
                 <div className="flex items-center justify-between gap-4 pl-12">
                   {/* Meta Row */}
-                  <div className="flex items-center gap-3 text-[11px] text-[#52525b] flex-wrap">
+                  <div className="flex items-center gap-3 text-[11px] text-collab-500/60 flex-wrap">
                     <span className="flex-shrink-0">{repo.owner.login}</span>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <GitBranch className="h-3 w-3" />
@@ -516,7 +516,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
             <button
               onClick={loadMore}
               disabled={loading}
-              className="flex items-center gap-2 h-9 px-4 text-xs text-[#75757a] hover:text-[#fafafa] bg-[#101011] hover:bg-[#1f1f22] border border-[#1f1f22] hover:border-[#27272b] rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 h-9 px-4 text-xs text-collab-500 hover:text-collab-50 bg-collab-900 hover:bg-collab-700 border border-collab-700 hover:border-collab-600 rounded-lg transition-colors disabled:opacity-50"
             >
               {loading ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

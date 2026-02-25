@@ -73,7 +73,7 @@ const healthConfig: Record<HealthStatus, { label: string; color: string; bgColor
   at_risk: { label: 'At Risk', color: 'text-amber-400', bgColor: 'bg-amber-500/20', icon: AlertTriangle },
   overdue: { label: 'Overdue', color: 'text-red-400', bgColor: 'bg-red-500/20', icon: AlertCircle },
   completed: { label: 'Completed', color: 'text-blue-400', bgColor: 'bg-blue-500/20', icon: CheckCircle2 },
-  no_data: { label: 'No Timeline', color: 'text-[#666]', bgColor: 'bg-[#333]/50', icon: Clock },
+  no_data: { label: 'No Timeline', color: 'text-collab-500', bgColor: 'bg-collab-600/50', icon: Clock },
 };
 
 type ZoomLevel = 'day' | 'week';
@@ -272,20 +272,20 @@ export default function ProjectsGanttModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl max-h-[90vh] p-0 bg-[#0e0e0e] border-[#1a1a1a] overflow-hidden">
+      <DialogContent className="max-w-7xl max-h-[90vh] p-0 bg-collab-900 border-collab-700 overflow-hidden">
         <DialogHeader className="sr-only">
           <DialogTitle>Projects Timeline</DialogTitle>
         </DialogHeader>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a1a]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700">
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 rounded-md flex items-center justify-center bg-blue-500/20">
               <BarChart3 className="h-3.5 w-3.5 text-blue-400" />
             </div>
             <div>
-              <h2 className="text-sm font-medium text-[#e6edf3]">Projects Timeline</h2>
-              <p className="text-xs text-[#666]">
+              <h2 className="text-sm font-medium text-collab-50">Projects Timeline</h2>
+              <p className="text-xs text-collab-500">
                 Track project progress and deadlines
               </p>
             </div>
@@ -317,7 +317,7 @@ export default function ProjectsGanttModal({
             )}
 
             {/* View Controls */}
-            <div className="flex items-center gap-1 border-r border-[#1a1a1a] pr-3">
+            <div className="flex items-center gap-1 border-r border-collab-700 pr-3">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -325,7 +325,7 @@ export default function ProjectsGanttModal({
                       variant="ghost"
                       size="sm"
                       onClick={() => setZoomLevel(zoomLevel === 'day' ? 'week' : 'day')}
-                      className="h-7 w-7 p-0 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+                      className="h-7 w-7 p-0 text-collab-400 hover:text-collab-50 hover:bg-collab-800"
                     >
                       {zoomLevel === 'day' ? <ZoomOut className="h-4 w-4" /> : <ZoomIn className="h-4 w-4" />}
                     </Button>
@@ -342,15 +342,15 @@ export default function ProjectsGanttModal({
                     variant="ghost"
                     size="sm"
                     className={cn(
-                      "h-7 w-7 p-0 hover:bg-[#1a1a1a]",
-                      healthFilter.length > 0 || !showNoData ? "text-blue-400" : "text-[#8b949e] hover:text-[#e6edf3]"
+                      "h-7 w-7 p-0 hover:bg-collab-800",
+                      healthFilter.length > 0 || !showNoData ? "text-blue-400" : "text-collab-400 hover:text-collab-50"
                     )}
                   >
                     <Filter className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 bg-[#161617] border-[#1f1f1f]">
-                  <div className="px-2 py-1.5 text-xs text-[#666]">Filter by status</div>
+                <DropdownMenuContent align="end" className="w-48 bg-collab-900 border-collab-700">
+                  <div className="px-2 py-1.5 text-xs text-collab-500">Filter by status</div>
                   {(['on_track', 'at_risk', 'overdue', 'completed'] as HealthStatus[]).map(health => {
                     const config = healthConfig[health];
                     return (
@@ -358,26 +358,26 @@ export default function ProjectsGanttModal({
                         key={health}
                         checked={healthFilter.includes(health)}
                         onCheckedChange={() => toggleHealthFilter(health)}
-                        className="text-[#e6edf3] focus:bg-[#1f1f1f] cursor-pointer"
+                        className="text-collab-50 focus:bg-collab-700 cursor-pointer"
                       >
                         <span className={config.color}>{config.label}</span>
                       </DropdownMenuCheckboxItem>
                     );
                   })}
-                  <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+                  <DropdownMenuSeparator className="bg-collab-700" />
                   <DropdownMenuCheckboxItem
                     checked={showNoData}
                     onCheckedChange={setShowNoData}
-                    className="text-[#e6edf3] focus:bg-[#1f1f1f] cursor-pointer"
+                    className="text-collab-50 focus:bg-collab-700 cursor-pointer"
                   >
                     Show projects without dates
                   </DropdownMenuCheckboxItem>
                   {(healthFilter.length > 0 || !showNoData) && (
                     <>
-                      <DropdownMenuSeparator className="bg-[#1f1f1f]" />
+                      <DropdownMenuSeparator className="bg-collab-700" />
                       <DropdownMenuItem
                         onClick={() => { setHealthFilter([]); setShowNoData(true); }}
-                        className="text-[#8b949e] focus:bg-[#1f1f1f] cursor-pointer"
+                        className="text-collab-400 focus:bg-collab-700 cursor-pointer"
                       >
                         Clear filters
                       </DropdownMenuItem>
@@ -393,7 +393,7 @@ export default function ProjectsGanttModal({
                 variant="ghost"
                 size="sm"
                 onClick={goToPreviousMonth}
-                className="h-7 w-7 p-0 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+                className="h-7 w-7 p-0 text-collab-400 hover:text-collab-50 hover:bg-collab-800"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -401,19 +401,19 @@ export default function ProjectsGanttModal({
                 variant="ghost"
                 size="sm"
                 onClick={goToToday}
-                className="h-7 px-2 text-xs text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+                className="h-7 px-2 text-xs text-collab-400 hover:text-collab-50 hover:bg-collab-800"
               >
                 <Calendar className="h-3 w-3 mr-1" />
                 Today
               </Button>
-              <span className="text-sm font-medium text-[#e6edf3] min-w-[120px] text-center">
+              <span className="text-sm font-medium text-collab-50 min-w-[120px] text-center">
                 {format(viewDate, 'MMMM yyyy')}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={goToNextMonth}
-                className="h-7 w-7 p-0 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+                className="h-7 w-7 p-0 text-collab-400 hover:text-collab-50 hover:bg-collab-800"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -423,7 +423,7 @@ export default function ProjectsGanttModal({
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="h-6 w-6 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+              className="h-6 w-6 text-collab-400 hover:text-collab-50 hover:bg-collab-800"
             >
               <X className="h-3.5 w-3.5" />
             </Button>
@@ -434,22 +434,22 @@ export default function ProjectsGanttModal({
         <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(90vh - 120px)' }}>
           {isLoading ? (
             <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-[#8b949e]" />
+              <Loader2 className="h-8 w-8 animate-spin text-collab-400" />
             </div>
           ) : !ganttData || ganttData.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-[#8b949e]">
+            <div className="flex-1 flex items-center justify-center text-collab-400">
               <div className="text-center">
-                <FolderOpen className="h-12 w-12 mx-auto mb-4 text-[#666]" />
+                <FolderOpen className="h-12 w-12 mx-auto mb-4 text-collab-500" />
                 <p className="text-base">No projects found</p>
-                <p className="text-sm text-[#666] mt-1">
+                <p className="text-sm text-collab-500 mt-1">
                   Create a project to see it on the timeline
                 </p>
               </div>
             </div>
           ) : filteredProjects.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-[#8b949e]">
+            <div className="flex-1 flex items-center justify-center text-collab-400">
               <div className="text-center">
-                <Filter className="h-12 w-12 mx-auto mb-4 text-[#666]" />
+                <Filter className="h-12 w-12 mx-auto mb-4 text-collab-500" />
                 <p className="text-base">No projects match your filters</p>
                 <Button
                   variant="ghost"
@@ -464,10 +464,10 @@ export default function ProjectsGanttModal({
           ) : (
             <div className="flex flex-1 overflow-hidden">
               {/* Project Names Column (Fixed) */}
-              <div className="w-72 flex-shrink-0 border-r border-[#1a1a1a] bg-[#0e0e0e] flex flex-col">
+              <div className="w-72 flex-shrink-0 border-r border-collab-700 bg-collab-900 flex flex-col">
                 {/* Header spacer */}
-                <div className="h-[56px] border-b border-[#1a1a1a] flex items-end px-3 pb-2 flex-shrink-0">
-                  <span className="text-xs font-medium text-[#8b949e]">
+                <div className="h-[56px] border-b border-collab-700 flex items-end px-3 pb-2 flex-shrink-0">
+                  <span className="text-xs font-medium text-collab-400">
                     {filteredProjects.length} Project{filteredProjects.length !== 1 ? 's' : ''}
                   </span>
                 </div>
@@ -487,7 +487,7 @@ export default function ProjectsGanttModal({
                       <div
                         key={project.id}
                         className={cn(
-                          "h-14 flex items-center px-3 border-b border-[#1a1a1a] hover:bg-[#161616] transition-colors",
+                          "h-14 flex items-center px-3 border-b border-collab-700 hover:bg-collab-900 transition-colors",
                           !project.hasRealDates && "opacity-60"
                         )}
                       >
@@ -497,7 +497,7 @@ export default function ProjectsGanttModal({
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-[#e6edf3] truncate">
+                            <span className="text-sm text-collab-50 truncate">
                               {project.name}
                             </span>
                             <TooltipProvider>
@@ -508,11 +508,11 @@ export default function ProjectsGanttModal({
                                 <TooltipContent side="right">
                                   <p className="font-medium">{health.label}</p>
                                   {project.hasRealDates ? (
-                                    <p className="text-xs text-[#8b949e]">
+                                    <p className="text-xs text-collab-400">
                                       {project.progress}% complete ({project.completedIssues}/{project.issueCount})
                                     </p>
                                   ) : (
-                                    <p className="text-xs text-[#8b949e]">
+                                    <p className="text-xs text-collab-400">
                                       No issues with dates assigned
                                     </p>
                                   )}
@@ -521,7 +521,7 @@ export default function ProjectsGanttModal({
                             </TooltipProvider>
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs text-[#666]">
+                            <span className="text-xs text-collab-500">
                               {project.completedIssues}/{project.issueCount} issues
                             </span>
                             {project.overdueIssues > 0 && (
@@ -542,14 +542,14 @@ export default function ProjectsGanttModal({
                 {/* Fixed headers */}
                 <div className="flex-shrink-0">
                   {/* Month headers */}
-                  <div className="h-7 flex border-b border-[#1a1a1a] bg-[#0e0e0e]">
+                  <div className="h-7 flex border-b border-collab-700 bg-collab-900">
                     {monthGroups.map((group, idx) => (
                       <div
                         key={idx}
-                        className="flex-shrink-0 border-r border-[#1a1a1a] flex items-center justify-center"
+                        className="flex-shrink-0 border-r border-collab-700 flex items-center justify-center"
                         style={{ width: group.days.length * dayWidth }}
                       >
-                        <span className="text-xs font-medium text-[#8b949e]">
+                        <span className="text-xs font-medium text-collab-400">
                           {format(group.month, 'MMMM yyyy')}
                         </span>
                       </div>
@@ -557,21 +557,21 @@ export default function ProjectsGanttModal({
                   </div>
 
                   {/* Day/Week headers */}
-                  <div className="h-7 flex border-b border-[#1a1a1a] bg-[#0e0e0e]">
+                  <div className="h-7 flex border-b border-collab-700 bg-collab-900">
                     {zoomLevel === 'day' ? (
                       timelineDays.map((day, idx) => (
                         <div
                           key={idx}
                           className={cn(
-                            "flex-shrink-0 flex items-center justify-center border-r border-[#1a1a1a]/50",
+                            "flex-shrink-0 flex items-center justify-center border-r border-collab-700/50",
                             isToday(day) && "bg-blue-500/10",
-                            isWeekend(day) && "bg-[#1a1a1a]/30"
+                            isWeekend(day) && "bg-collab-800/30"
                           )}
                           style={{ width: dayWidth }}
                         >
                           <span className={cn(
                             "text-[10px]",
-                            isToday(day) ? "text-blue-400 font-medium" : isWeekend(day) ? "text-[#444]" : "text-[#666]"
+                            isToday(day) ? "text-blue-400 font-medium" : isWeekend(day) ? "text-[#444]" : "text-collab-500"
                           )}>
                             {format(day, 'd')}
                           </span>
@@ -581,10 +581,10 @@ export default function ProjectsGanttModal({
                       timelineWeeks.map((week, idx) => (
                         <div
                           key={idx}
-                          className="flex-shrink-0 flex items-center justify-center border-r border-[#1a1a1a]"
+                          className="flex-shrink-0 flex items-center justify-center border-r border-collab-700"
                           style={{ width: week.days.length * dayWidth }}
                         >
-                          <span className="text-[10px] text-[#666]">
+                          <span className="text-[10px] text-collab-500">
                             W{format(week.start, 'w')}
                           </span>
                         </div>
@@ -624,9 +624,9 @@ export default function ProjectsGanttModal({
                           <div
                             key={idx}
                             className={cn(
-                              "flex-shrink-0 border-r border-[#1a1a1a]/30",
+                              "flex-shrink-0 border-r border-collab-700/30",
                               isToday(day) && "bg-blue-500/5",
-                              isWeekend(day) && "bg-[#1a1a1a]/20"
+                              isWeekend(day) && "bg-collab-800/20"
                             )}
                             style={{ width: dayWidth, height: '100%' }}
                           />
@@ -641,7 +641,7 @@ export default function ProjectsGanttModal({
                         return (
                           <div
                             key={project.id}
-                            className="absolute h-14 flex items-center border-b border-[#1a1a1a]/30"
+                            className="absolute h-14 flex items-center border-b border-collab-700/30"
                             style={{
                               top: idx * 56,
                               left: 0,
@@ -699,7 +699,7 @@ export default function ProjectsGanttModal({
                                   </TooltipTrigger>
                                   <TooltipContent
                                     side="top"
-                                    className="max-w-xs bg-[#1a1a1a] border-[#333] p-3"
+                                    className="max-w-xs bg-collab-800 border-collab-600 p-3"
                                   >
                                     <div className="space-y-2">
                                       <div className="flex items-center gap-2">
@@ -716,21 +716,21 @@ export default function ProjectsGanttModal({
                                             <span className={cn("text-xs px-1.5 py-0.5 rounded", health.bgColor, health.color)}>
                                               {health.label}
                                             </span>
-                                            <span className="text-xs text-[#8b949e]">
+                                            <span className="text-xs text-collab-400">
                                               {project.progress}% complete
                                             </span>
                                           </div>
 
-                                          <div className="text-xs text-[#8b949e] space-y-1">
+                                          <div className="text-xs text-collab-400 space-y-1">
                                             <div className="flex justify-between">
                                               <span>Timeline:</span>
-                                              <span className="text-[#e6edf3]">
+                                              <span className="text-collab-50">
                                                 {format(new Date(project.startDate), 'MMM d')} - {format(new Date(project.dueDate), 'MMM d, yyyy')}
                                               </span>
                                             </div>
                                             <div className="flex justify-between">
                                               <span>Issues:</span>
-                                              <span className="text-[#e6edf3]">
+                                              <span className="text-collab-50">
                                                 {project.completedIssues} of {project.issueCount} completed
                                               </span>
                                             </div>
@@ -742,14 +742,14 @@ export default function ProjectsGanttModal({
                                             )}
                                             <div className="flex justify-between">
                                               <span>Duration:</span>
-                                              <span className="text-[#e6edf3]">
+                                              <span className="text-collab-50">
                                                 {differenceInDays(new Date(project.dueDate), new Date(project.startDate))} days
                                               </span>
                                             </div>
                                           </div>
                                         </>
                                       ) : (
-                                        <div className="text-xs text-[#666] space-y-1">
+                                        <div className="text-xs text-collab-500 space-y-1">
                                           <div className="flex items-center gap-1.5">
                                             <Info className="h-3 w-3" />
                                             <span>No timeline data available</span>
@@ -757,8 +757,8 @@ export default function ProjectsGanttModal({
                                           <p className="text-[#555]">
                                             Add start/due dates to issues to see accurate project timeline
                                           </p>
-                                          <div className="pt-1 border-t border-[#333]">
-                                            <span className="text-[#8b949e]">
+                                          <div className="pt-1 border-t border-collab-600">
+                                            <span className="text-collab-400">
                                               {project.issueCount} issue{project.issueCount !== 1 ? 's' : ''} total
                                             </span>
                                           </div>
@@ -781,26 +781,26 @@ export default function ProjectsGanttModal({
         </div>
 
         {/* Footer with legend */}
-        <div className="px-4 py-2 border-t border-[#1a1a1a] flex items-center justify-between text-xs">
+        <div className="px-4 py-2 border-t border-collab-700 flex items-center justify-between text-xs">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5 text-[#666]">
+            <div className="flex items-center gap-1.5 text-collab-500">
               <div className="w-3 h-0.5 bg-blue-500" />
               <span>Today</span>
             </div>
-            <div className="flex items-center gap-3 border-l border-[#1a1a1a] pl-4">
+            <div className="flex items-center gap-3 border-l border-collab-700 pl-4">
               {(['on_track', 'at_risk', 'overdue', 'completed'] as HealthStatus[]).map(status => {
                 const config = healthConfig[status];
                 const Icon = config.icon;
                 return (
                   <div key={status} className="flex items-center gap-1">
                     <Icon className={cn("h-3 w-3", config.color)} />
-                    <span className="text-[#666]">{config.label}</span>
+                    <span className="text-collab-500">{config.label}</span>
                   </div>
                 );
               })}
             </div>
           </div>
-          <div className="flex items-center gap-2 text-[#666]">
+          <div className="flex items-center gap-2 text-collab-500">
             <Info className="h-3 w-3" />
             <span>Timeline based on issue start/due dates</span>
           </div>

@@ -48,8 +48,8 @@ export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
         onEscapeKeyDown={(e) => e.preventDefault()}
         className={`
         max-w-[95vw] md:max-w-[90vw] lg:max-w-[85vw] xl:max-w-[80vw]
-        max-h-[95vh] min-h-[600px] h-full bg-[#0a0a0a]
-        border-[#1f1f1f]
+        max-h-[95vh] min-h-[600px] h-full bg-collab-950
+        border-collab-700
         overflow-hidden flex flex-col
         p-0
       `}>
@@ -59,7 +59,7 @@ export function IssueDetailModal({ issueId, onClose }: IssueModalProps) {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto min-h-0 h-full bg-[#0a0a0a]">
+        <div className="flex-1 overflow-y-auto min-h-0 h-full bg-collab-950">
           {isLoading && !issue ? (
             <IssueDetailSkeleton />
           ) : (

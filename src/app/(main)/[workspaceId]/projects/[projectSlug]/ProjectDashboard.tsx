@@ -78,7 +78,7 @@ interface CompactStatProps {
 
 function CompactStat({ label, value, icon, variant = "default" }: CompactStatProps) {
   const variantStyles = {
-    default: { text: "text-[#fafafa]", icon: "text-[#75757a]" },
+    default: { text: "text-collab-50", icon: "text-collab-500" },
     success: { text: "text-emerald-400", icon: "text-emerald-400" },
     warning: { text: "text-amber-400", icon: "text-amber-400" },
     danger: { text: "text-red-400", icon: "text-red-400" },
@@ -93,7 +93,7 @@ function CompactStat({ label, value, icon, variant = "default" }: CompactStatPro
         <div className={cn("text-xl font-semibold", variantStyles[variant].text)}>
           {value}
         </div>
-        <div className="text-[11px] text-[#52525b]">{label}</div>
+        <div className="text-[11px] text-collab-500/60">{label}</div>
       </div>
     </div>
   );
@@ -117,25 +117,25 @@ function ViewChip({
         "group flex items-center gap-2 px-3 py-2 rounded-lg border transition-all flex-shrink-0",
         isDefault
           ? "bg-blue-500/10 border-blue-500/20 hover:border-blue-500/40"
-          : "bg-[#171719] border-[#1f1f22] hover:border-[#3f3f46] hover:bg-[#1f1f22]"
+          : "bg-collab-800 border-collab-700 hover:border-collab-600 hover:bg-collab-700"
       )}
     >
       <div className={cn(
         "flex-shrink-0",
-        isDefault ? "text-blue-400" : "text-[#75757a] group-hover:text-[#9c9ca1]"
+        isDefault ? "text-blue-400" : "text-collab-500 group-hover:text-collab-400"
       )}>
         {viewTypeIcons[view.displayType] || <LayoutGrid className="h-3.5 w-3.5" />}
       </div>
       <span className={cn(
         "text-sm transition-colors",
-        isDefault ? "text-blue-400" : "text-[#9c9ca1] group-hover:text-[#fafafa]"
+        isDefault ? "text-blue-400" : "text-collab-400 group-hover:text-collab-50"
       )}>
         {view.name}
       </span>
       {view.isFavorite && (
         <Star className="h-3 w-3 text-amber-400 fill-amber-400 flex-shrink-0" />
       )}
-      <span className="text-xs text-[#52525b]">
+      <span className="text-xs text-collab-500/60">
         {view._count?.issues || 0}
       </span>
     </Link>
@@ -169,14 +169,14 @@ function IssueRow({
   return (
     <div
       onClick={onClick}
-      className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#1f1f22] cursor-pointer transition-colors"
+      className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-collab-700 cursor-pointer transition-colors"
     >
       <div className={cn("w-1 h-6 rounded-full flex-shrink-0", indicatorColors[variant])} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-[#9c9ca1] group-hover:text-[#fafafa] truncate transition-colors">
+        <p className="text-sm text-collab-400 group-hover:text-collab-50 truncate transition-colors">
           {issue.title}
         </p>
-        <span className="text-[11px] text-[#52525b] font-mono">{issue.issueKey}</span>
+        <span className="text-[11px] text-collab-500/60 font-mono">{issue.issueKey}</span>
       </div>
       {issue.daysOverdue && issue.daysOverdue > 0 && (
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 flex-shrink-0">
@@ -191,7 +191,7 @@ function IssueRow({
       {issue.assignee && (
         <Avatar className="h-5 w-5 flex-shrink-0">
           <AvatarImage src={issue.assignee.image || undefined} />
-          <AvatarFallback className="text-[8px] bg-[#27272b]">
+          <AvatarFallback className="text-[8px] bg-collab-600">
             {issue.assignee.name?.charAt(0)?.toUpperCase() || '?'}
           </AvatarFallback>
         </Avatar>
@@ -240,20 +240,20 @@ function ActivityRow({ activity }: { activity: ActivityItem }) {
   const timeAgo = formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true });
 
   return (
-    <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg hover:bg-[#1f1f22] transition-colors">
-      <div className={cn("flex-shrink-0 mt-0.5", activityColors[activity.type] || "text-[#75757a]")}>
+    <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg hover:bg-collab-700 transition-colors">
+      <div className={cn("flex-shrink-0 mt-0.5", activityColors[activity.type] || "text-collab-500")}>
         {activityIcons[activity.type] || <Circle className="h-3.5 w-3.5" />}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-[#9c9ca1]">
-          <span className="text-[#fafafa]">{activity.author.name}</span>
+        <p className="text-sm text-collab-400">
+          <span className="text-collab-50">{activity.author.name}</span>
           {' '}{activity.title}
         </p>
         {activity.description && (
-          <p className="text-xs text-[#52525b] truncate mt-0.5">{activity.description}</p>
+          <p className="text-xs text-collab-500/60 truncate mt-0.5">{activity.description}</p>
         )}
       </div>
-      <span className="text-[10px] text-[#52525b] flex-shrink-0">{timeAgo}</span>
+      <span className="text-[10px] text-collab-500/60 flex-shrink-0">{timeAgo}</span>
     </div>
   );
 }
@@ -270,7 +270,7 @@ interface FeatureRequest {
 }
 
 const featureStatusColors: Record<string, { bg: string; text: string }> = {
-  pending: { bg: "bg-[#3f3f46]/20", text: "text-[#9c9ca1]" },
+  pending: { bg: "bg-collab-600/20", text: "text-collab-400" },
   under_review: { bg: "bg-blue-500/10", text: "text-blue-400" },
   planned: { bg: "bg-purple-500/10", text: "text-purple-400" },
   in_progress: { bg: "bg-amber-500/10", text: "text-amber-400" },
@@ -284,13 +284,13 @@ function FeatureRow({ feature, onClick }: { feature: FeatureRequest; onClick: ()
   return (
     <div
       onClick={onClick}
-      className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#1f1f22] cursor-pointer transition-colors"
+      className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-collab-700 cursor-pointer transition-colors"
     >
       <div className={cn("flex items-center gap-1 flex-shrink-0", feature.voteScore >= 0 ? "text-emerald-400" : "text-red-400")}>
         <ThumbsUp className="h-3 w-3" />
         <span className="text-xs font-medium">{feature.voteScore > 0 ? '+' : ''}{feature.voteScore}</span>
       </div>
-      <p className="text-sm text-[#9c9ca1] truncate flex-1">{feature.title}</p>
+      <p className="text-sm text-collab-400 truncate flex-1">{feature.title}</p>
       <span className={cn("text-[10px] px-1.5 py-0.5 rounded flex-shrink-0", statusStyle.bg, statusStyle.text)}>
         {feature.status.replace('_', ' ')}
       </span>
@@ -318,21 +318,21 @@ function SectionCard({
   className?: string;
 }) {
   return (
-    <div className={cn("rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden", className)}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#1f1f22]">
+    <div className={cn("rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden", className)}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700">
         <div className="flex items-center gap-2.5">
           <div className={cn("p-1.5 rounded-lg", iconBg)}>
             {icon}
           </div>
           <div>
-            <h3 className="text-sm font-medium text-[#fafafa]">{title}</h3>
-            {subtitle && <p className="text-[11px] text-[#52525b]">{subtitle}</p>}
+            <h3 className="text-sm font-medium text-collab-50">{title}</h3>
+            {subtitle && <p className="text-[11px] text-collab-500/60">{subtitle}</p>}
           </div>
         </div>
         {viewAllHref && (
           <Link
             href={viewAllHref}
-            className="flex items-center gap-1 text-[11px] text-[#52525b] hover:text-[#9c9ca1] transition-colors"
+            className="flex items-center gap-1 text-[11px] text-collab-500/60 hover:text-collab-400 transition-colors"
           >
             View all <ExternalLink className="h-2.5 w-2.5" />
           </Link>
@@ -350,10 +350,10 @@ function SectionCard({
 function EmptyState({ text, icon }: { text: string; icon: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center py-8 text-center">
-      <div className="p-3 rounded-xl bg-[#101011] mb-3 text-[#3f3f46]">
+      <div className="p-3 rounded-xl bg-collab-900 mb-3 text-collab-500/50">
         {icon}
       </div>
-      <p className="text-xs text-[#52525b]">{text}</p>
+      <p className="text-xs text-collab-500/60">{text}</p>
     </div>
   );
 }
@@ -418,11 +418,11 @@ export function ProjectDashboard({
     return (
       <div className="h-full w-full overflow-y-auto">
         <div className="flex flex-col gap-6 p-8 max-w-[1400px] mx-auto animate-pulse">
-          <div className="h-16 bg-[#171719] rounded-2xl" />
-          <div className="h-12 bg-[#171719] rounded-xl" />
+          <div className="h-16 bg-collab-800 rounded-2xl" />
+          <div className="h-12 bg-collab-800 rounded-xl" />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 h-[400px] bg-[#171719] rounded-2xl" />
-            <div className="h-[400px] bg-[#171719] rounded-2xl" />
+            <div className="lg:col-span-2 h-[400px] bg-collab-800 rounded-2xl" />
+            <div className="h-[400px] bg-collab-800 rounded-2xl" />
           </div>
         </div>
       </div>
@@ -441,7 +441,7 @@ export function ProjectDashboard({
       <div className="flex flex-col gap-6 p-8 max-w-[1400px] mx-auto">
 
         {/* ─── Header + Stats Row ──────────────────────────────────────────── */}
-        <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
+        <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
           <div className="flex items-center justify-between px-6 py-5">
             <div className="flex items-center gap-4">
               <div
@@ -449,8 +449,8 @@ export function ProjectDashboard({
                 style={{ backgroundColor: projectColor || '#6366f1' }}
               />
               <div>
-                <h1 className="text-xl font-medium text-[#fafafa]">{projectName}</h1>
-                <p className="text-sm text-[#75757a] max-w-lg">
+                <h1 className="text-xl font-medium text-collab-50">{projectName}</h1>
+                <p className="text-sm text-collab-500 max-w-lg">
                   {projectDescription || "Project dashboard"}
                 </p>
               </div>
@@ -460,7 +460,7 @@ export function ProjectDashboard({
                 variant="ghost"
                 size="sm"
                 onClick={() => router.push(`/${workspaceSlug}/projects/${projectSlug}/github`)}
-                className="h-8 px-3 text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] rounded-lg"
+                className="h-8 px-3 text-collab-500 hover:text-collab-50 hover:bg-collab-700 rounded-lg"
               >
                 <Github className="h-4 w-4 mr-1.5" />
                 GitHub
@@ -469,7 +469,7 @@ export function ProjectDashboard({
                 variant="ghost"
                 size="sm"
                 onClick={() => router.push(`/${workspaceSlug}/projects/${projectSlug}/changelog`)}
-                className="h-8 px-3 text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] rounded-lg"
+                className="h-8 px-3 text-collab-500 hover:text-collab-50 hover:bg-collab-700 rounded-lg"
               >
                 <Tag className="h-4 w-4 mr-1.5" />
                 Releases
@@ -478,7 +478,7 @@ export function ProjectDashboard({
                 variant="ghost"
                 size="sm"
                 onClick={() => router.push(`/${workspaceSlug}/projects/${projectSlug}/settings`)}
-                className="h-8 w-8 p-0 text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] rounded-lg"
+                className="h-8 w-8 p-0 text-collab-500 hover:text-collab-50 hover:bg-collab-700 rounded-lg"
               >
                 <Settings className="h-4 w-4" />
               </Button>
@@ -486,7 +486,7 @@ export function ProjectDashboard({
           </div>
 
           {/* Stats Row */}
-          <div className="flex items-center border-t border-[#1f1f22] divide-x divide-[#1f1f22]">
+          <div className="flex items-center border-t border-collab-700 divide-x divide-collab-700">
             <CompactStat
               label="Completion"
               value={`${summary?.stats.completionRate || 0}%`}
@@ -517,13 +517,13 @@ export function ProjectDashboard({
         {sortedViews.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium uppercase tracking-wider text-[#52525b]">
+              <span className="text-xs font-medium uppercase tracking-wider text-collab-500/60">
                 Views ({sortedViews.length})
               </span>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-[11px] text-[#52525b] hover:text-[#9c9ca1]"
+                className="h-6 px-2 text-[11px] text-collab-500/60 hover:text-collab-400"
               >
                 <Plus className="h-3 w-3 mr-1" />
                 New
@@ -601,13 +601,13 @@ export function ProjectDashboard({
             <SectionCard
               title="GitHub"
               subtitle={summary?.github?.connected ? "Repository connected" : "Not connected"}
-              icon={<Github className="h-4 w-4 text-[#75757a]" />}
-              iconBg="bg-[#101011]"
+              icon={<Github className="h-4 w-4 text-collab-500" />}
+              iconBg="bg-collab-900"
               viewAllHref={`/${workspaceSlug}/projects/${projectSlug}/github`}
             >
               {!summary?.github?.connected ? (
                 <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <p className="text-xs text-[#52525b] mb-2">Connect a repository</p>
+                  <p className="text-xs text-collab-500/60 mb-2">Connect a repository</p>
                   <Link
                     href={`/${workspaceSlug}/projects/${projectSlug}/github/settings`}
                     className="text-xs text-blue-400 hover:text-blue-300"

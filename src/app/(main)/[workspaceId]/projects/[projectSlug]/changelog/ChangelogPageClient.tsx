@@ -239,17 +239,17 @@ ${bugs.map((b) => `- ${b.aiTitle || b.issue.title}`).join('\n') || 'No bug fixes
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0b]">
+    <div className="h-full flex flex-col bg-collab-950">
       {/* Header */}
-      <div className="flex-none border-b border-[#1f1f1f]">
+      <div className="flex-none border-b border-collab-700">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#1a1a1b] flex items-center justify-center">
-              <Tag className="h-4 w-4 text-[#3fb950]" />
+            <div className="w-8 h-8 rounded-lg bg-collab-800 flex items-center justify-center">
+              <Tag className="h-4 w-4 text-green-400" />
             </div>
             <div>
-              <h1 className="text-sm font-medium text-[#e6edf3]">Changelog</h1>
-              <p className="text-xs text-[#6e7681]">{projectName}</p>
+              <h1 className="text-sm font-medium text-collab-50">Changelog</h1>
+              <p className="text-xs text-collab-500">{projectName}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -258,7 +258,7 @@ ${bugs.map((b) => `- ${b.aiTitle || b.issue.title}`).join('\n') || 'No bug fixes
               variant="ghost"
               size="sm"
               disabled={isGenerating}
-              className="h-8 px-3 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1b]"
+              className="h-8 px-3 text-collab-400 hover:text-collab-50 hover:bg-collab-800"
             >
               <Sparkles
                 className={cn('h-3.5 w-3.5 mr-1.5', isGenerating && 'animate-pulse')}
@@ -269,7 +269,7 @@ ${bugs.map((b) => `- ${b.aiTitle || b.issue.title}`).join('\n') || 'No bug fixes
               onClick={exportChangelog}
               variant="ghost"
               size="sm"
-              className="h-8 px-3 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1b]"
+              className="h-8 px-3 text-collab-400 hover:text-collab-50 hover:bg-collab-800"
             >
               <Download className="h-3.5 w-3.5 mr-1.5" />
               Export
@@ -280,7 +280,7 @@ ${bugs.map((b) => `- ${b.aiTitle || b.issue.title}`).join('\n') || 'No bug fixes
               }
               variant="ghost"
               size="sm"
-              className="h-8 px-3 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1b]"
+              className="h-8 px-3 text-collab-400 hover:text-collab-50 hover:bg-collab-800"
             >
               <Github className="h-3.5 w-3.5" />
             </Button>
@@ -306,39 +306,39 @@ ${bugs.map((b) => `- ${b.aiTitle || b.issue.title}`).join('\n') || 'No bug fixes
                   label="Production"
                   value={stats.production}
                   icon={Rocket}
-                  iconColor="text-[#3fb950]"
+                  iconColor="text-green-400"
                 />
                 <StatCard
                   label="Development"
                   value={stats.development}
                   icon={GitBranch}
-                  iconColor="text-[#58a6ff]"
+                  iconColor="text-blue-400"
                 />
                 <StatCard
                   label="Issues Resolved"
                   value={stats.issues}
                   icon={CheckCircle2}
-                  iconColor="text-[#a371f7]"
+                  iconColor="text-violet-400"
                 />
               </div>
 
               {/* Filters */}
               <div className="flex items-center gap-3">
                 <div className="relative flex-1 max-w-sm">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6e7681]" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-collab-500" />
                   <Input
                     placeholder="Search versions..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 h-9 bg-[#0d0d0e] border-[#1f1f1f] text-[#e6edf3] placeholder:text-[#6e7681] focus:border-[#30363d]"
+                    className="pl-9 h-9 bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500 focus:border-collab-600"
                   />
                 </div>
                 <Select value={environmentFilter} onValueChange={setEnvironmentFilter}>
-                  <SelectTrigger className="w-40 h-9 bg-[#0d0d0e] border-[#1f1f1f] text-[#e6edf3]">
-                    <Filter className="h-3.5 w-3.5 mr-2 text-[#6e7681]" />
+                  <SelectTrigger className="w-40 h-9 bg-collab-900 border-collab-700 text-collab-50">
+                    <Filter className="h-3.5 w-3.5 mr-2 text-collab-500" />
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#161617] border-[#1f1f1f]">
+                  <SelectContent className="bg-collab-900 border-collab-700">
                     <SelectItem value="all">All Environments</SelectItem>
                     <SelectItem value="production">Production</SelectItem>
                     <SelectItem value="staging">Staging</SelectItem>
@@ -360,11 +360,11 @@ ${bugs.map((b) => `- ${b.aiTitle || b.issue.title}`).join('\n') || 'No bug fixes
 
               {/* GitHub Releases */}
               {releases.length > 0 && (
-                <div className="space-y-4 pt-4 border-t border-[#1f1f1f]">
-                  <h2 className="text-sm font-medium text-[#e6edf3]">
+                <div className="space-y-4 pt-4 border-t border-collab-700">
+                  <h2 className="text-sm font-medium text-collab-50">
                     GitHub Releases
                   </h2>
-                  <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
+                  <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
                     <div className="divide-y divide-[#1f1f1f]">
                       {releases.slice(0, 10).map((release) => (
                         <ReleaseRow key={release.id} release={release} />
@@ -386,7 +386,7 @@ function StatCard({
   label,
   value,
   icon: Icon,
-  iconColor = 'text-[#8b949e]',
+  iconColor = 'text-collab-400',
 }: {
   label: string;
   value: number;
@@ -394,12 +394,12 @@ function StatCard({
   iconColor?: string;
 }) {
   return (
-    <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] p-4">
+    <div className="rounded-lg border border-collab-700 bg-collab-900 p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-[#8b949e]">{label}</span>
+        <span className="text-xs font-medium text-collab-400">{label}</span>
         <Icon className={cn('h-4 w-4', iconColor)} />
       </div>
-      <div className="text-2xl font-semibold text-[#e6edf3]">{value}</div>
+      <div className="text-2xl font-semibold text-collab-50">{value}</div>
     </div>
   );
 }
@@ -414,34 +414,34 @@ function VersionCard({ version }: { version: Version }) {
   const getEnvColor = (env: string) => {
     switch (env) {
       case 'production':
-        return 'bg-[#238636]/10 text-[#3fb950] border-[#238636]/30';
+        return 'bg-green-700/10 text-green-400 border-[#238636]/30';
       case 'staging':
-        return 'bg-[#9e6a03]/10 text-[#f0883e] border-[#9e6a03]/30';
+        return 'bg-yellow-700/10 text-orange-400 border-[#9e6a03]/30';
       default:
-        return 'bg-[#1f6feb]/10 text-[#58a6ff] border-[#1f6feb]/30';
+        return 'bg-blue-500/10 text-blue-400 border-[#1f6feb]/30';
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'RELEASED':
-        return <CheckCircle2 className="h-3.5 w-3.5 text-[#3fb950]" />;
+        return <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />;
       case 'PENDING':
-        return <Clock className="h-3.5 w-3.5 text-[#f0883e]" />;
+        return <Clock className="h-3.5 w-3.5 text-orange-400" />;
       default:
-        return <Clock className="h-3.5 w-3.5 text-[#8b949e]" />;
+        return <Clock className="h-3.5 w-3.5 text-collab-400" />;
     }
   };
 
   return (
-    <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
+    <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
       <div
-        className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-[#161617] transition-colors"
+        className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-collab-900 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-2">
           {getStatusIcon(version.status)}
-          <span className="text-sm font-mono font-medium text-[#e6edf3]">
+          <span className="text-sm font-mono font-medium text-collab-50">
             v{version.version}
           </span>
         </div>
@@ -451,7 +451,7 @@ function VersionCard({ version }: { version: Version }) {
         </Badge>
 
         {version.branch && (
-          <span className="text-xs text-[#6e7681] flex items-center gap-1">
+          <span className="text-xs text-collab-500 flex items-center gap-1">
             <GitBranch className="h-3 w-3" />
             {version.branch}
           </span>
@@ -459,16 +459,16 @@ function VersionCard({ version }: { version: Version }) {
 
         <div className="flex-1" />
 
-        <div className="flex items-center gap-4 text-xs text-[#6e7681]">
+        <div className="flex items-center gap-4 text-xs text-collab-500">
           {features.length > 0 && (
             <span className="flex items-center gap-1">
-              <Zap className="h-3 w-3 text-[#58a6ff]" />
+              <Zap className="h-3 w-3 text-blue-400" />
               {features.length}
             </span>
           )}
           {bugs.length > 0 && (
             <span className="flex items-center gap-1">
-              <Bug className="h-3 w-3 text-[#f85149]" />
+              <Bug className="h-3 w-3 text-red-500" />
               {bugs.length}
             </span>
           )}
@@ -487,25 +487,25 @@ function VersionCard({ version }: { version: Version }) {
       </div>
 
       {expanded && (
-        <div className="px-4 pb-4 pt-2 border-t border-[#1f1f1f] space-y-4">
+        <div className="px-4 pb-4 pt-2 border-t border-collab-700 space-y-4">
           {/* Show AI Summary if available */}
           {version.aiSummary && (
-            <p className="text-sm text-[#8b949e]">{version.aiSummary}</p>
+            <p className="text-sm text-collab-400">{version.aiSummary}</p>
           )}
 
           {/* Fallback: Show GitHub release description if no AI summary and no issues */}
           {!version.aiSummary && features.length === 0 && bugs.length === 0 && version.releases?.[0]?.description && (
             <div className="space-y-2">
-              <h4 className="text-xs font-medium text-[#8b949e] flex items-center gap-1.5">
+              <h4 className="text-xs font-medium text-collab-400 flex items-center gap-1.5">
                 <Github className="h-3.5 w-3.5" />
                 Release Notes
               </h4>
-              <p className="text-sm text-[#8b949e] whitespace-pre-wrap">{version.releases[0].description}</p>
+              <p className="text-sm text-collab-400 whitespace-pre-wrap">{version.releases[0].description}</p>
             </div>
           )}
 
           {version.parentVersion && (
-            <div className="text-xs text-[#6e7681] bg-[#161617] rounded px-3 py-2">
+            <div className="text-xs text-collab-500 bg-collab-900 rounded px-3 py-2">
               Promoted from {version.parentVersion.environment} v
               {version.parentVersion.version}
             </div>
@@ -515,13 +515,13 @@ function VersionCard({ version }: { version: Version }) {
             {/* Features */}
             {features.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-xs font-medium text-[#8b949e] flex items-center gap-1.5">
-                  <Zap className="h-3.5 w-3.5 text-[#58a6ff]" />
+                <h4 className="text-xs font-medium text-collab-400 flex items-center gap-1.5">
+                  <Zap className="h-3.5 w-3.5 text-blue-400" />
                   Features
                 </h4>
                 <div className="space-y-1">
                   {features.map((item) => (
-                    <div key={item.id} className="text-sm text-[#e6edf3]">
+                    <div key={item.id} className="text-sm text-collab-50">
                       • {item.aiTitle || item.issue.title}
                     </div>
                   ))}
@@ -532,13 +532,13 @@ function VersionCard({ version }: { version: Version }) {
             {/* Bug Fixes */}
             {bugs.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-xs font-medium text-[#8b949e] flex items-center gap-1.5">
-                  <Bug className="h-3.5 w-3.5 text-[#f85149]" />
+                <h4 className="text-xs font-medium text-collab-400 flex items-center gap-1.5">
+                  <Bug className="h-3.5 w-3.5 text-red-500" />
                   Bug Fixes
                 </h4>
                 <div className="space-y-1">
                   {bugs.map((item) => (
-                    <div key={item.id} className="text-sm text-[#e6edf3]">
+                    <div key={item.id} className="text-sm text-collab-50">
                       • {item.aiTitle || item.issue.title}
                     </div>
                   ))}
@@ -550,8 +550,8 @@ function VersionCard({ version }: { version: Version }) {
           {/* Deployments */}
           {version.deployments.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-xs font-medium text-[#8b949e] flex items-center gap-1.5">
-                <Rocket className="h-3.5 w-3.5 text-[#3fb950]" />
+              <h4 className="text-xs font-medium text-collab-400 flex items-center gap-1.5">
+                <Rocket className="h-3.5 w-3.5 text-green-400" />
                 Deployments
               </h4>
               <div className="flex flex-wrap gap-2">
@@ -559,7 +559,7 @@ function VersionCard({ version }: { version: Version }) {
                   <Badge
                     key={d.id}
                     variant="secondary"
-                    className="text-[10px] bg-[#1f1f1f] text-[#8b949e]"
+                    className="text-[10px] bg-collab-700 text-collab-400"
                   >
                     {d.environment} - {d.status.toLowerCase()}
                   </Badge>
@@ -575,7 +575,7 @@ function VersionCard({ version }: { version: Version }) {
            version.deployments.length === 0 &&
            !version.parentVersion &&
            !version.releases?.[0]?.description && (
-            <p className="text-sm text-[#6e7681] italic">
+            <p className="text-sm text-collab-500 italic">
               No changelog details available. Link issues to this version or generate an AI summary.
             </p>
           )}
@@ -591,43 +591,43 @@ function ReleaseRow({ release }: { release: Release }) {
       href={release.githubUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-3 px-4 py-3 hover:bg-[#161617] transition-colors group"
+      className="flex items-center gap-3 px-4 py-3 hover:bg-collab-900 transition-colors group"
     >
-      <Tag className="h-4 w-4 text-[#3fb950]" />
+      <Tag className="h-4 w-4 text-green-400" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-[#e6edf3]">
+          <span className="text-sm font-medium text-collab-50">
             {release.tagName}
           </span>
           {release.isPrerelease && (
             <Badge
               variant="secondary"
-              className="h-5 px-1.5 text-[10px] bg-[#1f1f1f] text-[#f0883e]"
+              className="h-5 px-1.5 text-[10px] bg-collab-700 text-orange-400"
             >
               Pre-release
             </Badge>
           )}
         </div>
         {release.name && release.name !== release.tagName && (
-          <p className="text-xs text-[#6e7681] truncate">{release.name}</p>
+          <p className="text-xs text-collab-500 truncate">{release.name}</p>
         )}
       </div>
       {release.publishedAt && (
-        <span className="text-xs text-[#6e7681]">
+        <span className="text-xs text-collab-500">
           {formatDistanceToNow(new Date(release.publishedAt), { addSuffix: true })}
         </span>
       )}
-      <ArrowUpRight className="h-3.5 w-3.5 text-[#6e7681] opacity-0 group-hover:opacity-100 transition-opacity" />
+      <ArrowUpRight className="h-3.5 w-3.5 text-collab-500 opacity-0 group-hover:opacity-100 transition-opacity" />
     </a>
   );
 }
 
 function EmptyState() {
   return (
-    <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] px-4 py-12 text-center">
-      <Tag className="h-10 w-10 mx-auto mb-3 text-[#6e7681]" />
-      <h3 className="text-sm font-medium text-[#e6edf3] mb-1">No versions found</h3>
-      <p className="text-xs text-[#6e7681]">
+    <div className="rounded-lg border border-collab-700 bg-collab-900 px-4 py-12 text-center">
+      <Tag className="h-10 w-10 mx-auto mb-3 text-collab-500" />
+      <h3 className="text-sm font-medium text-collab-50 mb-1">No versions found</h3>
+      <p className="text-xs text-collab-500">
         Create releases on GitHub to see them here
       </p>
     </div>
@@ -639,12 +639,12 @@ function LoadingSkeleton() {
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-24 rounded-lg bg-[#1f1f1f]" />
+          <Skeleton key={i} className="h-24 rounded-lg bg-collab-700" />
         ))}
       </div>
       <div className="space-y-3">
         {[...Array(5)].map((_, i) => (
-          <Skeleton key={i} className="h-16 rounded-lg bg-[#1f1f1f]" />
+          <Skeleton key={i} className="h-16 rounded-lg bg-collab-700" />
         ))}
       </div>
     </div>

@@ -65,12 +65,12 @@ function FeatureRow({
 
   return (
     <div
-      className="px-3 py-2.5 rounded-md hover:bg-[#161616] cursor-pointer transition-colors"
+      className="px-3 py-2.5 rounded-md hover:bg-collab-900 cursor-pointer transition-colors"
       onClick={() => onFeatureClick?.(feature.id)}
     >
       {/* Title row */}
       <div className="flex items-start gap-2 mb-1.5">
-        <p className="text-sm text-[#e6edf3] line-clamp-2 flex-1">
+        <p className="text-sm text-collab-50 line-clamp-2 flex-1">
           {feature.title}
         </p>
         <Badge
@@ -85,7 +85,7 @@ function FeatureRow({
       </div>
 
       {/* Meta row */}
-      <div className="flex items-center gap-3 text-[10px] text-[#666]">
+      <div className="flex items-center gap-3 text-[10px] text-collab-500">
         {/* Vote score */}
         <div className="flex items-center gap-1">
           {feature.voteScore >= 0 ? (
@@ -108,7 +108,7 @@ function FeatureRow({
         <div className="flex items-center gap-1">
           <Avatar className="h-3.5 w-3.5">
             <AvatarImage src={feature.author.image || undefined} />
-            <AvatarFallback className="text-[6px] bg-[#222]">
+            <AvatarFallback className="text-[6px] bg-collab-700">
               {feature.author.name?.charAt(0)?.toUpperCase() || '?'}
             </AvatarFallback>
           </Avatar>

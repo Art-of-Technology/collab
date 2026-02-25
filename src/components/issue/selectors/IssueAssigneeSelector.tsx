@@ -114,10 +114,10 @@ export function IssueAssigneeSelector({
     return (
       <div className={cn(
         "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs h-auto leading-tight min-h-[20px]",
-        "border border-[#2d2d30] bg-[#181818]"
+        "border border-collab-600 bg-collab-800"
       )}>
-        <Loader2 className="h-3 w-3 animate-spin text-[#6e7681]" />
-        <span className="text-[#6e7681] text-xs">Loading...</span>
+        <Loader2 className="h-3 w-3 animate-spin text-collab-500" />
+        <span className="text-collab-500 text-xs">Loading...</span>
       </div>
     );
   }
@@ -131,8 +131,8 @@ export function IssueAssigneeSelector({
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
-            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-            "text-[#cccccc] focus:outline-none bg-[#181818]",
+            "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
+            "text-collab-400 focus:outline-none bg-collab-800",
             disabled && "opacity-50 cursor-not-allowed"
           )}
         >
@@ -148,34 +148,34 @@ export function IssueAssigneeSelector({
                   </AvatarFallback>
                 </Avatar>
               )}
-              <span className="text-[#cccccc] text-xs truncate max-w-[80px]">{selectedUser.name}</span>
+              <span className="text-collab-400 text-xs truncate max-w-[80px]">{selectedUser.name}</span>
             </>
           ) : (
             <>
-              <UserX className="h-3 w-3 text-[#6e7681]" />
-              <span className="text-[#6e7681] text-xs">Assignee</span>
+              <UserX className="h-3 w-3 text-collab-500" />
+              <span className="text-collab-500 text-xs">Assignee</span>
             </>
           )}
         </Button>
       </PopoverTrigger>
       
       <PopoverContent 
-        className="w-72 p-0 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
+        className="w-72 p-0 bg-collab-800 border-collab-600 shadow-xl"
         align="start"
         side="bottom"
         sideOffset={4}
       >
-        <div className="p-3 border-b border-[#2d2d30]">
-          <div className="text-xs text-[#9ca3af] mb-2 font-medium">
+        <div className="p-3 border-b border-collab-600">
+          <div className="text-xs text-gray-400 mb-2 font-medium">
             Assign to
           </div>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-[#6e7681]" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-collab-500" />
             <Input
               placeholder="Search people..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-7 text-xs bg-[#0e0e0e] border-[#2d2d30] focus:border-[#464649] text-[#cccccc]"
+              className="pl-9 h-7 text-xs bg-collab-900 border-collab-600 focus:border-collab-600 text-collab-400"
             />
           </div>
         </div>
@@ -184,20 +184,20 @@ export function IssueAssigneeSelector({
           <Button
             type="button"
             variant="ghost"
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-collab-600 transition-colors text-left"
             onClick={() => handleSelect(null)}
           >
-            <div className="h-5 w-5 rounded-full border-2 border-dashed border-[#555] flex items-center justify-center">
-              <UserX className="h-2.5 w-2.5 text-[#6e7681]" />
+            <div className="h-5 w-5 rounded-full border-2 border-dashed border-collab-600 flex items-center justify-center">
+              <UserX className="h-2.5 w-2.5 text-collab-500" />
             </div>
-            <span className="text-[#9ca3af] flex-1">No assignee</span>
+            <span className="text-gray-400 flex-1">No assignee</span>
             {!value && (
-              <span className="text-xs text-[#6e7681]">✓</span>
+              <span className="text-xs text-collab-500">✓</span>
             )}
           </Button>
           
           {prioritizedUsers.length > 0 && (
-            <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">Team members</div>
+            <div className="px-2 pt-2 pb-1 text-xs text-collab-500">Team members</div>
           )}
           
           {prioritizedUsers.map((user) => (
@@ -208,7 +208,7 @@ export function IssueAssigneeSelector({
               className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left ${
                 user.id === currentUserId
                   ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30'
-                  : 'hover:bg-[#2a2a2a]'
+                  : 'hover:bg-collab-600'
               }`}
               onClick={() => handleSelect(user.id)}
             >
@@ -222,29 +222,29 @@ export function IssueAssigneeSelector({
                   </AvatarFallback>
                 </Avatar>
               )}
-              <span className={`text-[#cccccc] flex-1 ${user.id === currentUserId ? 'font-medium' : ''}`}>
+              <span className={`text-collab-400 flex-1 ${user.id === currentUserId ? 'font-medium' : ''}`}>
                 {user.name}{user.id === currentUserId ? " (You)" : ""}
               </span>
               {value === user.id && (
-                <span className="text-xs text-[#6e7681]">✓</span>
+                <span className="text-xs text-collab-500">✓</span>
               )}
             </Button>
           ))}
           
           {isLoading && (
-            <div className="px-2 py-4 text-center text-[#6e7681] text-sm">
+            <div className="px-2 py-4 text-center text-collab-500 text-sm">
               Loading members...
             </div>
           )}
           
           {!isLoading && prioritizedUsers.length === 0 && users.length > 0 && (
-            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+            <div className="px-2 py-4 text-center text-collab-500 text-xs">
               No people match your search
             </div>
           )}
           
           {!isLoading && users.length === 0 && (
-            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+            <div className="px-2 py-4 text-center text-collab-500 text-xs">
               No members found
             </div>
           )}

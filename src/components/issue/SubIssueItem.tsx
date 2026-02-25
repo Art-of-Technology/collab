@@ -119,7 +119,7 @@ export function SubIssueItem({
   };
 
   return (
-    <div className="group flex items-center px-3 py-2 bg-[#0f1011] border border-[#1f1f1f] rounded-md transition-all">
+    <div className="group flex items-center px-3 py-2 bg-collab-900 border border-collab-700 rounded-md transition-all">
       {/* Status Icon */}
       <div className="flex items-center w-5 mr-2 flex-shrink-0">
         {getStatusIcon(subIssue.status || 'todo')}
@@ -149,14 +149,14 @@ export function SubIssueItem({
                 onChange={(e) => setTitle(e.target.value)}
                 onBlur={handleTitleSave}
                 onKeyDown={handleTitleKeyDown}
-                className="w-full bg-transparent text-sm text-[#e6edf3] border-none outline-none font-medium"
+                className="w-full bg-transparent text-sm text-collab-50 border-none outline-none font-medium"
                 autoFocus
               />
             ) : (
               <Button
                 variant="ghost"
                 onClick={() => setIsEditing(true)}
-                className="text-left w-full text-sm text-[#e6edf3] hover:text-[#58a6ff] font-medium truncate transition-colors h-auto p-0 justify-start"
+                className="text-left w-full text-sm text-collab-50 hover:text-blue-400 font-medium truncate transition-colors h-auto p-0 justify-start"
               >
                 {subIssue.title}
               </Button>
@@ -171,13 +171,13 @@ export function SubIssueItem({
           {subIssue.labels.slice(0, 2).map((label, index) => (
             <Badge 
               key={index}
-              className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-[#2a2a2a] text-[#8b949e]"
+              className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-collab-600 text-collab-400"
             >
               {label}
             </Badge>
           ))}
           {subIssue.labels.length > 2 && (
-            <Badge className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-[#2a2a2a] text-[#8b949e]">
+            <Badge className="h-4 px-1.5 text-[9px] font-medium leading-none border-0 rounded-sm bg-collab-600 text-collab-400">
               +{subIssue.labels.length - 2}
             </Badge>
           )}
@@ -225,7 +225,7 @@ export function SubIssueItem({
         className="h-6 w-6 p-0 hover:bg-red-500/20 flex-shrink-0"
         onClick={onRemove}
       >
-        <X className="h-3 w-3 text-[#6e7681] hover:text-red-400" />
+        <X className="h-3 w-3 text-collab-500 hover:text-red-400" />
       </Button>
     </div>
   );

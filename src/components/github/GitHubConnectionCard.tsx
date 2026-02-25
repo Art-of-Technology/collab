@@ -60,9 +60,9 @@ export function GitHubConnectionCard({
   // Not connected - show compact connection prompt
   if (!repository) {
     return (
-      <Card className="bg-[#0d1117] border-[#21262d]">
+      <Card className="bg-collab-900 border-collab-700">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[#e6edf3]">
+          <CardTitle className="flex items-center gap-2 text-collab-50">
             <Github className="h-5 w-5" />
             GitHub Integration
           </CardTitle>
@@ -83,15 +83,15 @@ export function GitHubConnectionCard({
 
   // Connected - show summary with links to dedicated pages
   return (
-    <Card className="bg-[#0d1117] border-[#21262d]">
+    <Card className="bg-collab-900 border-collab-700">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#21262d] rounded-lg">
-              <Github className="h-5 w-5 text-[#e6edf3]" />
+            <div className="p-2 bg-collab-700 rounded-lg">
+              <Github className="h-5 w-5 text-collab-50" />
             </div>
             <div>
-              <CardTitle className="text-[#e6edf3] flex items-center gap-2">
+              <CardTitle className="text-collab-50 flex items-center gap-2">
                 {repository.fullName}
                 <Badge className="bg-green-500/10 text-green-400 border-green-500/30">
                   <CheckCircle className="h-3 w-3 mr-1" />
@@ -106,7 +106,7 @@ export function GitHubConnectionCard({
           <Button
             variant="outline"
             size="sm"
-            className="border-[#30363d] bg-transparent hover:bg-[#21262d]"
+            className="border-collab-600 bg-transparent hover:bg-collab-700"
             asChild
           >
             <a
@@ -123,30 +123,30 @@ export function GitHubConnectionCard({
       <CardContent className="space-y-4">
         {/* Quick Stats */}
         <div className="grid grid-cols-4 gap-3">
-          <div className="text-center p-3 bg-[#161b22] rounded-lg border border-[#21262d]">
-            <div className="text-xl font-bold text-[#e6edf3]">{repository._count?.branches || 0}</div>
-            <p className="text-xs text-[#8b949e] flex items-center justify-center gap-1">
+          <div className="text-center p-3 bg-collab-800 rounded-lg border border-collab-700">
+            <div className="text-xl font-bold text-collab-50">{repository._count?.branches || 0}</div>
+            <p className="text-xs text-collab-400 flex items-center justify-center gap-1">
               <GitBranch className="h-3 w-3" />
               Branches
             </p>
           </div>
-          <div className="text-center p-3 bg-[#161b22] rounded-lg border border-[#21262d]">
-            <div className="text-xl font-bold text-[#e6edf3]">{repository._count?.commits || 0}</div>
-            <p className="text-xs text-[#8b949e] flex items-center justify-center gap-1">
+          <div className="text-center p-3 bg-collab-800 rounded-lg border border-collab-700">
+            <div className="text-xl font-bold text-collab-50">{repository._count?.commits || 0}</div>
+            <p className="text-xs text-collab-400 flex items-center justify-center gap-1">
               <GitCommit className="h-3 w-3" />
               Commits
             </p>
           </div>
-          <div className="text-center p-3 bg-[#161b22] rounded-lg border border-[#21262d]">
-            <div className="text-xl font-bold text-[#e6edf3]">{repository._count?.pullRequests || 0}</div>
-            <p className="text-xs text-[#8b949e] flex items-center justify-center gap-1">
+          <div className="text-center p-3 bg-collab-800 rounded-lg border border-collab-700">
+            <div className="text-xl font-bold text-collab-50">{repository._count?.pullRequests || 0}</div>
+            <p className="text-xs text-collab-400 flex items-center justify-center gap-1">
               <GitPullRequest className="h-3 w-3" />
               PRs
             </p>
           </div>
-          <div className="text-center p-3 bg-[#161b22] rounded-lg border border-[#21262d]">
-            <div className="text-xl font-bold text-[#e6edf3]">{repository._count?.releases || 0}</div>
-            <p className="text-xs text-[#8b949e] flex items-center justify-center gap-1">
+          <div className="text-center p-3 bg-collab-800 rounded-lg border border-collab-700">
+            <div className="text-xl font-bold text-collab-50">{repository._count?.releases || 0}</div>
+            <p className="text-xs text-collab-400 flex items-center justify-center gap-1">
               <Tag className="h-3 w-3" />
               Releases
             </p>
@@ -157,7 +157,7 @@ export function GitHubConnectionCard({
         <div className="flex gap-2">
           <Button
             onClick={handleNavigateToDashboard}
-            className="flex-1 bg-[#238636] hover:bg-[#2ea043] text-white"
+            className="flex-1 bg-green-700 hover:bg-green-600 text-white"
           >
             <Zap className="h-4 w-4 mr-2" />
             Open Dashboard
@@ -166,7 +166,7 @@ export function GitHubConnectionCard({
           <Button
             onClick={handleNavigateToSettings}
             variant="outline"
-            className="border-[#30363d] bg-transparent hover:bg-[#21262d]"
+            className="border-collab-600 bg-transparent hover:bg-collab-700"
           >
             <Settings className="h-4 w-4 mr-2" />
             Settings

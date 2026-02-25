@@ -62,7 +62,7 @@ export function CommentReplyForm({
           size="sm"
           onClick={handleSubmit}
           disabled={!content.trim() || addCommentMutation.isPending}
-          className="bg-[#238636] hover:bg-[#2ea043] text-white h-6 text-xs px-2"
+          className="bg-green-700 hover:bg-green-600 text-white h-6 text-xs px-2"
         >
           {addCommentMutation.isPending ? "..." : "Reply"}
         </Button>
@@ -70,7 +70,7 @@ export function CommentReplyForm({
           size="sm"
           variant="outline"
           onClick={handleCancel}
-          className="border-[#333] text-[#7d8590] hover:bg-[#1a1a1a] h-6 text-xs px-2"
+          className="border-collab-600 text-collab-500 hover:bg-collab-800 h-6 text-xs px-2"
         >
           Cancel
         </Button>

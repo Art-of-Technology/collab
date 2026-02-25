@@ -46,12 +46,12 @@ export function IssueTabs({
     <div className="mt-6">
       {/* Tabs for all sections */}
       <Tabs defaultValue={defaultTab} className="w-full">
-        <div className="border-b border-[#21262d] pb-1">
+        <div className="border-b border-collab-700 pb-1">
           <TabsList className={`grid w-full ${gridCols} lg:w-auto lg:inline-flex bg-transparent`}>
             {showRelations && (
               <TabsTrigger
                 value="relations"
-                className="flex items-center gap-1.5 px-2 py-1 text-sm data-[state=active]:text-[#e1e7ef] text-[#7d8590] hover:text-[#c9d1d9] transition-colors data-[state=active]:bg-transparent border-0"
+                className="flex items-center gap-1.5 px-2 py-1 text-sm data-[state=active]:text-collab-50 text-collab-500 hover:text-collab-400 transition-colors data-[state=active]:bg-transparent border-0"
               >
                 <LinkIcon className="h-4 w-4" />
                 <span className="hidden sm:inline">Relations</span>
@@ -61,7 +61,7 @@ export function IssueTabs({
             {showTimeTracking && (
               <TabsTrigger
                 value="time"
-                className="flex items-center gap-1.5 px-2 py-1 text-sm data-[state=active]:text-[#e1e7ef] text-[#7d8590] hover:text-[#c9d1d9] transition-colors data-[state=active]:bg-transparent border-0"
+                className="flex items-center gap-1.5 px-2 py-1 text-sm data-[state=active]:text-collab-50 text-collab-500 hover:text-collab-400 transition-colors data-[state=active]:bg-transparent border-0"
               >
                 <Clock className="h-4 w-4" />
                 <span className="hidden sm:inline">Work Log</span>
@@ -71,7 +71,7 @@ export function IssueTabs({
             {showGitHub && (
               <TabsTrigger
                 value="github"
-                className="flex items-center gap-1.5 px-2 py-1 text-sm data-[state=active]:text-[#e1e7ef] text-[#7d8590] hover:text-[#c9d1d9] transition-colors data-[state=active]:bg-transparent border-0"
+                className="flex items-center gap-1.5 px-2 py-1 text-sm data-[state=active]:text-collab-50 text-collab-500 hover:text-collab-400 transition-colors data-[state=active]:bg-transparent border-0"
               >
                 <Code className="h-4 w-4" />
                 <span className="hidden sm:inline">GitHub</span>
@@ -80,7 +80,7 @@ export function IssueTabs({
 
             <TabsTrigger
               value="activity"
-              className="flex items-center gap-1.5 px-2 py-1 text-sm data-[state=active]:text-[#e1e7ef] text-[#7d8590] hover:text-[#c9d1d9] transition-colors data-[state=active]:bg-transparent border-0"
+              className="flex items-center gap-1.5 px-2 py-1 text-sm data-[state=active]:text-collab-50 text-collab-500 hover:text-collab-400 transition-colors data-[state=active]:bg-transparent border-0"
             >
               <History className="h-4 w-4" />
               <span className="hidden sm:inline">Activity</span>

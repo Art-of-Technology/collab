@@ -103,14 +103,14 @@ export default function QuickIssueCreate({
   const canSubmit = title.trim() && (!hasMultipleProjects || selectedProjectId);
 
   return (
-    <div className="p-3 bg-[#1f1f1f] rounded-lg border border-[#2a2a2a] space-y-3">
+    <div className="p-3 bg-collab-700 rounded-lg border border-collab-600 space-y-3">
       {/* Title Input */}
       <Input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Issue title..."
         onKeyDown={handleKeyDown}
-        className="bg-[#0e0e0e] border-[#2d2d30] focus:border-[#464649] text-[#cccccc]"
+        className="bg-collab-900 border-collab-600 focus:border-collab-600 text-collab-400"
         autoFocus
       />
 
@@ -124,9 +124,9 @@ export default function QuickIssueCreate({
                 type="button"
                 variant="ghost"
                 className={cn(
-                  "inline-flex h-6 items-center gap-1 rounded-md border border-[#2d2d30] bg-[#0e0e0e] px-2 text-xs",
-                  "hover:bg-[#2a2a2a] focus:border-[#464649] focus:outline-none focus:ring-1 focus:ring-[#464649]",
-                  selectedProjectId ? "text-[#cccccc]" : "text-[#666]"
+                  "inline-flex h-6 items-center gap-1 rounded-md border border-collab-600 bg-collab-900 px-2 text-xs",
+                  "hover:bg-collab-600 focus:border-collab-600 focus:outline-none focus:ring-1 focus:ring-collab-600",
+                  selectedProjectId ? "text-collab-400" : "text-collab-500"
                 )}
               >
                 <FolderOpen className="h-3 w-3" />
@@ -139,7 +139,7 @@ export default function QuickIssueCreate({
                 <ChevronDown className="h-3 w-3 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-56 p-0 bg-[#1c1c1c] border-[#2d2d30]" align="start">
+            <PopoverContent className="w-56 p-0 bg-collab-800 border-collab-600" align="start">
               <div className="p-1">
                 {projects.map((project) => (
                   <Button
@@ -148,10 +148,10 @@ export default function QuickIssueCreate({
                     variant="ghost"
                     className={cn(
                       "w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-sm text-left h-auto justify-start",
-                      "hover:bg-[#2a2a2a] transition-colors",
+                      "hover:bg-collab-600 transition-colors",
                       selectedProjectId === project.id
-                        ? "bg-[#2a2a2a] text-[#cccccc]"
-                        : "text-[#999]"
+                        ? "bg-collab-600 text-collab-400"
+                        : "text-collab-400"
                     )}
                     onClick={() => setSelectedProjectId(project.id)}
                   >
@@ -191,7 +191,7 @@ export default function QuickIssueCreate({
           size="sm"
           onClick={handleSubmit}
           disabled={!canSubmit || createIssueMutation.isPending}
-          className="bg-[#238636] hover:bg-[#2ea043] text-white h-7 text-xs"
+          className="bg-green-700 hover:bg-green-600 text-white h-7 text-xs"
         >
           {createIssueMutation.isPending ? 'Creating...' : 'Create'}
         </Button>
@@ -199,15 +199,15 @@ export default function QuickIssueCreate({
           size="sm"
           variant="ghost"
           onClick={onCancel}
-          className="text-[#6e7681] hover:text-[#cccccc] hover:bg-[#2a2a2a] h-7 text-xs"
+          className="text-collab-500 hover:text-collab-400 hover:bg-collab-600 h-7 text-xs"
         >
           Cancel
         </Button>
       </div>
 
       {/* Keyboard shortcuts hint */}
-      <div className="text-xs text-[#6e7681] pt-1">
-        <kbd className="px-1 py-0.5 bg-[#2d2d30] rounded text-[10px]">⌘ + Enter</kbd> to create, <kbd className="px-1 py-0.5 bg-[#2d2d30] rounded text-[10px]">Esc</kbd> to cancel
+      <div className="text-xs text-collab-500 pt-1">
+        <kbd className="px-1 py-0.5 bg-collab-600 rounded text-[10px]">⌘ + Enter</kbd> to create, <kbd className="px-1 py-0.5 bg-collab-600 rounded text-[10px]">Esc</kbd> to cancel
       </div>
     </div>
   );

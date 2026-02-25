@@ -90,8 +90,8 @@ export default function LayoutWithSidebar({
           size="icon"
           onClick={isMdUp ? toggleDesktop : toggleMobile}
           className="sidebar-toggle fixed top-1/2 -translate-y-1/2 z-40 w-[24px] hidden md:flex
-                        bg-[#070708] border border-[#1f1f22] hover:bg-[#101011]
-                        text-[#75757a] hover:text-[#fafafa] rounded-r-md rounded-l-none border-l-0 transition-all duration-200"
+                        bg-collab-950 border border-collab-700 hover:bg-collab-900
+                        text-collab-500 hover:text-collab-50 rounded-r-md rounded-l-none border-l-0 transition-all duration-200"
           style={{ left: sidebarLeft }}
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >

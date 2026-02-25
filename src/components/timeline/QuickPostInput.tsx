@@ -61,11 +61,11 @@ export default function QuickPostInput({ workspaceId }: QuickPostInputProps) {
   };
 
   return (
-    <div className="bg-[#171719] border border-[#1f1f22] rounded-2xl p-5">
+    <div className="bg-collab-800 border border-collab-700 rounded-2xl p-5">
       <div className="flex items-start gap-4">
-        <Avatar className="h-10 w-10 ring-2 ring-[#1f1f22] flex-shrink-0">
+        <Avatar className="h-10 w-10 ring-2 ring-collab-700 flex-shrink-0">
           <AvatarImage src={user?.image || undefined} />
-          <AvatarFallback className="text-sm bg-[#101011] text-[#75757a]">
+          <AvatarFallback className="text-sm bg-collab-900 text-collab-500">
             {user?.name?.charAt(0) || "?"}
           </AvatarFallback>
         </Avatar>
@@ -76,19 +76,19 @@ export default function QuickPostInput({ workspaceId }: QuickPostInputProps) {
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Share an update with your team..."
-            className="w-full bg-transparent text-sm text-[#fafafa] placeholder:text-[#75757a] resize-none outline-none min-h-[72px]"
+            className="w-full bg-transparent text-sm text-collab-50 placeholder:text-collab-500 resize-none outline-none min-h-[72px]"
             rows={2}
           />
 
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#1f1f22]">
-            <span className="text-xs text-[#75757a]">
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-collab-700">
+            <span className="text-xs text-collab-500">
               Press Enter to post
             </span>
 
             <button
               onClick={handleSubmit}
               disabled={!message.trim() || isSubmitting}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#27272b] hover:bg-[#3f3f46] disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm text-[#9c9ca1] hover:text-[#fafafa]"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-collab-600 hover:bg-collab-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm text-collab-400 hover:text-collab-50"
             >
               {isSubmitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

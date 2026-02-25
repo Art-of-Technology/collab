@@ -62,8 +62,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen bg-[#090909] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#22c55e]" />
+      <div className="min-h-screen bg-collab-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500" />
       </div>
     );
   }
@@ -80,11 +80,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   return (
-    <div className="min-h-screen bg-[#090909] flex">
+    <div className="min-h-screen bg-collab-950 flex">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-[#1f1f1f] flex flex-col h-screen sticky top-0 bg-[#090909]">
+      <aside className="w-64 border-r border-collab-700 flex flex-col h-screen sticky top-0 bg-collab-950">
         {/* Header - Collab Logo with Admin Dashboard subtitle */}
-        <div className="p-3 border-b border-[#1f1f1f]">
+        <div className="p-3 border-b border-collab-700">
           <Link href="/admin" className="flex flex-col items-start gap-1">
             <Image src="/logo-text.svg" width={100} height={100} alt="Collab" className="h-6 w-auto" />
             <span className="text-xs text-gray-500 font-medium">Admin Dashboard</span>
@@ -102,7 +102,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     variant="ghost"
                     className={cn(
                       "w-full justify-start h-8 px-2 text-sm transition-colors",
-                      active ? "bg-[#1f1f1f] text-white" : "text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+                      active ? "bg-collab-700 text-white" : "text-gray-400 hover:text-white hover:bg-collab-700"
                     )}
                   >
                     <item.icon className="mr-2 h-4 w-4" />
@@ -114,14 +114,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
 
           {/* Divider */}
-          <div className="my-4 border-t border-[#1f1f1f]" />
+          <div className="my-4 border-t border-collab-700" />
 
           {/* Related Links */}
           <div className="space-y-0.5">
             <p className="px-2 text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Related</p>
             {relatedLinks.map((item) => (
               <Link key={item.href} href={item.href}>
-                <Button variant="ghost" className="w-full justify-start h-8 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]">
+                <Button variant="ghost" className="w-full justify-start h-8 px-2 text-sm text-gray-400 hover:text-white hover:bg-collab-700">
                   <item.icon className="mr-2 h-4 w-4" />
                   {item.name}
                 </Button>
@@ -131,9 +131,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </ScrollArea>
 
         {/* Footer */}
-        <div className="p-2 border-t border-[#1f1f1f]">
+        <div className="p-2 border-t border-collab-700">
           <Link href="/">
-            <Button variant="ghost" className="w-full justify-start h-8 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]">
+            <Button variant="ghost" className="w-full justify-start h-8 px-2 text-sm text-gray-400 hover:text-white hover:bg-collab-700">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Collab
             </Button>

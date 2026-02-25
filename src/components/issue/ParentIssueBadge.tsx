@@ -46,12 +46,12 @@ export function ParentIssueBadge({
     <>
       <ArrowUp className="h-3 w-3 text-blue-500 flex-shrink-0" />
       {parent.issueKey && (
-        <span className="font-mono font-medium text-[10px] text-[#7d8590] group-hover:text-[#c9d1d9]">
+        <span className="font-mono font-medium text-[10px] text-collab-500 group-hover:text-collab-400">
           {parent.issueKey}
         </span>
       )}
       {!compact && (
-        <span className="text-[#9ca3af] group-hover:text-[#c9d1d9] truncate">
+        <span className="text-gray-400 group-hover:text-collab-400 truncate">
           {truncatedTitle}
         </span>
       )}
@@ -60,8 +60,8 @@ export function ParentIssueBadge({
 
   const commonClassName = cn(
     "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md",
-    "bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#2d2d30] hover:border-[#404040]",
-    "text-xs text-[#7d8590] hover:text-[#c9d1d9]",
+    "bg-collab-800 hover:bg-collab-600 border border-collab-600 hover:border-collab-600",
+    "text-xs text-collab-500 hover:text-collab-400",
     "transition-all duration-150",
     "group",
     className
@@ -130,7 +130,7 @@ export function ParentIssueBadgeMinimal({
     <>
       <ArrowUp className="h-2.5 w-2.5 text-blue-500 flex-shrink-0" />
       {parent.issueKey && (
-        <span className="font-mono font-medium text-[9px] text-[#7d8590] group-hover:text-[#c9d1d9]">
+        <span className="font-mono font-medium text-[9px] text-collab-500 group-hover:text-collab-400">
           {parent.issueKey}
         </span>
       )}
@@ -139,7 +139,7 @@ export function ParentIssueBadgeMinimal({
 
   const commonClassName = cn(
     "inline-flex items-center gap-1 px-1.5 py-0.5 rounded",
-    "bg-[#1a1a1a] hover:bg-[#2a2a2a] border border-[#2d2d30] hover:border-[#404040]",
+    "bg-collab-800 hover:bg-collab-600 border border-collab-600 hover:border-collab-600",
     "text-xs transition-all duration-150",
     "group",
     className

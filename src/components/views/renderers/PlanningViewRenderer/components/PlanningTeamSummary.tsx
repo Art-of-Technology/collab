@@ -36,7 +36,7 @@ function StatCard({ label, value, icon, color, bgColor, suffix }: StatCardProps)
   return (
     <div className={cn(
       "flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors",
-      "bg-[#141414] border-[#252525] hover:border-[#333]"
+      "bg-collab-900 border-collab-700 hover:border-collab-600"
     )}>
       <div className={cn(
         "flex items-center justify-center w-10 h-10 rounded-lg",
@@ -75,7 +75,7 @@ export function PlanningTeamSummary({
       <Button
         variant="ghost"
         onClick={onToggleCollapse}
-        className="w-full px-6 py-2 flex items-center justify-between text-xs text-gray-400 hover:text-gray-300 hover:bg-[#151515] transition-colors border-b border-[#1a1a1a] h-auto rounded-none"
+        className="w-full px-6 py-2 flex items-center justify-between text-xs text-gray-400 hover:text-gray-300 hover:bg-collab-800 transition-colors border-b border-collab-700 h-auto rounded-none"
       >
         <span className="flex items-center gap-2">
           <Activity className="h-3.5 w-3.5" />
@@ -101,12 +101,12 @@ export function PlanningTeamSummary({
   }
 
   return (
-    <div className="px-6 py-4 border-b border-[#1a1a1a] bg-[#0c0c0c]">
+    <div className="px-6 py-4 border-b border-collab-700 bg-collab-950">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-[#6366f1]" />
+            <Calendar className="h-4 w-4 text-indigo-500" />
             <span className="text-sm font-medium text-white">{dateLabel}</span>
           </div>
           {summary.teamCompletionRate > 0 && (

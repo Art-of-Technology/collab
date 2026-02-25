@@ -90,31 +90,31 @@ export default function FilterDropdown({
           variant={isModalVariant ? "outline" : "ghost"}
           size="sm"
           className={isModalVariant 
-            ? "h-8 px-3 bg-transparent border-[#2a2a2a] text-white hover:bg-[#1f1f1f]"
-            : "h-8 px-3 text-[#666] hover:text-white border border-[#2a2a2a] hover:border-[#3a3a3a]"
+            ? "h-8 px-3 bg-transparent border-collab-600 text-white hover:bg-collab-700"
+            : "h-8 px-3 text-collab-500 hover:text-white border border-collab-600 hover:border-[#3a3a3a]"
           }
         >
           <Filter className="h-4 w-4 mr-2" />
           Filter
           {Object.values(selectedFilters).flat().length > 0 && (
-            <span className="ml-2 px-1 py-0.5 bg-[#0969da] text-xs rounded">
+            <span className="ml-2 px-1 py-0.5 bg-blue-600 text-xs rounded">
               {Object.values(selectedFilters).flat().length}
             </span>
           )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent 
-        className="w-80 bg-[#090909] border-[#1f1f1f] p-0" 
+        className="w-80 bg-collab-950 border-collab-700 p-0" 
         align="start"
       >
-        <div className="p-3 border-b border-[#1f1f1f]">
+        <div className="p-3 border-b border-collab-700">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#666]" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-collab-500" />
             <Input
               placeholder="Filter..."
               value={filterSearch}
               onChange={(e) => setFilterSearch(e.target.value)}
-              className="pl-10 bg-[#1f1f1f] border-[#2a2a2a] text-white placeholder-[#666] h-8"
+              className="pl-10 bg-collab-700 border-collab-600 text-white placeholder:text-collab-500 h-8"
             />
           </div>
         </div>
@@ -132,18 +132,18 @@ export default function FilterDropdown({
                 return (
                   <DropdownMenu key={category.id}>
                     <DropdownMenuTrigger asChild>
-                      <div className="flex items-center gap-3 px-2 py-2 text-white hover:bg-[#1f1f1f] rounded cursor-pointer">
+                      <div className="flex items-center gap-3 px-2 py-2 text-white hover:bg-collab-700 rounded cursor-pointer">
                         <span className="flex-1">{category.name}</span>
                         {hasActiveFilters && (
-                          <span className="px-1 py-0.5 bg-[#0969da] text-xs rounded">
+                          <span className="px-1 py-0.5 bg-blue-600 text-xs rounded">
                             {selectedFilters[category.id].length}
                           </span>
                         )}
-                        <ChevronDown className="h-4 w-4 text-[#666] transform rotate-270" />
+                        <ChevronDown className="h-4 w-4 text-collab-500 transform rotate-270" />
                       </div>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent 
-                      className="w-48 bg-[#090909] border-[#1f1f1f]" 
+                      className="w-48 bg-collab-950 border-collab-700" 
                       side="right"
                       align="start"
                     >
@@ -151,11 +151,11 @@ export default function FilterDropdown({
                         <DropdownMenuItem
                           key={value}
                           onClick={() => handleFilterToggle(category.id, value)}
-                          className="text-white hover:bg-[#1f1f1f] flex items-center gap-2"
+                          className="text-white hover:bg-collab-700 flex items-center gap-2"
                         >
                           <Checkbox
                             checked={selectedFilters[category.id]?.includes(value) || false}
-                            className="border-[#2a2a2a] data-[state=checked]:bg-[#0969da] data-[state=checked]:border-[#0969da]"
+                            className="border-collab-600 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                           />
                           {renderFilterValue(category.id, value)}
                         </DropdownMenuItem>

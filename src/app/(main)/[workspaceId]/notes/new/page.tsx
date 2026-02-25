@@ -119,35 +119,35 @@ export default function NewNotePage() {
 
     if (workspaceLoading) {
         return (
-            <div className="h-full flex flex-col bg-[#09090b]">
+            <div className="h-full flex flex-col bg-collab-950">
                 <div className="flex-1 flex items-center justify-center">
-                    <div className="h-6 w-6 border-2 border-[#3f3f46] border-t-transparent rounded-full animate-spin" />
+                    <div className="h-6 w-6 border-2 border-collab-600 border-t-transparent rounded-full animate-spin" />
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="h-full flex flex-col bg-[#09090b]">
+        <div className="h-full flex flex-col bg-collab-950">
             {/* Header - matching notes list page */}
-            <div className="flex-none border-b border-[#1f1f1f]">
+            <div className="flex-none border-b border-collab-700">
                 <div className="flex items-center justify-between px-6 py-4">
                     <div className="flex items-center gap-3">
                         <Link href={`/${currentWorkspace?.slug}/notes`}>
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0 text-[#6e7681] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+                                className="h-8 w-8 p-0 text-collab-500 hover:text-collab-50 hover:bg-collab-800"
                             >
                                 <ChevronLeft className="h-4 w-4" />
                             </Button>
                         </Link>
-                        <div className="w-8 h-8 rounded-lg bg-[#1a1a1b] flex items-center justify-center">
-                            <Plus className="h-4 w-4 text-[#3b82f6]" />
+                        <div className="w-8 h-8 rounded-lg bg-collab-800 flex items-center justify-center">
+                            <Plus className="h-4 w-4 text-blue-500" />
                         </div>
                         <div>
-                            <h1 className="text-sm font-medium text-[#e6edf3]">New Context</h1>
-                            <p className="text-xs text-[#6e7681]">
+                            <h1 className="text-sm font-medium text-collab-50">New Context</h1>
+                            <p className="text-xs text-collab-500">
                                 {wizardComplete
                                     ? "Create your content"
                                     : "Choose type and visibility"}
@@ -200,7 +200,7 @@ export default function NewNotePage() {
                     )
                 ) : (
                     <div className="flex justify-center items-center py-12">
-                        <div className="h-6 w-6 border-2 border-[#3f3f46] border-t-transparent rounded-full animate-spin" />
+                        <div className="h-6 w-6 border-2 border-collab-600 border-t-transparent rounded-full animate-spin" />
                     </div>
                 )}
             </div>

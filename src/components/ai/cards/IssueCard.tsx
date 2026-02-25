@@ -19,7 +19,7 @@ const priorityColors: Record<string, string> = {
   high: "text-orange-400 bg-orange-400/10",
   medium: "text-yellow-400 bg-yellow-400/10",
   low: "text-blue-400 bg-blue-400/10",
-  none: "text-[#52525b] bg-[#52525b]/10",
+  none: "text-collab-500/60 bg-[#52525b]/10",
 };
 
 export default function IssueCard({
@@ -36,8 +36,8 @@ export default function IssueCard({
     <button
       onClick={onClick}
       className={cn(
-        "w-full text-left p-3 rounded-lg bg-[#1f1f1f]/60 border border-[#27272a]",
-        "hover:border-[#3f3f46] transition-colors group",
+        "w-full text-left p-3 rounded-lg bg-collab-700/60 border border-collab-600",
+        "hover:border-collab-600 transition-colors group",
         onClick && "cursor-pointer"
       )}
     >
@@ -53,19 +53,19 @@ export default function IssueCard({
         <div className="flex-1 min-w-0">
           {/* Issue key and project */}
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-mono text-[#52525b]">
+            <span className="text-[10px] font-mono text-collab-500/60">
               {issueKey}
             </span>
             {project && (
               <>
-                <span className="text-[10px] text-[#3f3f46]">in</span>
-                <span className="text-[10px] text-[#52525b]">{project}</span>
+                <span className="text-[10px] text-collab-500/50">in</span>
+                <span className="text-[10px] text-collab-500/60">{project}</span>
               </>
             )}
           </div>
 
           {/* Title */}
-          <p className="text-sm text-[#e4e4e7] group-hover:text-white truncate">
+          <p className="text-sm text-collab-50 group-hover:text-white truncate">
             {title}
           </p>
 
@@ -82,7 +82,7 @@ export default function IssueCard({
               </span>
             )}
             {assignee && (
-              <span className="text-[10px] text-[#52525b]">
+              <span className="text-[10px] text-collab-500/60">
                 {assignee.name}
               </span>
             )}

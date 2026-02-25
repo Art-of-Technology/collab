@@ -41,11 +41,11 @@ export default function ViewTypeSelector({
               className={cn(
                 "flex flex-col items-center gap-2 p-3 rounded-lg border transition-colors flex-1",
                 isSelected
-                  ? "border-[#0969da] bg-[#0969da]/10"
-                  : "border-[#2a2a2a] hover:border-[#444]"
+                  ? "border-blue-600 bg-blue-600/10"
+                  : "border-collab-600 hover:border-collab-600"
               )}
             >
-              <Icon className="h-5 w-5 text-[#999]" />
+              <Icon className="h-5 w-5 text-collab-400" />
               <span className="text-sm text-white">{type.name}</span>
             </Button>
           );
@@ -55,7 +55,7 @@ export default function ViewTypeSelector({
   }
 
   return (
-    <div className="flex items-center border border-[#2a2a2a] rounded">
+    <div className="flex items-center border border-collab-600 rounded">
       {filteredTypes.map((type, index) => {
         const Icon = type.icon;
         const isSelected = selectedType === type.id;
@@ -69,12 +69,12 @@ export default function ViewTypeSelector({
             size="sm"
             onClick={() => onTypeChange(type.id)}
             className={cn(
-              "h-8 px-3 rounded-none border-r border-[#2a2a2a]",
+              "h-8 px-3 rounded-none border-r border-collab-600",
               isFirst && "rounded-l",
               isLast && "rounded-r border-r-0",
               isSelected 
-                ? "bg-[#1f1f1f] text-white" 
-                : "text-[#666] hover:text-white hover:bg-[#1a1a1a]"
+                ? "bg-collab-700 text-white" 
+                : "text-collab-500 hover:text-white hover:bg-collab-800"
             )}
           >
             <Icon className="h-4 w-4" />

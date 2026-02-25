@@ -126,18 +126,18 @@ export default function CreateFeatureRequestButton({
           <span className="hidden sm:inline">New Request</span>
         </button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] bg-[#171719] border-[#1f1f22] p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[600px] bg-collab-800 border-collab-700 p-0 overflow-hidden">
         <form onSubmit={handleSubmit}>
           {/* Header */}
-          <div className="flex items-center gap-3 px-6 py-5 border-b border-[#1f1f22]">
+          <div className="flex items-center gap-3 px-6 py-5 border-b border-collab-700">
             <div className="p-2 rounded-lg bg-amber-500/10">
               <Lightbulb className="h-5 w-5 text-amber-400" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-medium text-[#fafafa]">
+              <DialogTitle className="text-lg font-medium text-collab-50">
                 New Feature Request
               </DialogTitle>
-              <DialogDescription className="text-sm text-[#75757a]">
+              <DialogDescription className="text-sm text-collab-500">
                 Share your idea with the team
               </DialogDescription>
             </div>
@@ -148,24 +148,24 @@ export default function CreateFeatureRequestButton({
             {/* Project Selector */}
             {!defaultProjectId && projects && projects.length > 0 && (
               <div className="space-y-2">
-                <Label className="text-sm text-[#9c9ca1]">
+                <Label className="text-sm text-collab-400">
                   Project <span className="text-red-400">*</span>
                 </Label>
                 <div className="relative">
                   <select
                     value={selectedProjectId}
                     onChange={(e) => setSelectedProjectId(e.target.value)}
-                    className="w-full h-10 px-3 rounded-lg bg-[#101011] border border-[#1f1f22] text-sm text-[#fafafa] focus:outline-none focus:border-[#3f3f46] transition-colors appearance-none cursor-pointer"
+                    className="w-full h-10 px-3 rounded-lg bg-collab-900 border border-collab-700 text-sm text-collab-50 focus:outline-none focus:border-collab-500/50 transition-colors appearance-none cursor-pointer"
                     required
                   >
-                    <option value="" className="bg-[#171719] text-[#75757a]">
+                    <option value="" className="bg-collab-800 text-collab-500">
                       Select a project
                     </option>
                     {projects.map((project) => (
                       <option
                         key={project.id}
                         value={project.id}
-                        className="bg-[#171719] text-[#fafafa]"
+                        className="bg-collab-800 text-collab-50"
                       >
                         {project.name}
                       </option>
@@ -173,7 +173,7 @@ export default function CreateFeatureRequestButton({
                   </select>
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
                     <svg
-                      className="w-4 h-4 text-[#52525b]"
+                      className="w-4 h-4 text-collab-500/60"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -193,27 +193,27 @@ export default function CreateFeatureRequestButton({
             {/* Project Badge (when at project level) */}
             {defaultProjectId && projectName && (
               <div className="flex items-center gap-2 text-sm">
-                <span className="text-[#52525b]">Project:</span>
-                <span className="text-[#fafafa] font-medium">{projectName}</span>
+                <span className="text-collab-500/60">Project:</span>
+                <span className="text-collab-50 font-medium">{projectName}</span>
               </div>
             )}
 
             {/* Title */}
             <div className="space-y-2">
-              <Label className="text-sm text-[#9c9ca1]">Title</Label>
+              <Label className="text-sm text-collab-400">Title</Label>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Brief title for your feature idea"
-                className="h-10 bg-[#101011] border-[#1f1f22] text-[#fafafa] placeholder:text-[#52525b] focus:border-[#3f3f46] focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="h-10 bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-collab-500/50 focus-visible:ring-0 focus-visible:ring-offset-0"
                 required
               />
             </div>
 
             {/* Description */}
             <div className="space-y-2">
-              <Label className="text-sm text-[#9c9ca1]">Description</Label>
-              <div className="rounded-lg border border-[#1f1f22] overflow-hidden bg-[#101011]">
+              <Label className="text-sm text-collab-400">Description</Label>
+              <div className="rounded-lg border border-collab-700 overflow-hidden bg-collab-900">
                 <RichEditor
                   value={description}
                   onChange={(html, text) => setDescription(html)}
@@ -227,12 +227,12 @@ export default function CreateFeatureRequestButton({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#1f1f22] bg-[#101011]">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-collab-700 bg-collab-900">
             <Button
               type="button"
               variant="ghost"
               onClick={() => setOpen(false)}
-              className="h-9 px-4 text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22]"
+              className="h-9 px-4 text-collab-500 hover:text-collab-50 hover:bg-collab-700"
             >
               Cancel
             </Button>

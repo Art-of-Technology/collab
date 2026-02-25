@@ -52,8 +52,8 @@ export function ReporterSelector({
     if (selectedReporters.length === 0) {
       return (
         <>
-          <UserX className="h-3 w-3 text-[#6e7681]" />
-          <span className="text-[#6e7681] text-xs">Reporter</span>
+          <UserX className="h-3 w-3 text-collab-500" />
+          <span className="text-collab-500 text-xs">Reporter</span>
         </>
       );
     }
@@ -72,7 +72,7 @@ export function ReporterSelector({
               </AvatarFallback>
             </Avatar>
           )}
-          <span className="text-[#cccccc] text-xs truncate max-w-[80px]">{reporter.name}</span>
+          <span className="text-collab-400 text-xs truncate max-w-[80px]">{reporter.name}</span>
         </>
       );
     }
@@ -84,11 +84,11 @@ export function ReporterSelector({
           {selectedReporters.slice(0, 3).map((reporter, index) => (
             <div key={reporter.id} className="relative" style={{ zIndex: 3 - index }}>
               {reporter.useCustomAvatar ? (
-                <CustomAvatar user={reporter} size="sm" className="border border-[#181818]" />
+                <CustomAvatar user={reporter} size="sm" className="border border-collab-700" />
               ) : (
-                <Avatar className="h-3.5 w-3.5 border border-[#181818]">
+                <Avatar className="h-3.5 w-3.5 border border-collab-700">
                   {reporter.image && <AvatarImage src={reporter.image} alt={reporter.name} />}
-                  <AvatarFallback className="text-xs font-medium bg-[#2a2a2a] text-white">
+                  <AvatarFallback className="text-xs font-medium bg-collab-600 text-white">
                     {reporter.name?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
@@ -96,12 +96,12 @@ export function ReporterSelector({
             </div>
           ))}
           {selectedReporters.length > 3 && (
-            <div className="h-3.5 w-3.5 rounded-full bg-[#404040] border border-[#181818] flex items-center justify-center">
+            <div className="h-3.5 w-3.5 rounded-full bg-collab-600 border border-collab-700 flex items-center justify-center">
               <span className="text-[8px] text-white font-medium">+</span>
             </div>
           )}
         </div>
-        <span className="text-[#cccccc] text-xs">{selectedReporters.length} reporters</span>
+        <span className="text-collab-400 text-xs">{selectedReporters.length} reporters</span>
       </>
     );
   };
@@ -123,11 +123,11 @@ export function ReporterSelector({
             </AvatarFallback>
           </Avatar>
         )}
-        <span className={cn("text-[#cccccc] flex-1", option.isPrioritized && "font-medium")}>
+        <span className={cn("text-collab-400 flex-1", option.isPrioritized && "font-medium")}>
           {reporter.name}
           {option.isPrioritized ? " (You)" : ""}
         </span>
-        {isSelected && <Check className="h-3 w-3 text-[#6e7681]" />}
+        {isSelected && <Check className="h-3 w-3 text-collab-500" />}
       </>
     );
   };

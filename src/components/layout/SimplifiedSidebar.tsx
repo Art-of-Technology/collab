@@ -46,18 +46,6 @@ import CreateViewModal from "@/components/modals/CreateViewModal";
 import CreateProjectModal from "@/components/modals/CreateProjectModal";
 import NotificationPopover from "@/components/layout/sidebar/NotificationPopover";
 
-// Collab Design System Colors
-const colors = {
-  bg950: "#070708",    // Sidebar background
-  bg900: "#101011",    // Page content / nested
-  bg800: "#171719",    // Cards, hover states
-  bg700: "#1f1f22",    // Borders
-  bg600: "#27272b",    // Strong hover
-  text500: "#75757a",  // Muted text
-  text400: "#9c9ca1",  // Secondary text
-  text50: "#fafafa",   // Primary text
-  blue600: "#2563eb",  // Primary accent
-};
 
 interface SimplifiedSidebarProps {
   pathname?: string;
@@ -105,7 +93,7 @@ export default function SimplifiedSidebar({
     router.push("/");
   };
 
-  const agentColor = currentAgent?.color || colors.blue600;
+  const agentColor = currentAgent?.color || '#2563eb';
 
   const mainNav = [
     { name: "Home", href: `${workspaceBase}/dashboard`, icon: Home, current: pathname.includes("/dashboard") },
@@ -121,7 +109,7 @@ export default function SimplifiedSidebar({
         {/* Logo */}
         <div className="px-2 mb-4 flex justify-center">
           <Link href={`${workspaceBase}/dashboard`}>
-            <div className={`p-2 rounded-lg hover:bg-[${colors.bg800}] transition-colors`}>
+            <div className="p-2 rounded-lg hover:bg-collab-800 transition-colors">
               <Image src="/logo-icon.svg" width={24} height={24} alt="Collab" />
             </div>
           </Link>
@@ -136,8 +124,8 @@ export default function SimplifiedSidebar({
               className={cn(
                 "flex items-center justify-center h-9 w-full rounded-lg transition-all duration-150",
                 item.current
-                  ? `bg-[${colors.bg800}] text-white`
-                  : `text-[${colors.text500}] hover:text-white hover:bg-[${colors.bg800}]`
+                  ? "bg-collab-800 text-white"
+                  : "text-collab-500 hover:text-white hover:bg-collab-800"
               )}
               title={item.name}
             >
@@ -152,7 +140,7 @@ export default function SimplifiedSidebar({
         <div className="px-2 mb-2 flex justify-center">
           <button
             onClick={focusInput}
-            className={`flex items-center justify-center h-9 w-9 rounded-lg bg-[${colors.bg950}] border border-[${colors.bg700}] hover:bg-[${colors.bg800}] transition-all duration-150`}
+            className="flex items-center justify-center h-9 w-9 rounded-lg bg-collab-950 border border-collab-700 hover:bg-collab-800 transition-all duration-150"
             title={currentAgent ? `Ask ${currentAgent.name}` : "AI Assistant"}
           >
             {currentAgent ? (
@@ -172,23 +160,23 @@ export default function SimplifiedSidebar({
         <div className="px-2 flex justify-center">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className={`p-1 rounded-lg hover:bg-[${colors.bg800}] transition-colors`}>
-                <Avatar className={`h-8 w-8 ring-1 ring-[${colors.bg700}]`}>
+              <button className="p-1 rounded-lg hover:bg-collab-800 transition-colors">
+                <Avatar className="h-8 w-8 ring-1 ring-collab-700">
                   <AvatarImage src={userData?.image || undefined} />
-                  <AvatarFallback className={`text-xs bg-[${colors.bg800}] text-[${colors.text400}]`}>
+                  <AvatarFallback className="text-xs bg-collab-800 text-collab-400">
                     {userData?.name?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className={`w-48 bg-[${colors.bg900}] border-[${colors.bg700}]`}>
+            <DropdownMenuContent align="end" className="w-48 bg-collab-900 border-collab-700">
               <DropdownMenuItem
                 onClick={() => router.push(`${workspaceBase}/settings`)}
-                className={`text-[${colors.text400}] hover:text-white focus:bg-[${colors.bg800}]`}
+                className="text-collab-400 hover:text-white focus:bg-collab-800"
               >
                 <Settings className="mr-2 h-4 w-4" /> Settings
               </DropdownMenuItem>
-              <DropdownMenuSeparator className={`bg-[${colors.bg700}]`} />
+              <DropdownMenuSeparator className="bg-collab-700" />
               <DropdownMenuItem
                 onClick={handleSignOut}
                 className="text-red-400 hover:text-red-300 focus:bg-red-500/10"
@@ -223,11 +211,11 @@ export default function SimplifiedSidebar({
             const event = new KeyboardEvent("keydown", { key: "k", metaKey: true });
             document.dispatchEvent(event);
           }}
-          className="flex items-center gap-4 rounded-lg border px-2 py-2 text-sm bg-[#070708] border-[#1f1f22] hover:bg-[#171719] transition-colors"
+          className="flex items-center gap-4 rounded-lg border px-2 py-2 text-sm bg-collab-950 border-collab-700 hover:bg-collab-800 transition-colors"
         >
-          <Search className="h-4 w-4 text-[#75757a]" />
-          <span className="flex-1 text-left text-[#75757a]">Search...</span>
-          <kbd className="text-xs px-1.5 py-0.5 rounded bg-[#171719] text-[#9c9ca1]">⌘K</kbd>
+          <Search className="h-4 w-4 text-collab-500" />
+          <span className="flex-1 text-left text-collab-500">Search...</span>
+          <kbd className="text-xs px-1.5 py-0.5 rounded bg-collab-800 text-collab-400">⌘K</kbd>
         </button>
 
         {/* Workspace Selector */}
@@ -242,11 +230,11 @@ export default function SimplifiedSidebar({
               className={cn(
                 "flex items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium transition-all duration-150",
                 item.current
-                  ? "bg-[#171719] text-white"
-                  : "text-[#9c9ca1] hover:text-white hover:bg-[#171719]"
+                  ? "bg-collab-800 text-white"
+                  : "text-collab-400 hover:text-white hover:bg-collab-800"
               )}
             >
-              <item.icon className={cn("h-4 w-4", item.current ? "text-white" : "text-[#75757a]")} />
+              <item.icon className={cn("h-4 w-4", item.current ? "text-white" : "text-collab-500")} />
               <span>{item.name}</span>
             </Link>
           ))}
@@ -259,23 +247,23 @@ export default function SimplifiedSidebar({
             className={cn(
               "flex items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium transition-all duration-150 group",
               pathname.startsWith(`${workspaceBase}/projects`)
-                ? "bg-[#171719] text-white"
-                : "text-[#9c9ca1] hover:text-white hover:bg-[#171719]"
+                ? "bg-collab-800 text-white"
+                : "text-collab-400 hover:text-white hover:bg-collab-800"
             )}
           >
-            <FolderKanban className={cn("h-4 w-4", pathname.startsWith(`${workspaceBase}/projects`) ? "text-white" : "text-[#75757a]")} />
+            <FolderKanban className={cn("h-4 w-4", pathname.startsWith(`${workspaceBase}/projects`) ? "text-white" : "text-collab-500")} />
             <span>Projects</span>
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowCreateProjectModal(true); }}
-              className="ml-auto p-1 hover:bg-[#1f1f22] rounded transition-colors opacity-0 group-hover:opacity-100"
+              className="ml-auto p-1 hover:bg-collab-700 rounded transition-colors opacity-0 group-hover:opacity-100"
             >
-              <Plus className="h-3.5 w-3.5 text-[#75757a]" />
+              <Plus className="h-3.5 w-3.5 text-collab-500" />
             </button>
           </Link>
 
           {/* Starred Projects */}
           {starredProjects.length > 0 && (
-            <div className="mt-1 space-y-0.5 ml-6 pl-3 border-l border-[#1f1f22]">
+            <div className="mt-1 space-y-0.5 ml-6 pl-3 border-l border-collab-700">
               {starredProjects.map((project: any) => (
                 <Link
                   key={project.id}
@@ -283,8 +271,8 @@ export default function SimplifiedSidebar({
                   className={cn(
                     "flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-all duration-150",
                     pathname.includes(`/projects/${project.slug}`)
-                      ? "text-white bg-[#171719]"
-                      : "text-[#9c9ca1] hover:text-white hover:bg-[#101011]"
+                      ? "text-white bg-collab-800"
+                      : "text-collab-400 hover:text-white hover:bg-collab-900"
                   )}
                 >
                   <div
@@ -305,23 +293,23 @@ export default function SimplifiedSidebar({
             className={cn(
               "flex items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium transition-all duration-150 group",
               pathname === `${workspaceBase}/views`
-                ? "bg-[#171719] text-white"
-                : "text-[#9c9ca1] hover:text-white hover:bg-[#171719]"
+                ? "bg-collab-800 text-white"
+                : "text-collab-400 hover:text-white hover:bg-collab-800"
             )}
           >
-            <Eye className={cn("h-4 w-4", pathname === `${workspaceBase}/views` ? "text-white" : "text-[#75757a]")} />
+            <Eye className={cn("h-4 w-4", pathname === `${workspaceBase}/views` ? "text-white" : "text-collab-500")} />
             <span>Views</span>
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowCreateViewModal(true); }}
-              className="ml-auto p-1 hover:bg-[#1f1f22] rounded transition-colors opacity-0 group-hover:opacity-100"
+              className="ml-auto p-1 hover:bg-collab-700 rounded transition-colors opacity-0 group-hover:opacity-100"
             >
-              <Plus className="h-3.5 w-3.5 text-[#75757a]" />
+              <Plus className="h-3.5 w-3.5 text-collab-500" />
             </button>
           </Link>
 
           {/* Starred Views */}
           {starredViews.length > 0 && (
-            <div className="mt-1 space-y-0.5 ml-6 pl-3 border-l border-[#1f1f22]">
+            <div className="mt-1 space-y-0.5 ml-6 pl-3 border-l border-collab-700">
               {starredViews.map((view: any) => (
                 <Link
                   key={view.id}
@@ -329,8 +317,8 @@ export default function SimplifiedSidebar({
                   className={cn(
                     "flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-all duration-150",
                     pathname.includes(`/views/${view.slug || view.id}`)
-                      ? "text-white bg-[#171719]"
-                      : "text-[#9c9ca1] hover:text-white hover:bg-[#101011]"
+                      ? "text-white bg-collab-800"
+                      : "text-collab-400 hover:text-white hover:bg-collab-900"
                   )}
                 >
                   <Star className="h-3 w-3 text-amber-400 fill-amber-400 flex-shrink-0" />
@@ -344,7 +332,7 @@ export default function SimplifiedSidebar({
         {/* Apps Section */}
         {installedApps.length > 0 && (
           <div>
-            <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#75757a]">
+            <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-collab-500">
               Apps
             </div>
             <div className="space-y-0.5">
@@ -355,8 +343,8 @@ export default function SimplifiedSidebar({
                   className={cn(
                     "flex items-center gap-4 rounded-lg px-2 py-2 text-sm transition-all duration-150",
                     pathname.includes(`/apps/${installation.app.slug}`)
-                      ? "bg-[#171719] text-white"
-                      : "text-[#9c9ca1] hover:text-white hover:bg-[#171719]"
+                      ? "bg-collab-800 text-white"
+                      : "text-collab-400 hover:text-white hover:bg-collab-800"
                   )}
                 >
                   {installation.app.iconUrl ? (
@@ -368,7 +356,7 @@ export default function SimplifiedSidebar({
                       className="rounded flex-shrink-0"
                     />
                   ) : (
-                    <Grid3X3 className="h-4 w-4 text-[#75757a] flex-shrink-0" />
+                    <Grid3X3 className="h-4 w-4 text-collab-500 flex-shrink-0" />
                   )}
                   <span className="truncate">{installation.app.name}</span>
                 </Link>
@@ -383,45 +371,45 @@ export default function SimplifiedSidebar({
         {/* Support Link */}
         <Link
           href="/support"
-          className="flex items-center gap-4 rounded-lg px-2 py-2 text-sm text-[#9c9ca1] hover:text-white hover:bg-[#171719] transition-colors"
+          className="flex items-center gap-4 rounded-lg px-2 py-2 text-sm text-collab-400 hover:text-white hover:bg-collab-800 transition-colors"
         >
-          <HelpCircle className="h-4 w-4 text-[#75757a]" />
+          <HelpCircle className="h-4 w-4 text-collab-500" />
           <span>Support</span>
         </Link>
 
         {/* Documentation Link */}
         <Link
           href="/docs"
-          className="flex items-center gap-4 rounded-lg px-2 py-2 text-sm text-[#9c9ca1] hover:text-white hover:bg-[#171719] transition-colors"
+          className="flex items-center gap-4 rounded-lg px-2 py-2 text-sm text-collab-400 hover:text-white hover:bg-collab-800 transition-colors"
         >
-          <ExternalLink className="h-4 w-4 text-[#75757a]" />
+          <ExternalLink className="h-4 w-4 text-collab-500" />
           <span>Documentation</span>
         </Link>
 
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-[#171719] transition-colors group">
-              <Avatar className="h-8 w-8 ring-1 ring-[#1f1f22]">
+            <button className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-collab-800 transition-colors group">
+              <Avatar className="h-8 w-8 ring-1 ring-collab-700">
                 <AvatarImage src={userData?.image || undefined} />
-                <AvatarFallback className="text-xs bg-[#171719] text-[#9c9ca1]">
+                <AvatarFallback className="text-xs bg-collab-800 text-collab-400">
                   {userData?.name?.charAt(0) || "U"}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 text-left min-w-0">
                 <p className="text-sm text-white truncate">{userData?.name || "User"}</p>
               </div>
-              <ChevronDown className="h-4 w-4 text-[#75757a] group-hover:text-[#9c9ca1] transition-colors flex-shrink-0" />
+              <ChevronDown className="h-4 w-4 text-collab-500 group-hover:text-collab-400 transition-colors flex-shrink-0" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 bg-[#101011] border-[#1f1f22]">
+          <DropdownMenuContent align="end" className="w-56 bg-collab-900 border-collab-700">
             <DropdownMenuItem
               onClick={() => router.push(`${workspaceBase}/settings`)}
-              className="text-[#9c9ca1] hover:text-white focus:bg-[#171719]"
+              className="text-collab-400 hover:text-white focus:bg-collab-800"
             >
               <Settings className="mr-2 h-4 w-4" /> Settings
             </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-[#1f1f22]" />
+            <DropdownMenuSeparator className="bg-collab-700" />
             <DropdownMenuItem
               onClick={handleSignOut}
               className="text-red-400 hover:text-red-300 focus:bg-red-500/10"

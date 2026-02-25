@@ -174,8 +174,8 @@ export function GlobalFilterSelector({
     if (selectedOptions.length === 0) {
       return (
         <>
-          <EmptyIcon className="h-3.5 w-3.5 text-[#75757a]" />
-          <span className="text-[#75757a] text-xs">{label}</span>
+          <EmptyIcon className="h-3.5 w-3.5 text-collab-500" />
+          <span className="text-collab-500 text-xs">{label}</span>
         </>
       );
     }
@@ -185,7 +185,7 @@ export function GlobalFilterSelector({
       return (
         <>
           {renderOptionIcon(opt, "h-3.5 w-3.5")}
-          <span className="text-[#fafafa] text-xs truncate max-w-[80px]">
+          <span className="text-collab-50 text-xs truncate max-w-[80px]">
             {opt.label}
             {opt.isPrioritized && opt.priorityLabel ? ` ${opt.priorityLabel}` : ""}
           </span>
@@ -207,12 +207,12 @@ export function GlobalFilterSelector({
             </div>
           ))}
           {selectedOptions.length > 3 && (
-            <div className="h-3 w-3 rounded-full bg-[#27272b] border border-[#1f1f22] flex items-center justify-center">
-              <span className="text-[8px] text-[#9c9ca1] font-medium">+</span>
+            <div className="h-3 w-3 rounded-full bg-collab-600 border border-collab-700 flex items-center justify-center">
+              <span className="text-[8px] text-collab-400 font-medium">+</span>
             </div>
           )}
         </div>
-        <span className="text-[#fafafa] text-xs">
+        <span className="text-collab-50 text-xs">
           {selectedOptions.length} {computedPluralLabel}
         </span>
       </>
@@ -228,7 +228,7 @@ export function GlobalFilterSelector({
           className={cn(
             "rounded-full flex-shrink-0",
             sizeClass,
-            withBorder && "border border-[#1f1f22]"
+            withBorder && "border border-collab-700"
           )}
           style={{ backgroundColor: option.color }}
         />
@@ -253,9 +253,9 @@ export function GlobalFilterSelector({
       return (
         <div
           className={cn(
-            "rounded-full bg-[#101011] flex-shrink-0 flex items-center justify-center text-[8px] font-medium text-[#9c9ca1]",
+            "rounded-full bg-collab-900 flex-shrink-0 flex items-center justify-center text-[8px] font-medium text-collab-400",
             sizeClass,
-            withBorder && "border border-[#1f1f22]"
+            withBorder && "border border-collab-700"
           )}
         >
           {option.label?.charAt(0) || "U"}
@@ -263,7 +263,7 @@ export function GlobalFilterSelector({
       );
     }
 
-    return <EmptyIcon className={cn(sizeClass, "text-[#75757a]")} />;
+    return <EmptyIcon className={cn(sizeClass, "text-collab-500")} />;
   };
 
   // Default option content renderer
@@ -273,9 +273,9 @@ export function GlobalFilterSelector({
         {renderOptionIcon(option, "h-3.5 w-3.5")}
         <div className="flex flex-col flex-1 min-w-0">
           <span className={cn(
-            "text-[#9c9ca1]",
+            "text-collab-400",
             option.isPrioritized && "font-medium",
-            isSelected && "text-[#fafafa]"
+            isSelected && "text-collab-50"
           )}>
             {option.label}
             {option.isPrioritized && option.priorityLabel ? ` ${option.priorityLabel}` : ""}
@@ -285,7 +285,7 @@ export function GlobalFilterSelector({
           )}
         </div>
         {option.suffix && (
-          <span className="text-xs text-[#75757a]">{option.suffix}</span>
+          <span className="text-xs text-collab-500">{option.suffix}</span>
         )}
         {isSelected && (
           <Check className="h-3.5 w-3.5 text-blue-400" />
@@ -302,10 +302,10 @@ export function GlobalFilterSelector({
           tabIndex={disabled ? -1 : 0}
           className={cn(
             "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all duration-200 h-8 cursor-pointer select-none",
-            "border border-[#27272b] hover:border-[#3f3f46] hover:bg-[#27272b]",
-            "text-[#9c9ca1] bg-[#101011]",
+            "border border-collab-600 hover:border-collab-600 hover:bg-collab-600",
+            "text-collab-400 bg-collab-900",
             "outline-none",
-            selectedOptions.length > 0 && "border-[#3f3f46] bg-[#1f1f22]",
+            selectedOptions.length > 0 && "border-collab-600 bg-collab-700",
             disabled && "opacity-50 cursor-not-allowed pointer-events-none"
           )}
         >
@@ -317,29 +317,29 @@ export function GlobalFilterSelector({
       </PopoverTrigger>
 
       <PopoverContent
-        className={cn("p-0 bg-[#171719] border-[#1f1f22] shadow-xl rounded-xl", popoverWidth)}
+        className={cn("p-0 bg-collab-800 border-collab-700 shadow-xl rounded-xl", popoverWidth)}
         align={popoverAlign}
         side="bottom"
         sideOffset={4}
       >
         {/* Header with optional search */}
         {showSearch ? (
-          <div className="p-3 border-b border-[#1f1f22]">
-            <div className="text-xs text-[#75757a] mb-2 font-medium">
+          <div className="p-3 border-b border-collab-700">
+            <div className="text-xs text-collab-500 mb-2 font-medium">
               {computedFilterHeader}
             </div>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-[#75757a]" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-collab-500" />
               <Input
                 placeholder={searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-8 text-xs bg-[#101011] border-[#1f1f22] focus:border-[#27272b] text-[#fafafa] placeholder:text-[#75757a] rounded-lg"
+                className="pl-9 h-8 text-xs bg-collab-900 border-collab-700 focus:border-collab-600 text-collab-50 placeholder:text-collab-500 rounded-lg"
               />
             </div>
           </div>
         ) : (
-          <div className="text-xs text-[#75757a] px-3 py-2.5 border-b border-[#1f1f22] font-medium">
+          <div className="text-xs text-collab-500 px-3 py-2.5 border-b border-collab-700 font-medium">
             {computedFilterHeader}
           </div>
         )}
@@ -347,8 +347,8 @@ export function GlobalFilterSelector({
         {/* Loading state */}
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-6">
-            <Loader2 className="h-4 w-4 animate-spin text-[#75757a]" />
-            <span className="text-[#75757a] text-xs">Loading...</span>
+            <Loader2 className="h-4 w-4 animate-spin text-collab-500" />
+            <span className="text-collab-500 text-xs">Loading...</span>
           </div>
         ) : (
           <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#27272b] scrollbar-track-transparent p-1.5">
@@ -357,11 +357,11 @@ export function GlobalFilterSelector({
               <Button
                 type="button"
                 variant="ghost"
-                className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs rounded-lg hover:bg-[#1f1f22] transition-colors text-left h-auto"
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs rounded-lg hover:bg-collab-700 transition-colors text-left h-auto"
                 onClick={handleClear}
               >
-                <EmptyIcon className="h-3.5 w-3.5 text-[#75757a]" />
-                <span className="text-[#75757a] flex-1">{computedClearLabel}</span>
+                <EmptyIcon className="h-3.5 w-3.5 text-collab-500" />
+                <span className="text-collab-500 flex-1">{computedClearLabel}</span>
                 {selectedIds.length === 0 && (
                   <Check className="h-3.5 w-3.5 text-blue-400" />
                 )}
@@ -370,7 +370,7 @@ export function GlobalFilterSelector({
 
             {/* Section header */}
             {sectionHeader && filteredOptions.length > 0 && (
-              <div className="px-2.5 pt-2 pb-1 text-xs text-[#52525b] font-medium">
+              <div className="px-2.5 pt-2 pb-1 text-xs text-collab-500/60 font-medium">
                 {sectionHeader}
               </div>
             )}
@@ -389,8 +389,8 @@ export function GlobalFilterSelector({
                       className={cn(
                         "w-full flex items-center gap-2.5 px-2.5 py-2 text-xs rounded-lg transition-colors text-left h-auto",
                         isSelected
-                          ? "bg-[#1f1f22]"
-                          : "hover:bg-[#1f1f22]",
+                          ? "bg-collab-700"
+                          : "hover:bg-collab-700",
                         option.isPrioritized && !isSelected && "bg-blue-500/5 hover:bg-blue-500/10",
                         option.disabled && "opacity-50 cursor-not-allowed"
                       )}
@@ -409,14 +409,14 @@ export function GlobalFilterSelector({
               renderNoResults ? (
                 renderNoResults(searchQuery)
               ) : (
-                <div className="px-2.5 py-6 text-center text-[#75757a] text-xs">
+                <div className="px-2.5 py-6 text-center text-collab-500 text-xs">
                   <div className="space-y-3">
                     <p>No results for "{searchQuery}"</p>
                     {showCreateButton && onCreateClick && (
                       <Button
                         variant="outline"
                         size="sm"
-                        className="gap-2 h-8 text-xs bg-[#101011] border-[#1f1f22] hover:bg-[#1f1f22] hover:border-[#27272b] text-[#9c9ca1] rounded-lg"
+                        className="gap-2 h-8 text-xs bg-collab-900 border-collab-700 hover:bg-collab-700 hover:border-collab-600 text-collab-400 rounded-lg"
                         onClick={() => onCreateClick(searchQuery)}
                         disabled={isCreating}
                       >
@@ -436,14 +436,14 @@ export function GlobalFilterSelector({
               renderEmptyState ? (
                 renderEmptyState()
               ) : (
-                <div className="px-2.5 py-6 text-center text-[#75757a] text-xs">
+                <div className="px-2.5 py-6 text-center text-collab-500 text-xs">
                   <div className="space-y-3">
                     <p>No {computedPluralLabel} available</p>
                     {showCreateButton && onCreateClick && (
                       <Button
                         variant="outline"
                         size="sm"
-                        className="gap-2 h-8 text-xs bg-[#101011] border-[#1f1f22] hover:bg-[#1f1f22] hover:border-[#27272b] text-[#9c9ca1] rounded-lg"
+                        className="gap-2 h-8 text-xs bg-collab-900 border-collab-700 hover:bg-collab-700 hover:border-collab-600 text-collab-400 rounded-lg"
                         onClick={() => onCreateClick("")}
                         disabled={isCreating}
                       >
@@ -464,11 +464,11 @@ export function GlobalFilterSelector({
 
         {/* Clear all footer (when multiple selected) */}
         {selectionMode === "multi" && selectedIds.length > 1 && (
-          <div className="border-t border-[#1f1f22] p-2">
+          <div className="border-t border-collab-700 p-2">
             <Button
               variant="ghost"
               size="sm"
-              className="w-full text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] h-8 text-xs rounded-lg"
+              className="w-full text-collab-500 hover:text-collab-50 hover:bg-collab-700 h-8 text-xs rounded-lg"
               onClick={handleClear}
             >
               <X className="h-3.5 w-3.5 mr-2" />

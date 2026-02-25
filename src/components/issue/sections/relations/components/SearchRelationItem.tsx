@@ -97,7 +97,7 @@ export function SearchRelationItem({
     <div
       className={cn(
         "group flex items-center px-2 py-1.5 transition-all duration-150 cursor-pointer rounded-md",
-        "hover:bg-[#0f1011]",
+        "hover:bg-collab-900",
         isSelected && "bg-blue-500/10 border-l-2 border-blue-500"
       )}
       onClick={() => onToggle(item)}
@@ -107,7 +107,7 @@ export function SearchRelationItem({
         {isSelected ? (
           <Check className="h-3.5 w-3.5 text-blue-500" />
         ) : (
-          <div className="h-3.5 w-3.5 border border-[#333] rounded-sm"></div>
+          <div className="h-3.5 w-3.5 border border-collab-600 rounded-sm"></div>
         )}
       </div>
 
@@ -122,14 +122,14 @@ export function SearchRelationItem({
           )}
 
           {/* Issue Key - moved to top */}
-          <span className="text-[#8b949e] text-[10px] font-mono font-medium">
+          <span className="text-collab-400 text-[10px] font-mono font-medium">
             {item.issueKey || item.type.toUpperCase()}
           </span>
         </div>
 
         {/* Title - moved under issue key */}
         <div className="flex items-center">
-          <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
+          <span className="text-collab-50 text-sm font-medium truncate group-hover:text-blue-400 transition-colors">
             {item.title}
           </span>
         </div>
@@ -178,20 +178,20 @@ export function SearchRelationItem({
         {item.assignee ? (
           <Avatar className="h-5 w-5">
             <AvatarImage src={item.assignee.image || undefined} />
-            <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
+            <AvatarFallback className="text-xs bg-collab-600 text-white border-none">
               {item.assignee.name?.charAt(0)?.toUpperCase()}
             </AvatarFallback>
           </Avatar>
         ) : (
-          <div className="h-5 w-5 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
-            <User className="h-2.5 w-2.5 text-[#666]" />
+          <div className="h-5 w-5 rounded-full bg-collab-800 border border-collab-600 flex items-center justify-center">
+            <User className="h-2.5 w-2.5 text-collab-500" />
           </div>
         )}
       </div>
 
       {/* Updated Date */}
       <div className="flex-shrink-0 w-10">
-        <span className="text-[#6e7681] text-xs">
+        <span className="text-collab-500 text-xs">
           {format(new Date(item.updatedAt), 'MMM d')}
         </span>
       </div>

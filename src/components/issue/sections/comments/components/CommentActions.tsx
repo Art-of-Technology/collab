@@ -44,7 +44,7 @@ export function CommentActions({
         size="sm"
         onClick={onLike}
         className={`flex items-center gap-1 text-[10px] hover:text-red-400 transition-colors h-auto p-1 ${
-          hasLiked ? "text-red-400" : "text-[#7d8590]"
+          hasLiked ? "text-red-400" : "text-collab-500"
         }`}
       >
         <Heart className={`h-2.5 w-2.5 ${hasLiked ? "fill-current" : ""}`} />
@@ -55,7 +55,7 @@ export function CommentActions({
         variant="ghost"
         size="sm"
         onClick={onReply}
-        className="flex items-center gap-1 text-[10px] text-[#7d8590] hover:text-[#c9d1d9] transition-colors h-auto p-1"
+        className="flex items-center gap-1 text-[10px] text-collab-500 hover:text-collab-400 transition-colors h-auto p-1"
       >
         <Reply className="h-2.5 w-2.5" />
         Reply
@@ -66,7 +66,7 @@ export function CommentActions({
           variant="ghost"
           size="sm"
           onClick={onToggleReplies}
-          className="flex items-center gap-1 text-[10px] text-[#7d8590] hover:text-[#c9d1d9] transition-colors h-auto p-1"
+          className="flex items-center gap-1 text-[10px] text-collab-500 hover:text-collab-400 transition-colors h-auto p-1"
         >
           {repliesCollapsed ? (
             <ChevronRight className="h-2.5 w-2.5" />
@@ -80,19 +80,19 @@ export function CommentActions({
       {isAuthor && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="text-[10px] text-[#7d8590] hover:text-[#c9d1d9] transition-all h-auto p-1">
+            <Button variant="ghost" size="sm" className="text-[10px] text-collab-500 hover:text-collab-400 transition-all h-auto p-1">
               <MoreHorizontal className="h-2.5 w-2.5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="bg-[#1f1f1f] border-[#333]">
+          <DropdownMenuContent align="start" className="bg-collab-700 border-collab-600">
             {onEdit && (
-              <DropdownMenuItem onClick={onEdit} className="text-[#ccc] hover:bg-[#333]">
+              <DropdownMenuItem onClick={onEdit} className="text-[#ccc] hover:bg-collab-600">
                 <Edit className="h-3 w-3 mr-2" />
                 Edit
               </DropdownMenuItem>
             )}
             {onDelete && (
-              <DropdownMenuItem onClick={onDelete} className="text-red-400 hover:bg-[#333]">
+              <DropdownMenuItem onClick={onDelete} className="text-red-400 hover:bg-collab-600">
                 <Trash2 className="h-3 w-3 mr-2" />
                 Delete
               </DropdownMenuItem>

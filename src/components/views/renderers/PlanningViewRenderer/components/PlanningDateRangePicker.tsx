@@ -207,15 +207,15 @@ export function PlanningDateRangePicker({
   return (
     <div className="flex items-center gap-2">
       {/* View Mode Toggle */}
-      <div className="flex items-center bg-[#1a1a1a] border border-[#2d2d30] rounded-md p-0.5">
+      <div className="flex items-center bg-collab-800 border border-collab-600 rounded-md p-0.5">
         <Button
           variant="ghost"
           onClick={() => onViewModeChange('day')}
           className={cn(
             "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors h-auto",
             viewMode === 'day'
-              ? "bg-[#2563eb] text-white"
-              : "text-gray-400 hover:text-white hover:bg-[#252525]"
+              ? "bg-blue-600 text-white"
+              : "text-gray-400 hover:text-white hover:bg-collab-700"
           )}
         >
           <CalendarIcon className="h-3 w-3" />
@@ -227,8 +227,8 @@ export function PlanningDateRangePicker({
           className={cn(
             "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors h-auto",
             viewMode === 'week'
-              ? "bg-[#2563eb] text-white"
-              : "text-gray-400 hover:text-white hover:bg-[#252525]"
+              ? "bg-blue-600 text-white"
+              : "text-gray-400 hover:text-white hover:bg-collab-700"
           )}
         >
           <CalendarDays className="h-3 w-3" />
@@ -240,8 +240,8 @@ export function PlanningDateRangePicker({
           className={cn(
             "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors h-auto",
             viewMode === 'activity'
-              ? "bg-[#2563eb] text-white"
-              : "text-gray-400 hover:text-white hover:bg-[#252525]"
+              ? "bg-blue-600 text-white"
+              : "text-gray-400 hover:text-white hover:bg-collab-700"
           )}
         >
           <CalendarRange className="h-3 w-3" />
@@ -250,11 +250,11 @@ export function PlanningDateRangePicker({
       </div>
 
       {/* Date Navigation */}
-      <div className="flex items-center bg-[#1a1a1a] border border-[#2d2d30] rounded-md">
+      <div className="flex items-center bg-collab-800 border border-collab-600 rounded-md">
         <Button
           variant="ghost"
           onClick={navigatePrevious}
-          className="p-1.5 hover:bg-[#252525] transition-colors rounded-l-md h-auto"
+          className="p-1.5 hover:bg-collab-700 transition-colors rounded-l-md h-auto"
           title="Previous period"
         >
           <ChevronLeft className="h-4 w-4 text-gray-400" />
@@ -266,21 +266,21 @@ export function PlanningDateRangePicker({
               variant="ghost"
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 text-xs font-medium transition-colors h-auto",
-                "text-white hover:bg-[#252525]"
+                "text-white hover:bg-collab-700"
               )}
             >
-              <CalendarIcon className="h-3.5 w-3.5 text-[#6366f1]" />
+              <CalendarIcon className="h-3.5 w-3.5 text-indigo-500" />
               <span>{formatDateRangeLabel()}</span>
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            className="w-auto p-0 bg-[#1c1c1e] border-[#333]"
+            className="w-auto p-0 bg-collab-800 border-collab-600"
             align="center"
             sideOffset={8}
           >
             <div className="flex">
               {/* Presets */}
-              <div className="border-r border-[#333] p-2 space-y-1">
+              <div className="border-r border-collab-600 p-2 space-y-1">
                 <div className="text-xs font-medium text-gray-400 px-2 py-1">Quick Select</div>
                 {presets.map((preset) => (
                   <Button
@@ -291,7 +291,7 @@ export function PlanningDateRangePicker({
                       onDateRangeChange(range);
                       setCalendarOpen(false);
                     }}
-                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-[#252525] rounded transition-colors h-auto justify-start"
+                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-collab-700 rounded transition-colors h-auto justify-start"
                   >
                     {preset.label}
                   </Button>
@@ -313,7 +313,7 @@ export function PlanningDateRangePicker({
                   selected={selectingRange === 'start' ? dateRange.startDate : dateRange.endDate}
                   onSelect={handleDateSelect}
                   disabled={(date) => date > new Date()}
-                  className="bg-[#1c1c1e] text-white"
+                  className="bg-collab-800 text-white"
                   modifiers={{
                     range_start: dateRange.startDate,
                     range_end: dateRange.endDate,
@@ -338,7 +338,7 @@ export function PlanningDateRangePicker({
           className={cn(
             "p-1.5 transition-colors rounded-r-md h-auto",
             canNavigateNext()
-              ? "hover:bg-[#252525] text-gray-400"
+              ? "hover:bg-collab-700 text-gray-400"
               : "text-gray-600 cursor-not-allowed"
           )}
           title="Next period"

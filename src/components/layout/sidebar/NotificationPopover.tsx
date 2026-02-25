@@ -41,7 +41,7 @@ export default function NotificationPopover() {
         <Button
           variant="ghost"
           size="icon-sm"
-          className="relative text-[#71717a] hover:text-white"
+          className="relative text-collab-500 hover:text-white"
           title="Notifications"
         >
           <Bell className="h-4 w-4" />
@@ -88,7 +88,7 @@ export default function NotificationPopover() {
                 }}
                 className={cn(
                   "flex items-start gap-3 w-full px-4 py-3 text-left hover:bg-white/[0.03] transition-colors",
-                  !notification.read && "bg-[#8b5cf6]/5"
+                  !notification.read && "bg-violet-500/5"
                 )}
               >
                 <Avatar className="h-7 w-7 flex-shrink-0 mt-0.5 ring-1 ring-white/[0.06]">
@@ -104,7 +104,7 @@ export default function NotificationPopover() {
                     </span>{" "}
                     {notification.content || "sent a notification"}
                     {notification.issue && (
-                      <> in <span className="text-[#8b5cf6]">{notification.issue.issueKey || notification.issue.title}</span></>
+                      <> in <span className="text-violet-500">{notification.issue.issueKey || notification.issue.title}</span></>
                     )}
                   </p>
                   <span className="text-[10px] text-white/20 mt-1 block">
@@ -112,7 +112,7 @@ export default function NotificationPopover() {
                   </span>
                 </div>
                 {!notification.read && (
-                  <div className="w-2 h-2 rounded-full bg-[#8b5cf6] flex-shrink-0 mt-2" style={{ boxShadow: "0 0 6px rgba(139,92,246,0.4)" }} />
+                  <div className="w-2 h-2 rounded-full bg-violet-500 flex-shrink-0 mt-2" style={{ boxShadow: "0 0 6px rgba(139,92,246,0.4)" }} />
                 )}
               </button>
             ))

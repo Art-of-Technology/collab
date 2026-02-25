@@ -44,7 +44,7 @@ export function TemplatePreview({ template, className }: TemplatePreviewProps) {
   return (
     <div className={cn("flex flex-col h-full", className)}>
       {/* Header */}
-      <div className="flex-none px-4 py-3 border-b border-[#1f1f1f] bg-[#0a0a0b]">
+      <div className="flex-none px-4 py-3 border-b border-collab-700 bg-collab-950">
         <div className="flex items-start gap-3">
           <div
             className={cn(
@@ -55,19 +55,19 @@ export function TemplatePreview({ template, className }: TemplatePreviewProps) {
             <Icon className={cn("h-5 w-5", typeConfig.color)} />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-[14px] font-semibold text-[#fafafa] mb-1">
+            <h3 className="text-[14px] font-semibold text-collab-50 mb-1">
               {template.name}
             </h3>
             {template.description && (
-              <p className="text-[12px] text-[#6e7681]">{template.description}</p>
+              <p className="text-[12px] text-collab-500">{template.description}</p>
             )}
           </div>
         </div>
       </div>
 
       {/* Metadata */}
-      <div className="flex-none px-4 py-2 border-b border-[#1f1f1f] flex items-center gap-4">
-        <div className="flex items-center gap-1.5 text-[11px] text-[#6e7681]">
+      <div className="flex-none px-4 py-2 border-b border-collab-700 flex items-center gap-4">
+        <div className="flex items-center gap-1.5 text-[11px] text-collab-500">
           <span
             className={cn(
               "px-2 py-0.5 rounded font-medium",
@@ -80,14 +80,14 @@ export function TemplatePreview({ template, className }: TemplatePreviewProps) {
         </div>
 
         {template.author && (
-          <div className="flex items-center gap-1.5 text-[11px] text-[#6e7681]">
+          <div className="flex items-center gap-1.5 text-[11px] text-collab-500">
             <User className="h-3 w-3" />
             <span>By {template.author.name || "Unknown"}</span>
           </div>
         )}
 
         {template.usageCount > 0 && (
-          <div className="flex items-center gap-1.5 text-[11px] text-[#6e7681]">
+          <div className="flex items-center gap-1.5 text-[11px] text-collab-500">
             <Clock className="h-3 w-3" />
             <span>Used {template.usageCount} times</span>
           </div>
@@ -96,8 +96,8 @@ export function TemplatePreview({ template, className }: TemplatePreviewProps) {
 
       {/* Placeholders Info */}
       {placeholders.length > 0 && (
-        <div className="flex-none px-4 py-2 border-b border-[#1f1f1f] bg-[#0a0a0b]">
-          <p className="text-[10px] uppercase font-semibold text-[#52525b] mb-1.5">
+        <div className="flex-none px-4 py-2 border-b border-collab-700 bg-collab-950">
+          <p className="text-[10px] uppercase font-semibold text-collab-500/60 mb-1.5">
             Dynamic Fields
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -117,22 +117,22 @@ export function TemplatePreview({ template, className }: TemplatePreviewProps) {
       <div className="flex-1 overflow-auto p-4">
         {/* Title Preview */}
         <div className="mb-4">
-          <p className="text-[10px] uppercase font-semibold text-[#52525b] mb-1.5">
+          <p className="text-[10px] uppercase font-semibold text-collab-500/60 mb-1.5">
             Title Template
           </p>
           <div
-            className="text-[15px] font-semibold text-[#e6edf3]"
+            className="text-[15px] font-semibold text-collab-50"
             dangerouslySetInnerHTML={{ __html: previewTitle }}
           />
         </div>
 
         {/* Content Preview */}
         <div>
-          <p className="text-[10px] uppercase font-semibold text-[#52525b] mb-1.5">
+          <p className="text-[10px] uppercase font-semibold text-collab-500/60 mb-1.5">
             Content Preview
           </p>
           <div
-            className="prose prose-sm prose-invert max-w-none text-[13px] text-[#8b949e] [&_h2]:text-[14px] [&_h2]:text-[#e6edf3] [&_h2]:font-semibold [&_h2]:mt-3 [&_h2]:mb-1.5 [&_h3]:text-[13px] [&_h3]:text-[#c9d1d9] [&_h3]:font-medium [&_h3]:mt-2 [&_h3]:mb-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_p]:my-1 [&_code]:bg-[#1f1f1f] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[11px] [&_pre]:bg-[#0a0a0b] [&_pre]:p-2 [&_pre]:rounded [&_pre]:text-[11px] [&_table]:border-collapse [&_th]:border [&_th]:border-[#1f1f1f] [&_th]:px-2 [&_th]:py-1 [&_th]:text-[11px] [&_th]:bg-[#0a0a0b] [&_td]:border [&_td]:border-[#1f1f1f] [&_td]:px-2 [&_td]:py-1 [&_td]:text-[11px]"
+            className="prose prose-sm prose-invert max-w-none text-[13px] text-collab-400 [&_h2]:text-[14px] [&_h2]:text-collab-50 [&_h2]:font-semibold [&_h2]:mt-3 [&_h2]:mb-1.5 [&_h3]:text-[13px] [&_h3]:text-collab-400 [&_h3]:font-medium [&_h3]:mt-2 [&_h3]:mb-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_p]:my-1 [&_code]:bg-collab-700 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[11px] [&_pre]:bg-collab-950 [&_pre]:p-2 [&_pre]:rounded [&_pre]:text-[11px] [&_table]:border-collapse [&_th]:border [&_th]:border-collab-700 [&_th]:px-2 [&_th]:py-1 [&_th]:text-[11px] [&_th]:bg-collab-950 [&_td]:border [&_td]:border-collab-700 [&_td]:px-2 [&_td]:py-1 [&_td]:text-[11px]"
             dangerouslySetInnerHTML={{ __html: previewContent }}
           />
         </div>
@@ -140,15 +140,15 @@ export function TemplatePreview({ template, className }: TemplatePreviewProps) {
 
       {/* Tags */}
       {template.defaultTags.length > 0 && (
-        <div className="flex-none px-4 py-2 border-t border-[#1f1f1f] bg-[#0a0a0b]">
-          <p className="text-[10px] uppercase font-semibold text-[#52525b] mb-1.5">
+        <div className="flex-none px-4 py-2 border-t border-collab-700 bg-collab-950">
+          <p className="text-[10px] uppercase font-semibold text-collab-500/60 mb-1.5">
             Default Tags
           </p>
           <div className="flex flex-wrap gap-1.5">
             {template.defaultTags.map((tag) => (
               <span
                 key={tag}
-                className="text-[11px] px-2 py-0.5 rounded bg-[#1f1f1f] text-[#8b949e]"
+                className="text-[11px] px-2 py-0.5 rounded bg-collab-700 text-collab-400"
               >
                 #{tag}
               </span>

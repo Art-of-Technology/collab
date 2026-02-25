@@ -23,6 +23,16 @@ module.exports = {
   				'600': '#16a34a',
   				'700': '#15803d'
   			},
+  			collab: {
+  				'50': '#fafafa',
+  				'400': '#9c9ca1',
+  				'500': '#75757a',
+  				'600': '#27272b',
+  				'700': '#1f1f22',
+  				'800': '#171719',
+  				'900': '#101011',
+  				'950': '#070708',
+  			},
   			glass: {
   				DEFAULT: 'rgba(255,255,255,0.03)',
   				light: 'rgba(255,255,255,0.06)',
@@ -146,9 +156,10 @@ module.exports = {
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
-  		}
-  	}
+  			sm: 'calc(var(--radius) - 4px)',
+  			'4xl': '2rem'
+  		},
+  	},
   },
   plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
 } 

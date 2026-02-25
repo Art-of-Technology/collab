@@ -32,13 +32,13 @@ function WorkloadBar({ workload }: { workload: number }) {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="w-20 h-1.5 bg-[#27272a] rounded-full overflow-hidden">
+      <div className="w-20 h-1.5 bg-collab-600 rounded-full overflow-hidden">
         <div
           className={cn('h-full rounded-full transition-all', colorClass)}
           style={{ width: `${percentage}%` }}
         />
       </div>
-      <span className="text-xs text-[#52525b] font-medium w-4">{workload}</span>
+      <span className="text-xs text-collab-500/60 font-medium w-4">{workload}</span>
     </div>
   );
 }
@@ -79,7 +79,7 @@ export function MemberCard({ member, isExpanded, onToggle, onClick }: MemberCard
   return (
     <div
       className={cn(
-        'bg-[#0c0c0d] rounded-lg border border-[#1f1f23] overflow-hidden transition-colors',
+        'bg-collab-950 rounded-lg border border-collab-700 overflow-hidden transition-colors',
         hasBlockers && 'border-red-500/20'
       )}
     >
@@ -92,14 +92,14 @@ export function MemberCard({ member, isExpanded, onToggle, onClick }: MemberCard
         {/* Avatar */}
         <Avatar className="h-9 w-9 flex-shrink-0">
           <AvatarImage src={user.image || undefined} />
-          <AvatarFallback className="bg-[#27272a] text-[#fafafa] text-sm font-medium">
+          <AvatarFallback className="bg-collab-600 text-collab-50 text-sm font-medium">
             {user.name.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
 
         {/* Name and warnings */}
         <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
-          <span className="text-[13px] font-medium text-[#fafafa] truncate max-w-[140px]">
+          <span className="text-[13px] font-medium text-collab-50 truncate max-w-[140px]">
             {user.name}
           </span>
           {hasWarnings && (
@@ -144,7 +144,7 @@ export function MemberCard({ member, isExpanded, onToggle, onClick }: MemberCard
         {/* Chevron */}
         <ChevronRight
           className={cn(
-            'h-4 w-4 text-[#52525b] transition-transform flex-shrink-0',
+            'h-4 w-4 text-collab-500/60 transition-transform flex-shrink-0',
             isExpanded && 'rotate-90'
           )}
         />
@@ -153,7 +153,7 @@ export function MemberCard({ member, isExpanded, onToggle, onClick }: MemberCard
       {/* Today highlight - subtle */}
       {todayHighlight && (
         <div className="px-4 pb-2 -mt-1">
-          <p className="text-[11px] text-[#52525b] truncate pl-12">
+          <p className="text-[11px] text-collab-500/60 truncate pl-12">
             {todayHighlight}
           </p>
         </div>

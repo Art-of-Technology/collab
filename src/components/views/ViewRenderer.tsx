@@ -1209,7 +1209,7 @@ export default function ViewRenderer({
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#101011]">
+    <div className="h-full flex flex-col bg-collab-900">
       {/* Header */}
       <PageHeader
         icon={VIEW_TYPE_ICONS[view.type as keyof typeof VIEW_TYPE_ICONS] || List}
@@ -1292,7 +1292,7 @@ export default function ViewRenderer({
                 onClick={() => setShowAIFilter(!showAIFilter)}
                 className={cn(
                   pageHeaderButtonStyles.ghost,
-                  showAIFilter && "bg-[#8b5cf6]/10 text-[#8b5cf6] border-[#8b5cf6]/30"
+                  showAIFilter && "bg-violet-500/10 text-violet-500 border-violet-500/30"
                 )}
               >
                 <Sparkles className="h-3 w-3 md:mr-1" />
@@ -1353,7 +1353,7 @@ export default function ViewRenderer({
 
       {/* Save Dialog */}
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent className="bg-[#090909] border-[#1f1f1f] text-white">
+        <DialogContent className="bg-collab-900 border-collab-700 text-white">
           <DialogHeader>
             <DialogTitle>Save as new view</DialogTitle>
           </DialogHeader>
@@ -1362,19 +1362,19 @@ export default function ViewRenderer({
               placeholder="View name"
               value={newViewName}
               onChange={(e) => setNewViewName(e.target.value)}
-              className="bg-[#1f1f1f] border-[#2a2a2a] text-white"
+              className="bg-collab-700 border-collab-600 text-white"
             />
             <div className="flex justify-end gap-2">
               <Button
                 variant="ghost"
                 onClick={() => setShowSaveDialog(false)}
-                className="text-[#666]"
+                className="text-collab-500"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleSaveAsNewView}
-                className="bg-[#0969da] hover:bg-[#0860ca]"
+                className="bg-blue-500 hover:bg-blue-600"
               >
                 Save view
               </Button>
@@ -1399,11 +1399,11 @@ export default function ViewRenderer({
       {/* Filters and Display Controls Bar - Hidden for PLANNING view */}
       {tempDisplayType !== 'PLANNING' && (
       <div className={cn(
-        "border-b bg-[#101011] transition-colors",
+        "border-b bg-collab-900 transition-colors",
         // Mobile: Glassmorphism styling
         "border-white/10 bg-black/60 backdrop-blur-xl px-4 py-3",
         // Desktop: Original styling
-        "md:border-[#1a1a1a] md:bg-[#101011] md:backdrop-blur-none md:px-6 md:py-2"
+        "md:border-collab-700 md:bg-collab-900 md:backdrop-blur-none md:px-6 md:py-2"
       )}>
         {/* AI Filter Bar */}
         {showAIFilter && (
@@ -1578,8 +1578,8 @@ export default function ViewRenderer({
       {/* View Content */}
       <div className="flex-1 min-h-0 relative overflow-hidden">
         {isLoadingAdditionalIssues && (
-          <div className="absolute top-4 right-4 z-10 bg-[#0d1117] border border-[#30363d] rounded-md px-3 py-2 shadow-lg">
-            <div className="flex items-center gap-2 text-[#8b949e]">
+          <div className="absolute top-4 right-4 z-10 bg-collab-900 border border-collab-700 rounded-md px-3 py-2 shadow-lg">
+            <div className="flex items-center gap-2 text-collab-400">
               <Loader2 className="h-3 w-3 animate-spin" />
               <span className="text-xs">Loading additional issues...</span>
             </div>

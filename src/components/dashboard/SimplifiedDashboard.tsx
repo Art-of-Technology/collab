@@ -16,6 +16,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { PageLayout } from "@/components/ui/page-layout";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,23 +73,6 @@ interface SimplifiedDashboardProps {
   recentInteractions: RecentInteraction[];
 }
 
-// ─── Collab Design System Colors ─────────────────────────────────────────────
-
-const colors = {
-  // Backgrounds (page is #101011, cards are #171719)
-  bg900: "#101011",    // Page background / nested
-  bg800: "#171719",    // Cards, sections
-  bg700: "#1f1f22",    // Borders
-  bg600: "#27272b",    // Hover states
-  // Text
-  text50: "#fafafa",   // Primary
-  text400: "#9c9ca1",  // Secondary
-  text500: "#75757a",  // Muted
-  text600: "#4a4a4e",  // Disabled
-  // Accents
-  blue600: "#2563eb",
-};
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function SimplifiedDashboard({
@@ -101,12 +87,10 @@ export default function SimplifiedDashboard({
   const base = currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}` : "";
   const firstName = userName?.split(" ")[0] || "there";
 
-  // Filter to only views and projects
   const quickAccessItems = recentInteractions.filter(
     (item) => item.type === "view" || item.type === "project"
   );
 
-  // Section collapse states
   const [expandedSections, setExpandedSections] = useState({
     attention: true,
     inProgress: true,
@@ -122,171 +106,134 @@ export default function SimplifiedDashboard({
   const dueTodayCount = myQueue.filter((i) => i.reason === "due-today").length;
 
   return (
-    <div className="h-full w-full overflow-y-auto">
-      <div className="flex flex-col gap-8 p-8 max-w-[1400px] mx-auto">
-        {/* ─── Header ─────────────────────────────────────────────────────── */}
+    <PageLayout className="gap-8">
+      <PageHeader
+        title={`${greeting}, ${firstName}`}
+        subtitle={summary || "Here's your workspace overview"}
+      />
+
+      {/* ─── Stats Row ──────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard
+          label="Overdue"
+          value={overdueCount}
+          variant={overdueCount > 0 ? "warning" : "default"}
+        />
+        <StatCard
+          label="Due Today"
+          value={dueTodayCount}
+          variant={dueTodayCount > 0 ? "info" : "default"}
+        />
+        <StatCard
+          label="In Progress"
+          value={workInProgress.inProgress.length}
+        />
+        <StatCard
+          label="In Review"
+          value={workInProgress.inReview.length}
+        />
+      </div>
+
+      {/* ─── Quick Access (Views & Projects only) ───────────────────────── */}
+      {quickAccessItems.length > 0 && (
         <div>
-          <h1 className="text-2xl font-medium text-white mb-1">
-            {greeting}, {firstName}
-          </h1>
-          <p className="text-sm text-[#75757a]">
-            {summary || "Here's your workspace overview"}
-          </p>
+          <div className="text-xs font-medium uppercase tracking-wider text-collab-500 mb-3">
+            Quick Access
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {quickAccessItems.slice(0, 6).map((item) => (
+              <Link
+                key={`${item.type}-${item.id}`}
+                href={
+                  item.type === "project"
+                    ? `${base}/projects/${item.projectSlug}`
+                    : `${base}/views/${item.id}`
+                }
+                className="group flex items-center gap-3 p-3 rounded-xl bg-collab-800 border border-collab-700 hover:bg-collab-700 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-lg bg-collab-900 flex items-center justify-center flex-shrink-0">
+                  {item.type === "project" ? (
+                    <FolderKanban className="w-4 h-4 text-collab-500" />
+                  ) : (
+                    <LayoutGrid className="w-4 h-4 text-collab-500" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-collab-400 group-hover:text-white truncate transition-colors">
+                    {item.title}
+                  </p>
+                  <p className="text-xs text-collab-500 capitalize">{item.type}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
+      )}
 
-        {/* ─── Stats Row ──────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard
-            label="Overdue"
-            value={overdueCount}
-            variant={overdueCount > 0 ? "warning" : "default"}
-          />
-          <StatCard
-            label="Due Today"
-            value={dueTodayCount}
-            variant={dueTodayCount > 0 ? "info" : "default"}
-          />
-          <StatCard
-            label="In Progress"
-            value={workInProgress.inProgress.length}
-          />
-          <StatCard
-            label="In Review"
-            value={workInProgress.inReview.length}
-          />
+      {/* ─── Work Sections (Horizontal Collapsible) ─────────────────────── */}
+      <div>
+        <div className="text-xs font-medium uppercase tracking-wider text-collab-500 mb-3">
+          Your Work
         </div>
+        <div className="flex gap-3 overflow-x-auto pb-4">
+          <WorkSection
+            title="Needs Attention"
+            icon={<AlertTriangle className="w-4 h-4" />}
+            count={myQueue.length}
+            expanded={expandedSections.attention}
+            onToggle={() => toggleSection("attention")}
+            variant="warning"
+          >
+            {myQueue.slice(0, 5).map((item) => (
+              <IssueRow key={item.id} item={item} base={base} />
+            ))}
+            {myQueue.length === 0 && <DashboardEmptyState text="All clear" />}
+          </WorkSection>
 
-        {/* ─── Quick Access (Views & Projects only) ───────────────────────── */}
-        {quickAccessItems.length > 0 && (
-          <div>
-            <div className="text-xs font-medium uppercase tracking-wider text-[#75757a] mb-3">
-              Quick Access
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {quickAccessItems.slice(0, 6).map((item) => (
-                <Link
-                  key={`${item.type}-${item.id}`}
-                  href={
-                    item.type === "project"
-                      ? `${base}/projects/${item.projectSlug}`
-                      : `${base}/views/${item.id}`
-                  }
-                  className="group flex items-center gap-3 p-3 rounded-xl bg-[#171719] border border-[#1f1f22] hover:bg-[#1f1f22] transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-[#101011] flex items-center justify-center flex-shrink-0">
-                    {item.type === "project" ? (
-                      <FolderKanban className="w-4 h-4 text-[#75757a]" />
-                    ) : (
-                      <LayoutGrid className="w-4 h-4 text-[#75757a]" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-[#9c9ca1] group-hover:text-white truncate transition-colors">
-                      {item.title}
-                    </p>
-                    <p className="text-xs text-[#75757a] capitalize">{item.type}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
+          <WorkSection
+            title="In Progress"
+            icon={<Play className="w-4 h-4" />}
+            count={workInProgress.inProgress.length}
+            expanded={expandedSections.inProgress}
+            onToggle={() => toggleSection("inProgress")}
+            variant="blue"
+          >
+            {workInProgress.inProgress.slice(0, 5).map((item) => (
+              <WorkRow key={item.id} item={item} base={base} />
+            ))}
+            {workInProgress.inProgress.length === 0 && <DashboardEmptyState text="No items" />}
+          </WorkSection>
 
-        {/* ─── Work Sections (Horizontal Collapsible) ─────────────────────── */}
-        <div>
-          <div className="text-xs font-medium uppercase tracking-wider text-[#75757a] mb-3">
-            Your Work
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-4">
-            {/* Needs Attention */}
-            <WorkSection
-              title="Needs Attention"
-              icon={<AlertTriangle className="w-4 h-4" />}
-              count={myQueue.length}
-              expanded={expandedSections.attention}
-              onToggle={() => toggleSection("attention")}
-              variant="warning"
-            >
-              {myQueue.slice(0, 5).map((item) => (
-                <IssueRow key={item.id} item={item} base={base} />
-              ))}
-              {myQueue.length === 0 && <EmptyState text="All clear" />}
-            </WorkSection>
+          <WorkSection
+            title="In Review"
+            icon={<GitPullRequest className="w-4 h-4" />}
+            count={workInProgress.inReview.length}
+            expanded={expandedSections.inReview}
+            onToggle={() => toggleSection("inReview")}
+            variant="purple"
+          >
+            {workInProgress.inReview.slice(0, 5).map((item) => (
+              <WorkRow key={item.id} item={item} base={base} />
+            ))}
+            {workInProgress.inReview.length === 0 && <DashboardEmptyState text="No items" />}
+          </WorkSection>
 
-            {/* In Progress */}
-            <WorkSection
-              title="In Progress"
-              icon={<Play className="w-4 h-4" />}
-              count={workInProgress.inProgress.length}
-              expanded={expandedSections.inProgress}
-              onToggle={() => toggleSection("inProgress")}
-              variant="blue"
-            >
-              {workInProgress.inProgress.slice(0, 5).map((item) => (
-                <WorkRow key={item.id} item={item} base={base} />
-              ))}
-              {workInProgress.inProgress.length === 0 && <EmptyState text="No items" />}
-            </WorkSection>
-
-            {/* In Review */}
-            <WorkSection
-              title="In Review"
-              icon={<GitPullRequest className="w-4 h-4" />}
-              count={workInProgress.inReview.length}
-              expanded={expandedSections.inReview}
-              onToggle={() => toggleSection("inReview")}
-              variant="purple"
-            >
-              {workInProgress.inReview.slice(0, 5).map((item) => (
-                <WorkRow key={item.id} item={item} base={base} />
-              ))}
-              {workInProgress.inReview.length === 0 && <EmptyState text="No items" />}
-            </WorkSection>
-
-            {/* Ready to Deploy */}
-            <WorkSection
-              title="Ready to Deploy"
-              icon={<Rocket className="w-4 h-4" />}
-              count={workInProgress.readyToDeploy.length}
-              expanded={expandedSections.deploy}
-              onToggle={() => toggleSection("deploy")}
-              variant="green"
-            >
-              {workInProgress.readyToDeploy.slice(0, 5).map((item) => (
-                <WorkRow key={item.id} item={item} base={base} />
-              ))}
-              {workInProgress.readyToDeploy.length === 0 && <EmptyState text="No items" />}
-            </WorkSection>
-          </div>
+          <WorkSection
+            title="Ready to Deploy"
+            icon={<Rocket className="w-4 h-4" />}
+            count={workInProgress.readyToDeploy.length}
+            expanded={expandedSections.deploy}
+            onToggle={() => toggleSection("deploy")}
+            variant="green"
+          >
+            {workInProgress.readyToDeploy.slice(0, 5).map((item) => (
+              <WorkRow key={item.id} item={item} base={base} />
+            ))}
+            {workInProgress.readyToDeploy.length === 0 && <DashboardEmptyState text="No items" />}
+          </WorkSection>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-
-interface StatCardProps {
-  label: string;
-  value: number;
-  variant?: "default" | "warning" | "info";
-}
-
-function StatCard({ label, value, variant = "default" }: StatCardProps) {
-  return (
-    <div className="p-5 rounded-2xl bg-[#171719] border border-[#1f1f22]">
-      <div className="text-xs text-[#75757a] mb-2">{label}</div>
-      <div
-        className={cn(
-          "text-3xl font-semibold",
-          variant === "warning" && value > 0 && "text-amber-400",
-          variant === "info" && value > 0 && "text-blue-400",
-          (variant === "default" || value === 0) && "text-white"
-        )}
-      >
-        {value}
-      </div>
-    </div>
+    </PageLayout>
   );
 }
 
@@ -323,25 +270,24 @@ function WorkSection({
   return (
     <div
       className={cn(
-        "rounded-2xl bg-[#171719] border border-[#1f1f22] transition-all duration-200 flex-shrink-0",
+        "rounded-2xl bg-collab-800 border border-collab-700 transition-all duration-200 flex-shrink-0",
         expanded ? "w-[320px]" : "w-[56px]"
       )}
     >
-      {/* Header */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-3 p-4 hover:bg-[#1f1f22] transition-colors rounded-t-2xl"
+        className="w-full flex items-center gap-3 p-4 hover:bg-collab-700 transition-colors rounded-t-2xl"
       >
         {expanded ? (
-          <ChevronLeft className="w-4 h-4 text-[#75757a] flex-shrink-0" />
+          <ChevronLeft className="w-4 h-4 text-collab-500 flex-shrink-0" />
         ) : (
-          <ChevronRight className="w-4 h-4 text-[#75757a] flex-shrink-0" />
+          <ChevronRight className="w-4 h-4 text-collab-500 flex-shrink-0" />
         )}
 
         {expanded && (
           <>
-            <div className="text-[#75757a] flex-shrink-0">{icon}</div>
-            <span className="text-sm font-medium text-[#9c9ca1] flex-1 text-left truncate">
+            <div className="text-collab-500 flex-shrink-0">{icon}</div>
+            <span className="text-sm font-medium text-collab-400 flex-1 text-left truncate">
               {title}
             </span>
             <span
@@ -366,7 +312,6 @@ function WorkSection({
         )}
       </button>
 
-      {/* Content */}
       {expanded && (
         <div className="px-4 pb-4 space-y-1 max-h-[320px] overflow-y-auto">
           {children}
@@ -392,7 +337,7 @@ function IssueRow({ item, base }: { item: QueueItem; base: string }) {
   return (
     <Link
       href={`${base}/issue/${item.id}`}
-      className="group flex items-center gap-3 p-2 rounded-lg hover:bg-[#101011] transition-colors"
+      className="group flex items-center gap-3 p-2 rounded-lg hover:bg-collab-900 transition-colors"
     >
       <div
         className="w-1 h-8 rounded-full flex-shrink-0"
@@ -400,9 +345,9 @@ function IssueRow({ item, base }: { item: QueueItem; base: string }) {
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-xs text-[#75757a] font-mono">{item.issueKey}</span>
+          <span className="text-xs text-collab-500 font-mono">{item.issueKey}</span>
         </div>
-        <p className="text-sm text-[#9c9ca1] group-hover:text-white truncate transition-colors">
+        <p className="text-sm text-collab-400 group-hover:text-white truncate transition-colors">
           {item.title}
         </p>
       </div>
@@ -424,18 +369,18 @@ function WorkRow({ item, base }: { item: WorkItem; base: string }) {
   return (
     <Link
       href={`${base}/issue/${item.id}`}
-      className="group flex items-center gap-3 p-2 rounded-lg hover:bg-[#101011] transition-colors"
+      className="group flex items-center gap-3 p-2 rounded-lg hover:bg-collab-900 transition-colors"
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-xs text-[#75757a] font-mono">{item.issueKey}</span>
+          <span className="text-xs text-collab-500 font-mono">{item.issueKey}</span>
           {item.daysInStatus > 2 && (
             <span className="text-[10px] px-1 py-0.5 rounded-lg bg-amber-400/10 text-amber-400">
               {item.daysInStatus}d
             </span>
           )}
         </div>
-        <p className="text-sm text-[#9c9ca1] group-hover:text-white truncate transition-colors">
+        <p className="text-sm text-collab-400 group-hover:text-white truncate transition-colors">
           {item.title}
         </p>
       </div>
@@ -443,9 +388,9 @@ function WorkRow({ item, base }: { item: WorkItem; base: string }) {
   );
 }
 
-// ─── Empty State ──────────────────────────────────────────────────────────────
+// ─── Dashboard Empty State ───────────────────────────────────────────────────
 
-function EmptyState({ text }: { text: string }) {
+function DashboardEmptyState({ text }: { text: string }) {
   return (
     <div className="py-8 text-center">
       <div
@@ -455,7 +400,7 @@ function EmptyState({ text }: { text: string }) {
           backgroundSize: "8px 8px",
         }}
       />
-      <p className="text-xs text-[#75757a]">{text}</p>
+      <p className="text-xs text-collab-500">{text}</p>
     </div>
   );
 }

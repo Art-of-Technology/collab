@@ -235,7 +235,7 @@ export function SecretEditor({
     <div className="space-y-4">
       {/* Mode Toggle and Actions */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 bg-[#0d0d0e] border border-[#1f1f1f] rounded-lg p-0.5">
+        <div className="flex items-center gap-2 bg-collab-900 border border-collab-700 rounded-lg p-0.5">
           <Button
             type="button"
             variant="ghost"
@@ -243,8 +243,8 @@ export function SecretEditor({
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors h-auto",
               localMode === "key-value"
-                ? "bg-[#1f1f1f] text-[#e6edf3]"
-                : "text-[#6e7681] hover:text-[#8b949e]"
+                ? "bg-collab-700 text-collab-50"
+                : "text-collab-500 hover:text-collab-400"
             )}
           >
             <List className="h-3 w-3" />
@@ -257,8 +257,8 @@ export function SecretEditor({
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors h-auto",
               localMode === "raw"
-                ? "bg-[#1f1f1f] text-[#e6edf3]"
-                : "text-[#6e7681] hover:text-[#8b949e]"
+                ? "bg-collab-700 text-collab-50"
+                : "text-collab-500 hover:text-collab-400"
             )}
           >
             <FileCode className="h-3 w-3" />
@@ -273,7 +273,7 @@ export function SecretEditor({
             size="sm"
             onClick={handleCopyAll}
             disabled={disabled}
-            className="h-7 text-[#6e7681] hover:text-[#e6edf3]"
+            className="h-7 text-collab-500 hover:text-collab-50"
           >
             <Copy className="h-3.5 w-3.5 mr-1.5" />
             Copy All
@@ -286,7 +286,7 @@ export function SecretEditor({
                 variant="ghost"
                 size="sm"
                 onClick={() => handleExport("env")}
-                className="h-7 text-[#6e7681] hover:text-[#e6edf3] rounded-r-none"
+                className="h-7 text-collab-500 hover:text-collab-50 rounded-r-none"
               >
                 <Download className="h-3.5 w-3.5 mr-1.5" />
                 .env
@@ -296,7 +296,7 @@ export function SecretEditor({
                 variant="ghost"
                 size="sm"
                 onClick={() => handleExport("json")}
-                className="h-7 text-[#6e7681] hover:text-[#e6edf3] rounded-l-none border-l border-[#27272a]"
+                className="h-7 text-collab-500 hover:text-collab-50 rounded-l-none border-l border-collab-600"
               >
                 .json
               </Button>
@@ -328,7 +328,7 @@ export function SecretEditor({
             size="sm"
             onClick={handleAddVariable}
             disabled={disabled}
-            className="w-full h-9 border-dashed border-[#27272a] text-[#6e7681] hover:text-[#e6edf3] hover:border-[#3f3f46]"
+            className="w-full h-9 border-dashed border-collab-600 text-collab-500 hover:text-collab-50 hover:border-collab-600"
           >
             <Plus className="h-3.5 w-3.5 mr-1.5" />
             Add Variable
@@ -342,23 +342,23 @@ export function SecretEditor({
           disabled={disabled}
           className={cn(
             "min-h-[300px] font-mono text-sm",
-            "bg-[#0d0d0e] border-[#1f1f1f] text-[#e6edf3]",
-            "placeholder:text-[#52525b]",
-            "focus:border-[#3b82f6] focus:ring-0"
+            "bg-collab-900 border-collab-700 text-collab-50",
+            "placeholder:text-collab-500/60",
+            "focus:border-blue-500 focus:ring-0"
           )}
         />
       )}
 
       {/* Security Options */}
-      <div className="flex flex-col gap-4 pt-4 border-t border-[#1f1f1f]">
+      <div className="flex flex-col gap-4 pt-4 border-t border-collab-700">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Lock className="h-4 w-4 text-[#6e7681]" />
+            <Lock className="h-4 w-4 text-collab-500" />
             <div>
-              <Label htmlFor="restricted" className="text-sm text-[#e6edf3]">
+              <Label htmlFor="restricted" className="text-sm text-collab-50">
                 Restricted Access
               </Label>
-              <p className="text-xs text-[#6e7681]">
+              <p className="text-xs text-collab-500">
                 Require explicit sharing even for project/workspace scope
               </p>
             </div>
@@ -373,12 +373,12 @@ export function SecretEditor({
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-[#6e7681]" />
+            <Calendar className="h-4 w-4 text-collab-500" />
             <div>
-              <Label htmlFor="expiresAt" className="text-sm text-[#e6edf3]">
+              <Label htmlFor="expiresAt" className="text-sm text-collab-50">
                 Expiration Date
               </Label>
-              <p className="text-xs text-[#6e7681]">
+              <p className="text-xs text-collab-500">
                 Optional: Secret access expires after this date
               </p>
             </div>
@@ -391,8 +391,8 @@ export function SecretEditor({
             disabled={disabled}
             className={cn(
               "w-[180px] h-8",
-              "bg-[#18181b] border-[#27272a] text-[#e6edf3]",
-              "focus:border-[#3b82f6] focus:ring-0"
+              "bg-collab-800 border-collab-600 text-collab-50",
+              "focus:border-blue-500 focus:ring-0"
             )}
           />
         </div>

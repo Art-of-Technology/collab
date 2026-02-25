@@ -578,8 +578,8 @@ export function CollabInput({
         className={cn(
           "min-h-[80px] p-4 rounded-xl pr-20 text-sm",
           "overflow-y-auto scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-[#27272b]",
-          "border border-[#1f1f22] focus:border-[#27272b] transition-colors duration-200",
-          "whitespace-pre-wrap text-[#fafafa] !outline-none bg-[#101011]",
+          "border border-collab-700 focus:border-collab-600 transition-colors duration-200",
+          "whitespace-pre-wrap text-collab-50 !outline-none bg-collab-900",
           isOverLimit ? "border-red-400/70" : "",
           disabled && "opacity-70 cursor-not-allowed",
         )}
@@ -627,7 +627,7 @@ export function CollabInput({
               ? "bg-red-500/10 text-red-400"
               : isNearLimit
                 ? "bg-amber-500/10 text-amber-400"
-                : "bg-[#27272b] text-[#75757a]",
+                : "bg-collab-600 text-collab-500",
           )}
         >
           {charCount}/{maxLength}
@@ -646,7 +646,7 @@ export function CollabInput({
                 size="icon"
                 className={cn(
                   "h-9 px-3 gap-1.5 text-xs font-medium rounded-xl transition-all flex items-center justify-center",
-                  "bg-[#27272b] hover:bg-[#3f3f46]",
+                  "bg-collab-600 hover:bg-collab-600",
                   "focus:ring-1 focus:ring-purple-500/20 active:scale-[0.98]",
                   !rawContent.trim() && "opacity-50",
                 )}
@@ -660,10 +660,10 @@ export function CollabInput({
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-72 p-0 bg-[#171719] border-[#1f1f22] rounded-xl" align="end">
-              <div className="p-4 border-b border-[#1f1f22]">
-                <h4 className="text-sm font-semibold text-[#fafafa]">AI Improved Text</h4>
-                <p className="text-xs text-[#75757a] mt-1">
+            <PopoverContent className="w-72 p-0 bg-collab-800 border-collab-700 rounded-xl" align="end">
+              <div className="p-4 border-b border-collab-700">
+                <h4 className="text-sm font-semibold text-collab-50">AI Improved Text</h4>
+                <p className="text-xs text-collab-500 mt-1">
                   {isImproving
                     ? "Analyzing your text..."
                     : errorMessage
@@ -675,7 +675,7 @@ export function CollabInput({
               {isImproving ? (
                 <div className="p-8 flex flex-col items-center justify-center gap-3">
                   <Loader2 className="h-6 w-6 text-purple-400 animate-spin" />
-                  <p className="text-xs text-[#75757a]">Processing...</p>
+                  <p className="text-xs text-collab-500">Processing...</p>
                 </div>
               ) : errorMessage ? (
                 <div className="p-4">
@@ -684,18 +684,18 @@ export function CollabInput({
                   </div>
                 </div>
               ) : improvedText ? (
-                <div className="p-4 max-h-48 overflow-y-auto text-sm text-[#9c9ca1]">
+                <div className="p-4 max-h-48 overflow-y-auto text-sm text-collab-400">
                   <CollabText content={improvedText} />
                 </div>
               ) : null}
 
               {/* Show buttons only if not improving */}
               {!isImproving && (
-                <div className="border-t border-[#1f1f22] p-3 flex justify-end gap-2 bg-[#101011]/50">
+                <div className="border-t border-collab-700 p-3 flex justify-end gap-2 bg-collab-900/50">
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="text-[#9c9ca1] hover:text-[#fafafa] hover:bg-[#27272b] rounded-lg"
+                    className="text-collab-400 hover:text-collab-50 hover:bg-collab-600 rounded-lg"
                     onClick={() => {
                       setShowImprovePopover(false);
                       setErrorMessage('');
@@ -726,8 +726,8 @@ export function CollabInput({
             size="icon"
             className={cn(
               "h-9 w-9 rounded-xl transition-all flex items-center justify-center",
-              "bg-[#27272b] hover:bg-[#3f3f46] text-[#9c9ca1] hover:text-[#fafafa]",
-              "focus:ring-1 focus:ring-[#27272b] active:scale-[0.98]",
+              "bg-collab-600 hover:bg-collab-600 text-collab-400 hover:text-collab-50",
+              "focus:ring-1 focus:ring-collab-600 active:scale-[0.98]",
               !rawContent.trim() && "opacity-50",
             )}
             disabled={Boolean(disabled || loading || !rawContent.trim() || isOverLimit)}

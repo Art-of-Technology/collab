@@ -102,21 +102,21 @@ export default function DashboardClient({
         <div className="flex flex-col gap-8 p-8 max-w-[1400px] mx-auto animate-pulse">
           {/* Header skeleton */}
           <div>
-            <div className="h-8 w-48 bg-[#171719] rounded-lg mb-2" />
-            <div className="h-4 w-64 bg-[#171719] rounded-lg" />
+            <div className="h-8 w-48 bg-collab-800 rounded-lg mb-2" />
+            <div className="h-4 w-64 bg-collab-800 rounded-lg" />
           </div>
 
           {/* Stats skeleton */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-24 bg-[#171719] rounded-2xl border border-[#1f1f22]" />
+              <div key={i} className="h-24 bg-collab-800 rounded-2xl border border-collab-700" />
             ))}
           </div>
 
           {/* Work sections skeleton */}
           <div className="flex gap-3">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="w-[320px] h-[280px] bg-[#171719] rounded-2xl border border-[#1f1f22] flex-shrink-0" />
+              <div key={i} className="w-[320px] h-[280px] bg-collab-800 rounded-2xl border border-collab-700 flex-shrink-0" />
             ))}
           </div>
         </div>

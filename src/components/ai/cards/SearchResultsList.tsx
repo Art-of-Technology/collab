@@ -26,8 +26,8 @@ export default function SearchResultsList({
 }: SearchResultsListProps) {
   if (results.length === 0) {
     return (
-      <div className="p-3 rounded-lg bg-[#1f1f1f]/60 border border-[#27272a] text-center">
-        <p className="text-xs text-[#71717a]">No results found</p>
+      <div className="p-3 rounded-lg bg-collab-700/60 border border-collab-600 text-center">
+        <p className="text-xs text-collab-500">No results found</p>
       </div>
     );
   }
@@ -35,11 +35,11 @@ export default function SearchResultsList({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between px-1">
-        <span className="text-[10px] text-[#52525b] font-medium uppercase tracking-wider">
+        <span className="text-[10px] text-collab-500/60 font-medium uppercase tracking-wider">
           Search Results
         </span>
         {totalCount && totalCount > results.length && (
-          <span className="text-[10px] text-[#52525b]">
+          <span className="text-[10px] text-collab-500/60">
             Showing {results.length} of {totalCount}
           </span>
         )}

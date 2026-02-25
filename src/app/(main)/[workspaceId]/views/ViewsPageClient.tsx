@@ -3,8 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Search,
   Plus,
@@ -37,6 +35,12 @@ import { useToast } from '@/hooks/use-toast';
 import { ConfirmationModal } from '@/components/modals/ConfirmationModal';
 import { useProjects } from '@/hooks/queries/useProjects';
 import { formatDistanceToNow } from 'date-fns';
+import { PageLayout } from '@/components/ui/page-layout';
+import { PageHeader } from '@/components/ui/page-header';
+import { SearchBar } from '@/components/ui/search-bar';
+import { FilterToggle } from '@/components/ui/filter-toggle';
+import { ShadowListGroup } from '@/components/ui/shadow-list-group';
+import { EmptyState } from '@/components/ui/empty-state';
 
 interface ViewsPageClientProps {
   workspaceId: string;
@@ -73,10 +77,10 @@ const getVisibilityIcon = (visibility: string) => {
 
 const getVisibilityColor = (visibility: string) => {
   switch (visibility) {
-    case 'WORKSPACE': return 'text-[#22c55e]';
-    case 'PERSONAL': return 'text-[#3b82f6]';
-    case 'SHARED': return 'text-[#a855f7]';
-    default: return 'text-[#6e7681]';
+    case 'WORKSPACE': return 'text-green-500';
+    case 'PERSONAL': return 'text-blue-500';
+    case 'SHARED': return 'text-violet-500';
+    default: return 'text-collab-500';
   }
 };
 
@@ -114,13 +118,19 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
     return matchesSearch && matchesFilter;
   });
 
-  // Calculate view counts
   const viewCounts = {
     all: views.length,
     workspace: views.filter(v => v.visibility === 'WORKSPACE').length,
     personal: views.filter(v => v.visibility === 'PERSONAL').length,
     shared: views.filter(v => v.visibility === 'SHARED').length,
   };
+
+  const filterOptions = [
+    { id: 'all', label: 'All', count: viewCounts.all },
+    { id: 'workspace', label: 'Workspace', count: viewCounts.workspace },
+    { id: 'personal', label: 'Personal', count: viewCounts.personal },
+    { id: 'shared', label: 'Shared', count: viewCounts.shared },
+  ];
 
   const handleViewClick = (viewSlug: string) => {
     router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/views/${viewSlug}`);
@@ -181,102 +191,91 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
 
   if (isLoading) {
     return (
-      <div className="h-full flex items-center justify-center bg-[#0a0a0b]">
-        <Loader2 className="h-6 w-6 animate-spin text-[#6e7681]" />
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-collab-500" />
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0b]">
-      {/* Header */}
-      <div className="flex-none border-b border-[#1f1f1f]">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#1a1a1b] flex items-center justify-center">
-              <Eye className="h-4 w-4 text-[#a371f7]" />
-            </div>
-            <div>
-              <h1 className="text-sm font-medium text-[#e6edf3]">Views</h1>
-              <p className="text-xs text-[#6e7681]">
-                {filteredViews.length} view{filteredViews.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+    <PageLayout>
+      <PageHeader
+        title="Views"
+        subtitle={`${filteredViews.length} view${filteredViews.length !== 1 ? 's' : ''}`}
+        actions={
+          <Button
+            onClick={handleCreateView}
+            size="sm"
+            className="h-9 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-xl"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            New View
+          </Button>
+        }
+      >
+        <div className="flex items-center gap-3">
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search views..."
+          />
+          <FilterToggle
+            options={filterOptions}
+            value={visibilityFilter}
+            onChange={(id) => setVisibilityFilter(id as ViewVisibilityFilter)}
+          />
+        </div>
+      </PageHeader>
+
+      {filteredViews.length > 0 ? (
+        <ShadowListGroup>
+          {filteredViews.map((view) => (
+            <ShadowListGroup.Item key={view.id} className="!p-0">
+              <ViewListItem
+                view={view}
+                onViewClick={() => handleViewClick(view.slug || view.id)}
+                onSettings={(e) => handleViewSettings(view.slug || view.id, e)}
+                onToggleFavorite={(e) => handleToggleViewFavorite(view.id, e)}
+                onDelete={(e) => handleDeleteView(view.id, view.name, e)}
+                isFavoriteLoading={toggleViewFavoriteMutation.isPending}
+              />
+            </ShadowListGroup.Item>
+          ))}
+        </ShadowListGroup>
+      ) : searchQuery ? (
+        <EmptyState
+          icon={<Search className="h-8 w-8 text-collab-500/60" />}
+          title="No views found"
+          description="Try different keywords"
+          action={
+            <Button
+              onClick={() => setSearchQuery('')}
+              variant="ghost"
+              size="sm"
+              className="text-collab-400 hover:text-collab-50 hover:bg-collab-700"
+            >
+              Clear search
+            </Button>
+          }
+        />
+      ) : (
+        <EmptyState
+          icon={<Eye className="h-8 w-8 text-collab-500/60" />}
+          title="No views yet"
+          description="Views help you organize and filter your issues. Create custom views for different workflows and perspectives."
+          action={
             <Button
               onClick={handleCreateView}
               size="sm"
-              className="h-7 px-3 bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/20 hover:border-[#3b82f6]/30"
+              className="bg-blue-500 hover:bg-blue-600 text-white rounded-xl"
             >
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
-              New View
+              <Plus className="h-4 w-4 mr-2" />
+              Create your first view
             </Button>
-          </div>
-        </div>
+          }
+        />
+      )}
 
-        {/* Filters */}
-        <div className="flex items-center gap-3 px-6 pb-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6e7681]" />
-            <Input
-              placeholder="Search views..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9 bg-[#0d0d0e] border-[#1f1f1f] text-[#e6edf3] placeholder:text-[#6e7681] focus:border-[#30363d]"
-            />
-          </div>
-
-          <div className="flex items-center gap-1 rounded-lg border border-[#1f1f1f] p-0.5 bg-[#0d0d0e]">
-            {(['all', 'workspace', 'personal', 'shared'] as const).map((filter) => (
-              <Button
-                key={filter}
-                variant="ghost"
-                size="sm"
-                onClick={() => setVisibilityFilter(filter)}
-                className={cn(
-                  "h-7",
-                  visibilityFilter === filter
-                    ? "bg-[#1f1f1f] text-[#e6edf3]"
-                    : "text-[#6e7681] hover:text-[#8b949e] hover:bg-transparent"
-                )}
-              >
-                {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
-                <span className="ml-1.5 text-[#6e7681]">
-                  {viewCounts[filter]}
-                </span>
-              </Button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <ScrollArea className="flex-1">
-        <div className="p-6">
-          {filteredViews.length > 0 ? (
-            <div className="rounded-lg border border-[#1f1f1f] overflow-hidden divide-y divide-[#1f1f1f]">
-              {filteredViews.map((view) => (
-                <ViewListItem
-                  key={view.id}
-                  view={view}
-                  onViewClick={() => handleViewClick(view.slug || view.id)}
-                  onSettings={(e) => handleViewSettings(view.slug || view.id, e)}
-                  onToggleFavorite={(e) => handleToggleViewFavorite(view.id, e)}
-                  onDelete={(e) => handleDeleteView(view.id, view.name, e)}
-                  isFavoriteLoading={toggleViewFavoriteMutation.isPending}
-                />
-              ))}
-            </div>
-          ) : searchQuery ? (
-            <EmptySearch onClear={() => setSearchQuery('')} />
-          ) : (
-            <EmptyState onCreate={handleCreateView} />
-          )}
-        </div>
-      </ScrollArea>
-
-      {/* Create View Modal */}
       {showCreateModal && (
         <CreateViewModal
           isOpen={showCreateModal}
@@ -286,15 +285,14 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
         />
       )}
 
-      {/* Delete Confirmation Modal */}
       <ConfirmationModal
         isOpen={!!viewToDelete}
         onClose={() => setViewToDelete(null)}
         onConfirm={confirmDeleteView}
         title="Delete View"
         message={
-          <span className="text-[#8b949e] text-sm">
-            Are you sure you want to delete <strong className="text-[#e6edf3]">&quot;{viewToDelete?.name}&quot;</strong>? <br />This action cannot be undone.
+          <span className="text-collab-400 text-sm">
+            Are you sure you want to delete <strong className="text-collab-50">&quot;{viewToDelete?.name}&quot;</strong>? <br />This action cannot be undone.
           </span>
         }
         confirmText="Delete"
@@ -302,11 +300,10 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
         variant="destructive"
         isLoading={deleteViewMutation.isPending}
       />
-    </div>
+    </PageLayout>
   );
 }
 
-// View List Item Component
 function ViewListItem({
   view,
   onViewClick,
@@ -327,48 +324,43 @@ function ViewListItem({
 
   return (
     <div
-      className="group relative flex items-center gap-4 px-5 py-4 hover:bg-gradient-to-r hover:from-[#151518] hover:to-transparent transition-all duration-200 cursor-pointer"
+      className="group relative flex items-center gap-4 px-5 py-4 hover:bg-collab-700/50 transition-all duration-200 cursor-pointer"
       onClick={onViewClick}
     >
-      {/* Color indicator - using visibility color */}
       <div
         className={cn(
           "w-1 h-8 rounded-full flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity",
-          view.visibility === 'WORKSPACE' ? "bg-[#22c55e]" :
-          view.visibility === 'PERSONAL' ? "bg-[#3b82f6]" :
-          view.visibility === 'SHARED' ? "bg-[#a855f7]" :
-          "bg-[#6366f1]"
+          view.visibility === 'WORKSPACE' ? "bg-green-500" :
+          view.visibility === 'PERSONAL' ? "bg-blue-500" :
+          view.visibility === 'SHARED' ? "bg-violet-500" :
+          "bg-indigo-500"
         )}
       />
 
-      {/* View Info */}
       <div className="flex-1 min-w-0">
-        {/* Title Row */}
         <div className="flex items-center gap-2.5">
-          <h3 className="text-[14px] font-semibold text-[#fafafa] group-hover:text-white truncate">
+          <h3 className="text-sm font-medium text-collab-50 group-hover:text-white truncate">
             {view.name}
           </h3>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f1f23] text-[#71717a] font-mono flex items-center gap-1">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-collab-700 text-collab-500 font-mono flex items-center gap-1">
             <TypeIcon className="h-3 w-3" />
             {viewTypeLabels[view.displayType as keyof typeof viewTypeLabels]}
           </span>
           {view.isDefault && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#27272a] text-[#a1a1aa] uppercase tracking-wider font-medium">
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-collab-600 text-collab-400 uppercase tracking-wider font-medium">
               default
             </span>
           )}
         </div>
 
-        {/* Description */}
         {view.description && (
-          <p className="text-[12px] text-[#52525b] truncate max-w-[280px] mt-0.5">
+          <p className="text-xs text-collab-500/60 truncate max-w-[280px] mt-0.5">
             {view.description}
           </p>
         )}
 
-        {/* Stats Row */}
         <div className="flex items-center gap-3 mt-2">
-          <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
+          <div className="flex items-center gap-1 text-[11px] text-collab-500">
             <VisibilityIcon className={cn("h-3 w-3", getVisibilityColor(view.visibility))} />
             <span className={getVisibilityColor(view.visibility)}>
               {view.visibility === 'WORKSPACE' ? 'Team' :
@@ -377,19 +369,18 @@ function ViewListItem({
           </div>
 
           {view._count?.issues !== undefined && (
-            <div className="flex items-center gap-1 text-[11px] text-[#71717a]">
-              <Eye className="h-3 w-3 text-[#6e7681]" />
+            <div className="flex items-center gap-1 text-[11px] text-collab-500">
+              <Eye className="h-3 w-3 text-collab-500" />
               <span className="tabular-nums">{view._count.issues} issues</span>
             </div>
           )}
 
-          <span className="text-[10px] text-[#3f3f46]">
+          <span className="text-[10px] text-collab-500/50">
             {formatDistanceToNow(new Date(view.updatedAt), { addSuffix: true })}
           </span>
         </div>
       </div>
 
-      {/* Inline Actions */}
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
         <Button
           variant="ghost"
@@ -403,7 +394,7 @@ function ViewListItem({
             "h-8 w-8",
             view.isFavorite
               ? "text-yellow-400 hover:text-yellow-300"
-              : "text-[#71717a] hover:text-yellow-400"
+              : "text-collab-500 hover:text-yellow-400"
           )}
           title={view.isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
@@ -422,13 +413,13 @@ function ViewListItem({
           <span>Open</span>
         </Button>
 
-        <div className="w-px h-5 bg-[#27272a] mx-1" />
+        <div className="w-px h-5 bg-collab-600 mx-1" />
 
         <Button
           variant="ghost"
           size="icon-sm"
           onClick={onSettings}
-          className="h-8 w-8 text-[#71717a] hover:text-white"
+          className="h-8 w-8 text-collab-500 hover:text-white"
           title="Settings"
         >
           <Settings className="h-4 w-4" />
@@ -445,8 +436,8 @@ function ViewListItem({
                 className={cn(
                   "h-8 w-8",
                   view.isDefault
-                    ? "text-[#3f3f46] cursor-not-allowed"
-                    : "text-[#71717a] hover:text-[#ef4444]"
+                    ? "text-collab-500/50 cursor-not-allowed"
+                    : "text-collab-500 hover:text-red-500"
                 )}
                 title={view.isDefault ? "Default views cannot be deleted" : "Delete"}
               >
@@ -454,58 +445,13 @@ function ViewListItem({
               </Button>
             </TooltipTrigger>
             {view.isDefault && (
-              <TooltipContent className="bg-[#1f1f1f] border-[#27272a] text-[#e6edf3] text-xs">
+              <TooltipContent className="bg-collab-700 border-collab-600 text-collab-50 text-xs">
                 <p>Default views cannot be deleted</p>
               </TooltipContent>
             )}
           </Tooltip>
         </TooltipProvider>
       </div>
-    </div>
-  );
-}
-
-// Empty Search State
-function EmptySearch({ onClear }: { onClear: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20">
-      <div className="w-12 h-12 rounded-full bg-[#161617] flex items-center justify-center mb-4">
-        <Search className="h-6 w-6 text-[#6e7681]" />
-      </div>
-      <h3 className="text-sm font-medium text-[#e6edf3] mb-1">No views found</h3>
-      <p className="text-xs text-[#6e7681] mb-4">Try different keywords</p>
-      <Button
-        onClick={onClear}
-        variant="ghost"
-        size="sm"
-        className="h-8 text-xs text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#161617]"
-      >
-        Clear search
-      </Button>
-    </div>
-  );
-}
-
-// Empty State
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20">
-      <div className="w-16 h-16 rounded-full bg-[#161617] flex items-center justify-center mb-4">
-        <Eye className="h-8 w-8 text-[#6e7681]" />
-      </div>
-      <h3 className="text-sm font-medium text-[#e6edf3] mb-1">No views yet</h3>
-      <p className="text-xs text-[#6e7681] mb-4 text-center max-w-sm">
-        Views help you organize and filter your issues.
-        Create custom views for different workflows and perspectives.
-      </p>
-      <Button
-        onClick={onCreate}
-        size="sm"
-        className="h-7 px-3 bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/20 hover:border-[#3b82f6]/30"
-      >
-        <Plus className="h-3.5 w-3.5 mr-1.5" />
-        Create your first view
-      </Button>
     </div>
   );
 }

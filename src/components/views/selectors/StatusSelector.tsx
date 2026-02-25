@@ -90,8 +90,8 @@ export function StatusSelector({
     if (selectedStatuses.length === 0) {
       return (
         <>
-          <Circle className="h-3 w-3 text-[#6e7681]" />
-          <span className="text-[#6e7681] text-xs">Status</span>
+          <Circle className="h-3 w-3 text-collab-500" />
+          <span className="text-collab-500 text-xs">Status</span>
         </>
       );
     }
@@ -102,7 +102,7 @@ export function StatusSelector({
       return (
         <>
           <Icon className="h-3 w-3" style={{ color: status.color }} />
-          <span className="text-[#cccccc] text-xs">{status.displayName}</span>
+          <span className="text-collab-400 text-xs">{status.displayName}</span>
         </>
       );
     }
@@ -122,12 +122,12 @@ export function StatusSelector({
             );
           })}
           {selectedStatuses.length > 2 && (
-            <div className="h-2.5 w-2.5 rounded-full bg-[#404040] flex items-center justify-center">
+            <div className="h-2.5 w-2.5 rounded-full bg-collab-600 flex items-center justify-center">
               <span className="text-[8px] text-white font-medium">+</span>
             </div>
           )}
         </div>
-        <span className="text-[#cccccc] text-xs">{selectedStatuses.length} statuses</span>
+        <span className="text-collab-400 text-xs">{selectedStatuses.length} statuses</span>
       </>
     );
   };
@@ -142,8 +142,8 @@ export function StatusSelector({
     return (
       <>
         <Icon className="h-3.5 w-3.5" style={{ color: status.color }} />
-        <span className="text-[#cccccc] flex-1">{status.displayName}</span>
-        {isSelected && <Check className="h-3 w-3 text-[#6e7681]" />}
+        <span className="text-collab-400 flex-1">{status.displayName}</span>
+        {isSelected && <Check className="h-3 w-3 text-collab-500" />}
       </>
     );
   };

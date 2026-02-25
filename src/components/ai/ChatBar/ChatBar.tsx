@@ -379,7 +379,7 @@ export default function ChatBar() {
                                 : "hover:bg-white/[0.04]"
                             )}
                           >
-                            <Sparkles className="h-3.5 w-3.5 text-[#8b5cf6]" />
+                            <Sparkles className="h-3.5 w-3.5 text-violet-500" />
                             <span className="text-sm text-white/50">
                               Ask AI about <span className="text-white/70">&ldquo;{inputValue.trim()}&rdquo;</span>
                             </span>
@@ -400,7 +400,7 @@ export default function ChatBar() {
                               "hover:bg-white/[0.04] transition-colors"
                             )}
                           >
-                            <Sparkles className="h-3.5 w-3.5 text-[#8b5cf6]" />
+                            <Sparkles className="h-3.5 w-3.5 text-violet-500" />
                             <span className="text-sm text-white/50">
                               Ask AI about <span className="text-white/70">&ldquo;{inputValue.trim()}&rdquo;</span>
                             </span>

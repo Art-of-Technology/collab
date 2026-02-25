@@ -67,25 +67,25 @@ export function IssueProjectSelector({
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
-            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-            "text-[#cccccc] focus:outline-none bg-[#181818]",
+            "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
+            "text-collab-400 focus:outline-none bg-collab-800",
             disabled && "opacity-50 cursor-not-allowed"
           )}
         >
-          <Home className="h-3 w-3 text-[#6e7681]" />
-          <span className="text-[#cccccc] text-xs truncate max-w-[100px]">
+          <Home className="h-3 w-3 text-collab-500" />
+          <span className="text-collab-400 text-xs truncate max-w-[100px]">
             {selectedProject ? selectedProject.name : "Project"}
           </span>
         </Button>
       </PopoverTrigger>
       
       <PopoverContent 
-        className="w-60 p-1 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
+        className="w-60 p-1 bg-collab-800 border-collab-600 shadow-xl"
         align="start"
         side="bottom"
         sideOffset={4}
       >
-        <div className="text-xs text-[#9ca3af] px-2 py-1.5 border-b border-[#2d2d30] mb-1 font-medium">
+        <div className="text-xs text-gray-400 px-2 py-1.5 border-b border-collab-600 mb-1 font-medium">
           Select project
         </div>
         
@@ -93,18 +93,18 @@ export function IssueProjectSelector({
           <Button
             type="button"
             variant="ghost"
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left h-auto justify-start"
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-collab-600 transition-colors text-left h-auto justify-start"
             onClick={() => {
               onChange(undefined);
               setIsOpen(false);
             }}
           >
-            <div className="w-4 h-4 rounded border border-dashed border-[#555] flex items-center justify-center">
-              <span className="text-xs text-[#6e7681]">×</span>
+            <div className="w-4 h-4 rounded border border-dashed border-collab-600 flex items-center justify-center">
+              <span className="text-xs text-collab-500">×</span>
             </div>
-            <span className="text-[#9ca3af]">No project</span>
+            <span className="text-gray-400">No project</span>
             {!value && (
-              <span className="ml-auto text-xs text-[#6e7681]">✓</span>
+              <span className="ml-auto text-xs text-collab-500">✓</span>
             )}
           </Button>
 
@@ -113,7 +113,7 @@ export function IssueProjectSelector({
               key={project.id}
               type="button"
               variant="ghost"
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left h-auto justify-start"
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-collab-600 transition-colors text-left h-auto justify-start"
               onClick={() => {
                 onChange(project.id);
                 setIsOpen(false);
@@ -125,21 +125,21 @@ export function IssueProjectSelector({
               >
                 <Home className="h-2.5 w-2.5 text-white" />
               </div>
-              <span className="text-[#e6edf3]">{project.name}</span>
+              <span className="text-collab-50">{project.name}</span>
               {value === project.id && (
-                <span className="ml-auto text-xs text-[#6e7681]">✓</span>
+                <span className="ml-auto text-xs text-collab-500">✓</span>
               )}
             </Button>
           ))}
           
           {isLoading && (
-            <div className="px-2 py-4 text-center text-[#6e7681] text-sm">
+            <div className="px-2 py-4 text-center text-collab-500 text-sm">
               Loading projects...
             </div>
           )}
           
           {!isLoading && projects.length === 0 && (
-            <div className="px-2 py-4 text-center text-[#6e7681] text-sm">
+            <div className="px-2 py-4 text-center text-collab-500 text-sm">
               No projects found
             </div>
           )}

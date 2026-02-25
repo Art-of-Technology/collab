@@ -245,8 +245,8 @@ export function NoteFormEditor({
         if (!selected) {
             return (
                 <>
-                    <FileText className="h-3.5 w-3.5 text-[#75757a]" />
-                    <span className="text-[#75757a] text-xs">Type</span>
+                    <FileText className="h-3.5 w-3.5 text-collab-500" />
+                    <span className="text-collab-500 text-xs">Type</span>
                 </>
             );
         }
@@ -255,7 +255,7 @@ export function NoteFormEditor({
         return (
             <>
                 <Icon className={cn("h-3.5 w-3.5", config.color)} />
-                <span className="text-[#fafafa] text-xs">{selected.label}</span>
+                <span className="text-collab-50 text-xs">{selected.label}</span>
             </>
         );
     };
@@ -266,8 +266,8 @@ export function NoteFormEditor({
         if (!selected) {
             return (
                 <>
-                    <Lock className="h-3.5 w-3.5 text-[#75757a]" />
-                    <span className="text-[#75757a] text-xs">Scope</span>
+                    <Lock className="h-3.5 w-3.5 text-collab-500" />
+                    <span className="text-collab-500 text-xs">Scope</span>
                 </>
             );
         }
@@ -276,7 +276,7 @@ export function NoteFormEditor({
         return (
             <>
                 <Icon className={cn("h-3.5 w-3.5", config.color)} />
-                <span className="text-[#fafafa] text-xs">{selected.label}</span>
+                <span className="text-collab-50 text-xs">{selected.label}</span>
             </>
         );
     };
@@ -287,8 +287,8 @@ export function NoteFormEditor({
         if (!selected || !selected.id) {
             return (
                 <>
-                    <FolderKanban className="h-3.5 w-3.5 text-[#75757a]" />
-                    <span className="text-[#75757a] text-xs">No Project</span>
+                    <FolderKanban className="h-3.5 w-3.5 text-collab-500" />
+                    <span className="text-collab-500 text-xs">No Project</span>
                 </>
             );
         }
@@ -298,17 +298,17 @@ export function NoteFormEditor({
                     className="h-3 w-3 rounded-full"
                     style={{ backgroundColor: selected.color || "#6366f1" }}
                 />
-                <span className="text-[#fafafa] text-xs">{selected.label}</span>
+                <span className="text-collab-50 text-xs">{selected.label}</span>
             </>
         );
     };
 
     if (isFetchingNote) {
         return (
-            <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] p-12">
+            <div className="rounded-2xl bg-collab-800 border border-collab-700 p-12">
                 <div className="flex flex-col items-center justify-center gap-3">
-                    <div className="h-6 w-6 border-2 border-[#1f1f22] border-t-[#75757a] rounded-full animate-spin" />
-                    <p className="text-sm text-[#75757a]">Loading context...</p>
+                    <div className="h-6 w-6 border-2 border-collab-700 border-t-[#75757a] rounded-full animate-spin" />
+                    <p className="text-sm text-collab-500">Loading context...</p>
                 </div>
             </div>
         );
@@ -316,14 +316,14 @@ export function NoteFormEditor({
 
     if (error) {
         return (
-            <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] p-12">
+            <div className="rounded-2xl bg-collab-800 border border-collab-700 p-12">
                 <div className="flex flex-col items-center justify-center gap-4">
                     <p className="text-sm text-red-400">{error}</p>
                     {onCancel && (
                         <Button
                             variant="outline"
                             onClick={onCancel}
-                            className="bg-[#101011] border-[#1f1f22] text-[#9c9ca1] hover:bg-[#1f1f22] hover:text-[#fafafa] rounded-xl"
+                            className="bg-collab-900 border-collab-700 text-collab-400 hover:bg-collab-700 hover:text-collab-50 rounded-xl"
                         >
                             Go Back
                         </Button>
@@ -336,8 +336,8 @@ export function NoteFormEditor({
     // Shared button style for consistency
     const toolbarButtonClass = cn(
         "inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium transition-all",
-        "bg-[#101011] border border-[#1f1f22] hover:border-[#27272b] hover:bg-[#1f1f22]",
-        "text-[#9c9ca1] hover:text-[#fafafa]",
+        "bg-collab-900 border border-collab-700 hover:border-collab-600 hover:bg-collab-700",
+        "text-collab-400 hover:text-collab-50",
         "focus:outline-none !ring-0 !ring-offset-0"
     );
 
@@ -346,14 +346,14 @@ export function NoteFormEditor({
         "focus:outline-none !ring-0 !ring-offset-0",
         isActive
             ? `bg-${activeColor}-500/10 border border-${activeColor}-500/30 text-${activeColor}-400 hover:bg-${activeColor}-500/20`
-            : "bg-[#101011] border border-[#1f1f22] hover:border-[#27272b] hover:bg-[#1f1f22] text-[#9c9ca1] hover:text-[#fafafa]"
+            : "bg-collab-900 border border-collab-700 hover:border-collab-600 hover:bg-collab-700 text-collab-400 hover:text-collab-50"
     );
 
     return (
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
                 {/* Toolbar - organized in logical groups */}
-                <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
+                <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
                     {/* Main toolbar row */}
                     <div className="flex items-center gap-3 p-4">
                         {/* Left: Metadata selectors */}
@@ -457,7 +457,7 @@ export function NoteFormEditor({
                         </div>
 
                         {/* Divider */}
-                        <div className="h-6 w-px bg-[#1f1f22]" />
+                        <div className="h-6 w-px bg-collab-700" />
 
                         {/* Middle: Toggle buttons */}
                         <div className="flex items-center gap-2">
@@ -477,7 +477,7 @@ export function NoteFormEditor({
                                                     "focus:outline-none !ring-0 !ring-offset-0",
                                                     field.value
                                                         ? "bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
-                                                        : "bg-[#101011] border border-[#1f1f22] hover:border-[#27272b] hover:bg-[#1f1f22] text-[#9c9ca1] hover:text-[#fafafa]"
+                                                        : "bg-collab-900 border border-collab-700 hover:border-collab-600 hover:bg-collab-700 text-collab-400 hover:text-collab-50"
                                                 )}
                                                 title="Add to favorites"
                                             >
@@ -507,7 +507,7 @@ export function NoteFormEditor({
                                                         "focus:outline-none !ring-0 !ring-offset-0",
                                                         field.value
                                                             ? "bg-purple-500/10 border border-purple-500/30 text-purple-400 hover:bg-purple-500/20"
-                                                            : "bg-[#101011] border border-[#1f1f22] hover:border-[#27272b] hover:bg-[#1f1f22] text-[#9c9ca1] hover:text-[#fafafa]",
+                                                            : "bg-collab-900 border border-collab-700 hover:border-collab-600 hover:bg-collab-700 text-collab-400 hover:text-collab-50",
                                                         !isOwner && "opacity-50 cursor-not-allowed"
                                                     )}
                                                     title="Include in AI context"
@@ -569,7 +569,7 @@ export function NoteFormEditor({
                             )}
 
                             {/* Divider before status */}
-                            <div className="h-6 w-px bg-[#1f1f22]" />
+                            <div className="h-6 w-px bg-collab-700" />
 
                             {/* Save button for secret types OR Autosave status */}
                             {isSecretType ? (
@@ -592,11 +592,11 @@ export function NoteFormEditor({
                                     )}
                                 </Button>
                             ) : (
-                                <div className="flex items-center gap-2 px-3 h-8 rounded-lg bg-[#101011] border border-[#1f1f22]">
+                                <div className="flex items-center gap-2 px-3 h-8 rounded-lg bg-collab-900 border border-collab-700">
                                     {autosaveStatus === "idle" && (
                                         <div className="flex items-center gap-2">
                                             <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                                            <span className="text-xs text-[#52525b]">Autosave on</span>
+                                            <span className="text-xs text-collab-500/60">Autosave on</span>
                                         </div>
                                     )}
 
@@ -634,9 +634,9 @@ export function NoteFormEditor({
                 </div>
 
                 {/* Editor Area - in a card */}
-                <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
+                <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
                     {/* Title Input */}
-                    <div className="px-6 pt-6 pb-4 border-b border-[#1f1f22]">
+                    <div className="px-6 pt-6 pb-4 border-b border-collab-700">
                         <FormField
                             control={form.control}
                             name="title"
@@ -647,7 +647,7 @@ export function NoteFormEditor({
                                             {...field}
                                             type="text"
                                             placeholder="Untitled"
-                                            className="w-full bg-transparent border-0 outline-none text-2xl font-semibold text-[#fafafa] placeholder:text-[#3f3f46] px-0 py-1 focus:outline-none"
+                                            className="w-full bg-transparent border-0 outline-none text-2xl font-semibold text-collab-50 placeholder:text-collab-500/50 px-0 py-1 focus:outline-none"
                                             style={{ caretColor: '#3b82f6' }}
                                         />
                                     </FormControl>
@@ -690,45 +690,45 @@ export function NoteFormEditor({
                                                     "[&_.ProseMirror]:shadow-none",
                                                     "[&_.ProseMirror]:p-0",
                                                     "[&_.ProseMirror]:focus:ring-0",
-                                                    "[&_.ProseMirror]:text-[#9c9ca1]",
+                                                    "[&_.ProseMirror]:text-collab-400",
                                                     "[&_.ProseMirror]:text-sm",
                                                     "[&_.ProseMirror]:leading-relaxed",
-                                                    "[&_.ProseMirror_p.is-editor-empty:first-child::before]:text-[#52525b]",
+                                                    "[&_.ProseMirror_p.is-editor-empty:first-child::before]:text-collab-500/60",
                                                     "[&_.ProseMirror_p]:my-3",
                                                     "[&_.ProseMirror_h1]:text-xl",
                                                     "[&_.ProseMirror_h1]:font-semibold",
-                                                    "[&_.ProseMirror_h1]:text-[#fafafa]",
+                                                    "[&_.ProseMirror_h1]:text-collab-50",
                                                     "[&_.ProseMirror_h1]:mt-6",
                                                     "[&_.ProseMirror_h1]:mb-3",
                                                     "[&_.ProseMirror_h2]:text-lg",
                                                     "[&_.ProseMirror_h2]:font-medium",
-                                                    "[&_.ProseMirror_h2]:text-[#fafafa]",
+                                                    "[&_.ProseMirror_h2]:text-collab-50",
                                                     "[&_.ProseMirror_h2]:mt-5",
                                                     "[&_.ProseMirror_h2]:mb-2",
                                                     "[&_.ProseMirror_h3]:text-base",
                                                     "[&_.ProseMirror_h3]:font-medium",
-                                                    "[&_.ProseMirror_h3]:text-[#e4e4e7]",
+                                                    "[&_.ProseMirror_h3]:text-collab-50",
                                                     "[&_.ProseMirror_h3]:mt-4",
                                                     "[&_.ProseMirror_h3]:mb-2",
                                                     "[&_.ProseMirror_ul]:my-3",
                                                     "[&_.ProseMirror_ol]:my-3",
-                                                    "[&_.ProseMirror_li]:text-[#9c9ca1]",
-                                                    "[&_.ProseMirror_code]:bg-[#1f1f22]",
-                                                    "[&_.ProseMirror_code]:text-[#f472b6]",
+                                                    "[&_.ProseMirror_li]:text-collab-400",
+                                                    "[&_.ProseMirror_code]:bg-collab-700",
+                                                    "[&_.ProseMirror_code]:text-pink-400",
                                                     "[&_.ProseMirror_code]:px-1.5",
                                                     "[&_.ProseMirror_code]:py-0.5",
                                                     "[&_.ProseMirror_code]:rounded-lg",
                                                     "[&_.ProseMirror_code]:text-xs",
-                                                    "[&_.ProseMirror_pre]:bg-[#101011]",
+                                                    "[&_.ProseMirror_pre]:bg-collab-900",
                                                     "[&_.ProseMirror_pre]:border",
-                                                    "[&_.ProseMirror_pre]:border-[#1f1f22]",
+                                                    "[&_.ProseMirror_pre]:border-collab-700",
                                                     "[&_.ProseMirror_pre]:rounded-xl",
                                                     "[&_.ProseMirror_pre]:p-4",
                                                     "[&_.ProseMirror_pre]:my-4",
                                                     "[&_.ProseMirror_blockquote]:border-l-2",
-                                                    "[&_.ProseMirror_blockquote]:border-[#27272b]",
+                                                    "[&_.ProseMirror_blockquote]:border-collab-600",
                                                     "[&_.ProseMirror_blockquote]:pl-4",
-                                                    "[&_.ProseMirror_blockquote]:text-[#75757a]",
+                                                    "[&_.ProseMirror_blockquote]:text-collab-500",
                                                     "[&_.ProseMirror_blockquote]:italic",
                                                     "[&_.ProseMirror_a]:text-blue-400",
                                                     "[&_.ProseMirror_a]:underline",

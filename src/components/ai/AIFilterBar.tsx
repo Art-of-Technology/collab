@@ -291,15 +291,15 @@ export default function AIFilterBar({
         }}
         className={cn(
           "flex items-center gap-2 px-3 py-2 rounded-lg",
-          "bg-[#1f1f1f]/50 border border-[#27272a] hover:border-[#3f3f46]",
-          "text-sm text-[#71717a] hover:text-[#a1a1aa]",
+          "bg-collab-700/50 border border-collab-600 hover:border-collab-600",
+          "text-sm text-collab-500 hover:text-collab-400",
           "transition-all duration-200",
           className
         )}
       >
-        <Sparkles className="h-4 w-4 text-[#8b5cf6]" />
+        <Sparkles className="h-4 w-4 text-violet-500" />
         <span>AI Filter</span>
-        <span className="text-[#52525b]">|</span>
+        <span className="text-collab-500/60">|</span>
         <Search className="h-3.5 w-3.5" />
         <span>Search issues...</span>
       </button>
@@ -311,13 +311,13 @@ export default function AIFilterBar({
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-[#0a0a0a] border border-[#27272a] rounded-xl overflow-hidden"
+        className="bg-collab-950 border border-collab-600 rounded-xl overflow-hidden"
       >
         {/* Search Input */}
         <form onSubmit={handleSubmit} className="flex items-center gap-2 p-3">
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="p-1.5 rounded-lg bg-[#8b5cf6]/20">
-              <Wand2 className="h-4 w-4 text-[#8b5cf6]" />
+            <div className="p-1.5 rounded-lg bg-violet-500/20">
+              <Wand2 className="h-4 w-4 text-violet-500" />
             </div>
           </div>
 
@@ -342,7 +342,7 @@ export default function AIFilterBar({
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setQuery("")}
-                className="text-[#52525b] hover:text-white"
+                className="text-collab-500/60 hover:text-white"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -373,22 +373,22 @@ export default function AIFilterBar({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="px-3 pb-3 border-t border-[#1f1f1f]"
+              className="px-3 pb-3 border-t border-collab-700"
             >
               <div className="flex items-center gap-2 pt-3 flex-wrap">
-                <span className="text-[10px] text-[#52525b] uppercase tracking-wider">
+                <span className="text-[10px] text-collab-500/60 uppercase tracking-wider">
                   Active filters:
                 </span>
                 {parsedFilters.map((filter, index) => (
                   <Badge
                     key={index}
                     variant="outline"
-                    className="bg-[#8b5cf6]/10 border-[#8b5cf6]/30 text-[#c4b5fd] text-xs gap-1 pr-1"
+                    className="bg-violet-500/10 border-violet-500/30 text-violet-300 text-xs gap-1 pr-1"
                   >
                     {filter.display}
                     <button
                       onClick={() => removeFilter(index)}
-                      className="ml-1 p-0.5 hover:bg-[#8b5cf6]/20 rounded"
+                      className="ml-1 p-0.5 hover:bg-violet-500/20 rounded"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -396,7 +396,7 @@ export default function AIFilterBar({
                 ))}
                 <button
                   onClick={clearAllFilters}
-                  className="text-[10px] text-[#71717a] hover:text-white transition-colors"
+                  className="text-[10px] text-collab-500 hover:text-white transition-colors"
                 >
                   Clear all
                 </button>
@@ -412,21 +412,21 @@ export default function AIFilterBar({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="border-t border-[#1f1f1f] max-h-64 overflow-y-auto"
+              className="border-t border-collab-700 max-h-64 overflow-y-auto"
             >
               {/* Recent Queries */}
               {recentQueries.length > 0 && (
                 <div className="p-2">
-                  <p className="px-2 py-1 text-[10px] text-[#52525b] uppercase tracking-wider">
+                  <p className="px-2 py-1 text-[10px] text-collab-500/60 uppercase tracking-wider">
                     Recent
                   </p>
                   {recentQueries.map((recent, index) => (
                     <button
                       key={index}
                       onClick={() => handleExampleClick(recent)}
-                      className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm text-[#a1a1aa] hover:bg-[#1f1f1f] hover:text-white transition-colors text-left"
+                      className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm text-collab-400 hover:bg-collab-700 hover:text-white transition-colors text-left"
                     >
-                      <History className="h-3.5 w-3.5 text-[#52525b]" />
+                      <History className="h-3.5 w-3.5 text-collab-500/60" />
                       <span className="truncate">{recent}</span>
                     </button>
                   ))}
@@ -434,17 +434,17 @@ export default function AIFilterBar({
               )}
 
               {/* Example Queries */}
-              <div className="p-2 border-t border-[#1f1f1f]">
-                <p className="px-2 py-1 text-[10px] text-[#52525b] uppercase tracking-wider">
+              <div className="p-2 border-t border-collab-700">
+                <p className="px-2 py-1 text-[10px] text-collab-500/60 uppercase tracking-wider">
                   Try asking
                 </p>
                 {EXAMPLE_QUERIES.map((example, index) => (
                   <button
                     key={index}
                     onClick={() => handleExampleClick(example)}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm text-[#a1a1aa] hover:bg-[#1f1f1f] hover:text-white transition-colors text-left"
+                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm text-collab-400 hover:bg-collab-700 hover:text-white transition-colors text-left"
                   >
-                    <Sparkles className="h-3.5 w-3.5 text-[#8b5cf6]" />
+                    <Sparkles className="h-3.5 w-3.5 text-violet-500" />
                     <span>{example}</span>
                   </button>
                 ))}

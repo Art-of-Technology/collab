@@ -59,16 +59,16 @@ export default function AISuggestion({
         onClick={onAction}
         className={cn(
           "flex items-center gap-2 px-3 py-2",
-          "bg-[#1f1f1f] border border-[#27272a] rounded-lg",
-          "hover:bg-[#27272a] hover:border-[#3f3f46]",
+          "bg-collab-700 border border-collab-600 rounded-lg",
+          "hover:bg-collab-600 hover:border-collab-600",
           "text-left transition-all w-full"
         )}
       >
         <Icon className={cn("h-4 w-4", config.iconColor)} />
-        <span className="flex-1 text-sm text-[#e6edf3] truncate">
+        <span className="flex-1 text-sm text-collab-50 truncate">
           {suggestion.title}
         </span>
-        <ArrowRight className="h-3.5 w-3.5 text-[#52525b]" />
+        <ArrowRight className="h-3.5 w-3.5 text-collab-500/60" />
       </button>
     );
   }
@@ -78,7 +78,7 @@ export default function AISuggestion({
       <div
         className={cn(
           "relative overflow-hidden",
-          "bg-[#1f1f1f] border rounded-xl",
+          "bg-collab-700 border rounded-xl",
           config.borderColor
         )}
       >
@@ -92,11 +92,11 @@ export default function AISuggestion({
                 <Icon className={cn("h-4 w-4", config.iconColor)} />
               </div>
               <div>
-                <h4 className="text-sm font-medium text-[#fafafa]">
+                <h4 className="text-sm font-medium text-collab-50">
                   {suggestion.title}
                 </h4>
                 {suggestion.description && (
-                  <p className="text-xs text-[#71717a] mt-1">
+                  <p className="text-xs text-collab-500 mt-1">
                     {suggestion.description}
                   </p>
                 )}
@@ -106,9 +106,9 @@ export default function AISuggestion({
             {onDismiss && (
               <button
                 onClick={onDismiss}
-                className="p-1 hover:bg-[#27272a] rounded transition-colors"
+                className="p-1 hover:bg-collab-600 rounded transition-colors"
               >
-                <X className="h-4 w-4 text-[#52525b]" />
+                <X className="h-4 w-4 text-collab-500/60" />
               </button>
             )}
           </div>
@@ -119,7 +119,7 @@ export default function AISuggestion({
                 size="sm"
                 variant="ghost"
                 onClick={onAction}
-                className="h-7 text-xs text-[#8b5cf6] hover:text-[#a78bfa] hover:bg-[#8b5cf6]/10"
+                className="h-7 text-xs text-violet-500 hover:text-violet-400 hover:bg-violet-500/10"
               >
                 Take action
                 <ArrowRight className="h-3.5 w-3.5 ml-1" />
@@ -136,16 +136,16 @@ export default function AISuggestion({
     <div
       className={cn(
         "flex items-start gap-3 p-3",
-        "bg-[#1f1f1f] border rounded-lg",
+        "bg-collab-700 border rounded-lg",
         config.borderColor,
-        "hover:bg-[#27272a] transition-colors"
+        "hover:bg-collab-600 transition-colors"
       )}
     >
       <Icon className={cn("h-4 w-4 mt-0.5", config.iconColor)} />
       <div className="flex-1">
-        <p className="text-sm text-[#e6edf3]">{suggestion.title}</p>
+        <p className="text-sm text-collab-50">{suggestion.title}</p>
         {suggestion.description && (
-          <p className="text-xs text-[#71717a] mt-0.5">
+          <p className="text-xs text-collab-500 mt-0.5">
             {suggestion.description}
           </p>
         )}
@@ -153,9 +153,9 @@ export default function AISuggestion({
       {onAction && (
         <button
           onClick={onAction}
-          className="p-1.5 hover:bg-[#3f3f46] rounded transition-colors"
+          className="p-1.5 hover:bg-collab-600 rounded transition-colors"
         >
-          <ArrowRight className="h-3.5 w-3.5 text-[#71717a]" />
+          <ArrowRight className="h-3.5 w-3.5 text-collab-500" />
         </button>
       )}
     </div>
@@ -218,15 +218,15 @@ export function AIInsightCard({
           <Icon className={cn("h-4 w-4", config.iconColor)} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-[#fafafa]">{title}</p>
-          <p className="text-xs text-[#71717a] mt-1">{description}</p>
+          <p className="text-sm font-medium text-collab-50">{title}</p>
+          <p className="text-xs text-collab-500 mt-1">{description}</p>
         </div>
         {onDismiss && (
           <button
             onClick={onDismiss}
-            className="p-1 hover:bg-[#27272a] rounded transition-colors"
+            className="p-1 hover:bg-collab-600 rounded transition-colors"
           >
-            <X className="h-4 w-4 text-[#52525b]" />
+            <X className="h-4 w-4 text-collab-500/60" />
           </button>
         )}
       </div>
@@ -238,7 +238,7 @@ export function AIInsightCard({
               size="sm"
               variant="ghost"
               onClick={onAction}
-              className="h-7 px-3 text-xs bg-[#1f1f1f] hover:bg-[#27272a]"
+              className="h-7 px-3 text-xs bg-collab-700 hover:bg-collab-600"
             >
               {actionLabel || 'View'}
             </Button>
@@ -248,7 +248,7 @@ export function AIInsightCard({
               size="sm"
               variant="ghost"
               onClick={onDismiss}
-              className="h-7 px-3 text-xs text-[#52525b] hover:text-[#71717a]"
+              className="h-7 px-3 text-xs text-collab-500/60 hover:text-collab-500"
             >
               Dismiss
             </Button>

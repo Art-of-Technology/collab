@@ -128,9 +128,9 @@ export default function PlanningViewRendererV2({
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#09090b]">
+    <div className="h-full flex flex-col bg-collab-950">
       {/* Toolbar - Compact filter bar */}
-      <div className="border-b border-[#1f1f23] bg-[#0c0c0d] px-4 py-2">
+      <div className="border-b border-collab-700 bg-collab-950 px-4 py-2">
         <div className="flex items-center justify-between">
           {/* Left - Filters */}
           <div className="flex items-center gap-2">
@@ -153,7 +153,7 @@ export default function PlanningViewRendererV2({
                 variant="ghost"
                 size="sm"
                 onClick={handleResetChanges}
-                className="h-7 px-2 text-xs text-[#71717a] hover:text-white"
+                className="h-7 px-2 text-xs text-collab-500 hover:text-white"
               >
                 <RotateCcw className="h-3 w-3 mr-1" />
                 Reset

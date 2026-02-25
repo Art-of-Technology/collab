@@ -44,7 +44,7 @@ export function TryItResponse({
   if (!response && !error) return null;
 
   return (
-    <div className="mt-6 pt-6 border-t border-[#1f1f1f]">
+    <div className="mt-6 pt-6 border-t border-collab-700">
       <h4 className="text-sm font-semibold mb-4">Responses</h4>
       
       {error ? (
@@ -104,7 +104,7 @@ export function TryItResponse({
                 Copy
               </Button>
             </div>
-            <div className="p-3 bg-[#090909] border border-[#1f1f1f] rounded-md">
+            <div className="p-3 bg-collab-950 border border-collab-700 rounded-md">
               <code className="text-xs text-foreground break-all">
                 {buildUrl(endpoint.url, baseUrl, pathParams, queryParams)}
               </code>
@@ -168,7 +168,7 @@ export function TryItResponse({
                     Response headers
                   </CollapsibleTrigger>
                   <CollapsibleContent className="mt-2">
-                    <div className="p-3 bg-[#090909] border border-[#1f1f1f] rounded-md">
+                    <div className="p-3 bg-collab-950 border border-collab-700 rounded-md">
                       <div className="space-y-1">
                         {Object.entries(response.headers).map(([key, value]) => (
                           <div key={key} className="text-xs font-mono">

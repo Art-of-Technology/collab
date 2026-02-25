@@ -112,7 +112,7 @@ export function SelectedRelationItem({
   onRemove
 }: SelectedRelationItemProps) {
   return (
-    <div className="group flex items-center px-2 py-1.5 bg-[#0f1011] border border-[#1f1f1f] rounded-md transition-all">
+    <div className="group flex items-center px-2 py-1.5 bg-collab-900 border border-collab-700 rounded-md transition-all">
 
       {/* Title and Issue Key section */}
       <div className="flex-1 min-w-0 mr-3">
@@ -125,14 +125,14 @@ export function SelectedRelationItem({
           )}
 
           {/* Issue Key - moved to top */}
-          <span className="text-[#8b949e] text-[10px] font-mono font-medium">
+          <span className="text-collab-400 text-[10px] font-mono font-medium">
             {item.issueKey || item.type.toUpperCase()}
           </span>
         </div>
 
         {/* Title - moved under issue key */}
         <div className="flex items-center">
-          <span className="text-[#e6edf3] text-sm font-medium truncate">
+          <span className="text-collab-50 text-sm font-medium truncate">
             {item.title}
           </span>
         </div>
@@ -183,13 +183,13 @@ export function SelectedRelationItem({
         {item.assignee ? (
           <Avatar className="h-5 w-5">
             <AvatarImage src={item.assignee.image || undefined} />
-            <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
+            <AvatarFallback className="text-xs bg-collab-600 text-white border-none">
               {item.assignee.name?.charAt(0)?.toUpperCase()}
             </AvatarFallback>
           </Avatar>
         ) : (
-          <div className="h-5 w-5 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
-            <User className="h-2.5 w-2.5 text-[#666]" />
+          <div className="h-5 w-5 rounded-full bg-collab-800 border border-collab-600 flex items-center justify-center">
+            <User className="h-2.5 w-2.5 text-collab-500" />
           </div>
         )}
       </div>
@@ -201,10 +201,10 @@ export function SelectedRelationItem({
           onValueChange={(value) => onRelationTypeChange(item.id, value as IssueRelationType)}
           disabled={!canChangeRelationType}
         >
-          <SelectTrigger className="w-32 h-6 text-xs bg-[#1a1a1a] border-[#333] text-[#e1e7ef]">
+          <SelectTrigger className="w-32 h-6 text-xs bg-collab-800 border-collab-600 text-collab-50">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="bg-[#1a1a1a] border-[#333]">
+          <SelectContent className="bg-collab-800 border-collab-600">
             <SelectItem value="child">Sub-issue</SelectItem>
             <SelectItem value="parent">Parent</SelectItem>
             <SelectItem value="blocks">Blocks</SelectItem>
@@ -223,7 +223,7 @@ export function SelectedRelationItem({
         className="h-6 w-6 p-0 hover:bg-red-500/20 flex-shrink-0"
         onClick={() => onRemove(item.id)}
       >
-        <X className="h-3 w-3 text-[#6e7681] hover:text-red-400" />
+        <X className="h-3 w-3 text-collab-500 hover:text-red-400" />
       </Button>
     </div>
   );

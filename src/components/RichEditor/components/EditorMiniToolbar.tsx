@@ -41,7 +41,7 @@ export function EditorMiniToolbar({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-6 w-6 hover:bg-white/10 text-[#8b949e] hover:text-white"
+              className="h-6 w-6 hover:bg-white/10 text-collab-400 hover:text-white"
               onClick={handleUndo}
               disabled={!canUndo}
             >
@@ -59,7 +59,7 @@ export function EditorMiniToolbar({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-6 w-6 hover:bg-white/10 text-[#8b949e] hover:text-white"
+              className="h-6 w-6 hover:bg-white/10 text-collab-400 hover:text-white"
               onClick={handleRedo}
               disabled={!canRedo}
             >
@@ -78,7 +78,7 @@ export function EditorMiniToolbar({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 hover:bg-white/10 text-[#8b949e] hover:text-white"
+                className="h-6 w-6 hover:bg-white/10 text-collab-400 hover:text-white"
                 onClick={onHistoryClick}
               >
                 <HistoryIcon className="h-3 w-3" />

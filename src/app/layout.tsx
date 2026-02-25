@@ -60,7 +60,7 @@ export default async function RootLayout({
       </head>
 
       <body
-        className={cn("font-sans antialiased dark:bg-[#070708] dark:text-white", fontSans.variable, inter.className)}
+        className={cn("font-sans antialiased dark:bg-collab-950 dark:text-white", fontSans.variable, inter.className)}
         style={{ "--sidebar-width": width } as React.CSSProperties}
       >
         <ThemeProvider

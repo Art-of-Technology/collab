@@ -59,14 +59,14 @@ export function ProjectStatusSelector({
       <div
         className={cn(
           "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs h-auto leading-tight min-h-[20px]",
-          "border border-[#2d2d30] bg-[#181818]",
-          "text-[#cccccc]",
+          "border border-collab-600 bg-collab-800",
+          "text-collab-400",
           className
         )}
       >
         <Icon className={cn("h-3 w-3", currentConfig.iconClassName)} />
-        <span className="text-[#cccccc] text-xs">{currentConfig.label}</span>
-        <span className="text-[#6e7681] text-xs">({counts[value]})</span>
+        <span className="text-collab-400 text-xs">{currentConfig.label}</span>
+        <span className="text-collab-500 text-xs">({counts[value]})</span>
       </div>
     );
   }
@@ -80,25 +80,25 @@ export function ProjectStatusSelector({
           disabled={disabled || readonly}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs h-auto leading-tight min-h-[20px]",
-            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-            "text-[#cccccc] bg-[#181818]",
+            "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
+            "text-collab-400 bg-collab-800",
             (disabled || readonly) && "opacity-50 cursor-not-allowed",
             className
           )}
         >
           <Icon className={cn("h-3 w-3", currentConfig.iconClassName)} />
-          <span className="text-[#cccccc] text-xs">{currentConfig.label}</span>
-          <span className="text-[#6e7681] text-xs">({counts[value]})</span>
+          <span className="text-collab-400 text-xs">{currentConfig.label}</span>
+          <span className="text-collab-500 text-xs">({counts[value]})</span>
         </Button>
       </PopoverTrigger>
       
       <PopoverContent 
-        className="w-56 p-1 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
+        className="w-56 p-1 bg-collab-800 border-collab-600 shadow-xl"
         align="start"
         side="bottom"
         sideOffset={4}
       >
-        <div className="text-xs text-[#9ca3af] px-2 py-1.5 border-b border-[#2d2d30] mb-1 font-medium">
+        <div className="text-xs text-gray-400 px-2 py-1.5 border-b border-collab-600 mb-1 font-medium">
           Filter projects
         </div>
         
@@ -113,16 +113,16 @@ export function ProjectStatusSelector({
                 key={status}
                 variant="ghost"
                 type="button"
-                className="w-full justify-start h-auto gap-2 px-2 py-1.5 text-xs hover:bg-[#2a2a2a]"
+                className="w-full justify-start h-auto gap-2 px-2 py-1.5 text-xs hover:bg-collab-600"
                 onClick={() => onChange(status)}
               >
                 <StatusIcon className={cn("h-3.5 w-3.5", config.iconClassName)} />
-                <span className="text-[#cccccc] flex-1">{config.label}</span>
-                <span className="text-xs text-[#6e7681]">
+                <span className="text-collab-400 flex-1">{config.label}</span>
+                <span className="text-xs text-collab-500">
                   {count}
                 </span>
                 {value === status && (
-                  <span className="text-xs text-[#6e7681]">✓</span>
+                  <span className="text-xs text-collab-500">✓</span>
                 )}
               </Button>
             );

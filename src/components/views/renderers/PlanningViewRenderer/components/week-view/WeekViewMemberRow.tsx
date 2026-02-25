@@ -46,24 +46,24 @@ export function WeekViewMemberRow({
   const totals = { completed, sentToReview, started, blocked };
 
   return (
-    <tr className="border-b border-[#27272a]">
+    <tr className="border-b border-collab-600">
       {/* Member cell - sticky left */}
-      <td className="min-w-[224px] w-[224px] sticky left-0 z-10 bg-[#09090b] border-r border-[#27272a] align-top">
+      <td className="min-w-[224px] w-[224px] sticky left-0 z-10 bg-collab-950 border-r border-collab-600 align-top">
         <Button
           variant="ghost"
           onClick={onToggle}
-          className="w-full px-3 py-3 flex items-center gap-3 hover:bg-[#18181b] transition-colors text-left h-auto justify-start rounded-none"
+          className="w-full px-3 py-3 flex items-center gap-3 hover:bg-collab-800 transition-colors text-left h-auto justify-start rounded-none"
         >
           <Avatar className="h-8 w-8 flex-shrink-0">
             <AvatarImage src={member.userImage} />
-            <AvatarFallback className="bg-[#27272a] text-[#fafafa] text-xs font-medium">
+            <AvatarFallback className="bg-collab-600 text-collab-50 text-xs font-medium">
               {member.userName.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-[13px] font-medium text-[#fafafa] truncate">
+              <span className="text-[13px] font-medium text-collab-50 truncate">
                 {member.userName}
               </span>
               {hasWarnings && (
@@ -79,7 +79,7 @@ export function WeekViewMemberRow({
           </div>
           
           <ChevronRight className={cn(
-            "h-4 w-4 text-[#52525b] transition-transform flex-shrink-0",
+            "h-4 w-4 text-collab-500/60 transition-transform flex-shrink-0",
             isExpanded && "rotate-90"
           )} />
         </Button>
@@ -105,7 +105,7 @@ export function WeekViewMemberRow({
           <td 
             key={dateStr}
             className={cn(
-              "min-w-[280px] w-[280px] border-r border-[#27272a] align-top",
+              "min-w-[280px] w-[280px] border-r border-collab-600 align-top",
               isTodayDay && "bg-blue-500/[0.03]",
               isFutureDay && "opacity-50"
             )}
@@ -118,9 +118,9 @@ export function WeekViewMemberRow({
             ) : (
               <div className="flex items-center justify-center py-4">
                 {totalItems > 0 ? (
-                  <span className="text-[12px] text-[#71717a]">{totalItems} items</span>
+                  <span className="text-[12px] text-collab-500">{totalItems} items</span>
                 ) : (
-                  <span className="text-[12px] text-[#3f3f46]">—</span>
+                  <span className="text-[12px] text-collab-500/50">—</span>
                 )}
               </div>
             )}

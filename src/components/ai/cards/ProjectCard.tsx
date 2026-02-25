@@ -24,8 +24,8 @@ export default function ProjectCard({
     <button
       onClick={onClick}
       className={cn(
-        "w-full text-left p-3 rounded-lg bg-[#1f1f1f]/60 border border-[#27272a]",
-        "hover:border-[#3f3f46] transition-colors",
+        "w-full text-left p-3 rounded-lg bg-collab-700/60 border border-collab-600",
+        "hover:border-collab-600 transition-colors",
         onClick && "cursor-pointer"
       )}
     >
@@ -34,16 +34,16 @@ export default function ProjectCard({
           className="w-3 h-3 rounded-sm"
           style={{ backgroundColor: color }}
         />
-        <span className="text-sm font-medium text-[#e4e4e7]">{name}</span>
+        <span className="text-sm font-medium text-collab-50">{name}</span>
       </div>
 
       <div className="flex items-center gap-3">
-        <span className="text-[10px] text-[#71717a]">
+        <span className="text-[10px] text-collab-500">
           {issueCount} issues
         </span>
         {issueCount > 0 && (
           <>
-            <div className="flex-1 h-1 bg-[#27272a] rounded-full overflow-hidden">
+            <div className="flex-1 h-1 bg-collab-600 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all"
                 style={{
@@ -52,7 +52,7 @@ export default function ProjectCard({
                 }}
               />
             </div>
-            <span className="text-[10px] text-[#52525b]">
+            <span className="text-[10px] text-collab-500/60">
               {Math.round(progress)}%
             </span>
           </>

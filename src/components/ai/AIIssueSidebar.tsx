@@ -217,15 +217,15 @@ export default function AIIssueSidebar({
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0a] border-l border-[#27272a]">
+    <div className="h-full flex flex-col bg-collab-950 border-l border-collab-600">
       {/* Header */}
-      <div className="p-4 border-b border-[#27272a]">
+      <div className="p-4 border-b border-collab-600">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-[#8b5cf6]/20">
-              <Sparkles className="h-4 w-4 text-[#8b5cf6]" />
+            <div className="p-1.5 rounded-lg bg-violet-500/20">
+              <Sparkles className="h-4 w-4 text-violet-500" />
             </div>
-            <h3 className="text-sm font-medium text-[#fafafa]">AI Insights</h3>
+            <h3 className="text-sm font-medium text-collab-50">AI Insights</h3>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -233,7 +233,7 @@ export default function AIIssueSidebar({
               size="icon-sm"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="text-[#71717a] hover:text-white"
+              className="text-collab-500 hover:text-white"
             >
               <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
             </Button>
@@ -242,7 +242,7 @@ export default function AIIssueSidebar({
                 variant="ghost"
                 size="icon-sm"
                 onClick={onClose}
-                className="text-[#71717a] hover:text-white"
+                className="text-collab-500 hover:text-white"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -251,7 +251,7 @@ export default function AIIssueSidebar({
         </div>
 
         {/* Issue Context */}
-        <div className="text-xs text-[#52525b]">
+        <div className="text-xs text-collab-500/60">
           <span className="font-mono">{issue.issueKey}</span>
           <span className="mx-1.5">•</span>
           <span className="truncate">{issue.title}</span>
@@ -259,14 +259,14 @@ export default function AIIssueSidebar({
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-[#27272a]">
+      <div className="flex border-b border-collab-600">
         <button
           onClick={() => setActiveTab('related')}
           className={cn(
             "flex-1 py-2 text-xs font-medium transition-colors",
             activeTab === 'related'
-              ? "text-[#8b5cf6] border-b-2 border-[#8b5cf6]"
-              : "text-[#71717a] hover:text-white"
+              ? "text-violet-500 border-b-2 border-violet-500"
+              : "text-collab-500 hover:text-white"
           )}
         >
           Related Issues
@@ -279,8 +279,8 @@ export default function AIIssueSidebar({
           className={cn(
             "flex-1 py-2 text-xs font-medium transition-colors",
             activeTab === 'suggestions'
-              ? "text-[#8b5cf6] border-b-2 border-[#8b5cf6]"
-              : "text-[#71717a] hover:text-white"
+              ? "text-violet-500 border-b-2 border-violet-500"
+              : "text-collab-500 hover:text-white"
           )}
         >
           Suggestions
@@ -294,8 +294,8 @@ export default function AIIssueSidebar({
       <ScrollArea className="flex-1">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 text-[#8b5cf6] animate-spin mb-3" />
-            <p className="text-xs text-[#71717a]">Analyzing issue...</p>
+            <Loader2 className="h-6 w-6 text-violet-500 animate-spin mb-3" />
+            <p className="text-xs text-collab-500">Analyzing issue...</p>
           </div>
         ) : (
           <div className="p-4">
@@ -310,9 +310,9 @@ export default function AIIssueSidebar({
                 >
                   {relatedIssues.length === 0 ? (
                     <div className="text-center py-8">
-                      <Link2 className="h-8 w-8 text-[#3f3f46] mx-auto mb-3" />
-                      <p className="text-sm text-[#71717a]">No related issues found</p>
-                      <p className="text-xs text-[#52525b] mt-1">
+                      <Link2 className="h-8 w-8 text-collab-500/50 mx-auto mb-3" />
+                      <p className="text-sm text-collab-500">No related issues found</p>
+                      <p className="text-xs text-collab-500/60 mt-1">
                         AI couldn't find similar issues in this workspace
                       </p>
                     </div>
@@ -321,10 +321,10 @@ export default function AIIssueSidebar({
                       <button
                         key={related.id}
                         onClick={() => onNavigateToIssue?.(related.issueKey)}
-                        className="w-full text-left p-3 rounded-lg bg-[#1f1f1f]/50 border border-[#27272a] hover:border-[#3f3f46] transition-colors group"
+                        className="w-full text-left p-3 rounded-lg bg-collab-700/50 border border-collab-600 hover:border-collab-600 transition-colors group"
                       >
                         <div className="flex items-start justify-between mb-1.5">
-                          <span className="text-[10px] font-mono text-[#52525b]">
+                          <span className="text-[10px] font-mono text-collab-500/60">
                             {related.issueKey}
                           </span>
                           <Badge
@@ -334,7 +334,7 @@ export default function AIIssueSidebar({
                             {getRelationLabel(related.relation)}
                           </Badge>
                         </div>
-                        <p className="text-sm text-[#fafafa] group-hover:text-white truncate">
+                        <p className="text-sm text-collab-50 group-hover:text-white truncate">
                           {related.title}
                         </p>
                         <div className="flex items-center gap-2 mt-2">
@@ -349,10 +349,10 @@ export default function AIIssueSidebar({
                               {related.status}
                             </span>
                           )}
-                          <span className="text-[10px] text-[#52525b]">
+                          <span className="text-[10px] text-collab-500/60">
                             {Math.round(related.similarity * 100)}% match
                           </span>
-                          <ArrowRight className="h-3 w-3 text-[#3f3f46] opacity-0 group-hover:opacity-100 ml-auto transition-opacity" />
+                          <ArrowRight className="h-3 w-3 text-collab-500/50 opacity-0 group-hover:opacity-100 ml-auto transition-opacity" />
                         </div>
                       </button>
                     ))
@@ -371,8 +371,8 @@ export default function AIIssueSidebar({
                   {suggestions.length === 0 ? (
                     <div className="text-center py-8">
                       <CheckCircle2 className="h-8 w-8 text-emerald-500/50 mx-auto mb-3" />
-                      <p className="text-sm text-[#71717a]">Looking good!</p>
-                      <p className="text-xs text-[#52525b] mt-1">
+                      <p className="text-sm text-collab-500">Looking good!</p>
+                      <p className="text-xs text-collab-500/60 mt-1">
                         AI has no suggestions for this issue
                       </p>
                     </div>
@@ -382,21 +382,21 @@ export default function AIIssueSidebar({
                       return (
                         <div
                           key={suggestion.id}
-                          className="p-3 rounded-lg bg-[#1f1f1f]/50 border border-[#27272a]"
+                          className="p-3 rounded-lg bg-collab-700/50 border border-collab-600"
                         >
                           <div className="flex items-start gap-3">
-                            <div className="p-2 rounded-lg bg-[#8b5cf6]/10 flex-shrink-0">
-                              <Icon className="h-4 w-4 text-[#8b5cf6]" />
+                            <div className="p-2 rounded-lg bg-violet-500/10 flex-shrink-0">
+                              <Icon className="h-4 w-4 text-violet-500" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-[#fafafa]">
+                              <p className="text-sm font-medium text-collab-50">
                                 {suggestion.title}
                               </p>
-                              <p className="text-xs text-[#71717a] mt-1">
+                              <p className="text-xs text-collab-500 mt-1">
                                 {suggestion.description}
                               </p>
                               <div className="flex items-center justify-between mt-2">
-                                <span className="text-[10px] text-[#52525b]">
+                                <span className="text-[10px] text-collab-500/60">
                                   {Math.round(suggestion.confidence * 100)}% confidence
                                 </span>
                                 {suggestion.action && (
@@ -404,7 +404,7 @@ export default function AIIssueSidebar({
                                     variant="ghost"
                                     size="sm"
                                     onClick={suggestion.action}
-                                    className="h-6 px-2 text-[10px] text-[#8b5cf6] hover:bg-[#8b5cf6]/10"
+                                    className="h-6 px-2 text-[10px] text-violet-500 hover:bg-violet-500/10"
                                   >
                                     Apply
                                   </Button>
@@ -424,8 +424,8 @@ export default function AIIssueSidebar({
       </ScrollArea>
 
       {/* Footer */}
-      <div className="p-3 border-t border-[#27272a]">
-        <p className="text-[10px] text-[#52525b] text-center">
+      <div className="p-3 border-t border-collab-600">
+        <p className="text-[10px] text-collab-500/60 text-center">
           AI insights are generated automatically based on your workspace data
         </p>
       </div>

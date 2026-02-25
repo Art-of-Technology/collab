@@ -207,8 +207,8 @@ export function AIReviewsPanel({
       {/* Header with Request Button */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Bot className="h-4 w-4 text-[#a371f7]" />
-          <h4 className="font-medium text-[#e6edf3]">AI Reviews ({reviews.length})</h4>
+          <Bot className="h-4 w-4 text-violet-400" />
+          <h4 className="font-medium text-collab-50">AI Reviews ({reviews.length})</h4>
         </div>
         {showRequestButton && isAIReviewEnabled && !hasInProgressReview && (
           <Button
@@ -216,7 +216,7 @@ export function AIReviewsPanel({
             disabled={requestingReview}
             size="sm"
             variant="outline"
-            className="h-7 px-2 text-xs border-[#a371f7] text-[#a371f7] hover:bg-[#a371f7]/10"
+            className="h-7 px-2 text-xs border-[#a371f7] text-violet-400 hover:bg-violet-400/10"
           >
             {requestingReview ? (
               <>
@@ -235,7 +235,7 @@ export function AIReviewsPanel({
 
       {/* Empty State */}
       {reviews.length === 0 && (
-        <div className="text-center py-8 text-[#8b949e]">
+        <div className="text-center py-8 text-collab-400">
           <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p className="text-sm">No AI reviews yet</p>
           {showRequestButton && isAIReviewEnabled && (
@@ -244,7 +244,7 @@ export function AIReviewsPanel({
             </p>
           )}
           {!isAIReviewEnabled && (
-            <p className="text-xs mt-1 text-[#6e7681]">
+            <p className="text-xs mt-1 text-collab-500">
               Enable AI Reviews in GitHub settings to use this feature
             </p>
           )}
@@ -256,13 +256,13 @@ export function AIReviewsPanel({
         {reviews.map((review) => (
           <div
             key={review.id}
-            className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden"
+            className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden"
           >
             {/* Review Header */}
             <Button
               variant="ghost"
               onClick={() => toggleExpanded(review.id)}
-              className="w-full px-4 py-3 flex items-start justify-between hover:bg-[#161617] transition-colors h-auto"
+              className="w-full px-4 py-3 flex items-start justify-between hover:bg-collab-900 transition-colors h-auto"
             >
               <div className="flex items-start gap-3">
                 {getSeverityIcon(review.severity)}
@@ -278,15 +278,15 @@ export function AIReviewsPanel({
                     )}
                     <Badge
                       variant="outline"
-                      className="text-xs text-[#8b949e] border-[#30363d]"
+                      className="text-xs text-collab-400 border-collab-600"
                     >
                       {review.triggerType === 'AUTOMATIC' ? 'Auto' : 'Manual'}
                     </Badge>
                   </div>
-                  <p className="text-sm text-[#e6edf3] mt-1 line-clamp-2">
+                  <p className="text-sm text-collab-50 mt-1 line-clamp-2">
                     {review.status === 'COMPLETED' ? review.summary : review.errorMessage || 'Processing...'}
                   </p>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-[#6e7681]">
+                  <div className="flex items-center gap-3 mt-2 text-xs text-collab-500">
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
                       {formatDistanceToNow(new Date(review.createdAt), { addSuffix: true })}
@@ -313,23 +313,23 @@ export function AIReviewsPanel({
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="text-[#58a6ff] hover:underline text-xs flex items-center gap-1"
+                    className="text-blue-400 hover:underline text-xs flex items-center gap-1"
                   >
                     <ExternalLink className="h-3 w-3" />
                     GitHub
                   </a>
                 )}
                 {expandedReviews.has(review.id) ? (
-                  <ChevronDown className="h-4 w-4 text-[#8b949e]" />
+                  <ChevronDown className="h-4 w-4 text-collab-400" />
                 ) : (
-                  <ChevronRight className="h-4 w-4 text-[#8b949e]" />
+                  <ChevronRight className="h-4 w-4 text-collab-400" />
                 )}
               </div>
             </Button>
 
             {/* Expanded Content */}
             {expandedReviews.has(review.id) && review.status === 'COMPLETED' && (
-              <div className="px-4 pb-4 pt-2 border-t border-[#1f1f1f]">
+              <div className="px-4 pb-4 pt-2 border-t border-collab-700">
                 {/* Findings by Category */}
                 {Object.entries(review.findings as AIReviewFindings).map(([category, items]) => {
                   if (!items || items.length === 0) return null;
@@ -346,7 +346,7 @@ export function AIReviewsPanel({
                     <div key={category} className="mt-3">
                       <div className="flex items-center gap-2 mb-2">
                         {getCategoryIcon(category)}
-                        <span className="text-sm font-medium text-[#e6edf3]">
+                        <span className="text-sm font-medium text-collab-50">
                           {categoryLabels[category]} ({items.length})
                         </span>
                       </div>
@@ -354,7 +354,7 @@ export function AIReviewsPanel({
                         {items.map((item: { message: string; file?: string; line?: number; severity?: string }, index: number) => (
                           <div
                             key={index}
-                            className="text-sm text-[#8b949e] p-2 rounded bg-[#161617]"
+                            className="text-sm text-collab-400 p-2 rounded bg-collab-900"
                           >
                             {'severity' in item && (
                               <Badge
@@ -371,7 +371,7 @@ export function AIReviewsPanel({
                               </Badge>
                             )}
                             {item.file && (
-                              <code className="text-xs text-[#58a6ff] mr-2">
+                              <code className="text-xs text-blue-400 mr-2">
                                 {item.file}
                                 {item.line && `:${item.line}`}
                               </code>

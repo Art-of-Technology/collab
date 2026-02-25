@@ -21,7 +21,7 @@ export default function AppSwitcher() {
         <Button
           variant="ghost"
           className={cn(
-            "w-full justify-between h-7 px-2 text-sm text-gray-400 hover:text-white hover:bg-[#1f1f1f]"
+            "w-full justify-between h-7 px-2 text-sm text-gray-400 hover:text-white hover:bg-collab-700"
           )}
         >
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -35,7 +35,7 @@ export default function AppSwitcher() {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        className="w-64 bg-[#090909] border-[#1f1f1f] p-0"
+        className="w-64 bg-collab-950 border-collab-700 p-0"
       >
         <div className="p-4 text-center text-xs text-gray-400">
           No apps available

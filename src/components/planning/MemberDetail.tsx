@@ -36,7 +36,7 @@ function SectionHeader({ icon: Icon, title, count, color }: SectionHeaderProps) 
       <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color }}>
         {title}
       </span>
-      <span className="text-[11px] text-[#3f3f46]">{count}</span>
+      <span className="text-[11px] text-collab-500/50">{count}</span>
     </div>
   );
 }
@@ -61,18 +61,18 @@ function DaySection({ dateKey, activity, onIssueClick }: DaySectionProps) {
   if (!hasContent) return null;
 
   return (
-    <div className="border-b border-[#1f1f23] pb-3">
+    <div className="border-b border-collab-700 pb-3">
       {/* Day Header */}
       <div className="flex items-center gap-2 px-1 py-3">
         <span
           className={cn(
             'text-xs font-semibold',
-            isToday(date) ? 'text-blue-400' : 'text-[#a1a1aa]'
+            isToday(date) ? 'text-blue-400' : 'text-collab-400'
           )}
         >
           {label}
         </span>
-        <span className="text-xs text-[#52525b]">{dateStr}</span>
+        <span className="text-xs text-collab-500/60">{dateStr}</span>
         {isToday(date) && (
           <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-medium">
             LIVE
@@ -146,7 +146,7 @@ function CurrentStateSection({ member, onIssueClick }: CurrentStateSectionProps)
   return (
     <div className="pt-2">
       <div className="px-1 pb-2">
-        <span className="text-[11px] font-medium text-[#52525b] uppercase tracking-wider">
+        <span className="text-[11px] font-medium text-collab-500/60 uppercase tracking-wider">
           Current State
         </span>
       </div>
@@ -224,9 +224,9 @@ export function MemberDetail({ member, onClose, onIssueClick }: MemberDetailProp
   }, [days]);
 
   return (
-    <div className="flex flex-col h-full bg-[#09090b]">
+    <div className="flex flex-col h-full bg-collab-950">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#1f1f23]">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-collab-700">
         <Button
           variant="ghost"
           size="icon"
@@ -238,14 +238,14 @@ export function MemberDetail({ member, onClose, onIssueClick }: MemberDetailProp
 
         <Avatar className="h-10 w-10">
           <AvatarImage src={user.image || undefined} />
-          <AvatarFallback className="bg-[#27272a] text-[#fafafa] text-sm font-medium">
+          <AvatarFallback className="bg-collab-600 text-collab-50 text-sm font-medium">
             {user.name.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
 
         <div className="flex-1 min-w-0">
-          <h2 className="text-[15px] font-semibold text-[#fafafa] truncate">{user.name}</h2>
-          <div className="flex items-center gap-3 text-[11px] text-[#71717a]">
+          <h2 className="text-[15px] font-semibold text-collab-50 truncate">{user.name}</h2>
+          <div className="flex items-center gap-3 text-[11px] text-collab-500">
             <span className="text-emerald-400">{summary.completed} completed</span>
             <span>{summary.inProgress + summary.inReview} active</span>
             {summary.blocked > 0 && (

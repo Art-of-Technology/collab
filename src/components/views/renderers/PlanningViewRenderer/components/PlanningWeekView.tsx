@@ -71,8 +71,8 @@ export function PlanningWeekView({
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-[#3f3f46] text-[13px]">No team activity found</div>
-          <div className="text-[#52525b] text-[12px] mt-1">
+          <div className="text-collab-500/50 text-[13px]">No team activity found</div>
+          <div className="text-collab-500/60 text-[12px] mt-1">
             There are no team members with activity in this period
           </div>
         </div>

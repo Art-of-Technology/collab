@@ -81,7 +81,7 @@ export default function AIQuickActions({ suggestions, onSelect }: AIQuickActions
 
   return (
     <div className="space-y-2">
-      <p className="text-[10px] text-[#52525b] uppercase tracking-wider font-medium px-1">
+      <p className="text-[10px] text-collab-500/60 uppercase tracking-wider font-medium px-1">
         Quick Actions
       </p>
       <div className="grid grid-cols-2 gap-2">
@@ -97,26 +97,26 @@ export default function AIQuickActions({ suggestions, onSelect }: AIQuickActions
               })}
               className={cn(
                 "flex items-start gap-2 p-3",
-                "bg-[#1f1f1f] border border-[#27272a] rounded-xl",
-                "hover:bg-[#27272a] hover:border-[#3f3f46]",
+                "bg-collab-700 border border-collab-600 rounded-xl",
+                "hover:bg-collab-600 hover:border-collab-600",
                 "text-left transition-all duration-200",
                 "group"
               )}
             >
               <div className={cn(
                 "p-1.5 rounded-lg",
-                "bg-[#8b5cf6]/10 text-[#8b5cf6]",
-                "group-hover:bg-[#8b5cf6]/20",
+                "bg-violet-500/10 text-violet-500",
+                "group-hover:bg-violet-500/20",
                 "transition-colors"
               )}>
                 <Icon className="h-3.5 w-3.5" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-[#fafafa] truncate">
+                <p className="text-xs font-medium text-collab-50 truncate">
                   {suggestion.title}
                 </p>
                 {suggestion.description && suggestion.description !== suggestion.title && (
-                  <p className="text-[10px] text-[#52525b] truncate mt-0.5">
+                  <p className="text-[10px] text-collab-500/60 truncate mt-0.5">
                     {suggestion.description}
                   </p>
                 )}
@@ -149,9 +149,9 @@ export function AIQuickActionsCompact({
           })}
           className={cn(
             "px-2.5 py-1.5 text-xs",
-            "bg-[#8b5cf6]/10 text-[#c4b5fd]",
-            "border border-[#8b5cf6]/20 rounded-lg",
-            "hover:bg-[#8b5cf6]/20 hover:border-[#8b5cf6]/30",
+            "bg-violet-500/10 text-violet-300",
+            "border border-violet-500/20 rounded-lg",
+            "hover:bg-violet-500/20 hover:border-violet-500/30",
             "transition-colors"
           )}
         >

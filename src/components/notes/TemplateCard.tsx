@@ -50,21 +50,21 @@ export function TemplateCard({
       className={cn(
         "group w-full flex items-start gap-3 p-3 rounded-lg border transition-all duration-200 text-left",
         isSelected
-          ? "bg-[#1a1a1b] border-[#3b82f6]/50 ring-1 ring-[#3b82f6]/20"
-          : "bg-[#0d0d0e] border-[#1f1f1f] hover:bg-[#151518] hover:border-[#2a2a2d]"
+          ? "bg-collab-800 border-blue-500/50 ring-1 ring-blue-500/20"
+          : "bg-collab-900 border-collab-700 hover:bg-collab-800 hover:border-collab-600"
       )}
     >
       {/* Icon */}
       <div
         className={cn(
           "w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors",
-          isSelected ? "bg-[#3b82f6]/10" : "bg-[#1a1a1b] group-hover:bg-[#1f1f1f]"
+          isSelected ? "bg-blue-500/10" : "bg-collab-800 group-hover:bg-collab-700"
         )}
       >
         <Icon
           className={cn(
             "h-4.5 w-4.5 transition-colors",
-            isSelected ? "text-[#3b82f6]" : typeConfig.color
+            isSelected ? "text-blue-500" : typeConfig.color
           )}
         />
       </div>
@@ -75,13 +75,13 @@ export function TemplateCard({
           <h3
             className={cn(
               "text-[13px] font-medium truncate transition-colors",
-              isSelected ? "text-[#3b82f6]" : "text-[#fafafa] group-hover:text-white"
+              isSelected ? "text-blue-500" : "text-collab-50 group-hover:text-white"
             )}
           >
             {template.name}
           </h3>
           {template.isBuiltIn && (
-            <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#3b82f6]/10 text-[#3b82f6] text-[9px] font-medium">
+            <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 text-[9px] font-medium">
               <Sparkles className="h-2 w-2" />
               Built-in
             </span>
@@ -89,7 +89,7 @@ export function TemplateCard({
         </div>
 
         {template.description && (
-          <p className="text-[11px] text-[#6e7681] line-clamp-2 mb-1.5">
+          <p className="text-[11px] text-collab-500 line-clamp-2 mb-1.5">
             {template.description}
           </p>
         )}
@@ -108,13 +108,13 @@ export function TemplateCard({
           {template.defaultTags.slice(0, 2).map((tag) => (
             <span
               key={tag}
-              className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f1f1f] text-[#8b949e]"
+              className="text-[10px] px-1.5 py-0.5 rounded bg-collab-700 text-collab-400"
             >
               {tag}
             </span>
           ))}
           {template.defaultTags.length > 2 && (
-            <span className="text-[10px] text-[#6e7681]">
+            <span className="text-[10px] text-collab-500">
               +{template.defaultTags.length - 2}
             </span>
           )}

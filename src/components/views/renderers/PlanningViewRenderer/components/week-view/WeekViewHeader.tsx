@@ -12,9 +12,9 @@ export function WeekViewHeader({ days }: WeekViewHeaderProps) {
     <thead className="sticky top-0 z-20">
       <tr>
         <th 
-          className="min-w-[224px] w-[224px] sticky left-0 z-30 bg-[#09090b] border-b border-r border-[#27272a] px-3 py-3 text-left"
+          className="min-w-[224px] w-[224px] sticky left-0 z-30 bg-collab-950 border-b border-r border-collab-600 px-3 py-3 text-left"
         >
-          <span className="text-[11px] font-medium text-[#52525b] uppercase tracking-wider">
+          <span className="text-[11px] font-medium text-collab-500/60 uppercase tracking-wider">
             Team Member
           </span>
         </th>
@@ -25,27 +25,27 @@ export function WeekViewHeader({ days }: WeekViewHeaderProps) {
             <th 
               key={format(day, 'yyyy-MM-dd')} 
               className={cn(
-                "min-w-[280px] w-[280px] border-b border-r border-[#27272a] px-3 py-2 text-center font-normal",
-                isTodayDay ? "bg-[#1a1a1a]" : "bg-[#09090b]",
+                "min-w-[280px] w-[280px] border-b border-r border-collab-600 px-3 py-2 text-center font-normal",
+                isTodayDay ? "bg-collab-800" : "bg-collab-950",
                 isFutureDay && "opacity-50"
               )}
             >
               <div className="flex items-center justify-center gap-2">
                 <span className={cn(
                   "text-[11px] font-medium uppercase",
-                  isTodayDay ? "text-blue-400" : "text-[#52525b]"
+                  isTodayDay ? "text-blue-400" : "text-collab-500/60"
                 )}>
                   {format(day, 'EEE')}
                 </span>
                 <span className={cn(
                   "text-[15px] font-semibold",
-                  isTodayDay ? "text-[#fafafa]" : "text-[#a1a1aa]"
+                  isTodayDay ? "text-collab-50" : "text-collab-400"
                 )}>
                   {format(day, 'd')}
                 </span>
                 <span className={cn(
                   "text-[11px]",
-                  isTodayDay ? "text-blue-400" : "text-[#52525b]"
+                  isTodayDay ? "text-blue-400" : "text-collab-500/60"
                 )}>
                   {format(day, 'MMM')}
                 </span>

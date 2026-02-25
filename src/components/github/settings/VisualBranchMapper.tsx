@@ -159,8 +159,8 @@ export function VisualBranchMapper({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-medium text-[#e6edf3]">Branch to Environment Mapping</h3>
-          <p className="text-xs text-[#6e7681] mt-0.5">
+          <h3 className="text-sm font-medium text-collab-50">Branch to Environment Mapping</h3>
+          <p className="text-xs text-collab-500 mt-0.5">
             Drag and drop branches to assign them to deployment environments
           </p>
         </div>
@@ -170,7 +170,7 @@ export function VisualBranchMapper({
             size="sm"
             onClick={onRefreshBranches}
             disabled={loadingBranches}
-            className="h-8 px-3 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#161617]"
+            className="h-8 px-3 text-collab-400 hover:text-collab-50 hover:bg-collab-900"
           >
             {loadingBranches ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
@@ -186,8 +186,8 @@ export function VisualBranchMapper({
             className={cn(
               "h-8",
               hasChanges
-                ? "bg-[#238636] hover:bg-[#2ea043] text-white"
-                : "bg-[#161617] text-[#8b949e]"
+                ? "bg-green-700 hover:bg-green-600 text-white"
+                : "bg-collab-900 text-collab-400"
             )}
           >
             {isSaving ? (
@@ -203,20 +203,20 @@ export function VisualBranchMapper({
       {/* Visual Mapper */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Unmapped Branches Pool */}
-        <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-          <div className="px-3 py-2.5 border-b border-[#1f1f1f]">
-            <h4 className="text-xs font-medium text-[#e6edf3] flex items-center gap-2">
-              <GitBranch className="h-3.5 w-3.5 text-[#6e7681]" />
+        <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
+          <div className="px-3 py-2.5 border-b border-collab-700">
+            <h4 className="text-xs font-medium text-collab-50 flex items-center gap-2">
+              <GitBranch className="h-3.5 w-3.5 text-collab-500" />
               Available Branches
             </h4>
-            <p className="text-[10px] text-[#6e7681] mt-0.5">Drag to an environment</p>
+            <p className="text-[10px] text-collab-500 mt-0.5">Drag to an environment</p>
           </div>
           <ScrollArea className="h-[360px]">
             <div className="p-2">
               {unmappedBranches.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8">
                   <Check className="h-6 w-6 text-green-500 mb-2" />
-                  <p className="text-xs text-[#6e7681]">All branches mapped</p>
+                  <p className="text-xs text-collab-500">All branches mapped</p>
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -228,13 +228,13 @@ export function VisualBranchMapper({
                       onDragEnd={handleDragEnd}
                       className={cn(
                         "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-grab active:cursor-grabbing transition-all group",
-                        "bg-[#161617] hover:bg-[#1a1a1b] border border-transparent hover:border-[#30363d]",
-                        draggedBranch === branch && "opacity-50 border-[#58a6ff]"
+                        "bg-collab-900 hover:bg-collab-800 border border-transparent hover:border-collab-600",
+                        draggedBranch === branch && "opacity-50 border-blue-400"
                       )}
                     >
-                      <GripVertical className="h-3 w-3 text-[#6e7681]" />
-                      <GitBranch className="h-3 w-3 text-[#6e7681]" />
-                      <span className="text-xs text-[#e6edf3] flex-1 truncate font-mono">
+                      <GripVertical className="h-3 w-3 text-collab-500" />
+                      <GitBranch className="h-3 w-3 text-collab-500" />
+                      <span className="text-xs text-collab-50 flex-1 truncate font-mono">
                         {branch}
                       </span>
                       <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -265,10 +265,10 @@ export function VisualBranchMapper({
           <div
             key={env.id}
             className={cn(
-              "rounded-lg border bg-[#0d0d0e] overflow-hidden transition-all",
+              "rounded-lg border bg-collab-900 overflow-hidden transition-all",
               dragOverEnv === env.id
                 ? "border-2 border-dashed"
-                : "border-[#1f1f1f]"
+                : "border-collab-700"
             )}
             style={{
               borderColor: dragOverEnv === env.id ? env.color : undefined,
@@ -277,15 +277,15 @@ export function VisualBranchMapper({
             onDragLeave={handleDragLeave}
             onDrop={e => handleDrop(e, env.id)}
           >
-            <div className="px-3 py-2.5 border-b border-[#1f1f1f] flex items-center justify-between">
+            <div className="px-3 py-2.5 border-b border-collab-700 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div
                   className="w-2.5 h-2.5 rounded-full"
                   style={{ backgroundColor: env.color }}
                 />
-                <h4 className="text-xs font-medium text-[#e6edf3]">{env.name}</h4>
+                <h4 className="text-xs font-medium text-collab-50">{env.name}</h4>
               </div>
-              <Badge variant="secondary" className="h-4 px-1 text-[10px] bg-[#161617] text-[#8b949e]">
+              <Badge variant="secondary" className="h-4 px-1 text-[10px] bg-collab-900 text-collab-400">
                 {branchesByEnvironment[env.id]?.length || 0}
               </Badge>
             </div>
@@ -300,7 +300,7 @@ export function VisualBranchMapper({
             >
               {branchesByEnvironment[env.id]?.length === 0 ? (
                 <div className="h-full flex items-center justify-center">
-                  <p className="text-[10px] text-[#6e7681]">Drop branches here</p>
+                  <p className="text-[10px] text-collab-500">Drop branches here</p>
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -312,13 +312,13 @@ export function VisualBranchMapper({
                       onDragEnd={handleDragEnd}
                       className={cn(
                         "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-grab active:cursor-grabbing group",
-                        "bg-[#161617] hover:bg-[#1a1a1b] border border-transparent hover:border-[#30363d]",
+                        "bg-collab-900 hover:bg-collab-800 border border-transparent hover:border-collab-600",
                         draggedBranch === branch && "opacity-50"
                       )}
                     >
-                      <GripVertical className="h-3 w-3 text-[#6e7681]" />
+                      <GripVertical className="h-3 w-3 text-collab-500" />
                       <GitBranch className="h-3 w-3" style={{ color: env.color }} />
-                      <span className="text-xs text-[#e6edf3] flex-1 truncate font-mono">
+                      <span className="text-xs text-collab-50 flex-1 truncate font-mono">
                         {branch}
                       </span>
                       <Button
@@ -338,16 +338,16 @@ export function VisualBranchMapper({
       </div>
 
       {/* Quick Actions */}
-      <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-        <div className="px-4 py-3 border-b border-[#1f1f1f]">
-          <h4 className="text-xs font-medium text-[#e6edf3]">Quick Setup</h4>
-          <p className="text-[10px] text-[#6e7681] mt-0.5">Apply common branch mapping patterns</p>
+      <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
+        <div className="px-4 py-3 border-b border-collab-700">
+          <h4 className="text-xs font-medium text-collab-50">Quick Setup</h4>
+          <p className="text-[10px] text-collab-500 mt-0.5">Apply common branch mapping patterns</p>
         </div>
         <div className="px-4 py-3 flex flex-wrap gap-2">
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2.5 text-xs text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#161617] border border-[#1f1f1f]"
+            className="h-7 px-2.5 text-xs text-collab-400 hover:text-collab-50 hover:bg-collab-900 border border-collab-700"
             onClick={() => {
               setMappings({
                 main: 'production',
@@ -363,7 +363,7 @@ export function VisualBranchMapper({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2.5 text-xs text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#161617] border border-[#1f1f1f]"
+            className="h-7 px-2.5 text-xs text-collab-400 hover:text-collab-50 hover:bg-collab-900 border border-collab-700"
             onClick={() => {
               setMappings({
                 main: 'production',
@@ -376,7 +376,7 @@ export function VisualBranchMapper({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2.5 text-xs text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#161617] border border-[#1f1f1f]"
+            className="h-7 px-2.5 text-xs text-collab-400 hover:text-collab-50 hover:bg-collab-900 border border-collab-700"
             onClick={() => setMappings({})}
           >
             <Trash2 className="h-3 w-3 mr-1" />

@@ -158,22 +158,22 @@ export function VersionHistoryPanel({
             <History className="h-3 w-3" />
             <span>History</span>
             {currentVersion && currentVersion > 1 && (
-              <span className="text-[10px] text-[#6e7681]">
+              <span className="text-[10px] text-collab-500">
                 v{currentVersion}
               </span>
             )}
           </Button>
         </SheetTrigger>
-        <SheetContent className="w-full sm:max-w-2xl bg-[#0a0a0b] border-[#1f1f1f]">
-          <SheetHeader className="border-b border-[#1f1f1f] pb-4">
-            <SheetTitle className="flex items-center gap-2 text-[#e6edf3]">
-              <div className="w-8 h-8 rounded-lg bg-[#1a1a1b] flex items-center justify-center">
-                <History className="h-4 w-4 text-[#3b82f6]" />
+        <SheetContent className="w-full sm:max-w-2xl bg-collab-950 border-collab-700">
+          <SheetHeader className="border-b border-collab-700 pb-4">
+            <SheetTitle className="flex items-center gap-2 text-collab-50">
+              <div className="w-8 h-8 rounded-lg bg-collab-800 flex items-center justify-center">
+                <History className="h-4 w-4 text-blue-500" />
               </div>
               <div>
                 <span className="text-sm font-medium">Version History</span>
                 {data && (
-                  <p className="text-xs text-[#6e7681] font-normal">
+                  <p className="text-xs text-collab-500 font-normal">
                     {data.versions.length} version{data.versions.length !== 1 ? "s" : ""}
                   </p>
                 )}
@@ -184,8 +184,8 @@ export function VersionHistoryPanel({
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
               <div className="flex flex-col items-center gap-3">
-                <Loader2 className="h-6 w-6 animate-spin text-[#6e7681]" />
-                <p className="text-xs text-[#52525b]">Loading versions...</p>
+                <Loader2 className="h-6 w-6 animate-spin text-collab-500" />
+                <p className="text-xs text-collab-500/60">Loading versions...</p>
               </div>
             </div>
           ) : error ? (
@@ -198,7 +198,7 @@ export function VersionHistoryPanel({
                 variant="ghost"
                 size="sm"
                 onClick={() => setSelectedVersion(null)}
-                className="mb-4 text-[#6e7681] hover:text-[#e6edf3]"
+                className="mb-4 text-collab-500 hover:text-collab-50"
               >
                 <ChevronLeft className="h-3.5 w-3.5 mr-1" />
                 Back to list
@@ -221,7 +221,7 @@ export function VersionHistoryPanel({
                         version={selectedVersion.version}
                         changeType={selectedVersion.changeType}
                       />
-                      <span className="text-xs text-[#6e7681]">
+                      <span className="text-xs text-collab-500">
                         {formatDistanceToNow(new Date(selectedVersion.createdAt), {
                           addSuffix: true,
                         })}
@@ -237,35 +237,35 @@ export function VersionHistoryPanel({
                       Restore
                     </Button>
                   </div>
-                  <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-                    <div className="px-4 py-3 border-b border-[#1f1f1f]">
-                      <h4 className="text-sm font-semibold text-[#fafafa]">{selectedVersion.title}</h4>
+                  <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-collab-700">
+                      <h4 className="text-sm font-semibold text-collab-50">{selectedVersion.title}</h4>
                       <div className="flex items-center gap-2 mt-1">
                         <Avatar className="h-4 w-4">
                           <AvatarImage src={selectedVersion.author.image || undefined} />
-                          <AvatarFallback className="text-[8px] bg-[#27272a] text-[#71717a]">
+                          <AvatarFallback className="text-[8px] bg-collab-600 text-collab-500">
                             {selectedVersion.author.name?.[0] || "U"}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="text-[10px] text-[#52525b]">
+                        <span className="text-[10px] text-collab-500/60">
                           {selectedVersion.author.name || selectedVersion.author.email || "Unknown"}
                         </span>
-                        <span className="text-[10px] text-[#3f3f46]">
+                        <span className="text-[10px] text-collab-500/50">
                           {format(new Date(selectedVersion.createdAt), "MMM d, yyyy 'at' h:mm a")}
                         </span>
                       </div>
                     </div>
                     <div className="p-4">
                       <div
-                        className="prose prose-sm prose-invert max-w-none text-[#e4e4e7]
-                          [&_p]:my-2 [&_p]:text-[#e4e4e7]
-                          [&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-[#fafafa] [&_h1]:mt-4 [&_h1]:mb-2
-                          [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-[#fafafa] [&_h2]:mt-3 [&_h2]:mb-2
-                          [&_h3]:text-base [&_h3]:font-medium [&_h3]:text-[#e4e4e7] [&_h3]:mt-3 [&_h3]:mb-1
-                          [&_ul]:my-2 [&_ol]:my-2 [&_li]:text-[#d4d4d8]
-                          [&_code]:bg-[#27272a] [&_code]:text-[#f472b6] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs
-                          [&_pre]:bg-[#18181b] [&_pre]:border [&_pre]:border-[#27272a] [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:my-3
-                          [&_blockquote]:border-l-2 [&_blockquote]:border-[#3f3f46] [&_blockquote]:pl-3 [&_blockquote]:text-[#a1a1aa] [&_blockquote]:italic
+                        className="prose prose-sm prose-invert max-w-none text-collab-50
+                          [&_p]:my-2 [&_p]:text-collab-50
+                          [&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-collab-50 [&_h1]:mt-4 [&_h1]:mb-2
+                          [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-collab-50 [&_h2]:mt-3 [&_h2]:mb-2
+                          [&_h3]:text-base [&_h3]:font-medium [&_h3]:text-collab-50 [&_h3]:mt-3 [&_h3]:mb-1
+                          [&_ul]:my-2 [&_ol]:my-2 [&_li]:text-collab-400
+                          [&_code]:bg-collab-600 [&_code]:text-pink-400 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs
+                          [&_pre]:bg-collab-800 [&_pre]:border [&_pre]:border-collab-600 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:my-3
+                          [&_blockquote]:border-l-2 [&_blockquote]:border-collab-600 [&_blockquote]:pl-3 [&_blockquote]:text-collab-400 [&_blockquote]:italic
                           [&_a]:text-blue-400 [&_a]:underline"
                         dangerouslySetInnerHTML={{ __html: selectedVersion.content }}
                       />
@@ -277,21 +277,21 @@ export function VersionHistoryPanel({
           ) : (
             <ScrollArea className="h-[calc(100vh-140px)] mt-4">
               {compareFromVersion && (
-                <div className="mb-4 p-3 rounded-lg bg-[#3b82f6]/10 border border-[#3b82f6]/20 flex items-center justify-between">
-                  <span className="text-xs text-[#3b82f6]">
+                <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-between">
+                  <span className="text-xs text-blue-500">
                     Select another version to compare with v{compareFromVersion}
                   </span>
                   <Button
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => setCompareFromVersion(null)}
-                    className="h-6 w-6 text-[#3b82f6] hover:text-[#60a5fa]"
+                    className="h-6 w-6 text-blue-500 hover:text-blue-400"
                   >
                     <X className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               )}
-              <div className="rounded-lg border border-[#1f1f1f] overflow-hidden divide-y divide-[#1f1f1f]">
+              <div className="rounded-lg border border-collab-700 overflow-hidden divide-y divide-[#1f1f1f]">
                 {data?.versions.map((version, index) => (
                   <VersionListItem
                     key={version.id}
@@ -305,12 +305,12 @@ export function VersionHistoryPanel({
                 ))}
               </div>
               {data?.versions.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-16 rounded-lg border border-dashed border-[#27272a] bg-[#0d0d0e]/50">
-                  <History className="h-10 w-10 text-[#3f3f46] mb-4" />
-                  <h3 className="text-sm font-medium text-[#a1a1aa] mb-1">
+                <div className="flex flex-col items-center justify-center py-16 rounded-lg border border-dashed border-collab-600 bg-collab-900/50">
+                  <History className="h-10 w-10 text-collab-500/50 mb-4" />
+                  <h3 className="text-sm font-medium text-collab-400 mb-1">
                     No version history
                   </h3>
-                  <p className="text-xs text-[#52525b]">
+                  <p className="text-xs text-collab-500/60">
                     Changes will be tracked automatically
                   </p>
                 </div>
@@ -355,7 +355,7 @@ function VersionListItem({
     <div
       className={cn(
         "group relative flex items-center gap-4 px-5 py-3.5 hover:bg-gradient-to-r hover:from-[#151518] hover:to-transparent transition-all duration-200 cursor-pointer",
-        isCompareSource && "bg-[#3b82f6]/5 border-l-2 border-l-[#3b82f6]"
+        isCompareSource && "bg-blue-500/5 border-l-2 border-l-[#3b82f6]"
       )}
       onClick={onView}
     >
@@ -369,7 +369,7 @@ function VersionListItem({
       <div className="flex-1 min-w-0">
         {/* Title Row */}
         <div className="flex items-center gap-2.5">
-          <h3 className="text-[14px] font-semibold text-[#fafafa] group-hover:text-white truncate">
+          <h3 className="text-[14px] font-semibold text-collab-50 group-hover:text-white truncate">
             {version.title}
           </h3>
           <VersionBadge
@@ -381,7 +381,7 @@ function VersionListItem({
 
         {/* Content Preview */}
         {preview && (
-          <p className="text-[12px] text-[#52525b] truncate max-w-[400px] mt-0.5">
+          <p className="text-[12px] text-collab-500/60 truncate max-w-[400px] mt-0.5">
             {preview}
           </p>
         )}
@@ -392,16 +392,16 @@ function VersionListItem({
           <div className="flex items-center gap-1.5">
             <Avatar className="h-4 w-4">
               <AvatarImage src={version.author.image || undefined} />
-              <AvatarFallback className="text-[8px] bg-[#27272a] text-[#71717a]">
+              <AvatarFallback className="text-[8px] bg-collab-600 text-collab-500">
                 {version.author.name?.[0] || "U"}
               </AvatarFallback>
             </Avatar>
-            <span className="text-[10px] text-[#52525b]">
+            <span className="text-[10px] text-collab-500/60">
               {version.author.name || version.author.email || "Unknown"}
             </span>
           </div>
 
-          <span className="text-[10px] text-[#3f3f46]">
+          <span className="text-[10px] text-collab-500/50">
             {formatDistanceToNow(new Date(version.createdAt), { addSuffix: true })}
           </span>
         </div>
@@ -416,7 +416,7 @@ function VersionListItem({
             e.stopPropagation();
             onView();
           }}
-          className="h-8 w-8 text-[#52525b] hover:text-[#e6edf3]"
+          className="h-8 w-8 text-collab-500/60 hover:text-collab-50"
           title="View version"
         >
           <Eye className="h-3.5 w-3.5" />
@@ -431,8 +431,8 @@ function VersionListItem({
           className={cn(
             "h-8 w-8",
             isCompareSource
-              ? "text-[#3b82f6]"
-              : "text-[#52525b] hover:text-[#e6edf3]"
+              ? "text-blue-500"
+              : "text-collab-500/60 hover:text-collab-50"
           )}
           title="Compare versions"
         >
@@ -446,7 +446,7 @@ function VersionListItem({
               e.stopPropagation();
               onRestore();
             }}
-            className="h-8 w-8 text-[#52525b] hover:text-amber-400"
+            className="h-8 w-8 text-collab-500/60 hover:text-amber-400"
             title="Restore version"
           >
             <RotateCcw className="h-3.5 w-3.5" />

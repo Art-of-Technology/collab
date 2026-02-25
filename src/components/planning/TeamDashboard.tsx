@@ -137,7 +137,7 @@ function IssueCard({ issue, status, onClick, compact }: IssueCardProps) {
       variant="ghost"
       onClick={onClick}
       className={cn(
-        'w-full text-left rounded-lg border border-[#1f1f23] h-auto justify-start',
+        'w-full text-left rounded-lg border border-collab-700 h-auto justify-start',
         style.bg,
         compact ? 'p-2.5' : 'p-3'
       )}
@@ -148,7 +148,7 @@ function IssueCard({ issue, status, onClick, compact }: IssueCardProps) {
           {/* Top row: Key, Status, Time/Duration */}
           <div className="flex items-center gap-1.5 flex-wrap mb-1">
             {/* Issue Key Badge */}
-            <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-[#27272a] text-[#a1a1aa]">
+            <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-collab-600 text-collab-400">
               {issue.key}
             </span>
 
@@ -187,7 +187,7 @@ function IssueCard({ issue, status, onClick, compact }: IssueCardProps) {
 
           {/* Title */}
           <p className={cn(
-            'text-[#e4e4e7] leading-snug',
+            'text-collab-50 leading-snug',
             compact ? 'text-xs line-clamp-1' : 'text-[13px] line-clamp-2'
           )}>
             {issue.title}
@@ -238,19 +238,19 @@ function CollapsibleSection({
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
           'flex items-center gap-2.5 w-full px-3 py-2 rounded-lg h-auto justify-start',
-          'border border-transparent hover:border-[#27272a]',
+          'border border-transparent hover:border-collab-600',
           'group'
         )}
       >
         {/* Chevron indicator - more prominent */}
         <div className={cn(
           'flex items-center justify-center w-5 h-5 rounded transition-colors',
-          'bg-[#1f1f23] group-hover:bg-[#27272a]'
+          'bg-collab-700 group-hover:bg-collab-600'
         )}>
           {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-[#71717a] group-hover:text-[#a1a1aa]" />
+            <ChevronDown className="h-3.5 w-3.5 text-collab-500 group-hover:text-collab-400" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-[#71717a] group-hover:text-[#a1a1aa]" />
+            <ChevronRight className="h-3.5 w-3.5 text-collab-500 group-hover:text-collab-400" />
           )}
         </div>
 
@@ -263,7 +263,7 @@ function CollapsibleSection({
         </div>
 
         {/* Title */}
-        <span className="text-sm font-medium text-[#e4e4e7] group-hover:text-white transition-colors">
+        <span className="text-sm font-medium text-collab-50 group-hover:text-white transition-colors">
           {title}
         </span>
 
@@ -282,7 +282,7 @@ function CollapsibleSection({
         <div className="flex-1" />
 
         {/* Expand/collapse hint text */}
-        <span className="text-[10px] text-[#52525b] group-hover:text-[#71717a] transition-colors">
+        <span className="text-[10px] text-collab-500/60 group-hover:text-collab-500 transition-colors">
           {isExpanded ? 'Collapse' : 'Expand'}
         </span>
       </Button>
@@ -336,8 +336,8 @@ function ExpandableIssueList({
           onClick={() => setIsExpanded(!isExpanded)}
           className={cn(
             'w-full text-center py-2 rounded-lg border border-dashed h-auto',
-            'border-[#27272a] hover:border-[#3f3f46]',
-            'text-xs font-medium text-[#71717a] hover:text-[#a1a1aa]'
+            'border-collab-600 hover:border-collab-600',
+            'text-xs font-medium text-collab-500 hover:text-collab-400'
           )}
         >
           {isExpanded ? (
@@ -381,19 +381,19 @@ function MemberSelector({ members, selectedId, onSelect }: MemberSelectorProps) 
               'relative flex items-center gap-2 px-2 py-1.5 rounded-full h-auto flex-shrink-0',
               isSelected
                 ? 'bg-blue-600 text-white hover:bg-blue-600 hover:text-white'
-                : 'bg-[#18181b] text-[#a1a1aa] hover:bg-[#1f1f23] hover:text-white'
+                : 'bg-collab-800 text-collab-400 hover:bg-collab-700 hover:text-white'
             )}
           >
             <div className="relative">
               <Avatar className="h-5 w-5">
                 <AvatarImage src={member.user.image || undefined} />
-                <AvatarFallback className="text-[10px] bg-[#27272a]">
+                <AvatarFallback className="text-[10px] bg-collab-600">
                   {member.user.name.charAt(0)}
                 </AvatarFallback>
               </Avatar>
               {/* Red dot inside the container, positioned properly */}
               {member.hasBlockers && !isSelected && (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-[#18181b]" />
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-collab-700" />
               )}
             </div>
             <span className="text-xs font-medium">
@@ -421,12 +421,12 @@ function DateNavigator({ selectedDate, onDateChange }: DateNavigatorProps) {
   const viewingToday = isToday(selectedDate);
 
   return (
-    <div className="flex items-center gap-1 bg-[#18181b] rounded-lg p-0.5">
+    <div className="flex items-center gap-1 bg-collab-800 rounded-lg p-0.5">
       <Button
         variant="ghost"
         size="sm"
         onClick={() => onDateChange(subDays(selectedDate, 1))}
-        className="h-7 w-7 p-0 text-[#71717a] hover:text-white hover:bg-[#27272a] rounded-md"
+        className="h-7 w-7 p-0 text-collab-500 hover:text-white hover:bg-collab-600 rounded-md"
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
@@ -439,14 +439,14 @@ function DateNavigator({ selectedDate, onDateChange }: DateNavigatorProps) {
               'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium h-auto',
               viewingToday
                 ? 'bg-blue-600 text-white hover:bg-blue-600 hover:text-white'
-                : 'text-[#fafafa] hover:bg-[#27272a]'
+                : 'text-collab-50 hover:bg-collab-600'
             )}
           >
             <Calendar className="h-3.5 w-3.5" />
             {viewingToday ? 'Today' : format(selectedDate, 'MMM d, yyyy')}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0 bg-[#0f0f10] border-[#27272a]" align="center">
+        <PopoverContent className="w-auto p-0 bg-collab-900 border-collab-600" align="center">
           <CalendarPicker
             mode="single"
             selected={selectedDate}
@@ -461,7 +461,7 @@ function DateNavigator({ selectedDate, onDateChange }: DateNavigatorProps) {
         size="sm"
         onClick={() => !viewingToday && onDateChange(addDays(selectedDate, 1))}
         disabled={viewingToday}
-        className="h-7 w-7 p-0 text-[#71717a] hover:text-white hover:bg-[#27272a] rounded-md disabled:opacity-30"
+        className="h-7 w-7 p-0 text-collab-500 hover:text-white hover:bg-collab-600 rounded-md disabled:opacity-30"
       >
         <ChevronRight className="h-4 w-4" />
       </Button>
@@ -520,11 +520,11 @@ function DateReport({ member, selectedDate, onIssueClick }: DateReportProps) {
   return (
     <div className="h-full flex flex-col">
       {/* Date Header with Stats */}
-      <div className="px-5 py-3 border-b border-[#1f1f23] bg-[#0a0a0b]">
+      <div className="px-5 py-3 border-b border-collab-700 bg-collab-950">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-medium text-[#fafafa]">{dateLabel}</h2>
-            <p className="text-[11px] text-[#52525b] mt-0.5">
+            <h2 className="text-sm font-medium text-collab-50">{dateLabel}</h2>
+            <p className="text-[11px] text-collab-500/60 mt-0.5">
               {viewingToday ? 'Current work state' : 'Historical snapshot'}
             </p>
           </div>
@@ -564,11 +564,11 @@ function DateReport({ member, selectedDate, onIssueClick }: DateReportProps) {
         <div className="p-5">
           {!hasActivity && !hasState ? (
             <div className="text-center py-12">
-              <div className="w-12 h-12 rounded-full bg-[#18181b] flex items-center justify-center mx-auto mb-3">
-                <Calendar className="h-5 w-5 text-[#3f3f46]" />
+              <div className="w-12 h-12 rounded-full bg-collab-800 flex items-center justify-center mx-auto mb-3">
+                <Calendar className="h-5 w-5 text-collab-500/50" />
               </div>
-              <p className="text-sm text-[#52525b]">No data for this date</p>
-              <p className="text-xs text-[#3f3f46] mt-1">
+              <p className="text-sm text-collab-500/60">No data for this date</p>
+              <p className="text-xs text-collab-500/50 mt-1">
                 {viewingToday ? 'No active work assigned' : 'No recorded activity'}
               </p>
             </div>
@@ -576,9 +576,9 @@ function DateReport({ member, selectedDate, onIssueClick }: DateReportProps) {
             <div className="grid grid-cols-2 gap-6">
               {/* Left Column: Activity (What Happened) */}
               <div>
-                <div className="flex items-center gap-2 mb-4 pb-2 border-b border-[#1f1f23]">
+                <div className="flex items-center gap-2 mb-4 pb-2 border-b border-collab-700">
                   <Zap className="h-4 w-4 text-amber-500" />
-                  <h3 className="text-xs font-semibold text-[#fafafa] uppercase tracking-wider">
+                  <h3 className="text-xs font-semibold text-collab-50 uppercase tracking-wider">
                     Activity
                   </h3>
                 </div>
@@ -640,17 +640,17 @@ function DateReport({ member, selectedDate, onIssueClick }: DateReportProps) {
                     </CollapsibleSection>
                   </div>
                 ) : (
-                  <div className="text-center py-8 border border-dashed border-[#27272a] rounded-lg">
-                    <p className="text-xs text-[#3f3f46]">No activity recorded</p>
+                  <div className="text-center py-8 border border-dashed border-collab-600 rounded-lg">
+                    <p className="text-xs text-collab-500/50">No activity recorded</p>
                   </div>
                 )}
               </div>
 
               {/* Right Column: State (Work Snapshot) */}
               <div>
-                <div className="flex items-center gap-2 mb-4 pb-2 border-b border-[#1f1f23]">
+                <div className="flex items-center gap-2 mb-4 pb-2 border-b border-collab-700">
                   <TrendingUp className="h-4 w-4 text-blue-500" />
-                  <h3 className="text-xs font-semibold text-[#fafafa] uppercase tracking-wider">
+                  <h3 className="text-xs font-semibold text-collab-50 uppercase tracking-wider">
                     Work State
                   </h3>
                 </div>
@@ -728,8 +728,8 @@ function DateReport({ member, selectedDate, onIssueClick }: DateReportProps) {
                     </CollapsibleSection>
                   </div>
                 ) : (
-                  <div className="text-center py-8 border border-dashed border-[#27272a] rounded-lg">
-                    <p className="text-xs text-[#3f3f46]">No active work</p>
+                  <div className="text-center py-8 border border-dashed border-collab-600 rounded-lg">
+                    <p className="text-xs text-collab-500/50">No active work</p>
                   </div>
                 )}
               </div>
@@ -773,15 +773,15 @@ export function TeamDashboard({
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#09090b]">
-        <Loader2 className="h-5 w-5 animate-spin text-[#52525b]" />
+      <div className="flex-1 flex items-center justify-center bg-collab-950">
+        <Loader2 className="h-5 w-5 animate-spin text-collab-500/60" />
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#09090b]">
+      <div className="flex-1 flex items-center justify-center bg-collab-950">
         <p className="text-sm text-red-400">Failed to load team data</p>
       </div>
     );
@@ -799,9 +799,9 @@ export function TeamDashboard({
 
   return (
     <>
-      <div className="flex-1 flex flex-col min-h-0 bg-[#09090b]">
+      <div className="flex-1 flex flex-col min-h-0 bg-collab-950">
         {/* Compact Header */}
-        <div className="px-4 py-2.5 border-b border-[#1f1f23] bg-[#0c0c0d]">
+        <div className="px-4 py-2.5 border-b border-collab-700 bg-collab-950">
           <div className="flex items-center justify-between gap-4">
             <MemberSelector
               members={data.members}
@@ -825,14 +825,14 @@ export function TeamDashboard({
 
         {/* Member Badge - Simple name display */}
         {selectedMember && (
-          <div className="px-4 py-2 border-b border-[#18181b] bg-[#0a0a0b] flex items-center gap-3">
+          <div className="px-4 py-2 border-b border-collab-700 bg-collab-950 flex items-center gap-3">
             <Avatar className="h-7 w-7">
               <AvatarImage src={selectedMember.user.image || undefined} />
-              <AvatarFallback className="text-xs bg-[#27272a]">
+              <AvatarFallback className="text-xs bg-collab-600">
                 {selectedMember.user.name.charAt(0)}
               </AvatarFallback>
             </Avatar>
-            <span className="text-sm font-medium text-[#fafafa]">{selectedMember.user.name}</span>
+            <span className="text-sm font-medium text-collab-50">{selectedMember.user.name}</span>
           </div>
         )}
 

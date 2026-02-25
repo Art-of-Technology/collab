@@ -84,13 +84,13 @@ export function SecretVariableRow({
     <div
       className={cn(
         "group flex items-center gap-2 px-3 py-2 rounded-lg",
-        "bg-[#0d0d0e] border border-[#1f1f1f]",
-        "hover:border-[#27272a] transition-colors",
+        "bg-collab-900 border border-collab-700",
+        "hover:border-collab-600 transition-colors",
         disabled && "opacity-50 pointer-events-none"
       )}
     >
       {/* Drag handle */}
-      <div className="cursor-grab text-[#3f3f46] hover:text-[#52525b]">
+      <div className="cursor-grab text-collab-500/50 hover:text-collab-500/60">
         <GripVertical className="h-4 w-4" />
       </div>
 
@@ -101,14 +101,14 @@ export function SecretVariableRow({
         placeholder="KEY"
         className={cn(
           "flex-shrink-0 w-[180px] h-8 px-2",
-          "bg-[#18181b] border-[#27272a] text-[#e6edf3]",
-          "font-mono text-sm placeholder:text-[#52525b]",
-          "focus:border-[#3b82f6] focus:ring-0"
+          "bg-collab-800 border-collab-600 text-collab-50",
+          "font-mono text-sm placeholder:text-collab-500/60",
+          "focus:border-blue-500 focus:ring-0"
         )}
         disabled={disabled}
       />
 
-      <span className="text-[#52525b] text-lg">=</span>
+      <span className="text-collab-500/60 text-lg">=</span>
 
       {/* Value input */}
       <Input
@@ -118,9 +118,9 @@ export function SecretVariableRow({
         placeholder="value"
         className={cn(
           "flex-1 h-8 px-2",
-          "bg-[#18181b] border-[#27272a] text-[#e6edf3]",
-          "font-mono text-sm placeholder:text-[#52525b]",
-          "focus:border-[#3b82f6] focus:ring-0"
+          "bg-collab-800 border-collab-600 text-collab-50",
+          "font-mono text-sm placeholder:text-collab-500/60",
+          "focus:border-blue-500 focus:ring-0"
         )}
         disabled={disabled}
       />
@@ -135,7 +135,7 @@ export function SecretVariableRow({
           onClick={() => setIsRevealed(!isRevealed)}
           className={cn(
             "h-7 w-7",
-            isRevealed ? "text-amber-400" : "text-[#52525b] hover:text-[#a1a1aa]"
+            isRevealed ? "text-amber-400" : "text-collab-500/60 hover:text-collab-400"
           )}
           title={isRevealed ? "Hide value" : "Reveal value"}
         >
@@ -148,7 +148,7 @@ export function SecretVariableRow({
           variant="ghost"
           size="icon"
           onClick={handleCopy}
-          className="h-7 w-7 text-[#52525b] hover:text-[#a1a1aa]"
+          className="h-7 w-7 text-collab-500/60 hover:text-collab-400"
           title="Copy value"
         >
           <Copy className="h-3.5 w-3.5" />
@@ -159,9 +159,9 @@ export function SecretVariableRow({
           <Checkbox
             checked={variable.masked}
             onCheckedChange={(checked) => handleMaskedChange(checked === true)}
-            className="h-3.5 w-3.5 border-[#3f3f46] data-[state=checked]:bg-[#3b82f6]"
+            className="h-3.5 w-3.5 border-collab-600 data-[state=checked]:bg-blue-500"
           />
-          <span className="text-[10px] text-[#52525b]">Mask</span>
+          <span className="text-[10px] text-collab-500/60">Mask</span>
         </div>
 
         {/* Delete button */}
@@ -170,7 +170,7 @@ export function SecretVariableRow({
           variant="ghost"
           size="icon"
           onClick={() => onDelete(index)}
-          className="h-7 w-7 text-[#52525b] hover:text-red-400"
+          className="h-7 w-7 text-collab-500/60 hover:text-red-400"
           title="Delete variable"
         >
           <Trash2 className="h-3.5 w-3.5" />

@@ -32,7 +32,7 @@ export function SubIssueCreate({ onAdd }: SubIssueCreateProps) {
 
   if (isCreating) {
     return (
-      <div className="flex items-center px-3 py-2 bg-[#0f1011] border border-[#1f1f1f] rounded-md">
+      <div className="flex items-center px-3 py-2 bg-collab-900 border border-collab-700 rounded-md">
         <div className="w-5 mr-2" /> {/* Spacer for status icon alignment */}
         <div className="w-5 mr-2" /> {/* Spacer for type icon alignment */}
         <input
@@ -46,7 +46,7 @@ export function SubIssueCreate({ onAdd }: SubIssueCreateProps) {
           }}
           onKeyDown={handleKeyDown}
           placeholder="Sub-issue title"
-          className="flex-1 bg-transparent text-sm text-[#e6edf3] border-none outline-none placeholder-[#8b949e] font-medium"
+          className="flex-1 bg-transparent text-sm text-collab-50 border-none outline-none placeholder-[#8b949e] font-medium"
           autoFocus
         />
       </div>
@@ -57,7 +57,7 @@ export function SubIssueCreate({ onAdd }: SubIssueCreateProps) {
     <Button
       variant="ghost"
       onClick={() => setIsCreating(true)}
-      className="w-full justify-start px-3 py-2 h-auto text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#0f1011] border border-dashed border-[#1f1f1f] hover:border-[#333] rounded-md transition-all"
+      className="w-full justify-start px-3 py-2 h-auto text-collab-400 hover:text-collab-50 hover:bg-collab-900 border border-dashed border-collab-700 hover:border-collab-600 rounded-md transition-all"
     >
       <Plus className="h-4 w-4 mr-2" />
       <span className="text-sm">Add sub-issue</span>

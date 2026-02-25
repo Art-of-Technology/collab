@@ -148,7 +148,7 @@ export function IssueChip({ data, onClick }: { data: IssueData; onClick?: () => 
         </TooltipTrigger>
         <TooltipContent
           side="top"
-          className="bg-[#0d0d12] border-white/10 p-3 max-w-xs shadow-xl"
+          className="bg-collab-900 border-white/10 p-3 max-w-xs shadow-xl"
         >
           <div className="space-y-2">
             <div className="font-medium text-white text-sm leading-tight">
@@ -227,7 +227,7 @@ export function UserChip({ data, onClick }: { data: UserData; onClick?: () => vo
             <span className="font-medium">{data.name}</span>
           </motion.button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="bg-[#0d0d12] border-white/10 p-3">
+        <TooltipContent side="top" className="bg-collab-900 border-white/10 p-3">
           <div className="space-y-1">
             <div className="font-medium text-white">{data.name}</div>
             {data.email && <div className="text-xs text-white/40">{data.email}</div>}
@@ -281,7 +281,7 @@ export function ProjectChip({ data, onClick }: { data: ProjectData; onClick?: ()
             )}
           </motion.button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="bg-[#0d0d12] border-white/10 p-3">
+        <TooltipContent side="top" className="bg-collab-900 border-white/10 p-3">
           <div className="space-y-1">
             <div className="font-medium text-white">{data.name}</div>
             {data.prefix && <div className="text-xs text-white/40">Prefix: {data.prefix}</div>}
@@ -614,16 +614,16 @@ export function DynamicViewCard({ data, onClick }: { data: DynamicViewData; onCl
       whileTap={{ scale: 0.99 }}
       className={cn(
         "w-full text-left p-3 rounded-lg",
-        "bg-[#18181b]/60 border border-[#27272a]",
-        "hover:bg-[#1f1f23] hover:border-[#3f3f46]",
+        "bg-collab-800/60 border border-collab-600",
+        "hover:bg-collab-700 hover:border-collab-600",
         "transition-all duration-200 cursor-pointer group"
       )}
     >
       <div className="flex items-center gap-3">
         {/* Icon */}
         <div className={cn(
-          "shrink-0 p-2 rounded-md bg-[#27272a]",
-          "group-hover:bg-[#3f3f46] transition-colors"
+          "shrink-0 p-2 rounded-md bg-collab-600",
+          "group-hover:bg-collab-600 transition-colors"
         )}>
           <DisplayIcon className={cn("w-4 h-4", config.color)} />
         </div>
@@ -632,12 +632,12 @@ export function DynamicViewCard({ data, onClick }: { data: DynamicViewData; onCl
         <div className="flex-1 min-w-0">
           {/* Title row */}
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm font-medium text-[#fafafa] truncate group-hover:text-white transition-colors">
+            <span className="text-sm font-medium text-collab-50 truncate group-hover:text-white transition-colors">
               {data.name}
             </span>
             <span className={cn(
               "shrink-0 text-[10px] px-1.5 py-0.5 rounded",
-              "bg-[#27272a] text-[#71717a]"
+              "bg-collab-600 text-collab-500"
             )}>
               {config.label}
             </span>
@@ -646,22 +646,22 @@ export function DynamicViewCard({ data, onClick }: { data: DynamicViewData; onCl
           {/* Meta row */}
           <div className="flex items-center gap-2 flex-wrap">
             {/* Issue count */}
-            <span className="text-[11px] text-[#71717a]">
+            <span className="text-[11px] text-collab-500">
               {data.issueCount} {data.issueCount === 1 ? 'issue' : 'issues'}
             </span>
 
             {/* Grouping */}
             {data.grouping && data.grouping !== 'none' && (
               <>
-                <span className="text-[#3f3f46]">·</span>
-                <span className="text-[11px] text-[#52525b]">by {data.grouping}</span>
+                <span className="text-collab-500/50">·</span>
+                <span className="text-[11px] text-collab-500/60">by {data.grouping}</span>
               </>
             )}
 
             {/* Filter tags */}
             {filterTags.length > 0 && (
               <>
-                <span className="text-[#3f3f46]">·</span>
+                <span className="text-collab-500/50">·</span>
                 <div className="flex items-center gap-1">
                   {filterTags.map((tag, i) => (
                     <span
@@ -672,7 +672,7 @@ export function DynamicViewCard({ data, onClick }: { data: DynamicViewData; onCl
                     </span>
                   ))}
                   {remainingFilters > 0 && (
-                    <span className="text-[10px] text-[#52525b]">+{remainingFilters}</span>
+                    <span className="text-[10px] text-collab-500/60">+{remainingFilters}</span>
                   )}
                 </div>
               </>
@@ -681,7 +681,7 @@ export function DynamicViewCard({ data, onClick }: { data: DynamicViewData; onCl
         </div>
 
         {/* Arrow */}
-        <ArrowRight className="shrink-0 w-4 h-4 text-[#3f3f46] group-hover:text-[#71717a] group-hover:translate-x-0.5 transition-all" />
+        <ArrowRight className="shrink-0 w-4 h-4 text-collab-500/50 group-hover:text-collab-500 group-hover:translate-x-0.5 transition-all" />
       </div>
     </motion.button>
   );

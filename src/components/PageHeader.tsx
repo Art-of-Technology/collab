@@ -36,7 +36,7 @@ export function PageHeader({
   const router = useRouter();
 
   return (
-    <div className="flex-none border-b border-[#1f1f1f]">
+    <div className="flex-none border-b border-collab-700">
       <div className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-3">
           {backHref && (
@@ -45,12 +45,12 @@ export function PageHeader({
                 variant="ghost"
                 size="sm"
                 onClick={() => router.push(backHref)}
-                className="h-8 px-2 text-[#6e7681] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+                className="h-8 px-2 text-collab-500 hover:text-collab-50 hover:bg-collab-800"
               >
                 <ArrowLeft className="h-4 w-4 mr-1" />
                 {backLabel}
               </Button>
-              <div className="w-px h-5 bg-[#1f1f1f]" />
+              <div className="w-px h-5 bg-collab-700" />
             </>
           )}
 
@@ -71,9 +71,9 @@ export function PageHeader({
           )}
 
           <div>
-            <h1 className="text-sm font-medium text-[#e6edf3]">{title}</h1>
+            <h1 className="text-sm font-medium text-collab-50">{title}</h1>
             {subtitle && (
-              <p className="text-xs text-[#6e7681]">{subtitle}</p>
+              <p className="text-xs text-collab-500">{subtitle}</p>
             )}
           </div>
         </div>
@@ -85,7 +85,7 @@ export function PageHeader({
               size="sm"
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="h-8 px-2 text-[#6e7681] hover:text-[#e6edf3] hover:bg-[#1a1a1a]"
+              className="h-8 px-2 text-collab-500 hover:text-collab-50 hover:bg-collab-800"
             >
               <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
             </Button>
@@ -111,7 +111,7 @@ interface PageHeaderTabsProps {
 export function PageHeaderTabs({ tabs, activeTab, onTabChange }: PageHeaderTabsProps) {
   return (
     <div className="flex items-center gap-1 px-6 pb-3">
-      <div className="flex items-center gap-1 rounded-lg border border-[#1f1f1f] p-0.5 bg-[#0d0d0e]">
+      <div className="flex items-center gap-1 rounded-lg border border-collab-700 p-0.5 bg-collab-900">
         {tabs.map((tab) => (
           <Button
             key={tab.id}
@@ -120,13 +120,13 @@ export function PageHeaderTabs({ tabs, activeTab, onTabChange }: PageHeaderTabsP
             className={cn(
               "h-auto px-3 py-1.5 text-xs font-medium rounded-md",
               activeTab === tab.id
-                ? "bg-[#1f1f1f] text-[#e6edf3]"
-                : "text-[#6e7681] hover:text-[#8b949e]"
+                ? "bg-collab-700 text-collab-50"
+                : "text-collab-500 hover:text-collab-400"
             )}
           >
             {tab.label}
             {tab.count !== undefined && (
-              <span className="ml-1.5 text-[#6e7681]">{tab.count}</span>
+              <span className="ml-1.5 text-collab-500">{tab.count}</span>
             )}
           </Button>
         ))}

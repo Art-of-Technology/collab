@@ -99,14 +99,14 @@ export function LabelsSelector({
 
   // Custom empty/no results rendering for create functionality
   const renderNoResults = (searchQuery: string) => (
-    <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+    <div className="px-2 py-4 text-center text-collab-500 text-xs">
       <div className="space-y-2">
         <p>No labels found for "{searchQuery}"</p>
         {workspaceId && (
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 h-6 text-xs bg-[#0e0e0e] border-[#2d2d30] hover:bg-[#1a1a1a] text-[#cccccc]"
+            className="gap-2 h-6 text-xs bg-collab-900 border-collab-600 hover:bg-collab-800 text-collab-400"
             onClick={() => handleCreateLabel(searchQuery)}
             disabled={isCreating}
           >
@@ -123,14 +123,14 @@ export function LabelsSelector({
   );
 
   const renderEmptyState = () => (
-    <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+    <div className="px-2 py-4 text-center text-collab-500 text-xs">
       <div className="space-y-2">
         <p>No labels available</p>
         {workspaceId && (
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 h-6 text-xs bg-[#0e0e0e] border-[#2d2d30] hover:bg-[#1a1a1a] text-[#cccccc]"
+            className="gap-2 h-6 text-xs bg-collab-900 border-collab-600 hover:bg-collab-800 text-collab-400"
             onClick={() => handleCreateLabel("New Label")}
             disabled={isCreating}
           >

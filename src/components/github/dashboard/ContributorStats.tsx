@@ -101,7 +101,7 @@ export function ContributorStats({
 
   if (loading) {
     return (
-      <Card className="bg-[#0d1117] border-[#21262d]">
+      <Card className="bg-collab-900 border-collab-700">
         <CardContent className="pt-6">
           <div className="flex items-center justify-center h-32">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -112,19 +112,19 @@ export function ContributorStats({
   }
 
   return (
-    <Card className="bg-[#0d1117] border-[#21262d]">
+    <Card className="bg-collab-900 border-collab-700">
       <CardHeader className={compact ? 'pb-2' : ''}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-purple-500" />
-            <CardTitle className="text-lg text-[#e6edf3]">Contributors</CardTitle>
+            <CardTitle className="text-lg text-collab-50">Contributors</CardTitle>
             <Badge variant="secondary" className="ml-2">
               {contributors.length}
             </Badge>
           </div>
           {showDetails && (
             <Tabs value={timeRange} onValueChange={setTimeRange} className="w-auto">
-              <TabsList className="h-8 bg-[#21262d]">
+              <TabsList className="h-8 bg-collab-700">
                 <TabsTrigger value="week" className="text-xs h-6 px-2">Week</TabsTrigger>
                 <TabsTrigger value="month" className="text-xs h-6 px-2">Month</TabsTrigger>
                 <TabsTrigger value="all" className="text-xs h-6 px-2">All Time</TabsTrigger>
@@ -150,7 +150,7 @@ export function ContributorStats({
               {contributors.map((contributor, index) => (
                 <div
                   key={contributor.id}
-                  className="flex items-start gap-3 p-3 rounded-lg hover:bg-[#161b22] transition-colors"
+                  className="flex items-start gap-3 p-3 rounded-lg hover:bg-collab-800 transition-colors"
                 >
                   {/* Rank */}
                   {showDetails && (
@@ -164,7 +164,7 @@ export function ContributorStats({
                           }`}
                         />
                       ) : (
-                        <span className="text-xs text-[#8b949e]">#{index + 1}</span>
+                        <span className="text-xs text-collab-400">#{index + 1}</span>
                       )}
                     </div>
                   )}
@@ -174,7 +174,7 @@ export function ContributorStats({
                     {contributor.avatar && (
                       <AvatarImage src={contributor.avatar} alt={contributor.name} />
                     )}
-                    <AvatarFallback className="bg-[#21262d] text-[#e6edf3]">
+                    <AvatarFallback className="bg-collab-700 text-collab-50">
                       {getInitials(contributor.name)}
                     </AvatarFallback>
                   </Avatar>
@@ -183,10 +183,10 @@ export function ContributorStats({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-sm text-[#e6edf3]">
+                        <p className="font-medium text-sm text-collab-50">
                           {contributor.name}
                         </p>
-                        <p className="text-xs text-[#8b949e]">@{contributor.login}</p>
+                        <p className="text-xs text-collab-400">@{contributor.login}</p>
                       </div>
                       {showDetails && (
                         <Badge variant="outline" className="text-xs">
@@ -197,17 +197,17 @@ export function ContributorStats({
 
                     {/* Stats */}
                     <div className="flex items-center gap-4 mt-2">
-                      <div className="flex items-center gap-1 text-xs text-[#8b949e]">
+                      <div className="flex items-center gap-1 text-xs text-collab-400">
                         <GitCommit className="h-3 w-3" />
                         <span>{formatNumber(contributor.stats.commits)}</span>
                       </div>
-                      <div className="flex items-center gap-1 text-xs text-[#8b949e]">
+                      <div className="flex items-center gap-1 text-xs text-collab-400">
                         <GitPullRequest className="h-3 w-3" />
                         <span>{contributor.stats.pullRequests}</span>
                       </div>
                       {showDetails && (
                         <>
-                          <div className="flex items-center gap-1 text-xs text-[#8b949e]">
+                          <div className="flex items-center gap-1 text-xs text-collab-400">
                             <MessageSquare className="h-3 w-3" />
                             <span>{contributor.stats.reviews}</span>
                           </div>
@@ -227,7 +227,7 @@ export function ContributorStats({
                     {showDetails && (
                       <Progress
                         value={getContributionPercentage(contributor.stats.commits)}
-                        className="h-1 mt-2 bg-[#21262d]"
+                        className="h-1 mt-2 bg-collab-700"
                       />
                     )}
                   </div>
@@ -239,31 +239,31 @@ export function ContributorStats({
 
         {/* Summary Stats */}
         {showDetails && contributors.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-[#21262d]">
+          <div className="mt-4 pt-4 border-t border-collab-700">
             <div className="grid grid-cols-4 gap-4">
               <div className="text-center">
-                <p className="text-lg font-bold text-[#e6edf3]">
+                <p className="text-lg font-bold text-collab-50">
                   {formatNumber(getTotalCommits())}
                 </p>
-                <p className="text-xs text-[#8b949e]">Total Commits</p>
+                <p className="text-xs text-collab-400">Total Commits</p>
               </div>
               <div className="text-center">
-                <p className="text-lg font-bold text-[#e6edf3]">
+                <p className="text-lg font-bold text-collab-50">
                   {formatNumber(contributors.reduce((acc, c) => acc + c.stats.pullRequests, 0))}
                 </p>
-                <p className="text-xs text-[#8b949e]">Pull Requests</p>
+                <p className="text-xs text-collab-400">Pull Requests</p>
               </div>
               <div className="text-center">
-                <p className="text-lg font-bold text-[#e6edf3]">
+                <p className="text-lg font-bold text-collab-50">
                   {formatNumber(contributors.reduce((acc, c) => acc + c.stats.reviews, 0))}
                 </p>
-                <p className="text-xs text-[#8b949e]">Reviews</p>
+                <p className="text-xs text-collab-400">Reviews</p>
               </div>
               <div className="text-center">
                 <p className="text-lg font-bold text-green-500">
                   +{formatNumber(contributors.reduce((acc, c) => acc + c.stats.linesAdded, 0))}
                 </p>
-                <p className="text-xs text-[#8b949e]">Lines Added</p>
+                <p className="text-xs text-collab-400">Lines Added</p>
               </div>
             </div>
           </div>

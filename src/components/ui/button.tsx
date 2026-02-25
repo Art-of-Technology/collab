@@ -11,10 +11,10 @@ const buttonVariants = cva(
       variant: {
         // Primary - Semi-transparent blue (like "New Context" button)
         default:
-          "bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/20 hover:border-[#3b82f6]/30",
+          "bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 hover:border-blue-500/30",
         // Solid primary - for high emphasis actions
         primary:
-          "bg-[#3b82f6] hover:bg-[#2563eb] text-white border border-transparent",
+          "bg-blue-500 hover:bg-blue-600 text-white border border-transparent",
         // Destructive - Semi-transparent red
         destructive:
           "bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 hover:border-red-500/30",
@@ -23,16 +23,16 @@ const buttonVariants = cva(
           "bg-red-500 hover:bg-red-600 text-white border border-transparent",
         // Outline - subtle border, transparent bg
         outline:
-          "border border-[#27272a] bg-transparent hover:bg-[#1f1f1f] hover:border-[#3f3f46] text-[#a1a1aa] hover:text-[#e6edf3]",
+          "border border-collab-600 bg-transparent hover:bg-collab-700 hover:border-collab-600 text-collab-400 hover:text-collab-50",
         // Secondary - dark bg with subtle styling
         secondary:
-          "bg-[#1f1f1f] hover:bg-[#27272a] text-[#a1a1aa] hover:text-[#e6edf3] border border-[#27272a] hover:border-[#3f3f46]",
+          "bg-collab-700 hover:bg-collab-600 text-collab-400 hover:text-collab-50 border border-collab-600 hover:border-collab-600",
         // Ghost - no border, transparent bg until hover
         ghost:
-          "hover:bg-[#1f1f1f] text-[#a1a1aa] hover:text-[#e6edf3]",
+          "hover:bg-collab-700 text-collab-400 hover:text-collab-50",
         // Link - text only with underline
         link:
-          "text-[#3b82f6] underline-offset-4 hover:underline bg-transparent",
+          "text-blue-500 underline-offset-4 hover:underline bg-transparent",
         // Success - Semi-transparent green
         success:
           "bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 hover:border-green-500/30",
@@ -41,16 +41,16 @@ const buttonVariants = cva(
           "bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 hover:border-amber-500/30",
         // AI Primary - Semi-transparent purple for AI actions
         ai:
-          "bg-[#8b5cf6]/10 hover:bg-[#8b5cf6]/20 text-[#8b5cf6] border border-[#8b5cf6]/20 hover:border-[#8b5cf6]/30",
+          "bg-violet-500/10 hover:bg-violet-500/20 text-violet-500 border border-violet-500/20 hover:border-violet-500/30",
         // AI Solid - for prominent AI actions
         "ai-solid":
           "bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] hover:from-[#7c3aed] hover:to-[#6d28d9] text-white border border-transparent shadow-lg shadow-purple-500/20",
         // AI Ghost - subtle AI styling
         "ai-ghost":
-          "hover:bg-[#8b5cf6]/10 text-[#a1a1aa] hover:text-[#c4b5fd]",
+          "hover:bg-violet-500/10 text-collab-400 hover:text-violet-300",
         // AI Suggestion - dashed border for suggested actions
         "ai-suggestion":
-          "bg-[#8b5cf6]/5 hover:bg-[#8b5cf6]/10 text-[#c4b5fd] border border-dashed border-[#8b5cf6]/30 hover:border-[#8b5cf6]/50",
+          "bg-violet-500/5 hover:bg-violet-500/10 text-violet-300 border border-dashed border-violet-500/30 hover:border-violet-500/50",
       },
       size: {
         default: "h-9 px-4 py-2",

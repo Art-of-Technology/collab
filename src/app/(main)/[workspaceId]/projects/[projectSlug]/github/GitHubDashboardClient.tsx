@@ -219,22 +219,22 @@ export function GitHubDashboardClient({
   // No repository connected
   if (!repository) {
     return (
-      <div className="h-full w-full overflow-y-auto bg-[#101011]">
+      <div className="h-full w-full overflow-y-auto bg-collab-900">
         <div className="flex flex-col gap-6 p-8 max-w-[1400px] mx-auto">
-          <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
+          <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
             <div className="flex items-center justify-between px-6 py-5">
               <div className="flex items-center gap-4">
-                <div className="p-2.5 rounded-xl bg-[#1f1f22]">
-                  <Github className="h-5 w-5 text-[#75757a]" />
+                <div className="p-2.5 rounded-xl bg-collab-700">
+                  <Github className="h-5 w-5 text-collab-500" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-medium text-[#fafafa]">GitHub Integration</h1>
-                  <p className="text-sm text-[#75757a]">Connect a repository to get started</p>
+                  <h1 className="text-xl font-medium text-collab-50">GitHub Integration</h1>
+                  <p className="text-sm text-collab-500">Connect a repository to get started</p>
                 </div>
               </div>
               <Link
                 href={`/${workspaceSlug}/projects/${project.slug}`}
-                className="flex items-center gap-2 h-9 px-4 rounded-lg text-sm text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] transition-colors"
+                className="flex items-center gap-2 h-9 px-4 rounded-lg text-sm text-collab-500 hover:text-collab-50 hover:bg-collab-700 transition-colors"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back
@@ -244,11 +244,11 @@ export function GitHubDashboardClient({
 
           <div className="flex items-center justify-center py-20">
             <div className="text-center max-w-sm">
-              <div className="w-16 h-16 rounded-2xl bg-[#171719] border border-[#1f1f22] flex items-center justify-center mx-auto mb-5">
-                <Github className="h-8 w-8 text-[#52525b]" />
+              <div className="w-16 h-16 rounded-2xl bg-collab-800 border border-collab-700 flex items-center justify-center mx-auto mb-5">
+                <Github className="h-8 w-8 text-collab-500/60" />
               </div>
-              <h2 className="text-lg font-medium text-[#fafafa] mb-2">No Repository Connected</h2>
-              <p className="text-sm text-[#75757a] mb-6">
+              <h2 className="text-lg font-medium text-collab-50 mb-2">No Repository Connected</h2>
+              <p className="text-sm text-collab-500 mb-6">
                 Link a GitHub repository to track commits, pull requests, releases, and branches.
               </p>
               <Button
@@ -265,36 +265,36 @@ export function GitHubDashboardClient({
   }
 
   return (
-    <div className="h-full w-full overflow-y-auto bg-[#101011]">
+    <div className="h-full w-full overflow-y-auto bg-collab-900">
       <div className="flex flex-col gap-6 p-8 max-w-[1400px] mx-auto">
 
         {/* Header Card */}
-        <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
+        <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
           <div className="flex items-center justify-between px-6 py-5">
             <div className="flex items-center gap-4">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#1f1f22] to-[#27272b]">
-                <Github className="h-5 w-5 text-[#fafafa]" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-collab-700 to-collab-600">
+                <Github className="h-5 w-5 text-collab-50" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-medium text-[#fafafa]">{repository.fullName}</h1>
+                  <h1 className="text-xl font-medium text-collab-50">{repository.fullName}</h1>
                   <a
                     href={`https://github.com/${repository.fullName}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#52525b] hover:text-[#9c9ca1] transition-colors"
+                    className="text-collab-500/60 hover:text-collab-400 transition-colors"
                   >
                     <ExternalLink className="h-4 w-4" />
                   </a>
                 </div>
-                <div className="flex items-center gap-3 text-sm text-[#75757a]">
+                <div className="flex items-center gap-3 text-sm text-collab-500">
                   <span className="flex items-center gap-1">
                     <GitBranch className="h-3.5 w-3.5" />
                     {repository.defaultBranch || 'main'}
                   </span>
                   {lastSynced && (
                     <>
-                      <span className="text-[#3f3f46]">•</span>
+                      <span className="text-collab-500/50">•</span>
                       <span>Synced {formatDistanceToNow(lastSynced, { addSuffix: true })}</span>
                     </>
                   )}
@@ -307,14 +307,14 @@ export function GitHubDashboardClient({
                 variant="ghost"
                 size="sm"
                 disabled={isRefreshing || isSyncing}
-                className="h-9 px-3 text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22]"
+                className="h-9 px-3 text-collab-500 hover:text-collab-50 hover:bg-collab-700"
               >
                 <RefreshCw className={cn("h-4 w-4 mr-2", (isRefreshing || isSyncing) && "animate-spin")} />
                 {isSyncing ? 'Syncing...' : 'Refresh'}
               </Button>
               <Link
                 href={`/${workspaceSlug}/projects/${project.slug}`}
-                className="flex items-center gap-2 h-9 px-4 rounded-lg text-sm text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] transition-colors"
+                className="flex items-center gap-2 h-9 px-4 rounded-lg text-sm text-collab-500 hover:text-collab-50 hover:bg-collab-700 transition-colors"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back
@@ -323,7 +323,7 @@ export function GitHubDashboardClient({
                 onClick={() => router.push(`/${workspaceSlug}/projects/${project.slug}/settings?tab=github`)}
                 variant="ghost"
                 size="sm"
-                className="h-9 w-9 p-0 text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22]"
+                className="h-9 w-9 p-0 text-collab-500 hover:text-collab-50 hover:bg-collab-700"
               >
                 <Settings className="h-4 w-4" />
               </Button>
@@ -331,7 +331,7 @@ export function GitHubDashboardClient({
           </div>
 
           {/* Stats Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-[#1f1f22]">
+          <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-collab-700">
             <StatCard
               label="Commits"
               value={stats?.commits?.total ?? commits.length}
@@ -386,18 +386,18 @@ export function GitHubDashboardClient({
                 <div className="flex items-center justify-between">
                   <button
                     onClick={() => setActiveView('overview')}
-                    className="flex items-center gap-2 text-sm text-[#75757a] hover:text-[#fafafa] transition-colors"
+                    className="flex items-center gap-2 text-sm text-collab-500 hover:text-collab-50 transition-colors"
                   >
                     <ChevronLeft className="h-4 w-4" />
                     Back to Overview
                   </button>
                   <div className="relative w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#52525b]" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-collab-500/60" />
                     <Input
                       placeholder="Search..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 h-9 bg-[#171719] border-[#1f1f22] text-[#fafafa] placeholder:text-[#52525b] focus:border-[#3f3f46] focus-visible:ring-0"
+                      className="pl-10 h-9 bg-collab-800 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-collab-500/50 focus-visible:ring-0"
                     />
                   </div>
                 </div>
@@ -526,9 +526,9 @@ export function GitHubDashboardClient({
                 </div>
 
                 {/* Quick Actions */}
-                <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
-                  <div className="px-4 py-3 border-b border-[#1f1f22]">
-                    <span className="text-xs font-medium uppercase tracking-wider text-[#52525b]">Quick Actions</span>
+                <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-collab-700">
+                    <span className="text-xs font-medium uppercase tracking-wider text-collab-500/60">Quick Actions</span>
                   </div>
                   <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <QuickActionButton
@@ -589,18 +589,18 @@ function StatCard({
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-[#1f1f22]",
-        !isLast && "border-r border-[#1f1f22]",
-        active && "bg-[#1f1f22]"
+        "flex items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-collab-700",
+        !isLast && "border-r border-collab-700",
+        active && "bg-collab-700"
       )}
     >
       <div className={cn("p-2 rounded-lg", iconBg)}>
         <div className={iconColor}>{icon}</div>
       </div>
       <div>
-        <div className="text-xl font-semibold text-[#fafafa]">{value}</div>
-        <div className="text-[11px] text-[#52525b]">{label}</div>
-        {subValue && <div className="text-[10px] text-[#75757a] mt-0.5">{subValue}</div>}
+        <div className="text-xl font-semibold text-collab-50">{value}</div>
+        <div className="text-[11px] text-collab-500/60">{label}</div>
+        {subValue && <div className="text-[10px] text-collab-500 mt-0.5">{subValue}</div>}
       </div>
     </button>
   );
@@ -622,21 +622,21 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#1f1f22]">
+    <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700">
         <div className="flex items-center gap-2.5">
           <div className={cn("p-1.5 rounded-lg", iconBg)}>{icon}</div>
-          <h3 className="text-sm font-medium text-[#fafafa]">{title}</h3>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f1f22] text-[#75757a]">{count}</span>
+          <h3 className="text-sm font-medium text-collab-50">{title}</h3>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-collab-700 text-collab-500">{count}</span>
         </div>
         <button
           onClick={onViewAll}
-          className="flex items-center gap-1 text-[11px] text-[#52525b] hover:text-[#9c9ca1] transition-colors"
+          className="flex items-center gap-1 text-[11px] text-collab-500/60 hover:text-collab-400 transition-colors"
         >
           View all <ChevronRight className="h-3 w-3" />
         </button>
       </div>
-      <div className="divide-y divide-[#1f1f22]">{children}</div>
+      <div className="divide-y divide-collab-700">{children}</div>
     </div>
   );
 }
@@ -651,9 +651,9 @@ function DataList<T>({
   renderItem: (item: T) => React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden divide-y divide-[#1f1f22]">
+    <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden divide-y divide-collab-700">
       {items.length === 0 ? (
-        <div className="py-12 text-center text-sm text-[#52525b]">{emptyMessage}</div>
+        <div className="py-12 text-center text-sm text-collab-500/60">{emptyMessage}</div>
       ) : (
         items.map(renderItem)
       )}
@@ -668,12 +668,12 @@ function CommitRow({ commit, repoFullName, compact }: { commit: Commit; repoFull
       href={`https://github.com/${repoFullName}/commit/${commit.sha}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-start gap-3 px-4 py-3 hover:bg-[#1f1f22] transition-colors group"
+      className="flex items-start gap-3 px-4 py-3 hover:bg-collab-700 transition-colors group"
     >
       <GitCommit className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className={cn("text-sm text-[#fafafa]", compact && "truncate")}>{firstLine}</p>
-        <div className="flex items-center gap-2 mt-1 text-[11px] text-[#52525b]">
+        <p className={cn("text-sm text-collab-50", compact && "truncate")}>{firstLine}</p>
+        <div className="flex items-center gap-2 mt-1 text-[11px] text-collab-500/60">
           <span className="font-mono">{commit.sha.substring(0, 7)}</span>
           <span>•</span>
           <span>{commit.authorName}</span>
@@ -681,7 +681,7 @@ function CommitRow({ commit, repoFullName, compact }: { commit: Commit; repoFull
           <span>{formatDistanceToNow(new Date(commit.commitDate), { addSuffix: true })}</span>
         </div>
       </div>
-      <ArrowUpRight className="h-3.5 w-3.5 text-[#3f3f46] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+      <ArrowUpRight className="h-3.5 w-3.5 text-collab-500/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
     </a>
   );
 }
@@ -692,7 +692,7 @@ function PullRequestRow({ pr, repoFullName, compact }: { pr: PullRequest; repoFu
       case 'OPEN': return { color: 'text-emerald-400', bg: 'bg-emerald-500/10' };
       case 'MERGED': return { color: 'text-purple-400', bg: 'bg-purple-500/10' };
       case 'CLOSED': return { color: 'text-red-400', bg: 'bg-red-500/10' };
-      default: return { color: 'text-[#75757a]', bg: 'bg-[#1f1f22]' };
+      default: return { color: 'text-collab-500', bg: 'bg-collab-700' };
     }
   };
   const getStateIcon = (state: string) => {
@@ -710,15 +710,15 @@ function PullRequestRow({ pr, repoFullName, compact }: { pr: PullRequest; repoFu
       href={`https://github.com/${repoFullName}/pull/${pr.githubPrId}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-start gap-3 px-4 py-3 hover:bg-[#1f1f22] transition-colors group"
+      className="flex items-start gap-3 px-4 py-3 hover:bg-collab-700 transition-colors group"
     >
       <div className={cn("flex-shrink-0 mt-0.5", style.color)}>{getStateIcon(pr.state)}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className={cn("text-sm text-[#fafafa]", compact && "truncate")}>{pr.title}</span>
-          <span className="text-xs text-[#52525b]">#{pr.githubPrId}</span>
+          <span className={cn("text-sm text-collab-50", compact && "truncate")}>{pr.title}</span>
+          <span className="text-xs text-collab-500/60">#{pr.githubPrId}</span>
         </div>
-        <div className="flex items-center gap-2 mt-1 text-[11px] text-[#52525b]">
+        <div className="flex items-center gap-2 mt-1 text-[11px] text-collab-500/60">
           <span className={cn("px-1.5 py-0.5 rounded text-[10px]", style.bg, style.color)}>
             {pr.state.toLowerCase()}
           </span>
@@ -732,7 +732,7 @@ function PullRequestRow({ pr, repoFullName, compact }: { pr: PullRequest; repoFu
           <span>{formatDistanceToNow(new Date(pr.mergedAt || pr.closedAt || pr.createdAt), { addSuffix: true })}</span>
         </div>
       </div>
-      <ArrowUpRight className="h-3.5 w-3.5 text-[#3f3f46] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+      <ArrowUpRight className="h-3.5 w-3.5 text-collab-500/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
     </a>
   );
 }
@@ -743,29 +743,29 @@ function ReleaseRow({ release, compact }: { release: Release; compact?: boolean 
       href={release.githubUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-start gap-3 px-4 py-3 hover:bg-[#1f1f22] transition-colors group"
+      className="flex items-start gap-3 px-4 py-3 hover:bg-collab-700 transition-colors group"
     >
       <Tag className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-[#fafafa]">{release.tagName}</span>
+          <span className="text-sm font-medium text-collab-50">{release.tagName}</span>
           {release.isPrerelease && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">Pre-release</span>
           )}
           {release.isDraft && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f1f22] text-[#75757a]">Draft</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-collab-700 text-collab-500">Draft</span>
           )}
         </div>
         {release.name && release.name !== release.tagName && (
-          <p className={cn("text-xs text-[#75757a] mt-0.5", compact && "truncate")}>{release.name}</p>
+          <p className={cn("text-xs text-collab-500 mt-0.5", compact && "truncate")}>{release.name}</p>
         )}
         {release.publishedAt && (
-          <div className="text-[11px] text-[#52525b] mt-1">
+          <div className="text-[11px] text-collab-500/60 mt-1">
             {formatDistanceToNow(new Date(release.publishedAt), { addSuffix: true })}
           </div>
         )}
       </div>
-      <ArrowUpRight className="h-3.5 w-3.5 text-[#3f3f46] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+      <ArrowUpRight className="h-3.5 w-3.5 text-collab-500/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
     </a>
   );
 }
@@ -787,12 +787,12 @@ function BranchRow({
       href={`https://github.com/${repoFullName}/tree/${branch.name}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-3 px-4 py-3 hover:bg-[#1f1f22] transition-colors group"
+      className="flex items-center gap-3 px-4 py-3 hover:bg-collab-700 transition-colors group"
     >
       <GitBranch className="h-4 w-4 text-amber-400 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-mono text-[#fafafa]">{branch.name}</span>
+          <span className="text-sm font-mono text-collab-50">{branch.name}</span>
           {isDefault && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">default</span>
           )}
@@ -800,9 +800,9 @@ function BranchRow({
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">protected</span>
           )}
         </div>
-        {sha && <p className="text-[11px] text-[#52525b] font-mono mt-0.5">{sha.substring(0, 7)}</p>}
+        {sha && <p className="text-[11px] text-collab-500/60 font-mono mt-0.5">{sha.substring(0, 7)}</p>}
       </div>
-      <ArrowUpRight className="h-3.5 w-3.5 text-[#3f3f46] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+      <ArrowUpRight className="h-3.5 w-3.5 text-collab-500/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
     </a>
   );
 }
@@ -818,12 +818,12 @@ function QuickActionButton({
   href?: string;
   onClick?: () => void;
 }) {
-  const className = "group flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-[#101011] border border-[#1f1f22] hover:border-[#27272b] hover:bg-[#1f1f22] transition-all text-sm text-[#9c9ca1] hover:text-[#fafafa]";
+  const className = "group flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-collab-900 border border-collab-700 hover:border-collab-600 hover:bg-collab-700 transition-all text-sm text-collab-400 hover:text-collab-50";
 
   if (href) {
     return (
       <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
-        <Icon className="h-4 w-4 text-[#52525b] group-hover:text-[#75757a]" />
+        <Icon className="h-4 w-4 text-collab-500/60 group-hover:text-collab-500" />
         {label}
       </a>
     );
@@ -831,7 +831,7 @@ function QuickActionButton({
 
   return (
     <button onClick={onClick} className={className}>
-      <Icon className="h-4 w-4 text-[#52525b] group-hover:text-[#75757a]" />
+      <Icon className="h-4 w-4 text-collab-500/60 group-hover:text-collab-500" />
       {label}
     </button>
   );
@@ -840,8 +840,8 @@ function QuickActionButton({
 function EmptyState({ message, icon }: { message: string; icon: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center py-8 text-center">
-      <div className="p-3 rounded-xl bg-[#101011] mb-3 text-[#3f3f46]">{icon}</div>
-      <p className="text-xs text-[#52525b]">{message}</p>
+      <div className="p-3 rounded-xl bg-collab-900 mb-3 text-collab-500/50">{icon}</div>
+      <p className="text-xs text-collab-500/60">{message}</p>
     </div>
   );
 }
@@ -851,7 +851,7 @@ function LoadingSkeleton() {
     <div className="space-y-4">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-64 rounded-2xl bg-[#171719] border border-[#1f1f22] animate-pulse" />
+          <div key={i} className="h-64 rounded-2xl bg-collab-800 border border-collab-700 animate-pulse" />
         ))}
       </div>
     </div>

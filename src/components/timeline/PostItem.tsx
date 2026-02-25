@@ -59,8 +59,8 @@ const POST_TYPE_CONFIG: Record<
 
 const DEFAULT_CONFIG = {
   icon: MessageSquare,
-  color: "text-[#71717a]",
-  bgColor: "bg-[#27272a]",
+  color: "text-collab-500",
+  bgColor: "bg-collab-600",
   label: "Post",
 };
 
@@ -138,7 +138,7 @@ export default function PostItem({ item }: PostItemProps) {
   };
 
   return (
-    <div className="py-4 px-4 -mx-4 rounded-2xl bg-[#171719] border border-[#1f1f22] transition-all">
+    <div className="py-4 px-4 -mx-4 rounded-2xl bg-collab-800 border border-collab-700 transition-all">
       <div className="flex items-start gap-3">
         {/* Icon */}
         <div className={`p-2 rounded-xl ${config.bgColor} mt-0.5`}>
@@ -149,13 +149,13 @@ export default function PostItem({ item }: PostItemProps) {
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-center gap-2 mb-2">
-            <Avatar className="h-6 w-6 ring-1 ring-[#1f1f22]">
+            <Avatar className="h-6 w-6 ring-1 ring-collab-700">
               <AvatarImage src={item.user.image || undefined} />
-              <AvatarFallback className="text-[10px] bg-[#101011] text-[#75757a]">
+              <AvatarFallback className="text-[10px] bg-collab-900 text-collab-500">
                 {item.user.name?.charAt(0) || "?"}
               </AvatarFallback>
             </Avatar>
-            <span className="text-sm text-[#9c9ca1] font-medium">
+            <span className="text-sm text-collab-400 font-medium">
               {item.user.name || "Someone"}
             </span>
             <span
@@ -163,13 +163,13 @@ export default function PostItem({ item }: PostItemProps) {
             >
               {config.label}
             </span>
-            <span className="text-xs text-[#75757a] ml-auto">
+            <span className="text-xs text-collab-500 ml-auto">
               {format(new Date(item.createdAt), "h:mm a")}
             </span>
           </div>
 
           {/* Message */}
-          <p className="text-sm text-[#9c9ca1] leading-relaxed">
+          <p className="text-sm text-collab-400 leading-relaxed">
             {truncatedMessage}
           </p>
 
@@ -185,7 +185,7 @@ export default function PostItem({ item }: PostItemProps) {
                 "h-8 px-3 gap-1.5 rounded-lg text-xs",
                 hasReacted
                   ? "text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                  : "text-[#75757a] hover:text-[#9c9ca1] hover:bg-[#27272b]"
+                  : "text-collab-500 hover:text-collab-400 hover:bg-collab-600"
               )}
             >
               <Heart className={cn("h-3.5 w-3.5", hasReacted && "fill-current")} />
@@ -201,7 +201,7 @@ export default function PostItem({ item }: PostItemProps) {
                 "h-8 px-3 gap-1.5 rounded-lg text-xs",
                 isExpanded
                   ? "text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                  : "text-[#75757a] hover:text-[#9c9ca1] hover:bg-[#27272b]"
+                  : "text-collab-500 hover:text-collab-400 hover:bg-collab-600"
               )}
             >
               <MessageSquare className="h-3.5 w-3.5" />
@@ -220,13 +220,13 @@ export default function PostItem({ item }: PostItemProps) {
               isExpanded ? "max-h-[500px] opacity-100 mt-4" : "max-h-0 opacity-0"
             )}
           >
-            <div className="pt-4 border-t border-[#1f1f22]">
+            <div className="pt-4 border-t border-collab-700">
               {/* Comment Input */}
               {currentUser && (
                 <div className="flex items-start gap-3 mb-4">
-                  <Avatar className="h-7 w-7 ring-1 ring-[#1f1f22]">
+                  <Avatar className="h-7 w-7 ring-1 ring-collab-700">
                     <AvatarImage src={currentUser.image || undefined} />
-                    <AvatarFallback className="text-[10px] bg-[#101011] text-[#75757a]">
+                    <AvatarFallback className="text-[10px] bg-collab-900 text-collab-500">
                       {currentUser.name?.charAt(0) || "?"}
                     </AvatarFallback>
                   </Avatar>
@@ -242,13 +242,13 @@ export default function PostItem({ item }: PostItemProps) {
                         }
                       }}
                       placeholder="Write a comment..."
-                      className="flex-1 h-9 px-3 rounded-xl bg-[#101011] border border-[#1f1f22] text-sm text-[#fafafa] placeholder:text-[#75757a] focus:outline-none focus:border-[#27272b]"
+                      className="flex-1 h-9 px-3 rounded-xl bg-collab-900 border border-collab-700 text-sm text-collab-50 placeholder:text-collab-500 focus:outline-none focus:border-collab-600"
                     />
                     <Button
                       size="icon"
                       onClick={handleSubmitComment}
                       disabled={!commentText.trim() || createCommentMutation.isPending}
-                      className="h-9 w-9 rounded-xl bg-[#27272b] hover:bg-[#3f3f46] text-[#9c9ca1] hover:text-[#fafafa]"
+                      className="h-9 w-9 rounded-xl bg-collab-600 hover:bg-collab-600 text-collab-400 hover:text-collab-50"
                     >
                       {createCommentMutation.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -263,41 +263,41 @@ export default function PostItem({ item }: PostItemProps) {
               {/* Comments List */}
               {commentsLoading ? (
                 <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-4 w-4 animate-spin text-[#75757a]" />
+                  <Loader2 className="h-4 w-4 animate-spin text-collab-500" />
                 </div>
               ) : comments.length > 0 ? (
                 <div className="space-y-3">
                   {comments.slice(0, 5).map((comment: any) => (
                     <div key={comment.id} className="flex items-start gap-3">
-                      <Avatar className="h-6 w-6 ring-1 ring-[#1f1f22]">
+                      <Avatar className="h-6 w-6 ring-1 ring-collab-700">
                         <AvatarImage src={comment.author?.image || undefined} />
-                        <AvatarFallback className="text-[9px] bg-[#101011] text-[#75757a]">
+                        <AvatarFallback className="text-[9px] bg-collab-900 text-collab-500">
                           {comment.author?.name?.charAt(0) || "?"}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-[#9c9ca1]">
+                          <span className="text-xs font-medium text-collab-400">
                             {comment.author?.name || "Someone"}
                           </span>
-                          <span className="text-[10px] text-[#75757a]">
+                          <span className="text-[10px] text-collab-500">
                             {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
                           </span>
                         </div>
-                        <p className="text-sm text-[#9c9ca1] mt-0.5">
+                        <p className="text-sm text-collab-400 mt-0.5">
                           {comment.message}
                         </p>
                       </div>
                     </div>
                   ))}
                   {comments.length > 5 && (
-                    <p className="text-xs text-[#75757a] text-center pt-2">
+                    <p className="text-xs text-collab-500 text-center pt-2">
                       +{comments.length - 5} more comments
                     </p>
                   )}
                 </div>
               ) : (
-                <p className="text-xs text-[#75757a] text-center py-2">
+                <p className="text-xs text-collab-500 text-center py-2">
                   No comments yet. Be the first to comment!
                 </p>
               )}

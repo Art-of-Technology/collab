@@ -24,8 +24,8 @@ export default function CreateWorkspacePage() {
 
   if (status === 'loading' || isLoading) {
     return (
-      <div className="h-full bg-[#101011] flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-[#8b949e]" />
+      <div className="h-full bg-collab-900 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-collab-400" />
       </div>
     );
   }
@@ -37,7 +37,7 @@ export default function CreateWorkspacePage() {
   const canCreateWorkspace = workspaceLimit?.canCreateWorkspace ?? true;
 
   return (
-    <div className="h-full bg-[#101011] flex flex-col overflow-hidden">
+    <div className="h-full bg-collab-900 flex flex-col overflow-hidden">
       {/* Header */}
       <PageHeader
         icon={Building2}

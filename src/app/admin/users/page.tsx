@@ -41,7 +41,7 @@ export default async function AdminUsersPage() {
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+        <Card className="bg-collab-950 border-collab-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-400">Total Users</CardTitle>
             <Users className="h-4 w-4 text-gray-500" />
@@ -51,7 +51,7 @@ export default async function AdminUsersPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+        <Card className="bg-collab-950 border-collab-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-400">System Admins</CardTitle>
             <Shield className="h-4 w-4 text-gray-500" />
@@ -61,7 +61,7 @@ export default async function AdminUsersPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+        <Card className="bg-collab-950 border-collab-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-gray-400">Regular Users</CardTitle>
             <UserCheck className="h-4 w-4 text-gray-500" />
@@ -73,7 +73,7 @@ export default async function AdminUsersPage() {
       </div>
 
       {/* Users List */}
-      <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+      <Card className="bg-collab-950 border-collab-700">
         <CardHeader>
           <CardTitle className="text-white">All Users</CardTitle>
           <CardDescription className="text-gray-500">
@@ -85,12 +85,12 @@ export default async function AdminUsersPage() {
             {users.map((user) => (
               <div
                 key={user.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-[#1f1f1f] hover:bg-[#1f1f1f]/50 transition-colors"
+                className="flex items-center justify-between p-3 rounded-lg border border-collab-700 hover:bg-collab-700/50 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <Avatar className="h-9 w-9">
                     {user.image && <AvatarImage src={user.image} />}
-                    <AvatarFallback className="bg-[#1f1f1f] text-white text-sm">
+                    <AvatarFallback className="bg-collab-700 text-white text-sm">
                       {user.name?.charAt(0)?.toUpperCase() || 'U'}
                     </AvatarFallback>
                   </Avatar>
@@ -98,7 +98,7 @@ export default async function AdminUsersPage() {
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-white">{user.name || 'Unknown'}</span>
                       {user.role === 'SYSTEM_ADMIN' && (
-                        <Badge className="bg-[#22c55e]/10 text-[#22c55e] border-[#22c55e]/20 text-xs">
+                        <Badge className="bg-green-500/10 text-green-500 border-green-500/20 text-xs">
                           Admin
                         </Badge>
                       )}

@@ -232,15 +232,15 @@ export function ActionFiltersSelector({
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
-            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-            "text-[#cccccc] focus:outline-none bg-[#181818]",
+            "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
+            "text-collab-400 focus:outline-none bg-collab-800",
             disabled && "opacity-50 cursor-not-allowed"
           )}
         >
           {value.length === 0 ? (
             <>
-              <History className="h-3 w-3 text-[#6e7681]" />
-              <span className="text-[#6e7681] text-xs">Actions</span>
+              <History className="h-3 w-3 text-collab-500" />
+              <span className="text-collab-500 text-xs">Actions</span>
             </>
           ) : value.length === 1 ? (
             <>
@@ -249,7 +249,7 @@ export function ActionFiltersSelector({
                 const colorClass = selectedActions[0].color;
                 return <Icon className={cn("h-3 w-3", colorClass)} />;
               })()}
-              <span className="text-[#cccccc] text-xs">{getActionDisplayText(value[0])}</span>
+              <span className="text-collab-400 text-xs">{getActionDisplayText(value[0])}</span>
             </>
           ) : (
             <>
@@ -260,24 +260,24 @@ export function ActionFiltersSelector({
                   return <Icon key={action.value} className={cn("h-2.5 w-2.5", colorClass)} />;
                 })}
                 {selectedActions.length > 2 && (
-                  <div className="h-2.5 w-2.5 rounded-full bg-[#404040] flex items-center justify-center">
+                  <div className="h-2.5 w-2.5 rounded-full bg-collab-600 flex items-center justify-center">
                     <span className="text-[8px] text-white font-medium">+</span>
                   </div>
                 )}
               </div>
-              <span className="text-[#cccccc] text-xs">{value.length} actions</span>
+              <span className="text-collab-400 text-xs">{value.length} actions</span>
             </>
           )}
         </Button>
       </PopoverTrigger>
       
       <PopoverContent 
-        className="w-80 p-1 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
+        className="w-80 p-1 bg-collab-800 border-collab-600 shadow-xl"
         align="start"
         side="bottom"
         sideOffset={4}
       >
-        <div className="text-xs text-[#9ca3af] px-2 py-1.5 border-b border-[#2d2d30] mb-1 font-medium">
+        <div className="text-xs text-gray-400 px-2 py-1.5 border-b border-collab-600 mb-1 font-medium">
           Filter by actions
         </div>
         
@@ -286,13 +286,13 @@ export function ActionFiltersSelector({
           <Button
             type="button"
             variant="ghost"
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-collab-600 transition-colors text-left"
             onClick={() => onChange([])}
           >
-            <History className="h-3.5 w-3.5 text-[#6e7681]" />
-            <span className="text-[#9ca3af] flex-1">Clear actions filter</span>
+            <History className="h-3.5 w-3.5 text-collab-500" />
+            <span className="text-gray-400 flex-1">Clear actions filter</span>
             {value.length === 0 && (
-              <span className="text-xs text-[#6e7681]">✓</span>
+              <span className="text-xs text-collab-500">✓</span>
             )}
           </Button>
           
@@ -309,7 +309,7 @@ export function ActionFiltersSelector({
                 <Button
                   type="button"
                   variant="ghost"
-                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-collab-600 transition-colors text-left"
                   onClick={() => {
                     if (!action.hasSubConditions) {
                       // Actions without sub-conditions work as normal toggle
@@ -321,22 +321,22 @@ export function ActionFiltersSelector({
                   }}
                 >
                   <Icon className={cn("h-3.5 w-3.5", colorClass)} />
-                  <span className="text-[#cccccc] flex-1">{action.label}</span>
+                  <span className="text-collab-400 flex-1">{action.label}</span>
                   {action.hasSubConditions && (
                     <ChevronRight className={cn(
-                      "h-3 w-3 transition-transform text-[#6e7681]",
+                      "h-3 w-3 transition-transform text-collab-500",
                       isExpanded && "rotate-90"
                     )} />
                   )}
                   {isSelected && (!action.hasSubConditions || (selectedFilter?.subConditions?.values.length || 0) > 0) && (
-                    <span className="text-xs text-[#6e7681]">✓</span>
+                    <span className="text-xs text-collab-500">✓</span>
                   )}
                 </Button>
 
                 {/* Sub-conditions */}
                 {action.hasSubConditions && isExpanded && (
-                  <div className="ml-6 space-y-0.5 border-l border-[#2d2d30] pl-2">
-                    <div className="text-[10px] text-[#6e7681] px-2 py-1 uppercase tracking-wide">
+                  <div className="ml-6 space-y-0.5 border-l border-collab-600 pl-2">
+                    <div className="text-[10px] text-collab-500 px-2 py-1 uppercase tracking-wide">
                       {action.subConditionType} what?
                     </div>
                     
@@ -345,7 +345,7 @@ export function ActionFiltersSelector({
                         {isStatusesLoading ? (
                           <div className="flex items-center gap-1 px-2 py-1">
                             <Loader2 className="h-3 w-3 animate-spin" />
-                            <span className="text-[#6e7681] text-xs">Loading...</span>
+                            <span className="text-collab-500 text-xs">Loading...</span>
                           </div>
                         ) : uniqueStatuses.length > 0 ? (
                           uniqueStatuses.map((status) => {
@@ -355,7 +355,7 @@ export function ActionFiltersSelector({
                                 key={status.id}
                                 type="button"
                                 variant="ghost"
-                                className="w-full flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                                className="w-full flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-collab-600 transition-colors text-left"
                                 onClick={() => {
                                   const currentValues = selectedFilter?.subConditions?.values || [];
                                   const newValues = isSubSelected
@@ -365,15 +365,15 @@ export function ActionFiltersSelector({
                                 }}
                               >
                                 {statusIcon(status)}
-                                <span className="text-[#cccccc] flex-1">{status.displayName}</span>
+                                <span className="text-collab-400 flex-1">{status.displayName}</span>
                                 {isSubSelected && (
-                                  <span className="text-xs text-[#6e7681]">✓</span>
+                                  <span className="text-xs text-collab-500">✓</span>
                                 )}
                               </Button>
                             );
                           })
                         ) : (
-                          <div className="text-[#6e7681] text-xs px-2 py-1">
+                          <div className="text-collab-500 text-xs px-2 py-1">
                             No statuses available. Select projects first.
                           </div>
                         )}
@@ -390,7 +390,7 @@ export function ActionFiltersSelector({
                               key={priority.value}
                               type="button"
                               variant="ghost"
-                              className="w-full flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                              className="w-full flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-collab-600 transition-colors text-left"
                               onClick={() => {
                                 const currentValues = selectedFilter?.subConditions?.values || [];
                                 const newValues = isSubSelected
@@ -400,9 +400,9 @@ export function ActionFiltersSelector({
                               }}
                             >
                               <Icon className={cn("h-3.5 w-3.5", priority.color)} />
-                              <span className="text-[#cccccc] flex-1">{priority.label}</span>
+                              <span className="text-collab-400 flex-1">{priority.label}</span>
                               {isSubSelected && (
-                                <span className="text-xs text-[#6e7681]">✓</span>
+                                <span className="text-xs text-collab-500">✓</span>
                               )}
                             </Button>
                           );
@@ -420,7 +420,7 @@ export function ActionFiltersSelector({
                                 key={member.id}
                                 type="button"
                                 variant="ghost"
-                                className="w-full flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                                className="w-full flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-collab-600 transition-colors text-left"
                                 onClick={() => {
                                   const currentValues = selectedFilter?.subConditions?.values || [];
                                   const newValues = isSubSelected
@@ -434,15 +434,15 @@ export function ActionFiltersSelector({
                                     {member.name?.charAt(0).toUpperCase() || '?'}
                                   </span>
                                 </div>
-                                <span className="text-[#cccccc] flex-1">{member.name || member.email}</span>
+                                <span className="text-collab-400 flex-1">{member.name || member.email}</span>
                                 {isSubSelected && (
-                                  <span className="text-xs text-[#6e7681]">✓</span>
+                                  <span className="text-xs text-collab-500">✓</span>
                                 )}
                               </Button>
                             );
                           })
                         ) : (
-                          <div className="text-[#6e7681] text-xs px-2 py-1">
+                          <div className="text-collab-500 text-xs px-2 py-1">
                             No workspace members available.
                           </div>
                         )}

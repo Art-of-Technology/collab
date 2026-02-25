@@ -112,7 +112,7 @@ export default function TableViewRenderer({
   };
 
   return (
-    <div className="h-full bg-[#0D1117]">
+    <div className="h-full bg-collab-900">
       <div className="p-6">
         {issues.length === 0 ? (
           <div className="flex items-center justify-center h-64 text-gray-500">
@@ -125,9 +125,9 @@ export default function TableViewRenderer({
             </div>
           </div>
         ) : (
-          <div className="border border-[#21262d] rounded-lg overflow-hidden">
+          <div className="border border-collab-700 rounded-lg overflow-hidden">
             {/* Table Header */}
-            <div className="bg-[#161b22] border-b border-[#21262d]">
+            <div className="bg-collab-800 border-b border-collab-700">
               <div className="grid grid-cols-12 gap-4 p-4 text-sm font-medium text-gray-400">
                 <Button
                   variant="ghost"
@@ -203,7 +203,7 @@ export default function TableViewRenderer({
               {sortedIssues.map((issue) => (
                 <div
                   key={issue.id}
-                  className="grid grid-cols-12 gap-4 p-4 hover:bg-[#161b22] transition-colors cursor-pointer group"
+                  className="grid grid-cols-12 gap-4 p-4 hover:bg-collab-800 transition-colors cursor-pointer group"
                 >
                   {/* Key */}
                   <div className="col-span-1">

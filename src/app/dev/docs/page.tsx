@@ -241,7 +241,7 @@ export default function ApiDocsPage() {
 
       {/* Mobile Sidebar */}
       <div className="md:hidden mt-4 space-y-4">
-        <Card className="border-[#1f1f1f] bg-[#090909]">
+        <Card className="border-collab-700 bg-collab-950">
           <CardHeader>
             <CardTitle className="text-sm">Documentation</CardTitle>
           </CardHeader>
@@ -253,8 +253,8 @@ export default function ApiDocsPage() {
                 className={cn(
                   'w-full text-left px-3 py-2 rounded text-sm transition-colors border justify-start',
                   selectedSection === 'endpoints'
-                    ? 'bg-[#1f1f1f] text-white border-[#2a2a2a]'
-                    : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white border-[#1f1f1f]'
+                    ? 'bg-collab-700 text-white border-collab-600'
+                    : 'text-gray-400 hover:bg-collab-700 hover:text-white border-collab-700'
                 )}
               >
                 API Endpoints
@@ -265,8 +265,8 @@ export default function ApiDocsPage() {
                 className={cn(
                   'w-full text-left px-3 py-2 rounded text-sm transition-colors border justify-start',
                   selectedSection === 'oauth'
-                    ? 'bg-[#1f1f1f] text-white border-[#2a2a2a]'
-                    : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white border-[#1f1f1f]'
+                    ? 'bg-collab-700 text-white border-collab-600'
+                    : 'text-gray-400 hover:bg-collab-700 hover:text-white border-collab-700'
                 )}
               >
                 OAuth 2.0
@@ -277,8 +277,8 @@ export default function ApiDocsPage() {
                 className={cn(
                   'w-full text-left px-3 py-2 rounded text-sm transition-colors border justify-start',
                   selectedSection === 'third-party'
-                    ? 'bg-[#1f1f1f] text-white border-[#2a2a2a]'
-                    : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white border-[#1f1f1f]'
+                    ? 'bg-collab-700 text-white border-collab-600'
+                    : 'text-gray-400 hover:bg-collab-700 hover:text-white border-collab-700'
                 )}
               >
                 Third-Party API
@@ -288,7 +288,7 @@ export default function ApiDocsPage() {
         </Card>
 
         {selectedSection === 'endpoints' && (
-          <Card className="border-[#1f1f1f] bg-[#090909]">
+          <Card className="border-collab-700 bg-collab-950">
             <CardHeader>
               <CardTitle className="text-sm">Endpoints</CardTitle>
             </CardHeader>
@@ -308,8 +308,8 @@ export default function ApiDocsPage() {
                         className={cn(
                           'w-full text-left px-3 py-2 rounded text-sm transition-colors border h-auto justify-start',
                           selectedEndpoint === endpoint.url && selectedMethod === endpoint.method
-                            ? 'bg-[#1f1f1f] text-white border-[#2a2a2a]'
-                            : 'text-gray-400 hover:bg-[#1f1f1f] hover:text-white border-[#1f1f1f]'
+                            ? 'bg-collab-700 text-white border-collab-600'
+                            : 'text-gray-400 hover:bg-collab-700 hover:text-white border-collab-700'
                         )}
                       >
                         <div className="flex items-center gap-2 mb-1">

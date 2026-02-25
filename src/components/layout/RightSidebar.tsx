@@ -66,7 +66,7 @@ export default function RightSidebar() {
   return (
     <div 
       className={`
-        flex-shrink-0 bg-[#090909] transition-[width,opacity] duration-300 ease-in-out overflow-hidden
+        flex-shrink-0 bg-collab-950 transition-[width,opacity] duration-300 ease-in-out overflow-hidden
         ${isOpen && currentView ? 'w-80 opacity-100' : 'w-0 opacity-0'}
       `}
     >

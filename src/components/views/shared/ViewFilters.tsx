@@ -310,16 +310,16 @@ export default function ViewFilters({
   if (!isOpen) return null;
 
   return (
-    <div className="w-full bg-[#0a0a0a] overflow-hidden flex flex-col h-full">
+    <div className="w-full bg-collab-950 overflow-hidden flex flex-col h-full">
       {/* Compact Sidebar Header */}
-      <div className="p-3 border-b border-[#1f1f1f]">
+      <div className="p-3 border-b border-collab-700">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium text-white">View Options</h3>
           <Button 
             variant="ghost" 
             size="sm"
             onClick={onToggle}
-            className="h-6 w-6 p-0 text-[#666] hover:text-white"
+            className="h-6 w-6 p-0 text-collab-500 hover:text-white"
           >
             <X className="h-3 w-3" />
           </Button>
@@ -328,7 +328,7 @@ export default function ViewFilters({
         {/* Editable View Name */}
         <div className="mb-3">
           <div className="flex items-center justify-between">
-            <div className="text-xs text-[#9ca3af]">Name</div>
+            <div className="text-xs text-gray-400">Name</div>
             {isEditingName ? (
               <div className="flex items-center gap-1">
                 <Input
@@ -343,7 +343,7 @@ export default function ViewFilters({
                     }
                     setTimeout(() => handleNameDiscard(), 0);
                   }}
-                  className="h-5 text-xs bg-[#0e0e0e] border-[#2d2d30] focus:border-[#464649] text-[#cccccc] px-2 w-24"
+                  className="h-5 text-xs bg-collab-900 border-collab-600 focus:border-collab-600 text-collab-400 px-2 w-24"
                   autoFocus
                 />
                 <Button
@@ -373,11 +373,11 @@ export default function ViewFilters({
                 onClick={() => setIsEditingName(true)}
                 className={cn(
                   "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
-                  "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-                  "text-[#cccccc] focus:outline-none bg-[#181818]"
+                  "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
+                  "text-collab-400 focus:outline-none bg-collab-800"
                 )}
               >
-                <span className="text-[#cccccc] text-xs truncate max-w-[120px]">{view?.name || 'Unnamed View'}</span>
+                <span className="text-collab-400 text-xs truncate max-w-[120px]">{view?.name || 'Unnamed View'}</span>
               </Button>
             )}
           </div>
@@ -387,7 +387,7 @@ export default function ViewFilters({
         <div className="space-y-2 mb-3">
           {/* Visibility Selector */}
           <div className="flex items-center justify-between">
-            <div className="text-xs text-[#9ca3af]">Visibility</div>
+            <div className="text-xs text-gray-400">Visibility</div>
             <Popover modal={true}>
               <PopoverTrigger asChild>
                 <Button
@@ -395,31 +395,31 @@ export default function ViewFilters({
                   variant="ghost"
                   className={cn(
                     "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
-                    "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-                    "text-[#cccccc] focus:outline-none bg-[#181818]"
+                    "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
+                    "text-collab-400 focus:outline-none bg-collab-800"
                   )}
                 >
                   {view?.visibility === 'WORKSPACE' ? (
                     <>
-                      <Globe className="h-3 w-3 text-[#6e7681]" />
-                      <span className="text-[#cccccc] text-xs truncate max-w-[80px]">{workspace?.name || 'Workspace'}</span>
+                      <Globe className="h-3 w-3 text-collab-500" />
+                      <span className="text-collab-400 text-xs truncate max-w-[80px]">{workspace?.name || 'Workspace'}</span>
                     </>
                   ) : (
                     <>
-                      <Lock className="h-3 w-3 text-[#6e7681]" />
-                      <span className="text-[#cccccc] text-xs">Personal</span>
+                      <Lock className="h-3 w-3 text-collab-500" />
+                      <span className="text-collab-400 text-xs">Personal</span>
                     </>
                   )}
                 </Button>
               </PopoverTrigger>
               <PopoverContent 
-                className="w-56 p-0 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
+                className="w-56 p-0 bg-collab-800 border-collab-600 shadow-xl"
                 align="start"
                 side="bottom"
                 sideOffset={4}
               >
-                <div className="p-3 border-b border-[#2d2d30]">
-                  <div className="text-xs text-[#9ca3af] mb-2 font-medium">
+                <div className="p-3 border-b border-collab-600">
+                  <div className="text-xs text-gray-400 mb-2 font-medium">
                     Change visibility
                   </div>
                 </div>
@@ -428,25 +428,25 @@ export default function ViewFilters({
                   <Button
                     type="button"
                     variant="ghost"
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-collab-600 transition-colors text-left"
                     onClick={() => onVisibilityChange?.('WORKSPACE')}
                   >
-                    <Globe className="h-3 w-3 text-[#6e7681]" />
-                    <span className="text-[#cccccc] flex-1">{workspace?.name || 'Workspace'}</span>
+                    <Globe className="h-3 w-3 text-collab-500" />
+                    <span className="text-collab-400 flex-1">{workspace?.name || 'Workspace'}</span>
                     {view?.visibility === 'WORKSPACE' && (
-                      <span className="text-xs text-[#6e7681]">✓</span>
+                      <span className="text-xs text-collab-500">✓</span>
                     )}
                   </Button>
                   <Button
                     type="button"
                     variant="ghost"
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-[#2a2a2a] transition-colors text-left"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-collab-600 transition-colors text-left"
                     onClick={() => onVisibilityChange?.('PERSONAL')}
                   >
-                    <Lock className="h-3 w-3 text-[#6e7681]" />
-                    <span className="text-[#cccccc] flex-1">Personal</span>
+                    <Lock className="h-3 w-3 text-collab-500" />
+                    <span className="text-collab-400 flex-1">Personal</span>
                     {view?.visibility === 'PERSONAL' && (
-                      <span className="text-xs text-[#6e7681]">✓</span>
+                      <span className="text-xs text-collab-500">✓</span>
                     )}
                   </Button>
                 </div>
@@ -461,7 +461,7 @@ export default function ViewFilters({
             variant="ghost" 
             size="sm" 
             onClick={clearAllFilters}
-            className="w-full justify-start text-[#999] hover:text-white h-7 text-xs"
+            className="w-full justify-start text-collab-400 hover:text-white h-7 text-xs"
           >
             <X className="h-3 w-3 mr-1" />
             Clear filters
@@ -470,7 +470,7 @@ export default function ViewFilters({
       </div>
       
       {/* Compact Filter Tabs */}
-      <div className="border-b border-[#1f1f1f]">
+      <div className="border-b border-collab-700">
         <div className="flex">
           {[
             { id: 'assignees', label: 'Assignees' },
@@ -485,8 +485,8 @@ export default function ViewFilters({
               className={cn(
                 "flex-1 px-2 py-1.5 text-xs font-medium border-b-2 transition-colors",
                 activeFilterTab === tab.id
-                  ? "text-white border-[#0969da] bg-[#0969da]/10"
-                  : "text-[#999] border-transparent hover:text-white hover:bg-[#1f1f1f]"
+                  ? "text-white border-blue-600 bg-blue-600/10"
+                  : "text-collab-400 border-transparent hover:text-white hover:bg-collab-700"
               )}
             >
               {tab.label}
@@ -506,27 +506,27 @@ export default function ViewFilters({
                 className={cn(
                   "flex items-center justify-between p-1.5 rounded cursor-pointer transition-colors",
                   selectedFilters.assignees.includes(assignee.id)
-                    ? "bg-[#0969da]/20 border border-[#0969da]/40"
-                    : "hover:bg-[#1f1f1f]"
+                    ? "bg-blue-600/20 border border-blue-600/40"
+                    : "hover:bg-collab-700"
                 )}
                 onClick={() => handleFilterToggle('assignees', assignee.id)}
               >
                 <div className="flex items-center gap-2">
                   {assignee.id === 'unassigned' ? (
-                    <div className="w-5 h-5 rounded-full bg-[#1f1f1f] flex items-center justify-center">
-                      <User className="h-3 w-3 text-[#666]" />
+                    <div className="w-5 h-5 rounded-full bg-collab-700 flex items-center justify-center">
+                      <User className="h-3 w-3 text-collab-500" />
                     </div>
                   ) : (
                     <Avatar className="w-5 h-5">
                       <AvatarImage src={assignee.avatar} />
-                      <AvatarFallback className="text-xs bg-[#1f1f1f] text-[#999]">
+                      <AvatarFallback className="text-xs bg-collab-700 text-collab-400">
                         {assignee.name?.charAt(0)}
                       </AvatarFallback>
                     </Avatar>
                   )}
                   <span className="text-xs text-white">{assignee.name}</span>
                 </div>
-                <Badge variant="secondary" className="bg-[#1f1f1f] text-[#999] border-0 text-xs px-1.5 py-0.5 h-4">
+                <Badge variant="secondary" className="bg-collab-700 text-collab-400 border-0 text-xs px-1.5 py-0.5 h-4">
                   {assignee.count}
                 </Badge>
               </div>
@@ -543,8 +543,8 @@ export default function ViewFilters({
                 className={cn(
                   "flex items-center justify-between p-1.5 rounded cursor-pointer transition-colors",
                   selectedFilters.labels.includes(label.id)
-                    ? "bg-[#0969da]/20 border border-[#0969da]/40"
-                    : "hover:bg-[#1f1f1f]"
+                    ? "bg-blue-600/20 border border-blue-600/40"
+                    : "hover:bg-collab-700"
                 )}
                 onClick={() => handleFilterToggle('labels', label.id)}
               >
@@ -555,7 +555,7 @@ export default function ViewFilters({
                   />
                   <span className="text-xs text-white">{label.name}</span>
                 </div>
-                <Badge variant="secondary" className="bg-[#1f1f1f] text-[#999] border-0 text-xs px-1.5 py-0.5 h-4">
+                <Badge variant="secondary" className="bg-collab-700 text-collab-400 border-0 text-xs px-1.5 py-0.5 h-4">
                   {label.count}
                 </Badge>
               </div>
@@ -572,8 +572,8 @@ export default function ViewFilters({
                 className={cn(
                   "flex items-center justify-between p-1.5 rounded cursor-pointer transition-colors",
                   selectedFilters.priority.includes(priority.id)
-                    ? "bg-[#0969da]/20 border border-[#0969da]/40"
-                    : "hover:bg-[#1f1f1f]"
+                    ? "bg-blue-600/20 border border-blue-600/40"
+                    : "hover:bg-collab-700"
                 )}
                 onClick={() => handleFilterToggle('priority', priority.id)}
               >
@@ -584,11 +584,11 @@ export default function ViewFilters({
                     priority.id === 'HIGH' && "bg-orange-500",
                     priority.id === 'MEDIUM' && "bg-yellow-500",
                     priority.id === 'LOW' && "bg-green-500",
-                    priority.id === 'no-priority' && "bg-[#666]"
+                    priority.id === 'no-priority' && "bg-collab-500"
                   )} />
                   <span className="text-xs text-white">{priority.name}</span>
                 </div>
-                <Badge variant="secondary" className="bg-[#1f1f1f] text-[#999] border-0 text-xs px-1.5 py-0.5 h-4">
+                <Badge variant="secondary" className="bg-collab-700 text-collab-400 border-0 text-xs px-1.5 py-0.5 h-4">
                   {priority.count}
                 </Badge>
               </div>
@@ -605,8 +605,8 @@ export default function ViewFilters({
                 className={cn(
                   "flex items-center justify-between p-1.5 rounded cursor-pointer transition-colors",
                   selectedFilters.projects.includes(project.id)
-                    ? "bg-[#0969da]/20 border border-[#0969da]/40"
-                    : "hover:bg-[#1f1f1f]"
+                    ? "bg-blue-600/20 border border-blue-600/40"
+                    : "hover:bg-collab-700"
                 )}
                 onClick={() => handleFilterToggle('projects', project.id)}
               >
@@ -617,7 +617,7 @@ export default function ViewFilters({
                   />
                   <span className="text-xs text-white">{project.name}</span>
                 </div>
-                <Badge variant="secondary" className="bg-[#1f1f1f] text-[#999] border-0 text-xs px-1.5 py-0.5 h-4">
+                <Badge variant="secondary" className="bg-collab-700 text-collab-400 border-0 text-xs px-1.5 py-0.5 h-4">
                   {project.count}
                 </Badge>
               </div>
@@ -627,29 +627,29 @@ export default function ViewFilters({
       </div>
       
       {/* Compact Display Options Footer */}
-      <div className="border-t border-[#1f1f1f] p-3">
+      <div className="border-t border-collab-700 p-3">
         {/* View-specific options */}
         {viewType === 'kanban' && (
-          <div className="text-xs text-[#666] text-center">
+          <div className="text-xs text-collab-500 text-center">
             Drag & drop to reorganize
           </div>
         )}
         
         {viewType === 'list' && (
-          <div className="text-xs text-[#666] text-center">
+          <div className="text-xs text-collab-500 text-center">
             Click to view details
           </div>
         )}
         
         {viewType === 'timeline' && (
-          <div className="text-xs text-[#666] text-center">
+          <div className="text-xs text-collab-500 text-center">
             Timeline view
           </div>
         )}
 
         {/* Delete View Button - Only show if user is the owner */}
         {view && currentUser && view.createdBy === currentUser.id && onDeleteView && (
-          <div className="mt-3 pt-3 border-t border-[#1f1f1f]">
+          <div className="mt-3 pt-3 border-t border-collab-700">
             <Button
               variant="ghost"
               size="sm"
@@ -709,8 +709,8 @@ function OwnerSelector({
           variant="ghost"
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
-            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-            "text-[#cccccc] focus:outline-none bg-[#181818]"
+            "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
+            "text-collab-400 focus:outline-none bg-collab-800"
           )}
         >
           {selectedUser ? (
@@ -721,47 +721,47 @@ function OwnerSelector({
                   {selectedUser.name?.charAt(0) || "U"}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-[#cccccc] text-xs truncate max-w-[80px]">{selectedUser.name}</span>
+              <span className="text-collab-400 text-xs truncate max-w-[80px]">{selectedUser.name}</span>
             </>
           ) : (
             <>
-              <UserX className="h-3 w-3 text-[#6e7681]" />
-              <span className="text-[#6e7681] text-xs">Owner</span>
+              <UserX className="h-3 w-3 text-collab-500" />
+              <span className="text-collab-500 text-xs">Owner</span>
             </>
           )}
         </Button>
       </PopoverTrigger>
       
       <PopoverContent 
-        className="w-72 p-0 bg-[#1c1c1e] border-[#2d2d30] shadow-xl"
+        className="w-72 p-0 bg-collab-800 border-collab-600 shadow-xl"
         align="start"
         side="bottom"
         sideOffset={4}
       >
-        <div className="p-3 border-b border-[#2d2d30]">
-          <div className="text-xs text-[#9ca3af] mb-2 font-medium">
+        <div className="p-3 border-b border-collab-600">
+          <div className="text-xs text-gray-400 mb-2 font-medium">
             Change owner
           </div>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-[#6e7681]" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-collab-500" />
             <Input
               placeholder="Search people..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-7 text-xs bg-[#0e0e0e] border-[#2d2d30] focus:border-[#464649] text-[#cccccc]"
+              className="pl-9 h-7 text-xs bg-collab-900 border-collab-600 focus:border-collab-600 text-collab-400"
             />
           </div>
         </div>
         
         <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-[#444] scrollbar-track-transparent p-1">
           {isLoading ? (
-            <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+            <div className="px-2 py-4 text-center text-collab-500 text-xs">
               Loading members...
             </div>
           ) : (
             <>
               {prioritizedUsers.length > 0 && (
-                <div className="px-2 pt-2 pb-1 text-xs text-[#6e7681]">Team members</div>
+                <div className="px-2 pt-2 pb-1 text-xs text-collab-500">Team members</div>
               )}
               
               {prioritizedUsers.map((member) => (
@@ -772,7 +772,7 @@ function OwnerSelector({
               className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors text-left ${
                 member.id === currentUserId
                   ? 'bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30'
-                  : 'hover:bg-[#2a2a2a]'
+                  : 'hover:bg-collab-600'
               }`}
               onClick={() => onChange?.(member.id)}
             >
@@ -782,23 +782,23 @@ function OwnerSelector({
                   {member.name?.charAt(0) || "U"}
                 </AvatarFallback>
               </Avatar>
-              <span className={`text-[#cccccc] flex-1 ${member.id === currentUserId ? 'font-medium' : ''}`}>
+              <span className={`text-collab-400 flex-1 ${member.id === currentUserId ? 'font-medium' : ''}`}>
                 {member.name}{member.id === currentUserId ? " (You)" : ""}
               </span>
               {value === member.id && (
-                <span className="text-xs text-[#6e7681]">✓</span>
+                <span className="text-xs text-collab-500">✓</span>
               )}
             </Button>
               ))}
               
               {!prioritizedUsers.length && workspaceMembers.length > 0 && (
-                <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+                <div className="px-2 py-4 text-center text-collab-500 text-xs">
                   No people match your search
                 </div>
               )}
               
               {!isLoading && workspaceMembers.length === 0 && (
-                <div className="px-2 py-4 text-center text-[#6e7681] text-xs">
+                <div className="px-2 py-4 text-center text-collab-500 text-xs">
                   No members found
                 </div>
               )}

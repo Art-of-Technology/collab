@@ -70,7 +70,7 @@ interface BadgeProps {
 function Badge({ children, className }: BadgeProps) {
   return (
     <div className={cn(
-      "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-[#1c1c1e] border border-[#2a2a2e] text-[#a1a1aa]",
+      "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-collab-800 border border-collab-600 text-collab-400",
       className
     )}>
       {children}
@@ -108,19 +108,19 @@ function IssueItem({ issue, workspaceSlug, onOpenModal }: IssueItemProps) {
 
   return (
     <div 
-      className="group flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[#18181b] cursor-pointer transition-colors"
+      className="group flex items-center gap-3 px-3 py-2 rounded-md hover:bg-collab-800 cursor-pointer transition-colors"
       onClick={() => onOpenModal(issue.issueId)}
     >
       {/* Status dot */}
       <div className={cn("w-2 h-2 rounded-full flex-shrink-0", statusDotColor)} />
 
       {/* Issue key */}
-      <span className="text-[#71717a] text-xs font-mono flex-shrink-0 w-16">
+      <span className="text-collab-500 text-xs font-mono flex-shrink-0 w-16">
         {issue.issueKey}
       </span>
 
       {/* Title */}
-      <span className="flex-1 text-[#fafafa] text-[13px] truncate group-hover:text-[#a1a1aa] transition-colors">
+      <span className="flex-1 text-collab-50 text-[13px] truncate group-hover:text-collab-400 transition-colors">
         {issue.title}
       </span>
 
@@ -176,10 +176,10 @@ function GroupHeader({ title, count }: GroupHeaderProps) {
   
   return (
     <div className="flex items-center gap-2 px-3 pt-4 pb-1">
-      <span className="text-[11px] font-medium text-[#71717a]">
+      <span className="text-[11px] font-medium text-collab-500">
         {title}
       </span>
-      <span className="text-[11px] text-[#3f3f46]">{count}</span>
+      <span className="text-[11px] text-collab-500/50">{count}</span>
     </div>
   );
 }
@@ -263,17 +263,17 @@ function DayColumn({
     <div className="flex-1 min-w-0">
       {/* Column Header */}
       <div className={cn(
-        "px-4 py-3 border-b border-[#27272a]",
+        "px-4 py-3 border-b border-collab-600",
         isToday && "bg-blue-500/[0.03]"
       )}>
         <div className="flex items-center gap-2">
           <span className={cn(
             "text-[13px] font-medium",
-            isToday ? "text-blue-400" : "text-[#fafafa]"
+            isToday ? "text-blue-400" : "text-collab-50"
           )}>
             {title}
           </span>
-          <span className="text-[12px] text-[#52525b]">{date}</span>
+          <span className="text-[12px] text-collab-500/60">{date}</span>
           {isToday && (
             <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-medium ml-auto">
               LIVE
@@ -285,7 +285,7 @@ function DayColumn({
       {/* Content */}
       <div className="py-1">
         {isEmpty ? (
-          <div className="text-center py-8 text-[#52525b] text-[13px]">
+          <div className="text-center py-8 text-collab-500/60 text-[13px]">
             No activity
           </div>
         ) : (
@@ -483,23 +483,23 @@ function MemberCard({
     : 0;
 
   return (
-    <div className="bg-[#09090b] rounded-lg border border-[#27272a] overflow-hidden">
+    <div className="bg-collab-950 rounded-lg border border-collab-600 overflow-hidden">
       {/* Header */}
       <Button
         variant="ghost"
         onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[#18181b] transition-colors h-auto rounded-none"
+        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-collab-800 transition-colors h-auto rounded-none"
       >
         <Avatar className="h-8 w-8 flex-shrink-0">
           <AvatarImage src={member.userImage} />
-          <AvatarFallback className="bg-[#27272a] text-[#fafafa] text-xs font-medium">
+          <AvatarFallback className="bg-collab-600 text-collab-50 text-xs font-medium">
             {member.userName.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
         
         {/* Name */}
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[13px] font-medium text-[#fafafa] truncate">
+          <span className="text-[13px] font-medium text-collab-50 truncate">
             {member.userName}
           </span>
           {hasWarnings && (
@@ -522,14 +522,14 @@ function MemberCard({
         </div>
 
         <ChevronRight className={cn(
-          "h-4 w-4 text-[#52525b] transition-transform flex-shrink-0",
+          "h-4 w-4 text-collab-500/60 transition-transform flex-shrink-0",
           isExpanded && "rotate-90"
         )} />
       </Button>
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="border-t border-[#27272a]">
+        <div className="border-t border-collab-600">
           {/* Warnings */}
           {hasWarnings && (
             <div className="px-4 py-2 bg-amber-500/5 border-b border-amber-500/10 space-y-1">
@@ -606,7 +606,7 @@ export function PlanningDayView({
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-[#3f3f46] text-[13px]">No team activity found</div>
+          <div className="text-collab-500/50 text-[13px]">No team activity found</div>
         </div>
       </div>
     );

@@ -47,24 +47,24 @@ const getStatusIcon = (status: string) => {
   switch (normalizedStatus) {
     case 'todo':
     case 'backlog':
-      return <Circle className={cn(iconClass, "text-[#8b949e]")} />;
+      return <Circle className={cn(iconClass, "text-collab-400")} />;
     case 'in progress':
     case 'active':
     case 'working':
-      return <Clock className={cn(iconClass, "text-[#3b82f6]")} />;
+      return <Clock className={cn(iconClass, "text-blue-500")} />;
     case 'review':
     case 'testing':
-      return <Clock className={cn(iconClass, "text-[#f59e0b]")} />;
+      return <Clock className={cn(iconClass, "text-amber-500")} />;
     case 'done':
     case 'completed':
-      return <CheckCircle2 className={cn(iconClass, "text-[#22c55e]")} fill="currentColor" />;
+      return <CheckCircle2 className={cn(iconClass, "text-green-500")} fill="currentColor" />;
     case 'cancelled':
     case 'rejected':
-      return <XCircle className={cn(iconClass, "text-[#ef4444]")} fill="currentColor" />;
+      return <XCircle className={cn(iconClass, "text-red-500")} fill="currentColor" />;
     case 'blocked':
-      return <AlertCircle className={cn(iconClass, "text-[#f59e0b]")} />;
+      return <AlertCircle className={cn(iconClass, "text-amber-500")} />;
     default:
-      return <Circle className={cn(iconClass, "text-[#8b949e]")} />;
+      return <Circle className={cn(iconClass, "text-collab-400")} />;
   }
 };
 
@@ -185,8 +185,8 @@ export function IssueMentionSuggestion({
             variant="ghost"
             className={cn(
               "w-full justify-start h-auto px-2 py-1",
-              "hover:bg-[#1f1f1f]",
-              selectedIndex === index ? 'bg-[#1f1f1f] text-accent-foreground' : ''
+              "hover:bg-collab-700",
+              selectedIndex === index ? 'bg-collab-700 text-accent-foreground' : ''
             )}
             onClick={() => {
               if (issue && issue.id) {
@@ -211,7 +211,7 @@ export function IssueMentionSuggestion({
 
             {/* Issue Key */}
             <div className="w-16 flex-shrink-0">
-              <span className="text-[#8b949e] text-xs font-mono font-medium">
+              <span className="text-collab-400 text-xs font-mono font-medium">
                 {issue.issueKey || issue.type.toUpperCase()}
               </span>
             </div>
@@ -227,7 +227,7 @@ export function IssueMentionSuggestion({
                 )}
 
                 {/* Title */}
-                <span className="text-[#e6edf3] text-xs font-medium truncate group-hover:text-[#58a6ff] transition-colors">
+                <span className="text-collab-50 text-xs font-medium truncate group-hover:text-blue-400 transition-colors">
                   {issue.title}
                 </span>
               </div>
@@ -235,7 +235,7 @@ export function IssueMentionSuggestion({
               {/* Workspace name - only show if it exists and is different from current context */}
               {issue.workspace && (
                 <div className="flex items-center gap-1 mt-0.5">
-                  <span className="text-[#6e7681] text-[10px] font-mono">
+                  <span className="text-collab-500 text-[10px] font-mono">
                     {issue.workspace.name}
                   </span>
                 </div>

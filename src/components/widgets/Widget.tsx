@@ -81,8 +81,8 @@ export function Widget({
   return (
     <div
       className={cn(
-        "bg-[#0d0d0e] rounded-lg overflow-hidden transition-all duration-300",
-        bordered && "border border-[#1f1f1f]",
+        "bg-collab-900 rounded-lg overflow-hidden transition-all duration-300",
+        bordered && "border border-collab-700",
         isMaximized && "col-span-full",
         className
       )}
@@ -92,7 +92,7 @@ export function Widget({
         className={cn(
           "flex items-center justify-between",
           compact ? "px-3 py-2" : "px-4 py-2.5",
-          "bg-[#0a0a0b]"
+          "bg-collab-950"
         )}
       >
         <div className="flex items-center gap-2">
@@ -101,7 +101,7 @@ export function Widget({
               variant="ghost"
               size="sm"
               onClick={handleToggle}
-              className="h-5 w-5 p-0 text-[#52525b] hover:text-[#e6edf3] hover:bg-transparent"
+              className="h-5 w-5 p-0 text-collab-500/60 hover:text-collab-50 hover:bg-transparent"
             >
               {isExpanded ? (
                 <ChevronUp className="h-3.5 w-3.5" />
@@ -112,12 +112,12 @@ export function Widget({
           )}
 
           {icon && (
-            <div className="text-[#71717a]">
+            <div className="text-collab-500">
               {icon}
             </div>
           )}
 
-          <h3 className="text-xs font-medium text-[#a1a1aa] uppercase tracking-wider">{title}</h3>
+          <h3 className="text-xs font-medium text-collab-400 uppercase tracking-wider">{title}</h3>
         </div>
 
         <div className="flex items-center gap-1">
@@ -128,7 +128,7 @@ export function Widget({
               variant="ghost"
               size="sm"
               onClick={handleMaximize}
-              className="h-6 w-6 p-0 text-[#52525b] hover:text-[#e6edf3] hover:bg-[#1f1f1f]"
+              className="h-6 w-6 p-0 text-collab-500/60 hover:text-collab-50 hover:bg-collab-700"
               title={isMaximized ? 'Minimize' : 'Maximize'}
             >
               {isMaximized ? (
@@ -144,7 +144,7 @@ export function Widget({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-[#52525b] hover:text-[#e6edf3] hover:bg-[#1f1f1f]"
+                className="h-6 w-6 p-0 text-collab-500/60 hover:text-collab-50 hover:bg-collab-700"
               >
                 <ExternalLink className="h-3 w-3" />
               </Button>
@@ -163,16 +163,16 @@ export function Widget({
         <div className={cn(compact ? "p-2" : "p-3")}>
           {isLoading ? (
             <div className="flex items-center justify-center py-6">
-              <Loader2 className="h-5 w-5 animate-spin text-[#52525b]" />
+              <Loader2 className="h-5 w-5 animate-spin text-collab-500/60" />
             </div>
           ) : isEmpty ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               {emptyIcon && (
-                <div className="mb-2 text-[#3f3f46]">
+                <div className="mb-2 text-collab-500/50">
                   {emptyIcon}
                 </div>
               )}
-              <p className="text-xs text-[#52525b]">{emptyMessage}</p>
+              <p className="text-xs text-collab-500/60">{emptyMessage}</p>
             </div>
           ) : (
             children
@@ -204,7 +204,7 @@ export function WidgetListItem({
   variant = 'default',
 }: WidgetListItemProps) {
   const variantStyles = {
-    default: 'hover:bg-[#18181b]',
+    default: 'hover:bg-collab-800',
     danger: 'hover:bg-red-500/5 border-l-2 border-red-500/50',
     warning: 'hover:bg-amber-500/5 border-l-2 border-amber-500/50',
     success: 'hover:bg-emerald-500/5 border-l-2 border-emerald-500/50',
@@ -221,20 +221,20 @@ export function WidgetListItem({
       onClick={onClick}
     >
       {icon && (
-        <div className="flex-shrink-0 text-[#52525b]">
+        <div className="flex-shrink-0 text-collab-500/60">
           {icon}
         </div>
       )}
 
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] text-[#fafafa] truncate">{title}</p>
+        <p className="text-[13px] text-collab-50 truncate">{title}</p>
         {subtitle && (
-          <p className="text-[11px] text-[#52525b] truncate">{subtitle}</p>
+          <p className="text-[11px] text-collab-500/60 truncate">{subtitle}</p>
         )}
       </div>
 
       {right && (
-        <div className="flex-shrink-0 text-[11px] text-[#52525b]">
+        <div className="flex-shrink-0 text-[11px] text-collab-500/60">
           {right}
         </div>
       )}
@@ -250,10 +250,10 @@ export interface WidgetFooterLinkProps {
 
 export function WidgetFooterLink({ href, label = 'View all' }: WidgetFooterLinkProps) {
   return (
-    <div className="pt-2 mt-2 border-t border-[#1f1f1f]">
+    <div className="pt-2 mt-2 border-t border-collab-700">
       <Link
         href={href}
-        className="flex items-center justify-center gap-1 py-1 text-[11px] text-[#52525b] hover:text-[#a1a1aa] transition-colors"
+        className="flex items-center justify-center gap-1 py-1 text-[11px] text-collab-500/60 hover:text-collab-400 transition-colors"
       >
         {label}
         <ExternalLink className="h-2.5 w-2.5" />

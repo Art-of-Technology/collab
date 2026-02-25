@@ -130,7 +130,7 @@ function StandupIssueCard({ issue, status, onClick, showTime }: StandupIssueCard
       onClick={onClick}
       className={cn(
         'group p-4 rounded-xl border cursor-pointer transition-all',
-        'bg-[#0f0f10] border-[#1f1f23] hover:border-[#27272a] hover:bg-[#141416]'
+        'bg-collab-900 border-collab-700 hover:border-collab-600 hover:bg-collab-900'
       )}
     >
       <div className="flex items-start gap-3">
@@ -144,7 +144,7 @@ function StandupIssueCard({ issue, status, onClick, showTime }: StandupIssueCard
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="text-xs font-mono text-[#52525b]">{issue.key}</span>
+            <span className="text-xs font-mono text-collab-500/60">{issue.key}</span>
             {/* Show actual status name */}
             <span
               className="text-[10px] px-1.5 py-0.5 rounded-full"
@@ -175,7 +175,7 @@ function StandupIssueCard({ issue, status, onClick, showTime }: StandupIssueCard
               </span>
             )}
           </div>
-          <p className="text-sm text-[#e4e4e7] leading-snug mb-1">{issue.title}</p>
+          <p className="text-sm text-collab-50 leading-snug mb-1">{issue.title}</p>
 
           {/* Blocked reason */}
           {blockedIssue.blockedBy && (
@@ -226,19 +226,19 @@ function CollapsibleSection({
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
           'flex items-center gap-3 w-full px-3 py-2.5 rounded-lg h-auto justify-start',
-          'border border-transparent hover:border-[#27272a]',
+          'border border-transparent hover:border-collab-600',
           'group'
         )}
       >
         {/* Chevron indicator */}
         <div className={cn(
           'flex items-center justify-center w-6 h-6 rounded transition-colors',
-          'bg-[#1f1f23] group-hover:bg-[#27272a]'
+          'bg-collab-700 group-hover:bg-collab-600'
         )}>
           {isExpanded ? (
-            <ChevronDown className="h-4 w-4 text-[#71717a] group-hover:text-[#a1a1aa]" />
+            <ChevronDown className="h-4 w-4 text-collab-500 group-hover:text-collab-400" />
           ) : (
-            <ChevronRight className="h-4 w-4 text-[#71717a] group-hover:text-[#a1a1aa]" />
+            <ChevronRight className="h-4 w-4 text-collab-500 group-hover:text-collab-400" />
           )}
         </div>
 
@@ -251,7 +251,7 @@ function CollapsibleSection({
         </div>
 
         {/* Title */}
-        <span className="text-sm font-medium text-[#e4e4e7] group-hover:text-white transition-colors">
+        <span className="text-sm font-medium text-collab-50 group-hover:text-white transition-colors">
           {title}
         </span>
 
@@ -270,7 +270,7 @@ function CollapsibleSection({
         <div className="flex-1" />
 
         {/* Expand/collapse hint */}
-        <span className="text-[11px] text-[#52525b] group-hover:text-[#71717a] transition-colors">
+        <span className="text-[11px] text-collab-500/60 group-hover:text-collab-500 transition-colors">
           {isExpanded ? 'Collapse' : 'Expand'}
         </span>
       </Button>
@@ -323,8 +323,8 @@ function ExpandableIssueList({
           onClick={() => setIsExpanded(!isExpanded)}
           className={cn(
             'w-full text-center py-3 rounded-xl border border-dashed h-auto',
-            'border-[#27272a] hover:border-[#3f3f46]',
-            'text-sm font-medium text-[#71717a] hover:text-[#a1a1aa]'
+            'border-collab-600 hover:border-collab-600',
+            'text-sm font-medium text-collab-500 hover:text-collab-400'
           )}
         >
           {isExpanded ? (
@@ -351,7 +351,7 @@ function ExpandableIssueList({
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="py-4 text-center">
-      <p className="text-sm text-[#52525b]">{message}</p>
+      <p className="text-sm text-collab-500/60">{message}</p>
     </div>
   );
 }
@@ -389,13 +389,13 @@ function MemberStandup({ member, onIssueClick }: MemberStandupProps) {
     <div className="h-full flex flex-col">
       {/* Member Header - Clean, without summary stats */}
       <div className="flex items-center gap-4 mb-8">
-        <Avatar className="h-16 w-16 ring-2 ring-[#27272a]">
+        <Avatar className="h-16 w-16 ring-2 ring-collab-600">
           <AvatarImage src={user.image || undefined} />
-          <AvatarFallback className="bg-[#27272a] text-xl text-[#fafafa]">
+          <AvatarFallback className="bg-collab-600 text-xl text-collab-50">
             {user.name.charAt(0)}
           </AvatarFallback>
         </Avatar>
-        <h2 className="text-2xl font-semibold text-[#fafafa]">{user.name}</h2>
+        <h2 className="text-2xl font-semibold text-collab-50">{user.name}</h2>
       </div>
 
       {/* Standup Content - Two Column Layout */}
@@ -406,8 +406,8 @@ function MemberStandup({ member, onIssueClick }: MemberStandupProps) {
             {/* Yesterday Section */}
             <div className="mb-8">
               <div className="flex items-center gap-2 mb-4 px-3">
-                <Calendar className="h-5 w-5 text-[#52525b]" />
-                <h3 className="text-lg font-medium text-[#a1a1aa]">{yesterdayLabel}</h3>
+                <Calendar className="h-5 w-5 text-collab-500/60" />
+                <h3 className="text-lg font-medium text-collab-400">{yesterdayLabel}</h3>
               </div>
 
               {completedYesterday.length > 0 ? (
@@ -436,8 +436,8 @@ function MemberStandup({ member, onIssueClick }: MemberStandupProps) {
             {completedToday.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-4 px-3">
-                  <Calendar className="h-5 w-5 text-[#52525b]" />
-                  <h3 className="text-lg font-medium text-[#a1a1aa]">Today</h3>
+                  <Calendar className="h-5 w-5 text-collab-500/60" />
+                  <h3 className="text-lg font-medium text-collab-400">Today</h3>
                 </div>
                 <CollapsibleSection
                   icon={CheckCircle2}
@@ -589,9 +589,9 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
 
   if (totalMembers === 0) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#09090b] flex items-center justify-center">
+      <div className="fixed inset-0 z-50 bg-collab-950 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-lg text-[#71717a] mb-4">No team members with activity</p>
+          <p className="text-lg text-collab-500 mb-4">No team members with activity</p>
           <Button onClick={onClose} variant="outline">
             Close
           </Button>
@@ -602,15 +602,15 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-[#09090b] flex flex-col"
+      className="fixed inset-0 z-50 bg-collab-950 flex flex-col"
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#1f1f23]">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-collab-700">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold text-[#fafafa]">Daily Standup</h1>
-          <span className="text-sm text-[#52525b]">
+          <h1 className="text-lg font-semibold text-collab-50">Daily Standup</h1>
+          <span className="text-sm text-collab-500/60">
             {currentIndex + 1} of {totalMembers}
           </span>
         </div>
@@ -629,7 +629,7 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
             >
               <Avatar className="h-8 w-8">
                 <AvatarImage src={member.user.image || undefined} />
-                <AvatarFallback className="text-xs bg-[#27272a]">
+                <AvatarFallback className="text-xs bg-collab-600">
                   {member.user.name.charAt(0)}
                 </AvatarFallback>
               </Avatar>
@@ -644,7 +644,7 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
           variant="ghost"
           size="sm"
           onClick={onClose}
-          className="text-[#71717a] hover:text-[#fafafa]"
+          className="text-collab-500 hover:text-collab-50"
         >
           <X className="h-5 w-5" />
         </Button>
@@ -656,7 +656,7 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
         <Button
           variant="ghost"
           onClick={goToPrevious}
-          className="w-16 flex items-center justify-center text-[#52525b] hover:text-[#fafafa] rounded-none h-auto"
+          className="w-16 flex items-center justify-center text-collab-500/60 hover:text-collab-50 rounded-none h-auto"
         >
           <ChevronLeft className="h-8 w-8" />
         </Button>
@@ -672,14 +672,14 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
         <Button
           variant="ghost"
           onClick={goToNext}
-          className="w-16 flex items-center justify-center text-[#52525b] hover:text-[#fafafa] rounded-none h-auto"
+          className="w-16 flex items-center justify-center text-collab-500/60 hover:text-collab-50 rounded-none h-auto"
         >
           <ChevronRight className="h-8 w-8" />
         </Button>
       </div>
 
       {/* Footer Navigation */}
-      <div className="flex items-center justify-center gap-4 py-4 border-t border-[#1f1f23]">
+      <div className="flex items-center justify-center gap-4 py-4 border-t border-collab-700">
         <Button
           variant="outline"
           onClick={goToPrevious}
@@ -695,8 +695,8 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
               variant="ghost"
               onClick={() => setCurrentIndex(idx)}
               className={cn(
-                'h-2 rounded-full transition-all p-0 hover:bg-[#3f3f46]',
-                idx === currentIndex ? 'bg-blue-500 w-4' : 'bg-[#27272a] w-2'
+                'h-2 rounded-full transition-all p-0 hover:bg-collab-600',
+                idx === currentIndex ? 'bg-blue-500 w-4' : 'bg-collab-600 w-2'
               )}
             />
           ))}
@@ -712,11 +712,11 @@ export function StandupView({ members, onClose, onIssueClick }: StandupViewProps
       </div>
 
       {/* Keyboard hint */}
-      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-3 text-xs text-[#3f3f46]">
-        <span className="px-1.5 py-0.5 rounded border border-[#27272a] font-mono">←</span>
-        <span className="px-1.5 py-0.5 rounded border border-[#27272a] font-mono">→</span>
+      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-3 text-xs text-collab-500/50">
+        <span className="px-1.5 py-0.5 rounded border border-collab-600 font-mono">←</span>
+        <span className="px-1.5 py-0.5 rounded border border-collab-600 font-mono">→</span>
         <span>to navigate</span>
-        <span className="px-1.5 py-0.5 rounded border border-[#27272a] font-mono">ESC</span>
+        <span className="px-1.5 py-0.5 rounded border border-collab-600 font-mono">ESC</span>
         <span>to close</span>
       </div>
     </div>

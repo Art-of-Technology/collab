@@ -218,7 +218,7 @@ export default function ListViewRenderer({
     const ListHeader = () => {
         return (
             <div
-                className="hidden md:grid items-center gap-4 px-4 py-3 border-b border-[#1f1f1f] bg-[#101011] text-xs font-medium text-[#6e7681] sticky top-0 z-30"
+                className="hidden md:grid items-center gap-4 px-4 py-3 border-b border-collab-700 bg-collab-900 text-xs font-medium text-collab-500 sticky top-0 z-30"
                 style={{ gridTemplateColumns }}
             >
                 {displaySettings.displayProperties.includes('Status') && <div>Status</div>}
@@ -244,14 +244,14 @@ export default function ListViewRenderer({
                     // Mobile: Glassmorphism header
                     "bg-black/60 backdrop-blur-xl border-b border-white/10",
                     // Desktop: Simple divider style
-                    "md:bg-[#101011] md:backdrop-blur-none md:border-b md:border-[#1f1f1f] md:top-[41px]" // 41px is approx header height
+                    "md:bg-collab-900 md:backdrop-blur-none md:border-b md:border-collab-700 md:top-[41px]" // 41px is approx header height
                 )}
                 onClick={() => handleGroupToggle(groupKey)}
             >
                 <div className={cn(
                     "flex items-center gap-2 py-2 transition-colors",
                     "px-4 hover:bg-white/10",
-                    "md:px-4 md:hover:bg-[#0f1011] md:hover:bg-white/0"
+                    "md:px-4 md:hover:bg-collab-900 md:hover:bg-white/0"
                 )}>
                     {isCollapsed ? (
                         <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
@@ -260,8 +260,8 @@ export default function ListViewRenderer({
                     )}
                     <div className="flex items-center gap-2">
                         {displaySettings.grouping === 'status' && getStatusIcon(group.name)}
-                        <span className="text-[#e6edf3] text-xs font-medium">{group.name}</span>
-                        <span className="text-[#6e7681] text-xs">{group.count}</span>
+                        <span className="text-collab-50 text-xs font-medium">{group.name}</span>
+                        <span className="text-collab-500 text-xs">{group.count}</span>
                     </div>
                 </div>
             </div>
@@ -274,11 +274,11 @@ export default function ListViewRenderer({
         <>
             <div className="h-full flex flex-col overflow-y-auto">
                 {totalIssues === 0 ? (
-                    <div className="flex items-center justify-center h-64 text-[#8b949e]">
+                    <div className="flex items-center justify-center h-64 text-collab-400">
                         <div className="text-center">
-                            <Filter className="h-8 w-8 mx-auto mb-2 text-[#6e7681]" />
+                            <Filter className="h-8 w-8 mx-auto mb-2 text-collab-500" />
                             <p className="text-sm">No issues match your filters</p>
-                            <p className="text-xs text-[#6e7681] mt-1">
+                            <p className="text-xs text-collab-500 mt-1">
                                 Try adjusting your filter criteria
                             </p>
                         </div>

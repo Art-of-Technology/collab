@@ -324,7 +324,7 @@ export function InlineIssueCreator({
           variant="ghost"
           size="sm"
           onClick={handleExpand}
-          className="h-6 px-2 text-xs text-[#7d8590] hover:text-[#c9d1d9] hover:bg-[#1a1a1a] border border-transparent hover:border-[#333] transition-all w-full justify-start"
+          className="h-6 px-2 text-xs text-collab-500 hover:text-collab-400 hover:bg-collab-800 border border-transparent hover:border-collab-600 transition-all w-full justify-start"
         >
           <Plus className="h-3 w-3 mr-1.5" />
           Add {defaultRelationType === 'child' ? 'sub-issue' : 'relation'}
@@ -336,7 +336,7 @@ export function InlineIssueCreator({
   return (
     <div
       className={cn(
-        "border border-[#2d2d30] rounded-md bg-[#0d0d0d] overflow-hidden",
+        "border border-collab-600 rounded-md bg-collab-950 overflow-hidden",
         className
       )}
       onKeyDown={handleKeyDown}
@@ -344,7 +344,7 @@ export function InlineIssueCreator({
       <div className="p-2.5 space-y-2.5">
         {/* Mode Toggle - Compact */}
         {onLinkExisting && (
-          <div className="flex items-center gap-1 pb-2 border-b border-[#1a1a1a]">
+          <div className="flex items-center gap-1 pb-2 border-b border-collab-700">
             <Button
               variant="ghost"
               size="sm"
@@ -352,8 +352,8 @@ export function InlineIssueCreator({
               className={cn(
                 "px-2 h-6 text-[10px] rounded transition-colors",
                 mode === 'create'
-                  ? "bg-[#1a1a1a] text-[#e1e7ef]"
-                  : "text-[#7d8590] hover:text-[#c9d1d9]"
+                  ? "bg-collab-800 text-collab-50"
+                  : "text-collab-500 hover:text-collab-400"
               )}
             >
               Create
@@ -365,8 +365,8 @@ export function InlineIssueCreator({
               className={cn(
                 "px-2 h-6 text-[10px] rounded transition-colors flex items-center gap-1",
                 mode === 'link'
-                  ? "bg-[#1a1a1a] text-[#e1e7ef]"
-                  : "text-[#7d8590] hover:text-[#c9d1d9]"
+                  ? "bg-collab-800 text-collab-50"
+                  : "text-collab-500 hover:text-collab-400"
               )}
             >
               <LinkIcon className="h-2.5 w-2.5" />
@@ -384,7 +384,7 @@ export function InlineIssueCreator({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Issue title"
-                className="w-full bg-transparent border-0 text-sm text-[#e1e7ef] placeholder:text-[#7d8590] focus:outline-none px-0 py-1"
+                className="w-full bg-transparent border-0 text-sm text-collab-50 placeholder:text-collab-500 focus:outline-none px-0 py-1"
               />
 
               <div className="pt-1">
@@ -401,13 +401,13 @@ export function InlineIssueCreator({
             </div>
 
             {/* Divider */}
-            <div className="border-t border-[#1a1a1a] -mx-2.5" />
+            <div className="border-t border-collab-700 -mx-2.5" />
 
             {/* Selectors Row */}
             <div className="flex flex-wrap items-center gap-1.5">
               {/* Relation Type */}
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-[#7d8590]">as</span>
+                <span className="text-xs text-collab-500">as</span>
                 <IssueRelationTypeSelector
                   value={relationType}
                   onChange={setRelationType}
@@ -470,7 +470,7 @@ export function InlineIssueCreator({
                 size="sm"
                 onClick={handleCreate}
                 disabled={!title.trim() || !projectId || createIssueMutation.isPending}
-                className="h-6 px-2 text-xs bg-[#238636] hover:bg-[#2ea043] text-white"
+                className="h-6 px-2 text-xs bg-green-700 hover:bg-green-600 text-white"
               >
                 {createIssueMutation.isPending ? (
                   <>
@@ -485,12 +485,12 @@ export function InlineIssueCreator({
                 size="sm"
                 variant="ghost"
                 onClick={handleCollapse}
-                className="h-6 px-2 text-xs text-[#7d8590] hover:text-[#c9d1d9] hover:bg-[#1a1a1a]"
+                className="h-6 px-2 text-xs text-collab-500 hover:text-collab-400 hover:bg-collab-800"
               >
                 Cancel
               </Button>
-              <span className="text-[10px] text-[#6e7681] ml-auto">
-                <kbd className="px-1 py-0.5 text-[9px] bg-[#1a1a1a] border border-[#2d2d30] rounded">Esc</kbd>
+              <span className="text-[10px] text-collab-500 ml-auto">
+                <kbd className="px-1 py-0.5 text-[9px] bg-collab-800 border border-collab-600 rounded">Esc</kbd>
               </span>
             </div>
           </>
@@ -498,23 +498,23 @@ export function InlineIssueCreator({
           <>
             {/* Search Input */}
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7d8590] pointer-events-none" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-collab-500 pointer-events-none" />
               <Input
                 ref={searchInputRef}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search issues to link..."
-                className="bg-[#0a0a0a] border-[#2d2d30] text-sm focus:border-[#404040] h-8 pl-8 pr-8"
+                className="bg-collab-950 border-collab-600 text-sm focus:border-collab-600 h-8 pl-8 pr-8"
               />
               {isSearching && (
-                <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#7d8590] animate-spin pointer-events-none" />
+                <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-collab-500 animate-spin pointer-events-none" />
               )}
               {searchQuery.length > 0 && !isSearching && (
                 <Button
                   variant="ghost"
                   size="icon-xs"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6e7681] hover:text-[#8b949e] transition-colors p-0"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-collab-500 hover:text-collab-400 transition-colors p-0"
                 >
                   <X className="h-3 w-3" />
                 </Button>
@@ -523,7 +523,7 @@ export function InlineIssueCreator({
 
             {/* Relation Type for linking */}
             <div className="flex items-center gap-1.5 pb-2">
-              <span className="text-xs text-[#7d8590]">Link as</span>
+              <span className="text-xs text-collab-500">Link as</span>
               <IssueRelationTypeSelector
                 value={relationType}
                 onChange={setRelationType}
@@ -537,9 +537,9 @@ export function InlineIssueCreator({
                   <Badge
                     key={issue.id}
                     variant="outline"
-                    className="text-xs bg-[#1a1a1a] border-[#333] text-[#e1e7ef] pr-1"
+                    className="text-xs bg-collab-800 border-collab-600 text-collab-50 pr-1"
                   >
-                    <span className="text-[#7d8590] mr-1">{issue.issueKey}</span>
+                    <span className="text-collab-500 mr-1">{issue.issueKey}</span>
                     {issue.title.substring(0, 30)}{issue.title.length > 30 ? '...' : ''}
                     <Button
                       variant="ghost"
@@ -556,28 +556,28 @@ export function InlineIssueCreator({
 
             {/* Search States */}
             {searchQuery.length < 2 && (
-              <div className="text-xs text-[#6e7681] text-center py-6 space-y-1">
-                <p className="text-[#8b949e]">Type to search for issues</p>
-                <p className="text-[#6e7681]">Search by issue key, title, or description</p>
+              <div className="text-xs text-collab-500 text-center py-6 space-y-1">
+                <p className="text-collab-400">Type to search for issues</p>
+                <p className="text-collab-500">Search by issue key, title, or description</p>
               </div>
             )}
 
             {searchQuery.length >= 2 && isSearching && (
               <div className="flex items-center justify-center py-6 gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-[#7d8590]" />
-                <span className="text-xs text-[#7d8590]">Searching...</span>
+                <Loader2 className="h-4 w-4 animate-spin text-collab-500" />
+                <span className="text-xs text-collab-500">Searching...</span>
               </div>
             )}
 
             {searchQuery.length >= 2 && !isSearching && searchResults.length === 0 && (
               <div className="text-center py-6 space-y-1">
-                <p className="text-xs text-[#8b949e]">No issues found</p>
-                <p className="text-xs text-[#6e7681]">Try a different search term</p>
+                <p className="text-xs text-collab-400">No issues found</p>
+                <p className="text-xs text-collab-500">Try a different search term</p>
               </div>
             )}
 
             {searchQuery.length >= 2 && !isSearching && searchResults.length > 0 && (
-              <div className="max-h-48 overflow-y-auto border border-[#2d2d30] rounded bg-[#0a0a0a]">
+              <div className="max-h-48 overflow-y-auto border border-collab-600 rounded bg-collab-950">
                 {searchResults.map(issue => {
                   const isSelected = selectedIssues.some(i => i.id === issue.id);
                   return (
@@ -586,21 +586,21 @@ export function InlineIssueCreator({
                       variant="ghost"
                       onClick={() => toggleIssueSelection(issue)}
                       className={cn(
-                        "w-full px-3 py-2 text-left text-xs hover:bg-[#1a1a1a] border-b border-[#1a1a1a] last:border-b-0 transition-colors h-auto justify-start",
-                        isSelected && "bg-[#1a1a1a]"
+                        "w-full px-3 py-2 text-left text-xs hover:bg-collab-800 border-b border-collab-700 last:border-b-0 transition-colors h-auto justify-start",
+                        isSelected && "bg-collab-800"
                       )}
                     >
                       <div className="flex items-center gap-2 w-full">
                         <div className={cn(
                           "w-3 h-3 rounded border flex items-center justify-center flex-shrink-0",
-                          isSelected ? "bg-[#238636] border-[#238636]" : "border-[#7d8590]"
+                          isSelected ? "bg-green-700 border-[#238636]" : "border-collab-500"
                         )}>
                           {isSelected && <Check className="h-2 w-2 text-white" />}
                         </div>
-                        <span className="text-[#7d8590] font-mono flex-shrink-0">{issue.issueKey}</span>
-                        <span className="text-[#e1e7ef] flex-1 truncate">{issue.title}</span>
+                        <span className="text-collab-500 font-mono flex-shrink-0">{issue.issueKey}</span>
+                        <span className="text-collab-50 flex-1 truncate">{issue.title}</span>
                         {issue.project && (
-                          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-[#2d2d30] flex-shrink-0">
+                          <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-collab-600 flex-shrink-0">
                             {issue.project.name}
                           </Badge>
                         )}
@@ -617,7 +617,7 @@ export function InlineIssueCreator({
                 size="sm"
                 onClick={handleLinkSelected}
                 disabled={selectedIssues.length === 0 || isLinking}
-                className="h-6 px-2 text-xs bg-[#238636] hover:bg-[#2ea043] text-white"
+                className="h-6 px-2 text-xs bg-green-700 hover:bg-green-600 text-white"
               >
                 {isLinking ? (
                   <>
@@ -632,7 +632,7 @@ export function InlineIssueCreator({
                 size="sm"
                 variant="ghost"
                 onClick={handleCollapse}
-                className="h-6 px-2 text-xs text-[#7d8590] hover:text-[#c9d1d9] hover:bg-[#1a1a1a]"
+                className="h-6 px-2 text-xs text-collab-500 hover:text-collab-400 hover:bg-collab-800"
               >
                 Cancel
               </Button>

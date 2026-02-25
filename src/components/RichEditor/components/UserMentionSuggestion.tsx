@@ -130,8 +130,8 @@ export function UserMentionSuggestion({ query, onSelect, onEscape, workspaceId }
           key={user.id}
           variant="ghost"
           className={cn(
-            "w-full justify-start h-auto gap-2 p-1 hover:bg-[#1f1f1f] hover:text-accent-foreground",
-            selectedIndex === index ? "bg-[#1f1f1f] text-accent-foreground" : ""
+            "w-full justify-start h-auto gap-2 p-1 hover:bg-collab-700 hover:text-accent-foreground",
+            selectedIndex === index ? "bg-collab-700 text-accent-foreground" : ""
           )}
           onClick={() => {
             if (user && user.id) {

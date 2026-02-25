@@ -289,13 +289,13 @@ export default function CreatePostForm() {
   };
 
   return (
-    <Card className="mb-0 shadow-none transition-all duration-300 bg-[#171719] border-[#1f1f22] hover:border-[#27272b] rounded-2xl">
-      <CardHeader className="pb-3 relative border-b border-[#1f1f22] px-5 pt-5">
+    <Card className="mb-0 shadow-none transition-all duration-300 bg-collab-800 border-collab-700 hover:border-collab-600 rounded-2xl">
+      <CardHeader className="pb-3 relative border-b border-collab-700 px-5 pt-5">
         <div className="flex space-x-4">
           {renderAvatar()}
           <div className="flex-1 space-y-1">
-            <p className="text-sm font-medium leading-none text-[#fafafa]">{session?.user?.name || "Anonymous"}</p>
-            <p className="text-xs text-[#75757a]">@{session?.user?.email?.split('@')[0] || "username"}</p>
+            <p className="text-sm font-medium leading-none text-collab-50">{session?.user?.name || "Anonymous"}</p>
+            <p className="text-xs text-collab-500">@{session?.user?.email?.split('@')[0] || "username"}</p>
           </div>
         </div>
       </CardHeader>
@@ -326,7 +326,7 @@ export default function CreatePostForm() {
                 size="sm"
                 className={cn(
                   "h-7 px-3 gap-1.5 rounded-lg transition-all duration-300",
-                  "text-[#75757a] hover:text-[#fafafa] hover:bg-[#27272b]"
+                  "text-collab-500 hover:text-collab-50 hover:bg-collab-600"
                 )}
               >
                 <span className="text-xs">More options</span>
@@ -346,16 +346,16 @@ export default function CreatePostForm() {
           >
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="postType" className="text-[#9c9ca1] text-sm">Post Type</Label>
+                <Label htmlFor="postType" className="text-collab-400 text-sm">Post Type</Label>
                 <Select
                   value={formData.type}
                   onValueChange={(value) => handleSelectChange("type", value)}
                   disabled={isSubmitting}
                 >
-                  <SelectTrigger className="w-full bg-[#101011] border-[#1f1f22] text-[#fafafa] rounded-xl h-10">
+                  <SelectTrigger className="w-full bg-collab-900 border-collab-700 text-collab-50 rounded-xl h-10">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#171719] border-[#1f1f22]">
+                  <SelectContent className="bg-collab-800 border-collab-700">
                     <SelectItem value="UPDATE">Update</SelectItem>
                     <SelectItem value="BLOCKER">Blocker</SelectItem>
                     <SelectItem value="IDEA">Idea</SelectItem>
@@ -365,16 +365,16 @@ export default function CreatePostForm() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="priority" className="text-[#9c9ca1] text-sm">Priority</Label>
+                <Label htmlFor="priority" className="text-collab-400 text-sm">Priority</Label>
                 <Select
                   value={formData.priority}
                   onValueChange={(value) => handleSelectChange("priority", value)}
                   disabled={isSubmitting}
                 >
-                  <SelectTrigger className="w-full bg-[#101011] border-[#1f1f22] text-[#fafafa] rounded-xl h-10">
+                  <SelectTrigger className="w-full bg-collab-900 border-collab-700 text-collab-50 rounded-xl h-10">
                     <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#171719] border-[#1f1f22]">
+                  <SelectContent className="bg-collab-800 border-collab-700">
                     <SelectItem value="normal">Normal</SelectItem>
                     <SelectItem value="high">High</SelectItem>
                     <SelectItem value="critical">Critical</SelectItem>

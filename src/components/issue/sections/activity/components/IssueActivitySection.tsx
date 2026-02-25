@@ -17,7 +17,7 @@ export function IssueActivitySection({ issueId, limit = 50 }: IssueActivitySecti
     return (
       <div className="text-center py-8">
         <p className="text-red-400 mb-2">Failed to load activity history</p>
-        <p className="text-sm text-[#666]">{error}</p>
+        <p className="text-sm text-collab-500">{error}</p>
       </div>
     );
   }

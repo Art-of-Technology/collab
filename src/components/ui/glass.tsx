@@ -16,7 +16,7 @@ export function GlassPanel({
   return (
     <div
       className={cn(
-        "bg-[#0d0d0e] border border-[#1f1f1f] rounded-lg",
+        "bg-collab-900 border border-collab-700 rounded-lg",
         gradientBorder && "gradient-border",
         className
       )}
@@ -40,8 +40,8 @@ export function GlassCard({
   return (
     <div
       className={cn(
-        "bg-[#0d0d0e] border border-[#1f1f1f] rounded-lg transition-all duration-200",
-        hover && "hover:bg-[#18181b] hover:border-[#27272a]",
+        "bg-collab-900 border border-collab-700 rounded-lg transition-all duration-200",
+        hover && "hover:bg-collab-800 hover:border-collab-600",
         className
       )}
       {...props}

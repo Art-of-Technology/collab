@@ -79,15 +79,15 @@ export function CreateWorkspaceForm() {
           name="name"
           render={({ field }) => (
             <FormItem className="space-y-1.5">
-              <FormLabel className="text-[#e6edf3] text-sm font-medium">Workspace Name</FormLabel>
+              <FormLabel className="text-collab-50 text-sm font-medium">Workspace Name</FormLabel>
               <FormControl>
                 <Input
                   placeholder="My Team"
                   {...field}
-                  className="bg-transparent border-[#30363d] text-[#e6edf3] placeholder-[#6e7681] focus:border-[#58a6ff] hover:border-[#444c56] transition-colors h-8 text-sm"
+                  className="bg-transparent border-collab-600 text-collab-50 placeholder:text-collab-500 focus:border-blue-400 hover:border-collab-600 transition-colors h-8 text-sm"
                 />
               </FormControl>
-              <FormMessage className="text-[#f85149] text-xs" />
+              <FormMessage className="text-red-500 text-xs" />
             </FormItem>
           )}
         />
@@ -97,17 +97,17 @@ export function CreateWorkspaceForm() {
           name="description"
           render={({ field }) => (
             <FormItem className="space-y-1.5">
-              <FormLabel className="text-[#e6edf3] text-sm font-medium">Description</FormLabel>
+              <FormLabel className="text-collab-50 text-sm font-medium">Description</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="A brief description of your workspace"
                   {...field}
                   value={field.value || ''}
-                  className="bg-transparent border-[#30363d] text-[#e6edf3] placeholder-[#6e7681] focus:border-[#58a6ff] hover:border-[#444c56] transition-colors resize-none text-sm min-h-[60px]"
+                  className="bg-transparent border-collab-600 text-collab-50 placeholder:text-collab-500 focus:border-blue-400 hover:border-collab-600 transition-colors resize-none text-sm min-h-[60px]"
                   rows={2}
                 />
               </FormControl>
-              <FormMessage className="text-[#f85149] text-xs" />
+              <FormMessage className="text-red-500 text-xs" />
             </FormItem>
           )}
         />
@@ -117,19 +117,19 @@ export function CreateWorkspaceForm() {
           name="logoUrl"
           render={({ field }) => (
             <FormItem className="space-y-1.5">
-              <FormLabel className="text-[#e6edf3] text-sm font-medium">Logo URL</FormLabel>
+              <FormLabel className="text-collab-50 text-sm font-medium">Logo URL</FormLabel>
               <FormControl>
                 <Input
                   placeholder="https://example.com/logo.png"
                   {...field}
                   value={field.value || ''}
-                  className="bg-transparent border-[#30363d] text-[#e6edf3] placeholder-[#6e7681] focus:border-[#58a6ff] hover:border-[#444c56] transition-colors h-8 text-sm"
+                  className="bg-transparent border-collab-600 text-collab-50 placeholder:text-collab-500 focus:border-blue-400 hover:border-collab-600 transition-colors h-8 text-sm"
                 />
               </FormControl>
-              <FormDescription className="text-[#6e7681] text-xs">
+              <FormDescription className="text-collab-500 text-xs">
                 Optional • Provide a URL to your workspace logo
               </FormDescription>
-              <FormMessage className="text-[#f85149] text-xs" />
+              <FormMessage className="text-red-500 text-xs" />
             </FormItem>
           )}
         />
@@ -138,7 +138,7 @@ export function CreateWorkspaceForm() {
           <Button
             type="submit"
             disabled={createWorkspaceMutation.isPending}
-            className="bg-[#238636] hover:bg-[#2ea043] text-white border-0 h-8 px-3 text-sm font-medium transition-colors disabled:opacity-50"
+            className="bg-green-700 hover:bg-green-600 text-white border-0 h-8 px-3 text-sm font-medium transition-colors disabled:opacity-50"
           >
             {createWorkspaceMutation.isPending ? (
               <>

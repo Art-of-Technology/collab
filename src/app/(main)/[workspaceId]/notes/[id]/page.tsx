@@ -64,14 +64,14 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-9 w-9 p-0 text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] rounded-xl"
+                className="h-9 w-9 p-0 text-collab-500 hover:text-collab-50 hover:bg-collab-700 rounded-xl"
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
             </Link>
             <div>
               <h1 className="text-2xl font-medium text-white mb-1">Edit Context</h1>
-              <p className="text-sm text-[#75757a]">
+              <p className="text-sm text-collab-500">
                 Changes are saved automatically
               </p>
             </div>
@@ -83,21 +83,21 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-9 px-4 gap-2 rounded-xl text-[#75757a] hover:text-red-400 hover:bg-red-500/10"
+                className="h-9 px-4 gap-2 rounded-xl text-collab-500 hover:text-red-400 hover:bg-red-500/10"
               >
                 <Trash2 className="h-4 w-4" />
                 Delete
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent className="bg-[#171719] border-[#1f1f22] rounded-2xl">
+            <AlertDialogContent className="bg-collab-800 border-collab-700 rounded-2xl">
               <AlertDialogHeader>
-                <AlertDialogTitle className="text-[#fafafa]">Delete Context</AlertDialogTitle>
-                <AlertDialogDescription className="text-[#75757a]">
+                <AlertDialogTitle className="text-collab-50">Delete Context</AlertDialogTitle>
+                <AlertDialogDescription className="text-collab-500">
                   Are you sure you want to delete this context? This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel className="bg-[#101011] border-[#1f1f22] text-[#9c9ca1] hover:bg-[#1f1f22] hover:text-[#fafafa] rounded-xl">
+                <AlertDialogCancel className="bg-collab-900 border-collab-700 text-collab-400 hover:bg-collab-700 hover:text-collab-50 rounded-xl">
                   Cancel
                 </AlertDialogCancel>
                 <AlertDialogAction
@@ -121,7 +121,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ workspace
           />
         ) : (
           <div className="flex justify-center items-center py-20">
-            <div className="h-6 w-6 border-2 border-[#1f1f22] border-t-[#75757a] rounded-full animate-spin" />
+            <div className="h-6 w-6 border-2 border-collab-700 border-t-[#75757a] rounded-full animate-spin" />
           </div>
         )}
       </div>

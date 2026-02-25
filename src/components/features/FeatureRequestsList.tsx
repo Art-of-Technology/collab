@@ -43,14 +43,14 @@ const statusConfig: Record<string, { label: string; icon: React.ReactNode; bg: s
   pending: {
     label: "Pending",
     icon: <Clock className="h-3 w-3" />,
-    bg: "bg-[#3f3f46]/20",
-    text: "text-[#9c9ca1]",
+    bg: "bg-collab-600/20",
+    text: "text-collab-400",
   },
   PENDING: {
     label: "Pending",
     icon: <Clock className="h-3 w-3" />,
-    bg: "bg-[#3f3f46]/20",
-    text: "text-[#9c9ca1]",
+    bg: "bg-collab-600/20",
+    text: "text-collab-400",
   },
   accepted: {
     label: "Accepted",
@@ -190,22 +190,22 @@ export default function FeatureRequestsList({
           {/* Status Filter */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 h-9 px-3 rounded-lg bg-[#171719] border border-[#1f1f22] text-sm text-[#9c9ca1] hover:bg-[#1f1f22] hover:border-[#3f3f46] transition-colors">
+              <button className="flex items-center gap-2 h-9 px-3 rounded-lg bg-collab-800 border border-collab-700 text-sm text-collab-400 hover:bg-collab-700 hover:border-collab-600 transition-colors">
                 <span>{statusOptions.find((o) => o.value === status)?.label || "All Statuses"}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-[#52525b]" />
+                <ChevronDown className="h-3.5 w-3.5 text-collab-500/60" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              className="bg-[#171719] border-[#1f1f22] min-w-[140px]"
+              className="bg-collab-800 border-collab-700 min-w-[140px]"
             >
               {statusOptions.map((option) => (
                 <DropdownMenuItem
                   key={option.value}
                   onClick={() => updateQueryParams("status", option.value)}
                   className={cn(
-                    "text-[#9c9ca1] hover:text-[#fafafa] hover:bg-[#1f1f22] cursor-pointer",
-                    status === option.value && "text-[#fafafa] bg-[#1f1f22]"
+                    "text-collab-400 hover:text-collab-50 hover:bg-collab-700 cursor-pointer",
+                    status === option.value && "text-collab-50 bg-collab-700"
                   )}
                 >
                   {option.label}
@@ -217,22 +217,22 @@ export default function FeatureRequestsList({
           {/* Sort Filter */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 h-9 px-3 rounded-lg bg-[#171719] border border-[#1f1f22] text-sm text-[#9c9ca1] hover:bg-[#1f1f22] hover:border-[#3f3f46] transition-colors">
+              <button className="flex items-center gap-2 h-9 px-3 rounded-lg bg-collab-800 border border-collab-700 text-sm text-collab-400 hover:bg-collab-700 hover:border-collab-600 transition-colors">
                 <span>{orderOptions.find((o) => o.value === orderBy)?.label || "Most Votes"}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-[#52525b]" />
+                <ChevronDown className="h-3.5 w-3.5 text-collab-500/60" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              className="bg-[#171719] border-[#1f1f22] min-w-[140px]"
+              className="bg-collab-800 border-collab-700 min-w-[140px]"
             >
               {orderOptions.map((option) => (
                 <DropdownMenuItem
                   key={option.value}
                   onClick={() => updateQueryParams("orderBy", option.value)}
                   className={cn(
-                    "text-[#9c9ca1] hover:text-[#fafafa] hover:bg-[#1f1f22] cursor-pointer",
-                    orderBy === option.value && "text-[#fafafa] bg-[#1f1f22]"
+                    "text-collab-400 hover:text-collab-50 hover:bg-collab-700 cursor-pointer",
+                    orderBy === option.value && "text-collab-50 bg-collab-700"
                   )}
                 >
                   {option.label}
@@ -242,7 +242,7 @@ export default function FeatureRequestsList({
           </DropdownMenu>
         </div>
 
-        <span className="text-xs text-[#52525b]">
+        <span className="text-xs text-collab-500/60">
           {pagination.totalCount} request{pagination.totalCount !== 1 ? "s" : ""}
         </span>
       </div>
@@ -250,22 +250,22 @@ export default function FeatureRequestsList({
       {/* Loading State */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-[#52525b]" />
+          <Loader2 className="h-6 w-6 animate-spin text-collab-500/60" />
         </div>
       ) : featureRequests.length === 0 ? (
         /* Empty State */
-        <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] py-16 text-center">
+        <div className="rounded-2xl bg-collab-800 border border-collab-700 py-16 text-center">
           <div className="flex flex-col items-center">
-            <div className="p-4 rounded-2xl bg-[#101011] mb-4">
-              <Lightbulb className="h-8 w-8 text-[#3f3f46]" />
+            <div className="p-4 rounded-2xl bg-collab-900 mb-4">
+              <Lightbulb className="h-8 w-8 text-collab-500/50" />
             </div>
-            <h3 className="text-sm font-medium text-[#9c9ca1] mb-1">No feature requests found</h3>
-            <p className="text-xs text-[#52525b]">Be the first to submit an idea!</p>
+            <h3 className="text-sm font-medium text-collab-400 mb-1">No feature requests found</h3>
+            <p className="text-xs text-collab-500/60">Be the first to submit an idea!</p>
           </div>
         </div>
       ) : (
         /* Feature Requests List */
-        <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden divide-y divide-[#1f1f22]">
+        <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden divide-y divide-collab-700">
           {featureRequests.map((request) => {
             const featureLink = currentWorkspace
               ? `${pathname.replace(/\?.*$/, "")}/${request.id}`.replace(/\/+/g, "/")
@@ -276,7 +276,7 @@ export default function FeatureRequestsList({
               <Link
                 href={featureLink}
                 key={request.id}
-                className="group flex items-start gap-4 p-5 hover:bg-[#1f1f22] transition-colors"
+                className="group flex items-start gap-4 p-5 hover:bg-collab-700 transition-colors"
               >
                 {/* Vote Score */}
                 <div className="flex flex-col items-center gap-0.5 w-12 flex-shrink-0 pt-0.5">
@@ -287,7 +287,7 @@ export default function FeatureRequestsList({
                         ? "text-emerald-400"
                         : request.voteScore < 0
                         ? "text-red-400"
-                        : "text-[#52525b]"
+                        : "text-collab-500/60"
                     )}
                   >
                     {request.voteScore >= 0 ? (
@@ -303,7 +303,7 @@ export default function FeatureRequestsList({
                         ? "text-emerald-400"
                         : request.voteScore < 0
                         ? "text-red-400"
-                        : "text-[#75757a]"
+                        : "text-collab-500"
                     )}
                   >
                     {request.voteScore > 0 ? "+" : ""}
@@ -315,7 +315,7 @@ export default function FeatureRequestsList({
                 <div className="flex-1 min-w-0">
                   {/* Title Row */}
                   <div className="flex items-start justify-between gap-3 mb-2">
-                    <h3 className="text-[15px] font-medium text-[#fafafa] group-hover:text-white transition-colors line-clamp-1">
+                    <h3 className="text-[15px] font-medium text-collab-50 group-hover:text-white transition-colors line-clamp-1">
                       {request.title}
                     </h3>
                     <span
@@ -331,21 +331,21 @@ export default function FeatureRequestsList({
                   </div>
 
                   {/* Description */}
-                  <p className="text-sm text-[#75757a] line-clamp-2 mb-3">
+                  <p className="text-sm text-collab-500 line-clamp-2 mb-3">
                     {truncateText(request.description, 180)}
                   </p>
 
                   {/* Meta Row */}
-                  <div className="flex items-center gap-4 text-xs text-[#52525b]">
+                  <div className="flex items-center gap-4 text-xs text-collab-500/60">
                     {/* Author */}
                     <div className="flex items-center gap-1.5">
                       <Avatar className="h-4 w-4">
                         <AvatarImage src={request.author.image || undefined} />
-                        <AvatarFallback className="text-[8px] bg-[#27272b] text-[#75757a]">
+                        <AvatarFallback className="text-[8px] bg-collab-600 text-collab-500">
                           {request.author.name?.charAt(0)?.toUpperCase() || "?"}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-[#75757a]">
+                      <span className="text-collab-500">
                         {request.author.id === currentUserId ? "You" : request.author.name}
                       </span>
                     </div>
@@ -387,7 +387,7 @@ export default function FeatureRequestsList({
             size="sm"
             onClick={() => handlePageChange(pagination.page - 1)}
             disabled={pagination.page === 1 || isLoading}
-            className="h-8 px-3 text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] disabled:opacity-30"
+            className="h-8 px-3 text-collab-500 hover:text-collab-50 hover:bg-collab-700 disabled:opacity-30"
           >
             <ChevronLeft className="h-4 w-4 mr-1" />
             Previous
@@ -412,8 +412,8 @@ export default function FeatureRequestsList({
                   className={cn(
                     "h-8 w-8 rounded-lg text-sm transition-colors",
                     pagination.page === pageNum
-                      ? "bg-[#1f1f22] text-[#fafafa]"
-                      : "text-[#75757a] hover:bg-[#171719] hover:text-[#9c9ca1]"
+                      ? "bg-collab-700 text-collab-50"
+                      : "text-collab-500 hover:bg-collab-800 hover:text-collab-400"
                   )}
                 >
                   {pageNum}
@@ -427,7 +427,7 @@ export default function FeatureRequestsList({
             size="sm"
             onClick={() => handlePageChange(pagination.page + 1)}
             disabled={pagination.page === pagination.totalPages || isLoading}
-            className="h-8 px-3 text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] disabled:opacity-30"
+            className="h-8 px-3 text-collab-500 hover:text-collab-50 hover:bg-collab-700 disabled:opacity-30"
           >
             Next
             <ChevronRight className="h-4 w-4 ml-1" />

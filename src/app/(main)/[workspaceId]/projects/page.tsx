@@ -17,7 +17,7 @@ export default async function ProjectsPage({ params }: Props) {
   return (
     <Suspense fallback={
       <div className="h-full w-full flex items-center justify-center">
-        <div className="h-6 w-6 border-2 border-[#1f1f22] border-t-[#75757a] rounded-full animate-spin" />
+        <div className="h-6 w-6 border-2 border-collab-700 border-t-[#75757a] rounded-full animate-spin" />
       </div>
     }>
       <ProjectsPageClient/>

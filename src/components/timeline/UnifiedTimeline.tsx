@@ -120,7 +120,7 @@ export default function UnifiedTimeline({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-6 w-6 border-2 border-[#1f1f22] border-t-[#75757a] rounded-full animate-spin" />
+        <div className="h-6 w-6 border-2 border-collab-700 border-t-[#75757a] rounded-full animate-spin" />
       </div>
     );
   }
@@ -129,38 +129,38 @@ export default function UnifiedTimeline({
     <div>
       {/* Stats Bar */}
       <div className="flex items-center gap-4 mb-8">
-        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-[#171719] border border-[#1f1f22]">
+        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-collab-800 border border-collab-700">
           <div className="p-2 rounded-xl bg-emerald-500/10">
             <Zap className="h-4 w-4 text-emerald-400" />
           </div>
           <div>
-            <span className="text-xl font-semibold text-[#fafafa]">
+            <span className="text-xl font-semibold text-collab-50">
               {stats?.todayCount || 0}
             </span>
-            <span className="text-sm text-[#75757a] ml-2">today</span>
+            <span className="text-sm text-collab-500 ml-2">today</span>
           </div>
         </div>
-        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-[#171719] border border-[#1f1f22]">
+        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-collab-800 border border-collab-700">
           <div className="p-2 rounded-xl bg-blue-500/10">
             <Activity className="h-4 w-4 text-blue-400" />
           </div>
           <div>
-            <span className="text-xl font-semibold text-[#fafafa]">
+            <span className="text-xl font-semibold text-collab-50">
               {stats?.weekCount || 0}
             </span>
-            <span className="text-sm text-[#75757a] ml-2">this week</span>
+            <span className="text-sm text-collab-500 ml-2">this week</span>
           </div>
         </div>
       </div>
 
       {/* Timeline */}
       {groupedItems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 rounded-2xl border border-dashed border-[#1f1f22] bg-[#171719]/50">
+        <div className="flex flex-col items-center justify-center py-20 rounded-2xl border border-dashed border-collab-700 bg-collab-800/50">
           <Activity className="h-12 w-12 text-[#27272b] mb-4" />
-          <h3 className="text-sm font-medium text-[#9c9ca1] mb-1">
+          <h3 className="text-sm font-medium text-collab-400 mb-1">
             No activity found
           </h3>
-          <p className="text-sm text-[#75757a] text-center max-w-sm">
+          <p className="text-sm text-collab-500 text-center max-w-sm">
             {searchQuery
               ? "Try adjusting your search"
               : "Activity will appear here as your team works on issues"}
@@ -169,21 +169,21 @@ export default function UnifiedTimeline({
       ) : (
         <div className="relative">
           {/* Vertical timeline line */}
-          <div className="absolute left-[15px] top-6 bottom-0 w-px bg-gradient-to-b from-[#1f1f22] via-[#1f1f22] to-transparent" />
+          <div className="absolute left-[15px] top-6 bottom-0 w-px bg-gradient-to-b from-collab-700 via-[#1f1f22] to-transparent" />
 
           {groupedItems.map((group) => (
             <Fragment key={group.date}>
               {/* Date Header */}
               <div className="flex items-center gap-3 mb-4 mt-10 first:mt-0 relative">
-                <div className="w-8 h-8 rounded-full bg-[#171719] border border-[#1f1f22] flex items-center justify-center z-10">
-                  <span className="text-[10px] font-semibold text-[#9c9ca1]">
+                <div className="w-8 h-8 rounded-full bg-collab-800 border border-collab-700 flex items-center justify-center z-10">
+                  <span className="text-[10px] font-semibold text-collab-400">
                     {format(new Date(group.date), "dd")}
                   </span>
                 </div>
-                <span className="text-xs font-medium text-[#75757a] uppercase tracking-wider">
+                <span className="text-xs font-medium text-collab-500 uppercase tracking-wider">
                   {group.label}
                 </span>
-                <div className="flex-1 h-px bg-[#1f1f22]" />
+                <div className="flex-1 h-px bg-collab-700" />
               </div>
 
               {/* Items */}
@@ -200,11 +200,11 @@ export default function UnifiedTimeline({
         <div ref={loadMoreRef} className="flex justify-center py-10 ml-10">
           {isFetchingNextPage ? (
             <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin text-[#75757a]" />
-              <span className="text-sm text-[#75757a]">Loading more...</span>
+              <Loader2 className="h-4 w-4 animate-spin text-collab-500" />
+              <span className="text-sm text-collab-500">Loading more...</span>
             </div>
           ) : (
-            <span className="text-sm text-[#75757a]">Scroll to load more</span>
+            <span className="text-sm text-collab-500">Scroll to load more</span>
           )}
         </div>
       )}

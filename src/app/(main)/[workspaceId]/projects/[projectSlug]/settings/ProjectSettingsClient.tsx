@@ -355,27 +355,27 @@ export default function ProjectSettingsClient({
   // Loading state
   if (loading) {
     return (
-      <div className="h-full w-full flex items-center justify-center bg-[#101011]">
-        <Loader2 className="h-6 w-6 animate-spin text-[#52525b]" />
+      <div className="h-full w-full flex items-center justify-center bg-collab-900">
+        <Loader2 className="h-6 w-6 animate-spin text-collab-500/60" />
       </div>
     );
   }
 
   if (!project) {
     return (
-      <div className="h-full w-full flex items-center justify-center bg-[#101011]">
+      <div className="h-full w-full flex items-center justify-center bg-collab-900">
         <div className="text-center">
-          <p className="text-[#75757a]">Project not found</p>
+          <p className="text-collab-500">Project not found</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full w-full overflow-y-auto bg-[#101011]">
+    <div className="h-full w-full overflow-y-auto bg-collab-900">
       <div className="flex flex-col gap-6 p-8 max-w-[1000px] mx-auto">
         {/* Header */}
-        <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
+        <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
           <div className="flex items-center justify-between px-6 py-5">
             <div className="flex items-center gap-4">
               <div
@@ -383,10 +383,10 @@ export default function ProjectSettingsClient({
                 style={{ backgroundColor: formData.color || "#6366f1" }}
               />
               <div>
-                <h1 className="text-xl font-medium text-[#fafafa]">
+                <h1 className="text-xl font-medium text-collab-50">
                   {project.name} Settings
                 </h1>
-                <p className="text-sm text-[#75757a]">
+                <p className="text-sm text-collab-500">
                   Manage project configuration
                 </p>
               </div>
@@ -394,7 +394,7 @@ export default function ProjectSettingsClient({
             <div className="flex items-center gap-2">
               <Link
                 href={`/${currentWorkspace?.slug || workspaceId}/projects/${projectSlug}`}
-                className="flex items-center gap-2 h-9 px-4 rounded-lg text-sm text-[#75757a] hover:text-[#fafafa] hover:bg-[#1f1f22] transition-colors"
+                className="flex items-center gap-2 h-9 px-4 rounded-lg text-sm text-collab-500 hover:text-collab-50 hover:bg-collab-700 transition-colors"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back
@@ -420,7 +420,7 @@ export default function ProjectSettingsClient({
           </div>
 
           {/* Tabs */}
-          <div className="flex items-center gap-1 px-6 border-t border-[#1f1f22]">
+          <div className="flex items-center gap-1 px-6 border-t border-collab-700">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -428,8 +428,8 @@ export default function ProjectSettingsClient({
                 className={cn(
                   "flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors relative",
                   activeTab === tab.id
-                    ? "text-[#fafafa]"
-                    : "text-[#75757a] hover:text-[#9c9ca1]",
+                    ? "text-collab-50"
+                    : "text-collab-500 hover:text-collab-400",
                   tab.id === "danger" && "text-red-400 hover:text-red-300"
                 )}
               >
@@ -447,40 +447,40 @@ export default function ProjectSettingsClient({
         <div className="space-y-6">
           {/* General Tab */}
           {activeTab === "general" && (
-            <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
-              <div className="px-6 py-4 border-b border-[#1f1f22]">
-                <h2 className="text-sm font-medium text-[#fafafa]">Basic Information</h2>
-                <p className="text-xs text-[#52525b] mt-0.5">
+            <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+              <div className="px-6 py-4 border-b border-collab-700">
+                <h2 className="text-sm font-medium text-collab-50">Basic Information</h2>
+                <p className="text-xs text-collab-500/60 mt-0.5">
                   Configure your project's name, description, and identification
                 </p>
               </div>
               <div className="p-6 space-y-5">
                 {/* Project Name */}
                 <div className="space-y-2">
-                  <Label className="text-sm text-[#9c9ca1]">Project Name</Label>
+                  <Label className="text-sm text-collab-400">Project Name</Label>
                   <Input
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Enter project name"
-                    className="h-10 bg-[#101011] border-[#1f1f22] text-[#fafafa] placeholder:text-[#52525b] focus:border-[#3f3f46] focus-visible:ring-0"
+                    className="h-10 bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-collab-500/50 focus-visible:ring-0"
                   />
                 </div>
 
                 {/* Description */}
                 <div className="space-y-2">
-                  <Label className="text-sm text-[#9c9ca1]">Description</Label>
+                  <Label className="text-sm text-collab-400">Description</Label>
                   <Textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder="Enter project description"
                     rows={3}
-                    className="bg-[#101011] border-[#1f1f22] text-[#fafafa] placeholder:text-[#52525b] focus:border-[#3f3f46] focus-visible:ring-0 resize-none"
+                    className="bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-collab-500/50 focus-visible:ring-0 resize-none"
                   />
                 </div>
 
                 {/* Issue Key Prefix */}
                 <div className="space-y-2">
-                  <Label className="text-sm text-[#9c9ca1]">Issue Key Prefix</Label>
+                  <Label className="text-sm text-collab-400">Issue Key Prefix</Label>
                   <Input
                     value={formData.keyPrefix}
                     onChange={(e) => {
@@ -491,14 +491,14 @@ export default function ProjectSettingsClient({
                     placeholder="e.g., PROJ"
                     maxLength={10}
                     className={cn(
-                      "h-10 bg-[#101011] border-[#1f1f22] text-[#fafafa] placeholder:text-[#52525b] focus:border-[#3f3f46] focus-visible:ring-0 font-mono uppercase",
+                      "h-10 bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-collab-500/50 focus-visible:ring-0 font-mono uppercase",
                       prefixError && "border-red-500"
                     )}
                   />
                   {prefixError ? (
                     <p className="text-xs text-red-400">{prefixError}</p>
                   ) : (
-                    <p className="text-xs text-[#52525b]">
+                    <p className="text-xs text-collab-500/60">
                       Issues will be numbered as {formData.keyPrefix || "PROJ"}-1, {formData.keyPrefix || "PROJ"}-2, etc.
                     </p>
                   )}
@@ -506,7 +506,7 @@ export default function ProjectSettingsClient({
 
                 {/* Project Color */}
                 <div className="space-y-2">
-                  <Label className="text-sm text-[#9c9ca1]">Project Color</Label>
+                  <Label className="text-sm text-collab-400">Project Color</Label>
                   <div className="flex flex-wrap gap-2">
                     {projectColors.map((color) => (
                       <button
@@ -515,7 +515,7 @@ export default function ProjectSettingsClient({
                         className={cn(
                           "w-8 h-8 rounded-lg transition-all",
                           formData.color === color
-                            ? "ring-2 ring-white ring-offset-2 ring-offset-[#171719] scale-110"
+                            ? "ring-2 ring-white ring-offset-2 ring-offset-collab-800 scale-110"
                             : "hover:scale-105"
                         )}
                         style={{ backgroundColor: color }}
@@ -529,10 +529,10 @@ export default function ProjectSettingsClient({
 
           {/* Statuses Tab */}
           {activeTab === "statuses" && (
-            <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
-              <div className="px-6 py-4 border-b border-[#1f1f22]">
-                <h2 className="text-sm font-medium text-[#fafafa]">Project Statuses</h2>
-                <p className="text-xs text-[#52525b] mt-0.5">
+            <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+              <div className="px-6 py-4 border-b border-collab-700">
+                <h2 className="text-sm font-medium text-collab-50">Project Statuses</h2>
+                <p className="text-xs text-collab-500/60 mt-0.5">
                   Configure the available statuses for issues in this project
                 </p>
               </div>
@@ -541,13 +541,13 @@ export default function ProjectSettingsClient({
                 {statuses.map((status) => (
                   <div
                     key={status.id}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-[#101011] border border-[#1f1f22]"
+                    className="flex items-center gap-3 p-3 rounded-xl bg-collab-900 border border-collab-700"
                   >
                     <div
                       className="w-3 h-3 rounded-full flex-shrink-0"
                       style={{ backgroundColor: status.color }}
                     />
-                    <span className="text-sm text-[#fafafa] flex-1">{status.name}</span>
+                    <span className="text-sm text-collab-50 flex-1">{status.name}</span>
                     {status.isDefault && (
                       <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400">
                         Default
@@ -574,7 +574,7 @@ export default function ProjectSettingsClient({
                     {!status.isDefault && (
                       <button
                         onClick={() => handleRemoveStatus(status.id)}
-                        className="p-1.5 rounded-lg text-[#52525b] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        className="p-1.5 rounded-lg text-collab-500/60 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -583,7 +583,7 @@ export default function ProjectSettingsClient({
                 ))}
 
                 {/* Add New Status */}
-                <div className="flex items-center gap-3 p-3 rounded-xl border border-dashed border-[#27272b] bg-[#101011]/50">
+                <div className="flex items-center gap-3 p-3 rounded-xl border border-dashed border-collab-600 bg-collab-900/50">
                   <button
                     onClick={() => {
                       const randomColor = statusColors[Math.floor(Math.random() * statusColors.length)];
@@ -596,7 +596,7 @@ export default function ProjectSettingsClient({
                     value={newStatusName}
                     onChange={(e) => setNewStatusName(e.target.value)}
                     placeholder="New status name..."
-                    className="flex-1 h-8 bg-transparent border-0 text-[#fafafa] placeholder:text-[#52525b] focus-visible:ring-0 px-0"
+                    className="flex-1 h-8 bg-transparent border-0 text-collab-50 placeholder:text-collab-500/60 focus-visible:ring-0 px-0"
                     onKeyDown={(e) => e.key === "Enter" && handleAddStatus()}
                   />
                   <Button
@@ -627,16 +627,16 @@ export default function ProjectSettingsClient({
                 /* Connected State */
                 <>
                   {/* Repository Card */}
-                  <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
+                  <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
                     <div className="p-5">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#1f1f22] to-[#27272b] flex items-center justify-center">
-                            <Github className="h-6 w-6 text-[#fafafa]" />
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-collab-700 to-collab-600 flex items-center justify-center">
+                            <Github className="h-6 w-6 text-collab-50" />
                           </div>
                           <div>
                             <div className="flex items-center gap-2 mb-0.5">
-                              <h3 className="text-base font-medium text-[#fafafa]">
+                              <h3 className="text-base font-medium text-collab-50">
                                 {project.repository.fullName}
                               </h3>
                               <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -644,7 +644,7 @@ export default function ProjectSettingsClient({
                                 Active
                               </span>
                             </div>
-                            <p className="text-sm text-[#52525b]">
+                            <p className="text-sm text-collab-500/60">
                               Connected repository • Syncing automatically
                             </p>
                           </div>
@@ -653,7 +653,7 @@ export default function ProjectSettingsClient({
                           href={`https://github.com/${project.repository.fullName}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#1f1f22] hover:bg-[#27272b] text-xs text-[#9c9ca1] hover:text-[#fafafa] transition-colors"
+                          className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-collab-700 hover:bg-collab-600 text-xs text-collab-400 hover:text-collab-50 transition-colors"
                         >
                           <ExternalLink className="h-3.5 w-3.5" />
                           View on GitHub
@@ -662,7 +662,7 @@ export default function ProjectSettingsClient({
                     </div>
 
                     {/* Stats Row */}
-                    <div className="grid grid-cols-4 border-t border-[#1f1f22]">
+                    <div className="grid grid-cols-4 border-t border-collab-700">
                       {[
                         { icon: GitBranch, label: "Branches", value: project.repository._count?.branches || 0, color: "text-purple-400", bg: "bg-purple-500/10" },
                         { icon: GitCommit, label: "Commits", value: project.repository._count?.commits || 0, color: "text-blue-400", bg: "bg-blue-500/10" },
@@ -673,15 +673,15 @@ export default function ProjectSettingsClient({
                           key={stat.label}
                           className={cn(
                             "p-4 flex items-center gap-3",
-                            index !== 3 && "border-r border-[#1f1f22]"
+                            index !== 3 && "border-r border-collab-700"
                           )}
                         >
                           <div className={cn("p-2 rounded-lg", stat.bg)}>
                             <stat.icon className={cn("h-4 w-4", stat.color)} />
                           </div>
                           <div>
-                            <div className="text-lg font-semibold text-[#fafafa]">{stat.value}</div>
-                            <div className="text-[11px] text-[#52525b]">{stat.label}</div>
+                            <div className="text-lg font-semibold text-collab-50">{stat.value}</div>
+                            <div className="text-[11px] text-collab-500/60">{stat.label}</div>
                           </div>
                         </div>
                       ))}
@@ -689,52 +689,52 @@ export default function ProjectSettingsClient({
                   </div>
 
                   {/* Quick Actions */}
-                  <div className="rounded-2xl bg-[#171719] border border-[#1f1f22] overflow-hidden">
-                    <div className="px-5 py-3 border-b border-[#1f1f22]">
-                      <span className="text-xs font-medium uppercase tracking-wider text-[#52525b]">Quick Actions</span>
+                  <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+                    <div className="px-5 py-3 border-b border-collab-700">
+                      <span className="text-xs font-medium uppercase tracking-wider text-collab-500/60">Quick Actions</span>
                     </div>
                     <div className="p-2">
                       <div className="grid grid-cols-2 gap-2">
                         <Link
                           href={`/${currentWorkspace?.slug || workspaceId}/projects/${projectSlug}/github`}
-                          className="group flex items-center gap-3 p-3 rounded-xl hover:bg-[#1f1f22] transition-colors"
+                          className="group flex items-center gap-3 p-3 rounded-xl hover:bg-collab-700 transition-colors"
                         >
                           <div className="p-2 rounded-lg bg-emerald-500/10 group-hover:bg-emerald-500/20 transition-colors">
                             <Activity className="h-4 w-4 text-emerald-400" />
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-[#fafafa]">Activity Dashboard</p>
-                            <p className="text-xs text-[#52525b]">View commits, PRs & activity</p>
+                            <p className="text-sm font-medium text-collab-50">Activity Dashboard</p>
+                            <p className="text-xs text-collab-500/60">View commits, PRs & activity</p>
                           </div>
-                          <ChevronRight className="h-4 w-4 text-[#3f3f46] ml-auto group-hover:text-[#75757a] transition-colors" />
+                          <ChevronRight className="h-4 w-4 text-collab-500/50 ml-auto group-hover:text-collab-500 transition-colors" />
                         </Link>
 
                         <Link
                           href={`/${currentWorkspace?.slug || workspaceId}/projects/${projectSlug}/changelog`}
-                          className="group flex items-center gap-3 p-3 rounded-xl hover:bg-[#1f1f22] transition-colors"
+                          className="group flex items-center gap-3 p-3 rounded-xl hover:bg-collab-700 transition-colors"
                         >
                           <div className="p-2 rounded-lg bg-amber-500/10 group-hover:bg-amber-500/20 transition-colors">
                             <Tag className="h-4 w-4 text-amber-400" />
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-[#fafafa]">Changelog</p>
-                            <p className="text-xs text-[#52525b]">View releases & versions</p>
+                            <p className="text-sm font-medium text-collab-50">Changelog</p>
+                            <p className="text-xs text-collab-500/60">View releases & versions</p>
                           </div>
-                          <ChevronRight className="h-4 w-4 text-[#3f3f46] ml-auto group-hover:text-[#75757a] transition-colors" />
+                          <ChevronRight className="h-4 w-4 text-collab-500/50 ml-auto group-hover:text-collab-500 transition-colors" />
                         </Link>
 
                         <Link
                           href={`/${currentWorkspace?.slug || workspaceId}/projects/${projectSlug}/github/settings`}
-                          className="group flex items-center gap-3 p-3 rounded-xl hover:bg-[#1f1f22] transition-colors"
+                          className="group flex items-center gap-3 p-3 rounded-xl hover:bg-collab-700 transition-colors"
                         >
                           <div className="p-2 rounded-lg bg-blue-500/10 group-hover:bg-blue-500/20 transition-colors">
                             <Settings className="h-4 w-4 text-blue-400" />
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-[#fafafa]">Integration Settings</p>
-                            <p className="text-xs text-[#52525b]">Configure sync & webhooks</p>
+                            <p className="text-sm font-medium text-collab-50">Integration Settings</p>
+                            <p className="text-xs text-collab-500/60">Configure sync & webhooks</p>
                           </div>
-                          <ChevronRight className="h-4 w-4 text-[#3f3f46] ml-auto group-hover:text-[#75757a] transition-colors" />
+                          <ChevronRight className="h-4 w-4 text-collab-500/50 ml-auto group-hover:text-collab-500 transition-colors" />
                         </Link>
 
                         <button
@@ -744,31 +744,31 @@ export default function ProjectSettingsClient({
                               description: "Syncing repository data from GitHub...",
                             });
                           }}
-                          className="group flex items-center gap-3 p-3 rounded-xl hover:bg-[#1f1f22] transition-colors text-left"
+                          className="group flex items-center gap-3 p-3 rounded-xl hover:bg-collab-700 transition-colors text-left"
                         >
                           <div className="p-2 rounded-lg bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
                             <RefreshCw className="h-4 w-4 text-purple-400" />
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-[#fafafa]">Sync Now</p>
-                            <p className="text-xs text-[#52525b]">Manually refresh data</p>
+                            <p className="text-sm font-medium text-collab-50">Sync Now</p>
+                            <p className="text-xs text-collab-500/60">Manually refresh data</p>
                           </div>
-                          <ChevronRight className="h-4 w-4 text-[#3f3f46] ml-auto group-hover:text-[#75757a] transition-colors" />
+                          <ChevronRight className="h-4 w-4 text-collab-500/50 ml-auto group-hover:text-collab-500 transition-colors" />
                         </button>
                       </div>
                     </div>
                   </div>
 
                   {/* Disconnect Option */}
-                  <div className="rounded-xl bg-[#171719] border border-[#1f1f22] p-4 flex items-center justify-between">
+                  <div className="rounded-xl bg-collab-800 border border-collab-700 p-4 flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-[#9c9ca1]">Disconnect Repository</p>
-                      <p className="text-xs text-[#52525b]">Remove the GitHub integration from this project</p>
+                      <p className="text-sm text-collab-400">Disconnect Repository</p>
+                      <p className="text-xs text-collab-500/60">Remove the GitHub integration from this project</p>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 px-3 text-[#75757a] hover:text-red-400 hover:bg-red-500/10"
+                      className="h-8 px-3 text-collab-500 hover:text-red-400 hover:bg-red-500/10"
                     >
                       Disconnect
                     </Button>
@@ -782,18 +782,18 @@ export default function ProjectSettingsClient({
           {activeTab === "danger" && (
             <div className="space-y-4">
               {/* Archive Project */}
-              <div className="rounded-2xl bg-[#171719] border border-amber-500/20 overflow-hidden">
-                <div className="px-6 py-4 border-b border-[#1f1f22]">
+              <div className="rounded-2xl bg-collab-800 border border-amber-500/20 overflow-hidden">
+                <div className="px-6 py-4 border-b border-collab-700">
                   <div className="flex items-center gap-2">
                     <Archive className="h-4 w-4 text-amber-400" />
-                    <h2 className="text-sm font-medium text-[#fafafa]">Archive Project</h2>
+                    <h2 className="text-sm font-medium text-collab-50">Archive Project</h2>
                   </div>
-                  <p className="text-xs text-[#52525b] mt-0.5">
+                  <p className="text-xs text-collab-500/60 mt-0.5">
                     Archived projects are hidden from the main list but can be restored
                   </p>
                 </div>
                 <div className="p-6 flex items-center justify-between">
-                  <p className="text-sm text-[#75757a]">
+                  <p className="text-sm text-collab-500">
                     Archive this project to hide it from your workspace
                   </p>
                   <Button
@@ -808,18 +808,18 @@ export default function ProjectSettingsClient({
               </div>
 
               {/* Delete Project */}
-              <div className="rounded-2xl bg-[#171719] border border-red-500/20 overflow-hidden">
-                <div className="px-6 py-4 border-b border-[#1f1f22]">
+              <div className="rounded-2xl bg-collab-800 border border-red-500/20 overflow-hidden">
+                <div className="px-6 py-4 border-b border-collab-700">
                   <div className="flex items-center gap-2">
                     <Trash2 className="h-4 w-4 text-red-400" />
-                    <h2 className="text-sm font-medium text-[#fafafa]">Delete Project</h2>
+                    <h2 className="text-sm font-medium text-collab-50">Delete Project</h2>
                   </div>
-                  <p className="text-xs text-[#52525b] mt-0.5">
+                  <p className="text-xs text-collab-500/60 mt-0.5">
                     Permanently delete this project and all its data
                   </p>
                 </div>
                 <div className="p-6 flex items-center justify-between">
-                  <p className="text-sm text-[#75757a]">
+                  <p className="text-sm text-collab-500">
                     This action cannot be undone. All issues, views, and data will be lost.
                   </p>
                   <Button
@@ -839,23 +839,23 @@ export default function ProjectSettingsClient({
 
       {/* Status Deletion Dialog */}
       <AlertDialog open={!!statusToDelete} onOpenChange={(open) => !open && setStatusToDelete(null)}>
-        <AlertDialogContent className="bg-[#171719] border-[#1f1f22]">
+        <AlertDialogContent className="bg-collab-800 border-collab-700">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[#fafafa]">
+            <AlertDialogTitle className="text-collab-50">
               Delete "{statusToDelete?.name}"
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-[#75757a]">
-              This status has <strong className="text-[#fafafa]">{statusIssueCount}</strong> issue(s).
+            <AlertDialogDescription className="text-collab-500">
+              This status has <strong className="text-collab-50">{statusIssueCount}</strong> issue(s).
               Select a status to move them to.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
           <div className="py-4">
-            <Label className="text-sm text-[#9c9ca1] mb-2 block">Move issues to:</Label>
+            <Label className="text-sm text-collab-400 mb-2 block">Move issues to:</Label>
             <select
               value={targetStatusId}
               onChange={(e) => setTargetStatusId(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg bg-[#101011] border border-[#1f1f22] text-sm text-[#fafafa] focus:outline-none focus:border-[#3f3f46]"
+              className="w-full h-10 px-3 rounded-lg bg-collab-900 border border-collab-700 text-sm text-collab-50 focus:outline-none focus:border-collab-500/50"
             >
               <option value="">Select a status</option>
               {statuses
@@ -869,7 +869,7 @@ export default function ProjectSettingsClient({
           </div>
 
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-transparent border-[#1f1f22] text-[#75757a] hover:bg-[#1f1f22] hover:text-[#fafafa]">
+            <AlertDialogCancel className="bg-transparent border-collab-700 text-collab-500 hover:bg-collab-700 hover:text-collab-50">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
@@ -885,15 +885,15 @@ export default function ProjectSettingsClient({
 
       {/* Archive Dialog */}
       <AlertDialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>
-        <AlertDialogContent className="bg-[#171719] border-[#1f1f22]">
+        <AlertDialogContent className="bg-collab-800 border-collab-700">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[#fafafa]">Archive Project</AlertDialogTitle>
-            <AlertDialogDescription className="text-[#75757a]">
+            <AlertDialogTitle className="text-collab-50">Archive Project</AlertDialogTitle>
+            <AlertDialogDescription className="text-collab-500">
               Are you sure you want to archive "{project.name}"? It will be hidden from your workspace but can be restored later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-transparent border-[#1f1f22] text-[#75757a] hover:bg-[#1f1f22] hover:text-[#fafafa]">
+            <AlertDialogCancel className="bg-transparent border-collab-700 text-collab-500 hover:bg-collab-700 hover:text-collab-50">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
@@ -908,10 +908,10 @@ export default function ProjectSettingsClient({
 
       {/* Delete Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent className="bg-[#171719] border-[#1f1f22]">
+        <AlertDialogContent className="bg-collab-800 border-collab-700">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[#fafafa]">Delete Project</AlertDialogTitle>
-            <AlertDialogDescription className="text-[#75757a]">
+            <AlertDialogTitle className="text-collab-50">Delete Project</AlertDialogTitle>
+            <AlertDialogDescription className="text-collab-500">
               This action cannot be undone. Type <strong className="text-red-400">{project.name}</strong> to confirm.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -920,11 +920,11 @@ export default function ProjectSettingsClient({
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="Type project name to confirm"
-              className="h-10 bg-[#101011] border-[#1f1f22] text-[#fafafa] placeholder:text-[#52525b] focus:border-red-500 focus-visible:ring-0"
+              className="h-10 bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-red-500 focus-visible:ring-0"
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-transparent border-[#1f1f22] text-[#75757a] hover:bg-[#1f1f22] hover:text-[#fafafa]">
+            <AlertDialogCancel className="bg-transparent border-collab-700 text-collab-500 hover:bg-collab-700 hover:text-collab-50">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction

@@ -131,14 +131,14 @@ export function IssueRelationsSection({
             className="flex items-center gap-2 group flex-1 h-auto p-0 justify-start hover:bg-transparent"
           >
             {expandedGroups.has('child') ? (
-              <ChevronDown className="h-4 w-4 text-[#7d8590] group-hover:text-[#c9d1d9] transition-colors" />
+              <ChevronDown className="h-4 w-4 text-collab-500 group-hover:text-collab-400 transition-colors" />
             ) : (
-              <ChevronRight className="h-4 w-4 text-[#7d8590] group-hover:text-[#c9d1d9] transition-colors" />
+              <ChevronRight className="h-4 w-4 text-collab-500 group-hover:text-collab-400 transition-colors" />
             )}
-            <h3 className="text-sm font-semibold text-[#e1e7ef] group-hover:text-white transition-colors">
+            <h3 className="text-sm font-semibold text-collab-50 group-hover:text-white transition-colors">
               Sub-issues
               {hasSubIssues && (
-                <span className="ml-2 text-xs text-[#7d8590] font-normal">
+                <span className="ml-2 text-xs text-collab-500 font-normal">
                   {relations.children.length}
                 </span>
               )}
@@ -149,11 +149,11 @@ export function IssueRelationsSection({
           {hasSubIssues && subIssueProgress && subIssueProgress.total > 0 && (
             <div className="flex items-center gap-2 ml-4">
               <div className="flex items-center gap-1.5 text-xs">
-                <span className="text-[#e1e7ef] font-medium">{subIssueProgress.completed}</span>
-                <span className="text-[#7d8590]">/</span>
-                <span className="text-[#7d8590]">{subIssueProgress.total}</span>
+                <span className="text-collab-50 font-medium">{subIssueProgress.completed}</span>
+                <span className="text-collab-500">/</span>
+                <span className="text-collab-500">{subIssueProgress.total}</span>
               </div>
-              <div className="w-16 h-1.5 rounded-full overflow-hidden bg-[#2d2d30]">
+              <div className="w-16 h-1.5 rounded-full overflow-hidden bg-collab-600">
                 <div
                   className={cn(
                     "h-full rounded-full transition-all duration-300",
@@ -188,7 +188,7 @@ export function IssueRelationsSection({
 
             {/* No sub-issues message */}
             {!hasSubIssues && activeInlineCreator !== 'child' && (
-              <div className="text-xs text-[#6e7681] italic">
+              <div className="text-xs text-collab-500 italic">
                 No sub-issues yet
               </div>
             )}
@@ -211,7 +211,7 @@ export function IssueRelationsSection({
                 variant="ghost"
                 size="sm"
                 onClick={() => handleAddRelation('child')}
-                className="h-7 px-2 text-xs text-[#7d8590] hover:text-[#c9d1d9] hover:bg-[#1a1a1a] border border-transparent hover:border-[#333] transition-all w-full justify-start"
+                className="h-7 px-2 text-xs text-collab-500 hover:text-collab-400 hover:bg-collab-800 border border-transparent hover:border-collab-600 transition-all w-full justify-start"
               >
                 <span className="text-lg mr-2 leading-none">+</span>
                 Add sub-issue
@@ -223,7 +223,7 @@ export function IssueRelationsSection({
 
       {/* Divider */}
       {(hasRelations || hasSubIssues) && (
-        <div className="border-t border-[#1f1f1f]" />
+        <div className="border-t border-collab-700" />
       )}
 
       {/* Other Relations */}
@@ -235,14 +235,14 @@ export function IssueRelationsSection({
             className="flex items-center gap-2 group flex-1 h-auto p-0 justify-start hover:bg-transparent"
           >
             {isRelationsSectionExpanded ? (
-              <ChevronDown className="h-4 w-4 text-[#7d8590] group-hover:text-[#c9d1d9] transition-colors" />
+              <ChevronDown className="h-4 w-4 text-collab-500 group-hover:text-collab-400 transition-colors" />
             ) : (
-              <ChevronRight className="h-4 w-4 text-[#7d8590] group-hover:text-[#c9d1d9] transition-colors" />
+              <ChevronRight className="h-4 w-4 text-collab-500 group-hover:text-collab-400 transition-colors" />
             )}
-            <h3 className="text-sm font-semibold text-[#e1e7ef] group-hover:text-white transition-colors">
+            <h3 className="text-sm font-semibold text-collab-50 group-hover:text-white transition-colors">
               Relations
               {relationsCount > 0 && (
-                <span className="ml-2 text-xs text-[#7d8590] font-normal">
+                <span className="ml-2 text-xs text-collab-500 font-normal">
                   {relationsCount}
                 </span>
               )}
@@ -282,7 +282,7 @@ export function IssueRelationsSection({
 
             {/* No relations message - only show when no relations AND creator is not active for relations */}
             {!hasRelations && (activeInlineCreator === null || activeInlineCreator === 'child') && (
-              <div className="text-xs text-[#6e7681] italic">
+              <div className="text-xs text-collab-500 italic">
                 No relations yet
               </div>
             )}
@@ -306,7 +306,7 @@ export function IssueRelationsSection({
                 variant="ghost"
                 size="sm"
                 onClick={() => handleAddRelation('relates_to')}
-                className="h-7 px-2 text-xs text-[#7d8590] hover:text-[#c9d1d9] hover:bg-[#1a1a1a] border border-transparent hover:border-[#333] transition-all w-full justify-start"
+                className="h-7 px-2 text-xs text-collab-500 hover:text-collab-400 hover:bg-collab-800 border border-transparent hover:border-collab-600 transition-all w-full justify-start"
               >
                 <span className="text-lg mr-2 leading-none">+</span>
                 Add relation

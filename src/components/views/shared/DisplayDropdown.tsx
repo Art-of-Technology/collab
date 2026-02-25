@@ -114,8 +114,8 @@ export default function DisplayDropdown({
           variant={isModalVariant ? "outline" : "ghost"}
           size="sm"
           className={isModalVariant 
-            ? "h-8 px-3 bg-transparent border-[#2a2a2a] text-white hover:bg-[#1f1f1f]"
-            : "h-8 px-3 text-[#666] hover:text-white border border-[#2a2a2a] hover:border-[#3a3a3a]"
+            ? "h-8 px-3 bg-transparent border-collab-600 text-white hover:bg-collab-700"
+            : "h-8 px-3 text-collab-500 hover:text-white border border-collab-600 hover:border-[#3a3a3a]"
           }
         >
           <Eye className="h-4 w-4 mr-2" />
@@ -124,7 +124,7 @@ export default function DisplayDropdown({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent 
-        className="w-80 bg-[#090909] border-[#1f1f1f] p-4" 
+        className="w-80 bg-collab-950 border-collab-700 p-4" 
         align="end"
       >
         {/* Grouping and Ordering Controls */}
@@ -132,12 +132,12 @@ export default function DisplayDropdown({
           <div className="flex items-center justify-between">
             <span className="text-sm text-white font-medium">Grouping</span>
             <Select value={grouping} onValueChange={onGroupingChange}>
-              <SelectTrigger className="w-32 h-8 bg-[#1f1f1f] border-[#2a2a2a] text-white">
+              <SelectTrigger className="w-32 h-8 bg-collab-700 border-collab-600 text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#090909] border-[#1f1f1f]">
+              <SelectContent className="bg-collab-950 border-collab-700">
                 {currentGroupingOptions.map((option) => (
-                  <SelectItem key={option.id} value={option.id} className="text-white focus:bg-[#1f1f1f]">
+                  <SelectItem key={option.id} value={option.id} className="text-white focus:bg-collab-700">
                     {option.name}
                   </SelectItem>
                 ))}
@@ -148,12 +148,12 @@ export default function DisplayDropdown({
           <div className="flex items-center justify-between">
             <span className="text-sm text-white font-medium">Ordering</span>
             <Select value={ordering} onValueChange={onOrderingChange}>
-              <SelectTrigger className="w-32 h-8 bg-[#1f1f1f] border-[#2a2a2a] text-white">
+              <SelectTrigger className="w-32 h-8 bg-collab-700 border-collab-600 text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#090909] border-[#1f1f1f]">
+              <SelectContent className="bg-collab-950 border-collab-700">
                 {ORDERING_OPTIONS.map((option) => (
-                  <SelectItem key={option.id} value={option.id} className="text-white focus:bg-[#1f1f1f]">
+                  <SelectItem key={option.id} value={option.id} className="text-white focus:bg-collab-700">
                     {option.name}
                   </SelectItem>
                 ))}
@@ -166,12 +166,12 @@ export default function DisplayDropdown({
             <div className="flex items-center justify-between">
               <span className="text-sm text-white font-medium">Completed issues</span>
               <Select value={completedIssues} onValueChange={onCompletedIssuesChange}>
-                <SelectTrigger className="w-32 h-8 bg-[#1f1f1f] border-[#2a2a2a] text-white">
+                <SelectTrigger className="w-32 h-8 bg-collab-700 border-collab-600 text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[#090909] border-[#1f1f1f]">
-                  <SelectItem value="all" className="text-white focus:bg-[#1f1f1f]">All</SelectItem>
-                  <SelectItem value="completed" className="text-white focus:bg-[#1f1f1f]">Completed issues</SelectItem>
+                <SelectContent className="bg-collab-950 border-collab-700">
+                  <SelectItem value="all" className="text-white focus:bg-collab-700">All</SelectItem>
+                  <SelectItem value="completed" className="text-white focus:bg-collab-700">Completed issues</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -184,7 +184,7 @@ export default function DisplayDropdown({
               <Checkbox
                 checked={showSubIssues}
                 onCheckedChange={(checked) => onShowSubIssuesChange(checked === true)}
-                className="border-[#2a2a2a] data-[state=checked]:bg-[#0969da] data-[state=checked]:border-[#0969da]"
+                className="border-collab-600 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
               />
             </div>
           )}
@@ -195,29 +195,29 @@ export default function DisplayDropdown({
               <Checkbox
                 checked={showEmptyGroups}
                 onCheckedChange={(checked) => onShowEmptyGroupsChange(checked === true)}
-                className="border-[#2a2a2a] data-[state=checked]:bg-[#0969da] data-[state=checked]:border-[#0969da]"
+                className="border-collab-600 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
               />
             </div>
           )}
         </div>
 
-        <div className="border-t border-[#1f1f1f] pt-4">
+        <div className="border-t border-collab-700 pt-4">
           <div className="space-y-3">
             <h4 className="text-sm text-white font-medium">
               {displayType === 'LIST' ? 'List' : displayType === 'KANBAN' ? 'Board' : 'Timeline'} options
             </h4>
-            <p className="text-sm text-[#999]">Display properties</p>
+            <p className="text-sm text-collab-400">Display properties</p>
             
             <div className="grid grid-cols-2 gap-2">
               {currentDisplayProperties.map((property) => (
                 <div 
                   key={property}
-                  className="flex items-center space-x-2 p-2 rounded hover:bg-[#1f1f1f] cursor-pointer"
+                  className="flex items-center space-x-2 p-2 rounded hover:bg-collab-700 cursor-pointer"
                   onClick={() => toggleDisplayProperty(property)}
                 >
                   <Checkbox
                     checked={displayProperties.includes(property)}
-                    className="border-[#2a2a2a] data-[state=checked]:bg-[#0969da] data-[state=checked]:border-[#0969da]"
+                    className="border-collab-600 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                   />
                   <span className="text-sm text-white">{property}</span>
                 </div>
@@ -228,20 +228,20 @@ export default function DisplayDropdown({
 
         {/* Reset and additional actions */}
         {!isModalVariant && (
-          <div className="border-t border-[#1f1f1f] pt-4 mt-4">
+          <div className="border-t border-collab-700 pt-4 mt-4">
             <div className="flex justify-between">
               <Button 
                 variant="ghost" 
                 size="sm"
                 onClick={onReset}
-                className="text-[#666] hover:text-white"
+                className="text-collab-500 hover:text-white"
               >
                 Reset
               </Button>
               <Button 
                 variant="ghost" 
                 size="sm"
-                className="text-[#0969da] hover:text-[#0860ca]"
+                className="text-blue-600 hover:text-blue-600"
               >
                 Set default for everyone
               </Button>

@@ -65,18 +65,18 @@ export default function FilterTags({
             key={`${filterId}-${value}`}
             variant="secondary"
             className={isModalVariant
-              ? "h-7 px-2 bg-[#1f1f1f] text-white border border-[#2a2a2a] flex items-center gap-2"
-              : "h-8 px-3 bg-[#1f1f1f] text-white border border-[#2a2a2a] flex items-center gap-2"
+              ? "h-7 px-2 bg-collab-700 text-white border border-collab-600 flex items-center gap-2"
+              : "h-8 px-3 bg-collab-700 text-white border border-collab-600 flex items-center gap-2"
             }
           >
-            <span className="text-[#999]">
+            <span className="text-collab-400">
               {FILTER_LABELS[filterId as keyof typeof FILTER_LABELS] || filterId}:
             </span>
             <span>{renderFilterValue(filterId, value)}</span>
             <Button
               variant="ghost"
               onClick={() => onRemove(filterId, value)}
-              className="text-[#666] hover:text-white transition-colors p-0 h-auto"
+              className="text-collab-500 hover:text-white transition-colors p-0 h-auto"
             >
               <X className="h-3 w-3" />
             </Button>

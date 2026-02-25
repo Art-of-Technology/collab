@@ -111,12 +111,12 @@ export default function AIAssistantWidget() {
         className={cn(
           "fixed bottom-6 right-6 z-50",
           "w-[380px] h-12",
-          "bg-[#0d0d0e] border border-[#27272a]",
+          "bg-collab-900 border border-collab-600",
           "rounded-full shadow-lg shadow-black/20",
           "flex items-center px-4 gap-3"
         )}
       >
-        <Sparkles className="h-4 w-4 text-[#8b5cf6]" />
+        <Sparkles className="h-4 w-4 text-violet-500" />
         <input
           ref={inputRef}
           type="text"
@@ -127,22 +127,22 @@ export default function AIAssistantWidget() {
           }}
           placeholder="Ask AI anything..."
           className={cn(
-            "flex-1 bg-transparent text-sm text-[#fafafa]",
-            "placeholder:text-[#52525b]",
+            "flex-1 bg-transparent text-sm text-collab-50",
+            "placeholder:text-collab-500/60",
             "focus:outline-none"
           )}
         />
         <button
           onClick={expandWidget}
-          className="p-1.5 hover:bg-[#1f1f1f] rounded-full transition-colors"
+          className="p-1.5 hover:bg-collab-700 rounded-full transition-colors"
         >
-          <Maximize2 className="h-4 w-4 text-[#71717a]" />
+          <Maximize2 className="h-4 w-4 text-collab-500" />
         </button>
         <button
           onClick={closeWidget}
-          className="p-1.5 hover:bg-[#1f1f1f] rounded-full transition-colors"
+          className="p-1.5 hover:bg-collab-700 rounded-full transition-colors"
         >
-          <X className="h-4 w-4 text-[#71717a]" />
+          <X className="h-4 w-4 text-collab-500" />
         </button>
       </motion.div>
     );
@@ -158,43 +158,43 @@ export default function AIAssistantWidget() {
       className={cn(
         "fixed bottom-6 right-6 z-50",
         "w-[420px] h-[600px]",
-        "bg-[#0d0d0e] border border-[#27272a]",
+        "bg-collab-900 border border-collab-600",
         "rounded-2xl shadow-xl shadow-black/30",
         "flex flex-col overflow-hidden"
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#1f1f1f] bg-gradient-to-r from-[#8b5cf6]/10 to-transparent">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700 bg-gradient-to-r from-[#8b5cf6]/10 to-transparent">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-[#8b5cf6]/20 rounded-lg">
-            <Sparkles className="h-4 w-4 text-[#8b5cf6]" />
+          <div className="p-1.5 bg-violet-500/20 rounded-lg">
+            <Sparkles className="h-4 w-4 text-violet-500" />
           </div>
           <div>
-            <h3 className="text-sm font-medium text-[#fafafa]">AI Assistant</h3>
-            <p className="text-[10px] text-[#52525b]">Powered by Claude</p>
+            <h3 className="text-sm font-medium text-collab-50">AI Assistant</h3>
+            <p className="text-[10px] text-collab-500/60">Powered by Claude</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
           {messages.length > 0 && (
             <button
               onClick={clearHistory}
-              className="p-1.5 hover:bg-[#1f1f1f] rounded-lg transition-colors group"
+              className="p-1.5 hover:bg-collab-700 rounded-lg transition-colors group"
               title="Clear conversation"
             >
-              <Trash2 className="h-4 w-4 text-[#52525b] group-hover:text-[#71717a]" />
+              <Trash2 className="h-4 w-4 text-collab-500/60 group-hover:text-collab-500" />
             </button>
           )}
           <button
             onClick={minimizeWidget}
-            className="p-1.5 hover:bg-[#1f1f1f] rounded-lg transition-colors"
+            className="p-1.5 hover:bg-collab-700 rounded-lg transition-colors"
           >
-            <Minus className="h-4 w-4 text-[#71717a]" />
+            <Minus className="h-4 w-4 text-collab-500" />
           </button>
           <button
             onClick={closeWidget}
-            className="p-1.5 hover:bg-[#1f1f1f] rounded-lg transition-colors"
+            className="p-1.5 hover:bg-collab-700 rounded-lg transition-colors"
           >
-            <X className="h-4 w-4 text-[#71717a]" />
+            <X className="h-4 w-4 text-collab-500" />
           </button>
         </div>
       </div>
@@ -206,12 +206,12 @@ export default function AIAssistantWidget() {
             {/* Welcome message */}
             <div className="text-center py-6">
               <div className="mx-auto w-12 h-12 rounded-2xl bg-gradient-to-br from-[#8b5cf6]/20 to-[#7c3aed]/20 flex items-center justify-center mb-3">
-                <Sparkles className="h-6 w-6 text-[#8b5cf6]" />
+                <Sparkles className="h-6 w-6 text-violet-500" />
               </div>
-              <h3 className="text-sm font-medium text-[#fafafa] mb-1">
+              <h3 className="text-sm font-medium text-collab-50 mb-1">
                 How can I help you today?
               </h3>
-              <p className="text-xs text-[#52525b]">
+              <p className="text-xs text-collab-500/60">
                 {getContextualPrompt()}
               </p>
             </div>
@@ -229,7 +229,7 @@ export default function AIAssistantWidget() {
             ))}
 
             {isLoading && (
-              <div className="flex items-center gap-2 text-[#52525b]">
+              <div className="flex items-center gap-2 text-collab-500/60">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-xs">Thinking...</span>
               </div>
@@ -239,7 +239,7 @@ export default function AIAssistantWidget() {
       </ScrollArea>
 
       {/* Input Area */}
-      <div className="p-4 border-t border-[#1f1f1f] bg-[#0a0a0b]">
+      <div className="p-4 border-t border-collab-700 bg-collab-950">
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <div className="flex-1 relative">
             <input
@@ -251,10 +251,10 @@ export default function AIAssistantWidget() {
               disabled={isLoading}
               className={cn(
                 "w-full px-4 py-2.5 pr-10",
-                "bg-[#1f1f1f] border border-[#27272a]",
-                "rounded-xl text-sm text-[#fafafa]",
-                "placeholder:text-[#52525b]",
-                "focus:outline-none focus:border-[#8b5cf6]/50 focus:ring-1 focus:ring-[#8b5cf6]/20",
+                "bg-collab-700 border border-collab-600",
+                "rounded-xl text-sm text-collab-50",
+                "placeholder:text-collab-500/60",
+                "focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20",
                 "disabled:opacity-50 disabled:cursor-not-allowed",
                 "transition-all duration-200"
               )}
@@ -266,7 +266,7 @@ export default function AIAssistantWidget() {
                 className={cn(
                   "absolute right-2 top-1/2 -translate-y-1/2",
                   "p-1 rounded-md",
-                  "text-[#52525b] hover:text-[#71717a] hover:bg-[#27272a]",
+                  "text-collab-500/60 hover:text-collab-500 hover:bg-collab-600",
                   "transition-colors"
                 )}
               >
@@ -282,7 +282,7 @@ export default function AIAssistantWidget() {
             disabled={!inputValue.trim() || isLoading}
             className={cn(
               "px-3 h-10",
-              "bg-[#8b5cf6] hover:bg-[#7c3aed]",
+              "bg-violet-500 hover:bg-violet-600",
               "disabled:opacity-50 disabled:cursor-not-allowed"
             )}
           >
@@ -293,8 +293,8 @@ export default function AIAssistantWidget() {
             )}
           </Button>
         </form>
-        <p className="text-[10px] text-[#3f3f46] text-center mt-2">
-          Press <kbd className="px-1 py-0.5 bg-[#1f1f1f] rounded text-[#52525b]">Cmd+J</kbd> to toggle
+        <p className="text-[10px] text-collab-500/50 text-center mt-2">
+          Press <kbd className="px-1 py-0.5 bg-collab-700 rounded text-collab-500/60">Cmd+J</kbd> to toggle
         </p>
       </div>
     </motion.div>

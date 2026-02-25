@@ -99,8 +99,8 @@ const ACTION_CONFIG: Record<
 
 const DEFAULT_CONFIG = {
   icon: Circle,
-  color: "text-[#71717a]",
-  bgColor: "bg-[#27272a]",
+  color: "text-collab-500",
+  bgColor: "bg-collab-600",
   label: "updated",
 };
 
@@ -127,8 +127,8 @@ export default function ActivityItem({
           : item.newValue;
       return (
         <>
-          <span className="text-[#fafafa] font-medium">{userName}</span>
-          <span className="text-[#75757a]"> moved to </span>
+          <span className="text-collab-50 font-medium">{userName}</span>
+          <span className="text-collab-500"> moved to </span>
           <span
             className="px-2 py-0.5 rounded-lg text-xs font-medium"
             style={{
@@ -151,9 +151,9 @@ export default function ActivityItem({
 
       return (
         <>
-          <span className="text-[#fafafa] font-medium">{userName}</span>
-          <span className="text-[#75757a]"> assigned to </span>
-          <span className="text-[#fafafa] font-medium">{assigneeName}</span>
+          <span className="text-collab-50 font-medium">{userName}</span>
+          <span className="text-collab-500"> assigned to </span>
+          <span className="text-collab-50 font-medium">{assigneeName}</span>
         </>
       );
     }
@@ -173,9 +173,9 @@ export default function ActivityItem({
       };
       return (
         <>
-          <span className="text-[#fafafa] font-medium">{userName}</span>
-          <span className="text-[#75757a]"> set priority to </span>
-          <span className={priorityColors[priority.toLowerCase()] || "text-[#fafafa]"}>
+          <span className="text-collab-50 font-medium">{userName}</span>
+          <span className="text-collab-500"> set priority to </span>
+          <span className={priorityColors[priority.toLowerCase()] || "text-collab-50"}>
             {priority}
           </span>
         </>
@@ -185,14 +185,14 @@ export default function ActivityItem({
     // Default message
     return (
       <>
-        <span className="text-[#fafafa] font-medium">{userName}</span>
-        <span className="text-[#75757a]"> {config.label}</span>
+        <span className="text-collab-50 font-medium">{userName}</span>
+        <span className="text-collab-500"> {config.label}</span>
       </>
     );
   }, [item, config.label]);
 
   return (
-    <div className="group flex items-start gap-3 py-3 px-4 -mx-4 rounded-xl hover:bg-[#171719] transition-colors">
+    <div className="group flex items-start gap-3 py-3 px-4 -mx-4 rounded-xl hover:bg-collab-800 transition-colors">
       {/* Icon */}
       <div className={`p-2 rounded-xl ${config.bgColor} mt-0.5 shrink-0`}>
         <Icon className={`h-4 w-4 ${config.color}`} />
@@ -207,7 +207,7 @@ export default function ActivityItem({
         {item.issue && issueUrl && (
           <Link
             href={issueUrl}
-            className="mt-2 inline-flex items-center gap-2 text-sm text-[#75757a] hover:text-[#9c9ca1] transition-colors group/link"
+            className="mt-2 inline-flex items-center gap-2 text-sm text-collab-500 hover:text-collab-400 transition-colors group/link"
           >
             <span
               className="w-2 h-2 rounded-full shrink-0"
@@ -215,7 +215,7 @@ export default function ActivityItem({
                 backgroundColor: item.issue.project?.color || "#6366f1",
               }}
             />
-            <span className="font-mono text-[#75757a] group-hover/link:text-[#9c9ca1]">
+            <span className="font-mono text-collab-500 group-hover/link:text-collab-400">
               {item.issue.issueKey}
             </span>
             <span className="truncate max-w-[300px]">{item.issue.title}</span>
@@ -225,12 +225,12 @@ export default function ActivityItem({
 
       {/* Timestamp & Avatar */}
       <div className="flex items-center gap-3 flex-shrink-0">
-        <span className="text-xs text-[#75757a]">
+        <span className="text-xs text-collab-500">
           {format(new Date(item.createdAt), "h:mm a")}
         </span>
-        <Avatar className="h-7 w-7 ring-1 ring-[#1f1f22]">
+        <Avatar className="h-7 w-7 ring-1 ring-collab-700">
           <AvatarImage src={item.user.image || undefined} />
-          <AvatarFallback className="text-xs bg-[#171719] text-[#75757a]">
+          <AvatarFallback className="text-xs bg-collab-800 text-collab-500">
             {item.user.name?.charAt(0) || "?"}
           </AvatarFallback>
         </Avatar>

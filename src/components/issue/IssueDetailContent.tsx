@@ -833,8 +833,8 @@ export function IssueDetailContent({
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center space-y-4">
-          <LoadingState size="md" className="mx-auto text-[#8b949e]" noPadding={true} />
-          <p className="text-[#8b949e] text-sm">Loading issue...</p>
+          <LoadingState size="md" className="mx-auto text-collab-400" noPadding={true} />
+          <p className="text-collab-400 text-sm">Loading issue...</p>
         </div>
       </div>
     );
@@ -844,15 +844,15 @@ export function IssueDetailContent({
   if (error) {
     return (
       <div className="text-center py-12">
-        <div className="p-8 border border-[#1f1f1f] bg-[#0a0a0a] rounded-lg">
+        <div className="p-8 border border-collab-700 bg-collab-900 rounded-lg">
           <div className="space-y-4">
             <div className="text-red-400 font-semibold">Error</div>
-            <p className="text-[#8b949e]">{error}</p>
+            <p className="text-collab-400">{error}</p>
             <div className="flex justify-center gap-2">
               <Button
                 onClick={onRefresh}
                 size="sm"
-                className="bg-[#238636] hover:bg-[#2ea043] text-white"
+                className="bg-green-600 hover:bg-green-700 text-white"
               >
                 Try Again
               </Button>
@@ -861,7 +861,7 @@ export function IssueDetailContent({
                   onClick={onClose}
                   variant="outline"
                   size="sm"
-                  className="border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
+                  className="border-collab-700 text-collab-400 hover:bg-collab-700"
                 >
                   Close
                 </Button>
@@ -877,10 +877,10 @@ export function IssueDetailContent({
   if (!issue) {
     return (
       <div className="text-center py-12">
-        <div className="p-8 border border-[#1f1f1f] bg-[#0a0a0a] rounded-lg">
+        <div className="p-8 border border-collab-700 bg-collab-900 rounded-lg">
           <div className="space-y-4">
             <div className="text-lg font-semibold text-white">Issue not found</div>
-            <p className="text-[#8b949e]">
+            <p className="text-collab-400">
               The issue you're looking for doesn't exist or you don't have permission to view it.
             </p>
             {onClose && (
@@ -888,7 +888,7 @@ export function IssueDetailContent({
                 onClick={onClose}
                 variant="outline"
                 size="sm"
-                className="border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
+                className="border-collab-700 text-collab-400 hover:bg-collab-700"
               >
                 Close
               </Button>
@@ -902,7 +902,7 @@ export function IssueDetailContent({
   return (
     <div className={cn(
       "h-full flex flex-col",
-      "bg-[#0a0a0a] text-white transition-opacity duration-200",
+      "bg-collab-900 text-white transition-opacity duration-200",
       isUpdating && "opacity-60"
     )}>
       {/* Page Header */}
@@ -913,7 +913,7 @@ export function IssueDetailContent({
           <Button
             variant="ghost"
             onClick={handleBackNavigation}
-            className="h-auto p-0 gap-2 text-[#7d8590] hover:text-[#e6edf3] text-sm hover:bg-transparent"
+            className="h-auto p-0 gap-2 text-collab-500 hover:text-collab-50 text-sm hover:bg-transparent"
           >
             <ArrowLeft className="h-3 w-3" />
             <span>
@@ -965,7 +965,7 @@ export function IssueDetailContent({
                 }}
                 className={cn(
                   pageHeaderButtonStyles.ghost,
-                  "text-[#7d8590] hover:text-[#e6edf3]"
+                  "text-collab-500 hover:text-collab-50"
                 )}
                 title="Open in new tab"
               >
@@ -980,7 +980,7 @@ export function IssueDetailContent({
               variant="ghost"
               size="sm"
               onClick={handleCopyLink}
-              className="h-6 px-1 md:px-2 text-[#7d8590] hover:text-[#e6edf3] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22] flex items-center justify-center"
+              className="h-6 px-1 md:px-2 text-collab-500 hover:text-collab-50 text-xs border border-collab-700 hover:border-collab-600 bg-collab-900 hover:bg-collab-800 flex items-center justify-center"
             >
               <Copy className="h-3 w-3 md:mr-1" />
               <span data-text className="hidden md:inline ml-1">Copy Link</span>
@@ -990,7 +990,7 @@ export function IssueDetailContent({
               size="sm"
               onClick={handleDeleteIssue}
               disabled={deleteIssueMutation.isPending}
-              className="h-6 px-1 md:px-2 text-[#f85149] hover:text-[#ff6b6b] text-xs border border-[#21262d] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22] flex items-center justify-center"
+              className="h-6 px-1 md:px-2 text-red-400 hover:text-red-300 text-xs border border-collab-700 hover:border-collab-600 bg-collab-900 hover:bg-collab-800 flex items-center justify-center"
             >
               {deleteIssueMutation.isPending ? (
                 <Loader2 className="h-3 w-3 animate-spin md:mr-1" />
@@ -1014,7 +1014,7 @@ export function IssueDetailContent({
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3 title-editing-controls">
                     {/* Issue Key Badge */}
                     <Badge
-                      className="font-mono text-xs px-2 py-1 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0 w-fit"
+                    className="font-mono text-xs px-2 py-1 bg-collab-700 border-collab-600 text-collab-400 hover:bg-collab-600 transition-colors cursor-pointer flex-shrink-0 w-fit"
                       onClick={handleCopyLink}
                     >
                       {issue.issueKey}
@@ -1023,7 +1023,7 @@ export function IssueDetailContent({
                       ref={titleInputRef}
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      className="text-lg sm:text-xl font-semibold bg-[#1f1f1f] border-[#333] text-white placeholder-[#6e7681] h-auto py-1 flex-1 min-w-0"
+                      className="text-lg sm:text-xl font-semibold bg-collab-700 border-collab-600 text-white placeholder-collab-500 h-auto py-1 flex-1 min-w-0"
                       placeholder="Issue title"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
@@ -1041,7 +1041,7 @@ export function IssueDetailContent({
                         size="sm"
                         onClick={handleSaveTitle}
                         disabled={isUpdating}
-                        className="h-8 bg-[#238636] hover:bg-[#2ea043] text-white"
+                        className="h-8 bg-green-600 hover:bg-green-700 text-white"
                       >
                         {isUpdating ? (
                           <Loader2 className="h-3 w-3 animate-spin sm:mr-1" />
@@ -1059,7 +1059,7 @@ export function IssueDetailContent({
                           setTitle(issue.title);
                         }}
                         disabled={isUpdating}
-                        className="h-8 border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f]"
+                        className="h-8 border-collab-700 text-collab-400 hover:bg-collab-700"
                       >
                         <X className="h-3 w-3 sm:mr-1" />
                         <span className="hidden sm:inline">Cancel</span>
@@ -1075,7 +1075,7 @@ export function IssueDetailContent({
                 >
                   {/* Issue Key Badge */}
                   <Badge
-                    className="font-mono text-xs px-2 pt-1 pb-0.5 bg-[#1f1f1f] border-[#333] text-[#8b949e] hover:bg-[#333] transition-colors cursor-pointer flex-shrink-0 w-fit"
+                    className="font-mono text-xs px-2 pt-1 pb-0.5 bg-collab-700 border-collab-600 text-collab-400 hover:bg-collab-600 transition-colors cursor-pointer flex-shrink-0 w-fit"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleCopyLink();
@@ -1084,10 +1084,10 @@ export function IssueDetailContent({
                     {issue.issueKey}
                   </Badge>
                   <div className="flex flex-row items-center gap-2 min-h-[2rem] sm:h-8 w-full">
-                    <h1 className="text-lg sm:text-xl font-semibold text-white group-hover:text-[#58a6ff] transition-colors flex-1 min-w-0 break-words text-left" data-issue-title>
+                    <h1 className="text-lg sm:text-xl font-semibold text-white group-hover:text-blue-400 transition-colors flex-1 min-w-0 break-words text-left" data-issue-title>
                       {issue.title}
                     </h1>
-                    <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-[#6e7681] flex-shrink-0" />
+                    <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-collab-500 flex-shrink-0" />
                   </div>
                 </Button>
               )}
@@ -1171,7 +1171,7 @@ export function IssueDetailContent({
 
               <div className={cn("flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
                 {/* Created info */}
-                <div className="flex items-center gap-1 text-xs text-[#6e7681] flex-wrap">
+                <div className="flex items-center gap-1 text-xs text-collab-500 flex-wrap">
                   <span>Created {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</span>
                   {createdByUser && (
                     <>
@@ -1179,7 +1179,7 @@ export function IssueDetailContent({
                       <div className="flex items-center gap-1">
                         <Avatar className="h-4 w-4">
                           <AvatarImage src={createdByUser?.image} />
-                          <AvatarFallback className="text-[10px] bg-[#333] text-[#8b949e]">
+                          <AvatarFallback className="text-[10px] bg-collab-600 text-collab-400">
                             {createdByUser?.name?.charAt(0)}
                           </AvatarFallback>
                         </Avatar>
@@ -1190,13 +1190,13 @@ export function IssueDetailContent({
                 </div>
 
                 {/* Autosave status indicator and Editor Controls */}
-                <div className="flex items-center gap-2 sm:gap-4 text-xs text-[#8b949e]">
+                <div className="flex items-center gap-2 sm:gap-4 text-xs text-collab-400">
                   {/* Autosave Status */}
-                  <div className="flex items-center gap-2 border-r border-[#21262d] pr-2 sm:pr-4">
+                  <div className="flex items-center gap-2 border-r border-collab-700 pr-2 sm:pr-4">
                     {autosaveStatus === "idle" && (
                       <>
-                        <span className="hidden sm:inline text-[#8b949e]">Autosave is active</span>
-                        <span className="sm:hidden text-[#8b949e]">Autosave</span>
+                        <span className="hidden sm:inline text-collab-400">Autosave is active</span>
+                        <span className="sm:hidden text-collab-400">Autosave</span>
                         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                       </>
                     )}
@@ -1222,7 +1222,7 @@ export function IssueDetailContent({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 px-2 text-xs text-[#ff6b6b] hover:bg-[#2a1212]"
+                          className="h-6 px-2 text-xs text-red-400 hover:bg-red-500/10"
                           onClick={() => autosaveDescription(description)}
                         >
                           Retry
@@ -1278,11 +1278,11 @@ export function IssueDetailContent({
 
               {/* Separate Comments Section - Always visible */}
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-[#e1e7ef] border-b border-[#21262d] pb-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-collab-50 border-b border-collab-700 pb-2">
                   <MessageSquare className="h-4 w-4" />
                   <span>Comments</span>
                   {issue.comments && issue.comments.length > 0 && (
-                    <span className="ml-1 text-xs bg-[#333] text-[#aaa] px-1.5 py-0.5 rounded-full">
+                    <span className="ml-1 text-xs bg-collab-600 text-collab-400 px-1.5 py-0.5 rounded-full">
                       {issue.comments.length}
                     </span>
                   )}

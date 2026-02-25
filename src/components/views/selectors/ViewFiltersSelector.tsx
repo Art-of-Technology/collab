@@ -101,34 +101,34 @@ export function ViewFiltersSelector({
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
-            "border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a]",
-            "text-[#cccccc] focus:outline-none bg-[#181818]",
+            "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
+            "text-collab-400 focus:outline-none bg-collab-800",
             disabled && "opacity-50 cursor-not-allowed",
-            activeFilterCount > 0 && "border-[#f59e0b]/30 bg-[#f59e0b]/5"
+            activeFilterCount > 0 && "border-[#f59e0b]/30 bg-amber-500/5"
           )}
         >
           <Filter className={cn(
             "h-3 w-3",
-            activeFilterCount > 0 ? "text-[#f59e0b]" : "text-[#ef4444]"
+            activeFilterCount > 0 ? "text-amber-500" : "text-red-500"
           )} />
-          <span className="text-[#cccccc] text-xs">{getDisplayText()}</span>
-          <ChevronDown className="h-3 w-3 text-[#6e7681]" />
+          <span className="text-collab-400 text-xs">{getDisplayText()}</span>
+          <ChevronDown className="h-3 w-3 text-collab-500" />
         </Button>
       </PopoverTrigger>
       
       <PopoverContent 
-        className="w-80 p-1 bg-[#1c1c1e] border-[#333] shadow-lg"
+        className="w-80 p-1 bg-collab-800 border-collab-600 shadow-lg"
         align="start"
         side="bottom"
         sideOffset={4}
       >
-        <div className="flex items-center justify-between px-2 py-1.5 border-b border-[#333] mb-1">
-          <span className="text-xs text-[#9ca3af]">Filters</span>
+        <div className="flex items-center justify-between px-2 py-1.5 border-b border-collab-600 mb-1">
+          <span className="text-xs text-gray-400">Filters</span>
           {activeFilterCount > 0 && (
             <Button
               variant="ghost"
               onClick={clearAllFilters}
-              className="text-xs text-[#6e7681] hover:text-[#e6edf3] h-auto py-0 px-1"
+              className="text-xs text-collab-500 hover:text-collab-50 h-auto py-0 px-1"
             >
               Clear all
             </Button>
@@ -138,20 +138,20 @@ export function ViewFiltersSelector({
         {/* Active filters */}
         {activeFilterCount > 0 && (
           <div className="px-2 py-1 mb-2">
-            <div className="text-xs text-[#9ca3af] mb-2">Active filters:</div>
+            <div className="text-xs text-gray-400 mb-2">Active filters:</div>
             <div className="flex flex-wrap gap-1">
               {Object.entries(value).map(([filterKey, filterValues]) => (
                 filterValues.map(filterValue => (
                   <div
                     key={`${filterKey}-${filterValue}`}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#f59e0b]/20 border border-[#f59e0b]/30 rounded text-xs"
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 border border-[#f59e0b]/30 rounded text-xs"
                   >
-                    <span className="text-[#f59e0b]">{filterKey}:</span>
-                    <span className="text-[#e6edf3]">{filterValue}</span>
+                    <span className="text-amber-500">{filterKey}:</span>
+                    <span className="text-collab-50">{filterValue}</span>
                     <Button
                       variant="ghost"
                       onClick={() => removeFilter(filterKey, filterValue)}
-                      className="text-[#6e7681] hover:text-[#f85149] h-auto p-0 w-auto"
+                      className="text-collab-500 hover:text-red-500 h-auto p-0 w-auto"
                     >
                       <X className="h-2.5 w-2.5" />
                     </Button>
@@ -165,7 +165,7 @@ export function ViewFiltersSelector({
         <div className="space-y-2 max-h-64 overflow-y-auto">
           {FILTER_OPTIONS.map((filter) => (
             <div key={filter.key}>
-              <div className="text-xs font-medium text-[#e6edf3] px-2 py-1">
+              <div className="text-xs font-medium text-collab-50 px-2 py-1">
                 {filter.label}
               </div>
               <div className="space-y-0.5">
@@ -176,13 +176,13 @@ export function ViewFiltersSelector({
                     <Button
                       key={option}
                       variant="ghost"
-                      className="w-full flex items-center gap-3 px-2 py-1.5 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left h-auto justify-start"
+                      className="w-full flex items-center gap-3 px-2 py-1.5 text-sm rounded-md hover:bg-collab-600 transition-colors text-left h-auto justify-start"
                       onClick={() => toggleFilter(filter.key, option)}
                     >
                       <div className="w-4 h-4 flex items-center justify-center">
-                        {isSelected && <Check className="h-3 w-3 text-[#22c55e]" />}
+                        {isSelected && <Check className="h-3 w-3 text-green-500" />}
                       </div>
-                      <span className="text-[#e6edf3] text-xs">{option}</span>
+                      <span className="text-collab-50 text-xs">{option}</span>
                     </Button>
                   );
                 })}

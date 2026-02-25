@@ -154,7 +154,7 @@ export function RelationItem({
 
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-      <div className="group flex flex-col md:flex-row md:items-center px-2 py-1.5 md:py-1 transition-all duration-150 rounded-md hover:bg-[#0f1011] relative">
+      <div className="group flex flex-col md:flex-row md:items-center px-2 py-1.5 md:py-1 transition-all duration-150 rounded-md hover:bg-collab-900 relative">
         <div className="flex items-center flex-1 min-w-0">
           {relationTypeConfig && (
             <InfoBadge className="mr-2 flex-shrink-0">
@@ -173,12 +173,12 @@ export function RelationItem({
             <div className="flex-1 min-w-0 mr-2 md:mr-3 overflow-hidden">
               <div className="flex items-center gap-2 min-w-0">
                 {/* Issue key */}
-                <span className="text-[#8b949e] text-xs font-mono font-medium flex-shrink-0">
+                <span className="text-collab-400 text-xs font-mono font-medium flex-shrink-0">
                   {item.issueKey}
                 </span>
 
                 {/* Issue title */}
-                <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors min-w-0">
+                <span className="text-collab-50 text-sm font-medium truncate group-hover:text-blue-400 transition-colors min-w-0">
                   {item.title}
                 </span>
               </div>
@@ -244,26 +244,26 @@ export function RelationItem({
               {item.assignee ? (
                 <Avatar className="h-5 w-5">
                   <AvatarImage src={item.assignee.image || undefined} />
-                  <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
+                  <AvatarFallback className="text-xs bg-collab-600 text-white border-none">
                     {item.assignee.name?.charAt(0)?.toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
               ) : (
-                <div className="h-5 w-5 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
-                  <User className="h-2.5 w-2.5 text-[#666]" />
+                <div className="h-5 w-5 rounded-full bg-collab-800 border border-collab-600 flex items-center justify-center">
+                  <User className="h-2.5 w-2.5 text-collab-500" />
                 </div>
               )}
             </div>
 
             {/* Desktop: Updated Date */}
             <div className="hidden md:flex flex-shrink-0 min-w-[3.5rem]">
-              <span className="text-[#6e7681] text-xs whitespace-nowrap">
+              <span className="text-collab-500 text-xs whitespace-nowrap">
                 {format(new Date(item.updatedAt), 'MMM d')}
               </span>
             </div>
 
             {/* Desktop: External Link */}
-            <ExternalLink className="hidden md:block h-3 w-3 text-[#666] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2" />
+            <ExternalLink className="hidden md:block h-3 w-3 text-collab-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2" />
           </Link>
 
           {/* Mobile: Expand/Collapse button */}
@@ -271,7 +271,7 @@ export function RelationItem({
             <Button
               variant="ghost"
               size="sm"
-              className="md:hidden h-6 w-6 p-0 text-[#7d8590] hover:text-[#c9d1d9] flex-shrink-0 ml-2"
+              className="md:hidden h-6 w-6 p-0 text-collab-500 hover:text-collab-400 flex-shrink-0 ml-2"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -291,7 +291,7 @@ export function RelationItem({
             <Button
               variant="ghost"
               size="sm"
-              className="hidden md:flex h-6 w-6 p-0 text-[#666] hover:text-red-400 hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-all ml-2 flex-shrink-0"
+              className="hidden md:flex h-6 w-6 p-0 text-collab-500 hover:text-red-400 hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-all ml-2 flex-shrink-0"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -306,7 +306,7 @@ export function RelationItem({
 
         {/* Mobile: Collapsible details section */}
         <CollapsibleContent className="md:hidden">
-          <div className="mt-2 pt-2 border-t border-[#1f1f1f] space-y-2">
+          <div className="mt-2 pt-2 border-t border-collab-700 space-y-2">
             {/* Badges row */}
             <div className="flex items-center gap-1.5 flex-wrap">
               {/* Status Badge */}
@@ -370,23 +370,23 @@ export function RelationItem({
                   <div className="flex items-center gap-1.5">
                     <Avatar className="h-5 w-5">
                       <AvatarImage src={item.assignee.image || undefined} />
-                      <AvatarFallback className="text-xs bg-[#2a2a2a] text-white border-none">
+                      <AvatarFallback className="text-xs bg-collab-600 text-white border-none">
                         {item.assignee.name?.charAt(0)?.toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-xs text-[#8b949e]">{item.assignee.name}</span>
+                    <span className="text-xs text-collab-400">{item.assignee.name}</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5">
-                    <div className="h-5 w-5 rounded-full bg-[#1a1a1a] border border-[#2a2a2a] flex items-center justify-center">
-                      <User className="h-2.5 w-2.5 text-[#666]" />
+                    <div className="h-5 w-5 rounded-full bg-collab-800 border border-collab-600 flex items-center justify-center">
+                      <User className="h-2.5 w-2.5 text-collab-500" />
                     </div>
-                    <span className="text-xs text-[#6e7681]">Unassigned</span>
+                    <span className="text-xs text-collab-500">Unassigned</span>
                   </div>
                 )}
 
                 {/* Date */}
-                <span className="text-xs text-[#6e7681] whitespace-nowrap">
+                <span className="text-xs text-collab-500 whitespace-nowrap">
                   {format(new Date(item.updatedAt), 'MMM d')}
                 </span>
               </div>
@@ -395,7 +395,7 @@ export function RelationItem({
               <div className="flex items-center gap-2">
                 <Link
                   href={itemUrl}
-                  className="text-[#7d8590] hover:text-[#c9d1d9] transition-colors"
+                  className="text-collab-500 hover:text-collab-400 transition-colors"
                   onClick={handleRelationClick}
                 >
                   <ExternalLink className="h-4 w-4" />
@@ -404,7 +404,7 @@ export function RelationItem({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 text-[#666] hover:text-red-400 hover:bg-red-500/20"
+                    className="h-6 w-6 p-0 text-collab-500 hover:text-red-400 hover:bg-red-500/20"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();

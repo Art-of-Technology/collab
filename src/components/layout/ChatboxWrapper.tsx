@@ -85,7 +85,7 @@ const ChatboxWrapper = () => {
 
   return (
     <aside
-      className={`fixed right-0 top-16 bottom-0 z-50 bg-[#1c1c1c] border-l border-[#2a2929] transition-all duration-150 ease-in-out overflow-hidden shadow-lg
+      className={`fixed right-0 top-16 bottom-0 z-50 bg-collab-800 border-l border-collab-600 transition-all duration-150 ease-in-out overflow-hidden shadow-lg
       ${isChatOpen ? 'w-[360px]' : 'w-0'} 
       `}
     >

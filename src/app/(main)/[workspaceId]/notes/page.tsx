@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react";
 import { canEditNote } from "@/utils/permissions";
 import { redirect, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Search,
   Plus,
@@ -54,6 +53,10 @@ import { GlobalFilterSelector, FilterOption } from "@/components/ui/GlobalFilter
 import { getNoteTypeConfig } from "@/lib/note-types";
 import { PinnedNotesSection } from "@/components/notes/PinnedNotesSection";
 import { useProjects } from "@/hooks/queries/useProjects";
+import { PageLayout } from "@/components/ui/page-layout";
+import { PageHeader } from "@/components/ui/page-header";
+import { SearchBar } from "@/components/ui/search-bar";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface Note {
   id: string;
@@ -188,18 +191,18 @@ function NoteListItem({
   // Get scope color for indicator
   const getScopeColor = () => {
     switch (note.scope) {
-      case NoteScope.PERSONAL: return '#71717a';
-      case NoteScope.PROJECT: return '#a855f7';
-      case NoteScope.WORKSPACE: return '#22c55e';
-      case NoteScope.PUBLIC: return '#f59e0b';
-      case NoteScope.SHARED: return '#3b82f6';
-      default: return '#6366f1';
+      case NoteScope.PERSONAL: return 'rgb(113, 113, 122)'; // zinc-500
+      case NoteScope.PROJECT: return 'rgb(168, 85, 247)'; // violet-500
+      case NoteScope.WORKSPACE: return 'rgb(34, 197, 94)'; // green-500
+      case NoteScope.PUBLIC: return 'rgb(245, 158, 11)'; // amber-500
+      case NoteScope.SHARED: return 'rgb(59, 130, 246)'; // blue-500
+      default: return 'rgb(99, 102, 241)'; // indigo-500
     }
   };
 
   return (
     <div
-      className="group relative flex items-center gap-4 px-5 py-4 hover:bg-[#1f1f22] transition-all duration-200 cursor-pointer"
+      className="group relative flex items-center gap-4 px-5 py-4 hover:bg-collab-600 transition-all duration-200 cursor-pointer"
       onClick={() => router.push(`/${workspaceSlug}/notes/${note.id}`)}
     >
       {/* Color indicator based on scope */}
@@ -213,7 +216,7 @@ function NoteListItem({
         {/* Title Row */}
         <div className="flex items-center gap-2.5">
           <TypeIcon className={cn("h-4 w-4 flex-shrink-0", typeConfig.color)} />
-          <h3 className="text-sm font-medium text-[#fafafa] group-hover:text-white truncate">
+          <h3 className="text-sm font-medium text-collab-50 group-hover:text-white truncate">
             {note.title}
           </h3>
           {note.isPinned && (
@@ -225,7 +228,7 @@ function NoteListItem({
           {note.isAiContext && (
             <Bot className="h-3.5 w-3.5 text-purple-400 flex-shrink-0" />
           )}
-          <span className="text-xs px-2 py-0.5 rounded-lg bg-[#27272b] text-[#75757a] font-medium flex-shrink-0 flex items-center gap-1">
+          <span className="text-xs px-2 py-0.5 rounded-lg bg-collab-600 text-collab-500 font-medium flex-shrink-0 flex items-center gap-1">
             <ScopeIconComponent className="h-3 w-3" />
             {note.scope.charAt(0) + note.scope.slice(1).toLowerCase()}
           </span>
@@ -233,7 +236,7 @@ function NoteListItem({
 
         {/* Description */}
         {preview && (
-          <p className="text-sm text-[#75757a] truncate max-w-[500px] mt-1">
+          <p className="text-sm text-collab-500 truncate max-w-[500px] mt-1">
             {preview}
           </p>
         )}
@@ -242,17 +245,17 @@ function NoteListItem({
         <div className="flex items-center gap-3 mt-2">
           {/* Author avatar */}
           <div className="flex items-center gap-1.5">
-            <Avatar className="h-5 w-5 ring-1 ring-[#1f1f22]">
+            <Avatar className="h-5 w-5 ring-1 ring-collab-700">
               <AvatarImage src={note.author.image || undefined} />
-              <AvatarFallback className="text-[9px] bg-[#101011] text-[#75757a]">
+              <AvatarFallback className="text-[9px] bg-collab-900 text-collab-500">
                 {note.author.name?.charAt(0)?.toUpperCase() || "?"}
               </AvatarFallback>
             </Avatar>
-            <span className="text-xs text-[#75757a]">{note.author.name}</span>
+            <span className="text-xs text-collab-500">{note.author.name}</span>
           </div>
 
           {note.project && (
-            <div className="flex items-center gap-1.5 text-xs text-[#75757a]">
+            <div className="flex items-center gap-1.5 text-xs text-collab-500">
               <div
                 className="h-2.5 w-2.5 rounded-full"
                 style={{ backgroundColor: note.project.color || "#6366f1" }}
@@ -273,26 +276,26 @@ function NoteListItem({
                 </span>
               ))}
               {note.tags.length > 2 && (
-                <span className="text-xs text-[#75757a]">+{note.tags.length - 2}</span>
+                <span className="text-xs text-collab-500">+{note.tags.length - 2}</span>
               )}
             </div>
           )}
 
           {note.sharedWith && note.sharedWith.length > 0 && (
-            <div className="flex items-center gap-1 text-xs text-[#75757a]">
+            <div className="flex items-center gap-1 text-xs text-collab-500">
               <Share2 className="h-3.5 w-3.5 text-blue-400" />
               <span className="tabular-nums">{note.sharedWith.length}</span>
             </div>
           )}
 
           {note.comments && note.comments.length > 0 && (
-            <div className="flex items-center gap-1 text-xs text-[#75757a]">
+            <div className="flex items-center gap-1 text-xs text-collab-500">
               <MessageSquare className="h-3.5 w-3.5" />
               <span className="tabular-nums">{note.comments.length}</span>
             </div>
           )}
 
-          <span className="text-xs text-[#52525b]">
+          <span className="text-xs text-collab-500/60">
             {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
           </span>
         </div>
@@ -311,7 +314,7 @@ function NoteListItem({
             "h-8 w-8 rounded-lg",
             note.isFavorite
               ? "text-amber-400 hover:bg-amber-500/10"
-              : "text-[#75757a] hover:text-amber-400 hover:bg-[#27272b]"
+              : "text-collab-500 hover:text-amber-400 hover:bg-collab-600"
           )}
           title={note.isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
@@ -331,7 +334,7 @@ function NoteListItem({
                 "h-8 w-8 rounded-lg",
                 note.isPinned
                   ? "text-amber-500 hover:bg-amber-500/10"
-                  : "text-[#75757a] hover:text-amber-500 hover:bg-[#27272b]"
+                  : "text-collab-500 hover:text-amber-500 hover:bg-collab-600"
               )}
               title={note.isPinned ? "Unpin" : "Pin to top"}
             >
@@ -345,7 +348,7 @@ function NoteListItem({
                 e.stopPropagation();
                 router.push(`/${workspaceSlug}/notes/${note.id}`);
               }}
-              className="h-8 px-3 gap-1.5 rounded-lg text-[#75757a] hover:text-[#fafafa] hover:bg-[#27272b]"
+              className="h-8 px-3 gap-1.5 rounded-lg text-collab-500 hover:text-collab-50 hover:bg-collab-600"
             >
               <Edit className="h-4 w-4" />
               <span>Edit</span>
@@ -358,7 +361,7 @@ function NoteListItem({
                 e.stopPropagation();
                 onDelete(note.id);
               }}
-              className="h-8 w-8 rounded-lg text-[#75757a] hover:text-red-400 hover:bg-red-500/10"
+              className="h-8 w-8 rounded-lg text-collab-500 hover:text-red-400 hover:bg-red-500/10"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -682,27 +685,20 @@ export default function NotesPage({
 
   if (status === "loading" || isLoading || workspaceLoading) {
     return (
-      <div className="h-full w-full overflow-y-auto">
-        <div className="flex flex-col gap-8 p-8 max-w-[1400px] mx-auto">
-          <div className="flex items-center justify-center py-20">
-            <div className="h-6 w-6 border-2 border-[#1f1f22] border-t-[#75757a] rounded-full animate-spin" />
-          </div>
+      <PageLayout>
+        <div className="flex items-center justify-center py-20">
+          <div className="h-6 w-6 border-2 border-collab-700 border-t-collab-500 rounded-full animate-spin" />
         </div>
-      </div>
+      </PageLayout>
     );
   }
 
   return (
-    <div className="h-full w-full overflow-y-auto">
-      <div className="flex flex-col gap-6 p-8 max-w-[1400px] mx-auto">
-        {/* Header - matching dashboard style */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-medium text-white mb-1">Context</h1>
-            <p className="text-sm text-[#75757a]">
-              {filteredNotes.length} context{filteredNotes.length !== 1 ? 's' : ''} in your workspace
-            </p>
-          </div>
+    <PageLayout>
+      <PageHeader
+        title="Context"
+        subtitle={`${filteredNotes.length} context${filteredNotes.length !== 1 ? 's' : ''} in your workspace`}
+        actions={
           <Button
             onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}
             size="sm"
@@ -711,21 +707,19 @@ export default function NotesPage({
             <Plus className="h-4 w-4 mr-2" />
             New Context
           </Button>
-        </div>
+        }
+      />
 
         {/* Search and Tab Toggle */}
         <div className="flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#75757a]" />
-            <Input
-              placeholder="Search context..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-10 bg-[#171719] border-[#1f1f22] text-[#fafafa] placeholder:text-[#75757a] focus:border-[#27272b] rounded-xl"
-            />
-          </div>
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search context..."
+            className="max-w-sm"
+          />
 
-          <div className="flex items-center gap-1 rounded-xl border border-[#1f1f22] p-1 bg-[#171719]">
+          <div className="flex items-center gap-1 rounded-xl border border-collab-700 p-1 bg-collab-800">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -746,13 +740,13 @@ export default function NotesPage({
                   className={cn(
                     "h-8 px-3 gap-1.5 rounded-lg",
                     isActive
-                      ? "bg-[#27272b] text-[#fafafa]"
-                      : "text-[#75757a] hover:text-[#9c9ca1] hover:bg-transparent"
+                      ? "bg-collab-600 text-collab-50"
+                      : "text-collab-500 hover:text-collab-400 hover:bg-transparent"
                   )}
                 >
                   {Icon && <Icon className="h-3 w-3" />}
                   {tab.label}
-                  <span className={cn(isActive ? "text-[#9c9ca1]" : "text-[#52525b]")}>{count}</span>
+                  <span className={cn(isActive ? "text-collab-400" : "text-collab-500/60")}>{count}</span>
                 </Button>
               );
             })}
@@ -760,7 +754,7 @@ export default function NotesPage({
         </div>
 
         {/* Filter Bar */}
-        <div className="flex flex-wrap items-center gap-2 p-4 rounded-2xl bg-[#171719] border border-[#1f1f22]">
+        <div className="flex flex-wrap items-center gap-2 p-4 rounded-2xl bg-collab-800 border border-collab-700">
           <GlobalFilterSelector
             value={selectedTypes}
             onChange={(value) => setSelectedTypes(value as string[])}
@@ -805,7 +799,7 @@ export default function NotesPage({
             filterHeader="Filter by tags"
           />
 
-          <div className="w-px h-5 bg-[#27272b] mx-1" />
+          <div className="w-px h-5 bg-collab-600 mx-1" />
 
           {/* Favorite Toggle */}
           <Button
@@ -816,7 +810,7 @@ export default function NotesPage({
               "h-8 px-3 gap-1.5 rounded-lg",
               showFavorites
                 ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
-                : "text-[#75757a] hover:text-[#9c9ca1] hover:bg-[#27272b]"
+                : "text-collab-500 hover:text-collab-400 hover:bg-collab-600"
             )}
           >
             <Star className={cn("h-3.5 w-3.5", showFavorites && "fill-amber-400")} />
@@ -832,7 +826,7 @@ export default function NotesPage({
               "h-8 px-3 gap-1.5 rounded-lg",
               showAiContext
                 ? "bg-purple-500/10 text-purple-400 hover:bg-purple-500/20"
-                : "text-[#75757a] hover:text-[#9c9ca1] hover:bg-[#27272b]"
+                : "text-collab-500 hover:text-collab-400 hover:bg-collab-600"
             )}
           >
             <Bot className="h-3.5 w-3.5" />
@@ -864,15 +858,11 @@ export default function NotesPage({
 
         {/* Notes List */}
         {filteredNotes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-dashed border-[#1f1f22] bg-[#171719]">
-            <div className="p-4 rounded-2xl bg-[#101011] mb-4">
-              <FileText className="h-8 w-8 text-[#52525b]" />
-            </div>
-            <h3 className="text-sm font-medium text-[#9c9ca1] mb-1">
-              No context found
-            </h3>
-            <p className="text-xs text-[#75757a] mb-4 text-center max-w-sm">
-              {hasActiveFilters
+          <EmptyState
+            icon={FileText}
+            title="No context found"
+            description={
+              hasActiveFilters
                 ? "Try adjusting your filters"
                 : activeTab === "personal"
                   ? "Create personal context to get started"
@@ -881,18 +871,20 @@ export default function NotesPage({
                     : activeTab === "shared"
                       ? "No context has been shared with you yet"
                       : "Get started by creating your first context"}
-            </p>
-            <Button
-              onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}
-              size="sm"
-              className="h-9 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-xl"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create Context
-            </Button>
-          </div>
+            variant="dashed"
+            action={
+              <Button
+                onClick={() => router.push(`/${currentWorkspace?.slug}/notes/new`)}
+                size="sm"
+                className="h-9 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-xl"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Context
+              </Button>
+            }
+          />
         ) : (
-          <div className="rounded-2xl border border-[#1f1f22] bg-[#171719] overflow-hidden divide-y divide-[#1f1f22]">
+          <div className="rounded-2xl border border-collab-700 bg-collab-800 overflow-hidden divide-y divide-collab-700">
             {filteredNotes.map((note) => (
               <NoteListItem
                 key={note.id}
@@ -909,16 +901,16 @@ export default function NotesPage({
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-          <AlertDialogContent className="bg-[#171719] border-[#1f1f22] rounded-2xl">
+          <AlertDialogContent className="bg-collab-800 border-collab-700 rounded-2xl">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-[#fafafa]">Delete Context</AlertDialogTitle>
-              <AlertDialogDescription className="text-[#75757a]">
+              <AlertDialogTitle className="text-collab-50">Delete Context</AlertDialogTitle>
+              <AlertDialogDescription className="text-collab-500">
                 Are you sure you want to delete this context? This action cannot be
                 undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="bg-[#101011] border-[#1f1f22] text-[#9c9ca1] hover:bg-[#27272b] hover:text-[#fafafa] rounded-xl">
+              <AlertDialogCancel className="bg-collab-900 border-collab-700 text-collab-400 hover:bg-collab-600 hover:text-collab-50 rounded-xl">
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction
@@ -930,7 +922,6 @@ export default function NotesPage({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
-    </div>
+    </PageLayout>
   );
 }
