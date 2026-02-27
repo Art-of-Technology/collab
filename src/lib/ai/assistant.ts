@@ -85,7 +85,7 @@ export class AgentAssistant {
   constructor(config: AIAssistantConfig = { provider: 'anthropic' }) {
     this.config = {
       provider: config.provider || 'anthropic',
-      model: config.model || (config.provider === 'openai' ? 'gpt-4-turbo-preview' : 'claude-sonnet-4-20250514'),
+      model: config.model || (config.provider === 'openai' ? 'gpt-4-turbo-preview' : 'claude-sonnet-4-6'),
       temperature: config.temperature ?? 0.7,
       maxTokens: config.maxTokens ?? 2048,
     };
@@ -212,7 +212,7 @@ export class AgentAssistant {
 
       while (continueLoop) {
         const response = await this.anthropic.messages.create({
-          model: this.config.model || 'claude-sonnet-4-20250514',
+          model: this.config.model || 'claude-sonnet-4-6',
           max_tokens: this.config.maxTokens || 2048,
           system: systemPrompt,
           messages,
@@ -413,7 +413,7 @@ You have access to tools that let you query real data from the workspace. Use th
     const messages = this.buildAnthropicMessages(conversationHistory, prompt);
 
     const response = await this.anthropic.messages.create({
-      model: this.config.model || 'claude-sonnet-4-20250514',
+      model: this.config.model || 'claude-sonnet-4-6',
       max_tokens: this.config.maxTokens || 2048,
       system: systemPrompt,
       messages: messages.length > 0 ? messages : [{ role: 'user', content: prompt }],

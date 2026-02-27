@@ -95,6 +95,7 @@ interface RecentInteraction {
   title: string;
   color: string;
   projectSlug?: string;
+  viewSlug?: string;
   action: "created" | "assigned" | "status_changed" | "commented" | "viewed";
   timestamp: string;
 }
@@ -793,6 +794,7 @@ export async function GET(req: Request) {
         type: "view",
         title: view.name,
         color: view.color || "#8b5cf6",
+        viewSlug: view.slug || undefined,
         action: "viewed",
         timestamp: view.lastAccessedAt,
       });
