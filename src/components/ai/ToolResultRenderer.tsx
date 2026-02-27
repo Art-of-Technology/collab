@@ -341,7 +341,7 @@ export default function ToolResultRenderer({
 
     // Issue list tools
     if (
-      /list_issues|search_issues|get_project_issues|filter_issues/i.test(
+      /find_issues|find_issues_by_activity|list_issues|search_issues|get_project_issues|filter_issues/i.test(
         toolName
       )
     ) {
