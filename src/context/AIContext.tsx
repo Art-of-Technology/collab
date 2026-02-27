@@ -362,9 +362,14 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
 
               case "tool_result": {
                 const e = event as ToolResultStreamEvent;
+                // Look up toolName from the matching tool_start block
+                const matchingStart = assistantBlocks.find(
+                  (b) => b.type === "tool_start" && b.toolUseId === e.toolUseId
+                );
                 assistantBlocks.push({
                   type: "tool_result",
                   toolUseId: e.toolUseId,
+                  toolName: matchingStart?.toolName,
                   isError: e.isError,
                   content: e.content,
                 });

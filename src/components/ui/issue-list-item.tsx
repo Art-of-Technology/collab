@@ -1,4 +1,5 @@
 import React from 'react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { Badge } from '@/components/ui/badge'
@@ -36,11 +37,12 @@ export interface IssueListItemProps {
   extra?: React.ReactNode
   /** Click handler */
   onClick?: (e: React.MouseEvent) => void
-  /** Link href — renders as <a> if provided */
+  /** Link href — renders as <Link> if provided */
   href?: string
+  /** Custom indicator bar color (overrides variant-based color) */
+  indicatorColor?: string
   className?: string
 }
-
 // ---------------------------------------------------------------------------
 // Priority colors
 // ---------------------------------------------------------------------------
@@ -58,12 +60,12 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const VARIANT_CONFIG = {
   default: {
-    container: 'hover:bg-collab-800',
+    container: 'hover:bg-collab-700',
     titleClass: 'text-collab-50',
     icon: null,
   },
   completed: {
-    container: 'hover:bg-collab-800',
+    container: 'hover:bg-collab-700',
     titleClass: 'text-collab-400 line-through decoration-collab-500/60',
     icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />,
   },
@@ -73,12 +75,12 @@ const VARIANT_CONFIG = {
     icon: <AlertTriangle className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />,
   },
   danger: {
-    container: 'hover:bg-collab-800',
+    container: 'hover:bg-collab-700',
     titleClass: 'text-collab-50',
     icon: null,
   },
   warning: {
-    container: 'hover:bg-collab-800',
+    container: 'hover:bg-collab-700',
     titleClass: 'text-collab-50',
     icon: null,
   },
@@ -106,6 +108,7 @@ export function IssueListItem({
   extra,
   onClick,
   href,
+  indicatorColor,
   className,
 }: IssueListItemProps) {
   const config = VARIANT_CONFIG[variant]
@@ -122,9 +125,11 @@ export function IssueListItem({
         )} />
       ) : (
         <div className={cn(
-          'w-1 h-6 rounded-full flex-shrink-0',
-          INDICATOR_COLORS[variant]
-        )} />
+            'w-1 h-6 rounded-full flex-shrink-0',
+            !indicatorColor && INDICATOR_COLORS[variant]
+          )}
+          style={indicatorColor ? { backgroundColor: indicatorColor } : undefined}
+        />
       )}
 
       {/* Issue key */}
@@ -178,15 +183,13 @@ export function IssueListItem({
 
   if (href) {
     return (
-      <a
+      <Link
         href={href}
         onClick={onClick}
         className={cn(containerClass, 'no-underline')}
-        target="_blank"
-        rel="noopener noreferrer"
       >
         {content}
-      </a>
+      </Link>
     )
   }
 

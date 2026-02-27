@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { getDefaultAgent } from '@/lib/ai/agents/registry';
-import { getMcpToken, getMcpServerUrl, invalidateMcpToken } from '@/lib/ai/mcp-token';
+import { getMcpToken, invalidateMcpToken } from '@/lib/ai/mcp-token';
+import { createMcpSession, McpClientSession, ClaudeTool } from '@/lib/ai/mcp-client';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
-const ANTHROPIC_MODEL = process.env.AI_MODEL || 'claude-sonnet-4-20250514';
+const ANTHROPIC_MODEL = process.env.AI_MODEL || 'claude-sonnet-4-6';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
 interface ChatRequestBody {
@@ -114,43 +115,14 @@ export async function POST(req: Request) {
       currentPage: context.currentPage,
     });
 
-    // Build tools array
-    const tools: any[] = [
-      {
-        type: 'mcp_toolset',
-        mcp_server_name: 'collab',
-        // NOTE: defer_loading removed — it hides ALL tool definitions from Claude
-        // unless a tool_search_tool_* is also present in the tools array.
-      },
-    ];
-    // Add web search if enabled
-    if (webSearchEnabled) {
-      tools.push({
-        type: 'web_search_20250305',
-        name: 'web_search',
-        max_uses: 5,
-      });
-    }
 
-    // Build MCP servers array (mutable — retry logic may update the token)
-    const mcpServers = [
-      {
-        type: 'url' as const,
-        url: `${getMcpServerUrl()}/api/mcp`,
-        name: 'collab',
-        authorization_token: mcpToken,
-      },
-    ];
 
-    console.log(`[stream] MCP server: ${mcpServers[0].url}, token: ${mcpToken.slice(0, 20)}...`);
-    console.log(`[stream] Tools config:`, JSON.stringify(tools, null, 2));
-
-    // Create the streaming response
-    const stream = createAnthropicStream(
+    // Create the streaming response with client-side MCP handling
+    const stream = createAnthropicStreamWithMcp(
       systemPrompt,
       messages,
-      tools,
-      mcpServers,
+      mcpToken,
+      webSearchEnabled || false,
       convoId,
       agent,
       refreshMcpToken
@@ -176,8 +148,8 @@ export async function POST(req: Request) {
 function buildAnthropicMessages(
   newMessage: string,
   history?: Array<{ role: 'user' | 'assistant'; content: string }>
-): Array<{ role: 'user' | 'assistant'; content: string }> {
-  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+): Array<{ role: 'user' | 'assistant'; content: string | any[] }> {
+  const messages: Array<{ role: 'user' | 'assistant'; content: string | any[] }> = [];
 
   if (history?.length) {
     for (const msg of history) {
@@ -217,14 +189,14 @@ function buildSystemPrompt(
 }
 
 /**
- * Create a ReadableStream that connects to Anthropic's streaming API
- * with MCP connector and forwards events to the client.
+ * Create a ReadableStream that connects to Anthropic's API
+ * with client-side MCP handling (tools are called directly by us).
  */
-function createAnthropicStream(
+function createAnthropicStreamWithMcp(
   systemPrompt: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-  tools: any[],
-  mcpServers: Array<{ type: string; url: string; name: string; authorization_token: string }>,
+  messages: Array<{ role: 'user' | 'assistant'; content: string | any[] }>,
+  mcpToken: string,
+  webSearchEnabled: boolean,
   conversationId: string | undefined,
   agent: { slug: string; name: string; color: string; avatar?: string },
   refreshMcpToken?: () => Promise<string>
@@ -238,6 +210,10 @@ function createAnthropicStream(
 
   return new ReadableStream({
     async start(controller) {
+      let mcpSession: McpClientSession | null = null;
+      let mcpTools: ClaudeTool[] = [];
+      let mcpFallback = false;
+
       try {
         // Send agent info first
         sendEvent(controller, {
@@ -245,20 +221,59 @@ function createAnthropicStream(
           agent: { slug: agent.slug, name: agent.name, color: agent.color },
         });
 
-        // Call Anthropic with MCP connector + streaming
+        // Initialize MCP session and get tools
+        try {
+          mcpSession = await createMcpSession(mcpToken);
+          mcpTools = mcpSession.convertToolsToClaudeFormat();
+
+        } catch (mcpError) {
+          console.error('[stream] Failed to initialize MCP session:', mcpError);
+
+          // Try refreshing token and retry once
+          if (refreshMcpToken) {
+            try {
+
+              const freshToken = await refreshMcpToken();
+              mcpSession = await createMcpSession(freshToken);
+              mcpTools = mcpSession.convertToolsToClaudeFormat();
+
+            } catch (retryError) {
+              console.error('[stream] MCP retry failed:', retryError);
+              mcpFallback = true;
+            }
+          } else {
+            mcpFallback = true;
+          }
+        }
+
+        if (mcpFallback) {
+          sendEvent(controller, {
+            type: 'text',
+            content:
+              '*Workspace tools are temporarily unavailable. I can still help with general questions.*\n\n',
+          });
+        }
+
+        // Build tools array for Claude (native format)
+        const tools: any[] = [...mcpTools];
+
+        // Add web search if enabled
+        if (webSearchEnabled) {
+          tools.push({
+            type: 'web_search_20250305',
+            name: 'web_search',
+            max_uses: 5,
+          });
+        }
+
+        // Call Anthropic with streaming
         let fullTextContent = '';
         let allMessages = [...messages];
         let continueLoop = true;
-        let mcpRetried = false;
-        let mcpFallback = false;
-        // Loop to handle pause_turn (Anthropic may pause) and MCP token retry
+
+        // Loop to handle tool calls and continuation
         while (continueLoop) {
           continueLoop = false;
-
-          // Build request — strip MCP if we're in fallback mode
-          const activeTools = mcpFallback
-            ? tools.filter((t: any) => t.type !== 'mcp_toolset')
-            : tools;
 
           const requestBody: Record<string, unknown> = {
             model: ANTHROPIC_MODEL,
@@ -266,16 +281,19 @@ function createAnthropicStream(
             system: systemPrompt,
             messages: allMessages,
             stream: true,
-            ...(activeTools.length > 0 ? { tools: activeTools } : {}),
-            ...(mcpFallback ? {} : { mcp_servers: mcpServers }),
+            ...(tools.length > 0 ? { tools } : {}),
           };
 
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
             'x-api-key': ANTHROPIC_API_KEY,
             'anthropic-version': '2023-06-01',
-            ...(mcpFallback ? {} : { 'anthropic-beta': 'mcp-client-2025-11-20' }),
           };
+
+          // Only add beta header if we have web search (server-side tool)
+          if (webSearchEnabled) {
+            headers['anthropic-beta'] = 'web-search-2025-03-05';
+          }
 
           const response = await fetch(ANTHROPIC_API_URL, {
             method: 'POST',
@@ -287,41 +305,13 @@ function createAnthropicStream(
             const errorText = await response.text();
             console.error('Anthropic API error:', response.status, errorText);
 
-            // Retry ONCE on MCP-related errors (stale/invalid token)
-            const isMcpError = /mcp|permission|insufficient/i.test(errorText);
-            if (isMcpError && refreshMcpToken && !mcpRetried) {
-              mcpRetried = true;
-              console.log('[stream] MCP auth error detected — refreshing token and retrying...');
-              try {
-                const freshToken = await refreshMcpToken();
-                mcpServers[0].authorization_token = freshToken;
-                console.log(`[stream] Retrying with fresh token: ${freshToken.slice(0, 20)}...`);
-                continueLoop = true;
-                continue;
-              } catch (refreshError) {
-                console.error('[stream] Token refresh failed:', refreshError);
-              }
-            }
-
-            // MCP retry exhausted — fall back to plain chat (no MCP tools)
-            if (isMcpError && mcpRetried) {
-              console.log('[stream] MCP failed after retry — falling back to chat without MCP tools');
-              mcpFallback = true;
-              sendEvent(controller, {
-                type: 'text',
-                content: '*Workspace tools are temporarily unavailable. I can still help with general questions.*\n\n',
-              });
-              fullTextContent += '*Workspace tools are temporarily unavailable. I can still help with general questions.*\n\n';
-              continueLoop = true;
-              continue;
-            }
-
-            // Non-MCP error — send to client
             let detail = `AI service error (${response.status}).`;
             try {
               const parsed = JSON.parse(errorText);
               detail = `AI error: ${parsed?.error?.message || errorText.slice(0, 200)}`;
-            } catch { /* not JSON */ }
+            } catch {
+              /* not JSON */
+            }
             sendEvent(controller, { type: 'error', message: detail });
             break;
           }
@@ -335,9 +325,10 @@ function createAnthropicStream(
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = '';
-          let currentContentBlocks: Map<number, any> = new Map();
+          const currentContentBlocks: Map<number, any> = new Map();
           let stopReason: string | null = null;
-          let assistantContentBlocks: any[] = [];
+          const assistantContentBlocks: any[] = [];
+          const pendingToolCalls: Array<{ id: string; name: string; input: any }> = [];
 
           while (true) {
             const { done, value } = await reader.read();
@@ -373,24 +364,24 @@ function createAnthropicStream(
                   if (block.type === 'text') {
                     // Text block starting — will get deltas
                   } else if (block.type === 'server_tool_use') {
-                    // Web search query
+                    // Web search query (server-side)
                     sendEvent(controller, {
                       type: 'tool_start',
                       toolType: 'web_search',
                       toolName: block.name || 'web_search',
                       toolUseId: block.id,
                     });
-                  } else if (block.type === 'mcp_tool_use') {
-                    // MCP tool call
+                  } else if (block.type === 'tool_use') {
+                    // Native tool call — this is our MCP tool
                     sendEvent(controller, {
                       type: 'tool_start',
                       toolType: 'mcp',
                       toolName: block.name,
-                      serverName: block.server_name,
+                      serverName: 'collab',
                       toolUseId: block.id,
                     });
                   } else if (block.type === 'web_search_tool_result') {
-                    // Web search results
+                    // Web search results (server-side)
                     const results = block.content || [];
                     sendEvent(controller, {
                       type: 'web_search_results',
@@ -403,20 +394,6 @@ function createAnthropicStream(
                           pageAge: r.page_age,
                         })),
                     });
-                  } else if (block.type === 'mcp_tool_result') {
-                    // MCP tool result
-                    const resultContent = block.content || [];
-                    const textContent = resultContent
-                      .filter((c: any) => c.type === 'text')
-                      .map((c: any) => c.text)
-                      .join('\n');
-
-                    sendEvent(controller, {
-                      type: 'tool_result',
-                      toolUseId: block.tool_use_id,
-                      isError: block.is_error || false,
-                      content: textContent,
-                    });
                   }
                   break;
                 }
@@ -425,13 +402,17 @@ function createAnthropicStream(
                   const delta = event.delta;
                   if (delta.type === 'text_delta' && delta.text) {
                     fullTextContent += delta.text;
+                    // Also accumulate into block for assistant message continuations
+                    const block = currentContentBlocks.get(event.index);
+                    if (block) {
+                      block.text = (block.text || '') + delta.text;
+                    }
                     sendEvent(controller, {
                       type: 'text',
                       content: delta.text,
                     });
                   } else if (delta.type === 'input_json_delta') {
-                    // Tool input being streamed — we already sent tool_start
-                    // The full input will be in the content block
+                    // Tool input being streamed
                     const block = currentContentBlocks.get(event.index);
                     if (block) {
                       block._inputJson = (block._inputJson || '') + (delta.partial_json || '');
@@ -443,14 +424,33 @@ function createAnthropicStream(
                 case 'content_block_stop': {
                   const block = currentContentBlocks.get(event.index);
                   if (block) {
-                    // Store for potential pause_turn re-submission
-                    assistantContentBlocks.push(block);
+                    if (block.type === 'tool_use') {
+                      // Parse accumulated input JSON, default to {} for no-arg tools
+                      try {
+                        block.input = block._inputJson
+                          ? JSON.parse(block._inputJson)
+                          : block.input || {};
+                        sendEvent(controller, {
+                          type: 'tool_input',
+                          toolUseId: block.id,
+                          input: block.input,
+                        });
 
-                    // If this was a tool use, send the complete input
-                    if (
-                      (block.type === 'mcp_tool_use' || block.type === 'server_tool_use') &&
-                      block._inputJson
-                    ) {
+                        // Queue tool call for execution
+                        pendingToolCalls.push({
+                          id: block.id,
+                          name: block.name,
+                          input: block.input,
+                        });
+                      } catch {
+                        // Malformed input JSON — still queue with empty input
+                        pendingToolCalls.push({
+                          id: block.id,
+                          name: block.name,
+                          input: {},
+                        });
+                      }
+                    } else if (block.type === 'server_tool_use' && block._inputJson) {
                       try {
                         const input = JSON.parse(block._inputJson);
                         sendEvent(controller, {
@@ -462,6 +462,10 @@ function createAnthropicStream(
                         // Skip malformed input
                       }
                     }
+
+                    // Store for potential continuation
+                    const { _inputJson, ...cleanBlock } = block;
+                    assistantContentBlocks.push(cleanBlock);
                   }
                   break;
                 }
@@ -490,22 +494,99 @@ function createAnthropicStream(
             }
           }
 
-          // Handle pause_turn — re-submit to continue the turn
-          if (stopReason === 'pause_turn') {
+          // Handle tool calls — execute them and continue conversation
+
+          if (stopReason === 'tool_use' && pendingToolCalls.length > 0 && mcpSession) {
             continueLoop = true;
-            // Build the assistant message content from collected blocks
+
+            // Build assistant message — strip streaming metadata (index, _inputJson, etc.)
             const assistantContent = assistantContentBlocks.map((block) => {
-              // Strip our internal tracking fields
-              const { _inputJson, ...cleanBlock } = block;
-              return cleanBlock;
-            });
+              if (block.type === 'tool_use') {
+                return {
+                  type: 'tool_use' as const,
+                  id: block.id,
+                  name: block.name,
+                  input: block.input || {},
+                };
+              }
+              if (block.type === 'text') {
+                return {
+                  type: 'text' as const,
+                  text: block.text || '',
+                };
+              }
+              // server_tool_use, web_search_tool_result, etc.
+              const { index, _inputJson, ...clean } = block;
+              return clean;
+            })
+              // Anthropic rejects empty text blocks
+              .filter((block: any) => !(block.type === 'text' && !block.text));
+
+            // Execute tool calls
+            const toolResults: any[] = [];
+
+            for (const toolCall of pendingToolCalls) {
+
+
+              try {
+                const result = await mcpSession.callTool(toolCall.name, toolCall.input || {});
+
+                // Extract text content from result
+                const textContent = result.content
+                  .filter((c) => c.type === 'text')
+                  .map((c) => c.text)
+                  .join('\n');
+
+                sendEvent(controller, {
+                  type: 'tool_result',
+                  toolUseId: toolCall.id,
+                  isError: result.isError,
+                  content: textContent,
+                });
+
+                toolResults.push({
+                  type: 'tool_result',
+                  tool_use_id: toolCall.id,
+                  is_error: result.isError,
+                  content: textContent,
+                });
+              } catch (toolError) {
+                console.error(`[stream] Tool execution error for ${toolCall.name}:`, toolError);
+
+                const errorMessage =
+                  toolError instanceof Error ? toolError.message : 'Unknown error';
+
+                sendEvent(controller, {
+                  type: 'tool_result',
+                  toolUseId: toolCall.id,
+                  isError: true,
+                  content: `Tool error: ${errorMessage}`,
+                });
+
+                toolResults.push({
+                  type: 'tool_result',
+                  tool_use_id: toolCall.id,
+                  is_error: true,
+                  content: `Tool error: ${errorMessage}`,
+                });
+              }
+            }
+
+            // Continue conversation with tool results
             allMessages = [
               ...allMessages,
               { role: 'assistant', content: assistantContent } as any,
+              { role: 'user', content: toolResults } as any,
             ];
-            // Reset for next iteration
-            assistantContentBlocks = [];
+          } else if (stopReason === 'end_turn' || stopReason === 'max_tokens') {
+            // Normal completion
+            continueLoop = false;
           }
+        }
+
+        // Close MCP session
+        if (mcpSession) {
+          await mcpSession.close();
         }
 
         // Send conversation ID
@@ -543,6 +624,16 @@ function createAnthropicStream(
         controller.close();
       } catch (error) {
         console.error('Stream processing error:', error);
+
+        // Clean up MCP session on error
+        if (mcpSession) {
+          try {
+            await mcpSession.close();
+          } catch {
+            // Ignore cleanup errors
+          }
+        }
+
         sendEvent(controller, {
           type: 'error',
           message: 'An error occurred while processing the response.',

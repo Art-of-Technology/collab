@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import {
   ChevronRight,
   ChevronLeft,
@@ -19,6 +18,8 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { PageLayout } from "@/components/ui/page-layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
+import { IssueListItem } from "@/components/ui/issue-list-item";
+import type { IssueListItemIssue } from "@/components/ui/issue-list-item";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ interface RecentInteraction {
   title: string;
   color: string;
   projectSlug?: string;
+  viewSlug?: string;
   action: "created" | "assigned" | "status_changed" | "commented" | "viewed";
   timestamp: string;
 }
@@ -147,7 +149,7 @@ export default function SimplifiedDashboard({
                 href={
                   item.type === "project"
                     ? `${base}/projects/${item.projectSlug}`
-                    : `${base}/views/${item.id}`
+                    : `${base}/views/${item.viewSlug || item.id}`
                 }
                 className="group flex items-center gap-3 p-3 rounded-xl bg-collab-800 border border-collab-700 hover:bg-collab-700 transition-colors"
               >
@@ -184,9 +186,27 @@ export default function SimplifiedDashboard({
             onToggle={() => toggleSection("attention")}
             variant="warning"
           >
-            {myQueue.slice(0, 5).map((item) => (
-              <IssueRow key={item.id} item={item} base={base} />
-            ))}
+            {myQueue.slice(0, 5).map((item) => {
+              const config = reasonConfig[item.reason] || reasonConfig.overdue;
+              return (
+                <IssueListItem
+                  key={item.id}
+                  issue={mapQueueItem(item)}
+                  href={`${base}/issues/${item.issueKey}`}
+                  indicatorColor={config.color}
+                  extra={
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded-lg flex-shrink-0"
+                      style={{ backgroundColor: `${config.color}15`, color: config.color }}
+                    >
+                      {item.reason === "overdue" && item.daysOverdue
+                        ? `${item.daysOverdue}d`
+                        : config.label}
+                    </span>
+                  }
+                />
+              );
+            })}
             {myQueue.length === 0 && <DashboardEmptyState text="All clear" />}
           </WorkSection>
 
@@ -199,7 +219,18 @@ export default function SimplifiedDashboard({
             variant="blue"
           >
             {workInProgress.inProgress.slice(0, 5).map((item) => (
-              <WorkRow key={item.id} item={item} base={base} />
+              <IssueListItem
+                key={item.id}
+                issue={mapWorkItem(item)}
+                href={`${base}/issues/${item.issueKey}`}
+                extra={
+                  item.daysInStatus > 2 ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-amber-400/10 text-amber-400 flex-shrink-0">
+                      {item.daysInStatus}d
+                    </span>
+                  ) : undefined
+                }
+              />
             ))}
             {workInProgress.inProgress.length === 0 && <DashboardEmptyState text="No items" />}
           </WorkSection>
@@ -213,7 +244,18 @@ export default function SimplifiedDashboard({
             variant="purple"
           >
             {workInProgress.inReview.slice(0, 5).map((item) => (
-              <WorkRow key={item.id} item={item} base={base} />
+              <IssueListItem
+                key={item.id}
+                issue={mapWorkItem(item)}
+                href={`${base}/issues/${item.issueKey}`}
+                extra={
+                  item.daysInStatus > 2 ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-amber-400/10 text-amber-400 flex-shrink-0">
+                      {item.daysInStatus}d
+                    </span>
+                  ) : undefined
+                }
+              />
             ))}
             {workInProgress.inReview.length === 0 && <DashboardEmptyState text="No items" />}
           </WorkSection>
@@ -227,7 +269,18 @@ export default function SimplifiedDashboard({
             variant="green"
           >
             {workInProgress.readyToDeploy.slice(0, 5).map((item) => (
-              <WorkRow key={item.id} item={item} base={base} />
+              <IssueListItem
+                key={item.id}
+                issue={mapWorkItem(item)}
+                href={`${base}/issues/${item.issueKey}`}
+                extra={
+                  item.daysInStatus > 2 ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-amber-400/10 text-amber-400 flex-shrink-0">
+                      {item.daysInStatus}d
+                    </span>
+                  ) : undefined
+                }
+              />
             ))}
             {workInProgress.readyToDeploy.length === 0 && <DashboardEmptyState text="No items" />}
           </WorkSection>
@@ -321,7 +374,7 @@ function WorkSection({
   );
 }
 
-// ─── Issue Row (for Needs Attention) ──────────────────────────────────────────
+// ─── Reason Config (for Needs Attention badges) ─────────────────────────────────────────
 
 const reasonConfig: Record<string, { icon: typeof Clock; label: string; color: string }> = {
   overdue: { icon: AlertTriangle, label: "Overdue", color: "#ef4444" },
@@ -331,61 +384,27 @@ const reasonConfig: Record<string, { icon: typeof Clock; label: string; color: s
   "high-priority": { icon: Flame, label: "High", color: "#a855f7" },
 };
 
-function IssueRow({ item, base }: { item: QueueItem; base: string }) {
-  const config = reasonConfig[item.reason] || reasonConfig.overdue;
+// ─── Data Mappers ───────────────────────────────────────────────────────────────
 
-  return (
-    <Link
-      href={`${base}/issue/${item.id}`}
-      className="group flex items-center gap-3 p-2 rounded-lg hover:bg-collab-900 transition-colors"
-    >
-      <div
-        className="w-1 h-8 rounded-full flex-shrink-0"
-        style={{ backgroundColor: config.color }}
-      />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-xs text-collab-500 font-mono">{item.issueKey}</span>
-        </div>
-        <p className="text-sm text-collab-400 group-hover:text-white truncate transition-colors">
-          {item.title}
-        </p>
-      </div>
-      <span
-        className="text-[10px] px-1.5 py-0.5 rounded-lg flex-shrink-0"
-        style={{ backgroundColor: `${config.color}15`, color: config.color }}
-      >
-        {item.reason === "overdue" && item.daysOverdue
-          ? `${item.daysOverdue}d`
-          : config.label}
-      </span>
-    </Link>
-  );
+function mapQueueItem(item: QueueItem): IssueListItemIssue {
+  return {
+    id: item.id,
+    title: item.title,
+    issueKey: item.issueKey,
+    status: item.status || undefined,
+    priority: item.priority?.toUpperCase() || undefined,
+    project: { name: item.projectName, color: item.projectColor },
+  };
 }
 
-// ─── Work Row (for In Progress, Review, Deploy) ───────────────────────────────
-
-function WorkRow({ item, base }: { item: WorkItem; base: string }) {
-  return (
-    <Link
-      href={`${base}/issue/${item.id}`}
-      className="group flex items-center gap-3 p-2 rounded-lg hover:bg-collab-900 transition-colors"
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-xs text-collab-500 font-mono">{item.issueKey}</span>
-          {item.daysInStatus > 2 && (
-            <span className="text-[10px] px-1 py-0.5 rounded-lg bg-amber-400/10 text-amber-400">
-              {item.daysInStatus}d
-            </span>
-          )}
-        </div>
-        <p className="text-sm text-collab-400 group-hover:text-white truncate transition-colors">
-          {item.title}
-        </p>
-      </div>
-    </Link>
-  );
+function mapWorkItem(item: WorkItem): IssueListItemIssue {
+  return {
+    id: item.id,
+    title: item.title,
+    issueKey: item.issueKey,
+    status: item.status || undefined,
+    project: { name: item.projectName, color: item.projectColor },
+  };
 }
 
 // ─── Dashboard Empty State ───────────────────────────────────────────────────

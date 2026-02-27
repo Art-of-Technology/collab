@@ -5,20 +5,13 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import {
-  Bug,
-  CheckCircle2,
-  Circle,
-  CircleDot,
-  Milestone,
-  BookOpen,
-  Layers,
-  User,
-  Folder,
-  ExternalLink,
   AlertTriangle,
-  Clock,
-  TrendingUp,
+  CheckCircle2,
+  Folder,
   ArrowRight,
+  Layers,
+  TrendingUp,
+  User,
 } from "lucide-react";
 import {
   Tooltip,
@@ -27,8 +20,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import {
+  IssueListItem,
+  type IssueListItemIssue,
+} from "@/components/ui/issue-list-item";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { Badge } from "@/components/ui/badge";
 
-// Types for interactive elements
+// ─── Shared Types ───────────────────────────────────────────────────────────
+
 export interface IssueData {
   key: string;
   title?: string;
@@ -54,125 +54,183 @@ export interface ProjectData {
   issueCount?: number;
 }
 
-// Status configuration
-const statusConfig: Record<string, { bg: string; text: string; border: string; glow?: string }> = {
-  "backlog": { bg: "bg-slate-500/10", text: "text-slate-400", border: "border-slate-500/20" },
-  "todo": { bg: "bg-slate-500/10", text: "text-slate-400", border: "border-slate-500/20" },
-  "in progress": { bg: "bg-blue-500/15", text: "text-blue-400", border: "border-blue-500/25", glow: "shadow-blue-500/10" },
-  "in_progress": { bg: "bg-blue-500/15", text: "text-blue-400", border: "border-blue-500/25", glow: "shadow-blue-500/10" },
-  "in review": { bg: "bg-purple-500/15", text: "text-purple-400", border: "border-purple-500/25" },
-  "in_review": { bg: "bg-purple-500/15", text: "text-purple-400", border: "border-purple-500/25" },
-  "done": { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/25", glow: "shadow-emerald-500/10" },
-  "completed": { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/25" },
-  "cancelled": { bg: "bg-red-500/10", text: "text-red-400/70", border: "border-red-500/20" },
-  "blocked": { bg: "bg-orange-500/15", text: "text-orange-400", border: "border-orange-500/25", glow: "shadow-orange-500/10" },
-  "waiting_for_deploy": { bg: "bg-cyan-500/15", text: "text-cyan-400", border: "border-cyan-500/25" },
-  "deprecated": { bg: "bg-gray-500/10", text: "text-gray-500", border: "border-gray-500/20" },
+export interface DynamicViewData {
+  name: string;
+  displayType: string;
+  grouping?: string;
+  issueCount: number;
+  filterSummary?: string;
+  viewUrl: string;
+}
+
+// ─── Status Utilities ───────────────────────────────────────────────────────
+
+const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
+  backlog:            { bg: "bg-slate-500/10",   text: "text-slate-400" },
+  todo:               { bg: "bg-slate-500/10",   text: "text-slate-400" },
+  "in progress":      { bg: "bg-blue-500/15",    text: "text-blue-400" },
+  in_progress:        { bg: "bg-blue-500/15",    text: "text-blue-400" },
+  "in review":        { bg: "bg-purple-500/15",  text: "text-purple-400" },
+  in_review:          { bg: "bg-purple-500/15",  text: "text-purple-400" },
+  done:               { bg: "bg-emerald-500/15", text: "text-emerald-400" },
+  completed:          { bg: "bg-emerald-500/15", text: "text-emerald-400" },
+  cancelled:          { bg: "bg-red-500/10",     text: "text-red-400/70" },
+  blocked:            { bg: "bg-orange-500/15",  text: "text-orange-400" },
+  waiting_for_deploy: { bg: "bg-cyan-500/15",    text: "text-cyan-400" },
 };
 
-const getStatusStyle = (status?: string) => {
-  if (!status) return statusConfig["backlog"];
-  const normalized = status.toLowerCase().trim();
-  return statusConfig[normalized] || statusConfig["backlog"];
-};
+function getStatusStyle(status?: string) {
+  if (!status) return STATUS_STYLES.backlog;
+  return STATUS_STYLES[status.toLowerCase().trim()] || STATUS_STYLES.backlog;
+}
 
-// Priority configuration
-const priorityConfig: Record<string, { color: string; icon?: boolean }> = {
-  "urgent": { color: "text-red-400", icon: true },
-  "high": { color: "text-orange-400" },
-  "medium": { color: "text-yellow-400" },
-  "low": { color: "text-slate-400" },
-};
+/** Map status to IssueListItem variant */
+function getIssueVariant(
+  status?: string
+): "default" | "completed" | "blocked" | "danger" {
+  if (!status) return "default";
+  const s = status.toLowerCase().trim();
+  if (s === "done" || s === "completed") return "completed";
+  if (s === "blocked") return "blocked";
+  if (s === "cancelled") return "danger";
+  return "default";
+}
 
-const getPriorityStyle = (priority?: string) => {
-  if (!priority) return priorityConfig["medium"];
-  return priorityConfig[priority.toLowerCase()] || priorityConfig["medium"];
-};
+/** Convert AI IssueData → shared IssueListItemIssue */
+function mapIssueData(data: IssueData): IssueListItemIssue {
+  return {
+    id: data.key || `ai-${Math.random().toString(36).slice(2, 9)}`,
+    title: data.title || data.key || "Untitled Issue",
+    issueKey: data.key || undefined,
+    status: data.status,
+    priority: data.priority?.toUpperCase(),
+    assignee:
+      data.assignee && data.assignee !== "Unassigned"
+        ? { name: data.assignee }
+        : null,
+    project: data.project ? { name: data.project } : undefined,
+  };
+}
 
-// Type icons
-const typeIcons: Record<string, React.ElementType> = {
-  "BUG": Bug,
-  "TASK": CheckCircle2,
-  "STORY": BookOpen,
-  "EPIC": Layers,
-  "MILESTONE": Milestone,
-  "SUBTASK": CircleDot,
-};
+// ─── Inline Status Badge ────────────────────────────────────────────────────
 
-/**
- * Interactive Issue Chip - Compact clickable element
- */
-export function IssueChip({ data, onClick }: { data: IssueData; onClick?: () => void }) {
+function StatusBadge({ status }: { status: string }) {
+  const style = getStatusStyle(status);
+  return (
+    <span
+      className={cn(
+        "text-[10px] px-1.5 py-0.5 rounded font-medium whitespace-nowrap",
+        style.bg,
+        style.text
+      )}
+    >
+      {status}
+    </span>
+  );
+}
+
+// ─── IssueCard ──────────────────────────────────────────────────────────────
+// Uses the shared IssueListItem — consistent with dashboard issue rendering.
+
+export function IssueCard({
+  data,
+  onClick,
+}: {
+  data: IssueData;
+  onClick?: () => void;
+}) {
   const router = useRouter();
   const { currentWorkspace } = useWorkspace();
 
-  const statusStyle = getStatusStyle(data.status);
-  const priorityStyle = getPriorityStyle(data.priority);
-  const TypeIcon = typeIcons[data.type?.toUpperCase() || "TASK"] || Circle;
+  const handleClick = (e: React.MouseEvent) => {
+    if (onClick) {
+      onClick();
+    } else if (currentWorkspace?.slug && data.key) {
+      router.push(`/${currentWorkspace.slug}/issues/${data.key}`);
+    }
+  };
+
+  if (!data.key && !data.title) return null;
+
+  const issue = mapIssueData(data);
+  const variant = getIssueVariant(data.status);
+
+  return (
+    <IssueListItem
+      issue={issue}
+      variant={variant}
+      showKey={!!data.key}
+      showPriority={!!data.priority}
+      showAssignee={!!data.assignee && data.assignee !== "Unassigned"}
+      onClick={handleClick}
+      extra={data.status ? <StatusBadge status={data.status} /> : undefined}
+      className="rounded-lg border border-transparent hover:border-collab-700 hover:bg-collab-800 transition-all"
+    />
+  );
+}
+
+// ─── IssueChip ──────────────────────────────────────────────────────────────
+// Compact inline badge for referencing issues within text.
+
+export function IssueChip({
+  data,
+  onClick,
+}: {
+  data: IssueData;
+  onClick?: () => void;
+}) {
+  const router = useRouter();
+  const { currentWorkspace } = useWorkspace();
 
   const handleClick = () => {
     if (onClick) {
       onClick();
     } else if (currentWorkspace?.slug && data.key) {
-      router.push(`/${currentWorkspace.slug}/issue/${data.key}`);
+      router.push(`/${currentWorkspace.slug}/issues/${data.key}`);
     }
   };
 
-  // Don't render if no key
   if (!data.key) return null;
 
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <motion.button
+          <button
             onClick={handleClick}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.98 }}
             className={cn(
               "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium",
-              "border backdrop-blur-sm transition-all duration-200",
-              "hover:shadow-lg cursor-pointer",
-              statusStyle.bg,
-              statusStyle.text,
-              statusStyle.border,
-              statusStyle.glow && `hover:${statusStyle.glow}`
+              "border transition-colors cursor-pointer",
+              "bg-collab-800 border-collab-700 text-collab-50",
+              "hover:bg-collab-700 hover:border-collab-600"
             )}
           >
-            <TypeIcon className={cn("w-3 h-3", priorityStyle.color)} />
-            <span className="font-mono font-semibold">{data.key}</span>
-            {priorityStyle.icon && (
-              <AlertTriangle className="w-3 h-3 text-red-400 animate-pulse" />
+            <span className="font-mono font-semibold text-collab-400">
+              {data.key}
+            </span>
+            {data.priority?.toLowerCase() === "urgent" && (
+              <AlertTriangle className="w-3 h-3 text-red-400" />
             )}
-          </motion.button>
+          </button>
         </TooltipTrigger>
         <TooltipContent
           side="top"
-          className="bg-collab-900 border-white/10 p-3 max-w-xs shadow-xl"
+          className="bg-collab-900 border-collab-700 p-3 max-w-xs shadow-xl"
         >
           <div className="space-y-2">
-            <div className="font-medium text-white text-sm leading-tight">
+            <div className="font-medium text-collab-50 text-sm leading-tight">
               {data.title || data.key}
             </div>
             <div className="flex flex-wrap gap-1.5 text-[10px]">
-              {data.status && (
-                <span className={cn("px-1.5 py-0.5 rounded", statusStyle.bg, statusStyle.text)}>
-                  {data.status}
-                </span>
-              )}
+              {data.status && <StatusBadge status={data.status} />}
               {data.priority && (
-                <span className={cn("px-1.5 py-0.5 rounded bg-white/5", priorityStyle.color)}>
+                <span className="px-1.5 py-0.5 rounded bg-collab-800 text-collab-400">
                   {data.priority}
-                </span>
-              )}
-              {data.type && (
-                <span className="px-1.5 py-0.5 rounded bg-white/5 text-white/50">
-                  {data.type}
                 </span>
               )}
             </div>
             {data.assignee && (
-              <div className="text-[10px] text-white/40 flex items-center gap-1">
+              <div className="text-[10px] text-collab-500 flex items-center gap-1">
                 <User className="w-3 h-3" />
                 {data.assignee}
               </div>
@@ -184,10 +242,46 @@ export function IssueChip({ data, onClick }: { data: IssueData; onClick?: () => 
   );
 }
 
-/**
- * Interactive User Chip - Clickable user badge
- */
-export function UserChip({ data, onClick }: { data: UserData; onClick?: () => void }) {
+// ─── IssueList ──────────────────────────────────────────────────────────────
+// Animated list of IssueCard — mirrors dashboard "Your Work" section pattern.
+
+export function IssueList({ issues }: { issues: IssueData[] }) {
+  const validIssues = issues.filter((i) => i.key || i.title);
+  if (!validIssues.length) return null;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between mb-2 px-1">
+        <span className="text-xs font-medium text-collab-500 uppercase tracking-wider">
+          {validIssues.length} Issue{validIssues.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+      <div className="space-y-0.5">
+        {validIssues.map((issue, i) => (
+          <motion.div
+            key={issue.key || `issue-${i}`}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.03, duration: 0.15 }}
+          >
+            <IssueCard data={issue} />
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── UserChip ───────────────────────────────────────────────────────────────
+// Compact user reference — uses shared UserAvatar component.
+
+export function UserChip({
+  data,
+  onClick,
+}: {
+  data: UserData;
+  onClick?: () => void;
+}) {
   const router = useRouter();
   const { currentWorkspace } = useWorkspace();
 
@@ -199,40 +293,38 @@ export function UserChip({ data, onClick }: { data: UserData; onClick?: () => vo
     }
   };
 
-  const initials = data.name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <motion.button
+          <button
             onClick={handleClick}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.98 }}
             className={cn(
               "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium",
-              "bg-violet-500/10 text-violet-300 border border-violet-500/20",
-              "hover:bg-violet-500/20 hover:border-violet-500/30 hover:shadow-lg hover:shadow-violet-500/5",
-              "transition-all duration-200 cursor-pointer backdrop-blur-sm"
+              "bg-collab-800 text-collab-50 border border-collab-700",
+              "hover:bg-collab-700 hover:border-collab-600",
+              "transition-colors cursor-pointer"
             )}
           >
-            <div className="w-4 h-4 rounded-full bg-gradient-to-br from-violet-400 to-purple-600 flex items-center justify-center text-[8px] font-bold text-white">
-              {initials}
-            </div>
+            <UserAvatar
+              user={{ name: data.name }}
+              size="xs"
+              className="flex-shrink-0"
+            />
             <span className="font-medium">{data.name}</span>
-          </motion.button>
+          </button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="bg-collab-900 border-white/10 p-3">
+        <TooltipContent
+          side="top"
+          className="bg-collab-900 border-collab-700 p-3"
+        >
           <div className="space-y-1">
-            <div className="font-medium text-white">{data.name}</div>
-            {data.email && <div className="text-xs text-white/40">{data.email}</div>}
+            <div className="font-medium text-collab-50">{data.name}</div>
+            {data.email && (
+              <div className="text-xs text-collab-500">{data.email}</div>
+            )}
             {data.activeIssues !== undefined && (
-              <div className="text-xs text-white/50 flex items-center gap-1 mt-1.5">
+              <div className="text-xs text-collab-400 flex items-center gap-1 mt-1.5">
                 <TrendingUp className="w-3 h-3" />
                 {data.activeIssues} active issues
               </div>
@@ -244,10 +336,16 @@ export function UserChip({ data, onClick }: { data: UserData; onClick?: () => vo
   );
 }
 
-/**
- * Interactive Project Chip - Clickable project badge
- */
-export function ProjectChip({ data, onClick }: { data: ProjectData; onClick?: () => void }) {
+// ─── ProjectChip ────────────────────────────────────────────────────────────
+// Compact project reference — design system styled.
+
+export function ProjectChip({
+  data,
+  onClick,
+}: {
+  data: ProjectData;
+  onClick?: () => void;
+}) {
   const router = useRouter();
   const { currentWorkspace } = useWorkspace();
 
@@ -255,7 +353,9 @@ export function ProjectChip({ data, onClick }: { data: ProjectData; onClick?: ()
     if (onClick) {
       onClick();
     } else if (currentWorkspace?.slug && (data.id || data.prefix)) {
-      router.push(`/${currentWorkspace.slug}/projects/${data.prefix || data.id}`);
+      router.push(
+        `/${currentWorkspace.slug}/projects/${data.prefix || data.id}`
+      );
     }
   };
 
@@ -263,30 +363,39 @@ export function ProjectChip({ data, onClick }: { data: ProjectData; onClick?: ()
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <motion.button
+          <button
             onClick={handleClick}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.98 }}
             className={cn(
               "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium",
-              "bg-cyan-500/10 text-cyan-300 border border-cyan-500/20",
-              "hover:bg-cyan-500/20 hover:border-cyan-500/30 hover:shadow-lg hover:shadow-cyan-500/5",
-              "transition-all duration-200 cursor-pointer backdrop-blur-sm"
+              "bg-collab-800 text-collab-50 border border-collab-700",
+              "hover:bg-collab-700 hover:border-collab-600",
+              "transition-colors cursor-pointer"
             )}
           >
-            <Folder className="w-3 h-3" />
+            <Folder className="w-3 h-3 text-collab-500" />
             <span className="font-medium">{data.name}</span>
             {data.issueCount !== undefined && (
-              <span className="text-white/30 text-[10px]">({data.issueCount})</span>
+              <span className="text-collab-500 text-[10px]">
+                ({data.issueCount})
+              </span>
             )}
-          </motion.button>
+          </button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="bg-collab-900 border-white/10 p-3">
+        <TooltipContent
+          side="top"
+          className="bg-collab-900 border-collab-700 p-3"
+        >
           <div className="space-y-1">
-            <div className="font-medium text-white">{data.name}</div>
-            {data.prefix && <div className="text-xs text-white/40">Prefix: {data.prefix}</div>}
+            <div className="font-medium text-collab-50">{data.name}</div>
+            {data.prefix && (
+              <div className="text-xs text-collab-500">
+                Prefix: {data.prefix}
+              </div>
+            )}
             {data.issueCount !== undefined && (
-              <div className="text-xs text-white/50">{data.issueCount} issues</div>
+              <div className="text-xs text-collab-400">
+                {data.issueCount} issues
+              </div>
             )}
           </div>
         </TooltipContent>
@@ -295,137 +404,9 @@ export function ProjectChip({ data, onClick }: { data: ProjectData; onClick?: ()
   );
 }
 
-/**
- * Issue Card - Larger interactive card for displaying issue details
- */
-export function IssueCard({ data, onClick }: { data: IssueData; onClick?: () => void }) {
-  const router = useRouter();
-  const { currentWorkspace } = useWorkspace();
+// ─── UserWorkloadCard ───────────────────────────────────────────────────────
+// Individual workload card — uses shared UserAvatar + design tokens.
 
-  const statusStyle = getStatusStyle(data.status);
-  const priorityStyle = getPriorityStyle(data.priority);
-  const TypeIcon = typeIcons[data.type?.toUpperCase() || "TASK"] || Circle;
-
-  const handleClick = () => {
-    if (onClick) {
-      onClick();
-    } else if (currentWorkspace?.slug && data.key) {
-      router.push(`/${currentWorkspace.slug}/issue/${data.key}`);
-    }
-  };
-
-  // Use title as fallback display if no key
-  const displayKey = data.key || "—";
-  const displayTitle = data.title || "Untitled Issue";
-
-  return (
-    <motion.button
-      onClick={handleClick}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.99 }}
-      className={cn(
-        "w-full text-left p-3 rounded-xl",
-        "bg-white/[0.02] border border-white/[0.06]",
-        "hover:bg-white/[0.04] hover:border-white/[0.1]",
-        "transition-all duration-200 cursor-pointer",
-        "group backdrop-blur-sm"
-      )}
-    >
-      <div className="flex items-start gap-3">
-        {/* Type Icon with status background */}
-        <div className={cn("mt-0.5 p-1.5 rounded-lg", statusStyle.bg, statusStyle.border, "border")}>
-          <TypeIcon className={cn("w-3.5 h-3.5", priorityStyle.color)} />
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          {/* Key and Priority */}
-          <div className="flex items-center gap-2 mb-1">
-            {data.key && (
-              <span className="font-mono text-xs text-white/40 font-medium">{displayKey}</span>
-            )}
-            {data.priority && (
-              <span className={cn("text-[10px] font-medium uppercase tracking-wide", priorityStyle.color)}>
-                {data.priority}
-              </span>
-            )}
-            {priorityStyle.icon && (
-              <AlertTriangle className="w-3 h-3 text-red-400" />
-            )}
-          </div>
-
-          {/* Title */}
-          <div className="text-sm text-white/80 line-clamp-2 group-hover:text-white transition-colors">
-            {displayTitle}
-          </div>
-
-          {/* Meta */}
-          <div className="flex items-center gap-2 mt-2 text-[10px] text-white/30">
-            {data.status && (
-              <span className={cn("px-1.5 py-0.5 rounded", statusStyle.bg, statusStyle.text)}>
-                {data.status}
-              </span>
-            )}
-            {data.assignee && data.assignee !== "Unassigned" && (
-              <>
-                <span>•</span>
-                <span className="flex items-center gap-1">
-                  <User className="w-3 h-3" />
-                  {data.assignee}
-                </span>
-              </>
-            )}
-            {data.project && (
-              <>
-                <span>•</span>
-                <span>{data.project}</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Arrow */}
-        <ArrowRight className="w-4 h-4 text-white/10 group-hover:text-white/30 group-hover:translate-x-1 transition-all mt-1" />
-      </div>
-    </motion.button>
-  );
-}
-
-/**
- * Issue List - Renders a list of issue cards with animation
- */
-export function IssueList({ issues }: { issues: IssueData[] }) {
-  // Filter out invalid issues
-  const validIssues = issues.filter((i) => i.key || i.title);
-
-  if (!validIssues.length) return null;
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium text-white/40 uppercase tracking-wider">
-          {validIssues.length} Issue{validIssues.length !== 1 ? "s" : ""}
-        </span>
-      </div>
-      <div className="space-y-2">
-        {validIssues.map((issue, i) => (
-          <motion.div
-            key={issue.key || `issue-${i}`}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05, duration: 0.2 }}
-          >
-            <IssueCard data={issue} />
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/**
- * User Workload Card - Individual user with workload stats
- */
 function UserWorkloadCard({
   user,
   index,
@@ -445,75 +426,73 @@ function UserWorkloadCard({
   const router = useRouter();
   const { currentWorkspace } = useWorkspace();
 
-  const initials = user.name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-
   const handleClick = () => {
     if (currentWorkspace?.slug && user.id) {
       router.push(`/${currentWorkspace.slug}/issues?assignee=${user.id}`);
     } else if (currentWorkspace?.slug) {
-      router.push(`/${currentWorkspace.slug}/issues?q=${encodeURIComponent(user.name)}`);
+      router.push(
+        `/${currentWorkspace.slug}/issues?q=${encodeURIComponent(user.name)}`
+      );
     }
   };
 
-  // Calculate health indicator
   const isOverloaded = user.totalActive > 10;
   const hasOverdue = (user.overdue || 0) > 0;
 
   return (
     <motion.button
       onClick={handleClick}
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.2 }}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.99 }}
+      transition={{ delay: index * 0.04, duration: 0.15 }}
       className={cn(
         "w-full text-left p-4 rounded-xl",
-        "bg-white/[0.02] border border-white/[0.06]",
-        "hover:bg-white/[0.04] hover:border-white/[0.1]",
-        "transition-all duration-200 cursor-pointer group backdrop-blur-sm"
+        "bg-collab-800 border border-collab-700",
+        "hover:bg-collab-700 hover:border-collab-600",
+        "transition-all cursor-pointer group"
       )}
     >
       <div className="flex items-center justify-between">
-        {/* User Info */}
+        {/* User info */}
         <div className="flex items-center gap-3">
-          <div className={cn(
-            "w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold",
-            "bg-gradient-to-br from-violet-500/20 to-purple-600/20 text-violet-300",
-            "border border-violet-500/20"
-          )}>
-            {initials}
-          </div>
+          <UserAvatar
+            user={{ name: user.name }}
+            size="lg"
+            className="h-9 w-9 flex-shrink-0"
+          />
           <div>
-            <div className="text-sm font-medium text-white/90 group-hover:text-white transition-colors">
+            <div className="text-sm font-medium text-collab-50 group-hover:text-white transition-colors">
               {user.name}
             </div>
             {user.email && (
-              <div className="text-xs text-white/30">{user.email}</div>
+              <div className="text-xs text-collab-500">{user.email}</div>
             )}
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Active count */}
         <div className="text-right">
-          <div className={cn(
-            "text-2xl font-bold",
-            isOverloaded ? "text-orange-400" : hasOverdue ? "text-yellow-400" : "text-white/80"
-          )}>
+          <div
+            className={cn(
+              "text-2xl font-bold tabular-nums",
+              isOverloaded
+                ? "text-orange-400"
+                : hasOverdue
+                  ? "text-amber-400"
+                  : "text-collab-50"
+            )}
+          >
             {user.totalActive}
           </div>
-          <div className="text-[10px] text-white/30 uppercase tracking-wider">active</div>
+          <div className="text-[10px] text-collab-500 uppercase tracking-wider">
+            active
+          </div>
         </div>
       </div>
 
       {/* Status breakdown */}
       {user.byStatus && Object.keys(user.byStatus).length > 0 && (
-        <div className="mt-3 pt-3 border-t border-white/[0.04] flex flex-wrap gap-1.5">
+        <div className="mt-3 pt-3 border-t border-collab-700 flex flex-wrap gap-1.5">
           {Object.entries(user.byStatus)
             .sort(([, a], [, b]) => b - a)
             .slice(0, 4)
@@ -523,11 +502,10 @@ function UserWorkloadCard({
                 <span
                   key={status}
                   className={cn(
-                    "px-2 py-0.5 rounded-md text-[10px] font-medium",
+                    "px-2 py-0.5 rounded-md text-[10px] font-medium border",
                     style.bg,
                     style.text,
-                    style.border,
-                    "border"
+                    "border-collab-700"
                   )}
                 >
                   {count} {status}
@@ -558,134 +536,7 @@ function UserWorkloadCard({
   );
 }
 
-/**
- * User Workload List - Renders team workload as cards
- */
-/**
- * Dynamic View Card - Compact AI-generated view preview with open action
- */
-export interface DynamicViewData {
-  name: string;
-  displayType: string;
-  grouping?: string;
-  issueCount: number;
-  filterSummary?: string;
-  viewUrl: string;
-}
-
-export function DynamicViewCard({ data, onClick }: { data: DynamicViewData; onClick?: () => void }) {
-  const router = useRouter();
-  const { currentWorkspace } = useWorkspace();
-
-  const handleOpen = () => {
-    if (onClick) {
-      onClick();
-    } else if (data.viewUrl && currentWorkspace?.slug) {
-      const fullUrl = data.viewUrl.startsWith('/')
-        ? `/${currentWorkspace.slug}${data.viewUrl}`
-        : data.viewUrl;
-      router.push(fullUrl);
-    }
-  };
-
-  const displayTypeConfig: Record<string, { icon: React.ElementType; label: string; color: string }> = {
-    'KANBAN': { icon: Layers, label: 'Board', color: 'text-blue-400' },
-    'LIST': { icon: CheckCircle2, label: 'List', color: 'text-emerald-400' },
-    'TABLE': { icon: Layers, label: 'Table', color: 'text-violet-400' },
-  };
-
-  const config = displayTypeConfig[data.displayType] || displayTypeConfig['LIST'];
-  const DisplayIcon = config.icon;
-
-  // Parse filter summary into compact tags
-  const filterTags = data.filterSummary && data.filterSummary !== 'no filters'
-    ? data.filterSummary.split(', ').slice(0, 3)
-    : [];
-  const remainingFilters = data.filterSummary && data.filterSummary !== 'no filters'
-    ? data.filterSummary.split(', ').length - 3
-    : 0;
-
-  return (
-    <motion.button
-      onClick={handleOpen}
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -1 }}
-      whileTap={{ scale: 0.99 }}
-      className={cn(
-        "w-full text-left p-3 rounded-lg",
-        "bg-collab-800/60 border border-collab-600",
-        "hover:bg-collab-700 hover:border-collab-600",
-        "transition-all duration-200 cursor-pointer group"
-      )}
-    >
-      <div className="flex items-center gap-3">
-        {/* Icon */}
-        <div className={cn(
-          "shrink-0 p-2 rounded-md bg-collab-600",
-          "group-hover:bg-collab-600 transition-colors"
-        )}>
-          <DisplayIcon className={cn("w-4 h-4", config.color)} />
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          {/* Title row */}
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm font-medium text-collab-50 truncate group-hover:text-white transition-colors">
-              {data.name}
-            </span>
-            <span className={cn(
-              "shrink-0 text-[10px] px-1.5 py-0.5 rounded",
-              "bg-collab-600 text-collab-500"
-            )}>
-              {config.label}
-            </span>
-          </div>
-
-          {/* Meta row */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Issue count */}
-            <span className="text-[11px] text-collab-500">
-              {data.issueCount} {data.issueCount === 1 ? 'issue' : 'issues'}
-            </span>
-
-            {/* Grouping */}
-            {data.grouping && data.grouping !== 'none' && (
-              <>
-                <span className="text-collab-500/50">·</span>
-                <span className="text-[11px] text-collab-500/60">by {data.grouping}</span>
-              </>
-            )}
-
-            {/* Filter tags */}
-            {filterTags.length > 0 && (
-              <>
-                <span className="text-collab-500/50">·</span>
-                <div className="flex items-center gap-1">
-                  {filterTags.map((tag, i) => (
-                    <span
-                      key={i}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                  {remainingFilters > 0 && (
-                    <span className="text-[10px] text-collab-500/60">+{remainingFilters}</span>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Arrow */}
-        <ArrowRight className="shrink-0 w-4 h-4 text-collab-500/50 group-hover:text-collab-500 group-hover:translate-x-0.5 transition-all" />
-      </div>
-    </motion.button>
-  );
-}
+// ─── UserWorkloadList ───────────────────────────────────────────────────────
 
 export function UserWorkloadList({
   users,
@@ -701,24 +552,24 @@ export function UserWorkloadList({
     completedThisWeek?: number;
   }>;
 }) {
-  // Filter out users without names
   const validUsers = users.filter((u) => u.name);
-
   if (!validUsers.length) return null;
 
-  // Calculate team totals
   const totalActive = validUsers.reduce((sum, u) => sum + u.totalActive, 0);
-  const totalOverdue = validUsers.reduce((sum, u) => sum + (u.overdue || 0), 0);
+  const totalOverdue = validUsers.reduce(
+    (sum, u) => sum + (u.overdue || 0),
+    0
+  );
 
   return (
     <div className="space-y-3">
-      {/* Header with summary */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-white/40 uppercase tracking-wider">
-          Team Workload ({validUsers.length} member{validUsers.length !== 1 ? "s" : ""})
+      <div className="flex items-center justify-between px-1">
+        <span className="text-xs font-medium text-collab-500 uppercase tracking-wider">
+          Team Workload ({validUsers.length} member
+          {validUsers.length !== 1 ? "s" : ""})
         </span>
         <div className="flex items-center gap-3 text-xs">
-          <span className="text-white/50">{totalActive} total</span>
+          <span className="text-collab-400">{totalActive} total</span>
           {totalOverdue > 0 && (
             <span className="text-orange-400 flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" />
@@ -727,13 +578,128 @@ export function UserWorkloadList({
           )}
         </div>
       </div>
-
-      {/* User cards */}
       <div className="space-y-2">
         {validUsers.map((user, i) => (
-          <UserWorkloadCard key={user.id || user.email || i} user={user} index={i} />
+          <UserWorkloadCard
+            key={user.id || user.email || i}
+            user={user}
+            index={i}
+          />
         ))}
       </div>
     </div>
+  );
+}
+
+// ─── DynamicViewCard ────────────────────────────────────────────────────────
+
+export function DynamicViewCard({
+  data,
+  onClick,
+}: {
+  data: DynamicViewData;
+  onClick?: () => void;
+}) {
+  const router = useRouter();
+  const { currentWorkspace } = useWorkspace();
+
+  const handleOpen = () => {
+    if (onClick) {
+      onClick();
+    } else if (data.viewUrl && currentWorkspace?.slug) {
+      const fullUrl = data.viewUrl.startsWith("/")
+        ? `/${currentWorkspace.slug}${data.viewUrl}`
+        : data.viewUrl;
+      router.push(fullUrl);
+    }
+  };
+
+  const displayTypeConfig: Record<
+    string,
+    { icon: React.ElementType; label: string; color: string }
+  > = {
+    KANBAN: { icon: Layers, label: "Board", color: "text-blue-400" },
+    LIST: { icon: CheckCircle2, label: "List", color: "text-emerald-400" },
+    TABLE: { icon: Layers, label: "Table", color: "text-violet-400" },
+  };
+
+  const config =
+    displayTypeConfig[data.displayType] || displayTypeConfig.LIST;
+  const DisplayIcon = config.icon;
+
+  const filterTags =
+    data.filterSummary && data.filterSummary !== "no filters"
+      ? data.filterSummary.split(", ").slice(0, 3)
+      : [];
+  const remainingFilters =
+    data.filterSummary && data.filterSummary !== "no filters"
+      ? data.filterSummary.split(", ").length - 3
+      : 0;
+
+  return (
+    <button
+      onClick={handleOpen}
+      className={cn(
+        "w-full text-left p-3 rounded-lg",
+        "bg-collab-800 border border-collab-700",
+        "hover:bg-collab-700 hover:border-collab-600",
+        "transition-all cursor-pointer group"
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <div className="shrink-0 p-2 rounded-md bg-collab-900 border border-collab-700">
+          <DisplayIcon className={cn("w-4 h-4", config.color)} />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm font-medium text-collab-50 truncate group-hover:text-white transition-colors">
+              {data.name}
+            </span>
+            <Badge className="h-4 px-1.5 text-[10px] font-medium leading-none border-0 rounded-sm bg-collab-700 text-collab-400">
+              {config.label}
+            </Badge>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-collab-500">
+              {data.issueCount} {data.issueCount === 1 ? "issue" : "issues"}
+            </span>
+
+            {data.grouping && data.grouping !== "none" && (
+              <>
+                <span className="text-collab-500/50">·</span>
+                <span className="text-[11px] text-collab-500/60">
+                  by {data.grouping}
+                </span>
+              </>
+            )}
+
+            {filterTags.length > 0 && (
+              <>
+                <span className="text-collab-500/50">·</span>
+                <div className="flex items-center gap-1">
+                  {filterTags.map((tag, i) => (
+                    <Badge
+                      key={i}
+                      className="h-4 px-1.5 text-[10px] font-medium leading-none border-0 rounded-sm bg-violet-500/10 text-violet-400"
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                  {remainingFilters > 0 && (
+                    <span className="text-[10px] text-collab-500/60">
+                      +{remainingFilters}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <ArrowRight className="shrink-0 w-4 h-4 text-collab-500/50 group-hover:text-collab-400 group-hover:translate-x-0.5 transition-all" />
+      </div>
+    </button>
   );
 }
