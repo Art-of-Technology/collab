@@ -38,9 +38,9 @@ export const SUPPORTED_SCOPES = [
   'views:write',
   'labels:read',
   'labels:write',
-  // Notes & Knowledge System (Phase 6)
-  'notes:read',
-  'notes:write',
+  // Context & Knowledge System (Phase 6)
+  'context:read',
+  'context:write',
   'knowledge:read',
   'prompts:read',
   'secrets:read',
@@ -236,9 +236,9 @@ export function getScopeDescription(scope: string): string {
     'comments:write': 'Create and modify comments',
     'leave:read': 'Read access to leave requests',
     'leave:write': 'Create and modify leave requests',
-    // Notes & Knowledge System (Phase 6)
-    'notes:read': 'Read notes and knowledge base articles',
-    'notes:write': 'Create and modify notes',
+    // Context & Knowledge System (Phase 6)
+    'context:read': 'Read context documents and knowledge base articles',
+    'context:write': 'Create and modify context documents',
     'knowledge:read': 'Access knowledge base and documentation',
     'prompts:read': 'Read AI system prompts and context',
     'secrets:read': 'Read encrypted secrets (requires explicit grant)',

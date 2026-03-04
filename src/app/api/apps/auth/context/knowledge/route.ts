@@ -1,6 +1,6 @@
 /**
  * Third-Party App API: Knowledge Base Endpoint
- * GET /api/apps/auth/notes/knowledge - Search and browse knowledge base articles
+ * GET /api/apps/auth/context/knowledge - Search and browse knowledge base articles
  *
  * Returns notes of documentation types (GUIDE, HOW_TO, FAQ, TROUBLESHOOT, README, etc.)
  *
@@ -24,7 +24,7 @@ const KNOWLEDGE_TYPES = [
 ];
 
 /**
- * GET /api/apps/auth/notes/knowledge
+ * GET /api/apps/auth/context/knowledge
  * Search and browse knowledge base articles
  */
 export const GET = withAppAuth(

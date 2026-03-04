@@ -144,7 +144,7 @@ export function WeekViewMinimap({ scrollContainerRef, days }: WeekViewMinimapPro
               "absolute top-0 h-full rounded cursor-grab active:cursor-grabbing transition-colors border-2",
               isDragging 
                 ? "bg-blue-500/40 border-blue-400" 
-                : "bg-white/20 border-white/40 hover:bg-white/30 hover:border-white/50"
+                : "bg-collab-600/40 border-collab-500 hover:bg-collab-600/60 hover:border-collab-400"
             )}
             style={{
               left: `${thumbLeft}%`,

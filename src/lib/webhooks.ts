@@ -239,7 +239,10 @@ export const WEBHOOK_EVENT_TYPES = [
   'app.uninstalled',
   'leave.created',
   'leave.updated',
-  'leave.deleted'
+  'leave.deleted',
+  'context.created',
+  'context.updated',
+  'context.deleted'
 ] as const;
 
 export type WebhookEventType = typeof WEBHOOK_EVENT_TYPES[number];

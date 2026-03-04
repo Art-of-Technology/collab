@@ -71,16 +71,15 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
             <div
               {...provided.dragHandleProps}
               className={cn(
-                "flex items-center justify-between p-4 border-b-2 mb-4 cursor-grab active:cursor-grabbing",
-                getColumnColor(column.name, groupField)
+                "flex items-center justify-between px-4 py-3 border-b border-collab-700 mb-3 cursor-grab active:cursor-grabbing"
               )}
             >
               <div className="flex items-center gap-3">
                 <GripVertical className="h-4 w-4 text-collab-500" />
-                <h3 className="font-medium text-white">
+                <h3 className="text-sm font-medium text-collab-50">
                   {column.name}
                 </h3>
-                <Badge variant="secondary" className="text-xs bg-collab-700 text-collab-400 border-0">
+                <Badge variant="secondary" className="h-5 text-[10px] bg-collab-700 text-collab-400 border-0">
                   {column.issues.length}
                 </Badge>
                 {shouldShowDisabledState && (
@@ -106,11 +105,10 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
                   ref={provided.innerRef}
                   {...provided.droppableProps}
                   className={cn(
-                    "relative flex-1 min-h-0 space-y-2 rounded-lg transition-all duration-200 overflow-y-auto",
-                    isDraggingOver && draggedIssue && !shouldShowDisabledState && "bg-collab-800 border border-blue-600",
-                    isDraggingOver && draggedIssue && shouldShowDisabledState && "bg-collab-800 border border-red-500",
-                  )}
-                >
+                    "relative flex-1 min-h-0 space-y-2 rounded-lg transition-all duration-200 overflow-y-auto px-1",
+                    isDraggingOver && draggedIssue && !shouldShowDisabledState && "bg-collab-800/50 border border-blue-500/40 rounded-xl",
+                    isDraggingOver && draggedIssue && shouldShowDisabledState && "bg-red-500/5 border border-red-500/40 rounded-xl",
+                )}>
                   {isDraggingOver && draggedIssue && shouldShowDisabledState && (
                     <div className="absolute inset-0 bg-red-700/10 z-10">
                       <div className="flex items-center justify-center h-full">
@@ -148,16 +146,18 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
                   {/* Empty Column */}
                   {column.issues.length === 0 && !isCreatingIssue && !isDraggingOver && (
                     <div
-                      className={cn(
-                        "flex items-center justify-center h-32 text-collab-500 border-2 border-dashed border-collab-600 rounded-lg transition-colors cursor-pointer",
-                        isDraggingOver && draggedIssue && "pointer-events-none",
-                        !isDraggingOver && draggedIssue && "hover:border-blue-600"
-                      )}
+                      className="cursor-pointer"
                       onClick={handleStartCreatingIssue}
                     >
-                      <div className="text-center">
-                        <Plus className="h-6 w-6 mx-auto mb-2 text-collab-500" />
-                        <p className="text-sm">Add first issue</p>
+                      <div className="py-8 text-center">
+                        <div
+                          className="w-full h-16 rounded-lg mb-3"
+                          style={{
+                            backgroundImage: "radial-gradient(circle, #1f1f22 1px, transparent 1px)",
+                            backgroundSize: "8px 8px",
+                          }}
+                        />
+                        <p className="text-xs text-collab-500">No issues — click to add</p>
                       </div>
                     </div>
                   )}

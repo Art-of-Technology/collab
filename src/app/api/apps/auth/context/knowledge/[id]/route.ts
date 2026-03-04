@@ -1,6 +1,6 @@
 /**
  * Third-Party App API: Single Knowledge Base Article Endpoint
- * GET /api/apps/auth/notes/knowledge/[id] - Get full knowledge base article
+ * GET /api/apps/auth/context/knowledge/[id] - Get full knowledge base article
  *
  * Required scopes: knowledge:read
  */
@@ -22,7 +22,7 @@ const KNOWLEDGE_TYPES = [
 ];
 
 /**
- * GET /api/apps/auth/notes/knowledge/[id]
+ * GET /api/apps/auth/context/knowledge/[id]
  * Get full knowledge base article by ID
  */
 export const GET = withAppAuth(

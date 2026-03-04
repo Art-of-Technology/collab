@@ -36,14 +36,14 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
-                "group relative cursor-pointer transition-all duration-200 block",
-                // Mobile-first: Card-like design with glassmorphism
-                "mx-3 mb-3 p-4 rounded-xl",
-                "bg-white/5 hover:bg-white/10 backdrop-blur-sm",
-                "border border-white/10 hover:border-white/20",
-                // Desktop: More compact list style
-                "md:mx-0 md:mb-0 md:p-2 md:rounded-lg md:border-0 md:border-b md:border-collab-700",
-                "md:bg-transparent md:hover:bg-collab-900 md:backdrop-blur-none md:hover:border-collab-600"
+                "group relative cursor-pointer transition-all duration-150 block no-underline",
+                // Mobile: Card-like design
+                "mx-2 mb-2 p-3 rounded-xl",
+                "bg-collab-800 hover:bg-collab-700",
+                "border border-collab-700 hover:border-collab-600",
+                // Desktop: Compact list row matching IssueListItem
+                "md:mx-0 md:mb-0 md:px-3 md:py-2 md:rounded-md md:border-0",
+                "md:bg-transparent md:hover:bg-collab-700"
             )}
             onClick={(e) => handleIssueClick(issue.issueKey || issue.id, e)}
         >
@@ -67,7 +67,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
 
                         {/* Issue Key */}
                         {displaySettings.displayProperties.includes('ID') && (
-                            <span className="text-gray-400 text-xs font-mono font-medium shrink-0">
+                            <span className="text-collab-500 text-xs font-mono shrink-0">
                                 {issue.issueKey}
                             </span>
                         )}
@@ -82,7 +82,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                 </div>
 
                 {/* Title */}
-                <h3 className="text-white text-sm font-medium mb-2 line-clamp-2">
+                <h3 className="text-collab-50 text-[13px] font-medium mb-2 line-clamp-2">
                     {issue.title}
                 </h3>
 
@@ -103,7 +103,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                         {issue.labels.slice(0, 3).map((label) => (
                             <Badge
                                 key={label.id}
-                                className="h-5 px-2 text-xs font-medium leading-none border-0 rounded-sm"
+                                className="h-4 px-1.5 text-[10px] font-medium leading-none border-0 rounded-sm"
                                 style={{
                                     backgroundColor: label.color + '20',
                                     color: label.color || '#8b949e'
@@ -113,7 +113,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                             </Badge>
                         ))}
                         {issue.labels.length > 3 && (
-                            <span className="text-xs text-gray-500 px-1">+{issue.labels.length - 3}</span>
+                            <span className="text-xs text-collab-500 px-1">+{issue.labels.length - 3}</span>
                         )}
                     </div>
                 )}
@@ -124,7 +124,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                         {/* Project Badge */}
                         {displaySettings.displayProperties.includes('Project') && issue.project && (
                             <Badge
-                                className="h-5 px-2 text-xs font-medium leading-none border-0 rounded-md"
+                                className="h-4 px-1.5 text-[10px] font-medium leading-none border-0 rounded-sm"
                                 style={{
                                     backgroundColor: (issue.project.color || '#6e7681') + '30',
                                     color: issue.project.color || '#8b949e'
@@ -136,14 +136,14 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
 
                         {/* Status (text badge) */}
                         {displaySettings.displayProperties.includes('Status') && issue.status && (
-                            <Badge className="h-5 px-2 text-xs font-medium leading-none bg-white/10 text-gray-300 border-0 rounded-md">
+                            <Badge className="h-4 px-1.5 text-[10px] font-medium leading-none bg-collab-700 text-collab-300 border-0 rounded-sm">
                                 {normalizeStatus(issue.status)}
                             </Badge>
                         )}
 
                         {/* Due Date */}
                         {(displaySettings.displayProperties.includes('Due Date') || displaySettings.displayProperties.includes('Due date')) && issue.dueDate && (
-                            <Badge className="h-5 px-2 text-xs font-medium leading-none bg-orange-500/30 text-orange-400 border-0 rounded-md">
+                            <Badge className="h-4 px-1.5 text-[10px] font-medium leading-none bg-orange-500/20 text-orange-400 border-0 rounded-sm">
                                 {format(new Date(issue.dueDate), 'MMM d')}
                             </Badge>
                         )}
@@ -157,7 +157,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
 
                         {/* Comments Meta */}
                         {displaySettings.displayProperties.includes('Comments') && (
-                            <div className="flex items-center gap-1 px-2 py-1 bg-gray-500/20 text-gray-400 rounded-md">
+                            <div className="flex items-center gap-1 text-collab-500">
                                 <MessageSquare className="h-3 w-3" />
                                 <span className="text-xs font-medium">{issue._count?.comments || 0}</span>
                             </div>
@@ -165,7 +165,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
 
                         {/* Sub-issues Meta */}
                         {displaySettings.displayProperties.includes('Sub-issues') && (
-                            <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md">
+                            <div className="flex items-center gap-1 text-collab-500">
                                 <ArrowRight className="h-3 w-3" />
                                 <span className="text-xs font-medium">{issue._count?.children || 0}</span>
                             </div>
@@ -175,12 +175,12 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                     {/* Created / Updated Dates */}
                     <div className="flex items-center gap-2">
                         {displaySettings.displayProperties.includes('Created') && (
-                            <span className="text-gray-500 text-xs">
+                            <span className="text-collab-500 text-xs">
                                 {format(new Date(issue.createdAt), 'MMM d')}
                             </span>
                         )}
                         {displaySettings.displayProperties.includes('Updated') && (
-                            <span className="text-gray-500 text-xs">
+                            <span className="text-collab-500 text-xs">
                                 {format(new Date(issue.updatedAt), 'MMM d')}
                             </span>
                         )}
@@ -203,7 +203,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                 {/* Issue Key */}
                 {displaySettings.displayProperties.includes('ID') && (
                     <div className="flex items-center">
-                        <span className="text-collab-400 text-xs font-mono font-medium truncate">
+                        <span className="text-collab-500 text-xs font-mono truncate">
                             {issue.issueKey}
                         </span>
                     </div>
@@ -211,7 +211,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
 
                 {/* Title */}
                 <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-collab-50 text-sm font-medium truncate group-hover:text-blue-400 transition-colors">
+                    <span className="text-collab-50 text-[13px] font-medium truncate group-hover:text-blue-400 transition-colors">
                         {issue.title}
                     </span>
                     {issue.parent && (
@@ -273,7 +273,7 @@ const IssueRow = memo(({ issue, displaySettings, gridTemplateColumns, workspace,
                                 <div key={prop} className="flex items-center overflow-hidden">
                                     {issue.project && (
                                         <Badge
-                                            className="h-5 px-2 text-[10px] font-medium leading-none border-0 rounded-md bg-opacity-80 hover:bg-opacity-100 transition-all truncate"
+                                            className="h-4 px-1.5 text-[10px] font-medium leading-none border-0 rounded-sm truncate"
                                             style={{
                                                 backgroundColor: (issue.project.color || '#6e7681') + '30',
                                                 color: issue.project.color || '#8b949e'

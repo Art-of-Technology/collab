@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Bell, Check } from "lucide-react";
+import { Bell, Check, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -91,15 +91,27 @@ export default function NotificationPopover() {
                   !notification.read && "bg-violet-500/5"
                 )}
               >
-                <UserAvatar user={notification.sender} size="lg" className="h-7 w-7 flex-shrink-0 mt-0.5 ring-1 ring-white/[0.06]" />
+                {notification.type?.startsWith('COCLAW_') ? (
+                  <div className="h-7 w-7 flex-shrink-0 mt-0.5 rounded-full bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center ring-1 ring-white/[0.06]">
+                    <Bot className="h-3.5 w-3.5 text-white" />
+                  </div>
+                ) : (
+                  <UserAvatar user={notification.sender} size="lg" className="h-7 w-7 flex-shrink-0 mt-0.5 ring-1 ring-white/[0.06]" />
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-white/70 line-clamp-2">
-                    <span className="font-medium text-white/80">
-                      {notification.sender?.name || "Someone"}
-                    </span>{" "}
-                    {notification.content || "sent a notification"}
-                    {notification.issue && (
-                      <> in <span className="text-violet-500">{notification.issue.issueKey || notification.issue.title}</span></>
+                    {notification.type?.startsWith('COCLAW_') ? (
+                      <>{notification.content || 'Coclaw took an action'}</>
+                    ) : (
+                      <>
+                        <span className="font-medium text-white/80">
+                          {notification.sender?.name || "Someone"}
+                        </span>{" "}
+                        {notification.content || "sent a notification"}
+                        {notification.issue && (
+                          <> in <span className="text-violet-500">{notification.issue.issueKey || notification.issue.title}</span></>
+                        )}
+                      </>
                     )}
                   </p>
                   <span className="text-[10px] text-white/20 mt-1 block">

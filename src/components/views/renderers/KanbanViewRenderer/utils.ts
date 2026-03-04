@@ -6,14 +6,14 @@ const naturalCollator = new Intl.Collator(undefined, { numeric: true, sensitivit
 
 export const getColumnColor = (columnName: string, groupField: string): string => {
   const colors = COLUMN_COLORS[groupField as keyof typeof COLUMN_COLORS];
-  if (!colors) return 'border-gray-600';
+  if (!colors) return 'border-collab-600';
 
   const colorKey = columnName.toLowerCase();
-  return colors[colorKey as keyof typeof colors] || 'border-gray-600';
+  return colors[colorKey as keyof typeof colors] || 'border-collab-600';
 };
 
 export const getPriorityColor = (priority: string): string => {
-  return PRIORITY_COLORS[priority as keyof typeof PRIORITY_COLORS] || 'border-l-gray-600';
+  return PRIORITY_COLORS[priority as keyof typeof PRIORITY_COLORS] || 'border-l-collab-600';
 };
 
 export const filterIssues = (

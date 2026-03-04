@@ -59,6 +59,12 @@ services:
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      # Coclaw integration
+      - COCLAW_MANAGER_URL=${COCLAW_MANAGER_URL:-http://coclaw-manager:3350}
+      - COCLAW_MANAGER_TOKEN=${COCLAW_MANAGER_TOKEN}
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-collab_context}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     deploy:
       replicas: 2
       update_config:
@@ -78,14 +84,7 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 40s
 
 networks:
   collab_default:
-    driver: overlay
-    attachable: true
+    external: true

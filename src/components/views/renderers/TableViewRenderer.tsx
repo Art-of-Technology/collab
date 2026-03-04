@@ -6,8 +6,6 @@ import { UserAvatar } from '@/components/ui/user-avatar';
 import {
   MessageSquare,
   ArrowRight,
-  Calendar,
-  User,
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
@@ -85,13 +83,13 @@ export default function TableViewRenderer({
     return 0;
   });
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityDotColor = (priority: string) => {
     switch (priority) {
-      case 'URGENT': return 'text-red-500';
-      case 'HIGH': return 'text-orange-500';
-      case 'MEDIUM': return 'text-yellow-500';
-      case 'LOW': return 'text-green-500';
-      default: return 'text-gray-400';
+      case 'URGENT': return 'bg-red-500';
+      case 'HIGH': return 'bg-amber-500';
+      case 'MEDIUM': return 'bg-blue-500';
+      case 'LOW': return 'bg-slate-500';
+      default: return 'bg-collab-500';
     }
   };
 
@@ -100,250 +98,181 @@ export default function TableViewRenderer({
       case 'in progress': return 'text-blue-500';
       case 'done': return 'text-green-500';
       case 'review': return 'text-purple-500';
-      default: return 'text-gray-400';
+      default: return 'text-collab-400';
     }
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return null;
     return sortDirection === 'asc' ? 
-      <ChevronUp className="h-4 w-4" /> : 
-      <ChevronDown className="h-4 w-4" />;
+      <ChevronUp className="h-3 w-3" /> : 
+      <ChevronDown className="h-3 w-3" />;
   };
 
   return (
-    <div className="h-full bg-collab-900">
-      <div className="p-6">
-        {issues.length === 0 ? (
-          <div className="flex items-center justify-center h-64 text-gray-500">
-            <div className="text-center">
-              <User className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p>No issues found in this view</p>
-              <p className="text-sm text-gray-600 mt-1">
-                Create a new issue or adjust your filters
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="border border-collab-700 rounded-lg overflow-hidden">
-            {/* Table Header */}
-            <div className="bg-collab-800 border-b border-collab-700">
-              <div className="grid grid-cols-12 gap-4 p-4 text-sm font-medium text-gray-400">
-                <Button
-                  variant="ghost"
-                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
+    <div className="h-full">
+      {issues.length === 0 ? (
+        <div className="py-12 text-center">
+          <div
+            className="w-full max-w-xs mx-auto h-16 rounded-lg mb-3"
+            style={{
+              backgroundImage: "radial-gradient(circle, #1f1f22 1px, transparent 1px)",
+              backgroundSize: "8px 8px",
+            }}
+          />
+          <p className="text-xs text-collab-500">No issues found</p>
+          <p className="text-[10px] text-collab-600 mt-1">Create a new issue or adjust your filters</p>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-collab-700 overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-collab-700 bg-collab-800/60">
+                <th
+                  className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('key')}
                 >
-                  Key
-                  <SortIcon field="key" />
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  className="col-span-3 flex items-center gap-2 hover:text-white transition-colors text-left h-auto p-0 justify-start"
+                  <span className="flex items-center gap-1">Key <SortIcon field="key" /></span>
+                </th>
+                <th
+                  className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('title')}
                 >
-                  Title
-                  <SortIcon field="title" />
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
+                  <span className="flex items-center gap-1">Title <SortIcon field="title" /></span>
+                </th>
+                <th
+                  className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('status')}
                 >
-                  Status
-                  <SortIcon field="status" />
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
+                  <span className="flex items-center gap-1">Status <SortIcon field="status" /></span>
+                </th>
+                <th
+                  className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('priority')}
                 >
-                  Priority
-                  <SortIcon field="priority" />
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  className="col-span-2 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
+                  <span className="flex items-center gap-1">Priority <SortIcon field="priority" /></span>
+                </th>
+                <th
+                  className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('assignee')}
                 >
-                  Assignee
-                  <SortIcon field="assignee" />
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  className="col-span-2 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
+                  <span className="flex items-center gap-1">Assignee <SortIcon field="assignee" /></span>
+                </th>
+                <th
+                  className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('project')}
                 >
-                  Project
-                  <SortIcon field="project" />
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  className="col-span-1 flex items-center gap-2 hover:text-white transition-colors h-auto p-0 justify-start"
+                  <span className="flex items-center gap-1">Project <SortIcon field="project" /></span>
+                </th>
+                <th
+                  className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('dueDate')}
                 >
-                  Due Date
-                  <SortIcon field="dueDate" />
-                </Button>
-
-                <div className="col-span-1 text-center">
-                  Actions
-                </div>
-              </div>
-            </div>
-
-            {/* Table Body */}
-            <div className="divide-y divide-collab-700">
+                  <span className="flex items-center gap-1">Due <SortIcon field="dueDate" /></span>
+                </th>
+                <th className="px-3 py-2 text-center text-[11px] font-medium text-collab-400 uppercase tracking-wider">
+                  Meta
+                </th>
+              </tr>
+            </thead>
+            <tbody>
               {sortedIssues.map((issue) => (
-                <div
+                <tr
                   key={issue.id}
-                  className="grid grid-cols-12 gap-4 p-4 hover:bg-collab-800 transition-colors cursor-pointer group"
+                  className="border-b border-collab-700 hover:bg-collab-800/40 transition-colors cursor-pointer group"
                 >
                   {/* Key */}
-                  <div className="col-span-1">
-                    <Badge 
-                      variant="outline" 
-                      className="text-xs font-mono border-gray-600 text-gray-400"
-                    >
-                      {issue.issueKey}
-                    </Badge>
-                  </div>
+                  <td className="px-3 py-2.5">
+                    <span className="text-xs font-mono text-collab-400">{issue.issueKey}</span>
+                  </td>
 
                   {/* Title */}
-                  <div className="col-span-3 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge 
-                        variant="secondary" 
-                        className={cn(
-                          "text-xs capitalize",
-                          issue.type === 'EPIC' && "bg-purple-500/10 text-purple-400",
-                          issue.type === 'STORY' && "bg-blue-500/10 text-blue-400",
-                          issue.type === 'TASK' && "bg-green-500/10 text-green-400",
-                          issue.type === 'BUG' && "bg-red-500/10 text-red-400"
-                        )}
-                      >
-                        {issue.type.toLowerCase()}
-                      </Badge>
-                    </div>
-                    <p className="text-white font-medium truncate group-hover:text-blue-400 transition-colors">
+                  <td className="px-3 py-2.5 max-w-0">
+                    <p className="text-[13px] text-collab-50 font-medium truncate group-hover:text-blue-400 transition-colors">
                       {issue.title}
                     </p>
-                    {issue.description && (
-                      <p className="text-sm text-gray-500 truncate mt-1">
-                        {issue.description}
-                      </p>
-                    )}
-                  </div>
+                  </td>
 
                   {/* Status */}
-                  <div className="col-span-1">
-                    <Badge 
-                      variant="outline" 
-                      className={cn(
-                        "text-xs border-current/20 bg-current/5",
-                        getStatusColor(issue.projectStatus?.displayName || issue.statusValue || issue.status || 'Todo')
-                      )}
+                  <td className="px-3 py-2.5">
+                    <Badge
+                      className="h-4 px-1.5 text-[10px] font-medium leading-none border-0 rounded-sm bg-collab-700 text-collab-300"
                     >
                       {issue.projectStatus?.displayName || issue.statusValue || issue.status || 'Todo'}
                     </Badge>
-                  </div>
+                  </td>
 
                   {/* Priority */}
-                  <div className="col-span-1">
+                  <td className="px-3 py-2.5">
                     {issue.priority && (
-                      <div className="flex items-center gap-1">
-                        <div 
-                          className={cn(
-                            "h-2 w-2 rounded-full",
-                            getPriorityColor(issue.priority)
-                          )}
-                        />
-                        <span className={cn(
-                          "text-xs font-medium",
-                          getPriorityColor(issue.priority)
-                        )}>
-                          {issue.priority}
-                        </span>
+                      <div className="flex items-center gap-1.5">
+                        <div className={cn("h-2 w-2 rounded-full", getPriorityDotColor(issue.priority))} />
+                        <span className="text-xs text-collab-400">{issue.priority}</span>
                       </div>
                     )}
-                  </div>
+                  </td>
 
                   {/* Assignee */}
-                  <div className="col-span-2">
+                  <td className="px-3 py-2.5">
                     {issue.assignee ? (
                       <div className="flex items-center gap-2">
-                        <UserAvatar user={issue.assignee} size="md" />
-                        <span className="text-sm text-white truncate">
-                          {issue.assignee.name}
-                        </span>
+                        <UserAvatar user={issue.assignee} size="sm" />
+                        <span className="text-[13px] text-collab-50 truncate">{issue.assignee.name}</span>
                       </div>
                     ) : (
-                      <span className="text-sm text-gray-500">Unassigned</span>
+                      <span className="text-xs text-collab-500">Unassigned</span>
                     )}
-                  </div>
+                  </td>
 
                   {/* Project */}
-                  <div className="col-span-2">
+                  <td className="px-3 py-2.5">
                     {issue.project && (
-                      <Badge 
-                        variant="outline" 
-                        className="text-xs border-current/20 bg-current/5"
-                        style={{ 
-                          color: issue.project.color,
-                          borderColor: issue.project.color + '40',
-                          backgroundColor: issue.project.color + '10'
+                      <Badge
+                        className="h-4 px-1.5 text-[10px] font-medium leading-none border-0 rounded-sm"
+                        style={{
+                          backgroundColor: (issue.project.color || '#6e7681') + '20',
+                          color: issue.project.color || '#8b949e'
                         }}
                       >
                         {issue.project.name}
                       </Badge>
                     )}
-                  </div>
+                  </td>
 
                   {/* Due Date */}
-                  <div className="col-span-1">
+                  <td className="px-3 py-2.5">
                     {issue.dueDate ? (
-                      <div className="flex items-center gap-1 text-sm text-gray-400">
-                        <Calendar className="h-3 w-3" />
-                        <span>
-                          {new Date(issue.dueDate).toLocaleDateString('en-US', { 
-                            month: 'short', 
-                            day: 'numeric' 
-                          })}
-                        </span>
-                      </div>
+                      <span className="text-xs text-collab-400">
+                        {new Date(issue.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
                     ) : (
-                      <span className="text-sm text-gray-500">-</span>
+                      <span className="text-xs text-collab-600">—</span>
                     )}
-                  </div>
+                  </td>
 
-                  {/* Actions */}
-                  <div className="col-span-1 flex items-center justify-center gap-2 text-gray-500">
-                    {issue._count?.comments > 0 && (
-                      <div className="flex items-center gap-1">
-                        <MessageSquare className="h-3 w-3" />
-                        <span className="text-xs">{issue._count.comments}</span>
-                      </div>
-                    )}
-                    
-                    {issue._count?.children > 0 && (
-                      <div className="flex items-center gap-1">
-                        <ArrowRight className="h-3 w-3" />
-                        <span className="text-xs">{issue._count.children}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                  {/* Meta */}
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center justify-center gap-2 text-collab-500">
+                      {issue._count?.comments > 0 && (
+                        <div className="flex items-center gap-0.5">
+                          <MessageSquare className="h-3 w-3" />
+                          <span className="text-[10px]">{issue._count.comments}</span>
+                        </div>
+                      )}
+                      {issue._count?.children > 0 && (
+                        <div className="flex items-center gap-0.5">
+                          <ArrowRight className="h-3 w-3" />
+                          <span className="text-[10px]">{issue._count.children}</span>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
               ))}
-            </div>
-          </div>
-        )}
-      </div>
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 } 

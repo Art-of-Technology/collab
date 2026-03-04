@@ -69,10 +69,14 @@ export default function ChatBar() {
     blurInput,
     collapseChat,
     agent,
+    availableAgents,
+    selectedAgentSlug,
+    setSelectedAgentSlug,
     webSearchEnabled,
     setWebSearchEnabled,
     quickActions: aiQuickActions,
     executeQuickAction,
+    agentStatus,
   } = useAI();
 
   const router = useRouter();
@@ -493,6 +497,13 @@ export default function ChatBar() {
             hasSelectedResult={selectedIndex >= 0}
             webSearchEnabled={webSearchEnabled}
             onWebSearchToggle={() => setWebSearchEnabled(!webSearchEnabled)}
+            availableAgents={availableAgents}
+            selectedAgentSlug={selectedAgentSlug}
+            onAgentChange={setSelectedAgentSlug}
+            agentStatus={agentStatus ? {
+              instanceStatus: agentStatus.instance?.status || 'STOPPED',
+              isHealthy: agentStatus.healthy,
+            } : null}
           />
 
         </div>

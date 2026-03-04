@@ -6,8 +6,8 @@ export const DEFAULT_COLUMNS = {
 
 export const COLUMN_COLORS = {
   status: {
-    'backlog': 'border-gray-600',
-    'todo': 'border-gray-600',
+    'backlog': 'border-collab-600',
+    'todo': 'border-collab-600',
     'in progress': 'border-blue-500',
     'in review': 'border-purple-500',
     'done': 'border-green-500',

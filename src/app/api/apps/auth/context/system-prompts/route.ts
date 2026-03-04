@@ -1,6 +1,6 @@
 /**
  * Third-Party App API: System Prompts Endpoint
- * GET /api/apps/auth/notes/system-prompts - Get system prompts for AI context
+ * GET /api/apps/auth/context/system-prompts - Get system prompts for AI context
  *
  * Returns notes marked as AI context (SYSTEM_PROMPT, CODING_STYLE, TECH_STACK types)
  *
@@ -21,7 +21,7 @@ const PROMPT_TYPES = [
 ];
 
 /**
- * GET /api/apps/auth/notes/system-prompts
+ * GET /api/apps/auth/context/system-prompts
  * Get system prompts specifically for AI context
  */
 export const GET = withAppAuth(

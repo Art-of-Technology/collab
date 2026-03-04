@@ -72,7 +72,7 @@ export const getPriorityIcon = (priority: string) => {
         'LOW': 'text-green-500'
     };
 
-    const colorClass = colorMap[priority as keyof typeof colorMap] || 'text-gray-500';
+    const colorClass = colorMap[priority as keyof typeof colorMap] || 'text-collab-500';
 
     return <IconComponent className={cn("h-3.5 w-3.5", colorClass)} />;
 };

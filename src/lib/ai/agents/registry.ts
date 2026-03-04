@@ -1,9 +1,11 @@
 import type { AgentDefinition } from './types';
 import { cleoAgent } from './cleo';
+import { coclawAgent } from './coclaw';
 
-// Cleo is the single unified agent (replaces Alex + Nova)
+// Code-defined agents — Cleo (direct Anthropic) + Coclaw (per-user gateway proxy)
 const CODE_AGENTS: Record<string, AgentDefinition> = {
   cleo: cleoAgent,
+  coclaw: coclawAgent,
 };
 
 // In-memory cache for DB-backed agents
@@ -16,8 +18,7 @@ function isCacheValid(): boolean {
 }
 
 /**
- * Get all available agents.
- * Currently returns only code-defined agents (Cleo).
+ * Get all available agents (Cleo + Coclaw).
  * DB agent support is preserved but not active yet — will be enabled later.
  */
 export async function getAllAgents(_prisma?: any): Promise<AgentDefinition[]> {

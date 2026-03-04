@@ -1,11 +1,11 @@
 /**
- * Third-Party App API: Notes Endpoints
- * GET /api/apps/auth/notes - List notes with filtering
- * POST /api/apps/auth/notes - Create new note
+ * Third-Party App API: Context Endpoints
+ * GET /api/apps/auth/context - List context documents with filtering
+ * POST /api/apps/auth/context - Create a new context document
  *
  * Required scopes:
- * - notes:read for GET
- * - notes:write for POST
+ * - context:read for GET
+ * - context:write for POST
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -14,11 +14,12 @@ import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 import { NoteType, NoteScope } from '@prisma/client';
 import { stripHtmlToPlainText as stripHtml } from '@/lib/html-sanitizer';
+import { emitContextCreated } from '@/lib/event-bus';
 
-// Schema for creating notes
-// Note: Default scope is WORKSPACE (not PERSONAL) because PERSONAL notes
+// Schema for creating context documents
+// Note: Default scope is WORKSPACE (not PERSONAL) because PERSONAL context
 // are not accessible via MCP API endpoints - this prevents confusion where
-// created notes cannot be retrieved via the same API
+// documents cannot be retrieved via the same API
 const CreateNoteSchema = z.object({
   title: z.string().min(1).max(500),
   content: z.string(),
@@ -31,8 +32,8 @@ const CreateNoteSchema = z.object({
 });
 
 /**
- * GET /api/apps/auth/notes
- * List notes accessible to the app user
+ * GET /api/apps/auth/context
+ * List context documents accessible to the app user
  */
 export const GET = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
@@ -46,8 +47,8 @@ export const GET = withAppAuth(
       const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
       const offset = parseInt(searchParams.get('offset') || '0');
 
-      // Build where clause - only show notes the user can access via MCP
-      // PERSONAL notes are excluded (they're private to the owner)
+      // Build where clause - only show context docs accessible via MCP
+      // PERSONAL context is excluded (it's private to the owner)
       const where: any = {
         workspaceId: context.workspace.id,
         scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },
@@ -79,7 +80,7 @@ export const GET = withAppAuth(
         });
       }
 
-      // Exclude secret note types (use secrets endpoint instead)
+      // Exclude secret context types (use secrets endpoint instead)
       const secretTypes = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
 
       // Handle type filter: if specific type requested, validate and use it
@@ -88,7 +89,7 @@ export const GET = withAppAuth(
         // Check if requested type is a secret type
         if (secretTypes.includes(type)) {
           return NextResponse.json(
-            { error: 'invalid_type', error_description: 'Use /api/apps/auth/secrets endpoint for secret notes' },
+            { error: 'invalid_type', error_description: 'Use /api/apps/auth/secrets endpoint for secret context documents' },
             { status: 400 }
           );
         }
@@ -97,7 +98,7 @@ export const GET = withAppAuth(
         where.type = { notIn: secretTypes };
       }
 
-      const [notes, total] = await Promise.all([
+      const [contextDocs, total] = await Promise.all([
         prisma.note.findMany({
           where,
           skip: offset,
@@ -144,7 +145,7 @@ export const GET = withAppAuth(
       ]);
 
       const response = {
-        notes: notes.map(note => ({
+        context: contextDocs.map(note => ({
           id: note.id,
           title: note.title,
           excerpt: stripHtml(note.content).substring(0, 500) + (note.content.length > 500 ? '...' : ''),
@@ -161,24 +162,24 @@ export const GET = withAppAuth(
           updatedAt: note.updatedAt,
         })),
         total,
-        hasMore: offset + notes.length < total,
+        hasMore: offset + contextDocs.length < total,
       };
 
       return NextResponse.json(response);
     } catch (error) {
-      console.error('Error fetching notes:', error);
+      console.error('Error fetching context documents:', error);
       return NextResponse.json(
         { error: 'server_error', error_description: 'Internal server error' },
         { status: 500 }
       );
     }
   },
-  { requiredScopes: ['notes:read'] }
+  { requiredScopes: ['context:read'] }
 );
 
 /**
- * POST /api/apps/auth/notes
- * Create a new note
+ * POST /api/apps/auth/context
+ * Create a new context document
  */
 export const POST = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
@@ -206,16 +207,16 @@ export const POST = withAppAuth(
       // Validate scope requirements
       if (noteData.scope === NoteScope.PROJECT && !noteData.projectId) {
         return NextResponse.json(
-          { error: 'validation_error', error_description: 'Project ID is required for PROJECT scope notes' },
+          { error: 'validation_error', error_description: 'Project ID is required for PROJECT scope context documents' },
           { status: 400 }
         );
       }
 
-      // Prevent creating secret notes via this endpoint
+      // Prevent creating secret context documents via this endpoint
       const secretTypes = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
       if (secretTypes.includes(noteData.type)) {
         return NextResponse.json(
-          { error: 'forbidden', error_description: 'Cannot create secret notes via this endpoint' },
+          { error: 'forbidden', error_description: 'Cannot create secret context documents via this endpoint' },
           { status: 403 }
         );
       }
@@ -272,6 +273,28 @@ export const POST = withAppAuth(
         },
       });
 
+      // Fire-and-forget: emit context event for Qdrant sync
+      emitContextCreated(
+        {
+          id: note.id,
+          title: note.title,
+          content: note.content,
+          type: note.type,
+          scope: note.scope,
+          isAiContext: note.isAiContext,
+          aiContextPriority: note.aiContextPriority,
+          projectId: note.projectId,
+          authorId: context.user.id,
+        },
+        {
+          workspaceId: context.workspace.id,
+          workspaceName: context.workspace.name,
+          workspaceSlug: context.workspace.slug,
+          source: 'mcp',
+        },
+        { async: true }
+      ).catch((err) => console.error('Failed to emit context.created from MCP:', err));
+
       return NextResponse.json(note, { status: 201 });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -285,12 +308,12 @@ export const POST = withAppAuth(
         );
       }
 
-      console.error('Error creating note:', error);
+      console.error('Error creating context document:', error);
       return NextResponse.json(
         { error: 'server_error', error_description: 'Internal server error' },
         { status: 500 }
       );
     }
   },
-  { requiredScopes: ['notes:write'] }
+  { requiredScopes: ['context:write'] }
 );

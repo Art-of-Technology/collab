@@ -42,25 +42,25 @@ function IssueRow({ issue, workspaceSlug, compact = false }: IssueRowProps) {
   
   return (
     <div className={cn(
-      "group flex items-center gap-2 rounded transition-colors",
+      "group flex items-center gap-2 rounded-md transition-colors",
       compact ? "px-2 py-1.5" : "px-3 py-2",
-      "hover:bg-collab-800"
+      "hover:bg-collab-700"
     )}>
       <StatusIcon status={statusCategory} size="sm" />
       
       <Link
         href={`/${workspaceSlug}/issues/${issue.issueKey}`}
         className={cn(
-          "font-mono text-gray-400 hover:text-blue-400 transition-colors flex-shrink-0",
-          compact ? "text-xs" : "text-xs"
+          "font-mono text-collab-500 hover:text-blue-400 transition-colors flex-shrink-0",
+          compact ? "text-[11px]" : "text-xs"
         )}
       >
         {issue.issueKey}
       </Link>
       
       <span className={cn(
-        "text-gray-300 truncate flex-1",
-        compact ? "text-xs" : "text-sm"
+        "text-collab-50 truncate flex-1",
+        compact ? "text-[13px]" : "text-[13px]"
       )}>
         {issue.title}
       </span>
@@ -75,7 +75,7 @@ function IssueRow({ issue, workspaceSlug, compact = false }: IssueRowProps) {
                 ? "bg-red-500/10 text-red-400" 
                 : issue.daysInProgress >= 3 
                   ? "bg-orange-500/10 text-orange-400" 
-                  : "bg-gray-500/10 text-gray-400"
+                  : "bg-collab-700 text-collab-400"
             )}
           >
             {issue.daysInProgress}d
@@ -98,7 +98,7 @@ function IssueRow({ issue, workspaceSlug, compact = false }: IssueRowProps) {
         
         <Link
           href={`/${workspaceSlug}/issues/${issue.issueKey}`}
-          className="text-gray-500 hover:text-gray-300"
+          className="text-collab-500 hover:text-collab-300"
         >
           <ExternalLink className="h-3 w-3" />
         </Link>
@@ -125,8 +125,8 @@ function DaySectionHeader({
       <span className={cn("h-4 w-4", color, "[&>svg]:w-full [&>svg]:h-full")}>
         {icon}
       </span>
-      <span className="text-xs font-medium text-gray-400">{title}</span>
-      <Badge variant="secondary" className="h-4 px-1.5 text-xs bg-collab-700 text-gray-400 border-0">
+      <span className="text-[11px] font-medium uppercase tracking-wider text-collab-500">{title}</span>
+      <Badge variant="secondary" className="h-4 px-1.5 text-xs bg-collab-700 text-collab-400 border-0">
         {count}
       </Badge>
     </div>
@@ -197,19 +197,19 @@ export function PlanningMemberRow({
   const hasWarnings = insights.warnings.length > 0;
 
   return (
-    <div className="bg-collab-900 rounded-lg border border-collab-700 overflow-hidden hover:border-collab-600 transition-colors">
+    <div className="bg-collab-800 rounded-xl border border-collab-700 overflow-hidden hover:border-collab-600 transition-colors">
       {/* Member Header */}
       <Button
         variant="ghost"
         onClick={onToggleExpand}
-        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-collab-800 transition-colors h-auto rounded-none"
+        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-collab-700 transition-colors h-auto rounded-none"
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <UserAvatar user={{ name: member.userName, image: member.userImage }} size="lg" className="h-9 w-9 flex-shrink-0" />
           
           <div className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-white truncate">
+              <h3 className="text-sm font-medium text-collab-50 truncate">
                 {member.userName}
               </h3>
               {hasWarnings && (
@@ -244,16 +244,16 @@ export function PlanningMemberRow({
             value={completionProgress} 
             className="h-1.5 bg-collab-700"
           />
-          <div className="text-xs text-gray-500 mt-0.5 text-right">
+          <div className="text-xs text-collab-500 mt-0.5 text-right">
             {summary.completionRate}%
           </div>
         </div>
 
         {/* Expand/Collapse Icon */}
         {isExpanded ? (
-          <ChevronDown className="h-5 w-5 text-gray-400 flex-shrink-0" />
+          <ChevronDown className="h-5 w-5 text-collab-400 flex-shrink-0" />
         ) : (
-          <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
+          <ChevronRight className="h-5 w-5 text-collab-400 flex-shrink-0" />
         )}
       </Button>
 
@@ -390,8 +390,15 @@ export function PlanningMemberRow({
              displayActivity.inProgress.length === 0 && 
              displayActivity.inReview.length === 0 && 
              displayActivity.planned.length === 0 && (
-              <div className="py-8 text-center text-gray-500 text-sm">
-                No activity for this period
+              <div className="py-12 flex flex-col items-center justify-center gap-2">
+                <div
+                  className="w-16 h-16 rounded-full opacity-40"
+                  style={{
+                    backgroundImage: 'radial-gradient(circle, #1f1f22 1px, transparent 1px)',
+                    backgroundSize: '8px 8px'
+                  }}
+                />
+                <span className="text-xs text-collab-500">No activity for this period</span>
               </div>
             )}
           </div>

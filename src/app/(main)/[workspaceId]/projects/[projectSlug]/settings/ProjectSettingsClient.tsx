@@ -78,7 +78,7 @@ const statusColors = [
 const projectColors = [
   "#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e",
   "#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16", "#22c55e",
-  "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1",
+  "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6",
 ];
 
 export default function ProjectSettingsClient({
@@ -509,11 +509,13 @@ export default function ProjectSettingsClient({
                   <Label className="text-sm text-collab-400">Project Color</Label>
                   <div className="flex flex-wrap gap-2">
                     {projectColors.map((color) => (
-                      <button
+                      <Button
                         key={color}
+                        variant="ghost"
+                        size="icon"
                         onClick={() => setFormData({ ...formData, color })}
                         className={cn(
-                          "w-8 h-8 rounded-lg transition-all",
+                          "w-8 h-8 rounded-lg p-0 transition-all hover:opacity-80",
                           formData.color === color
                             ? "ring-2 ring-white ring-offset-2 ring-offset-collab-800 scale-110"
                             : "hover:scale-105"

@@ -813,10 +813,18 @@ export async function GET(req: Request) {
       });
     }
 
-    // Sort by timestamp and take top items
-    const recentInteractions = Array.from(interactionMap.values())
+    // Ensure views & projects always appear in Quick Access (reserve slots)
+    const allInteractions = Array.from(interactionMap.values());
+    const viewProjectItems = allInteractions
+      .filter((i) => i.type === "view" || i.type === "project")
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 12);
+      .slice(0, 6);
+    const issueItems = allInteractions
+      .filter((i) => i.type === "issue")
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 12 - viewProjectItems.length);
+    const recentInteractions = [...viewProjectItems, ...issueItems]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     // ─── Generate Summary ───
     const urgentCount = myQueue.filter((i) => i.reason === "overdue" || i.reason === "due-today").length;

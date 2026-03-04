@@ -14,6 +14,7 @@ import {
 } from "@/lib/secrets/crypto";
 import { logNoteAccess, canAccessNote } from "@/lib/secrets/access";
 import { createVersion, hasSignificantChange, detectChangeType } from "@/lib/versioning";
+import { emitContextUpdated, emitContextDeleted } from "@/lib/event-bus";
 
 export async function GET(
   request: NextRequest,
@@ -433,6 +434,31 @@ export async function PATCH(
       );
     }
 
+    // Fire-and-forget: emit context event for Qdrant sync
+    if (note.workspace) {
+      emitContextUpdated(
+        {
+          id: note.id,
+          title: note.title,
+          content: note.content,
+          type: note.type,
+          scope: note.scope,
+          isAiContext: note.isAiContext,
+          aiContextPriority: note.aiContextPriority,
+          projectId: note.projectId,
+          authorId: note.authorId,
+        },
+        { title, content, scope: finalScope, isAiContext, aiContextPriority },
+        {
+          workspaceId: note.workspace.id,
+          workspaceName: note.workspace.name,
+          workspaceSlug: note.workspace.slug,
+          source: 'api',
+        },
+        { async: true }
+      ).catch((err) => console.error('Failed to emit context.updated:', err));
+    }
+
     return NextResponse.json(note);
   } catch (error) {
     console.error("Error updating note:", error);
@@ -461,7 +487,10 @@ export async function DELETE(
       where: {
         id: id,
         authorId: session.user.id
-      }
+      },
+      include: {
+        workspace: { select: { id: true, name: true, slug: true } },
+      },
     });
 
     if (!existingNote) {
@@ -473,6 +502,20 @@ export async function DELETE(
         id: id
       }
     });
+
+    // Fire-and-forget: emit context event for Qdrant sync
+    if (existingNote.workspaceId && existingNote.workspace) {
+      emitContextDeleted(
+        { id: existingNote.id },
+        {
+          workspaceId: existingNote.workspace.id,
+          workspaceName: existingNote.workspace.name,
+          workspaceSlug: existingNote.workspace.slug,
+          source: 'api',
+        },
+        { async: true }
+      ).catch((err) => console.error('Failed to emit context.deleted:', err));
+    }
 
     return NextResponse.json({ message: "Note deleted successfully" });
   } catch (error) {

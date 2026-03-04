@@ -35,21 +35,21 @@ interface StatCardProps {
 function StatCard({ label, value, icon, color, bgColor, suffix }: StatCardProps) {
   return (
     <div className={cn(
-      "flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors",
-      "bg-collab-900 border-collab-700 hover:border-collab-600"
+      "flex items-center gap-3 p-4 rounded-xl border transition-colors",
+      "bg-collab-800 border-collab-700 hover:border-collab-600"
     )}>
       <div className={cn(
-        "flex items-center justify-center w-10 h-10 rounded-lg",
+        "flex items-center justify-center w-8 h-8 rounded-lg",
         bgColor
       )}>
         <div className={color}>{icon}</div>
       </div>
       <div>
-        <div className="text-2xl font-bold text-white">
+        <div className="text-2xl font-semibold text-collab-50">
           {value}
-          {suffix && <span className="text-sm font-normal text-gray-400 ml-1">{suffix}</span>}
+          {suffix && <span className="text-sm font-normal text-collab-400 ml-1">{suffix}</span>}
         </div>
-        <div className="text-xs text-gray-400">{label}</div>
+        <div className="text-xs text-collab-400">{label}</div>
       </div>
     </div>
   );
@@ -75,7 +75,7 @@ export function PlanningTeamSummary({
       <Button
         variant="ghost"
         onClick={onToggleCollapse}
-        className="w-full px-6 py-2 flex items-center justify-between text-xs text-gray-400 hover:text-gray-300 hover:bg-collab-800 transition-colors border-b border-collab-700 h-auto rounded-none"
+        className="w-full px-6 py-2 flex items-center justify-between text-xs text-collab-400 hover:text-collab-300 hover:bg-collab-800 transition-colors border-b border-collab-700 h-auto rounded-none"
       >
         <span className="flex items-center gap-2">
           <Activity className="h-3.5 w-3.5" />
@@ -94,20 +94,20 @@ export function PlanningTeamSummary({
             <Clock className="h-3 w-3 text-amber-400" />
             {summary.totalInProgress}
           </span>
-          <span className="text-gray-500">Click to expand</span>
+          <span className="text-collab-500">Click to expand</span>
         </div>
       </Button>
     );
   }
 
   return (
-    <div className="px-6 py-4 border-b border-collab-700 bg-collab-950">
+    <div className="px-6 py-4 border-b border-collab-700 bg-collab-900">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-indigo-500" />
-            <span className="text-sm font-medium text-white">{dateLabel}</span>
+            <Calendar className="h-4 w-4 text-collab-500" />
+            <span className="text-sm font-medium text-collab-50">{dateLabel}</span>
           </div>
           {summary.teamCompletionRate > 0 && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
@@ -120,7 +120,7 @@ export function PlanningTeamSummary({
           <Button
             variant="ghost"
             onClick={onToggleCollapse}
-            className="text-xs text-gray-500 hover:text-gray-400 transition-colors h-auto px-2 py-1"
+            className="text-xs text-collab-500 hover:text-collab-400 transition-colors h-auto px-2 py-1"
           >
             Collapse
           </Button>
@@ -175,7 +175,7 @@ export function PlanningTeamSummary({
 
       {/* Most Active Day indicator (only show for multi-day ranges) */}
       {!isSingleDay && summary.mostActiveDay && (
-        <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
+        <div className="mt-3 flex items-center gap-2 text-xs text-collab-400">
           <Activity className="h-3 w-3" />
           <span>
             Most active: {format(new Date(summary.mostActiveDay), 'EEEE, MMM d')}

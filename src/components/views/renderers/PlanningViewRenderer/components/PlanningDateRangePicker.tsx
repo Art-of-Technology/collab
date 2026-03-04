@@ -215,7 +215,7 @@ export function PlanningDateRangePicker({
             "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors h-auto",
             viewMode === 'day'
               ? "bg-blue-600 text-white"
-              : "text-gray-400 hover:text-white hover:bg-collab-700"
+              : "text-collab-400 hover:text-white hover:bg-collab-700"
           )}
         >
           <CalendarIcon className="h-3 w-3" />
@@ -228,7 +228,7 @@ export function PlanningDateRangePicker({
             "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors h-auto",
             viewMode === 'week'
               ? "bg-blue-600 text-white"
-              : "text-gray-400 hover:text-white hover:bg-collab-700"
+              : "text-collab-400 hover:text-white hover:bg-collab-700"
           )}
         >
           <CalendarDays className="h-3 w-3" />
@@ -241,7 +241,7 @@ export function PlanningDateRangePicker({
             "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors h-auto",
             viewMode === 'activity'
               ? "bg-blue-600 text-white"
-              : "text-gray-400 hover:text-white hover:bg-collab-700"
+              : "text-collab-400 hover:text-white hover:bg-collab-700"
           )}
         >
           <CalendarRange className="h-3 w-3" />
@@ -257,7 +257,7 @@ export function PlanningDateRangePicker({
           className="p-1.5 hover:bg-collab-700 transition-colors rounded-l-md h-auto"
           title="Previous period"
         >
-          <ChevronLeft className="h-4 w-4 text-gray-400" />
+          <ChevronLeft className="h-4 w-4 text-collab-400" />
         </Button>
 
         <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
@@ -281,7 +281,7 @@ export function PlanningDateRangePicker({
             <div className="flex">
               {/* Presets */}
               <div className="border-r border-collab-600 p-2 space-y-1">
-                <div className="text-xs font-medium text-gray-400 px-2 py-1">Quick Select</div>
+                <div className="text-xs font-medium text-collab-400 px-2 py-1">Quick Select</div>
                 {presets.map((preset) => (
                   <Button
                     key={preset.label}
@@ -291,7 +291,7 @@ export function PlanningDateRangePicker({
                       onDateRangeChange(range);
                       setCalendarOpen(false);
                     }}
-                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-collab-700 rounded transition-colors h-auto justify-start"
+                    className="w-full text-left px-3 py-1.5 text-xs text-collab-300 hover:bg-collab-700 rounded transition-colors h-auto justify-start"
                   >
                     {preset.label}
                   </Button>
@@ -300,7 +300,7 @@ export function PlanningDateRangePicker({
 
               {/* Calendar */}
               <div className="p-2">
-                <div className="text-xs text-gray-400 mb-2 px-2">
+                <div className="text-xs text-collab-400 mb-2 px-2">
                   {viewMode === 'day'
                     ? 'Select date (will include previous day)'
                     : viewMode === 'week'
@@ -338,8 +338,8 @@ export function PlanningDateRangePicker({
           className={cn(
             "p-1.5 transition-colors rounded-r-md h-auto",
             canNavigateNext()
-              ? "hover:bg-collab-700 text-gray-400"
-              : "text-gray-600 cursor-not-allowed"
+              ? "hover:bg-collab-700 text-collab-400"
+              : "text-collab-600 cursor-not-allowed"
           )}
           title="Next period"
         >

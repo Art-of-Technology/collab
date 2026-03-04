@@ -41,6 +41,7 @@ interface RecentInteraction {
   title: string;
   color: string;
   projectSlug?: string;
+  viewSlug?: string;
   action: "created" | "assigned" | "status_changed" | "commented" | "viewed";
   timestamp: string;
 }

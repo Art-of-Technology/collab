@@ -174,7 +174,7 @@ export default function TimelineViewRenderer({
       case 'HIGH': return 'bg-orange-500';
       case 'MEDIUM': return 'bg-yellow-500';
       case 'LOW': return 'bg-green-500';
-      default: return 'bg-gray-500';
+      default: return 'bg-collab-500';
     }
   };
 
@@ -206,11 +206,12 @@ export default function TimelineViewRenderer({
       {/* Main Timeline Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-collab-900 border-b border-collab-700 px-6 py-3">
+        <div className="sticky top-0 z-10 bg-collab-900/95 backdrop-blur-sm border-b border-collab-700 px-6 py-3">
           <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold text-white">
-              Timeline • {filteredIssues.length} Issues
-            </h1>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-collab-50">Timeline</span>
+              <span className="text-xs text-collab-500">{filteredIssues.length} issues</span>
+            </div>
             
             <div className="flex items-center gap-2">
               <Button
@@ -227,27 +228,20 @@ export default function TimelineViewRenderer({
         </div>
 
         {filteredIssues.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-collab-400">
-            <div className="text-center">
-              <Calendar className="h-12 w-12 mx-auto mb-4 text-collab-500" />
-              <p className="text-base">No issues found in this timeline</p>
-              <p className="text-sm text-collab-500 mt-1">
-                Create a new issue or adjust your filters
-              </p>
+          <div className="flex-1 flex items-center justify-center">
+            <div className="py-12 text-center">
+              <div
+                className="w-full max-w-xs mx-auto h-16 rounded-lg mb-3"
+                style={{
+                  backgroundImage: "radial-gradient(circle, #1f1f22 1px, transparent 1px)",
+                  backgroundSize: "8px 8px",
+                }}
+              />
+              <p className="text-xs text-collab-500">No issues in this timeline</p>
             </div>
           </div>
         ) : (
         <div className="flex-1 overflow-auto p-6">
-          {/* Timeline Header */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">Timeline View</h2>
-              <div className="flex items-center gap-2 text-sm text-collab-400">
-                <Clock className="h-4 w-4" />
-                <span>Showing {issues.length} issues</span>
-              </div>
-            </div>
-          </div>
 
           {/* Timeline Content */}
           <div className="space-y-8">
@@ -255,13 +249,13 @@ export default function TimelineViewRenderer({
               <div key={groupIndex} className="space-y-4">
                 {/* Group Header */}
                 {groupedIssues.length > 1 && (
-                  <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center gap-2 mb-4">
                     <div 
-                      className="w-3 h-3 rounded"
+                      className="w-2 h-2 rounded-full"
                       style={{ backgroundColor: group.color }}
                     />
-                    <h3 className="text-base font-medium text-white">{group.name}</h3>
-                    <Badge variant="secondary" className="text-xs bg-collab-700 text-collab-400 border-0">
+                    <span className="text-xs font-medium uppercase tracking-wider text-collab-400">{group.name}</span>
+                    <Badge variant="secondary" className="h-4 text-[10px] bg-collab-700 text-collab-400 border-0">
                       {group.issues.length}
                     </Badge>
                   </div>
@@ -275,50 +269,35 @@ export default function TimelineViewRenderer({
                     return (
                       <div
                         key={issue.id}
-                        className="group relative flex items-center gap-4 p-4 bg-collab-950 border border-collab-700 rounded-lg hover:border-collab-600 transition-all duration-200 cursor-pointer"
+                        className="group relative flex items-center gap-4 p-3 bg-collab-800 border border-collab-700 rounded-xl hover:bg-collab-700 hover:border-collab-600 transition-all duration-150 cursor-pointer"
                         onClick={() => handleIssueClick(issue.id)}
                       >
                         {/* Issue Info */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="text-xs font-mono text-collab-400">{issue.issueKey}</span>
                             <Badge 
-                              variant="outline" 
-                              className="text-xs font-mono border-collab-600 text-collab-400"
-                            >
-                              {issue.issueKey}
-                            </Badge>
-                            <Badge 
-                              variant="secondary" 
                               className={cn(
-                                "text-xs capitalize",
+                                "h-4 px-1.5 text-[10px] font-medium leading-none border-0 rounded-sm capitalize",
                                 issue.type === 'EPIC' && "bg-purple-500/10 text-purple-400",
                                 issue.type === 'STORY' && "bg-blue-500/10 text-blue-400",
                                 issue.type === 'TASK' && "bg-green-500/10 text-green-400",
                                 issue.type === 'BUG' && "bg-red-500/10 text-red-400"
                               )}
                             >
-                              {issue.type === 'EPIC' ? 'Epic' : 
-                                issue.type === 'STORY' ? 'Story' :
-                                issue.type === 'TASK' ? 'Task' :
-                                issue.type === 'BUG' ? 'Bug' :
-                                issue.type === 'MILESTONE' ? 'Milestone' :
-                                issue.type === 'SUBTASK' ? 'Subtask' :
-                                issue.type?.toLowerCase()}
+                              {issue.type?.toLowerCase()}
                             </Badge>
                             <div 
-                              className={cn(
-                                "w-2 h-2 rounded-full",
-                                getPriorityColor(issue.priority)
-                              )}
+                              className={cn("w-2 h-2 rounded-full", getPriorityColor(issue.priority))}
                               title={`${issue.priority} priority`}
                             />
                           </div>
                           
-                          <h4 className="text-white font-medium text-sm mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors">
+                          <h4 className="text-[13px] text-collab-50 font-medium mb-1 line-clamp-1 group-hover:text-blue-400 transition-colors">
                             {issue.title}
                           </h4>
                           
-                          <div className="flex items-center gap-3 text-xs text-collab-500">
+                          <div className="flex items-center gap-3 text-[10px] text-collab-500">
                             <span>{formatDate(timeline.startDate)}</span>
                             <span>→</span>
                             <span>{formatDate(timeline.endDate)}</span>
@@ -329,7 +308,7 @@ export default function TimelineViewRenderer({
                         {/* Timeline Bar */}
                         <div className="flex-shrink-0 relative">
                           <div 
-                            className="h-6 bg-blue-600/20 border border-blue-600/40 rounded flex items-center justify-between px-2"
+                            className="h-5 bg-blue-500/15 border border-blue-500/30 rounded-md flex items-center justify-between px-2"
                             style={{ width: `${timeline.width}px` }}
                           >
                             <div className="text-xs text-white font-medium truncate">
@@ -337,7 +316,7 @@ export default function TimelineViewRenderer({
                             </div>
                             {issue.progress && (
                               <div 
-                                className="absolute left-0 top-0 h-full bg-blue-600/60 rounded"
+                                className="absolute left-0 top-0 h-full bg-blue-500/40 rounded-md"
                                 style={{ width: `${issue.progress}%` }}
                               />
                             )}
@@ -346,7 +325,7 @@ export default function TimelineViewRenderer({
 
                         {/* Assignee */}
                         <div className="flex items-center gap-2">
-                        <UserAvatar user={issue.assignee} size="md" />
+                        <UserAvatar user={issue.assignee} size="sm" />
                         </div>
 
                         {/* Actions */}
@@ -366,9 +345,9 @@ export default function TimelineViewRenderer({
                 {groupedIssues.length > 1 && (
                   <Button
                     variant="ghost"
-                    className="w-full h-12 border-2 border-dashed border-collab-600 text-collab-500 hover:text-white hover:border-blue-600 transition-colors"
+                    className="w-full h-9 border border-dashed border-collab-700 text-collab-500 hover:text-collab-300 hover:border-collab-600 transition-colors rounded-lg"
                   >
-                    <Plus className="h-4 w-4 mr-2" />
+                    <Plus className="h-3.5 w-3.5 mr-2" />
                     Add issue to {group.name}
                   </Button>
                 )}
@@ -376,32 +355,6 @@ export default function TimelineViewRenderer({
             ))}
           </div>
 
-          {/* Timeline Footer */}
-          <div className="mt-8 pt-4 border-t border-collab-700">
-            <div className="flex items-center justify-between text-sm text-collab-500">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-red-500 rounded-full" />
-                  <span>Urgent</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full" />
-                  <span>High</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full" />
-                  <span>Medium</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full" />
-                  <span>Low</span>
-                </div>
-              </div>
-              <div className="text-collab-500">
-                Timeline spans {Math.ceil(issues.length * 1.5)} days
-              </div>
-            </div>
-          </div>
         </div>
         )}
       </div>
