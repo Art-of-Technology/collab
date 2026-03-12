@@ -4,6 +4,17 @@ import { prisma } from "@/lib/prisma";
 import { processUserProfileImage } from "@/utils/user-image-handler";
 import { CustomPrismaAdapter } from "@/lib/custom-prisma-adapter";
 
+// Log auth config at startup to help diagnose production issues
+if (typeof process !== "undefined") {
+  console.log("[NextAuth] Config check:", {
+    hasGoogleClientId: !!process.env.GOOGLE_CLIENT_ID,
+    hasGoogleClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+    hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,
+    nextAuthUrl: process.env.NEXTAUTH_URL || "NOT SET",
+    nodeEnv: process.env.NODE_ENV,
+  });
+}
+
 export const authOptions: AuthOptions = {
   adapter: CustomPrismaAdapter(prisma),
   providers: [
@@ -12,7 +23,8 @@ export const authOptions: AuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string
     })
   ],
-  debug: process.env.NODE_ENV === "development",
+  // Enable debug logging to diagnose callback errors in production
+  debug: true,
   session: {
     strategy: "jwt",
   },
