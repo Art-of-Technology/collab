@@ -669,9 +669,12 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
         if (error.name === "AbortError") return;
 
         console.error("Chat error:", error);
-        let errorMsg = "I encountered an error. Please try again.";
-        if (error.message?.includes("MCP")) {
-          errorMsg = "Failed to connect to workspace tools. Please try again.";
+        // Preserve the actual error message from SSE events or API responses
+        // instead of replacing with a generic message
+        let errorMsg = error.message || "I encountered an error. Please try again.";
+        // Clean up common wrapper prefixes from the error chain
+        if (errorMsg.startsWith("API error:")) {
+          errorMsg = "I encountered an error. Please try again.";
         }
 
         setMessages((prev) => [

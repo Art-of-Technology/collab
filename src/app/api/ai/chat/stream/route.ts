@@ -774,26 +774,113 @@ async function createCoclawProxyStream(
         }
 
         // Build OpenAI-compat request for Coclaw gateway
+        // Limit history to last 6 messages — Coclaw has its own memory system
+        // and 66+ tool schemas already consume significant context budget
+        const recentHistory = history?.slice(-6) || [];
         const openaiMessages: Array<{ role: string; content: string }> = [];
-        if (history?.length) {
-          for (const msg of history) {
-            openaiMessages.push({ role: msg.role, content: msg.content });
-          }
+        for (const msg of recentHistory) {
+          openaiMessages.push({ role: msg.role, content: msg.content });
         }
         openaiMessages.push({ role: 'user', content: message });
 
         // In remote mode, proxy through coclaw-manager; in local mode, hit gateway directly
         const managerUrl = process.env.COCLAW_MANAGER_URL;
         let gatewayUrl: string;
+        let eventsUrl: string;
         const gatewayHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
         if (managerUrl) {
           const base = managerUrl.replace(/\/+$/, '');
-          gatewayUrl = `${base}/api/instances/${encodeURIComponent(userId)}/${encodeURIComponent(workspaceId)}/proxy/v1/chat/completions`;
+          const proxyBase = `${base}/api/instances/${encodeURIComponent(userId)}/${encodeURIComponent(workspaceId)}/proxy`;
+          gatewayUrl = `${proxyBase}/v1/chat/completions`;
+          eventsUrl = `${proxyBase}/api/events`;
           const token = process.env.COCLAW_MANAGER_TOKEN;
           if (token) gatewayHeaders['Authorization'] = `Bearer ${token}`;
         } else {
           gatewayUrl = `http://127.0.0.1:${instance.port}/v1/chat/completions`;
+          eventsUrl = `http://127.0.0.1:${instance.port}/api/events`;
         }
+
+        // ── Start parallel event stream for tool call visibility ──
+        // Coclaw's agent loop broadcasts observer events (tool_call_start,
+        // tool_call, agent_start, etc.) to /api/events as SSE. We listen
+        // on this stream in parallel with the chat request and forward
+        // tool events to the frontend for live tool call rendering.
+        const eventsAbort = new AbortController();
+        let toolUseCounter = 0;
+        const activeToolIds = new Map<string, string>(); // tool name → toolUseId
+
+        const eventsListener = (async () => {
+          try {
+            const eventsHeaders: Record<string, string> = {};
+            if (managerUrl && process.env.COCLAW_MANAGER_TOKEN) {
+              eventsHeaders['Authorization'] = `Bearer ${process.env.COCLAW_MANAGER_TOKEN}`;
+            }
+            const eventsRes = await fetch(eventsUrl, {
+              headers: eventsHeaders,
+              signal: eventsAbort.signal,
+            });
+            if (!eventsRes.ok || !eventsRes.body) return;
+
+            const eventsReader = eventsRes.body.getReader();
+            const eventsDecoder = new TextDecoder();
+            let eventsBuf = '';
+
+            while (!eventsAbort.signal.aborted) {
+              const { done: eDone, value: eVal } = await eventsReader.read();
+              if (eDone) break;
+
+              eventsBuf += eventsDecoder.decode(eVal, { stream: true });
+              const eLines = eventsBuf.split('\n');
+              eventsBuf = eLines.pop() || '';
+
+              for (const eLine of eLines) {
+                if (!eLine.startsWith('data: ')) continue;
+                const eJsonStr = eLine.slice(6).trim();
+                if (!eJsonStr) continue;
+
+                let obsEvent: any;
+                try {
+                  obsEvent = JSON.parse(eJsonStr);
+                } catch {
+                  continue;
+                }
+
+                // Forward tool events to the frontend
+                switch (obsEvent.type) {
+                  case 'tool_call_start': {
+                    const toolName = obsEvent.tool || 'unknown_tool';
+                    const toolUseId = `coclaw_tc_${++toolUseCounter}`;
+                    activeToolIds.set(toolName, toolUseId);
+                    sendEvent(controller, {
+                      type: 'tool_start',
+                      toolType: 'mcp',
+                      toolName,
+                      serverName: 'coclaw',
+                      toolUseId,
+                    });
+                    break;
+                  }
+                  case 'tool_call': {
+                    const toolName = obsEvent.tool || 'unknown_tool';
+                    const toolUseId = activeToolIds.get(toolName) || `coclaw_tc_${++toolUseCounter}`;
+                    activeToolIds.delete(toolName);
+                    sendEvent(controller, {
+                      type: 'tool_result',
+                      toolUseId,
+                      isError: obsEvent.success === false,
+                      content: '',
+                    });
+                    break;
+                  }
+                  // Skip other events (llm_request, agent_start, agent_end, error)
+                  // — these are internal observability, not useful for the chat UI
+                }
+              }
+            }
+          } catch {
+            // Events stream error is non-fatal — chat still works without tool visibility
+          }
+        })();
 
         // Proxy to Coclaw gateway with streaming
         let gatewayResponse;
@@ -809,6 +896,7 @@ async function createCoclawProxyStream(
           });
         } catch (fetchError) {
           console.error('[coclaw-proxy] Gateway fetch failed:', fetchError);
+          eventsAbort.abort();
           sendEvent(controller, {
             type: 'error',
             message: 'Coclaw agent is starting up. Please try again in a few seconds.',
@@ -820,15 +908,33 @@ async function createCoclawProxyStream(
         if (!gatewayResponse.ok) {
           const errText = await gatewayResponse.text().catch(() => 'Unknown error');
           console.error('[coclaw-proxy] Gateway error:', gatewayResponse.status, errText);
+          eventsAbort.abort();
+
+          // Extract meaningful error from the gateway response body
+          let errorDetail = `Coclaw agent error (${gatewayResponse.status}).`;
+          try {
+            const parsed = JSON.parse(errText);
+            const msg = parsed?.error?.message || parsed?.error || parsed?.message;
+            if (msg && typeof msg === 'string') {
+              errorDetail = msg;
+            }
+          } catch {
+            // Not JSON — use raw text if short enough
+            if (errText.length > 0 && errText.length < 300) {
+              errorDetail = errText;
+            }
+          }
+
           sendEvent(controller, {
             type: 'error',
-            message: `Coclaw agent error (${gatewayResponse.status}). Please try again.`,
+            message: errorDetail,
           });
           controller.close();
           return;
         }
 
         if (!gatewayResponse.body) {
+          eventsAbort.abort();
           sendEvent(controller, { type: 'error', message: 'No response from Coclaw agent.' });
           controller.close();
           return;
@@ -861,6 +967,13 @@ async function createCoclawProxyStream(
               continue;
             }
 
+            // Check for error events embedded in the stream
+            if (chunk.error) {
+              const errMsg = typeof chunk.error === 'string' ? chunk.error : chunk.error.message || 'Unknown error';
+              sendEvent(controller, { type: 'error', message: errMsg });
+              continue;
+            }
+
             // Extract text delta from OpenAI-compat format
             const choice = chunk.choices?.[0];
             if (!choice) continue;
@@ -877,6 +990,10 @@ async function createCoclawProxyStream(
             }
           }
         }
+
+        // Stop the parallel events listener
+        eventsAbort.abort();
+        await eventsListener.catch(() => {});
 
         // Persist conversation + messages
         let convoId = conversationId;
@@ -938,6 +1055,8 @@ async function createCoclawProxyStream(
         controller.close();
       } catch (error) {
         console.error('[coclaw-proxy] Stream error:', error);
+        // Ensure events listener is cleaned up on error
+        try { eventsAbort?.abort(); } catch { /* may not exist yet */ }
         sendEvent(controller, {
           type: 'error',
           message: 'An error occurred while communicating with your Coclaw agent.',
