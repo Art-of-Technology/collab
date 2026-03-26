@@ -66,7 +66,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
-RAISE NOTICE 'Phase 1 complete: Enums created/verified';
+DO $$ BEGIN RAISE NOTICE 'Phase 1 complete: Enums created/verified'; END $$;
 
 -- ============================================================================
 -- PHASE 2: ALTER "Note" TABLE — ZERO DATA LOSS
@@ -123,13 +123,13 @@ DO $$ BEGIN
     -- Migrate public notes to WORKSPACE scope
     UPDATE "Note" SET "scope" = 'WORKSPACE' WHERE "isPublic" = true;
     -- Private notes stay as PERSONAL (the default)
-    RAISE NOTICE 'Migrated isPublic → scope for all notes';
+    RAISE NOTICE 'Migrated isPublic to scope for all notes';
     
     -- NOW drop isPublic — data is preserved in scope column
     ALTER TABLE "Note" DROP COLUMN "isPublic";
     RAISE NOTICE 'Dropped isPublic column (data preserved in scope)';
   ELSE
-    RAISE NOTICE 'isPublic already dropped — skipping migration';
+    RAISE NOTICE 'isPublic already dropped - skipping migration';
   END IF;
 END $$;
 
@@ -255,7 +255,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
-RAISE NOTICE 'Phase 2 complete: Note table migrated (isPublic → scope, all new columns added)';
+DO $$ BEGIN RAISE NOTICE 'Phase 2 complete: Note table migrated (isPublic to scope, all new columns added)'; END $$;
 
 -- ============================================================================
 -- PHASE 3: CREATE KNOWLEDGE BASE TABLES
@@ -412,7 +412,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
-RAISE NOTICE 'Phase 3 complete: Knowledge Base tables created';
+DO $$ BEGIN RAISE NOTICE 'Phase 3 complete: Knowledge Base tables created'; END $$;
 
 -- ============================================================================
 -- PHASE 4: CREATE AI SYSTEM TABLES
@@ -579,7 +579,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
-RAISE NOTICE 'Phase 4 complete: AI System tables created';
+DO $$ BEGIN RAISE NOTICE 'Phase 4 complete: AI System tables created'; END $$;
 
 -- ============================================================================
 -- PHASE 5: CREATE COCLAW TABLES
@@ -723,7 +723,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
-RAISE NOTICE 'Phase 5 complete: Coclaw tables created';
+DO $$ BEGIN RAISE NOTICE 'Phase 5 complete: Coclaw tables created'; END $$;
 
 -- ============================================================================
 -- PHASE 6: ALTER BoardItemActivity — STATUS FK TRACKING
@@ -759,7 +759,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
-RAISE NOTICE 'Phase 6 complete: BoardItemActivity status FKs added';
+DO $$ BEGIN RAISE NOTICE 'Phase 6 complete: BoardItemActivity status FKs added'; END $$;
 
 -- ============================================================================
 -- PHASE 7: VERIFICATION QUERIES
@@ -795,8 +795,10 @@ SELECT column_name FROM information_schema.columns
 WHERE table_name = 'BoardItemActivity'
 AND column_name IN ('oldStatusId', 'newStatusId');
 
-RAISE NOTICE '=== MIGRATION COMPLETE ===';
-RAISE NOTICE 'Review the verification query results above.';
-RAISE NOTICE 'Expected: 0 for isPublic_still_exists, 13 tables in new tables list.';
+DO $$ BEGIN
+  RAISE NOTICE '=== MIGRATION COMPLETE ===';
+  RAISE NOTICE 'Review the verification query results above.';
+  RAISE NOTICE 'Expected: 0 for isPublic_still_exists, 13 tables in new tables list.';
+END $$;
 
 COMMIT;
