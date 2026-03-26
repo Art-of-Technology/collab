@@ -60,6 +60,24 @@ export const GET = withAppAuth(
               image: true,
             },
           },
+          oldStatus: {
+            select: {
+              id: true,
+              name: true,
+              displayName: true,
+              color: true,
+              iconName: true,
+            },
+          },
+          newStatus: {
+            select: {
+              id: true,
+              name: true,
+              displayName: true,
+              color: true,
+              iconName: true,
+            },
+          },
         },
       });
 
@@ -72,6 +90,8 @@ export const GET = withAppAuth(
           fieldName: activity.fieldName,
           oldValue: activity.oldValue,
           newValue: activity.newValue,
+          oldStatus: activity.oldStatus || null,
+          newStatus: activity.newStatus || null,
           details: activity.details ? JSON.parse(activity.details) : null,
           user: activity.user,
           createdAt: activity.createdAt,

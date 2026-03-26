@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,107 +18,137 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { 
-  Settings, 
-  Save, 
-  ArrowLeft, 
-  Plus, 
+  Settings,
+  Save,
+  ArrowLeft,
+  Plus,
   X,
   FileText,
-  Circle
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { useWorkspace } from '@/context/WorkspaceContext';
-import { useProject, ProjectStatus } from '@/hooks/queries/useProjects';
-import { cn } from '@/lib/utils';
-import { DEFAULT_PROJECT_STATUSES, validateStatusDisplayName } from '@/constants/project-statuses';
-import PageHeader, { pageHeaderButtonStyles } from '@/components/layout/PageHeader';
-import { isValidNewIssuePrefix } from '@/lib/shared-issue-key-utils';
-import { GitHubConnectionCard } from '@/components/github/GitHubConnectionCard';
+  Circle,
+  Github,
+  Loader2,
+  Trash2,
+  AlertTriangle,
+  CheckCircle2,
+  ExternalLink,
+  GitBranch,
+  GitCommit,
+  GitPullRequest,
+  Tag,
+  ChevronDown,
+  ChevronRight,
+  Palette,
+  Archive,
+  Activity,
+  RefreshCw,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { useProject, ProjectStatus } from "@/hooks/queries/useProjects";
+import { cn } from "@/lib/utils";
+import {
+  DEFAULT_PROJECT_STATUSES,
+  validateStatusDisplayName,
+} from "@/constants/project-statuses";
+import { isValidNewIssuePrefix } from "@/lib/shared-issue-key-utils";
+import { GitHubOAuthConnection } from "@/components/github/GitHubOAuthConnection";
 
 interface ProjectSettingsClientProps {
   workspaceId: string;
   projectSlug: string;
 }
 
-export default function ProjectSettingsClient({ workspaceId, projectSlug }: ProjectSettingsClientProps) {
+// Tab configuration
+type SettingsTab = "general" | "statuses" | "github" | "danger";
+
+const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
+  { id: "general", label: "General", icon: <FileText className="h-4 w-4" /> },
+  { id: "statuses", label: "Statuses", icon: <Circle className="h-4 w-4" /> },
+  { id: "github", label: "GitHub", icon: <Github className="h-4 w-4" /> },
+  { id: "danger", label: "Danger Zone", icon: <AlertTriangle className="h-4 w-4" /> },
+];
+
+// Status colors
+const statusColors = [
+  "#6366f1", "#8b5cf6", "#3b82f6", "#06b6d4", "#10b981", "#84cc16",
+  "#eab308", "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#6b7280",
+];
+
+// Project colors
+const projectColors = [
+  "#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e",
+  "#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16", "#22c55e",
+  "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6",
+];
+
+export default function ProjectSettingsClient({
+  workspaceId,
+  projectSlug,
+}: ProjectSettingsClientProps) {
   const router = useRouter();
   const { toast } = useToast();
   const { currentWorkspace } = useWorkspace();
-  
-  // Fetch project data using the hook
-  const { data: project, isLoading: loading, refetch: refetchProject } = useProject(workspaceId, projectSlug);
+
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [saving, setSaving] = useState(false);
-  
+
+  // Fetch project data
+  const {
+    data: project,
+    isLoading: loading,
+    refetch: refetchProject,
+  } = useProject(workspaceId, projectSlug);
+
   // Form state
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    keyPrefix: '',
-    color: '#6366f1'
+    name: "",
+    description: "",
+    keyPrefix: "",
+    color: "#6366f1",
   });
-  
+
   // Status management state
   const [statuses, setStatuses] = useState<ProjectStatus[]>([]);
-  const [newStatusName, setNewStatusName] = useState('');
-  const [newStatusColor, setNewStatusColor] = useState('#6366f1');
-  
+  const [newStatusName, setNewStatusName] = useState("");
+  const [newStatusColor, setNewStatusColor] = useState("#6366f1");
+
   // Status deletion state
   const [statusToDelete, setStatusToDelete] = useState<ProjectStatus | null>(null);
   const [statusIssueCount, setStatusIssueCount] = useState(0);
-  const [targetStatusId, setTargetStatusId] = useState<string>('');
+  const [targetStatusId, setTargetStatusId] = useState<string>("");
   const [deletingStatus, setDeletingStatus] = useState(false);
-  
+
   // Prefix validation state
   const [prefixError, setPrefixError] = useState<string | null>(null);
 
-  // Default status colors
-  const statusColors = [
-    '#6366f1', // indigo
-    '#8b5cf6', // violet  
-    '#3b82f6', // blue
-    '#06b6d4', // cyan
-    '#10b981', // emerald
-    '#84cc16', // lime
-    '#eab308', // yellow
-    '#f59e0b', // amber
-    '#f97316', // orange
-    '#ef4444', // red
-    '#ec4899', // pink
-    '#6b7280'  // gray
-  ];
+  // Archive/Delete state
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   // Initialize form data when project loads
   useEffect(() => {
     if (project) {
       setFormData({
-        name: project.name || '',
-        description: project.description || '',
-        keyPrefix: project.keyPrefix || '',
-        color: project.color || '#6366f1'
+        name: project.name || "",
+        description: project.description || "",
+        keyPrefix: project.keyPrefix || "",
+        color: project.color || "#6366f1",
       });
-      
-      // Clear any prefix errors when loading project data
       setPrefixError(null);
-      
-      // Set statuses - use project statuses if available, otherwise default ones
+
       if (project.statuses && project.statuses.length > 0) {
         setStatuses(project.statuses);
       } else {
-        // Use default statuses from constants to ensure consistency
-        setStatuses(DEFAULT_PROJECT_STATUSES.map(status => ({
-          id: status.name,
-          name: status.displayName,
-          color: status.color,
-          order: status.order,
-          isDefault: status.isDefault
-        })));
+        setStatuses(
+          DEFAULT_PROJECT_STATUSES.map((status) => ({
+            id: status.name,
+            name: status.displayName,
+            color: status.color,
+            order: status.order,
+            isDefault: status.isDefault,
+          }))
+        );
       }
     }
   }, [project]);
@@ -126,52 +156,43 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
   const handleSave = async () => {
     try {
       setSaving(true);
-      
-      // Validate issue prefix if provided
+
       if (formData.keyPrefix && !isValidNewIssuePrefix(formData.keyPrefix)) {
-        setPrefixError('Issue prefix must start with a letter and contain only letters and numbers (no spaces)');
+        setPrefixError("Issue prefix must start with a letter and contain only letters and numbers");
         toast({
           title: "Error",
           description: "Invalid issue prefix format",
-          variant: "destructive"
+          variant: "destructive",
         });
         return;
       }
-      
-      const response = await fetch(`/api/workspaces/${workspaceId}/projects/${projectSlug}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          statuses: statuses
-        }),
-      });
+
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/projects/${projectSlug}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...formData, statuses }),
+        }
+      );
 
       if (!response.ok) {
-        // Extract error message from API response
-        const errorData = await response.json().catch(() => ({ error: 'Failed to update project' }));
-        throw new Error(errorData.error || 'Failed to update project');
+        const errorData = await response.json().catch(() => ({ error: "Failed to update project" }));
+        throw new Error(errorData.error || "Failed to update project");
       }
 
       toast({
-        title: "Success",
+        title: "Settings saved",
         description: "Project settings updated successfully",
       });
 
-      // Refresh project data
       await refetchProject();
     } catch (error) {
-      console.error('Error updating project:', error);
-      
-      // Display the actual error message from the API
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update project settings';
-      
+      const errorMessage = error instanceof Error ? error.message : "Failed to update project settings";
       toast({
         title: "Error",
         description: errorMessage,
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setSaving(false);
@@ -181,13 +202,12 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
   const handleAddStatus = () => {
     if (!newStatusName.trim()) return;
 
-    // Validate the status name
     const validation = validateStatusDisplayName(newStatusName.trim());
     if (!validation.valid) {
       toast({
         title: "Invalid Status Name",
         description: validation.error,
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -196,40 +216,38 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
       id: `status-${Date.now()}`,
       name: newStatusName.trim(),
       color: newStatusColor,
-      order: statuses.length
+      order: statuses.length,
     };
 
     setStatuses([...statuses, newStatus]);
-    setNewStatusName('');
-    setNewStatusColor('#6366f1');
+    setNewStatusName("");
+    setNewStatusColor("#6366f1");
   };
 
   const handleRemoveStatus = async (statusId: string) => {
-    const status = statuses.find(s => s.id === statusId);
+    const status = statuses.find((s) => s.id === statusId);
     if (!status) return;
 
-    // Check if this status has any issues
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/projects/${projectSlug}/statuses/${statusId}/issues-count`);
-      if (!response.ok) throw new Error('Failed to check status usage');
-      
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/projects/${projectSlug}/statuses/${statusId}/issues-count`
+      );
+      if (!response.ok) throw new Error("Failed to check status usage");
+
       const { count } = await response.json();
-      
+
       if (count > 0) {
-        // If status has issues, show confirmation modal
         setStatusToDelete(status);
         setStatusIssueCount(count);
-        setTargetStatusId('');
+        setTargetStatusId("");
       } else {
-        // If no issues, delete directly
-        setStatuses(statuses.filter(s => s.id !== statusId));
+        setStatuses(statuses.filter((s) => s.id !== statusId));
       }
     } catch (error) {
-      console.error('Error checking status usage:', error);
       toast({
         title: "Error",
         description: "Failed to check if status is being used",
-        variant: "destructive"
+        variant: "destructive",
       });
     }
   };
@@ -239,254 +257,316 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
 
     try {
       setDeletingStatus(true);
-      
-      // Call API to move issues and delete status
-      const response = await fetch(`/api/workspaces/${workspaceId}/projects/${projectSlug}/statuses/${statusToDelete.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          targetStatusId
-        }),
-      });
 
-      if (!response.ok) throw new Error('Failed to delete status');
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/projects/${projectSlug}/statuses/${statusToDelete.id}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetStatusId }),
+        }
+      );
 
-      // Remove status from local state
-      setStatuses(statuses.filter(s => s.id !== statusToDelete.id));
-      
-      // Close modal
+      if (!response.ok) throw new Error("Failed to delete status");
+
+      setStatuses(statuses.filter((s) => s.id !== statusToDelete.id));
       setStatusToDelete(null);
       setStatusIssueCount(0);
-      setTargetStatusId('');
+      setTargetStatusId("");
 
       toast({
-        title: "Success",
-        description: `Status deleted and ${statusIssueCount} issue(s) moved to the selected status`,
+        title: "Status deleted",
+        description: `${statusIssueCount} issue(s) moved to the selected status`,
       });
-
     } catch (error) {
-      console.error('Error deleting status:', error);
       toast({
         title: "Error",
         description: "Failed to delete status",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setDeletingStatus(false);
     }
   };
 
-  const handleCancelStatusDeletion = () => {
-    setStatusToDelete(null);
-    setStatusIssueCount(0);
-    setTargetStatusId('');
-  };
-
   const handleStatusColorChange = (statusId: string, color: string) => {
-    setStatuses(statuses.map(s => 
-      s.id === statusId ? { ...s, color } : s
-    ));
+    setStatuses(statuses.map((s) => (s.id === statusId ? { ...s, color } : s)));
   };
 
-  const handleBack = () => {
-    router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects`);
+  const handleArchiveProject = async () => {
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/projects/${projectSlug}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isArchived: true }),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to archive project");
+
+      toast({
+        title: "Project archived",
+        description: "The project has been archived successfully",
+      });
+
+      router.push(`/${currentWorkspace?.slug || workspaceId}/projects`);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to archive project",
+        variant: "destructive",
+      });
+    } finally {
+      setShowArchiveDialog(false);
+    }
   };
 
+  const handleDeleteProject = async () => {
+    if (deleteConfirmText !== project?.name) return;
+
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/projects/${projectSlug}`,
+        { method: "DELETE" }
+      );
+
+      if (!response.ok) throw new Error("Failed to delete project");
+
+      toast({
+        title: "Project deleted",
+        description: "The project has been permanently deleted",
+      });
+
+      router.push(`/${currentWorkspace?.slug || workspaceId}/projects`);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete project",
+        variant: "destructive",
+      });
+    } finally {
+      setShowDeleteDialog(false);
+      setDeleteConfirmText("");
+    }
+  };
+
+  // Loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="h-full w-full flex items-center justify-center bg-collab-900">
+        <Loader2 className="h-6 w-6 animate-spin text-collab-500/60" />
       </div>
     );
   }
 
   if (!project) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="h-full w-full flex items-center justify-center bg-collab-900">
         <div className="text-center">
-          <p className="text-[#8b949e] text-sm">Project not found</p>
+          <p className="text-collab-500">Project not found</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#101011]">
-      {/* Header */}
-      <PageHeader
-        icon={Settings}
-        title={`${project.name} Settings`}
-        subtitle="Manage project configuration and statuses"
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handleBack}
-              variant="ghost"
-              className={cn(pageHeaderButtonStyles.ghost, "text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1a]")}
-            >
-              <ArrowLeft className="h-3.5 w-3.5 md:mr-1.5" />
-              <span data-text className="hidden md:inline ml-1">Back to Projects</span>
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className={pageHeaderButtonStyles.primary}
-            >
-              <Save className="h-3.5 w-3.5 md:mr-1.5" />
-              <span data-text className="hidden md:inline ml-1">{saving ? 'Saving...' : 'Save Changes'}</span>
-            </Button>
+    <div className="h-full w-full overflow-y-auto bg-collab-900">
+      <div className="flex flex-col gap-6 p-8 max-w-[1000px] mx-auto">
+        {/* Header */}
+        <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-5">
+            <div className="flex items-center gap-4">
+              <div
+                className="w-1.5 h-12 rounded-full flex-shrink-0"
+                style={{ backgroundColor: formData.color || "#6366f1" }}
+              />
+              <div>
+                <h1 className="text-xl font-medium text-collab-50">
+                  {project.name} Settings
+                </h1>
+                <p className="text-sm text-collab-500">
+                  Manage project configuration
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/${currentWorkspace?.slug || workspaceId}/projects/${projectSlug}`}
+                className="flex items-center gap-2 h-9 px-4 rounded-lg text-sm text-collab-500 hover:text-collab-50 hover:bg-collab-700 transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Link>
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="h-9 px-4 bg-blue-500 hover:bg-blue-400 text-white font-medium"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Changes
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
-        }
-      />
 
-      {/* Settings Content */}
-      <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-2xl mx-auto space-y-8">
-          
-          {/* Basic Information */}
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-medium text-[#e6edf3] mb-4 flex items-center">
-                <FileText className="mr-2 h-5 w-5" />
-                Basic Information
-              </h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name" className="text-sm font-medium text-[#e6edf3]">
-                    Project Name
-                  </Label>
+          {/* Tabs */}
+          <div className="flex items-center gap-1 px-6 border-t border-collab-700">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors relative",
+                  activeTab === tab.id
+                    ? "text-collab-50"
+                    : "text-collab-500 hover:text-collab-400",
+                  tab.id === "danger" && "text-red-400 hover:text-red-300"
+                )}
+              >
+                {tab.icon}
+                {tab.label}
+                {activeTab === tab.id && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="space-y-6">
+          {/* General Tab */}
+          {activeTab === "general" && (
+            <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+              <div className="px-6 py-4 border-b border-collab-700">
+                <h2 className="text-sm font-medium text-collab-50">Basic Information</h2>
+                <p className="text-xs text-collab-500/60 mt-0.5">
+                  Configure your project's name, description, and identification
+                </p>
+              </div>
+              <div className="p-6 space-y-5">
+                {/* Project Name */}
+                <div className="space-y-2">
+                  <Label className="text-sm text-collab-400">Project Name</Label>
                   <Input
-                    id="name"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="mt-1 bg-[#0f1011] border-[#1f1f1f] text-[#e6edf3]"
                     placeholder="Enter project name"
+                    className="h-10 bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-collab-500/50 focus-visible:ring-0"
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="description" className="text-sm font-medium text-[#e6edf3]">
-                    Description
-                  </Label>
+                {/* Description */}
+                <div className="space-y-2">
+                  <Label className="text-sm text-collab-400">Description</Label>
                   <Textarea
-                    id="description"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="mt-1 bg-[#0f1011] border-[#1f1f1f] text-[#e6edf3]"
                     placeholder="Enter project description"
                     rows={3}
+                    className="bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-collab-500/50 focus-visible:ring-0 resize-none"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="keyPrefix" className="text-sm font-medium text-[#e6edf3]">
-                      Issue Key Prefix
-                    </Label>
-                    <Input
-                      id="keyPrefix"
-                      value={formData.keyPrefix}
-                      onChange={(e) => {
-                        // Clean input: remove spaces and special characters, convert to uppercase
-                        const cleanValue = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                        setFormData({ ...formData, keyPrefix: cleanValue });
-                        // Clear prefix error when user starts typing
-                        if (prefixError) setPrefixError(null);
-                      }}
-                      className={cn(
-                        "mt-1 bg-[#0f1011] border-[#1f1f1f] text-[#e6edf3]",
-                        prefixError && "border-red-500 focus:border-red-500 focus:ring-red-500"
-                      )}
-                      placeholder="e.g., PROJ"
-                      maxLength={10}
-                    />
-                    {prefixError ? (
-                      <p className="text-xs text-red-400 mt-1">
-                        {prefixError}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-[#8b949e] mt-1">
-                        Issues will be numbered as {formData.keyPrefix || 'PROJ'}-1, {formData.keyPrefix || 'PROJ'}-2, etc. No spaces allowed.
-                      </p>
+                {/* Issue Key Prefix */}
+                <div className="space-y-2">
+                  <Label className="text-sm text-collab-400">Issue Key Prefix</Label>
+                  <Input
+                    value={formData.keyPrefix}
+                    onChange={(e) => {
+                      const cleanValue = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                      setFormData({ ...formData, keyPrefix: cleanValue });
+                      if (prefixError) setPrefixError(null);
+                    }}
+                    placeholder="e.g., PROJ"
+                    maxLength={10}
+                    className={cn(
+                      "h-10 bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-collab-500/50 focus-visible:ring-0 font-mono uppercase",
+                      prefixError && "border-red-500"
                     )}
-                  </div>
+                  />
+                  {prefixError ? (
+                    <p className="text-xs text-red-400">{prefixError}</p>
+                  ) : (
+                    <p className="text-xs text-collab-500/60">
+                      Issues will be numbered as {formData.keyPrefix || "PROJ"}-1, {formData.keyPrefix || "PROJ"}-2, etc.
+                    </p>
+                  )}
+                </div>
 
-                  <div>
-                    <Label htmlFor="color" className="text-sm font-medium text-[#e6edf3]">
-                      Project Color
-                    </Label>
-                    <div className="mt-1 flex items-center gap-2">
-                      <Input
-                        id="color"
-                        type="color"
-                        value={formData.color}
-                        onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                        className="w-12 h-8 p-1 bg-[#0f1011] border-[#1f1f1f]"
+                {/* Project Color */}
+                <div className="space-y-2">
+                  <Label className="text-sm text-collab-400">Project Color</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {projectColors.map((color) => (
+                      <Button
+                        key={color}
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setFormData({ ...formData, color })}
+                        className={cn(
+                          "w-8 h-8 rounded-lg p-0 transition-all hover:opacity-80",
+                          formData.color === color
+                            ? "ring-2 ring-white ring-offset-2 ring-offset-collab-800 scale-110"
+                            : "hover:scale-105"
+                        )}
+                        style={{ backgroundColor: color }}
                       />
-                      <Input
-                        value={formData.color}
-                        onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                        className="flex-1 bg-[#0f1011] border-[#1f1f1f] text-[#e6edf3]"
-                        placeholder="#6366f1"
-                      />
-                    </div>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* GitHub Integration */}
-          <div className="space-y-6">
-            <GitHubConnectionCard
-              projectId={project.id}
-              projectSlug={projectSlug}
-              workspaceSlug={workspaceId}
-              repository={project.repository}
-              onUpdate={refetchProject}
-            />
-          </div>
+          {/* Statuses Tab */}
+          {activeTab === "statuses" && (
+            <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+              <div className="px-6 py-4 border-b border-collab-700">
+                <h2 className="text-sm font-medium text-collab-50">Project Statuses</h2>
+                <p className="text-xs text-collab-500/60 mt-0.5">
+                  Configure the available statuses for issues in this project
+                </p>
+              </div>
+              <div className="p-6 space-y-3">
+                {/* Existing Statuses */}
+                {statuses.map((status) => (
+                  <div
+                    key={status.id}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-collab-900 border border-collab-700"
+                  >
+                    <div
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: status.color }}
+                    />
+                    <span className="text-sm text-collab-50 flex-1">{status.name}</span>
+                    {status.isDefault && (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400">
+                        Default
+                      </span>
+                    )}
 
-          {/* Status Management */}
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-medium text-[#e6edf3] mb-4 flex items-center">
-                <Circle className="mr-2 h-5 w-5" />
-                Project Statuses
-              </h3>
-              <p className="text-sm text-[#8b949e] mb-4">
-                Configure the available statuses for issues in this project. These will be used across all views.
-              </p>
-              
-              {/* Existing Statuses */}
-              <div className="space-y-3 mb-4">
-                {statuses.map((status, index) => (
-                  <div key={status.id} className="flex items-center gap-3 p-3 bg-[#0f1011] border border-[#1f1f1f] rounded-md">
-                    <div className="flex-1 flex items-center gap-3">
-                      <div 
-                        className="w-4 h-4 rounded-full" 
-                        style={{ backgroundColor: status.color }}
-                      />
-                      <span className="text-[#e6edf3] font-medium">{status.name}</span>
-                      {status.isDefault && (
-                        <Badge className="h-5 px-2 text-[10px] bg-blue-500/20 text-blue-400 border-0">
-                          Default
-                        </Badge>
-                      )}
-                    </div>
-                    
-                    {/* Color picker for status */}
-                    <div className="flex items-center gap-2">
-                      {statusColors.map((color) => (
+                    {/* Color picker popover */}
+                    <div className="flex items-center gap-1">
+                      {statusColors.slice(0, 6).map((color) => (
                         <button
                           key={color}
                           onClick={() => handleStatusColorChange(status.id, color)}
                           className={cn(
-                            "w-6 h-6 rounded-full border-2 transition-all",
-                            status.color === color ? "border-white scale-110" : "border-transparent"
+                            "w-5 h-5 rounded-md transition-all",
+                            status.color === color
+                              ? "ring-1 ring-white scale-110"
+                              : "opacity-60 hover:opacity-100"
                           )}
                           style={{ backgroundColor: color }}
                         />
@@ -494,106 +574,367 @@ export default function ProjectSettingsClient({ workspaceId, projectSlug }: Proj
                     </div>
 
                     {!status.isDefault && (
-                      <Button
+                      <button
                         onClick={() => handleRemoveStatus(status.id)}
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                        className="p-1.5 rounded-lg text-collab-500/60 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                       >
-                        <X className="h-3 w-3" />
-                      </Button>
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                     )}
                   </div>
                 ))}
-              </div>
 
-              {/* Add New Status */}
-              <div className="flex items-center gap-3 p-3 bg-[#0f1011] border border-[#1f1f1f] rounded-md border-dashed">
-                <input
-                  type="color"
-                  value={newStatusColor}
-                  onChange={(e) => setNewStatusColor(e.target.value)}
-                  className="w-8 h-8 rounded border-0 bg-transparent"
-                />
-                <Input
-                  value={newStatusName}
-                  onChange={(e) => setNewStatusName(e.target.value)}
-                  placeholder="Status name"
-                  className="flex-1 bg-transparent border-0 text-[#e6edf3] focus-visible:ring-0"
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddStatus()}
-                />
-                <Button
-                  onClick={handleAddStatus}
-                  disabled={!newStatusName.trim()}
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-green-400 hover:text-green-300 hover:bg-green-500/20"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
+                {/* Add New Status */}
+                <div className="flex items-center gap-3 p-3 rounded-xl border border-dashed border-collab-600 bg-collab-900/50">
+                  <button
+                    onClick={() => {
+                      const randomColor = statusColors[Math.floor(Math.random() * statusColors.length)];
+                      setNewStatusColor(randomColor);
+                    }}
+                    className="w-6 h-6 rounded-lg flex-shrink-0 transition-transform hover:scale-110"
+                    style={{ backgroundColor: newStatusColor }}
+                  />
+                  <Input
+                    value={newStatusName}
+                    onChange={(e) => setNewStatusName(e.target.value)}
+                    placeholder="New status name..."
+                    className="flex-1 h-8 bg-transparent border-0 text-collab-50 placeholder:text-collab-500/60 focus-visible:ring-0 px-0"
+                    onKeyDown={(e) => e.key === "Enter" && handleAddStatus()}
+                  />
+                  <Button
+                    onClick={handleAddStatus}
+                    disabled={!newStatusName.trim()}
+                    size="sm"
+                    className="h-7 px-3 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-30"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Add
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
+          {/* GitHub Tab */}
+          {activeTab === "github" && (
+            <div className="space-y-4">
+              {!project.repository ? (
+                /* Not Connected State - Full width repository selection */
+                <GitHubOAuthConnection
+                  projectId={project.id}
+                  onSuccess={refetchProject}
+                  compact={false}
+                />
+              ) : (
+                /* Connected State */
+                <>
+                  {/* Repository Card */}
+                  <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+                    <div className="p-5">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-collab-700 to-collab-600 flex items-center justify-center">
+                            <Github className="h-6 w-6 text-collab-50" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <h3 className="text-base font-medium text-collab-50">
+                                {project.repository.fullName}
+                              </h3>
+                              <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                Active
+                              </span>
+                            </div>
+                            <p className="text-sm text-collab-500/60">
+                              Connected repository • Syncing automatically
+                            </p>
+                          </div>
+                        </div>
+                        <a
+                          href={`https://github.com/${project.repository.fullName}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-collab-700 hover:bg-collab-600 text-xs text-collab-400 hover:text-collab-50 transition-colors"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          View on GitHub
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Stats Row */}
+                    <div className="grid grid-cols-4 border-t border-collab-700">
+                      {[
+                        { icon: GitBranch, label: "Branches", value: project.repository._count?.branches || 0, color: "text-purple-400", bg: "bg-purple-500/10" },
+                        { icon: GitCommit, label: "Commits", value: project.repository._count?.commits || 0, color: "text-blue-400", bg: "bg-blue-500/10" },
+                        { icon: GitPullRequest, label: "Pull Requests", value: project.repository._count?.pullRequests || 0, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+                        { icon: Tag, label: "Releases", value: project.repository._count?.releases || 0, color: "text-amber-400", bg: "bg-amber-500/10" },
+                      ].map((stat, index) => (
+                        <div
+                          key={stat.label}
+                          className={cn(
+                            "p-4 flex items-center gap-3",
+                            index !== 3 && "border-r border-collab-700"
+                          )}
+                        >
+                          <div className={cn("p-2 rounded-lg", stat.bg)}>
+                            <stat.icon className={cn("h-4 w-4", stat.color)} />
+                          </div>
+                          <div>
+                            <div className="text-lg font-semibold text-collab-50">{stat.value}</div>
+                            <div className="text-[11px] text-collab-500/60">{stat.label}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Quick Actions */}
+                  <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+                    <div className="px-5 py-3 border-b border-collab-700">
+                      <span className="text-xs font-medium uppercase tracking-wider text-collab-500/60">Quick Actions</span>
+                    </div>
+                    <div className="p-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Link
+                          href={`/${currentWorkspace?.slug || workspaceId}/projects/${projectSlug}/github`}
+                          className="group flex items-center gap-3 p-3 rounded-xl hover:bg-collab-700 transition-colors"
+                        >
+                          <div className="p-2 rounded-lg bg-emerald-500/10 group-hover:bg-emerald-500/20 transition-colors">
+                            <Activity className="h-4 w-4 text-emerald-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-collab-50">Activity Dashboard</p>
+                            <p className="text-xs text-collab-500/60">View commits, PRs & activity</p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-collab-500/50 ml-auto group-hover:text-collab-500 transition-colors" />
+                        </Link>
+
+                        <Link
+                          href={`/${currentWorkspace?.slug || workspaceId}/projects/${projectSlug}/changelog`}
+                          className="group flex items-center gap-3 p-3 rounded-xl hover:bg-collab-700 transition-colors"
+                        >
+                          <div className="p-2 rounded-lg bg-amber-500/10 group-hover:bg-amber-500/20 transition-colors">
+                            <Tag className="h-4 w-4 text-amber-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-collab-50">Changelog</p>
+                            <p className="text-xs text-collab-500/60">View releases & versions</p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-collab-500/50 ml-auto group-hover:text-collab-500 transition-colors" />
+                        </Link>
+
+                        <Link
+                          href={`/${currentWorkspace?.slug || workspaceId}/projects/${projectSlug}/github/settings`}
+                          className="group flex items-center gap-3 p-3 rounded-xl hover:bg-collab-700 transition-colors"
+                        >
+                          <div className="p-2 rounded-lg bg-blue-500/10 group-hover:bg-blue-500/20 transition-colors">
+                            <Settings className="h-4 w-4 text-blue-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-collab-50">Integration Settings</p>
+                            <p className="text-xs text-collab-500/60">Configure sync & webhooks</p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-collab-500/50 ml-auto group-hover:text-collab-500 transition-colors" />
+                        </Link>
+
+                        <button
+                          onClick={() => {
+                            toast({
+                              title: "Sync started",
+                              description: "Syncing repository data from GitHub...",
+                            });
+                          }}
+                          className="group flex items-center gap-3 p-3 rounded-xl hover:bg-collab-700 transition-colors text-left"
+                        >
+                          <div className="p-2 rounded-lg bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
+                            <RefreshCw className="h-4 w-4 text-purple-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-collab-50">Sync Now</p>
+                            <p className="text-xs text-collab-500/60">Manually refresh data</p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-collab-500/50 ml-auto group-hover:text-collab-500 transition-colors" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Disconnect Option */}
+                  <div className="rounded-xl bg-collab-800 border border-collab-700 p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-collab-400">Disconnect Repository</p>
+                      <p className="text-xs text-collab-500/60">Remove the GitHub integration from this project</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-3 text-collab-500 hover:text-red-400 hover:bg-red-500/10"
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Danger Zone Tab */}
+          {activeTab === "danger" && (
+            <div className="space-y-4">
+              {/* Archive Project */}
+              <div className="rounded-2xl bg-collab-800 border border-amber-500/20 overflow-hidden">
+                <div className="px-6 py-4 border-b border-collab-700">
+                  <div className="flex items-center gap-2">
+                    <Archive className="h-4 w-4 text-amber-400" />
+                    <h2 className="text-sm font-medium text-collab-50">Archive Project</h2>
+                  </div>
+                  <p className="text-xs text-collab-500/60 mt-0.5">
+                    Archived projects are hidden from the main list but can be restored
+                  </p>
+                </div>
+                <div className="p-6 flex items-center justify-between">
+                  <p className="text-sm text-collab-500">
+                    Archive this project to hide it from your workspace
+                  </p>
+                  <Button
+                    onClick={() => setShowArchiveDialog(true)}
+                    variant="outline"
+                    className="h-9 px-4 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                  >
+                    <Archive className="h-4 w-4 mr-2" />
+                    Archive
+                  </Button>
+                </div>
+              </div>
+
+              {/* Delete Project */}
+              <div className="rounded-2xl bg-collab-800 border border-red-500/20 overflow-hidden">
+                <div className="px-6 py-4 border-b border-collab-700">
+                  <div className="flex items-center gap-2">
+                    <Trash2 className="h-4 w-4 text-red-400" />
+                    <h2 className="text-sm font-medium text-collab-50">Delete Project</h2>
+                  </div>
+                  <p className="text-xs text-collab-500/60 mt-0.5">
+                    Permanently delete this project and all its data
+                  </p>
+                </div>
+                <div className="p-6 flex items-center justify-between">
+                  <p className="text-sm text-collab-500">
+                    This action cannot be undone. All issues, views, and data will be lost.
+                  </p>
+                  <Button
+                    onClick={() => setShowDeleteDialog(true)}
+                    variant="outline"
+                    className="h-9 px-4 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Status Deletion Confirmation Modal */}
-      <AlertDialog open={!!statusToDelete} onOpenChange={(open) => !open && handleCancelStatusDeletion()}>
-        <AlertDialogContent className="bg-[#090909] border-[#1f1f1f]">
+      {/* Status Deletion Dialog */}
+      <AlertDialog open={!!statusToDelete} onOpenChange={(open) => !open && setStatusToDelete(null)}>
+        <AlertDialogContent className="bg-collab-800 border-collab-700">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[#e6edf3]">
-              Delete Status "{statusToDelete?.name}"
+            <AlertDialogTitle className="text-collab-50">
+              Delete "{statusToDelete?.name}"
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-[#8b949e]">
-              This status is currently being used by <strong>{statusIssueCount}</strong> issue{statusIssueCount !== 1 ? 's' : ''}. 
-              You need to move {statusIssueCount === 1 ? 'this issue' : 'these issues'} to another status before deletion.
+            <AlertDialogDescription className="text-collab-500">
+              This status has <strong className="text-collab-50">{statusIssueCount}</strong> issue(s).
+              Select a status to move them to.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          
+
           <div className="py-4">
-            <Label htmlFor="target-status" className="text-sm font-medium text-[#e6edf3] mb-2 block">
-              Move issues to:
-            </Label>
-            <Select value={targetStatusId} onValueChange={setTargetStatusId}>
-              <SelectTrigger className="bg-[#0f1011] border-[#1f1f1f] text-[#e6edf3]">
-                <SelectValue placeholder="Select a status" />
-              </SelectTrigger>
-              <SelectContent className="bg-[#090909] border-[#1f1f1f]">
-                {statuses
-                  .filter(s => s.id !== statusToDelete?.id) // Don't show the status being deleted
-                  .map((status) => (
-                    <SelectItem 
-                      key={status.id} 
-                      value={status.id}
-                      className="text-[#e6edf3] focus:bg-[#1f1f1f]"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: status.color }}
-                        />
-                        {status.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-sm text-collab-400 mb-2 block">Move issues to:</Label>
+            <select
+              value={targetStatusId}
+              onChange={(e) => setTargetStatusId(e.target.value)}
+              className="w-full h-10 px-3 rounded-lg bg-collab-900 border border-collab-700 text-sm text-collab-50 focus:outline-none focus:border-collab-500/50"
+            >
+              <option value="">Select a status</option>
+              {statuses
+                .filter((s) => s.id !== statusToDelete?.id)
+                .map((status) => (
+                  <option key={status.id} value={status.id}>
+                    {status.name}
+                  </option>
+                ))}
+            </select>
           </div>
 
           <AlertDialogFooter>
-            <AlertDialogCancel 
-              onClick={handleCancelStatusDeletion}
-              className="bg-transparent border-[#1f1f1f] text-[#8b949e] hover:bg-[#1f1f1f] hover:text-[#e6edf3]"
-            >
+            <AlertDialogCancel className="bg-transparent border-collab-700 text-collab-500 hover:bg-collab-700 hover:text-collab-50">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmStatusDeletion}
               disabled={!targetStatusId || deletingStatus}
-              className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+              className="bg-red-500 hover:bg-red-600 text-white disabled:opacity-50"
             >
-              {deletingStatus ? 'Moving Issues...' : `Move ${statusIssueCount} Issue${statusIssueCount !== 1 ? 's' : ''} & Delete`}
+              {deletingStatus ? "Moving..." : "Move & Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Archive Dialog */}
+      <AlertDialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>
+        <AlertDialogContent className="bg-collab-800 border-collab-700">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-collab-50">Archive Project</AlertDialogTitle>
+            <AlertDialogDescription className="text-collab-500">
+              Are you sure you want to archive "{project.name}"? It will be hidden from your workspace but can be restored later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-transparent border-collab-700 text-collab-500 hover:bg-collab-700 hover:text-collab-50">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleArchiveProject}
+              className="bg-amber-500 hover:bg-amber-600 text-black"
+            >
+              Archive Project
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent className="bg-collab-800 border-collab-700">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-collab-50">Delete Project</AlertDialogTitle>
+            <AlertDialogDescription className="text-collab-500">
+              This action cannot be undone. Type <strong className="text-red-400">{project.name}</strong> to confirm.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type project name to confirm"
+              className="h-10 bg-collab-900 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-red-500 focus-visible:ring-0"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-transparent border-collab-700 text-collab-500 hover:bg-collab-700 hover:text-collab-50">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteProject}
+              disabled={deleteConfirmText !== project.name}
+              className="bg-red-500 hover:bg-red-600 text-white disabled:opacity-50"
+            >
+              Delete Permanently
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

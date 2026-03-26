@@ -127,7 +127,7 @@ export default function MCPAuthPage() {
   // Show login if not authenticated
   if (status === 'unauthenticated') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a]">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-collab-950">
         <div className="w-full max-w-md px-8">
           <div className="flex flex-col items-center justify-center text-center mb-8">
             <Link href="/" className="mb-4">
@@ -136,10 +136,10 @@ export default function MCPAuthPage() {
             <p className="mt-2 text-gray-400">Sign in to connect your workspace</p>
           </div>
 
-          <Card className="bg-[#111] border-[#222]">
+          <Card className="bg-collab-900 border-collab-700">
             <CardHeader className="text-center">
-              <div className="mx-auto mb-4 w-12 h-12 bg-[#1f1f1f] rounded-xl flex items-center justify-center">
-                <Terminal className="w-6 h-6 text-[#22c55e]" />
+              <div className="mx-auto mb-4 w-12 h-12 bg-collab-700 rounded-xl flex items-center justify-center">
+                <Terminal className="w-6 h-6 text-green-500" />
               </div>
               <CardTitle className="text-white">Connect to Collab MCP</CardTitle>
               <CardDescription className="text-gray-400">
@@ -149,7 +149,7 @@ export default function MCPAuthPage() {
             <CardContent>
               <Button
                 onClick={() => signIn(undefined, { callbackUrl: window.location.href })}
-                className="w-full bg-[#22c55e] hover:bg-[#22c55e]/90 text-black font-medium"
+                className="w-full bg-green-500 hover:bg-green-500/90 text-black font-medium"
               >
                 Sign in to Continue
               </Button>
@@ -163,8 +163,8 @@ export default function MCPAuthPage() {
   // Loading state
   if (status === 'loading' || isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#22c55e]" />
+      <div className="flex flex-col items-center justify-center min-h-screen bg-collab-950">
+        <Loader2 className="w-8 h-8 animate-spin text-green-500" />
         <p className="mt-4 text-gray-400">Loading...</p>
       </div>
     );
@@ -173,8 +173,8 @@ export default function MCPAuthPage() {
   // Validation errors
   if (!clientId || !redirectUri) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a]">
-        <Card className="bg-[#111] border-[#222] max-w-md">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-collab-950">
+        <Card className="bg-collab-900 border-collab-700 max-w-md">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center">
               <XCircle className="w-6 h-6 text-red-500" />
@@ -191,8 +191,8 @@ export default function MCPAuthPage() {
 
   if (!isValidRedirectUri) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a]">
-        <Card className="bg-[#111] border-[#222] max-w-md">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-collab-950">
+        <Card className="bg-collab-900 border-collab-700 max-w-md">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center">
               <XCircle className="w-6 h-6 text-red-500" />
@@ -209,7 +209,7 @@ export default function MCPAuthPage() {
 
   // Main authorization UI
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a]">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-collab-950">
       <div className="w-full max-w-md px-8">
         <div className="flex flex-col items-center justify-center text-center mb-8">
           <Link href="/" className="mb-4">
@@ -217,10 +217,10 @@ export default function MCPAuthPage() {
           </Link>
         </div>
 
-        <Card className="bg-[#111] border-[#222]">
+        <Card className="bg-collab-900 border-collab-700">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 w-12 h-12 bg-[#1f1f1f] rounded-xl flex items-center justify-center">
-              <Terminal className="w-6 h-6 text-[#22c55e]" />
+            <div className="mx-auto mb-4 w-12 h-12 bg-collab-700 rounded-xl flex items-center justify-center">
+              <Terminal className="w-6 h-6 text-green-500" />
             </div>
             <CardTitle className="text-white">Authorize Collab MCP</CardTitle>
             <CardDescription className="text-gray-400">
@@ -241,7 +241,7 @@ export default function MCPAuthPage() {
               {workspaces.length === 0 ? (
                 <p className="text-sm text-gray-500">
                   You don't have any workspaces.{' '}
-                  <Link href="/welcome" className="text-[#22c55e] hover:underline">
+                  <Link href="/welcome" className="text-green-500 hover:underline">
                     Create one
                   </Link>
                 </p>
@@ -250,18 +250,18 @@ export default function MCPAuthPage() {
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
-                      className="w-full justify-between bg-[#1f1f1f] border-[#333] text-white hover:bg-[#2a2a2a]"
+                      className="w-full justify-between bg-collab-700 border-collab-600 text-white hover:bg-collab-600"
                     >
                       {selectedWorkspace?.name || 'Select a workspace'}
                       <ChevronDown className="w-4 h-4 opacity-50" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-full min-w-[300px] bg-[#1f1f1f] border-[#333]">
+                  <DropdownMenuContent className="w-full min-w-[300px] bg-collab-700 border-collab-600">
                     {workspaces.map((workspace) => (
                       <DropdownMenuItem
                         key={workspace.id}
                         onClick={() => setSelectedWorkspace(workspace)}
-                        className="text-white hover:bg-[#2a2a2a] cursor-pointer"
+                        className="text-white hover:bg-collab-600 cursor-pointer"
                       >
                         <div className="flex flex-col">
                           <span>{workspace.name}</span>
@@ -277,21 +277,21 @@ export default function MCPAuthPage() {
             {/* Permissions */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-300">Permissions requested</label>
-              <div className="p-3 bg-[#1f1f1f] rounded-lg space-y-2">
+              <div className="p-3 bg-collab-700 rounded-lg space-y-2">
                 <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <CheckCircle2 className="w-4 h-4 text-[#22c55e]" />
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
                   <span>Read and write issues</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <CheckCircle2 className="w-4 h-4 text-[#22c55e]" />
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
                   <span>Read and write projects</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <CheckCircle2 className="w-4 h-4 text-[#22c55e]" />
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
                   <span>Read workspace information</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <CheckCircle2 className="w-4 h-4 text-[#22c55e]" />
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
                   <span>Read and write comments</span>
                 </div>
               </div>
@@ -307,7 +307,7 @@ export default function MCPAuthPage() {
               <Button
                 variant="outline"
                 onClick={handleDeny}
-                className="flex-1 bg-transparent border-[#333] text-gray-300 hover:bg-[#1f1f1f]"
+                className="flex-1 bg-transparent border-collab-600 text-gray-300 hover:bg-collab-700"
                 disabled={isAuthorizing}
               >
                 Deny
@@ -315,7 +315,7 @@ export default function MCPAuthPage() {
               <Button
                 onClick={handleAuthorize}
                 disabled={!selectedWorkspace || isAuthorizing}
-                className="flex-1 bg-[#22c55e] hover:bg-[#22c55e]/90 text-black font-medium"
+                className="flex-1 bg-green-500 hover:bg-green-500/90 text-black font-medium"
               >
                 {isAuthorizing ? (
                   <>

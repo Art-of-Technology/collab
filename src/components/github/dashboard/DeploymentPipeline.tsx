@@ -143,7 +143,7 @@ export function DeploymentPipeline({ repositoryId }: DeploymentPipelineProps) {
 
   if (loading) {
     return (
-      <Card className="bg-[#0d1117] border-[#21262d]">
+      <Card className="bg-collab-900 border-collab-700">
         <CardContent className="pt-6">
           <div className="flex items-center justify-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -161,18 +161,18 @@ export function DeploymentPipeline({ repositoryId }: DeploymentPipelineProps) {
   return (
     <div className="space-y-6">
       {/* Pipeline Visualization */}
-      <Card className="bg-[#0d1117] border-[#21262d]">
+      <Card className="bg-collab-900 border-collab-700">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Rocket className="h-5 w-5 text-orange-500" />
-              <CardTitle className="text-lg text-[#e6edf3]">Deployment Pipeline</CardTitle>
+              <CardTitle className="text-lg text-collab-50">Deployment Pipeline</CardTitle>
             </div>
             <Button
               variant="outline"
               size="sm"
               onClick={fetchDeployments}
-              className="border-[#30363d] bg-transparent hover:bg-[#21262d]"
+              className="border-collab-600 bg-transparent hover:bg-collab-700"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
@@ -186,7 +186,7 @@ export function DeploymentPipeline({ repositoryId }: DeploymentPipelineProps) {
           {sortedEnvironments.length === 0 ? (
             <div className="text-center py-12">
               <Rocket className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <h3 className="text-lg font-medium text-[#e6edf3] mb-2">No Deployments Yet</h3>
+              <h3 className="text-lg font-medium text-collab-50 mb-2">No Deployments Yet</h3>
               <p className="text-sm text-muted-foreground max-w-md mx-auto">
                 Deployments will appear here when you release new versions.
                 Create a release on GitHub to trigger deployments.
@@ -201,9 +201,9 @@ export function DeploymentPipeline({ repositoryId }: DeploymentPipelineProps) {
                     <div
                       className={`flex-1 p-4 rounded-lg border cursor-pointer transition-all ${
                         selectedEnv === env.environment
-                          ? 'border-[#58a6ff] ring-1 ring-[#58a6ff]'
-                          : 'border-[#21262d] hover:border-[#30363d]'
-                      } bg-[#161b22]`}
+                          ? 'border-blue-400 ring-1 ring-blue-400'
+                          : 'border-collab-700 hover:border-collab-600'
+                      } bg-collab-800`}
                       onClick={() =>
                         setSelectedEnv(selectedEnv === env.environment ? null : env.environment)
                       }
@@ -211,7 +211,7 @@ export function DeploymentPipeline({ repositoryId }: DeploymentPipelineProps) {
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <div className={`w-3 h-3 rounded-full ${getEnvColor(env.environment)}`} />
-                          <span className="font-medium text-[#e6edf3] capitalize">
+                          <span className="font-medium text-collab-50 capitalize">
                             {env.environment}
                           </span>
                         </div>
@@ -223,17 +223,17 @@ export function DeploymentPipeline({ repositoryId }: DeploymentPipelineProps) {
                           <Badge variant="outline" className="mb-2">
                             v{env.currentVersion}
                           </Badge>
-                          <p className="text-xs text-[#8b949e]">
+                          <p className="text-xs text-collab-400">
                             {formatDate(env.lastDeployment?.deployedAt)}
                           </p>
                         </div>
                       ) : (
-                        <p className="text-sm text-[#8b949e]">Not deployed</p>
+                        <p className="text-sm text-collab-400">Not deployed</p>
                       )}
                     </div>
 
                     {index < sortedEnvironments.length - 1 && (
-                      <ArrowRight className="h-5 w-5 text-[#30363d] mx-2 flex-shrink-0" />
+                      <ArrowRight className="h-5 w-5 text-collab-700 mx-2 flex-shrink-0" />
                     )}
                   </div>
                 ))}
@@ -241,10 +241,10 @@ export function DeploymentPipeline({ repositoryId }: DeploymentPipelineProps) {
 
               {/* Selected Environment Details */}
               {selectedEnv && (
-                <Card className="bg-[#161b22] border-[#21262d]">
+                <Card className="bg-collab-800 border-collab-700">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-base text-[#e6edf3] capitalize">
+                      <CardTitle className="text-base text-collab-50 capitalize">
                         {selectedEnv} Deployment History
                       </CardTitle>
                       <Button
@@ -273,7 +273,7 @@ export function DeploymentPipeline({ repositoryId }: DeploymentPipelineProps) {
                             {envData.history.map((deployment, idx) => (
                               <div
                                 key={deployment.id}
-                                className="flex items-start gap-3 p-3 rounded-lg bg-[#0d1117] border border-[#21262d]"
+                                className="flex items-start gap-3 p-3 rounded-lg bg-collab-900 border border-collab-700"
                               >
                                 <div className="flex-shrink-0 mt-1">
                                   {getStatusIcon(deployment.status)}
@@ -297,7 +297,7 @@ export function DeploymentPipeline({ repositoryId }: DeploymentPipelineProps) {
                                       </Badge>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-4 mt-2 text-xs text-[#8b949e]">
+                                  <div className="flex items-center gap-4 mt-2 text-xs text-collab-400">
                                     <span className="flex items-center gap-1">
                                       <Calendar className="h-3 w-3" />
                                       {formatDate(deployment.deployedAt)}

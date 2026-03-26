@@ -97,67 +97,68 @@ export function VersioningConfig({
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Version Strategy */}
-      <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-        <div className="px-4 py-3 border-b border-[#1f1f1f]">
-          <h3 className="text-sm font-medium text-[#e6edf3] flex items-center gap-2">
-            <Tag className="h-4 w-4 text-[#6e7681]" />
+      <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
+        <div className="px-4 py-3 border-b border-collab-700">
+          <h3 className="text-sm font-medium text-collab-50 flex items-center gap-2">
+            <Tag className="h-4 w-4 text-collab-500" />
             Version Strategy
           </h3>
-          <p className="text-xs text-[#6e7681] mt-0.5">
+          <p className="text-xs text-collab-500 mt-0.5">
             Choose how versions are numbered and incremented
           </p>
         </div>
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {VERSION_STRATEGIES.map(strategy => (
-              <button
+              <Button
                 key={strategy.id}
+                variant="ghost"
                 onClick={() => setConfig(prev => ({ ...prev, versioningStrategy: strategy.id as typeof prev.versioningStrategy }))}
                 className={cn(
-                  "p-4 rounded-lg border-2 text-left transition-all",
+                  "p-4 rounded-lg border-2 text-left transition-all h-auto",
                   config.versioningStrategy === strategy.id
-                    ? "border-[#58a6ff] bg-[#58a6ff]/5"
-                    : "border-[#1f1f1f] bg-[#161617] hover:border-[#30363d]"
+                    ? "border-blue-400 bg-blue-400/5"
+                    : "border-collab-700 bg-collab-900 hover:border-collab-600"
                 )}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <strategy.icon className={cn(
                     "h-4 w-4",
-                    config.versioningStrategy === strategy.id ? "text-[#58a6ff]" : "text-[#6e7681]"
+                    config.versioningStrategy === strategy.id ? "text-blue-400" : "text-collab-500"
                   )} />
                   <span className={cn(
                     "text-sm font-medium",
-                    config.versioningStrategy === strategy.id ? "text-[#58a6ff]" : "text-[#e6edf3]"
+                    config.versioningStrategy === strategy.id ? "text-blue-400" : "text-collab-50"
                   )}>
                     {strategy.name}
                   </span>
                 </div>
-                <p className="text-xs text-[#6e7681] mb-2">{strategy.description}</p>
-                <code className="text-[10px] text-[#6e7681] bg-[#0d0d0e] px-2 py-1 rounded">
+                <p className="text-xs text-collab-500 mb-2">{strategy.description}</p>
+                <code className="text-[10px] text-collab-500 bg-collab-900 px-2 py-1 rounded">
                   {strategy.example}
                 </code>
-              </button>
+              </Button>
             ))}
           </div>
         </div>
       </div>
 
       {/* Auto Versioning */}
-      <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-        <div className="px-4 py-3 border-b border-[#1f1f1f]">
-          <h3 className="text-xs font-medium text-[#e6edf3] flex items-center gap-2">
-            <GitMerge className="h-3.5 w-3.5 text-[#6e7681]" />
+      <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
+        <div className="px-4 py-3 border-b border-collab-700">
+          <h3 className="text-xs font-medium text-collab-50 flex items-center gap-2">
+            <GitMerge className="h-3.5 w-3.5 text-collab-500" />
             Automatic Versioning
           </h3>
-          <p className="text-[10px] text-[#6e7681] mt-0.5">
+          <p className="text-[10px] text-collab-500 mt-0.5">
             Configure automatic version creation from GitHub releases
           </p>
         </div>
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <Label className="text-sm text-[#e6edf3]">Enable Auto-Versioning</Label>
-              <p className="text-xs text-[#6e7681] mt-0.5">
+              <Label className="text-sm text-collab-50">Enable Auto-Versioning</Label>
+              <p className="text-xs text-collab-500 mt-0.5">
                 Automatically create versions when GitHub releases are published
               </p>
             </div>
@@ -167,14 +168,14 @@ export function VersioningConfig({
             />
           </div>
 
-          <div className="pt-2 border-t border-[#1f1f1f] space-y-4">
+          <div className="pt-2 border-t border-collab-700 space-y-4">
             <div>
-              <Label className="text-sm text-[#e6edf3] mb-2 block">Release Branch</Label>
+              <Label className="text-sm text-collab-50 mb-2 block">Release Branch</Label>
               <Select
                 value={config.releaseBranch}
                 onValueChange={(value) => setConfig(prev => ({ ...prev, releaseBranch: value }))}
               >
-                <SelectTrigger className="h-9 bg-[#161617] border-[#1f1f1f] text-[#e6edf3]">
+                <SelectTrigger className="h-9 bg-collab-900 border-collab-700 text-collab-50">
                   <SelectValue placeholder="Select branch" />
                 </SelectTrigger>
                 <SelectContent>
@@ -188,23 +189,23 @@ export function VersioningConfig({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-[#6e7681] mt-1">
+              <p className="text-[10px] text-collab-500 mt-1">
                 Releases from this branch will trigger version creation
               </p>
             </div>
 
             <div>
-              <Label className="text-sm text-[#e6edf3] mb-2 block">Version Prefix</Label>
+              <Label className="text-sm text-collab-50 mb-2 block">Version Prefix</Label>
               <div className="flex items-center gap-3">
                 <input
                   type="text"
                   value={config.versionPrefix}
                   onChange={(e) => setConfig(prev => ({ ...prev, versionPrefix: e.target.value }))}
                   placeholder="v"
-                  className="w-16 h-9 px-3 bg-[#161617] border border-[#1f1f1f] rounded-md text-[#e6edf3] text-sm focus:border-[#58a6ff] focus:outline-none"
+                  className="w-16 h-9 px-3 bg-collab-900 border border-collab-700 rounded-md text-collab-50 text-sm focus:border-blue-400 focus:outline-none"
                 />
-                <span className="text-xs text-[#6e7681]">+ version number</span>
-                <Badge variant="secondary" className="text-[10px] bg-[#161617] text-[#8b949e]">
+                <span className="text-xs text-collab-500">+ version number</span>
+                <Badge variant="secondary" className="text-[10px] bg-collab-900 text-collab-400">
                   Example: {config.versionPrefix}1.0.0
                 </Badge>
               </div>
@@ -214,21 +215,21 @@ export function VersioningConfig({
       </div>
 
       {/* Changelog Configuration */}
-      <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-        <div className="px-4 py-3 border-b border-[#1f1f1f]">
-          <h3 className="text-xs font-medium text-[#e6edf3] flex items-center gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-[#6e7681]" />
+      <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
+        <div className="px-4 py-3 border-b border-collab-700">
+          <h3 className="text-xs font-medium text-collab-50 flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-collab-500" />
             AI Changelog Generation
           </h3>
-          <p className="text-[10px] text-[#6e7681] mt-0.5">
+          <p className="text-[10px] text-collab-500 mt-0.5">
             Configure automatic changelog generation with AI
           </p>
         </div>
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <Label className="text-sm text-[#e6edf3]">Auto-Generate Changelog</Label>
-              <p className="text-xs text-[#6e7681] mt-0.5">
+              <Label className="text-sm text-collab-50">Auto-Generate Changelog</Label>
+              <p className="text-xs text-collab-500 mt-0.5">
                 Use AI to automatically generate changelogs for new releases
               </p>
             </div>
@@ -238,13 +239,13 @@ export function VersioningConfig({
             />
           </div>
 
-          <div className="pt-4 border-t border-[#1f1f1f] space-y-3">
-            <p className="text-xs text-[#6e7681] font-medium">Include in Changelog:</p>
+          <div className="pt-4 border-t border-collab-700 space-y-3">
+            <p className="text-xs text-collab-500 font-medium">Include in Changelog:</p>
 
             <div className="flex items-center justify-between py-2">
               <div>
-                <Label className="text-sm text-[#e6edf3]">Commit Messages</Label>
-                <p className="text-xs text-[#6e7681] mt-0.5">
+                <Label className="text-sm text-collab-50">Commit Messages</Label>
+                <p className="text-xs text-collab-500 mt-0.5">
                   Include commit messages in generated changelogs
                 </p>
               </div>
@@ -256,8 +257,8 @@ export function VersioningConfig({
 
             <div className="flex items-center justify-between py-2">
               <div>
-                <Label className="text-sm text-[#e6edf3]">Pull Request Descriptions</Label>
-                <p className="text-xs text-[#6e7681] mt-0.5">
+                <Label className="text-sm text-collab-50">Pull Request Descriptions</Label>
+                <p className="text-xs text-collab-500 mt-0.5">
                   Include PR titles and descriptions in generated changelogs
                 </p>
               </div>
@@ -292,8 +293,8 @@ export function VersioningConfig({
           className={cn(
             "h-8",
             hasChanges
-              ? "bg-[#238636] hover:bg-[#2ea043] text-white"
-              : "bg-[#161617] text-[#8b949e]"
+              ? "bg-green-700 hover:bg-green-600 text-white"
+              : "bg-collab-900 text-collab-400"
           )}
         >
           {isSaving ? (

@@ -30,7 +30,7 @@ export function calculateSubIssueProgress(children: RelationItem[]): SubIssuePro
  * Get color class based on progress percentage
  */
 export function getProgressColor(percentage: number): string {
-  if (percentage === 0) return 'bg-[#444]';
+  if (percentage === 0) return 'bg-collab-600';
   if (percentage < 30) return 'bg-red-500';
   if (percentage < 70) return 'bg-yellow-500';
   if (percentage < 100) return 'bg-blue-500';
@@ -45,7 +45,7 @@ export function getProgressBarColor(percentage: number): {
   bg: string;
 } {
   if (percentage === 0) {
-    return { bar: 'bg-[#444]', bg: 'bg-[#2d2d30]' };
+    return { bar: 'bg-collab-600', bg: 'bg-collab-600' };
   }
   if (percentage < 30) {
     return { bar: 'bg-red-500', bg: 'bg-red-500/10' };

@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
+import { emitIssueCreated } from '@/lib/event-bus';
 
 // Schema for creating new issues
 const CreateIssueSchema = z.object({
@@ -429,6 +430,19 @@ export const POST = withAppAuth(
 
         return created;
       });
+
+      // Fire-and-forget Qdrant sync
+      emitIssueCreated(
+        newIssue,
+        {
+          userId: context.user.id,
+          workspaceId: context.workspace.id,
+          workspaceName: context.workspace.name || '',
+          workspaceSlug: context.workspace.slug || '',
+          source: 'mcp-api',
+        },
+        { async: true }
+      ).catch(() => {});
 
       return NextResponse.json(newIssue, { status: 201 });
 

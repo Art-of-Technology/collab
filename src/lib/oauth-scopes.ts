@@ -33,11 +33,17 @@ export const SUPPORTED_SCOPES = [
   'leave:read',
   'leave:write',
   'projects:read',
-  'projects:write', 
-  'views:read', 
-  'views:write', 
-  'labels:read', 
-  'labels:write'
+  'projects:write',
+  'views:read',
+  'views:write',
+  'labels:read',
+  'labels:write',
+  // Context & Knowledge System (Phase 6)
+  'context:read',
+  'context:write',
+  'knowledge:read',
+  'prompts:read',
+  'secrets:read',
 ] as const;
 
 export type SupportedScope = typeof SUPPORTED_SCOPES[number];
@@ -248,7 +254,13 @@ export function getScopeDescription(scope: string): string {
     'comments:read': 'Read access to comments',
     'comments:write': 'Create and modify comments',
     'leave:read': 'Read access to leave requests',
-    'leave:write': 'Create and modify leave requests'
+    'leave:write': 'Create and modify leave requests',
+    // Context & Knowledge System (Phase 6)
+    'context:read': 'Read context documents and knowledge base articles',
+    'context:write': 'Create and modify context documents',
+    'knowledge:read': 'Access knowledge base and documentation',
+    'prompts:read': 'Read AI system prompts and context',
+    'secrets:read': 'Read encrypted secrets (requires explicit grant)',
   };
 
   return descriptions[scope] || `Access to ${scope}`;

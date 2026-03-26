@@ -72,7 +72,7 @@ export const getPriorityIcon = (priority: string) => {
         'LOW': 'text-green-500'
     };
 
-    const colorClass = colorMap[priority as keyof typeof colorMap] || 'text-gray-500';
+    const colorClass = colorMap[priority as keyof typeof colorMap] || 'text-collab-500';
 
     return <IconComponent className={cn("h-3.5 w-3.5", colorClass)} />;
 };
@@ -83,20 +83,20 @@ export const getStatusIcon = (status: string) => {
 
     switch (normalizedStatus) {
         case 'todo':
-            return <Circle className={cn(iconClass, "text-[#8b949e]")} />;
+            return <Circle className={cn(iconClass, "text-collab-400")} />;
         case 'in progress':
-            return <Clock className={cn(iconClass, "text-[#3b82f6]")} />;
+            return <Clock className={cn(iconClass, "text-blue-500")} />;
         case 'review':
-            return <Clock className={cn(iconClass, "text-[#f59e0b]")} />;
+            return <Clock className={cn(iconClass, "text-amber-500")} />;
         case 'testing':
-            return <Clock className={cn(iconClass, "text-[#8b5cf6]")} />;
+            return <Clock className={cn(iconClass, "text-violet-500")} />;
         case 'done':
-            return <CheckCircle2 className={cn(iconClass, "text-[#22c55e]")} fill="currentColor" />;
+            return <CheckCircle2 className={cn(iconClass, "text-green-500")} fill="currentColor" />;
         case 'cancelled':
-            return <XCircle className={cn(iconClass, "text-[#ef4444]")} fill="currentColor" />;
+            return <XCircle className={cn(iconClass, "text-red-500")} fill="currentColor" />;
         case 'blocked':
-            return <AlertCircle className={cn(iconClass, "text-[#f59e0b]")} />;
+            return <AlertCircle className={cn(iconClass, "text-amber-500")} />;
         default:
-            return <Circle className={cn(iconClass, "text-[#8b949e]")} />;
+            return <Circle className={cn(iconClass, "text-collab-400")} />;
     }
 };

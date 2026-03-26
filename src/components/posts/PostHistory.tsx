@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -159,12 +159,7 @@ export default function PostHistory({ postId }: PostHistoryProps) {
           {actions.map((action, index) => (
             <div key={action.id}>
               <div className="flex items-start gap-3">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={action.user_image || undefined} alt={action.user_name || "User"} />
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    {action.user_name?.charAt(0).toUpperCase() || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={{ name: action.user_name, image: action.user_image }} size="lg" />
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">

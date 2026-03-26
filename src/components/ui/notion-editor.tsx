@@ -923,19 +923,22 @@ export function NotionEditor({
             <div className="text-xs text-muted-foreground mb-2 px-2 font-medium">Commands</div>
             {filteredCommands.length > 0 ? (
               filteredCommands.map((cmd, index) => (
-                <button
+                <Button
                   key={cmd.command}
+                  variant="ghost"
                   onClick={() => executeSlashCommand(cmd.command)}
                   onMouseEnter={() => setIsKeyboardNavigation(false)}
-                  className={`w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md transition-colors ${selectedCommandIndex === index && isKeyboardNavigation
+                  className={cn(
+                    "w-full justify-start h-auto gap-3 px-2 py-2 text-sm",
+                    selectedCommandIndex === index && isKeyboardNavigation
                       ? 'bg-primary text-primary-foreground'
                       : 'hover:bg-muted'
-                    }`}
+                  )}
                   data-command-index={index}
                 >
                   <cmd.icon size={16} className="text-muted-foreground" />
                   <span>{cmd.title}</span>
-                </button>
+                </Button>
               ))
             ) : (
               <div className="px-2 py-2 text-sm text-muted-foreground">

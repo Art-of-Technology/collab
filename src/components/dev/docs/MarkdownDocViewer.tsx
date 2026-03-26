@@ -12,7 +12,7 @@ interface MarkdownDocViewerProps {
 export function MarkdownDocViewer({ title, content }: MarkdownDocViewerProps) {
   if (!content || content.trim() === '') {
     return (
-      <Card className="border-[#1f1f1f] bg-[#101011]">
+      <Card className="border-collab-700 bg-collab-900">
         <CardContent className="p-4 sm:p-6">
           <div className="mb-4 sm:mb-6">
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight mb-2">{title}</h1>
@@ -26,7 +26,7 @@ export function MarkdownDocViewer({ title, content }: MarkdownDocViewerProps) {
   }
 
   return (
-    <Card className="border-[#1f1f1f] bg-[#101011]">
+    <Card className="border-collab-700 bg-collab-900">
       <CardContent className="p-6">
         <div className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">{title}</h1>

@@ -204,24 +204,24 @@ export function GitHubSettingsClient({
   // No repository connected
   if (!repoData) {
     return (
-      <div className="h-full flex flex-col bg-[#0a0a0b]">
+      <div className="h-full flex flex-col bg-collab-950">
         {/* Header */}
-        <div className="flex-none border-b border-[#1f1f1f]">
+        <div className="flex-none border-b border-collab-700">
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[#1a1a1b] flex items-center justify-center">
-                <Settings className="h-4 w-4 text-[#e6edf3]" />
+              <div className="w-8 h-8 rounded-lg bg-collab-800 flex items-center justify-center">
+                <Settings className="h-4 w-4 text-collab-50" />
               </div>
               <div>
-                <h1 className="text-sm font-medium text-[#e6edf3]">GitHub Settings</h1>
-                <p className="text-xs text-[#6e7681]">{project.name} - Connect your repository</p>
+                <h1 className="text-sm font-medium text-collab-50">GitHub Settings</h1>
+                <p className="text-xs text-collab-500">{project.name} - Connect your repository</p>
               </div>
             </div>
             <Button
               onClick={handleBack}
               variant="ghost"
               size="sm"
-              className="h-8 px-3 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1b]"
+              className="h-8 px-3 text-collab-400 hover:text-collab-50 hover:bg-collab-800"
             >
               <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
               Back
@@ -242,28 +242,28 @@ export function GitHubSettingsClient({
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0b]">
+    <div className="h-full flex flex-col bg-collab-950">
       {/* Header */}
-      <div className="flex-none border-b border-[#1f1f1f]">
+      <div className="flex-none border-b border-collab-700">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#1a1a1b] flex items-center justify-center">
-              <Settings className="h-4 w-4 text-[#e6edf3]" />
+            <div className="w-8 h-8 rounded-lg bg-collab-800 flex items-center justify-center">
+              <Settings className="h-4 w-4 text-collab-50" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-sm font-medium text-[#e6edf3]">GitHub Settings</h1>
+                <h1 className="text-sm font-medium text-collab-50">GitHub Settings</h1>
                 <a
                   href={`https://github.com/${repoData.fullName}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-[#58a6ff] hover:underline flex items-center gap-1"
+                  className="text-xs text-blue-400 hover:underline flex items-center gap-1"
                 >
                   {repoData.fullName}
                   <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
-              <p className="text-xs text-[#6e7681]">{project.name}</p>
+              <p className="text-xs text-collab-500">{project.name}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -271,7 +271,7 @@ export function GitHubSettingsClient({
               onClick={handleBack}
               variant="ghost"
               size="sm"
-              className="h-8 px-3 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1b]"
+              className="h-8 px-3 text-collab-400 hover:text-collab-50 hover:bg-collab-800"
             >
               <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
               Back
@@ -281,7 +281,7 @@ export function GitHubSettingsClient({
               variant="ghost"
               size="sm"
               disabled={isSyncing}
-              className="h-8 px-3 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1b]"
+              className="h-8 px-3 text-collab-400 hover:text-collab-50 hover:bg-collab-800"
             >
               <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isSyncing && "animate-spin")} />
               {isSyncing ? 'Syncing' : 'Sync'}
@@ -292,22 +292,23 @@ export function GitHubSettingsClient({
         {/* Tab Navigation */}
         <div className="flex items-center gap-1 px-6">
           {tabs.map((tab) => (
-            <button
+            <Button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
+              variant="ghost"
               className={cn(
                 "flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-t-md transition-colors relative",
                 activeTab === tab.id
-                  ? "text-[#e6edf3] bg-[#0d0d0e]"
-                  : "text-[#8b949e] hover:text-[#e6edf3]"
+                  ? "text-collab-50 bg-collab-900"
+                  : "text-collab-400 hover:text-collab-50"
               )}
             >
               <tab.icon className="h-4 w-4" />
               {tab.label}
               {activeTab === tab.id && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#58a6ff]" />
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-400" />
               )}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -319,13 +320,13 @@ export function GitHubSettingsClient({
           {activeTab === 'connection' && (
             <div className="space-y-6 max-w-4xl">
               {/* Repository Status */}
-              <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-                <div className="px-4 py-3 border-b border-[#1f1f1f] flex items-center justify-between">
+              <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
+                <div className="px-4 py-3 border-b border-collab-700 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Github className="h-5 w-5 text-[#e6edf3]" />
+                    <Github className="h-5 w-5 text-collab-50" />
                     <div>
-                      <h3 className="text-sm font-medium text-[#e6edf3]">{repoData.fullName}</h3>
-                      <p className="text-xs text-[#6e7681]">Connected repository</p>
+                      <h3 className="text-sm font-medium text-collab-50">{repoData.fullName}</h3>
+                      <p className="text-xs text-collab-500">Connected repository</p>
                     </div>
                   </div>
                   <Badge className="bg-green-500/10 text-green-400 border-green-500/30">
@@ -335,7 +336,7 @@ export function GitHubSettingsClient({
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-5 divide-x divide-[#1f1f1f]">
+                <div className="grid grid-cols-5 divide-x divide-collab-700">
                   <StatItem icon={GitBranch} label="Branches" value={repoData._count.branches} />
                   <StatItem icon={GitCommit} label="Commits" value={repoData._count.commits} />
                   <StatItem icon={GitPullRequest} label="PRs" value={repoData._count.pullRequests} />
@@ -344,8 +345,8 @@ export function GitHubSettingsClient({
                 </div>
 
                 {/* Last Sync */}
-                <div className="px-4 py-3 border-t border-[#1f1f1f] flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs text-[#6e7681]">
+                <div className="px-4 py-3 border-t border-collab-700 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs text-collab-500">
                     <Clock className="h-3.5 w-3.5" />
                     {repoData.syncedAt
                       ? `Last synced ${formatDistanceToNow(new Date(repoData.syncedAt), { addSuffix: true })}`
@@ -356,7 +357,7 @@ export function GitHubSettingsClient({
                     variant="ghost"
                     size="sm"
                     disabled={isSyncing}
-                    className="h-7 px-2 text-xs text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#161617]"
+                    className="h-7 px-2 text-xs text-collab-400 hover:text-collab-50 hover:bg-collab-900"
                   >
                     {isSyncing ? (
                       <Loader2 className="h-3 w-3 animate-spin mr-1" />
@@ -382,15 +383,15 @@ export function GitHubSettingsClient({
               )}
 
               {/* Danger Zone */}
-              <div className="rounded-lg border border-red-500/30 bg-[#0d0d0e] overflow-hidden">
+              <div className="rounded-lg border border-red-500/30 bg-collab-900 overflow-hidden">
                 <div className="px-4 py-3 border-b border-red-500/20">
                   <h3 className="text-sm font-medium text-red-400">Danger Zone</h3>
                 </div>
                 <div className="px-4 py-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-[#e6edf3]">Disconnect Repository</p>
-                      <p className="text-xs text-[#6e7681] mt-0.5">
+                      <p className="text-sm text-collab-50">Disconnect Repository</p>
+                      <p className="text-xs text-collab-500 mt-0.5">
                         Remove this repository connection and all webhooks.
                       </p>
                     </div>
@@ -468,8 +469,8 @@ export function GitHubSettingsClient({
 function StatItem({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: number }) {
   return (
     <div className="px-4 py-3 text-center">
-      <div className="text-lg font-semibold text-[#e6edf3]">{value}</div>
-      <div className="text-xs text-[#6e7681] flex items-center justify-center gap-1 mt-0.5">
+      <div className="text-lg font-semibold text-collab-50">{value}</div>
+      <div className="text-xs text-collab-500 flex items-center justify-center gap-1 mt-0.5">
         <Icon className="h-3 w-3" />
         {label}
       </div>

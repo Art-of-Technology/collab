@@ -63,7 +63,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { format, differenceInDays } from "date-fns";
@@ -366,12 +366,7 @@ export function LeaveRequestsManager({
                       <TableRow key={request.id} className={priority === "urgent" ? "bg-red-500/10" : ""}>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={request.user.avatar || request.user.image || ""} />
-                              <AvatarFallback>
-                                {request.user.name?.charAt(0)?.toUpperCase() || request.user.email?.charAt(0)?.toUpperCase() || "?"}
-                              </AvatarFallback>
-                            </Avatar>
+                            <UserAvatar user={request.user} size="lg" />
                             <div>
                               <p className="font-medium">{request.user.name || "Unknown"}</p>
                               <p className="text-sm text-muted-foreground">{request.user.email || "No email"}</p>
@@ -626,12 +621,7 @@ export function LeaveRequestsManager({
             <div className="space-y-6">
               {/* Employee Info */}
               <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
-                  <AvatarImage src={selectedRequest.user.avatar || selectedRequest.user.image || ""} />
-                  <AvatarFallback className="text-lg">
-                    {selectedRequest.user.name?.charAt(0)?.toUpperCase() || selectedRequest.user.email?.charAt(0)?.toUpperCase() || "?"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={selectedRequest.user} size="lg" className="h-16 w-16" />
                 <div>
                   <h3 className="font-semibold text-lg">{selectedRequest.user.name}</h3>
                   <p className="text-muted-foreground">{selectedRequest.user.email || "No email"}</p>

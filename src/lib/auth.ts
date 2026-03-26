@@ -19,7 +19,7 @@ declare module "next-auth" {
   }
 }
 
-export const authConfig: AuthOptions = {
+export const authOptions: AuthOptions = {
   pages: {
     signIn: "/login",
   },
@@ -115,6 +115,9 @@ export const authConfig: AuthOptions = {
   },
 }; 
 
+// Alias for backwards compatibility with files using authConfig
+export const authConfig = authOptions;
+
 export async function getAuthSession() {
-  return await getServerSession(authConfig);
+  return await getServerSession(authOptions);
 } 

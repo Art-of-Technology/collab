@@ -68,6 +68,24 @@ export async function GET(
             image: true,
           },
         },
+        oldStatus: {
+          select: {
+            id: true,
+            name: true,
+            displayName: true,
+            color: true,
+            iconName: true,
+          },
+        },
+        newStatus: {
+          select: {
+            id: true,
+            name: true,
+            displayName: true,
+            color: true,
+            iconName: true,
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
@@ -127,9 +145,22 @@ export async function GET(
         type: issue?.type,
         priority: issue?.priority,
         status: issue?.status,
-        statusText: issue?.status, // Alias for component compatibility
+        statusText: issue?.status,
         statusDisplayName: issue?.projectStatus?.displayName || issue?.status,
         projectName: issue?.project?.name,
+        // Status change FK relations — proper displayName from DB
+        oldStatus: activity.oldStatus ? {
+          id: activity.oldStatus.id,
+          name: activity.oldStatus.name,
+          displayName: activity.oldStatus.displayName,
+          color: activity.oldStatus.color,
+        } : undefined,
+        newStatus: activity.newStatus ? {
+          id: activity.newStatus.id,
+          name: activity.newStatus.name,
+          displayName: activity.newStatus.displayName,
+          color: activity.newStatus.color,
+        } : undefined,
         issue: issue
           ? {
               id: issue.id,

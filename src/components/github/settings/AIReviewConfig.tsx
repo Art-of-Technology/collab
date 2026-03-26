@@ -90,7 +90,7 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-[#8b949e]" />
+        <Loader2 className="h-6 w-6 animate-spin text-collab-400" />
       </div>
     );
   }
@@ -98,13 +98,13 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Header */}
-      <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-        <div className="px-4 py-3 border-b border-[#1f1f1f] flex items-center justify-between">
+      <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
+        <div className="px-4 py-3 border-b border-collab-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Bot className="h-5 w-5 text-[#a371f7]" />
+            <Bot className="h-5 w-5 text-violet-400" />
             <div>
-              <h3 className="text-sm font-medium text-[#e6edf3]">AI Code Review</h3>
-              <p className="text-xs text-[#6e7681]">
+              <h3 className="text-sm font-medium text-collab-50">AI Code Review</h3>
+              <p className="text-xs text-collab-500">
                 Automatically analyze pull requests with AI
               </p>
             </div>
@@ -113,7 +113,7 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
             className={cn(
               aiReviewEnabled
                 ? 'bg-green-500/10 text-green-400 border-green-500/30'
-                : 'bg-[#21262d] text-[#8b949e] border-[#30363d]'
+                : 'bg-collab-700 text-collab-400 border-collab-600'
             )}
           >
             {aiReviewEnabled ? 'Enabled' : 'Disabled'}
@@ -121,21 +121,22 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
         </div>
 
         {/* Enable/Disable Toggle */}
-        <div className="p-4 border-b border-[#1f1f1f]">
+        <div className="p-4 border-b border-collab-700">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <label className="text-sm font-medium text-[#e6edf3]">
+              <label className="text-sm font-medium text-collab-50">
                 Enable AI Reviews
               </label>
-              <p className="text-xs text-[#6e7681]">
+              <p className="text-xs text-collab-500">
                 When enabled, AI will analyze your pull requests and provide code review feedback
               </p>
             </div>
-            <button
+            <Button
+              variant="ghost"
               onClick={() => handleToggleEnabled(!aiReviewEnabled)}
               className={cn(
-                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                aiReviewEnabled ? 'bg-[#a371f7]' : 'bg-[#30363d]'
+                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors p-0',
+                aiReviewEnabled ? 'bg-violet-400' : 'bg-collab-700'
               )}
             >
               <span
@@ -144,115 +145,117 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
                   aiReviewEnabled ? 'translate-x-6' : 'translate-x-1'
                 )}
               />
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Trigger Mode */}
         {aiReviewEnabled && (
           <div className="p-4">
-            <label className="text-sm font-medium text-[#e6edf3] block mb-3">
+            <label className="text-sm font-medium text-collab-50 block mb-3">
               Trigger Mode
             </label>
             <div className="grid grid-cols-2 gap-3">
               {/* Manual Mode */}
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => handleToggleAutoTrigger(false)}
                 className={cn(
-                  'p-4 rounded-lg border text-left transition-all',
+                  'p-4 rounded-lg border text-left transition-all h-auto',
                   !aiReviewAutoTrigger
-                    ? 'border-[#a371f7] bg-[#a371f7]/10'
-                    : 'border-[#30363d] bg-[#161617] hover:border-[#484f58]'
+                    ? 'border-violet-400 bg-violet-400/10'
+                    : 'border-collab-600 bg-collab-900 hover:border-collab-600'
                 )}
               >
                 <div className="flex items-center gap-2 mb-2">
-                  <MousePointer className="h-4 w-4 text-[#a371f7]" />
-                  <span className="text-sm font-medium text-[#e6edf3]">Manual</span>
+                  <MousePointer className="h-4 w-4 text-violet-400" />
+                  <span className="text-sm font-medium text-collab-50">Manual</span>
                   {!aiReviewAutoTrigger && (
-                    <CheckCircle2 className="h-4 w-4 text-[#a371f7] ml-auto" />
+                    <CheckCircle2 className="h-4 w-4 text-violet-400 ml-auto" />
                   )}
                 </div>
-                <p className="text-xs text-[#8b949e]">
+                <p className="text-xs text-collab-400">
                   Trigger AI reviews manually using the "Request Review" button in PRs
                 </p>
-              </button>
+              </Button>
 
               {/* Automatic Mode */}
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => handleToggleAutoTrigger(true)}
                 className={cn(
-                  'p-4 rounded-lg border text-left transition-all',
+                  'p-4 rounded-lg border text-left transition-all h-auto',
                   aiReviewAutoTrigger
-                    ? 'border-[#a371f7] bg-[#a371f7]/10'
-                    : 'border-[#30363d] bg-[#161617] hover:border-[#484f58]'
+                    ? 'border-violet-400 bg-violet-400/10'
+                    : 'border-collab-600 bg-collab-900 hover:border-collab-600'
                 )}
               >
                 <div className="flex items-center gap-2 mb-2">
-                  <Zap className="h-4 w-4 text-[#f0883e]" />
-                  <span className="text-sm font-medium text-[#e6edf3]">Automatic</span>
+                  <Zap className="h-4 w-4 text-orange-400" />
+                  <span className="text-sm font-medium text-collab-50">Automatic</span>
                   {aiReviewAutoTrigger && (
-                    <CheckCircle2 className="h-4 w-4 text-[#a371f7] ml-auto" />
+                    <CheckCircle2 className="h-4 w-4 text-violet-400 ml-auto" />
                   )}
                 </div>
-                <p className="text-xs text-[#8b949e]">
+                <p className="text-xs text-collab-400">
                   Automatically review PRs when opened or updated (excludes drafts)
                 </p>
-              </button>
+              </Button>
             </div>
           </div>
         )}
       </div>
 
       {/* What AI Reviews */}
-      <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-        <div className="px-4 py-3 border-b border-[#1f1f1f]">
+      <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
+        <div className="px-4 py-3 border-b border-collab-700">
           <div className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-[#58a6ff]" />
-            <h3 className="text-sm font-medium text-[#e6edf3]">What AI Reviews Analyze</h3>
+            <Info className="h-4 w-4 text-blue-400" />
+            <h3 className="text-sm font-medium text-collab-50">What AI Reviews Analyze</h3>
           </div>
         </div>
         <div className="p-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-[#161617]">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-collab-900">
               <Shield className="h-4 w-4 text-red-400 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-[#e6edf3]">Security</p>
-                <p className="text-xs text-[#6e7681]">XSS, injection, auth issues</p>
+                <p className="text-sm font-medium text-collab-50">Security</p>
+                <p className="text-xs text-collab-500">XSS, injection, auth issues</p>
               </div>
             </div>
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-[#161617]">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-collab-900">
               <Bug className="h-4 w-4 text-orange-400 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-[#e6edf3]">Bugs</p>
-                <p className="text-xs text-[#6e7681]">Logic errors, edge cases</p>
+                <p className="text-sm font-medium text-collab-50">Bugs</p>
+                <p className="text-xs text-collab-500">Logic errors, edge cases</p>
               </div>
             </div>
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-[#161617]">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-collab-900">
               <Zap className="h-4 w-4 text-yellow-400 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-[#e6edf3]">Performance</p>
-                <p className="text-xs text-[#6e7681]">N+1 queries, memory</p>
+                <p className="text-sm font-medium text-collab-50">Performance</p>
+                <p className="text-xs text-collab-500">N+1 queries, memory</p>
               </div>
             </div>
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-[#161617]">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-collab-900">
               <Code className="h-4 w-4 text-blue-400 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-[#e6edf3]">Code Quality</p>
-                <p className="text-xs text-[#6e7681]">Readability, naming</p>
+                <p className="text-sm font-medium text-collab-50">Code Quality</p>
+                <p className="text-xs text-collab-500">Readability, naming</p>
               </div>
             </div>
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-[#161617]">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-collab-900">
               <Sparkles className="h-4 w-4 text-purple-400 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-[#e6edf3]">Best Practices</p>
-                <p className="text-xs text-[#6e7681]">Patterns, conventions</p>
+                <p className="text-sm font-medium text-collab-50">Best Practices</p>
+                <p className="text-xs text-collab-500">Patterns, conventions</p>
               </div>
             </div>
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-[#161617]">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-collab-900">
               <Bot className="h-4 w-4 text-green-400 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-[#e6edf3]">Suggestions</p>
-                <p className="text-xs text-[#6e7681]">Improvements, alternatives</p>
+                <p className="text-sm font-medium text-collab-50">Suggestions</p>
+                <p className="text-xs text-collab-500">Improvements, alternatives</p>
               </div>
             </div>
           </div>
@@ -265,7 +268,7 @@ export function AIReviewConfig({ repositoryId }: AIReviewConfigProps) {
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="bg-[#a371f7] hover:bg-[#8957e5] text-white"
+            className="bg-violet-400 hover:bg-violet-500 text-white"
           >
             {saving ? (
               <>

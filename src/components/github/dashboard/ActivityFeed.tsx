@@ -188,7 +188,7 @@ export function ActivityFeed({
 
   if (loading) {
     return (
-      <Card className="bg-[#0d1117] border-[#21262d]">
+      <Card className="bg-collab-900 border-collab-700">
         <CardContent className="pt-6">
           <div className="flex items-center justify-center h-32">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -199,20 +199,20 @@ export function ActivityFeed({
   }
 
   return (
-    <Card className="bg-[#0d1117] border-[#21262d]">
+    <Card className="bg-collab-900 border-collab-700">
       <CardHeader className={compact ? 'pb-2' : ''}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className="h-5 w-5 text-blue-500" />
-            <CardTitle className="text-lg text-[#e6edf3]">Activity</CardTitle>
+            <CardTitle className="text-lg text-collab-50">Activity</CardTitle>
           </div>
           {showFilters && (
             <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-[150px] bg-transparent border-[#30363d]">
+              <SelectTrigger className="w-[150px] bg-transparent border-collab-600">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Filter" />
               </SelectTrigger>
-              <SelectContent className="bg-[#161b22] border-[#30363d]">
+              <SelectContent className="bg-collab-800 border-collab-600">
                 <SelectItem value="all">All Activity</SelectItem>
                 <SelectItem value="commit">Commits</SelectItem>
                 <SelectItem value="pull_request">Pull Requests</SelectItem>
@@ -241,15 +241,15 @@ export function ActivityFeed({
               {activities.map((activity, index) => (
                 <div
                   key={activity.id}
-                  className="flex items-start gap-3 p-3 rounded-lg hover:bg-[#161b22] transition-colors"
+                  className="flex items-start gap-3 p-3 rounded-lg hover:bg-collab-800 transition-colors"
                 >
                   {/* Timeline connector */}
                   <div className="flex flex-col items-center">
-                    <div className="p-2 bg-[#21262d] rounded-full">
+                    <div className="p-2 bg-collab-700 rounded-full">
                       {getActivityIcon(activity.type, activity.metadata)}
                     </div>
                     {index < activities.length - 1 && (
-                      <div className="w-px h-full bg-[#21262d] mt-2" />
+                      <div className="w-px h-full bg-collab-700 mt-2" />
                     )}
                   </div>
 
@@ -258,27 +258,27 @@ export function ActivityFeed({
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-sm text-[#e6edf3]">
+                          <span className="font-medium text-sm text-collab-50">
                             {activity.author.name}
                           </span>
-                          <span className="text-sm text-[#8b949e]">
+                          <span className="text-sm text-collab-400">
                             {activity.title}
                           </span>
                           {getActivityBadge(activity.type, activity.metadata)}
                         </div>
                         {activity.description && (
-                          <p className="text-sm text-[#8b949e] mt-1 truncate">
+                          <p className="text-sm text-collab-400 mt-1 truncate">
                             {activity.description}
                           </p>
                         )}
                         {activity.metadata?.sha && (
-                          <code className="text-xs text-[#58a6ff] font-mono mt-1 inline-block">
+                          <code className="text-xs text-blue-400 font-mono mt-1 inline-block">
                             {activity.metadata.sha.substring(0, 7)}
                           </code>
                         )}
                       </div>
                       <div className="flex items-center gap-2 ml-2">
-                        <span className="text-xs text-[#8b949e] whitespace-nowrap">
+                        <span className="text-xs text-collab-400 whitespace-nowrap">
                           {formatTimestamp(activity.timestamp)}
                         </span>
                         {activity.metadata?.githubUrl && (
@@ -286,7 +286,7 @@ export function ActivityFeed({
                             href={activity.metadata.githubUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[#8b949e] hover:text-[#58a6ff]"
+                            className="text-collab-400 hover:text-blue-400"
                           >
                             <ExternalLink className="h-3 w-3" />
                           </a>

@@ -52,27 +52,20 @@ export default function PageHeader({
   disableBlur = false,
   sticky = false
 }: PageHeaderProps) {
-  // Determine if blur should be disabled (when disableBlur is true OR when sticky is true)
   const shouldDisableBlur = disableBlur || sticky;
   
   return (
     <div className={cn(
-      // Base styling with glassmorphism (disabled if shouldDisableBlur is true)
       !shouldDisableBlur && "backdrop-blur-xl border-white/10",
       shouldDisableBlur && "border-white/10",
-      // Background: use solid when sticky or disableBlur, otherwise glassmorphism
-      shouldDisableBlur ? "bg-[#101011]" : "bg-black/40 md:bg-[#101011]",
+      shouldDisableBlur ? "bg-collab-900" : "bg-black/40 md:bg-collab-900",
 
-      // Responsive padding and spacing
       "px-4 py-3 md:px-6 md:py-2",
 
-      // Border styling
-      showBorder && "border-b border-white/10 md:border-[#1a1a1a]",
+      showBorder && "border-b border-white/10 md:border-collab-700",
 
-      // Mobile-specific styling
       "max-md:sticky max-md:top-0 max-md:z-40 max-md:shadow-lg",
       
-      // Sticky styling (for modal mode)
       sticky && "sticky top-0 z-50 shadow-lg",
 
       className
@@ -94,7 +87,7 @@ export default function PageHeader({
             {/* Icon and Title */}
             <div className="flex items-center gap-1 md:gap-2 min-w-0">
               {Icon && (
-                <Icon className="h-4 w-4 md:h-5 md:w-5 text-gray-400 shrink-0" />
+                <Icon className="h-4 w-4 md:h-5 md:w-5 text-collab-400 shrink-0" />
               )}
               {typeof title === 'string' ? (
                 <h1 className="text-xs sm:text-sm md:text-xl font-semibold text-white truncate">
@@ -109,7 +102,7 @@ export default function PageHeader({
 
             {/* Subtitle/Count - Responsive visibility */}
             {subtitle && (
-              <span className="text-gray-400 text-xs md:text-sm shrink-0 hidden xs:inline">
+              <span className="text-collab-400 text-xs md:text-sm shrink-0 hidden xs:inline">
                 {subtitle}
               </span>
             )}
@@ -176,7 +169,7 @@ export const pageHeaderButtonStyles = {
   // Default ghost button style - Icon-only on mobile, with text on desktop
   ghost: cn(
     "h-7 px-2 md:h-6 text-xs flex items-center justify-center",
-    "text-gray-400 hover:text-white",
+    "text-collab-400 hover:text-white",
     "border border-white/10 hover:border-white/20",
     "bg-white/5 hover:bg-white/10 backdrop-blur-sm",
     "rounded-md transition-all duration-200"
@@ -212,7 +205,7 @@ export const pageHeaderButtonStyles = {
   // Reset button (muted) - Icon-only on mobile
   reset: cn(
     "h-7 px-2 md:h-6 text-xs flex items-center justify-center",
-    "text-gray-500 hover:text-gray-400",
+    "text-collab-500 hover:text-collab-400",
     "border border-transparent hover:border-white/10",
     "bg-transparent hover:bg-white/5",
     "rounded-md transition-all duration-200"
@@ -229,13 +222,13 @@ export const pageHeaderButtonStyles = {
     "hover:bg-red-500/25 hover:border-red-400/60"
   ),
   activeGray: cn(
-    "border-gray-400/50 text-gray-300 bg-white/20",
-    "hover:bg-white/25 hover:border-gray-400/60"
+    "border-collab-400/50 text-collab-400 bg-white/20",
+    "hover:bg-white/25 hover:border-collab-400/60"
   ),
 
   // Inactive state for filter buttons - Icon-only on mobile
   inactive: cn(
-    "border-white/10 text-gray-400 hover:text-white",
+    "border-white/10 text-collab-400 hover:text-white",
     "hover:border-white/20 bg-white/5 hover:bg-white/10",
     "h-7 px-2 md:h-6 text-xs rounded-md flex items-center justify-center"
   )
@@ -244,10 +237,10 @@ export const pageHeaderButtonStyles = {
 // Search input styles for consistency - Mobile optimized
 export const pageHeaderSearchStyles = cn(
   "pl-7 w-full sm:w-24 md:w-48",
-  "bg-white/5 md:bg-[#0d1117] backdrop-blur-sm",
-  "border-white/10 md:border-[#21262d]",
-  "text-white placeholder-gray-500",
-  "focus:border-white/30 md:focus:border-[#58a6ff]",
+  "bg-white/5 md:bg-collab-900 backdrop-blur-sm",
+  "border-white/10 md:border-collab-700",
+  "text-white placeholder-collab-500",
+  "focus:border-white/30 md:focus:border-blue-500",
   "h-6 text-xs rounded-md",
   "transition-all duration-200"
 );

@@ -146,17 +146,17 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
         leftContent={
           tag && (
             <div className="flex items-center">
-              <span className="text-sm text-[#8b949e] mr-2">Filtered by:</span>
+              <span className="text-sm text-collab-400 mr-2">Filtered by:</span>
               <div className="flex items-center">
                 <Badge
                   variant="secondary"
-                  className="bg-[#1a1a1a] text-[#e6edf3] border-[#333] px-2 py-1 text-xs"
+                  className="bg-collab-800 text-collab-50 border-collab-600 px-2 py-1 text-xs"
                 >
                   #{tag}
                 </Badge>
                 <Link
                   href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/timeline` : '#'}
-                  className="ml-2 text-[#8b949e] hover:text-[#e6edf3] transition-colors"
+                  className="ml-2 text-collab-400 hover:text-collab-50 transition-colors"
                   aria-label="Clear tag filter"
                 >
                   <XCircleIcon className="h-4 w-4" />
@@ -168,15 +168,15 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
       />
 
       {/* Filter Buttons */}
-      <div className="flex-shrink-0 px-6 py-3 border-b border-[#1a1a1a]">
+      <div className="flex-shrink-0 px-6 py-3 border-b border-collab-700">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => handleFilterChange('all')}
             className={`h-6 px-2 text-xs border ${!filter || filter === 'all'
-              ? 'border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]'
-              : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+              ? 'border-blue-400 text-blue-400 bg-blue-500/20 hover:bg-blue-500/20 hover:border-blue-400'
+              : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
               }`}
           >
             All
@@ -187,8 +187,8 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             size="sm"
             onClick={() => handleFilterChange('updates')}
             className={`h-6 px-2 text-xs border ${filter === 'updates'
-              ? 'border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]'
-              : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+              ? 'border-blue-400 text-blue-400 bg-blue-500/20 hover:bg-blue-500/20 hover:border-blue-400'
+              : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
               }`}
           >
             Updates
@@ -199,8 +199,8 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             size="sm"
             onClick={() => handleFilterChange('blockers')}
             className={`h-6 px-2 text-xs border ${filter === 'blockers'
-              ? 'border-[#f85149] text-[#f85149] bg-[#21110f] hover:bg-[#21110f] hover:border-[#f85149]'
-              : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+              ? 'border-red-500 text-red-500 bg-red-500/10 hover:bg-red-500/10 hover:border-red-500'
+              : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
               }`}
           >
             Blockers
@@ -211,8 +211,8 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             size="sm"
             onClick={() => handleFilterChange('ideas')}
             className={`h-6 px-2 text-xs border ${filter === 'ideas'
-              ? 'border-[#a5a5a5] text-[#a5a5a5] bg-[#1a1a1a] hover:bg-[#1a1a1a] hover:border-[#a5a5a5]'
-              : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+              ? 'border-collab-400 text-collab-400 bg-collab-800 hover:bg-collab-800 hover:border-collab-400'
+              : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
               }`}
           >
             Ideas
@@ -223,8 +223,8 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             size="sm"
             onClick={() => handleFilterChange('questions')}
             className={`h-6 px-2 text-xs border ${filter === 'questions'
-              ? 'border-[#a5a5a5] text-[#a5a5a5] bg-[#1a1a1a] hover:bg-[#1a1a1a] hover:border-[#a5a5a5]'
-              : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+              ? 'border-collab-400 text-collab-400 bg-collab-800 hover:bg-collab-800 hover:border-collab-400'
+              : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
               }`}
           >
             Questions
@@ -245,12 +245,12 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
 
               <div className="pb-8">
                 {isLoading && initialPosts.length === 0 ? (
-                  <div className="flex items-center gap-2 text-[#8b949e] py-8">
+                  <div className="flex items-center gap-2 text-collab-400 py-8">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span className="text-sm">Loading posts...</span>
                   </div>
                 ) : isError ? (
-                  <div className="text-[#ef4444] text-sm py-8">
+                  <div className="text-red-500 text-sm py-8">
                     Something went wrong loading posts.
                   </div>
                 ) : (
@@ -269,59 +269,59 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             <div className="hidden xl:block w-64 flex-shrink-0">
               <div className="sticky top-4 space-y-4">
                 {/* Activity Overview */}
-                <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-[#e6edf3] mb-3 flex items-center gap-2">
+                <div className="bg-collab-900 border border-collab-700 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-collab-50 mb-3 flex items-center gap-2">
                     📊 Activity Overview
                   </h3>
                   <div className="space-y-2.5">
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Total Posts</span>
-                      <span className="text-[#e6edf3] font-medium">{activityStats.total}</span>
+                      <span className="text-collab-400">Total Posts</span>
+                      <span className="text-collab-50 font-medium">{activityStats.total}</span>
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Today</span>
-                      <span className="text-[#22c55e] font-medium">{activityStats.today}</span>
+                      <span className="text-collab-400">Today</span>
+                      <span className="text-green-500 font-medium">{activityStats.today}</span>
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">This Week</span>
-                      <span className="text-[#58a6ff] font-medium">{activityStats.thisWeek}</span>
+                      <span className="text-collab-400">This Week</span>
+                      <span className="text-blue-400 font-medium">{activityStats.thisWeek}</span>
                     </div>
                     {activityStats.blockers > 0 && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-[#8b949e]">🚫 Blockers</span>
-                        <span className="text-[#f85149] font-medium">{activityStats.blockers}</span>
+                        <span className="text-collab-400">🚫 Blockers</span>
+                        <span className="text-red-500 font-medium">{activityStats.blockers}</span>
                       </div>
                     )}
                     {activityStats.priorityPosts > 0 && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-[#8b949e]">⚡ Priority</span>
-                        <span className="text-[#fbbf24] font-medium">{activityStats.priorityPosts}</span>
+                        <span className="text-collab-400">⚡ Priority</span>
+                        <span className="text-amber-400 font-medium">{activityStats.priorityPosts}</span>
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* Team Activity */}
-                <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-[#e6edf3] mb-3 flex items-center gap-2">
+                <div className="bg-collab-900 border border-collab-700 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-collab-50 mb-3 flex items-center gap-2">
                     👥 Team Activity
                   </h3>
                   <div className="space-y-2.5">
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Active Today</span>
-                      <span className="text-[#22c55e] font-medium">
+                      <span className="text-collab-400">Active Today</span>
+                      <span className="text-green-500 font-medium">
                         {activityStats.activeAuthorsToday} {activityStats.activeAuthorsToday === 1 ? 'person' : 'people'}
                       </span>
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Active This Week</span>
-                      <span className="text-[#58a6ff] font-medium">
+                      <span className="text-collab-400">Active This Week</span>
+                      <span className="text-blue-400 font-medium">
                         {activityStats.activeAuthorsThisWeek} {activityStats.activeAuthorsThisWeek === 1 ? 'person' : 'people'}
                       </span>
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Avg. per Person</span>
-                      <span className="text-[#e6edf3] font-medium">
+                      <span className="text-collab-400">Avg. per Person</span>
+                      <span className="text-collab-50 font-medium">
                         {activityStats.activeAuthorsThisWeek > 0
                           ? Math.round(activityStats.thisWeek / activityStats.activeAuthorsThisWeek)
                           : 0}
@@ -331,28 +331,28 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
                 </div>
 
                 {/* Quick Actions */}
-                <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-[#e6edf3] mb-3 flex items-center gap-2">
+                <div className="bg-collab-900 border border-collab-700 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-collab-50 mb-3 flex items-center gap-2">
                     ⚡ Quick Stats
                   </h3>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-[#1a1a1a] rounded p-2 text-center">
-                      <div className="text-[#58a6ff] font-bold">{postCounts.updates}</div>
-                      <div className="text-[#8b949e]">Updates</div>
+                    <div className="bg-collab-800 rounded p-2 text-center">
+                      <div className="text-blue-400 font-bold">{postCounts.updates}</div>
+                      <div className="text-collab-400">Updates</div>
                     </div>
-                    <div className="bg-[#1a1a1a] rounded p-2 text-center">
-                      <div className="text-[#a5a5a5] font-bold">{postCounts.ideas}</div>
-                      <div className="text-[#8b949e]">Ideas</div>
+                    <div className="bg-collab-800 rounded p-2 text-center">
+                      <div className="text-collab-400 font-bold">{postCounts.ideas}</div>
+                      <div className="text-collab-400">Ideas</div>
                     </div>
-                    <div className="bg-[#1a1a1a] rounded p-2 text-center">
-                      <div className="text-[#a5a5a5] font-bold">{postCounts.questions}</div>
-                      <div className="text-[#8b949e]">Questions</div>
+                    <div className="bg-collab-800 rounded p-2 text-center">
+                      <div className="text-collab-400 font-bold">{postCounts.questions}</div>
+                      <div className="text-collab-400">Questions</div>
                     </div>
-                    <div className="bg-[#1a1a1a] rounded p-2 text-center">
-                      <div className="text-[#22c55e] font-bold">
+                    <div className="bg-collab-800 rounded p-2 text-center">
+                      <div className="text-green-500 font-bold">
                         {activityStats.total > 0 ? Math.round((activityStats.today / activityStats.total) * 100) : 0}%
                       </div>
-                      <div className="text-[#8b949e]">Today</div>
+                      <div className="text-collab-400">Today</div>
                     </div>
                   </div>
                 </div>

@@ -75,12 +75,12 @@ export function GitHubOverviewStats({ repository, stats }: GitHubOverviewStatsPr
       {/* Main Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* Commits */}
-        <Card className="bg-[#0d1117] border-[#21262d]">
+        <Card className="bg-collab-900 border-collab-700">
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-[#8b949e]">Total Commits</p>
-                <p className="text-2xl font-bold text-[#e6edf3]">
+                <p className="text-sm text-collab-400">Total Commits</p>
+                <p className="text-2xl font-bold text-collab-50">
                   {repository._count.commits.toLocaleString()}
                 </p>
                 {stats?.weeklyActivity && (
@@ -98,12 +98,12 @@ export function GitHubOverviewStats({ repository, stats }: GitHubOverviewStatsPr
         </Card>
 
         {/* Pull Requests */}
-        <Card className="bg-[#0d1117] border-[#21262d]">
+        <Card className="bg-collab-900 border-collab-700">
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-[#8b949e]">Pull Requests</p>
-                <p className="text-2xl font-bold text-[#e6edf3]">
+                <p className="text-sm text-collab-400">Pull Requests</p>
+                <p className="text-2xl font-bold text-collab-50">
                   {repository._count.pullRequests}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
@@ -127,17 +127,17 @@ export function GitHubOverviewStats({ repository, stats }: GitHubOverviewStatsPr
         </Card>
 
         {/* Releases */}
-        <Card className="bg-[#0d1117] border-[#21262d]">
+        <Card className="bg-collab-900 border-collab-700">
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-[#8b949e]">Releases</p>
-                <p className="text-2xl font-bold text-[#e6edf3]">
+                <p className="text-sm text-collab-400">Releases</p>
+                <p className="text-2xl font-bold text-collab-50">
                   {repository._count.releases}
                 </p>
                 {stats?.latestRelease && (
-                  <p className="text-xs text-[#8b949e] mt-1">
-                    Latest: <span className="text-[#58a6ff]">{stats.latestRelease.tagName}</span>
+                  <p className="text-xs text-collab-400 mt-1">
+                    Latest: <span className="text-blue-400">{stats.latestRelease.tagName}</span>
                   </p>
                 )}
               </div>
@@ -149,15 +149,15 @@ export function GitHubOverviewStats({ repository, stats }: GitHubOverviewStatsPr
         </Card>
 
         {/* Branches */}
-        <Card className="bg-[#0d1117] border-[#21262d]">
+        <Card className="bg-collab-900 border-collab-700">
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-[#8b949e]">Active Branches</p>
-                <p className="text-2xl font-bold text-[#e6edf3]">
+                <p className="text-sm text-collab-400">Active Branches</p>
+                <p className="text-2xl font-bold text-collab-50">
                   {repository.branches.length}
                 </p>
-                <p className="text-xs text-[#8b949e] mt-1 capitalize">
+                <p className="text-xs text-collab-400 mt-1 capitalize">
                   {repository.versioningStrategy.toLowerCase().replace('_', '-')} flow
                 </p>
               </div>
@@ -170,15 +170,15 @@ export function GitHubOverviewStats({ repository, stats }: GitHubOverviewStatsPr
       </div>
 
       {/* Environment Status */}
-      <Card className="bg-[#0d1117] border-[#21262d]">
+      <Card className="bg-collab-900 border-collab-700">
         <CardContent className="pt-4">
           <div className="flex items-center gap-2 mb-4">
-            <Rocket className="h-4 w-4 text-[#8b949e]" />
-            <span className="text-sm font-medium text-[#e6edf3]">Environment Status</span>
+            <Rocket className="h-4 w-4 text-collab-400" />
+            <span className="text-sm font-medium text-collab-50">Environment Status</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Production */}
-            <div className="flex items-center justify-between p-3 rounded-lg bg-[#161b22] border border-[#21262d]">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-collab-800 border border-collab-700">
               <div className="flex items-center gap-3">
                 <div className={`w-3 h-3 rounded-full ${
                   stats?.deployments?.production?.status === 'SUCCESS' ? 'bg-green-500' :
@@ -186,8 +186,8 @@ export function GitHubOverviewStats({ repository, stats }: GitHubOverviewStatsPr
                   stats?.deployments?.production ? 'bg-yellow-500' : 'bg-gray-500'
                 }`} />
                 <div>
-                  <p className="text-sm font-medium text-[#e6edf3]">Production</p>
-                  <p className="text-xs text-[#8b949e]">
+                  <p className="text-sm font-medium text-collab-50">Production</p>
+                  <p className="text-xs text-collab-400">
                     {stats?.deployments?.production
                       ? formatDate(stats.deployments.production.deployedAt)
                       : 'Not deployed'}
@@ -203,7 +203,7 @@ export function GitHubOverviewStats({ repository, stats }: GitHubOverviewStatsPr
             </div>
 
             {/* Staging */}
-            <div className="flex items-center justify-between p-3 rounded-lg bg-[#161b22] border border-[#21262d]">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-collab-800 border border-collab-700">
               <div className="flex items-center gap-3">
                 <div className={`w-3 h-3 rounded-full ${
                   stats?.deployments?.staging?.status === 'SUCCESS' ? 'bg-green-500' :
@@ -211,8 +211,8 @@ export function GitHubOverviewStats({ repository, stats }: GitHubOverviewStatsPr
                   stats?.deployments?.staging ? 'bg-yellow-500' : 'bg-gray-500'
                 }`} />
                 <div>
-                  <p className="text-sm font-medium text-[#e6edf3]">Staging</p>
-                  <p className="text-xs text-[#8b949e]">
+                  <p className="text-sm font-medium text-collab-50">Staging</p>
+                  <p className="text-xs text-collab-400">
                     {stats?.deployments?.staging
                       ? formatDate(stats.deployments.staging.deployedAt)
                       : 'Not deployed'}
@@ -225,7 +225,7 @@ export function GitHubOverviewStats({ repository, stats }: GitHubOverviewStatsPr
             </div>
 
             {/* Development */}
-            <div className="flex items-center justify-between p-3 rounded-lg bg-[#161b22] border border-[#21262d]">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-collab-800 border border-collab-700">
               <div className="flex items-center gap-3">
                 <div className={`w-3 h-3 rounded-full ${
                   stats?.deployments?.development?.status === 'SUCCESS' ? 'bg-green-500' :
@@ -233,8 +233,8 @@ export function GitHubOverviewStats({ repository, stats }: GitHubOverviewStatsPr
                   stats?.deployments?.development ? 'bg-yellow-500' : 'bg-gray-500'
                 }`} />
                 <div>
-                  <p className="text-sm font-medium text-[#e6edf3]">Development</p>
-                  <p className="text-xs text-[#8b949e]">
+                  <p className="text-sm font-medium text-collab-50">Development</p>
+                  <p className="text-xs text-collab-400">
                     {stats?.deployments?.development
                       ? formatDate(stats.deployments.development.deployedAt)
                       : 'Not deployed'}

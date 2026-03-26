@@ -13,10 +13,10 @@ export default function AdminSettingsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+        <Card className="bg-collab-950 border-collab-700">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Database className="h-5 w-5 text-[#22c55e]" />
+              <Database className="h-5 w-5 text-green-500" />
               <CardTitle className="text-white">Database</CardTitle>
             </div>
             <CardDescription className="text-gray-500">
@@ -25,27 +25,27 @@ export default function AdminSettingsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-lg border border-[#1f1f1f]">
+              <div className="flex items-center justify-between p-3 rounded-lg border border-collab-700">
                 <div>
                   <p className="font-medium text-white">Connection Status</p>
                   <p className="text-sm text-gray-500">PostgreSQL via Prisma</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[#22c55e]" />
-                  <span className="text-sm text-[#22c55e]">Connected</span>
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                  <span className="text-sm text-green-500">Connected</span>
                 </div>
               </div>
-              <Button variant="outline" className="w-full border-[#1f1f1f] text-gray-300 hover:text-white hover:bg-[#1f1f1f]" disabled>
+              <Button variant="outline" className="w-full border-collab-700 text-gray-300 hover:text-white hover:bg-collab-700" disabled>
                 Run Migrations
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+        <Card className="bg-collab-950 border-collab-700">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-[#22c55e]" />
+              <Shield className="h-5 w-5 text-green-500" />
               <CardTitle className="text-white">Security</CardTitle>
             </div>
             <CardDescription className="text-gray-500">
@@ -54,24 +54,24 @@ export default function AdminSettingsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-lg border border-[#1f1f1f]">
+              <div className="flex items-center justify-between p-3 rounded-lg border border-collab-700">
                 <div>
                   <p className="font-medium text-white">OAuth Providers</p>
                   <p className="text-sm text-gray-500">NextAuth.js configuration</p>
                 </div>
                 <span className="text-sm text-gray-400">Configured</span>
               </div>
-              <Button variant="outline" className="w-full border-[#1f1f1f] text-gray-300 hover:text-white hover:bg-[#1f1f1f]" disabled>
+              <Button variant="outline" className="w-full border-collab-700 text-gray-300 hover:text-white hover:bg-collab-700" disabled>
                 Manage Providers
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+        <Card className="bg-collab-950 border-collab-700">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Bell className="h-5 w-5 text-[#22c55e]" />
+              <Bell className="h-5 w-5 text-green-500" />
               <CardTitle className="text-white">Notifications</CardTitle>
             </div>
             <CardDescription className="text-gray-500">
@@ -80,24 +80,24 @@ export default function AdminSettingsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-lg border border-[#1f1f1f]">
+              <div className="flex items-center justify-between p-3 rounded-lg border border-collab-700">
                 <div>
                   <p className="font-medium text-white">Email Provider</p>
                   <p className="text-sm text-gray-500">SMTP configuration</p>
                 </div>
                 <span className="text-sm text-gray-400">Not configured</span>
               </div>
-              <Button variant="outline" className="w-full border-[#1f1f1f] text-gray-300 hover:text-white hover:bg-[#1f1f1f]" disabled>
+              <Button variant="outline" className="w-full border-collab-700 text-gray-300 hover:text-white hover:bg-collab-700" disabled>
                 Configure Email
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+        <Card className="bg-collab-950 border-collab-700">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Palette className="h-5 w-5 text-[#22c55e]" />
+              <Palette className="h-5 w-5 text-green-500" />
               <CardTitle className="text-white">Appearance</CardTitle>
             </div>
             <CardDescription className="text-gray-500">
@@ -106,14 +106,14 @@ export default function AdminSettingsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-lg border border-[#1f1f1f]">
+              <div className="flex items-center justify-between p-3 rounded-lg border border-collab-700">
                 <div>
                   <p className="font-medium text-white">Theme</p>
                   <p className="text-sm text-gray-500">Dark mode only</p>
                 </div>
                 <span className="text-sm text-gray-400">Default</span>
               </div>
-              <Button variant="outline" className="w-full border-[#1f1f1f] text-gray-300 hover:text-white hover:bg-[#1f1f1f]" disabled>
+              <Button variant="outline" className="w-full border-collab-700 text-gray-300 hover:text-white hover:bg-collab-700" disabled>
                 Customize Theme
               </Button>
             </div>
@@ -121,7 +121,7 @@ export default function AdminSettingsPage() {
         </Card>
       </div>
 
-      <Card className="bg-[#0a0a0a] border-[#1f1f1f]">
+      <Card className="bg-collab-950 border-collab-700">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-gray-500" />

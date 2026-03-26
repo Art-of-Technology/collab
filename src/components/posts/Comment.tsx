@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
 import { PencilIcon, TrashIcon, XMarkIcon, CheckIcon } from "@heroicons/react/24/outline";
@@ -182,12 +182,7 @@ export function Comment({
         {hasCustomAvatar ? (
           <CustomAvatar user={comment.author} size="sm" />
         ) : (
-          <Avatar className="h-7 w-7">
-            <AvatarImage src={comment.author.image || undefined} alt={comment.author.name || "User"} />
-            <AvatarFallback>
-              {comment.author.name?.charAt(0).toUpperCase() || "U"}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar user={comment.author} size="lg" className="h-7 w-7" />
         )}
         <div className="flex-1">
           <div className="rounded-lg">
@@ -258,12 +253,13 @@ export function Comment({
                     {likesCount} {likesCount === 1 ? 'like' : 'likes'}
                   </span>
                 )}
-                <button
-                  className="text-xs text-muted-foreground hover:text-primary"
+                <Button
+                  variant="ghost"
+                  className="text-xs text-muted-foreground hover:text-primary h-auto p-0"
                   onClick={() => setIsReplying(!isReplying)}
                 >
                   Reply
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -284,26 +280,29 @@ export function Comment({
 
         {isAuthor && !isEditing && (
           <div className="flex gap-1">
-            <button
+            <Button
+              variant="ghost"
               onClick={() => setIsEditing(true)}
-              className="p-1 rounded text-muted-foreground hover:text-primary"
+              className="p-1 rounded text-muted-foreground hover:text-primary h-auto"
               title="Edit comment"
             >
               <PencilIcon className="h-3.5 w-3.5" />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               onClick={() => setShowDeleteDialog(true)}
-              className="p-1 rounded text-muted-foreground hover:text-red-500"
+              className="p-1 rounded text-muted-foreground hover:text-red-500 h-auto"
               title="Delete comment"
             >
               <TrashIcon className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
         )}
 
         {!isAuthor && (
-          <button
-            className={`flex ml-auto items-center hover:text-red-500 ${hasReacted ? 'text-red-500 ' : 'text-muted-foreground'}`}
+          <Button
+            variant="ghost"
+            className={`flex ml-auto items-center hover:text-red-500 h-auto p-1 ${hasReacted ? 'text-red-500 ' : 'text-muted-foreground'}`}
             onClick={handleLike}
             disabled={addReactionMutation.isPending || removeReactionMutation.isPending}
           >
@@ -312,19 +311,20 @@ export function Comment({
             ) : (
               <HeartIconOutline className="h-3.5 w-3.5" />
             )}
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Replies section */}
       {comment.replies && comment.replies.length > 0 && (
         <div className="ml-8 mt-1">
-          <button
+          <Button
+            variant="ghost"
             onClick={toggleReplies}
-            className="text-xs text-muted-foreground hover:text-primary mb-1"
+            className="text-xs text-muted-foreground hover:text-primary mb-1 h-auto p-0"
           >
             {showReplies ? "Hide replies" : `Show ${comment.replies.length} ${comment.replies.length === 1 ? 'reply' : 'replies'}`}
-          </button>
+          </Button>
 
           {showReplies && (
             <div className="space-y-2 mt-1">

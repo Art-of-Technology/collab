@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { trackFieldChanges, createActivity, compareObjects, trackAssignment } from "@/lib/board-item-activity-service";
+import { trackFieldChanges, createActivity, compareObjects, trackAssignment, trackStatusChange } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
@@ -285,11 +285,26 @@ export async function PUT(
         });
       }
 
-      // Track other field changes (excluding assigneeId and reporterId since we handled them above)
+      // Handle status changes separately with proper FK relations
+      const statusChanged = oldIssue.statusId !== updatedIssue.statusId;
+      if (statusChanged) {
+        await trackStatusChange({
+          itemType: 'ISSUE',
+          itemId: updatedIssue.id,
+          userId: currentUser.id,
+          workspaceId: updatedIssue.workspaceId,
+          projectId: updatedIssue.projectId,
+          oldStatusId: oldIssue.statusId || null,
+          newStatusId: updatedIssue.statusId || null,
+          oldStatusName: oldIssue.status || null,
+          newStatusName: updatedIssue.status || null,
+        });
+      }
+
+      // Track other field changes (excluding assigneeId, reporterId, and status since we handled them above)
       const fieldsToTrack = [
         'title',
         'description',
-        'status',
         'priority',
         'dueDate',
         'storyPoints',

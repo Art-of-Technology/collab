@@ -28,7 +28,7 @@ export function ProgressBar({
         />
       </div>
       {showLabel && (
-        <span className="text-xs text-[#7d8590] font-medium min-w-[3ch]">
+        <span className="text-xs text-collab-500 font-medium min-w-[3ch]">
           {percentage}%
         </span>
       )}
@@ -53,9 +53,9 @@ export function ProgressBarWithLabel({
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <div className="flex items-center gap-1.5 min-w-[4rem]">
-        <span className="text-xs text-[#e1e7ef] font-medium">{completed}</span>
-        <span className="text-xs text-[#7d8590]">/</span>
-        <span className="text-xs text-[#7d8590]">{total}</span>
+        <span className="text-xs text-collab-50 font-medium">{completed}</span>
+        <span className="text-xs text-collab-500">/</span>
+        <span className="text-xs text-collab-500">{total}</span>
       </div>
       <div className={cn("flex-1 h-1.5 rounded-full overflow-hidden", colors.bg)}>
         <div
@@ -63,7 +63,7 @@ export function ProgressBarWithLabel({
           style={{ width: `${percentage}%` }}
         />
       </div>
-      <span className="text-xs text-[#7d8590] font-medium min-w-[3ch]">
+      <span className="text-xs text-collab-500 font-medium min-w-[3ch]">
         {percentage}%
       </span>
     </div>

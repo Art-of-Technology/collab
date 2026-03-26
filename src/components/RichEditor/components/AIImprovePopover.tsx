@@ -35,7 +35,7 @@ export function AIImprovePopover({
 
   const popover = (
     <div
-      className="fixed z-[99999] w-72 bg-[#0e0e0e] border border-[#333] rounded-md shadow-xl overflow-hidden pointer-events-auto"
+      className="fixed z-[99999] w-72 bg-collab-900 border border-collab-600 rounded-md shadow-xl overflow-hidden pointer-events-auto"
       data-ai-improve-popover
       style={{
         top: position.top,
@@ -45,12 +45,12 @@ export function AIImprovePopover({
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="p-3 border-b border-[#333] bg-[#1a1a1a]">
-        <h4 className="text-sm font-semibold text-[#e6edf3]">AI Improved Text</h4>
-        <p className="text-xs text-[#9ca3af] mt-1">Review and apply the AI improved version</p>
+      <div className="p-3 border-b border-collab-600 bg-collab-800">
+        <h4 className="text-sm font-semibold text-collab-50">AI Improved Text</h4>
+        <p className="text-xs text-gray-400 mt-1">Review and apply the AI improved version</p>
       </div>
       <div
-        className="max-h-48 bg-[#0e0e0e] overflow-y-auto overscroll-contain"
+        className="max-h-48 bg-collab-900 overflow-y-auto overscroll-contain"
         style={{ scrollBehavior: 'smooth' }}
         onWheel={(e) => {
           // Ensure wheel events are properly handled
@@ -60,17 +60,17 @@ export function AIImprovePopover({
         <div className="p-3 text-sm">
           <RichTextRenderer
             content={parseMarkdownToTipTap(improvedText) || improvedText}
-            className="text-[#e6edf3] prose-sm [&_*]:text-[#e6edf3]"
+            className="text-collab-50 prose-sm [&_*]:text-collab-50"
           />
         </div>
       </div>
-      <div className="border-t border-[#333] p-2 flex justify-end gap-2 bg-[#1a1a1a]">
+      <div className="border-t border-collab-600 p-2 flex justify-end gap-2 bg-collab-800">
         <Button
           size="sm"
           variant="ghost"
           onClick={onCancel}
           disabled={isImproving}
-          className="text-[#9ca3af] hover:text-white"
+          className="text-gray-400 hover:text-white"
         >
           Cancel
         </Button>

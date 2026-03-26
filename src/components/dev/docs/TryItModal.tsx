@@ -250,8 +250,8 @@ export function TryItModal({ endpoint, baseUrl, open, onOpenChange }: TryItModal
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("max-w-4xl w-full mx-4 flex flex-col bg-[#101011] border-[#1f1f1f] p-0 overflow-hidden", response || error ? "max-h-[90vh]" : "max-h-[85vh]")}>
-        <div className="flex-shrink-0 p-4 sm:p-6 pb-4 border-b border-[#1f1f1f]">
+      <DialogContent className={cn("max-w-4xl w-full mx-4 flex flex-col bg-collab-900 border-collab-700 p-0 overflow-hidden", response || error ? "max-h-[90vh]" : "max-h-[85vh]")}>
+        <div className="flex-shrink-0 p-4 sm:p-6 pb-4 border-b border-collab-700">
           <DialogHeader>
             <DialogTitle className="flex flex-col sm:flex-row sm:items-center gap-2">
               <span className="text-base sm:text-lg">{endpoint.method}</span>
@@ -279,12 +279,12 @@ export function TryItModal({ endpoint, baseUrl, open, onOpenChange }: TryItModal
             />
 
             {/* Execute/Clear Buttons */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-4 border-t border-[#1f1f1f]">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-4 border-t border-collab-700">
               <Button
                 variant="outline"
                 onClick={handleClear}
                 disabled={loading}
-                className="border-[#1f1f1f] hover:bg-[#1f1f1f] w-full sm:w-auto"
+                className="border-collab-700 hover:bg-collab-700 w-full sm:w-auto"
               >
                 Clear
               </Button>

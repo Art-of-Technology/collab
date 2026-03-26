@@ -82,8 +82,8 @@ export function QuickNotesWidget({ className }: QuickNotesWidgetProps) {
       await response.json();
       
       toast({
-        title: 'Note Created',
-        description: 'Your quick note has been saved.',
+        title: 'Context Created',
+        description: 'Your quick context has been saved.',
       });
 
       setContent(""); // Clear the input
@@ -116,7 +116,7 @@ export function QuickNotesWidget({ className }: QuickNotesWidgetProps) {
           value={content}
           onChange={(e) => setContent(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="Quick note..."
+          placeholder="Quick context..."
           className="h-8 text-sm bg-white/10 border-white/20 text-white placeholder:text-white/50"
           disabled={isCreating || isImproving}
         />

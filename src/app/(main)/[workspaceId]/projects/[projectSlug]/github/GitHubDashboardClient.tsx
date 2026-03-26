@@ -2,10 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import {
   GitBranch,
@@ -15,27 +13,23 @@ import {
   ExternalLink,
   RefreshCw,
   Settings,
-  Sparkles,
   CheckCircle2,
-  Clock,
   ArrowUpRight,
   ChevronRight,
   ChevronLeft,
   Loader2,
   Github,
   GitMerge,
-  Circle,
-  Rocket,
   Search,
   XCircle,
-  MessageSquare,
-  User,
-  Calendar,
+  ArrowLeft,
   FileCode,
+  Sparkles,
+  Activity,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { formatDistanceToNow, format } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 
 interface Repository {
   id: string;
@@ -140,13 +134,11 @@ export function GitHubDashboardClient({
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Auto-sync on mount
   const syncAndFetch = useCallback(async (showToast = false) => {
     if (!repository?.id) return;
 
     setIsSyncing(true);
     try {
-      // Sync from GitHub
       const syncResponse = await fetch(`/api/github/repositories/${repository.id}/sync`, {
         method: 'POST',
       });
@@ -161,7 +153,6 @@ export function GitHubDashboardClient({
         }
       }
 
-      // Fetch all data
       await fetchAllData();
     } catch (error) {
       console.error('Error syncing:', error);
@@ -186,30 +177,11 @@ export function GitHubDashboardClient({
         fetch(`/api/github/repositories/${repository.id}/github-branches`),
       ]);
 
-      if (dashboardRes.ok) {
-        const data = await dashboardRes.json();
-        setStats(data);
-      }
-
-      if (commitsRes.ok) {
-        const data = await commitsRes.json();
-        setCommits(data.commits || []);
-      }
-
-      if (prsRes.ok) {
-        const data = await prsRes.json();
-        setPullRequests(data.pullRequests || []);
-      }
-
-      if (releasesRes.ok) {
-        const data = await releasesRes.json();
-        setReleases(data.releases || []);
-      }
-
-      if (branchesRes.ok) {
-        const data = await branchesRes.json();
-        setBranches(data.branches || []);
-      }
+      if (dashboardRes.ok) setStats(await dashboardRes.json());
+      if (commitsRes.ok) setCommits((await commitsRes.json()).commits || []);
+      if (prsRes.ok) setPullRequests((await prsRes.json()).pullRequests || []);
+      if (releasesRes.ok) setReleases((await releasesRes.json()).releases || []);
+      if (branchesRes.ok) setBranches((await branchesRes.json()).branches || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -233,16 +205,13 @@ export function GitHubDashboardClient({
     c.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.authorName.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
   const filteredPRs = pullRequests.filter(pr =>
     pr.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
   const filteredReleases = releases.filter(r =>
     r.tagName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
   const filteredBranches = branches.filter(b =>
     b.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -250,22 +219,45 @@ export function GitHubDashboardClient({
   // No repository connected
   if (!repository) {
     return (
-      <div className="h-full flex flex-col bg-[#0a0a0b]">
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="text-center max-w-sm">
-            <div className="w-12 h-12 rounded-full bg-[#1a1a1b] flex items-center justify-center mx-auto mb-4">
-              <Github className="h-6 w-6 text-[#6e7681]" />
+      <div className="h-full w-full overflow-y-auto bg-collab-900">
+        <div className="flex flex-col gap-6 p-8 max-w-[1400px] mx-auto">
+          <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5">
+              <div className="flex items-center gap-4">
+                <div className="p-2.5 rounded-xl bg-collab-700">
+                  <Github className="h-5 w-5 text-collab-500" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-medium text-collab-50">GitHub Integration</h1>
+                  <p className="text-sm text-collab-500">Connect a repository to get started</p>
+                </div>
+              </div>
+              <Link
+                href={`/${workspaceSlug}/projects/${project.slug}`}
+                className="flex items-center gap-2 h-9 px-4 rounded-lg text-sm text-collab-500 hover:text-collab-50 hover:bg-collab-700 transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Link>
             </div>
-            <h2 className="text-lg font-medium text-[#e6edf3] mb-2">Connect a Repository</h2>
-            <p className="text-sm text-[#8b949e] mb-6">
-              Link a GitHub repository to track commits, releases, and deployments.
-            </p>
-            <Button
-              onClick={() => router.push(`/${workspaceSlug}/projects/${project.slug}/github/settings`)}
-              className="bg-[#238636] hover:bg-[#2ea043] text-white"
-            >
-              Connect Repository
-            </Button>
+          </div>
+
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center max-w-sm">
+              <div className="w-16 h-16 rounded-2xl bg-collab-800 border border-collab-700 flex items-center justify-center mx-auto mb-5">
+                <Github className="h-8 w-8 text-collab-500/60" />
+              </div>
+              <h2 className="text-lg font-medium text-collab-50 mb-2">No Repository Connected</h2>
+              <p className="text-sm text-collab-500 mb-6">
+                Link a GitHub repository to track commits, pull requests, releases, and branches.
+              </p>
+              <Button
+                onClick={() => router.push(`/${workspaceSlug}/projects/${project.slug}/settings?tab=github`)}
+                className="h-10 px-5 bg-blue-500 hover:bg-blue-400 text-white"
+              >
+                Connect Repository
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -273,249 +265,272 @@ export function GitHubDashboardClient({
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0b]">
-      {/* Header */}
-      <div className="flex-none border-b border-[#1f1f1f]">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#1a1a1b] flex items-center justify-center">
-              <Github className="h-4 w-4 text-[#e6edf3]" />
+    <div className="h-full w-full overflow-y-auto bg-collab-900">
+      <div className="flex flex-col gap-6 p-8 max-w-[1400px] mx-auto">
+
+        {/* Header Card */}
+        <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-5">
+            <div className="flex items-center gap-4">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-collab-700 to-collab-600">
+                <Github className="h-5 w-5 text-collab-50" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-medium text-collab-50">{repository.fullName}</h1>
+                  <a
+                    href={`https://github.com/${repository.fullName}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-collab-500/60 hover:text-collab-400 transition-colors"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </div>
+                <div className="flex items-center gap-3 text-sm text-collab-500">
+                  <span className="flex items-center gap-1">
+                    <GitBranch className="h-3.5 w-3.5" />
+                    {repository.defaultBranch || 'main'}
+                  </span>
+                  {lastSynced && (
+                    <>
+                      <span className="text-collab-500/50">•</span>
+                      <span>Synced {formatDistanceToNow(lastSynced, { addSuffix: true })}</span>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-medium text-[#e6edf3]">{repository.fullName}</h1>
-                <a
-                  href={`https://github.com/${repository.fullName}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#8b949e] hover:text-[#e6edf3] transition-colors"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-[#6e7681]">
-                <span className="flex items-center gap-1">
-                  <GitBranch className="h-3 w-3" />
-                  {repository.defaultBranch || 'main'}
-                </span>
-                {lastSynced && (
-                  <>
-                    <span>·</span>
-                    <span>Synced {formatDistanceToNow(lastSynced, { addSuffix: true })}</span>
-                  </>
-                )}
-              </div>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleManualRefresh}
+                variant="ghost"
+                size="sm"
+                disabled={isRefreshing || isSyncing}
+                className="h-9 px-3 text-collab-500 hover:text-collab-50 hover:bg-collab-700"
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-2", (isRefreshing || isSyncing) && "animate-spin")} />
+                {isSyncing ? 'Syncing...' : 'Refresh'}
+              </Button>
+              <Link
+                href={`/${workspaceSlug}/projects/${project.slug}`}
+                className="flex items-center gap-2 h-9 px-4 rounded-lg text-sm text-collab-500 hover:text-collab-50 hover:bg-collab-700 transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Link>
+              <Button
+                onClick={() => router.push(`/${workspaceSlug}/projects/${project.slug}/settings?tab=github`)}
+                variant="ghost"
+                size="sm"
+                className="h-9 w-9 p-0 text-collab-500 hover:text-collab-50 hover:bg-collab-700"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handleManualRefresh}
-              variant="ghost"
-              size="sm"
-              disabled={isRefreshing || isSyncing}
-              className="h-8 px-3 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1b]"
-            >
-              <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", (isRefreshing || isSyncing) && "animate-spin")} />
-              {isSyncing ? 'Syncing' : 'Refresh'}
-            </Button>
-            <Button
-              onClick={() => router.push(`/${workspaceSlug}/projects/${project.slug}/github/settings`)}
-              variant="ghost"
-              size="sm"
-              className="h-8 px-3 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1b]"
-            >
-              <Settings className="h-3.5 w-3.5" />
-            </Button>
+
+          {/* Stats Row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-collab-700">
+            <StatCard
+              label="Commits"
+              value={stats?.commits?.total ?? commits.length}
+              subValue={stats?.commits?.thisWeek ? `+${stats.commits.thisWeek} this week` : undefined}
+              icon={<GitCommit className="h-4 w-4" />}
+              iconBg="bg-blue-500/10"
+              iconColor="text-blue-400"
+              active={activeView === 'commits'}
+              onClick={() => setActiveView(activeView === 'commits' ? 'overview' : 'commits')}
+            />
+            <StatCard
+              label="Pull Requests"
+              value={stats?.pullRequests?.total ?? pullRequests.length}
+              subValue={stats?.pullRequests?.open ? `${stats.pullRequests.open} open` : undefined}
+              icon={<GitPullRequest className="h-4 w-4" />}
+              iconBg="bg-purple-500/10"
+              iconColor="text-purple-400"
+              active={activeView === 'pullrequests'}
+              onClick={() => setActiveView(activeView === 'pullrequests' ? 'overview' : 'pullrequests')}
+            />
+            <StatCard
+              label="Releases"
+              value={stats?.releases?.total ?? releases.length}
+              subValue={stats?.releases?.latest?.tagName}
+              icon={<Tag className="h-4 w-4" />}
+              iconBg="bg-emerald-500/10"
+              iconColor="text-emerald-400"
+              active={activeView === 'releases'}
+              onClick={() => setActiveView(activeView === 'releases' ? 'overview' : 'releases')}
+            />
+            <StatCard
+              label="Branches"
+              value={stats?.branches?.total ?? branches.length}
+              subValue={stats?.branches?.active ? `${stats.branches.active} active` : undefined}
+              icon={<GitBranch className="h-4 w-4" />}
+              iconBg="bg-amber-500/10"
+              iconColor="text-amber-400"
+              active={activeView === 'branches'}
+              onClick={() => setActiveView(activeView === 'branches' ? 'overview' : 'branches')}
+              isLast
+            />
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <ScrollArea className="flex-1">
-        <div className="p-6 space-y-6">
-          {loading ? (
-            <LoadingSkeleton />
-          ) : (
-            <>
-              {/* Stats Grid - Clickable */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <StatCard
-                  label="Commits"
-                  value={stats?.commits?.total ?? commits.length}
-                  subValue={stats?.commits?.thisWeek ? `+${stats.commits.thisWeek} this week` : undefined}
-                  icon={GitCommit}
-                  active={activeView === 'commits'}
-                  onClick={() => setActiveView(activeView === 'commits' ? 'overview' : 'commits')}
-                />
-                <StatCard
-                  label="Pull Requests"
-                  value={stats?.pullRequests?.total ?? pullRequests.length}
-                  subValue={stats?.pullRequests?.open ? `${stats.pullRequests.open} open` : undefined}
-                  icon={GitPullRequest}
-                  iconColor="text-[#a371f7]"
-                  active={activeView === 'pullrequests'}
-                  onClick={() => setActiveView(activeView === 'pullrequests' ? 'overview' : 'pullrequests')}
-                />
-                <StatCard
-                  label="Releases"
-                  value={stats?.releases?.total ?? releases.length}
-                  subValue={stats?.releases?.latest?.tagName}
-                  icon={Tag}
-                  iconColor="text-[#3fb950]"
-                  active={activeView === 'releases'}
-                  onClick={() => setActiveView(activeView === 'releases' ? 'overview' : 'releases')}
-                />
-                <StatCard
-                  label="Branches"
-                  value={stats?.branches?.total ?? branches.length}
-                  subValue={stats?.branches?.active ? `${stats.branches.active} active` : undefined}
-                  icon={GitBranch}
-                  iconColor="text-[#58a6ff]"
-                  active={activeView === 'branches'}
-                  onClick={() => setActiveView(activeView === 'branches' ? 'overview' : 'branches')}
-                />
-              </div>
-
-              {/* Active View */}
-              {activeView !== 'overview' && (
-                <div className="space-y-4">
-                  {/* Back button and search */}
-                  <div className="flex items-center justify-between">
-                    <Button
-                      onClick={() => setActiveView('overview')}
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 px-2 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1a1a1b]"
-                    >
-                      <ChevronLeft className="h-4 w-4 mr-1" />
-                      Back to Overview
-                    </Button>
-                    <div className="relative w-64">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6e7681]" />
-                      <Input
-                        placeholder="Search..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9 h-8 bg-[#0d0d0e] border-[#1f1f1f] text-[#e6edf3] placeholder:text-[#6e7681]"
-                      />
-                    </div>
+        {loading ? (
+          <LoadingSkeleton />
+        ) : (
+          <>
+            {/* Active Detail View */}
+            {activeView !== 'overview' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => setActiveView('overview')}
+                    className="flex items-center gap-2 text-sm text-collab-500 hover:text-collab-50 transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Back to Overview
+                  </button>
+                  <div className="relative w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-collab-500/60" />
+                    <Input
+                      placeholder="Search..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 h-9 bg-collab-800 border-collab-700 text-collab-50 placeholder:text-collab-500/60 focus:border-collab-500/50 focus-visible:ring-0"
+                    />
                   </div>
-
-                  {/* Detail View */}
-                  {activeView === 'commits' && (
-                    <CommitsView commits={filteredCommits} repoFullName={repository.fullName} />
-                  )}
-                  {activeView === 'pullrequests' && (
-                    <PullRequestsView pullRequests={filteredPRs} repoFullName={repository.fullName} />
-                  )}
-                  {activeView === 'releases' && (
-                    <ReleasesView releases={filteredReleases} />
-                  )}
-                  {activeView === 'branches' && (
-                    <BranchesView branches={filteredBranches} repoFullName={repository.fullName} defaultBranch={repository.defaultBranch} />
-                  )}
                 </div>
-              )}
 
-              {/* Overview Content */}
-              {activeView === 'overview' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {activeView === 'commits' && (
+                  <DataList
+                    items={filteredCommits}
+                    emptyMessage="No commits found"
+                    renderItem={(commit) => (
+                      <CommitRow key={commit.id} commit={commit} repoFullName={repository.fullName} />
+                    )}
+                  />
+                )}
+                {activeView === 'pullrequests' && (
+                  <DataList
+                    items={filteredPRs}
+                    emptyMessage="No pull requests found"
+                    renderItem={(pr) => (
+                      <PullRequestRow key={pr.id} pr={pr} repoFullName={repository.fullName} />
+                    )}
+                  />
+                )}
+                {activeView === 'releases' && (
+                  <DataList
+                    items={filteredReleases}
+                    emptyMessage="No releases found"
+                    renderItem={(release) => (
+                      <ReleaseRow key={release.id} release={release} />
+                    )}
+                  />
+                )}
+                {activeView === 'branches' && (
+                  <DataList
+                    items={filteredBranches}
+                    emptyMessage="No branches found"
+                    renderItem={(branch) => (
+                      <BranchRow
+                        key={branch.id || branch.name}
+                        branch={branch}
+                        isDefault={branch.name === repository.defaultBranch || branch.isDefault}
+                        repoFullName={repository.fullName}
+                      />
+                    )}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Overview Grid */}
+            {activeView === 'overview' && (
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* Recent Commits */}
-                  <div className="space-y-3">
-                    <SectionHeader
-                      title="Recent Commits"
-                      icon={GitCommit}
-                      count={commits.length}
-                      onViewAll={() => setActiveView('commits')}
-                    />
-                    <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-                      {commits.length === 0 ? (
-                        <EmptyState message="No commits yet" />
-                      ) : (
-                        <div className="divide-y divide-[#1f1f1f]">
-                          {commits.slice(0, 5).map((commit) => (
-                            <CommitRow key={commit.id} commit={commit} repoFullName={repository.fullName} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <SectionCard
+                    title="Recent Commits"
+                    icon={<GitCommit className="h-4 w-4 text-blue-400" />}
+                    iconBg="bg-blue-500/10"
+                    count={commits.length}
+                    onViewAll={() => setActiveView('commits')}
+                  >
+                    {commits.length === 0 ? (
+                      <EmptyState message="No commits yet" icon={<GitCommit className="h-5 w-5" />} />
+                    ) : (
+                      commits.slice(0, 5).map((commit) => (
+                        <CommitRow key={commit.id} commit={commit} repoFullName={repository.fullName} compact />
+                      ))
+                    )}
+                  </SectionCard>
 
-                  {/* Recent Pull Requests */}
-                  <div className="space-y-3">
-                    <SectionHeader
-                      title="Pull Requests"
-                      icon={GitPullRequest}
-                      count={pullRequests.length}
-                      onViewAll={() => setActiveView('pullrequests')}
-                    />
-                    <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-                      {pullRequests.length === 0 ? (
-                        <EmptyState message="No pull requests yet" />
-                      ) : (
-                        <div className="divide-y divide-[#1f1f1f]">
-                          {pullRequests.slice(0, 5).map((pr) => (
-                            <PullRequestRow key={pr.id} pr={pr} repoFullName={repository.fullName} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  {/* Pull Requests */}
+                  <SectionCard
+                    title="Pull Requests"
+                    icon={<GitPullRequest className="h-4 w-4 text-purple-400" />}
+                    iconBg="bg-purple-500/10"
+                    count={pullRequests.length}
+                    onViewAll={() => setActiveView('pullrequests')}
+                  >
+                    {pullRequests.length === 0 ? (
+                      <EmptyState message="No pull requests yet" icon={<GitPullRequest className="h-5 w-5" />} />
+                    ) : (
+                      pullRequests.slice(0, 5).map((pr) => (
+                        <PullRequestRow key={pr.id} pr={pr} repoFullName={repository.fullName} compact />
+                      ))
+                    )}
+                  </SectionCard>
 
                   {/* Releases */}
-                  <div className="space-y-3">
-                    <SectionHeader
-                      title="Releases"
-                      icon={Tag}
-                      count={releases.length}
-                      onViewAll={() => setActiveView('releases')}
-                    />
-                    <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-                      {releases.length === 0 ? (
-                        <EmptyState message="No releases yet" />
-                      ) : (
-                        <div className="divide-y divide-[#1f1f1f]">
-                          {releases.slice(0, 5).map((release) => (
-                            <ReleaseRow key={release.id} release={release} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <SectionCard
+                    title="Releases"
+                    icon={<Tag className="h-4 w-4 text-emerald-400" />}
+                    iconBg="bg-emerald-500/10"
+                    count={releases.length}
+                    onViewAll={() => setActiveView('releases')}
+                  >
+                    {releases.length === 0 ? (
+                      <EmptyState message="No releases yet" icon={<Tag className="h-5 w-5" />} />
+                    ) : (
+                      releases.slice(0, 5).map((release) => (
+                        <ReleaseRow key={release.id} release={release} compact />
+                      ))
+                    )}
+                  </SectionCard>
 
                   {/* Branches */}
-                  <div className="space-y-3">
-                    <SectionHeader
-                      title="Branches"
-                      icon={GitBranch}
-                      count={branches.length}
-                      onViewAll={() => setActiveView('branches')}
-                    />
-                    <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-                      {branches.length === 0 ? (
-                        <EmptyState message="No branches synced" />
-                      ) : (
-                        <div className="divide-y divide-[#1f1f1f]">
-                          {branches.slice(0, 5).map((branch) => (
-                            <BranchRow
-                              key={branch.id || branch.name}
-                              branch={branch}
-                              isDefault={branch.name === repository.defaultBranch || branch.isDefault}
-                              repoFullName={repository.fullName}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <SectionCard
+                    title="Branches"
+                    icon={<GitBranch className="h-4 w-4 text-amber-400" />}
+                    iconBg="bg-amber-500/10"
+                    count={branches.length}
+                    onViewAll={() => setActiveView('branches')}
+                  >
+                    {branches.length === 0 ? (
+                      <EmptyState message="No branches synced" icon={<GitBranch className="h-5 w-5" />} />
+                    ) : (
+                      branches.slice(0, 5).map((branch) => (
+                        <BranchRow
+                          key={branch.id || branch.name}
+                          branch={branch}
+                          isDefault={branch.name === repository.defaultBranch || branch.isDefault}
+                          repoFullName={repository.fullName}
+                          compact
+                        />
+                      ))
+                    )}
+                  </SectionCard>
                 </div>
-              )}
 
-              {/* Quick Actions */}
-              {activeView === 'overview' && (
-                <div className="space-y-3">
-                  <h3 className="text-sm font-medium text-[#e6edf3]">Quick Actions</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {/* Quick Actions */}
+                <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-collab-700">
+                    <span className="text-xs font-medium uppercase tracking-wider text-collab-500/60">Quick Actions</span>
+                  </div>
+                  <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <QuickActionButton
                       icon={GitPullRequest}
                       label="New Pull Request"
@@ -538,272 +553,219 @@ export function GitHubDashboardClient({
                     />
                   </div>
                 </div>
-              )}
-            </>
-          )}
-        </div>
-      </ScrollArea>
+              </>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-// Sub-components
+// ─── Sub-Components ────────────────────────────────────────────────────────────
+
 function StatCard({
   label,
   value,
   subValue,
-  icon: Icon,
-  iconColor = 'text-[#8b949e]',
+  icon,
+  iconBg,
+  iconColor,
   active,
   onClick,
+  isLast,
 }: {
   label: string;
   value: number;
   subValue?: string;
-  icon: React.ElementType;
-  iconColor?: string;
+  icon: React.ReactNode;
+  iconBg: string;
+  iconColor: string;
   active?: boolean;
   onClick?: () => void;
+  isLast?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        "rounded-lg border p-4 text-left transition-all",
-        active
-          ? "border-[#58a6ff] bg-[#58a6ff]/10"
-          : "border-[#1f1f1f] bg-[#0d0d0e] hover:border-[#30363d] hover:bg-[#161617]"
+        "flex items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-collab-700",
+        !isLast && "border-r border-collab-700",
+        active && "bg-collab-700"
       )}
     >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-[#8b949e]">{label}</span>
-        <Icon className={cn("h-4 w-4", active ? "text-[#58a6ff]" : iconColor)} />
+      <div className={cn("p-2 rounded-lg", iconBg)}>
+        <div className={iconColor}>{icon}</div>
       </div>
-      <div className="text-2xl font-semibold text-[#e6edf3]">{value}</div>
-      {subValue && (
-        <div className="text-xs text-[#6e7681] mt-1">{subValue}</div>
-      )}
+      <div>
+        <div className="text-xl font-semibold text-collab-50">{value}</div>
+        <div className="text-[11px] text-collab-500/60">{label}</div>
+        {subValue && <div className="text-[10px] text-collab-500 mt-0.5">{subValue}</div>}
+      </div>
     </button>
   );
 }
 
-function SectionHeader({
+function SectionCard({
   title,
-  icon: Icon,
+  icon,
+  iconBg,
   count,
   onViewAll,
+  children,
 }: {
   title: string;
-  icon: React.ElementType;
+  icon: React.ReactNode;
+  iconBg: string;
   count: number;
   onViewAll: () => void;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-[#8b949e]" />
-        <h3 className="text-sm font-medium text-[#e6edf3]">{title}</h3>
-        <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-[#1f1f1f] text-[#8b949e]">
-          {count}
-        </Badge>
+    <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700">
+        <div className="flex items-center gap-2.5">
+          <div className={cn("p-1.5 rounded-lg", iconBg)}>{icon}</div>
+          <h3 className="text-sm font-medium text-collab-50">{title}</h3>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-collab-700 text-collab-500">{count}</span>
+        </div>
+        <button
+          onClick={onViewAll}
+          className="flex items-center gap-1 text-[11px] text-collab-500/60 hover:text-collab-400 transition-colors"
+        >
+          View all <ChevronRight className="h-3 w-3" />
+        </button>
       </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={onViewAll}
-        className="h-6 px-2 text-xs text-[#8b949e] hover:text-[#e6edf3]"
-      >
-        View all
-        <ChevronRight className="h-3 w-3 ml-1" />
-      </Button>
+      <div className="divide-y divide-collab-700">{children}</div>
     </div>
   );
 }
 
-// Detail Views
-function CommitsView({ commits, repoFullName }: { commits: Commit[]; repoFullName: string }) {
+function DataList<T>({
+  items,
+  emptyMessage,
+  renderItem,
+}: {
+  items: T[];
+  emptyMessage: string;
+  renderItem: (item: T) => React.ReactNode;
+}) {
   return (
-    <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-      {commits.length === 0 ? (
-        <EmptyState message="No commits found" />
+    <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden divide-y divide-collab-700">
+      {items.length === 0 ? (
+        <div className="py-12 text-center text-sm text-collab-500/60">{emptyMessage}</div>
       ) : (
-        <div className="divide-y divide-[#1f1f1f]">
-          {commits.map((commit) => (
-            <CommitRow key={commit.id} commit={commit} repoFullName={repoFullName} detailed />
-          ))}
-        </div>
+        items.map(renderItem)
       )}
     </div>
   );
 }
 
-function PullRequestsView({ pullRequests, repoFullName }: { pullRequests: PullRequest[]; repoFullName: string }) {
-  return (
-    <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-      {pullRequests.length === 0 ? (
-        <EmptyState message="No pull requests found" />
-      ) : (
-        <div className="divide-y divide-[#1f1f1f]">
-          {pullRequests.map((pr) => (
-            <PullRequestRow key={pr.id} pr={pr} repoFullName={repoFullName} detailed />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ReleasesView({ releases }: { releases: Release[] }) {
-  return (
-    <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-      {releases.length === 0 ? (
-        <EmptyState message="No releases found" />
-      ) : (
-        <div className="divide-y divide-[#1f1f1f]">
-          {releases.map((release) => (
-            <ReleaseRow key={release.id} release={release} detailed />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BranchesView({ branches, repoFullName, defaultBranch }: { branches: Branch[]; repoFullName: string; defaultBranch?: string }) {
-  return (
-    <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] overflow-hidden">
-      {branches.length === 0 ? (
-        <EmptyState message="No branches found" />
-      ) : (
-        <div className="divide-y divide-[#1f1f1f]">
-          {branches.map((branch) => (
-            <BranchRow
-              key={branch.id || branch.name}
-              branch={branch}
-              isDefault={branch.name === defaultBranch || branch.isDefault}
-              repoFullName={repoFullName}
-              detailed
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Row Components
-function CommitRow({ commit, repoFullName, detailed }: { commit: Commit; repoFullName: string; detailed?: boolean }) {
+function CommitRow({ commit, repoFullName, compact }: { commit: Commit; repoFullName: string; compact?: boolean }) {
   const firstLine = commit.message.split('\n')[0];
   return (
     <a
       href={`https://github.com/${repoFullName}/commit/${commit.sha}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-start gap-3 px-4 py-3 hover:bg-[#161617] transition-colors group"
+      className="flex items-start gap-3 px-4 py-3 hover:bg-collab-700 transition-colors group"
     >
-      <GitCommit className="h-4 w-4 text-[#8b949e] mt-0.5 flex-shrink-0" />
+      <GitCommit className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className={cn("text-sm text-[#e6edf3]", !detailed && "truncate")}>{firstLine}</p>
-        <div className="flex items-center gap-2 mt-1 text-xs text-[#6e7681]">
+        <p className={cn("text-sm text-collab-50", compact && "truncate")}>{firstLine}</p>
+        <div className="flex items-center gap-2 mt-1 text-[11px] text-collab-500/60">
           <span className="font-mono">{commit.sha.substring(0, 7)}</span>
-          <span>·</span>
+          <span>•</span>
           <span>{commit.authorName}</span>
-          <span>·</span>
+          <span>•</span>
           <span>{formatDistanceToNow(new Date(commit.commitDate), { addSuffix: true })}</span>
         </div>
       </div>
-      <ArrowUpRight className="h-3.5 w-3.5 text-[#6e7681] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+      <ArrowUpRight className="h-3.5 w-3.5 text-collab-500/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
     </a>
   );
 }
 
-function PullRequestRow({ pr, repoFullName, detailed }: { pr: PullRequest; repoFullName: string; detailed?: boolean }) {
-  const getStateColor = (state: string) => {
+function PullRequestRow({ pr, repoFullName, compact }: { pr: PullRequest; repoFullName: string; compact?: boolean }) {
+  const getStateStyle = (state: string) => {
     switch (state.toUpperCase()) {
-      case 'OPEN': return 'text-[#3fb950]';
-      case 'MERGED': return 'text-[#a371f7]';
-      case 'CLOSED': return 'text-[#f85149]';
-      default: return 'text-[#8b949e]';
+      case 'OPEN': return { color: 'text-emerald-400', bg: 'bg-emerald-500/10' };
+      case 'MERGED': return { color: 'text-purple-400', bg: 'bg-purple-500/10' };
+      case 'CLOSED': return { color: 'text-red-400', bg: 'bg-red-500/10' };
+      default: return { color: 'text-collab-500', bg: 'bg-collab-700' };
     }
   };
-
   const getStateIcon = (state: string) => {
     switch (state.toUpperCase()) {
-      case 'OPEN': return <GitPullRequest className={cn("h-4 w-4", getStateColor(state))} />;
-      case 'MERGED': return <GitMerge className={cn("h-4 w-4", getStateColor(state))} />;
-      case 'CLOSED': return <XCircle className={cn("h-4 w-4", getStateColor(state))} />;
-      default: return <GitPullRequest className="h-4 w-4 text-[#8b949e]" />;
+      case 'OPEN': return <GitPullRequest className="h-4 w-4" />;
+      case 'MERGED': return <GitMerge className="h-4 w-4" />;
+      case 'CLOSED': return <XCircle className="h-4 w-4" />;
+      default: return <GitPullRequest className="h-4 w-4" />;
     }
   };
+  const style = getStateStyle(pr.state);
 
   return (
     <a
       href={`https://github.com/${repoFullName}/pull/${pr.githubPrId}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-start gap-3 px-4 py-3 hover:bg-[#161617] transition-colors group"
+      className="flex items-start gap-3 px-4 py-3 hover:bg-collab-700 transition-colors group"
     >
-      {getStateIcon(pr.state)}
+      <div className={cn("flex-shrink-0 mt-0.5", style.color)}>{getStateIcon(pr.state)}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className={cn("text-sm text-[#e6edf3]", !detailed && "truncate")}>{pr.title}</span>
-          <span className="text-xs text-[#6e7681]">#{pr.githubPrId}</span>
+          <span className={cn("text-sm text-collab-50", compact && "truncate")}>{pr.title}</span>
+          <span className="text-xs text-collab-500/60">#{pr.githubPrId}</span>
         </div>
-        <div className="flex items-center gap-2 mt-1 text-xs text-[#6e7681]">
-          <Badge variant="secondary" className={cn("h-4 px-1 text-[10px] bg-transparent border", getStateColor(pr.state))}>
+        <div className="flex items-center gap-2 mt-1 text-[11px] text-collab-500/60">
+          <span className={cn("px-1.5 py-0.5 rounded text-[10px]", style.bg, style.color)}>
             {pr.state.toLowerCase()}
-          </Badge>
+          </span>
           {pr.authorName && (
             <>
-              <span>·</span>
+              <span>•</span>
               <span>{pr.authorName}</span>
             </>
           )}
-          <span>·</span>
+          <span>•</span>
           <span>{formatDistanceToNow(new Date(pr.mergedAt || pr.closedAt || pr.createdAt), { addSuffix: true })}</span>
         </div>
       </div>
-      <ArrowUpRight className="h-3.5 w-3.5 text-[#6e7681] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+      <ArrowUpRight className="h-3.5 w-3.5 text-collab-500/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
     </a>
   );
 }
 
-function ReleaseRow({ release, detailed }: { release: Release; detailed?: boolean }) {
+function ReleaseRow({ release, compact }: { release: Release; compact?: boolean }) {
   return (
     <a
       href={release.githubUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-start gap-3 px-4 py-3 hover:bg-[#161617] transition-colors group"
+      className="flex items-start gap-3 px-4 py-3 hover:bg-collab-700 transition-colors group"
     >
-      <Tag className="h-4 w-4 text-[#3fb950] mt-0.5 flex-shrink-0" />
+      <Tag className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-[#e6edf3]">{release.tagName}</span>
+          <span className="text-sm font-medium text-collab-50">{release.tagName}</span>
           {release.isPrerelease && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-[#1f1f1f] text-[#f0883e]">
-              Pre-release
-            </Badge>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">Pre-release</span>
           )}
           {release.isDraft && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-[#1f1f1f] text-[#8b949e]">
-              Draft
-            </Badge>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-collab-700 text-collab-500">Draft</span>
           )}
         </div>
         {release.name && release.name !== release.tagName && (
-          <p className={cn("text-xs text-[#6e7681] mt-0.5", !detailed && "truncate")}>{release.name}</p>
-        )}
-        {detailed && release.description && (
-          <p className="text-xs text-[#6e7681] mt-1 line-clamp-2">{release.description}</p>
+          <p className={cn("text-xs text-collab-500 mt-0.5", compact && "truncate")}>{release.name}</p>
         )}
         {release.publishedAt && (
-          <div className="text-xs text-[#6e7681] mt-1">
+          <div className="text-[11px] text-collab-500/60 mt-1">
             {formatDistanceToNow(new Date(release.publishedAt), { addSuffix: true })}
           </div>
         )}
       </div>
-      <ArrowUpRight className="h-3.5 w-3.5 text-[#6e7681] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+      <ArrowUpRight className="h-3.5 w-3.5 text-collab-500/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
     </a>
   );
 }
@@ -812,41 +774,35 @@ function BranchRow({
   branch,
   isDefault,
   repoFullName,
-  detailed,
+  compact,
 }: {
-  branch: Branch | { name: string; sha?: string; isDefault?: boolean; isProtected?: boolean };
+  branch: Branch | { name: string; headSha?: string; isDefault?: boolean; isProtected?: boolean };
   isDefault: boolean;
   repoFullName: string;
-  detailed?: boolean;
+  compact?: boolean;
 }) {
-  const sha = 'headSha' in branch ? branch.headSha : ('sha' in branch ? branch.sha : undefined);
+  const sha = 'headSha' in branch ? branch.headSha : undefined;
   return (
     <a
       href={`https://github.com/${repoFullName}/tree/${branch.name}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-3 px-4 py-3 hover:bg-[#161617] transition-colors group"
+      className="flex items-center gap-3 px-4 py-3 hover:bg-collab-700 transition-colors group"
     >
-      <GitBranch className="h-4 w-4 text-[#58a6ff]" />
+      <GitBranch className="h-4 w-4 text-amber-400 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-mono text-[#e6edf3]">{branch.name}</span>
+          <span className="text-sm font-mono text-collab-50">{branch.name}</span>
           {isDefault && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-[#1f1f1f] text-[#8b949e]">
-              default
-            </Badge>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">default</span>
           )}
           {branch.isProtected && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-[#1f1f1f] text-[#f0883e]">
-              protected
-            </Badge>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">protected</span>
           )}
         </div>
-        {sha && (
-          <p className="text-xs text-[#6e7681] font-mono mt-0.5">{sha.substring(0, 7)}</p>
-        )}
+        {sha && <p className="text-[11px] text-collab-500/60 font-mono mt-0.5">{sha.substring(0, 7)}</p>}
       </div>
-      <ArrowUpRight className="h-3.5 w-3.5 text-[#6e7681] opacity-0 group-hover:opacity-100 transition-opacity" />
+      <ArrowUpRight className="h-3.5 w-3.5 text-collab-500/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
     </a>
   );
 }
@@ -862,12 +818,12 @@ function QuickActionButton({
   href?: string;
   onClick?: () => void;
 }) {
-  const className = "flex items-center gap-2 px-3 py-2.5 rounded-lg border border-[#1f1f1f] bg-[#0d0d0e] hover:bg-[#161617] hover:border-[#30363d] transition-all text-sm text-[#e6edf3]";
+  const className = "group flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-collab-900 border border-collab-700 hover:border-collab-600 hover:bg-collab-700 transition-all text-sm text-collab-400 hover:text-collab-50";
 
   if (href) {
     return (
       <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
-        <Icon className="h-4 w-4 text-[#8b949e]" />
+        <Icon className="h-4 w-4 text-collab-500/60 group-hover:text-collab-500" />
         {label}
       </a>
     );
@@ -875,31 +831,27 @@ function QuickActionButton({
 
   return (
     <button onClick={onClick} className={className}>
-      <Icon className="h-4 w-4 text-[#8b949e]" />
+      <Icon className="h-4 w-4 text-collab-500/60 group-hover:text-collab-500" />
       {label}
     </button>
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function EmptyState({ message, icon }: { message: string; icon: React.ReactNode }) {
   return (
-    <div className="px-4 py-8 text-center">
-      <p className="text-sm text-[#6e7681]">{message}</p>
+    <div className="flex flex-col items-center justify-center py-8 text-center">
+      <div className="p-3 rounded-xl bg-collab-900 mb-3 text-collab-500/50">{icon}</div>
+      <p className="text-xs text-collab-500/60">{message}</p>
     </div>
   );
 }
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-24 rounded-lg bg-[#1f1f1f]" />
-        ))}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-64 rounded-lg bg-[#1f1f1f]" />
+          <div key={i} className="h-64 rounded-2xl bg-collab-800 border border-collab-700 animate-pulse" />
         ))}
       </div>
     </div>

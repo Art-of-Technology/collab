@@ -67,7 +67,7 @@ export default function WorkspacesClient({
   };
 
   return (
-    <div className="h-full bg-[#101011] flex flex-col overflow-hidden">
+    <div className="h-full bg-collab-900 flex flex-col overflow-hidden">
       {/* Header */}
       <PageHeader
         icon={Building2}
@@ -99,7 +99,7 @@ export default function WorkspacesClient({
       />
 
       {/* Filters and Display Controls Bar */}
-      <div className="border-b border-[#1a1a1a] bg-[#101011] px-6 py-2">
+      <div className="border-b border-collab-700 bg-collab-900 px-6 py-2">
         <div className="flex items-center justify-between">
           {/* Left: Tab Filters */}
           <div className="flex items-center gap-1">
@@ -109,8 +109,8 @@ export default function WorkspacesClient({
               onClick={() => handleTabChange('workspaces')}
               className={`h-6 px-2 text-xs border ${
                 currentTab === 'workspaces' 
-                  ? 'border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]' 
-                  : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+                  ? 'border-blue-400 text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 hover:border-blue-400' 
+                  : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
               }`}
             >
               My Workspaces
@@ -122,14 +122,14 @@ export default function WorkspacesClient({
               onClick={() => handleTabChange('invitations')}
               className={`h-6 px-2 text-xs border relative ${
                 currentTab === 'invitations' 
-                  ? 'border-[#f85149] text-[#f85149] bg-[#21110f] hover:bg-[#21110f] hover:border-[#f85149]' 
-                  : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
+                  ? 'border-red-400 text-red-400 bg-red-500/20 hover:bg-red-500/20 hover:border-red-400' 
+                  : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
               }`}
             >
               Pending Invitations
               <span className="ml-1 text-xs opacity-70">{pendingInvitations.length}</span>
               {pendingInvitations.length > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#f85149] text-[9px] text-white font-medium">
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] text-white font-medium">
                   {pendingInvitations.length}
                 </span>
               )}
@@ -144,14 +144,14 @@ export default function WorkspacesClient({
           {currentTab === 'workspaces' ? (
             isLoadingWorkspaces && initialWorkspaces.length === 0 ? (
               <div className="flex justify-center items-center py-16">
-                <Loader2 className="h-6 w-6 animate-spin text-[#8b949e]" />
+                <Loader2 className="h-6 w-6 animate-spin text-collab-400" />
               </div>
             ) : workspaces.length > 0 ? (
               <div>
                 {workspaces.map((workspace: any) => (
                   <div 
                     key={workspace.id} 
-                    className="group flex items-center px-6 py-2 border-b border-[#1f1f1f] hover:bg-[#0f1011] hover:border-[#333] transition-all duration-150 cursor-pointer"
+                    className="group flex items-center px-6 py-2 border-b border-collab-700 hover:bg-collab-800 hover:border-collab-600 transition-all duration-150 cursor-pointer"
                   >
                     {/* Workspace Icon */}
                     <div className="flex items-center w-12 mr-4 flex-shrink-0">
@@ -159,13 +159,13 @@ export default function WorkspacesClient({
                         <Image
                           src={workspace.logoUrl}
                           alt={workspace.name}
-                          className="h-8 w-8 rounded border border-[#30363d]"
+                          className="h-8 w-8 rounded border border-collab-600"
                           width={32}
                           height={32}
                         />
                       ) : (
-                        <div className="h-8 w-8 rounded border border-[#30363d] bg-[#1a1a1a] flex items-center justify-center">
-                          <Building2 className="h-4 w-4 text-[#8b949e]" />
+                        <div className="h-8 w-8 rounded border border-collab-600 bg-collab-800 flex items-center justify-center">
+                          <Building2 className="h-4 w-4 text-collab-400" />
                         </div>
                       )}
                     </div>
@@ -173,11 +173,11 @@ export default function WorkspacesClient({
                     {/* Workspace Info */}
                     <div className="flex-1 min-w-0 mr-4">
                       <div className="flex items-center gap-2">
-                        <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
+                        <span className="text-collab-50 text-sm font-medium truncate group-hover:text-blue-400 transition-colors">
                           {workspace.name}
                         </span>
                         {workspace.ownerId === userId && (
-                          <Badge className="h-4 px-1.5 text-[9px] font-medium bg-[#f59e0b]/30 text-[#f59e0b] border-0 rounded flex items-center gap-1">
+                          <Badge className="h-4 px-1.5 text-[9px] font-medium bg-amber-500/30 text-amber-500 border-0 rounded flex items-center gap-1">
                             <Crown className="h-2.5 w-2.5" />
                             Owner
                           </Badge>
@@ -185,10 +185,10 @@ export default function WorkspacesClient({
                       </div>
                       
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[#8b949e] text-xs font-mono">@{workspace.slug}</span>
+                        <span className="text-collab-400 text-xs font-mono">@{workspace.slug}</span>
                         
                         {/* Privacy Badge */}
-                        <Badge className="h-3.5 px-1.5 text-[8px] font-medium bg-[#6e7681]/20 text-[#8b949e] border-0 rounded flex items-center gap-1">
+                        <Badge className="h-3.5 px-1.5 text-[8px] font-medium bg-collab-500/20 text-collab-400 border-0 rounded flex items-center gap-1">
                           {workspace.isPublic ? (
                             <>
                               <Globe className="h-2 w-2" />
@@ -203,20 +203,20 @@ export default function WorkspacesClient({
                         </Badge>
 
                         {/* Member Count Badge */}
-                        <Badge className="h-3.5 px-1.5 text-[8px] font-medium bg-[#58a6ff]/20 text-[#58a6ff] border-0 rounded flex items-center gap-1">
+                        <Badge className="h-3.5 px-1.5 text-[8px] font-medium bg-blue-500/20 text-blue-400 border-0 rounded flex items-center gap-1">
                           <Users className="h-2 w-2" />
                           {workspace.members.length}
                         </Badge>
 
                         {/* Creation Date */}
-                        <div className="flex items-center gap-1 text-[#6e7681] text-xs">
+                        <div className="flex items-center gap-1 text-collab-500 text-xs">
                           <Clock className="h-2.5 w-2.5" />
                           {format(new Date(workspace.createdAt), 'MMM d, yyyy')}
                         </div>
                       </div>
 
                       {workspace.description && (
-                        <p className="text-[#8b949e] text-xs mt-1 truncate">{workspace.description}</p>
+                        <p className="text-collab-400 text-xs mt-1 truncate">{workspace.description}</p>
                       )}
                     </div>
 
@@ -224,14 +224,14 @@ export default function WorkspacesClient({
                     <div className="flex items-center gap-2 flex-shrink-0 mr-4">
                       {/* Activity Badge */}
                       {workspace.lastActivityAt && (
-                        <Badge className="h-5 px-2 text-[10px] font-medium leading-none bg-[#22c55e]/20 text-[#22c55e] border-0 rounded-md">
+                        <Badge className="h-5 px-2 text-[10px] font-medium leading-none bg-green-500/20 text-green-500 border-0 rounded-md">
                           Active {format(new Date(workspace.lastActivityAt), 'MMM d')}
                         </Badge>
                       )}
 
                       {/* Project Count Badge */}
                       {workspace.projectCount > 0 && (
-                        <div className="flex items-center gap-1 px-2 py-1 bg-[#58a6ff]/20 text-[#58a6ff] rounded-md">
+                        <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md">
                           <Building2 className="h-3 w-3" />
                           <span className="text-[10px] font-medium">{workspace.projectCount}</span>
                         </div>
@@ -243,13 +243,13 @@ export default function WorkspacesClient({
                       <DashboardButton workspaceId={workspace.id} />
                       {(workspace.ownerId === userId || session?.user?.role === 'SYSTEM_ADMIN') ? (
                         <Link href={`/workspaces/${workspace.id}`}>
-                          <Button variant="outline" size="sm" className="border-[#30363d] text-[#8b949e] hover:bg-[#1a1a1a] hover:text-[#e6edf3]">
+                          <Button variant="outline" size="sm" className="border-collab-600 text-collab-400 hover:bg-collab-800 hover:text-collab-50">
                             <Settings className="mr-1.5 h-3 w-3" />
                             Manage
                           </Button>
                         </Link>
                       ) : (
-                        <Button variant="outline" size="sm" disabled className="border-[#30363d] text-[#6e7681]" title="Only workspace owners and admins can manage workspaces">
+                        <Button variant="outline" size="sm" disabled className="border-collab-600 text-collab-500" title="Only workspace owners and admins can manage workspaces">
                           <Settings className="mr-1.5 h-3 w-3" />
                           Manage
                         </Button>
@@ -259,16 +259,16 @@ export default function WorkspacesClient({
                 ))}
               </div>
             ) : (
-              <div className="flex items-center justify-center h-64 text-[#8b949e]">
+              <div className="flex items-center justify-center h-64 text-collab-400">
                 <div className="text-center">
-                  <Building2 className="h-8 w-8 mx-auto mb-2 text-[#6e7681]" />
+                  <Building2 className="h-8 w-8 mx-auto mb-2 text-collab-500" />
                   <p className="text-sm">No workspaces yet</p>
-                  <p className="text-xs text-[#6e7681] mt-1 mb-3">
+                  <p className="text-xs text-collab-500 mt-1 mb-3">
                     Create a workspace to start collaborating with your team
                   </p>
                   <Button 
                     size="sm" 
-                    className="bg-[#238636] hover:bg-[#2ea043] text-white border-0"
+                    className="bg-green-600 hover:bg-green-700 text-white border-0"
                     onClick={() => router.push('/create-workspace')}
                   >
                     <Plus className="mr-1.5 h-3 w-3" />
@@ -280,14 +280,14 @@ export default function WorkspacesClient({
           ) : (
             isLoadingInvitations && initialInvitations.length === 0 ? (
               <div className="flex justify-center items-center py-16">
-                <Loader2 className="h-6 w-6 animate-spin text-[#8b949e]" />
+                <Loader2 className="h-6 w-6 animate-spin text-collab-400" />
               </div>
             ) : pendingInvitations.length > 0 ? (
               <div>
                 {pendingInvitations.map((invitation: any) => (
                   <div 
                     key={invitation.id} 
-                    className="group flex items-center px-6 py-2 border-b border-[#1f1f1f] hover:bg-[#0f1011] hover:border-[#333] transition-all duration-150 cursor-pointer"
+                    className="group flex items-center px-6 py-2 border-b border-collab-700 hover:bg-collab-800 hover:border-collab-600 transition-all duration-150 cursor-pointer"
                   >
                     {/* Invitation Icon */}
                     <div className="flex items-center w-12 mr-4 flex-shrink-0">
@@ -295,13 +295,13 @@ export default function WorkspacesClient({
                         <Image
                           src={invitation.workspace.logoUrl}
                           alt={invitation.workspace.name}
-                          className="h-8 w-8 rounded border border-[#30363d]"
+                          className="h-8 w-8 rounded border border-collab-600"
                           width={32}
                           height={32}
                         />
                       ) : (
-                        <div className="h-8 w-8 rounded border border-[#30363d] bg-[#1a1a1a] flex items-center justify-center">
-                          <Mail className="h-4 w-4 text-[#8b949e]" />
+                        <div className="h-8 w-8 rounded border border-collab-600 bg-collab-800 flex items-center justify-center">
+                          <Mail className="h-4 w-4 text-collab-400" />
                         </div>
                       )}
                     </div>
@@ -309,38 +309,38 @@ export default function WorkspacesClient({
                     {/* Invitation Info */}
                     <div className="flex-1 min-w-0 mr-4">
                       <div className="flex items-center gap-2">
-                        <span className="text-[#e6edf3] text-sm font-medium truncate group-hover:text-[#58a6ff] transition-colors">
+                        <span className="text-collab-50 text-sm font-medium truncate group-hover:text-blue-400 transition-colors">
                           {invitation.workspace.name}
                         </span>
-                        <Badge className="h-4 px-1.5 text-[9px] font-medium bg-[#f85149]/30 text-[#f85149] border-0 rounded flex items-center gap-1">
+                        <Badge className="h-4 px-1.5 text-[9px] font-medium bg-red-500/30 text-red-500 border-0 rounded flex items-center gap-1">
                           <Mail className="h-2.5 w-2.5" />
                           Pending
                         </Badge>
                       </div>
                       
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[#8b949e] text-xs font-mono">@{invitation.workspace.slug}</span>
+                        <span className="text-collab-400 text-xs font-mono">@{invitation.workspace.slug}</span>
                         
                         {/* Invited by Badge */}
-                        <Badge className="h-3.5 px-1.5 text-[8px] font-medium bg-[#6e7681]/20 text-[#8b949e] border-0 rounded flex items-center gap-1">
+                        <Badge className="h-3.5 px-1.5 text-[8px] font-medium bg-collab-500/20 text-collab-400 border-0 rounded flex items-center gap-1">
                           <Users className="h-2 w-2" />
                           by {invitation.invitedBy.name || invitation.invitedBy.email.split('@')[0]}
                         </Badge>
 
                         {/* Role Badge */}
-                        <Badge className="h-3.5 px-1.5 text-[8px] font-medium bg-[#8b5cf6]/20 text-[#8b5cf6] border-0 rounded">
+                        <Badge className="h-3.5 px-1.5 text-[8px] font-medium bg-violet-500/20 text-violet-400 border-0 rounded">
                           {invitation.role || 'Member'}
                         </Badge>
 
                         {/* Expiry Warning */}
-                        <div className="flex items-center gap-1 text-[#f59e0b] text-xs">
+                        <div className="flex items-center gap-1 text-amber-500 text-xs">
                           <Calendar className="h-2.5 w-2.5" />
                           Expires {format(new Date(invitation.expiresAt), 'MMM d')}
                         </div>
                       </div>
 
                       {invitation.workspace.description && (
-                        <p className="text-[#8b949e] text-xs mt-1 truncate">{invitation.workspace.description}</p>
+                        <p className="text-collab-400 text-xs mt-1 truncate">{invitation.workspace.description}</p>
                       )}
                     </div>
 
@@ -348,7 +348,7 @@ export default function WorkspacesClient({
                     <div className="flex items-center gap-2 flex-shrink-0 mr-4">
                       {/* Urgency Badge */}
                       {new Date(invitation.expiresAt) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) && (
-                        <Badge className="h-5 px-2 text-[10px] font-medium leading-none bg-[#f59e0b]/20 text-[#f59e0b] border-0 rounded-md">
+                        <Badge className="h-5 px-2 text-[10px] font-medium leading-none bg-amber-500/20 text-amber-500 border-0 rounded-md">
                           Expires Soon
                         </Badge>
                       )}
@@ -360,7 +360,7 @@ export default function WorkspacesClient({
                         asChild 
                         variant="outline" 
                         size="sm" 
-                        className="border-[#238636] text-[#238636] hover:bg-[#238636] hover:text-white"
+                        className="border-green-600 text-green-600 hover:bg-green-600 hover:text-white"
                       >
                         <Link href={`/workspace-invitation/${invitation.token}`}>
                           Accept
@@ -372,11 +372,11 @@ export default function WorkspacesClient({
                 ))}
               </div>
             ) : (
-              <div className="flex items-center justify-center h-64 text-[#8b949e]">
+              <div className="flex items-center justify-center h-64 text-collab-400">
                 <div className="text-center">
-                  <Mail className="h-8 w-8 mx-auto mb-2 text-[#6e7681]" />
+                  <Mail className="h-8 w-8 mx-auto mb-2 text-collab-500" />
                   <p className="text-sm">No pending invitations</p>
-                  <p className="text-xs text-[#6e7681] mt-1">
+                  <p className="text-xs text-collab-500 mt-1">
                     You don&apos;t have any pending workspace invitations. Ask a workspace admin to invite you.
                   </p>
                 </div>

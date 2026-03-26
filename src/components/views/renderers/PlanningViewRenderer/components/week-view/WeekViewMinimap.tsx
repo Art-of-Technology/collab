@@ -100,9 +100,9 @@ export function WeekViewMinimap({ scrollContainerRef, days }: WeekViewMinimapPro
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Minimap container */}
-      <div className="bg-[#18181b] border border-[#3f3f46] rounded-lg shadow-xl p-2 w-48">
+      <div className="bg-collab-800 border border-collab-600 rounded-lg shadow-xl p-2 w-48">
         {/* Header */}
-        <div className="text-[9px] text-[#71717a] uppercase tracking-wider mb-1.5 px-1">
+        <div className="text-[9px] text-collab-500 uppercase tracking-wider mb-1.5 px-1">
           ← Scroll →
         </div>
         
@@ -110,7 +110,7 @@ export function WeekViewMinimap({ scrollContainerRef, days }: WeekViewMinimapPro
         <div 
           ref={trackRef}
           onClick={handleTrackClick}
-          className="h-8 bg-[#09090b] rounded relative cursor-pointer overflow-hidden border border-[#27272a]"
+          className="h-8 bg-collab-950 rounded relative cursor-pointer overflow-hidden border border-collab-600"
         >
           {/* Mini day indicators */}
           <div className="absolute inset-0 flex">
@@ -121,14 +121,14 @@ export function WeekViewMinimap({ scrollContainerRef, days }: WeekViewMinimapPro
                 <div 
                   key={i}
                   className={cn(
-                    "flex-1 border-r border-[#27272a] last:border-r-0 flex items-center justify-center",
+                    "flex-1 border-r border-collab-600 last:border-r-0 flex items-center justify-center",
                     isTodayDay && "bg-blue-500/20",
                     isFutureDay && "opacity-50"
                   )}
                 >
                   <span className={cn(
                     "text-[8px] font-medium",
-                    isTodayDay ? "text-blue-400" : "text-[#52525b]"
+                    isTodayDay ? "text-blue-400" : "text-collab-500/60"
                   )}>
                     {format(day, 'E')[0]}
                   </span>
@@ -144,7 +144,7 @@ export function WeekViewMinimap({ scrollContainerRef, days }: WeekViewMinimapPro
               "absolute top-0 h-full rounded cursor-grab active:cursor-grabbing transition-colors border-2",
               isDragging 
                 ? "bg-blue-500/40 border-blue-400" 
-                : "bg-white/20 border-white/40 hover:bg-white/30 hover:border-white/50"
+                : "bg-collab-600/40 border-collab-500 hover:bg-collab-600/60 hover:border-collab-400"
             )}
             style={{
               left: `${thumbLeft}%`,
@@ -162,7 +162,7 @@ export function WeekViewMinimap({ scrollContainerRef, days }: WeekViewMinimapPro
               <div key={i} className={cn("flex-1 text-center", isFutureDay && "opacity-50")}>
                 <span className={cn(
                   "text-[7px]",
-                  isTodayDay ? "text-blue-400 font-medium" : "text-[#52525b]"
+                  isTodayDay ? "text-blue-400 font-medium" : "text-collab-500/60"
                 )}>
                   {format(day, 'd')}
                 </span>

@@ -183,8 +183,9 @@ export class EventBus {
   }
 }
 
-// Singleton instance
-export const eventBus = EventBus.getInstance();
+// Singleton instance — use globalThis to survive Next.js module re-instantiation
+const globalForEventBus = globalThis as unknown as { __eventBus?: EventBus };
+export const eventBus = globalForEventBus.__eventBus ?? (globalForEventBus.__eventBus = EventBus.getInstance());
 
 // Convenience functions for common events
 export async function emitIssueCreated(
@@ -284,4 +285,29 @@ export async function emitLeaveDeleted(
   options?: EmitEventOptions
 ): Promise<void> {
   await eventBus.emit('leave.deleted', { leave }, context, options);
+}
+
+export async function emitContextCreated(
+  context: any,
+  eventContext: EventContext,
+  options?: EmitEventOptions
+): Promise<void> {
+  await eventBus.emit('context.created', { context }, eventContext, options);
+}
+
+export async function emitContextUpdated(
+  context: any,
+  changes: any,
+  eventContext: EventContext,
+  options?: EmitEventOptions
+): Promise<void> {
+  await eventBus.emit('context.updated', { context, changes }, eventContext, options);
+}
+
+export async function emitContextDeleted(
+  context: any,
+  eventContext: EventContext,
+  options?: EmitEventOptions
+): Promise<void> {
+  await eventBus.emit('context.deleted', { context }, eventContext, options);
 }

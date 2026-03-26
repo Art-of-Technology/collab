@@ -75,7 +75,7 @@ export default function KanbanViewRenderer(props: KanbanViewRendererProps & {
   }, [issues, view, workspace, setSelectedIssueId]);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-[#101011]">
+    <div className="h-full flex flex-col overflow-hidden bg-collab-900">
       {/* Kanban Board Container - Full height scrollable area */}
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className="h-full p-6 overflow-hidden">

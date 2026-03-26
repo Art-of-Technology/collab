@@ -6,8 +6,8 @@ export const DEFAULT_COLUMNS = {
 
 export const COLUMN_COLORS = {
   status: {
-    'backlog': 'border-gray-600',
-    'todo': 'border-gray-600',
+    'backlog': 'border-collab-600',
+    'todo': 'border-collab-600',
     'in progress': 'border-blue-500',
     'in review': 'border-purple-500',
     'done': 'border-green-500',
@@ -69,3 +69,6 @@ export const PRIORITY_BADGE_COLORS = {
 };
 
 export const DEFAULT_DISPLAY_PROPERTIES = ['Assignee', 'Priority', 'Labels', 'Due Date', 'Story Points', 'Reporter'];
+
+export const INITIAL_COLUMN_ITEMS = 20;
+export const LOAD_MORE_INCREMENT = 20;

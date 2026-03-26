@@ -74,12 +74,9 @@ export default function PostItem({
   const isAuthor = post.authorId === currentUserId;
   const timeAgo = formatDistanceToNow(new Date(post.createdAt), { addSuffix: true });
 
-  // Get initial liked and bookmarked state
+  // Get initial liked state
   const initialLiked = (post.reactions || []).some(
     (reaction: { authorId: string; type: string; }) => reaction.authorId === currentUserId && reaction.type === "LIKE"
-  );
-  const initialBookmarked = (post.reactions || []).some(
-    (reaction: { authorId: string; type: string; }) => reaction.authorId === currentUserId && reaction.type === "BOOKMARK"
   );
 
   // Initial edit form data
@@ -131,8 +128,8 @@ export default function PostItem({
   };
 
   return (
-    <Card className="mb-4 transition-all duration-200 hover:shadow-lg bg-[#0e0e0e] border-[#1a1a1a] hover:border-[#333] hover:bg-[#131313]">
-      <CardHeader className="pb-2 border-b border-[#1a1a1a]">
+    <Card className="mb-4 transition-all duration-200 hover:shadow-lg bg-collab-900 border-collab-700 hover:border-collab-600 hover:bg-collab-900">
+      <CardHeader className="pb-2 border-b border-collab-700">
         <PostHeader
           authorId={post.author.id}
           authorName={post.author.name}
@@ -169,7 +166,6 @@ export default function PostItem({
         <PostActions
           postId={post.id}
           initialLiked={initialLiked}
-          initialBookmarked={initialBookmarked}
           isFollowing={post.isFollowing}
           onLikeChange={handleLikeChange}
           onToggleExpand={() => toggleExpand(post.id)}

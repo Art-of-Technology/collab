@@ -6,14 +6,14 @@ const naturalCollator = new Intl.Collator(undefined, { numeric: true, sensitivit
 
 export const getColumnColor = (columnName: string, groupField: string): string => {
   const colors = COLUMN_COLORS[groupField as keyof typeof COLUMN_COLORS];
-  if (!colors) return 'border-gray-600';
+  if (!colors) return 'border-collab-600';
 
   const colorKey = columnName.toLowerCase();
-  return colors[colorKey as keyof typeof colors] || 'border-gray-600';
+  return colors[colorKey as keyof typeof colors] || 'border-collab-600';
 };
 
 export const getPriorityColor = (priority: string): string => {
-  return PRIORITY_COLORS[priority as keyof typeof PRIORITY_COLORS] || 'border-l-gray-600';
+  return PRIORITY_COLORS[priority as keyof typeof PRIORITY_COLORS] || 'border-l-collab-600';
 };
 
 export const filterIssues = (
@@ -211,12 +211,17 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
     // Only create dynamic columns for non-status grouping or when no project statuses exist
     if (!columnsMap.has(groupKey)) {
       if (groupField !== 'status' || !projectStatuses || projectStatuses.length === 0) {
-        columnsMap.set(groupKey, {
+        const columnMeta: any = {
           id: groupKey,
           name: groupValue,
           issues: [],
           order: columnsMap.size
-        });
+        };
+        // For assignee grouping, store the assignee ID for DnD field resolution
+        if (groupField === 'assignee' && issue.assignee?.id) {
+          columnMeta.assigneeId = issue.assignee.id;
+        }
+        columnsMap.set(groupKey, columnMeta);
       } else {
         // For status grouping with project statuses, the column should already exist
         // This is a fallback that shouldn't normally happen

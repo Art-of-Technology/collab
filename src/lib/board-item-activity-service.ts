@@ -178,3 +178,37 @@ export async function trackCreation(
     details: item ? { title: item.title, type: item.type } : undefined,
   });
 }
+
+export async function trackStatusChange(params: {
+  itemType: string;
+  itemId: string;
+  userId: string;
+  workspaceId: string;
+  projectId?: string;
+  oldStatusId: string | null;
+  newStatusId: string | null;
+  oldStatusName?: string | null;
+  newStatusName?: string | null;
+}) {
+  const { itemType, itemId, userId, workspaceId, projectId, oldStatusId, newStatusId, oldStatusName, newStatusName } = params;
+
+  if (oldStatusId === newStatusId) {
+    return null;
+  }
+
+  return prisma.issueActivity.create({
+    data: {
+      action: 'STATUS_CHANGED',
+      itemType,
+      itemId,
+      userId,
+      workspaceId,
+      projectId,
+      fieldName: 'statusId',
+      oldValue: oldStatusName ?? undefined,
+      newValue: newStatusName ?? undefined,
+      oldStatusId: oldStatusId ?? undefined,
+      newStatusId: newStatusId ?? undefined,
+    },
+  });
+}

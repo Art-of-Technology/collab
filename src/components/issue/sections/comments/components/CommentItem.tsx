@@ -138,18 +138,18 @@ export function CommentItem({
   };
 
   return (
-    <div className={`${level > 0 ? "ml-4 border-l border-[#2a2a2a] pl-3" : ""}`}>
-      <div className="group flex gap-2 py-1.5 hover:bg-[#0d0d0d] rounded-md px-1">
+    <div className={`${level > 0 ? "ml-4 border-l border-collab-600 pl-3" : ""}`}>
+      <div className="group flex gap-2 py-1.5 hover:bg-collab-950 rounded-md px-1">
         <div className="flex-shrink-0">
           <CustomAvatar user={comment.author} size="xs" />
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="text-xs font-medium text-[#e1e7ef]">
+            <span className="text-xs font-medium text-collab-50">
               {comment.author.name}
             </span>
-            <span className="text-[10px] text-[#7d8590]">
+            <span className="text-[10px] text-collab-500">
               {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
             </span>
           </div>
@@ -190,7 +190,7 @@ export function CommentItem({
             ) : (
               <RichTextRenderer
                 content={comment.html || comment.content}
-                className="text-[#c9d1d9] text-xs leading-relaxed"
+                className="text-collab-400 text-xs leading-relaxed"
               />
             )}
           </div>

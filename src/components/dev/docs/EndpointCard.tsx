@@ -50,7 +50,7 @@ export function EndpointCard({ endpoint, baseUrl, apiKey }: EndpointCardProps) {
 
   return (
     <>
-      <Card className="mb-6 border-[#1f1f1f] bg-[#101011]">
+      <Card className="mb-6 border-collab-700 bg-collab-900">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div className="flex-1 min-w-0">

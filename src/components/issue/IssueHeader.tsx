@@ -156,7 +156,7 @@ export function IssueHeader({
           
           <div className="flex items-center gap-2">
             {renderBadge(getIssueTypeBadge(issue.type))}
-            {renderBadge(getIssueStatusBadge(issue.status || "Todo"))}
+            {renderBadge(getIssueStatusBadge(issue.status || "Todo", issue.projectStatus?.displayName))}
             {renderBadge(getIssuePriorityBadge(issue.priority))}
           </div>
         </div>
