@@ -15,6 +15,7 @@ interface TimelineIssue {
   status: {
     id: string;
     name: string;
+    displayName: string;
     color: string | null;
   } | null;
   project: {
@@ -24,6 +25,14 @@ interface TimelineIssue {
     color: string | null;
     issuePrefix: string;
   } | null;
+}
+
+interface TimelineStatusRef {
+  id: string;
+  name: string;
+  displayName: string;
+  color: string | null;
+  iconName?: string | null;
 }
 
 export interface ActivityTimelineItem {
@@ -36,6 +45,9 @@ export interface ActivityTimelineItem {
   details: any;
   user: TimelineUser;
   issue: TimelineIssue | null;
+  // Status change FK relations — proper displayName from DB
+  oldStatus: TimelineStatusRef | null;
+  newStatus: TimelineStatusRef | null;
   createdAt: string;
 }
 

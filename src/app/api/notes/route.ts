@@ -12,6 +12,7 @@ import {
 } from "@/lib/secrets/crypto";
 import { logNoteAccess } from "@/lib/secrets/access";
 import { createInitialVersion } from "@/lib/versioning";
+import { emitContextCreated } from "@/lib/event-bus";
 
 export async function GET(request: NextRequest) {
   try {
@@ -481,6 +482,30 @@ export async function POST(request: NextRequest) {
         // Log but don't fail the creation if versioning fails
         console.error("Error creating initial version:", versionError);
       }
+    }
+
+    // Fire-and-forget: emit context event for Qdrant sync
+    if (note.workspace) {
+      emitContextCreated(
+        {
+          id: note.id,
+          title: note.title,
+          content: note.content,
+          type: note.type,
+          scope: note.scope,
+          isAiContext: note.isAiContext,
+          aiContextPriority: note.aiContextPriority,
+          projectId: note.projectId,
+          authorId: note.authorId,
+        },
+        {
+          workspaceId: note.workspace.id,
+          workspaceName: note.workspace.name,
+          workspaceSlug: note.workspace.slug,
+          source: 'api',
+        },
+        { async: true }
+      ).catch((err) => console.error('Failed to emit context.created:', err));
     }
 
     return NextResponse.json(note, { status: 201 });

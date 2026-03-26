@@ -119,12 +119,10 @@ export default function ActivityItem({
   const message = useMemo(() => {
     const userName = item.user.name || "Someone";
 
-    // Special handling for status changes
-    if (item.action === "STATUS_CHANGED" && item.newValue) {
-      const newStatus =
-        typeof item.newValue === "object"
-          ? item.newValue.name || item.newValue
-          : item.newValue;
+    // Special handling for status changes — use FK relation for proper displayName
+    if (item.action === "STATUS_CHANGED" && (item.newStatus || item.newValue)) {
+      const statusLabel = item.newStatus?.displayName || item.newValue;
+      const statusColor = item.newStatus?.color || item.issue?.status?.color || "#6366f1";
       return (
         <>
           <span className="text-collab-50 font-medium">{userName}</span>
@@ -132,11 +130,11 @@ export default function ActivityItem({
           <span
             className="px-2 py-0.5 rounded-lg text-xs font-medium"
             style={{
-              backgroundColor: `${item.issue?.status?.color || "#6366f1"}20`,
-              color: item.issue?.status?.color || "#a5b4fc",
+              backgroundColor: `${statusColor}20`,
+              color: statusColor,
             }}
           >
-            {newStatus}
+            {statusLabel}
           </span>
         </>
       );

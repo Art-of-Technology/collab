@@ -281,7 +281,7 @@ function PlanningViewRendererLegacy({
                   "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors h-auto",
                   !personalMode
                     ? "bg-blue-600 text-white"
-                    : "text-gray-400 hover:text-white hover:bg-collab-700"
+                    : "text-collab-400 hover:text-white hover:bg-collab-700"
                 )}
               >
                 <Users className="h-3 w-3" />
@@ -294,7 +294,7 @@ function PlanningViewRendererLegacy({
                   "flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors h-auto",
                   personalMode
                     ? "bg-emerald-500 text-white"
-                    : "text-gray-400 hover:text-white hover:bg-collab-700"
+                    : "text-collab-400 hover:text-white hover:bg-collab-700"
                 )}
               >
                 <User className="h-3 w-3" />
@@ -317,7 +317,7 @@ function PlanningViewRendererLegacy({
                   variant="ghost"
                   size="sm"
                   onClick={handleResetChanges}
-                  className="h-7 px-2 text-xs text-gray-400 hover:text-white"
+                  className="h-7 px-2 text-xs text-collab-400 hover:text-white"
                 >
                   <RotateCcw className="h-3 w-3 mr-1" />
                   Reset
@@ -353,7 +353,7 @@ function PlanningViewRendererLegacy({
       {/* Loading State */}
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          <Loader2 className="h-8 w-8 animate-spin text-collab-400" />
         </div>
       ) : (
         <>

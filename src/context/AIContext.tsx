@@ -87,9 +87,42 @@ export interface QuickAction {
   icon?: string;
 }
 
+/** Per-agent conversation state (cached in-memory during session) */
+interface AgentConversationState {
+  conversationId: string | null;
+  messages: ChatMessage[];
+}
+
+/** Coclaw agent runtime status (from /api/workspaces/.../coclaw/status) */
+export interface CoclawAgentStatus {
+  instance: {
+    status: string; // 'RUNNING' | 'STOPPED' | 'STARTING' | 'ERROR' | 'STOPPING'
+    pid?: number;
+    port?: number;
+    apiKeySource?: string;
+    providerId?: string;
+    startedAt?: string | null;
+    lastActiveAt?: string | null;
+    lastError?: string | null;
+    stoppedAt?: string | null;
+  };
+  gateway: {
+    provider?: string;
+    model?: string;
+    uptime_seconds?: number;
+    memory_backend?: string;
+    paired?: boolean;
+    channels?: Record<string, boolean>;
+  } | null;
+  healthy: boolean;
+}
+
 interface AIProviderState {
-  // Agent (Cleo — single agent, no switching)
+  // Agents (multi-agent: Cleo + Coclaw)
   agent: ClientAgent | null;
+  availableAgents: ClientAgent[];
+  selectedAgentSlug: string;
+  setSelectedAgentSlug: (slug: string) => void;
 
   // Chat bar state
   isExpanded: boolean;
@@ -106,6 +139,10 @@ interface AIProviderState {
   isStreaming: boolean;
   streamingText: string;
   activeToolCalls: ActiveToolCall[];
+  isLoadingHistory: boolean;
+
+  // Agent status (Coclaw)
+  agentStatus: CoclawAgentStatus | null;
 
   // Web search
   webSearchEnabled: boolean;
@@ -143,7 +180,9 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Agent state (Cleo only)
+  // Agent state (multi-agent)
+  const [availableAgents, setAvailableAgents] = useState<ClientAgent[]>([]);
+  const [selectedAgentSlug, setSelectedAgentSlugRaw] = useState<string>('coclaw');
   const [agent, setAgent] = useState<ClientAgent | null>(null);
 
   // Chat state
@@ -159,6 +198,13 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   // Web search
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
+  // Per-agent conversation cache (persists across agent switches within session)
+  const agentConversationsRef = useRef<Record<string, AgentConversationState>>({});
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  // Coclaw agent status
+  const [agentStatus, setAgentStatus] = useState<CoclawAgentStatus | null>(null);
+
   // Suggestions
   const [quickActions, setQuickActions] = useState<QuickAction[]>([]);
 
@@ -166,23 +212,27 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   const contextRef = useRef<AIContextType | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const historyLoadedRef = useRef<Set<string>>(new Set());
 
-  // ── Load agent (Cleo) ──
+  // ── Load agents ──
   useEffect(() => {
-    async function fetchAgent() {
+    async function fetchAgents() {
       try {
         const response = await fetch("/api/ai/agents");
         if (response.ok) {
           const data = await response.json();
-          const defaultAgent =
-            data.agents?.find((a: ClientAgent) => a.isDefault) || data.agents?.[0];
-          if (defaultAgent) {
-            setAgent(defaultAgent);
-          }
+          const agents: ClientAgent[] = data.agents || [];
+          setAvailableAgents(agents);
+
+          // Set active agent based on selectedAgentSlug
+          const selected = agents.find((a: ClientAgent) => a.slug === selectedAgentSlug);
+          const defaultAgent = agents.find((a: ClientAgent) => a.isDefault) || agents[0];
+          setAgent(selected || defaultAgent || null);
         }
       } catch {
-        // Fallback
-        setAgent({
+        // Fallback to Cleo
+        const fallback: ClientAgent = {
           slug: "cleo",
           name: "Cleo",
           color: "#6366f1",
@@ -190,11 +240,178 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
           personality: "Smart, proactive, and direct",
           capabilities: [],
           isDefault: true,
-        });
+        };
+        setAvailableAgents([fallback]);
+        setAgent(fallback);
       }
     }
-    fetchAgent();
+    fetchAgents();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Update active agent when selection changes + save/restore conversation per agent
+  useEffect(() => {
+    if (availableAgents.length > 0) {
+      const selected = availableAgents.find((a) => a.slug === selectedAgentSlug);
+      setAgent(selected || availableAgents[0] || null);
+    }
+  }, [selectedAgentSlug, availableAgents]);
+
+  // ── Save current agent's conversation to cache before switching ──
+  const saveCurrentConversation = useCallback(() => {
+    if (agent?.slug) {
+      agentConversationsRef.current[agent.slug] = {
+        conversationId,
+        messages,
+      };
+    }
+  }, [agent?.slug, conversationId, messages]);
+
+  // ── Load conversation history from DB for an agent ──
+  const loadConversationHistory = useCallback(
+    async (slug: string) => {
+      if (!currentWorkspace?.id || historyLoadedRef.current.has(slug)) return;
+
+      // Check in-memory cache first
+      const cached = agentConversationsRef.current[slug];
+      if (cached && (cached.messages.length > 0 || cached.conversationId)) {
+        setConversationId(cached.conversationId);
+        setMessages(cached.messages);
+        return;
+      }
+
+      setIsLoadingHistory(true);
+      try {
+        const params = new URLSearchParams({
+          workspaceId: currentWorkspace.id,
+          agentSlug: slug,
+          includeMessages: 'true',
+          limit: '1',
+        });
+        const response = await fetch(`/api/ai/conversations?${params}`);
+        if (!response.ok) throw new Error('Failed to load history');
+
+        const data = await response.json();
+        const latest = data.latestConversation;
+
+        if (latest?.messages?.length) {
+          const loaded: ChatMessage[] = latest.messages.map(
+            (m: { id: string; role: string; content: string; createdAt: string }) => ({
+              id: m.id,
+              role: m.role as 'user' | 'assistant',
+              text: m.content,
+              blocks: [{ type: 'text' as const, text: m.content }],
+              timestamp: new Date(m.createdAt),
+            }),
+          );
+          setConversationId(latest.id);
+          setMessages(loaded);
+          agentConversationsRef.current[slug] = {
+            conversationId: latest.id,
+            messages: loaded,
+          };
+        } else {
+          setConversationId(null);
+          setMessages([]);
+          agentConversationsRef.current[slug] = {
+            conversationId: null,
+            messages: [],
+          };
+        }
+      } catch (err) {
+        console.error('[AIContext] Failed to load conversation history:', err);
+        setConversationId(null);
+        setMessages([]);
+      } finally {
+        setIsLoadingHistory(false);
+        historyLoadedRef.current.add(slug);
+      }
+    },
+    [currentWorkspace?.id],
+  );
+
+  // ── On agent switch: save old, restore/load new ──
+  const prevAgentSlugRef = useRef<string>(selectedAgentSlug);
+  useEffect(() => {
+    if (prevAgentSlugRef.current !== selectedAgentSlug) {
+      // Save current agent's state
+      const prevSlug = prevAgentSlugRef.current;
+      if (prevSlug) {
+        agentConversationsRef.current[prevSlug] = { conversationId, messages };
+      }
+      prevAgentSlugRef.current = selectedAgentSlug;
+
+      // Restore from cache or load from DB
+      const cached = agentConversationsRef.current[selectedAgentSlug];
+      if (cached) {
+        setConversationId(cached.conversationId);
+        setMessages(cached.messages);
+      } else {
+        // Clear while loading
+        setConversationId(null);
+        setMessages([]);
+        loadConversationHistory(selectedAgentSlug);
+      }
+
+      // Clear streaming state
+      setStreamingText('');
+      setActiveToolCalls([]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAgentSlug, loadConversationHistory]);
+
+  // ── Load initial conversation history on mount ──
+  useEffect(() => {
+    if (currentWorkspace?.id && selectedAgentSlug) {
+      loadConversationHistory(selectedAgentSlug);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentWorkspace?.id]);
+
+  // ── Coclaw status polling (always-on) ──
+  // Polls even when Coclaw is not the selected agent so that:
+  // 1. Auto-respawn keeps the instance warm on any page load
+  // 2. Notification badges stay current
+  // 3. Agent status is immediately available when switching to Coclaw
+  // Uses 15s interval when Coclaw is active, 60s when another agent is selected.
+  useEffect(() => {
+    if (!currentWorkspace?.id) {
+      setAgentStatus(null);
+      if (statusPollRef.current) {
+        clearInterval(statusPollRef.current);
+        statusPollRef.current = null;
+      }
+      return;
+    }
+
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(
+          `/api/workspaces/${currentWorkspace.id}/coclaw/status`,
+        );
+        if (res.ok) {
+          const data: CoclawAgentStatus = await res.json();
+          setAgentStatus(data);
+        }
+      } catch {
+        // Silently fail — status is best-effort
+      }
+    };
+
+    // Initial fetch
+    fetchStatus();
+
+    // Active: 15s poll. Background: 60s poll (keeps auto-respawn + TTL alive).
+    const interval = selectedAgentSlug === 'coclaw' ? 15_000 : 60_000;
+    statusPollRef.current = setInterval(fetchStatus, interval);
+
+    return () => {
+      if (statusPollRef.current) {
+        clearInterval(statusPollRef.current);
+        statusPollRef.current = null;
+      }
+    };
+  }, [selectedAgentSlug, currentWorkspace?.id]);
 
   // ── Build context ──
   useEffect(() => {
@@ -278,6 +495,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
             })),
             conversationId,
             webSearchEnabled,
+            agentSlug: selectedAgentSlug,
           }),
           signal: abortControllerRef.current.signal,
         });
@@ -474,16 +692,25 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
         abortControllerRef.current = null;
       }
     },
-    [isLoading, isStreaming, messages, conversationId, webSearchEnabled, router, currentWorkspace]
+    [isLoading, isStreaming, messages, conversationId, webSearchEnabled, selectedAgentSlug, router, currentWorkspace]
   );
 
   // ── Conversation management ──
   const clearConversation = useCallback(() => {
     setMessages([]);
     setConversationId(null);
-    setStreamingText("");
+    setStreamingText('');
     setActiveToolCalls([]);
-  }, []);
+    // Clear in-memory cache for current agent
+    if (agent?.slug) {
+      agentConversationsRef.current[agent.slug] = {
+        conversationId: null,
+        messages: [],
+      };
+      // Allow re-loading from DB next time
+      historyLoadedRef.current.delete(agent.slug);
+    }
+  }, [agent?.slug]);
 
   const startNewConversation = useCallback(() => {
     clearConversation();
@@ -529,6 +756,12 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   // ── Provider value ──
   const value: AIProviderState = {
     agent,
+    availableAgents,
+    selectedAgentSlug,
+    setSelectedAgentSlug: useCallback((slug: string) => {
+      saveCurrentConversation();
+      setSelectedAgentSlugRaw(slug);
+    }, [saveCurrentConversation]),
     isExpanded,
     isFocused,
     expandChat,
@@ -541,6 +774,8 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
     isStreaming,
     streamingText,
     activeToolCalls,
+    isLoadingHistory,
+    agentStatus,
     webSearchEnabled,
     setWebSearchEnabled,
     sendMessage,
@@ -635,13 +870,14 @@ export function useAIWidget() {
   };
 }
 
-/** @deprecated Use useAI().agent instead */
+/** Use useAI() directly for agent selection — this hook now returns real multi-agent data */
 export function useAIAgents() {
-  const { agent } = useAI();
+  const { agent, availableAgents, selectedAgentSlug, setSelectedAgentSlug } = useAI();
   return {
     currentAgent: agent,
-    availableAgents: agent ? [agent] : [],
-    setCurrentAgent: () => {},
+    availableAgents,
+    selectedAgentSlug,
+    setCurrentAgent: setSelectedAgentSlug,
   };
 }
 
@@ -660,12 +896,25 @@ export function useAISuggestions() {
 }
 
 export function useAIConversation() {
-  const { conversationId, messages, startNewConversation, clearConversation } = useAI();
+  const { conversationId, messages, startNewConversation, clearConversation, isLoadingHistory } = useAI();
   return {
     currentConversationId: conversationId,
     messages,
-    loadConversation: async () => {},
+    isLoadingHistory,
     startNewConversation,
     clearConversation,
+  };
+}
+
+/** Hook for Coclaw agent status */
+export function useCoclawStatus() {
+  const { agentStatus, selectedAgentSlug } = useAI();
+  return {
+    status: agentStatus,
+    isCoclaw: selectedAgentSlug === 'coclaw',
+    isRunning: agentStatus?.instance?.status === 'RUNNING',
+    isHealthy: agentStatus?.healthy ?? false,
+    instanceStatus: agentStatus?.instance?.status || 'STOPPED',
+    gateway: agentStatus?.gateway || null,
   };
 }

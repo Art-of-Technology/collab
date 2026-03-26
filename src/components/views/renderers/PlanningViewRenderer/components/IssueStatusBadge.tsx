@@ -20,10 +20,10 @@ const sizeMap = {
 const statusConfig: Record<StatusCategory, { icon: typeof Circle; color: string }> = {
   done: { icon: CheckCircle2, color: 'text-green-500' },
   in_progress: { icon: PlayCircle, color: 'text-blue-500' },
-  todo: { icon: Circle, color: 'text-gray-400' },
+  todo: { icon: Circle, color: 'text-collab-400' },
   blocked: { icon: AlertCircle, color: 'text-red-500' },
-  cancelled: { icon: XCircle, color: 'text-gray-500' },
-  unknown: { icon: Clock, color: 'text-gray-400' },
+  cancelled: { icon: XCircle, color: 'text-collab-500' },
+  unknown: { icon: Clock, color: 'text-collab-400' },
 };
 
 export function StatusIcon({ status, size = 'md', className }: StatusIconProps) {
@@ -65,18 +65,19 @@ export function getStatusConfig(status: StatusCategory) {
 
 interface IssueStatusBadgeProps {
   status: string;
+  displayName?: string;
   statusSymbol?: string | null;
   className?: string;
 }
 
-export function IssueStatusBadge({ status, statusSymbol, className }: IssueStatusBadgeProps) {
+export function IssueStatusBadge({ status, displayName, statusSymbol, className }: IssueStatusBadgeProps) {
   const category = emojiToStatusCategory(statusSymbol);
   const config = statusConfig[category];
 
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
       <StatusIcon status={category} size="sm" />
-      <span className="text-xs text-gray-400">{status}</span>
+      <span className="text-xs text-collab-400">{displayName || status}</span>
     </div>
   );
 }
@@ -105,7 +106,7 @@ export function StatusTransition({ from, to }: { from: StatusCategory; to: Statu
   return (
     <div className="flex items-center gap-1">
       <StatusIcon status={from} size="sm" />
-      <span className="text-gray-500">→</span>
+      <span className="text-collab-500">→</span>
       <StatusIcon status={to} size="sm" />
     </div>
   );

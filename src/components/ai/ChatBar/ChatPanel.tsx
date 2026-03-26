@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Plus, Sparkles } from "lucide-react";
+import { X, Plus, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,6 +22,9 @@ export default function ChatPanel() {
     startNewConversation,
     quickActions,
     executeQuickAction,
+    isLoadingHistory,
+    agentStatus,
+    selectedAgentSlug,
   } = useAI();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -73,6 +76,13 @@ export default function ChatPanel() {
                   <span className="text-[10px] text-white/25">
                     {agent.personality}
                   </span>
+                  {/* Coclaw running status badge in header */}
+                  {selectedAgentSlug === 'coclaw' && agentStatus?.instance?.status === 'RUNNING' && (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400/80">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Running
+                    </span>
+                  )}
                 </>
               )}
             </div>
@@ -99,7 +109,12 @@ export default function ChatPanel() {
 
           {/* Messages area */}
           <ScrollArea ref={scrollRef} className="flex-1 overflow-hidden">
-            {messages.length === 0 && !isStreaming ? (
+            {isLoadingHistory ? (
+              <div className="flex items-center justify-center py-12 gap-2 text-white/25">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-xs">Loading conversation...</span>
+              </div>
+            ) : messages.length === 0 && !isStreaming ? (
               <div className="flex flex-col items-center justify-center py-12 px-4">
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center mb-4"

@@ -8,7 +8,7 @@ import React, {
   useImperativeHandle,
   useState,
 } from "react";
-import { ArrowUp, Loader2, Paperclip, X, Globe, Mic, StopCircle } from "lucide-react";
+import { ArrowUp, ChevronDown, Loader2, Paperclip, X, Globe, Mic, StopCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -21,11 +21,18 @@ interface ChatInputProps {
   placeholder?: string;
   onFocus?: () => void;
   onBlur?: () => void;
-  onArrowKey?: (direction: "up" | "down") => void;
+  onArrowKey?: (direction: 'up' | 'down') => void;
   onEscape?: () => void;
   hasSelectedResult?: boolean;
   webSearchEnabled: boolean;
   onWebSearchToggle: () => void;
+  availableAgents?: Array<{ slug: string; name: string; color: string; isDefault: boolean }>;
+  selectedAgentSlug?: string;
+  onAgentChange?: (slug: string) => void;
+  agentStatus?: {
+    instanceStatus: string;
+    isHealthy: boolean;
+  } | null;
 }
 
 export interface ChatInputHandle {
@@ -86,9 +93,12 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     hasSelectedResult,
     webSearchEnabled,
     onWebSearchToggle,
+    availableAgents = [],
+    selectedAgentSlug,
+    onAgentChange,
+    agentStatus,
   },
-  ref
-) {
+  ref) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
@@ -101,6 +111,24 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval>>();
+
+  // Agent dropdown state
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const agentDropdownRef = useRef<HTMLDivElement>(null);
+  const selectedAgent = availableAgents.find((a) => a.slug === selectedAgentSlug) || availableAgents[0];
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showAgentDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (agentDropdownRef.current && !agentDropdownRef.current.contains(e.target as Node)) {
+        setShowAgentDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showAgentDropdown]);
 
   useImperativeHandle(ref, () => ({
     focus: () => textareaRef.current?.focus(),
@@ -379,8 +407,8 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
               value={value}
               onChange={(e) => onValueChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              onFocus={onFocus}
-              onBlur={onBlur}
+              onFocus={(e) => { setIsFocused(true); onFocus?.(); }}
+              onBlur={(e) => { setIsFocused(false); onBlur?.(); }}
               placeholder={dynamicPlaceholder}
               rows={1}
               className={cn(
@@ -433,7 +461,9 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       <div
         className={cn(
           "flex items-center gap-1 px-3 pb-2.5 pt-0.5 transition-opacity duration-200",
-          isRecording ? "opacity-0 pointer-events-none" : "opacity-100"
+          isFocused || hasContent
+            ? (isRecording ? "opacity-0 pointer-events-none" : "opacity-100")
+            : "opacity-0 pointer-events-none h-0 overflow-hidden p-0"
         )}
       >
         {/* Left side: Web Search toggle */}
@@ -479,11 +509,102 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
           </button>
         </div>
 
+          {/* Agent selector */}
+          {availableAgents.length > 1 && selectedAgent && (
+            <div className="relative" ref={agentDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setShowAgentDropdown(!showAgentDropdown)}
+                className={cn(
+                  "rounded-lg transition-all flex items-center gap-1 px-2 py-1 h-7",
+                  "border",
+                  showAgentDropdown
+                    ? "bg-white/[0.08] text-white/70 border-white/20"
+                    : "bg-transparent text-white/30 hover:text-white/50 hover:bg-white/[0.04] border-transparent"
+                )}
+              >
+                <div className="relative w-2 h-2 flex-shrink-0">
+                  <div
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: selectedAgent.color }}
+                  />
+                  {/* Pulse overlay for running Coclaw */}
+                  {selectedAgent.slug === 'coclaw' && agentStatus?.instanceStatus === 'RUNNING' && (
+                    <div
+                      className="absolute inset-0 rounded-full animate-ping opacity-60"
+                      style={{ backgroundColor: selectedAgent.color }}
+                    />
+                  )}
+                </div>
+                <span className="text-[11px] font-medium">{selectedAgent.name}</span>
+                {selectedAgent.slug === 'coclaw' && agentStatus && (
+                  <span
+                    className={cn(
+                      'text-[9px] font-medium px-1 py-0.5 rounded',
+                      agentStatus.instanceStatus === 'RUNNING' && agentStatus.isHealthy
+                        ? 'text-emerald-400/80 bg-emerald-500/10'
+                        : agentStatus.instanceStatus === 'RUNNING'
+                          ? 'text-amber-400/80 bg-amber-500/10'
+                          : 'text-white/20 bg-white/[0.04]'
+                    )}
+                  >
+                    {agentStatus.instanceStatus === 'RUNNING' && agentStatus.isHealthy
+                      ? 'ON'
+                      : agentStatus.instanceStatus === 'RUNNING'
+                        ? '•••'
+                        : 'OFF'}
+                  </span>
+                )}
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {/* Dropdown */}
+              <AnimatePresence>
+                {showAgentDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute bottom-full left-0 mb-1 w-48 rounded-lg bg-zinc-900/95 backdrop-blur-xl border border-white/10 shadow-xl overflow-hidden z-50"
+                  >
+                    {availableAgents.map((agent) => (
+                      <button
+                        key={agent.slug}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          onAgentChange?.(agent.slug);
+                          setShowAgentDropdown(false);
+                        }}
+                        className={cn(
+                          "flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors",
+                          agent.slug === selectedAgentSlug
+                            ? "bg-white/[0.08] text-white/90"
+                            : "text-white/50 hover:bg-white/[0.04] hover:text-white/70"
+                        )}
+                      >
+                        <div
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: agent.color }}
+                        />
+                        <span className="text-sm font-medium">{agent.name}</span>
+                        {agent.slug === selectedAgentSlug && (
+                          <span className="ml-auto text-[10px] text-white/30">Active</span>
+                        )}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
         {/* Right side: Keyboard shortcut hint */}
         <div className="ml-auto hidden md:flex items-center gap-1.5">
           <kbd className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-white/20 font-mono">
             {typeof navigator !== "undefined" && navigator.platform?.includes("Mac")
-              ? "⌘"
+              ? "\u2318"
               : "Ctrl"}
             +K
           </kbd>

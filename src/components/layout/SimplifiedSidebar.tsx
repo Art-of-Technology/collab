@@ -5,7 +5,6 @@ import Image from "next/image";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Search,
   Home,
   Eye,
   Plus,
@@ -21,6 +20,7 @@ import {
   ChevronDown,
   HelpCircle,
   ExternalLink,
+  Bot,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import CreateViewModal from "@/components/modals/CreateViewModal";
 import CreateProjectModal from "@/components/modals/CreateProjectModal";
 import NotificationPopover from "@/components/layout/sidebar/NotificationPopover";
+import { useMention } from "@/context/MentionContext";
 
 
 interface SimplifiedSidebarProps {
@@ -94,12 +95,14 @@ export default function SimplifiedSidebar({
   };
 
   const agentColor = currentAgent?.color || '#2563eb';
+  const { unreadCoclawCount } = useMention();
 
   const mainNav = [
-    { name: "Home", href: `${workspaceBase}/dashboard`, icon: Home, current: pathname.includes("/dashboard") },
-    { name: "Timeline", href: `${workspaceBase}/timeline`, icon: MessageSquare, current: pathname.includes("/timeline") },
-    { name: "Context", href: `${workspaceBase}/notes`, icon: FileText, current: pathname.includes("/notes") },
-    { name: "Feature Requests", href: `${workspaceBase}/features`, icon: Lightbulb, current: pathname.includes("/features") },
+    { name: "Home", href: `${workspaceBase}/dashboard`, icon: Home, current: pathname.includes("/dashboard"), badge: 0 },
+    { name: "Timeline", href: `${workspaceBase}/timeline`, icon: MessageSquare, current: pathname.includes("/timeline"), badge: 0 },
+    { name: "Context", href: `${workspaceBase}/notes`, icon: FileText, current: pathname.includes("/notes"), badge: 0 },
+    { name: "Feature Requests", href: `${workspaceBase}/features`, icon: Lightbulb, current: pathname.includes("/features"), badge: 0 },
+    { name: "Coclaw", href: `${workspaceBase}/coclaw`, icon: Bot, current: pathname.includes("/coclaw"), badge: unreadCoclawCount },
   ];
 
   // ── Collapsed State ──
@@ -122,7 +125,7 @@ export default function SimplifiedSidebar({
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center justify-center h-9 w-full rounded-lg transition-all duration-150",
+                "flex items-center justify-center h-9 w-full rounded-lg transition-all duration-150 relative",
                 item.current
                   ? "bg-collab-800 text-white"
                   : "text-collab-500 hover:text-white hover:bg-collab-800"
@@ -130,6 +133,11 @@ export default function SimplifiedSidebar({
               title={item.name}
             >
               <item.icon className="h-[18px] w-[18px]" />
+              {item.badge > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 flex items-center justify-center text-[8px] font-bold rounded-full bg-violet-500 text-white">
+                  {item.badge > 9 ? "9+" : item.badge}
+                </span>
+              )}
             </Link>
           ))}
         </div>
@@ -166,7 +174,7 @@ export default function SimplifiedSidebar({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 bg-collab-900 border-collab-700">
               <DropdownMenuItem
-                onClick={() => router.push(`${workspaceBase}/settings`)}
+                onClick={() => router.push(`/workspaces/${currentWorkspace?.id}/settings/ai-keys`)}
                 className="text-collab-400 hover:text-white focus:bg-collab-800"
               >
                 <Settings className="mr-2 h-4 w-4" /> Settings
@@ -200,18 +208,6 @@ export default function SimplifiedSidebar({
 
       {/* Content */}
       <div className="flex-1 flex flex-col gap-4 px-2 py-4 overflow-y-auto">
-        {/* Search Box */}
-        <button
-          onClick={() => {
-            const event = new KeyboardEvent("keydown", { key: "k", metaKey: true });
-            document.dispatchEvent(event);
-          }}
-          className="flex items-center gap-4 rounded-lg border px-2 py-2 text-sm bg-collab-950 border-collab-700 hover:bg-collab-800 transition-colors"
-        >
-          <Search className="h-4 w-4 text-collab-500" />
-          <span className="flex-1 text-left text-collab-500">Search...</span>
-          <kbd className="text-xs px-1.5 py-0.5 rounded bg-collab-800 text-collab-400">⌘K</kbd>
-        </button>
 
         {/* Workspace Selector */}
         <WorkspaceSelector />
@@ -230,7 +226,12 @@ export default function SimplifiedSidebar({
               )}
             >
               <item.icon className={cn("h-4 w-4", item.current ? "text-white" : "text-collab-500")} />
-              <span>{item.name}</span>
+              <span className="flex-1">{item.name}</span>
+              {item.badge > 0 && (
+                <span className="h-5 min-w-[20px] px-1 flex items-center justify-center text-[10px] font-semibold rounded-full bg-violet-500 text-white">
+                  {item.badge > 9 ? "9+" : item.badge}
+                </span>
+              )}
             </Link>
           ))}
         </nav>
@@ -394,7 +395,7 @@ export default function SimplifiedSidebar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56 bg-collab-900 border-collab-700">
             <DropdownMenuItem
-              onClick={() => router.push(`${workspaceBase}/settings`)}
+              onClick={() => router.push(`/workspaces/${currentWorkspace?.id}/settings/ai-keys`)}
               className="text-collab-400 hover:text-white focus:bg-collab-800"
             >
               <Settings className="mr-2 h-4 w-4" /> Settings

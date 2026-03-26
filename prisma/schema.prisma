@@ -127,6 +127,12 @@ model User {
   aiMessages       AIMessage[]        @relation("AIMessageUser")
   dashboardLayouts DashboardLayout[]
   aiPreferences    AIUserPreference[]
+
+  // Coclaw relations
+  coclawInstances  CoclawInstance[]
+  coclawUsageLogs  CoclawUsageLog[]
+  coclawChannelConfigs CoclawChannelConfig[]
+  coclawChannelMessages CoclawChannelMessage[] @relation("CoclawChannelMessages")
 }
 
 model Account {
@@ -415,6 +421,12 @@ model Workspace {
   aiConversations  AIConversation[]
   dashboardLayouts DashboardLayout[]
   aiPreferences    AIUserPreference[]
+
+  // Coclaw relationships
+  coclawInstances  CoclawInstance[]
+  coclawUsageLogs  CoclawUsageLog[]
+  coclawChannelConfigs CoclawChannelConfig[]
+  coclawChannelMessages CoclawChannelMessage[] @relation("CoclawChannelMessages")
 }
 
 model WorkspaceMember {
@@ -743,6 +755,10 @@ model ProjectStatus {
   // Relationships - issues that use this status
   issues Issue[] @relation("IssueStatus")
 
+  // Activity tracking - back-relations for status change history
+  activitiesAsOldStatus IssueActivity[] @relation("ActivityOldStatus")
+  activitiesAsNewStatus IssueActivity[] @relation("ActivityNewStatus")
+
   // Ensure unique status names per project
   @@unique([projectId, name])
   @@index([projectId])
@@ -780,6 +796,12 @@ model IssueActivity {
   oldValue  String? // Previous value (JSON string for complex values)
   newValue  String? // New value (JSON string for complex values)
 
+  // Status change tracking with proper FK relations
+  oldStatusId String? // FK to ProjectStatus for status change tracking
+  newStatusId String? // FK to ProjectStatus for status change tracking
+  oldStatus   ProjectStatus? @relation("ActivityOldStatus", fields: [oldStatusId], references: [id], onDelete: SetNull)
+  newStatus   ProjectStatus? @relation("ActivityNewStatus", fields: [newStatusId], references: [id], onDelete: SetNull)
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([itemId, itemType])
@@ -791,6 +813,8 @@ model IssueActivity {
   // Performance indexes for team sync/planning view
   @@index([workspaceId, itemType, action, createdAt(sort: Desc)], name: "IssueActivity_team_sync_idx")
   @@index([itemId, itemType, action, createdAt], name: "IssueActivity_item_history_idx")
+  @@index([oldStatusId])
+  @@index([newStatusId])
   @@map("BoardItemActivity")
 }
 
@@ -2586,4 +2610,125 @@ model AIUserPreference {
   @@unique([userId, workspaceId])
   @@index([userId])
   @@index([workspaceId])
+}
+
+
+// ========================================
+// Coclaw Instance Management Models
+// ========================================
+
+enum CoclawInstanceStatus {
+  IDLE       // Created but not yet started
+  STARTING   // Process is spawning
+  RUNNING    // Active and healthy
+  STOPPING   // Graceful shutdown in progress
+  STOPPED    // Clean shutdown completed
+  ERROR      // Process crashed or failed
+}
+
+model CoclawInstance {
+  id           String               @id @default(cuid())
+  userId       String
+  workspaceId  String
+  status       CoclawInstanceStatus  @default(IDLE)
+  processId    Int?                  // OS PID of the Coclaw process
+  port         Int?                  // Port the instance is listening on
+  config       Json?                 // Runtime config overrides
+  apiKeySource String?               // "user" | "system"
+  providerId   String?               // Active AI provider (anthropic, openai, etc.)
+  lastActiveAt DateTime?
+  lastError    String?
+  startedAt    DateTime?
+  stoppedAt    DateTime?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([status])
+  @@index([lastActiveAt])
+}
+
+model CoclawUsageLog {
+  id           String   @id @default(cuid())
+  userId       String
+  workspaceId  String
+  messageCount Int      @default(0)  // Messages sent this day
+  tokenCount   Int      @default(0)  // Tokens consumed this day
+  apiKeySource String               // "user" | "system"
+  date         DateTime @db.Date     // Day-level granularity
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId, date])
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([date])
+  @@index([apiKeySource])
+}
+
+model CoclawChannelConfig {
+  id           String   @id @default(cuid())
+  userId       String
+  workspaceId  String
+  channelType  String               // telegram, discord, slack, whatsapp, etc.
+  config       String               // Encrypted JSON blob with channel credentials
+  enabled      Boolean  @default(true)
+  status       String   @default("DISCONNECTED") // CONNECTED, DISCONNECTED, ERROR
+  lastError    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId, channelType])
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([channelType])
+}
+
+// ---------------------------------------------------------------------------
+// Coclaw Channel Message Queue
+// ---------------------------------------------------------------------------
+// Messages exchanged between Collab web UI and Coclaw channel.
+// The Coclaw Collab channel polls for 'pending' user messages and posts
+// assistant responses back. This acts as the message bus between platforms.
+
+enum CoclawMessageStatus {
+  PENDING    // Waiting to be picked up by Coclaw
+  DELIVERED  // Picked up and acknowledged by Coclaw
+  FAILED     // Processing failed
+}
+
+model CoclawChannelMessage {
+  id             String               @id @default(cuid())
+  userId         String
+  workspaceId    String
+  conversationId String?              // Links to AIConversation.id for threading
+  role           String               // 'user' | 'assistant'
+  content        String               @db.Text
+  status         CoclawMessageStatus  @default(PENDING)
+  metadata       Json?                // Tool calls, actions, etc.
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  // Relations
+  user      User      @relation("CoclawChannelMessages", fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation("CoclawChannelMessages", fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workspaceId, status])
+  @@index([userId, status])
+  @@index([conversationId])
+  @@index([createdAt])
 }

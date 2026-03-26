@@ -100,9 +100,9 @@ const ACTIVITY_CONFIG: Record<MovementType, {
   none: {
     label: 'Updated',
     verb: 'updated',
-    color: 'text-gray-400',
-    bgColor: 'bg-gray-500',
-    ringColor: 'ring-gray-500/20',
+    color: 'text-collab-400',
+    bgColor: 'bg-collab-500',
+    ringColor: 'ring-collab-500/20',
     icon: Plus,
   },
   forward: {

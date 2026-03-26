@@ -75,7 +75,7 @@ Available paths:
 - /views — Saved views
 - /timeline — Timeline
 - /settings — Workspace settings
-- /notes — Notes
+- /context — Context
 - /features — Feature requests
 
 Example: "Here are your projects. [ACTION: type="navigate" params={"path":"/projects"}]"

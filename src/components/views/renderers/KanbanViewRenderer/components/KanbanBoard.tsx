@@ -96,13 +96,16 @@ function KanbanBoard({
     }
 
     const scrollArea = targetNode.querySelector<HTMLElement>(".kanban-column-scroll") || targetNode;
-    const issues = Array.from(targetNode.querySelectorAll<HTMLElement>("[data-issue-id]")).filter((n) => n.offsetParent !== null);
+    const issues = Array.from(scrollArea.querySelectorAll<HTMLElement>("[data-issue-id]")).filter((n) => n.offsetParent !== null);
     const scrollRect = scrollArea.getBoundingClientRect();
     const y = clientY - scrollRect.top + scrollArea.scrollTop;
 
     let issueIndex = issues.length;
     for (let i = 0; i < issues.length; i += 1) {
-      const mid = issues[i].offsetTop + (issues[i].offsetHeight / 2);
+      // Use the issue's position relative to the scroll area
+      const issueRect = issues[i].getBoundingClientRect();
+      const issueY = issueRect.top - scrollRect.top + scrollArea.scrollTop;
+      const mid = issueY + (issueRect.height / 2);
       if (y < mid) { issueIndex = i; break; }
     }
 

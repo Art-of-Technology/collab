@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import React, { useState } from "react";
 import {
@@ -323,22 +324,22 @@ function WorkSection({
   return (
     <div
       className={cn(
-        "rounded-2xl bg-collab-800 border border-collab-700 transition-all duration-200 flex-shrink-0",
+        "rounded-2xl bg-collab-800 border border-collab-700 transition-all duration-200 flex-shrink-0 overflow-hidden",
         expanded ? "w-[320px]" : "w-[56px]"
       )}
     >
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-3 p-4 hover:bg-collab-700 transition-colors rounded-t-2xl"
+        className={cn(
+          "w-full transition-colors",
+          expanded
+            ? "flex items-center gap-3 p-4 hover:bg-collab-700 rounded-t-2xl"
+            : "flex flex-col items-center justify-center p-2 pt-3 pb-3 hover:bg-collab-700 rounded-2xl h-full min-h-[120px]"
+        )}
       >
         {expanded ? (
-          <ChevronLeft className="w-4 h-4 text-collab-500 flex-shrink-0" />
-        ) : (
-          <ChevronRight className="w-4 h-4 text-collab-500 flex-shrink-0" />
-        )}
-
-        {expanded && (
           <>
+            <ChevronLeft className="w-4 h-4 text-collab-500 flex-shrink-0" />
             <div className="text-collab-500 flex-shrink-0">{icon}</div>
             <span className="text-sm font-medium text-collab-400 flex-1 text-left truncate">
               {title}
@@ -350,10 +351,9 @@ function WorkSection({
               {count}
             </span>
           </>
-        )}
-
-        {!expanded && (
-          <div className="flex flex-col items-center gap-1.5">
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <ChevronRight className="w-3.5 h-3.5 text-collab-600" />
             <div style={{ color: variantColor.dot }}>{icon}</div>
             <span
               className="text-[10px] font-medium px-1.5 py-0.5 rounded-lg"

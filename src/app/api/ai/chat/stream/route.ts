@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
-import { getDefaultAgent } from '@/lib/ai/agents/registry';
+import { getDefaultAgent, getAgent } from '@/lib/ai/agents/registry';
 import { getMcpToken, invalidateMcpToken } from '@/lib/ai/mcp-token';
 import { createMcpSession, McpClientSession, ClaudeTool } from '@/lib/ai/mcp-client';
+import { coclawManager } from '@/lib/coclaw/instance-manager';
+import { resolveApiKey } from '@/lib/coclaw/key-resolver';
+import { decryptVariable } from '@/lib/secrets/crypto';
+import type { ChannelConfigEntry } from '@/lib/coclaw/types';
+import {
+  createCoclawNotification,
+  CoclawNotificationType,
+} from '@/lib/coclaw/notifications';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const ANTHROPIC_MODEL = process.env.AI_MODEL || 'claude-sonnet-4-6';
@@ -19,6 +27,7 @@ interface ChatRequestBody {
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
   conversationId?: string;
   webSearchEnabled?: boolean;
+  agentSlug?: string;
 }
 
 export async function POST(req: Request) {
@@ -29,7 +38,7 @@ export async function POST(req: Request) {
     }
 
     const body: ChatRequestBody = await req.json();
-    const { message, context, history, conversationId, webSearchEnabled } = body;
+    const { message, context, history, conversationId, webSearchEnabled, agentSlug } = body;
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
@@ -52,9 +61,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 403 });
     }
 
-    // Load agent definition
-    const agent = await getDefaultAgent(prisma);
+    // Load agent definition — use requested agent or default
+    const agent = agentSlug
+      ? (await getAgent(agentSlug, prisma)) ?? (await getDefaultAgent(prisma))
+      : await getDefaultAgent(prisma);
 
+    // ── Coclaw Proxy Path ──
+    // If the selected agent is Coclaw, proxy to the user's Coclaw gateway instance
+    if (agent.slug === 'coclaw') {
+      const stream = await createCoclawProxyStream(
+        currentUser.id,
+        workspace.id,
+        message,
+        history,
+        conversationId,
+        agent,
+      );
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive',
+          'X-Accel-Buffering': 'no',
+        },
+      });
+    }
+
+    // ── Cleo Direct Path (Anthropic) ──
     // Get MCP token for this user+workspace
     let mcpToken: string;
     try {
@@ -114,8 +148,6 @@ export async function POST(req: Request) {
       workspaceSlug: workspace.slug || '',
       currentPage: context.currentPage,
     });
-
-
 
     // Create the streaming response with client-side MCP handling
     const stream = createAnthropicStreamWithMcp(
@@ -592,7 +624,7 @@ function createAnthropicStreamWithMcp(
         // Send conversation ID
         sendEvent(controller, {
           type: 'conversation',
-          conversationId,
+          conversationId: convoId,
         });
 
         // Send completion event
@@ -602,7 +634,7 @@ function createAnthropicStreamWithMcp(
         });
 
         // Persist assistant message
-        if (conversationId && fullTextContent) {
+        if (convoId && fullTextContent) {
           try {
             const agentRecord = await prisma.aIAgent
               .findUnique({ where: { slug: agent.slug }, select: { id: true } })
@@ -610,7 +642,7 @@ function createAnthropicStreamWithMcp(
 
             await prisma.aIMessage.create({
               data: {
-                conversationId,
+                conversationId: convoId,
                 agentId: agentRecord?.id || null,
                 role: 'assistant',
                 content: fullTextContent,
@@ -637,6 +669,278 @@ function createAnthropicStreamWithMcp(
         sendEvent(controller, {
           type: 'error',
           message: 'An error occurred while processing the response.',
+        });
+        controller.close();
+      }
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Coclaw Proxy — Translates OpenAI-compat SSE from Coclaw gateway to Collab SSE
+// ---------------------------------------------------------------------------
+
+async function createCoclawProxyStream(
+  userId: string,
+  workspaceId: string,
+  message: string,
+  history: Array<{ role: 'user' | 'assistant'; content: string }> | undefined,
+  conversationId: string | undefined,
+  agent: { slug: string; name: string; color: string; avatar?: string },
+): Promise<ReadableStream<Uint8Array>> {
+  const encoder = new TextEncoder();
+
+  function sendEvent(controller: ReadableStreamDefaultController, data: Record<string, unknown>) {
+    const event = `data: ${JSON.stringify(data)}\n\n`;
+    controller.enqueue(encoder.encode(event));
+  }
+
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        // Send agent info
+        sendEvent(controller, {
+          type: 'agent',
+          agent: { slug: agent.slug, name: agent.name, color: agent.color },
+        });
+
+        // Resolve API key for the user
+        let apiKeyResolution;
+        try {
+          apiKeyResolution = await resolveApiKey(userId, workspaceId);
+        } catch (keyError) {
+          console.error('[coclaw-proxy] API key resolution failed:', keyError);
+          sendEvent(controller, {
+            type: 'error',
+            message: 'No API key configured. Please add an AI provider key in Settings → AI Provider Keys.',
+          });
+          controller.close();
+          return;
+        }
+
+        // Get or spawn the user's Coclaw instance
+        const mcpToken = await getMcpToken(prisma, userId, workspaceId).catch(() => '');
+
+        // Load channel configs from DB
+        let channels: ChannelConfigEntry[] = [];
+        try {
+          const dbChannels = await prisma.coclawChannelConfig.findMany({
+            where: { userId, workspaceId, enabled: true },
+          });
+          channels = dbChannels.map((c) => {
+            let config: Record<string, unknown> = {};
+            try {
+              const decrypted = decryptVariable(c.config, workspaceId);
+              config = JSON.parse(decrypted) as Record<string, unknown>;
+            } catch {
+              // Skip channels with bad config
+            }
+            return { channelType: c.channelType, config, enabled: c.enabled };
+          }).filter((c) => Object.keys(c.config).length > 0);
+        } catch (channelErr) {
+          console.warn('[coclaw-proxy] Failed to load channel configs:', channelErr);
+        }
+
+        const embeddingApiUrl = process.env.EMBEDDING_API_URL || 'http://embeddings:3360';
+        const spawnConfig = {
+          provider: apiKeyResolution.provider,
+          apiKey: apiKeyResolution.key,
+          apiKeySource: apiKeyResolution.source,
+          collabApiUrl: `${process.env.COLLAB_INTERNAL_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api`,
+          mcpToken,
+          userId,
+          workspaceId,
+          memoryBackend: 'collab' as const,
+          qdrantUrl: process.env.QDRANT_URL || 'http://localhost:6333',
+          qdrantCollection: process.env.QDRANT_COLLECTION || 'collab_context',
+          embeddingProvider: `custom:${embeddingApiUrl}`,
+          embeddingModel: process.env.EMBEDDING_MODEL || 'all-MiniLM-L6-v2',
+          embeddingDimensions: parseInt(process.env.EMBEDDING_DIMENSIONS || '384', 10),
+          channels,
+          port: 0, // Will be allocated by instance manager
+        };
+
+        let instance;
+        try {
+          instance = await coclawManager.getOrCreateInstance(userId, workspaceId, spawnConfig);
+        } catch (spawnError) {
+          console.error('[coclaw-proxy] Failed to spawn Coclaw instance:', spawnError);
+          sendEvent(controller, {
+            type: 'error',
+            message: spawnError instanceof Error ? spawnError.message : 'Failed to start your Coclaw agent.',
+          });
+          controller.close();
+          return;
+        }
+
+        // Build OpenAI-compat request for Coclaw gateway
+        const openaiMessages: Array<{ role: string; content: string }> = [];
+        if (history?.length) {
+          for (const msg of history) {
+            openaiMessages.push({ role: msg.role, content: msg.content });
+          }
+        }
+        openaiMessages.push({ role: 'user', content: message });
+
+        // In remote mode, proxy through coclaw-manager; in local mode, hit gateway directly
+        const managerUrl = process.env.COCLAW_MANAGER_URL;
+        let gatewayUrl: string;
+        const gatewayHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (managerUrl) {
+          const base = managerUrl.replace(/\/+$/, '');
+          gatewayUrl = `${base}/api/instances/${encodeURIComponent(userId)}/${encodeURIComponent(workspaceId)}/proxy/v1/chat/completions`;
+          const token = process.env.COCLAW_MANAGER_TOKEN;
+          if (token) gatewayHeaders['Authorization'] = `Bearer ${token}`;
+        } else {
+          gatewayUrl = `http://127.0.0.1:${instance.port}/v1/chat/completions`;
+        }
+
+        // Proxy to Coclaw gateway with streaming
+        let gatewayResponse;
+        try {
+          gatewayResponse = await fetch(gatewayUrl, {
+            method: 'POST',
+            headers: gatewayHeaders,
+            body: JSON.stringify({
+              model: 'default',
+              messages: openaiMessages,
+              stream: true,
+            }),
+          });
+        } catch (fetchError) {
+          console.error('[coclaw-proxy] Gateway fetch failed:', fetchError);
+          sendEvent(controller, {
+            type: 'error',
+            message: 'Coclaw agent is starting up. Please try again in a few seconds.',
+          });
+          controller.close();
+          return;
+        }
+
+        if (!gatewayResponse.ok) {
+          const errText = await gatewayResponse.text().catch(() => 'Unknown error');
+          console.error('[coclaw-proxy] Gateway error:', gatewayResponse.status, errText);
+          sendEvent(controller, {
+            type: 'error',
+            message: `Coclaw agent error (${gatewayResponse.status}). Please try again.`,
+          });
+          controller.close();
+          return;
+        }
+
+        if (!gatewayResponse.body) {
+          sendEvent(controller, { type: 'error', message: 'No response from Coclaw agent.' });
+          controller.close();
+          return;
+        }
+
+        // Parse OpenAI-compat SSE stream from Coclaw gateway
+        // Format: data: {"id":"chatcmpl-...","choices":[{"delta":{"content":"text"},"finish_reason":null}]}
+        const reader = gatewayResponse.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullTextContent = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === '[DONE]' || !jsonStr) continue;
+
+            let chunk: any;
+            try {
+              chunk = JSON.parse(jsonStr);
+            } catch {
+              continue;
+            }
+
+            // Extract text delta from OpenAI-compat format
+            const choice = chunk.choices?.[0];
+            if (!choice) continue;
+
+            const deltaContent = choice.delta?.content;
+            if (deltaContent) {
+              fullTextContent += deltaContent;
+              sendEvent(controller, { type: 'text', content: deltaContent });
+            }
+
+            // Check for finish
+            if (choice.finish_reason === 'stop') {
+              break;
+            }
+          }
+        }
+
+        // Persist conversation + messages
+        let convoId = conversationId;
+        try {
+          if (!convoId) {
+            const agentRecord = await prisma.aIAgent
+              .findUnique({ where: { slug: agent.slug }, select: { id: true } })
+              .catch(() => null);
+            const conversation = await prisma.aIConversation.create({
+              data: {
+                userId,
+                workspaceId,
+                agentId: agentRecord?.id || null,
+                title: message.substring(0, 100),
+              },
+            });
+            convoId = conversation.id;
+          }
+
+          // Save user message
+          await prisma.aIMessage.create({
+            data: { conversationId: convoId, userId, role: 'user', content: message },
+          });
+
+          // Save assistant message
+          if (fullTextContent) {
+            const agentRecord = await prisma.aIAgent
+              .findUnique({ where: { slug: agent.slug }, select: { id: true } })
+              .catch(() => null);
+            await prisma.aIMessage.create({
+              data: {
+                conversationId: convoId,
+                agentId: agentRecord?.id || null,
+                role: 'assistant',
+                content: fullTextContent,
+              },
+            });
+          }
+        } catch {
+          // Continue without persistence
+        }
+
+        // Create Coclaw notification for this response
+        // (will be auto-read if user is viewing the chat; otherwise persists as unread)
+        if (fullTextContent) {
+          const preview = fullTextContent.length > 120
+            ? fullTextContent.substring(0, 117) + '...'
+            : fullTextContent;
+          createCoclawNotification({
+            userId,
+            type: CoclawNotificationType.COCLAW_RESPONSE,
+            content: `Coclaw: ${preview}`,
+          }).catch(() => {});
+        }
+
+        // Send conversation + done events
+        sendEvent(controller, { type: 'conversation', conversationId: convoId });
+        sendEvent(controller, { type: 'done', fullContent: fullTextContent });
+        controller.close();
+      } catch (error) {
+        console.error('[coclaw-proxy] Stream error:', error);
+        sendEvent(controller, {
+          type: 'error',
+          message: 'An error occurred while communicating with your Coclaw agent.',
         });
         controller.close();
       }

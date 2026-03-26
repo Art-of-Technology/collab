@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -10,17 +10,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Search,
-  Plus,
   Grid,
   List,
   Table,
   Calendar,
   BarChart3,
   Save,
-  RotateCcw,
-  Eye,
-  EyeOff,
   Loader2,
 } from 'lucide-react';
 import KanbanViewRenderer from './renderers/KanbanViewRenderer';
@@ -28,35 +23,23 @@ import ListViewRenderer from './renderers/ListViewRenderer';
 import TableViewRenderer from './renderers/TableViewRenderer';
 import TimelineViewRenderer from './renderers/TimelineViewRenderer';
 import PlanningViewRenderer from './renderers/PlanningViewRenderer';
-import ViewTypeSelector from './shared/ViewTypeSelector';
-import { ViewProjectSelector } from './selectors/ViewProjectSelector';
-import { ViewGroupingSelector } from './selectors/ViewGroupingSelector';
-import { ViewDisplayPropertiesSelector } from './selectors/ViewDisplayPropertiesSelector';
-import { ViewUpdatedAtSelector } from './selectors/ViewUpdatedAtSelector';
-import { StatusSelector } from './selectors/StatusSelector';
-import { PrioritySelector } from './selectors/PrioritySelector';
-import { TypeSelector } from './selectors/TypeSelector';
-import { AssigneeSelector } from './selectors/AssigneeSelector';
-import { ReporterSelector } from './selectors/ReporterSelector';
-import { LabelsSelector } from './selectors/LabelsSelector';
-import { ActionFiltersSelector, type ActionFilter } from './selectors/ActionFiltersSelector';
-import { useActionFilteredIssues } from '@/hooks/useActionFilteredIssues';
+
 import { useToast } from '@/hooks/use-toast';
 import { useViewPositions, mergeIssuesWithViewPositions } from '@/hooks/queries/useViewPositions';
 import { useProjects } from '@/hooks/queries/useProjects';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIssuesByWorkspace, issueKeys } from '@/hooks/queries/useIssues';
-import React, { useEffect } from 'react';
 import { useRealtimeWorkspaceEvents } from '@/hooks/useRealtimeWorkspaceEvents';
 import { IS_KANBAN_REALTIME_ENABLED } from '@/lib/featureFlags';
-import { Bell, BellOff, Sparkles } from 'lucide-react';
 import { NewIssueModal } from '@/components/issue';
 import { useRouter } from 'next/navigation';
+import { useActionFilteredIssues } from '@/hooks/useActionFilteredIssues';
 
-import { useViewFilters } from '@/context/ViewFiltersContext';
-import PageHeader, { pageHeaderButtonStyles, pageHeaderSearchStyles } from '@/components/layout/PageHeader';
-import { cn } from '@/lib/utils';
-import { AIFilterBar, convertToViewFilters, type ParsedFilter } from '@/components/ai';
+// ─── New filter system ──────────────────────────────────
+import { useViewFilterState } from '@/hooks/useViewFilterState';
+import type { ActionFilter } from '@/hooks/useViewFilterState';
+import ViewTopBar from './shared/ViewTopBar';
+
 
 interface ViewRendererProps {
   view: {
@@ -81,10 +64,10 @@ interface ViewRendererProps {
       color?: string;
       statuses?: any[];
     }>;
-    projectIds?: string[]; // For dynamic views
+    projectIds?: string[];
     isDefault: boolean;
     isFavorite: boolean;
-    isDynamic?: boolean; // Flag for AI-generated dynamic views
+    isDynamic?: boolean;
     createdBy: string;
     ownerId?: string;
     sharedWith: string[];
@@ -107,55 +90,71 @@ const VIEW_TYPE_ICONS = {
   PLANNING: Calendar
 };
 
+// ─── Component ──────────────────────────────────────────
+
 export default function ViewRenderer({
   view,
   issues: initialIssues,
   workspace,
   currentUser
 }: ViewRendererProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [newViewName, setNewViewName] = useState('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const router = useRouter();
+
+  // ─── UI state ──────────────────────────────────────────
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [newViewName, setNewViewName] = useState('');
   const [isNewIssueOpen, setIsNewIssueOpen] = useState(false);
   const [isFollowingProject, setIsFollowingProject] = useState(false);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
+  const [recentIssueCreated, setRecentIssueCreated] = useState(false);
   const pendingColumnOrdersRef = useRef<Record<string, number>>({});
   const commitColumnOrderRef = useRef<any>(null);
-  const handleFilterChangeRef = useRef<typeof handleFilterChange | null>(null);
 
-  // ViewFilters context
+  // ─── New unified filter/config state (URL-persisted) ───
+  const filterState = useViewFilterState({ view });
   const {
-    isOpen: isViewFiltersOpen,
-    setIsOpen: setIsViewFiltersOpen,
-    toggleOpen: toggleViewFilters,
-    filters: viewFiltersState,
-    setFilters: setViewFiltersState,
-    setCurrentView,
-    setIssues,
-    setWorkspace,
-    setCurrentUser,
-    setOnAssigneesChangeFromViewOptions
-  } = useViewFilters();
-  // Fetch all workspace projects for the project selector
+    scope,
+    search,
+    filters: activeFilters,
+    config: activeConfig,
+    setFilter,
+    setScope,
+    setSearch,
+    clearAllFilters,
+    setLayout,
+    setGroupBy,
+    setSortBy,
+    setDisplayProperties,
+    setProjectIds,
+    resetAll,
+    activeFilterCount,
+    hasChanges,
+    getConfigForSave,
+    getFiltersForSave,
+    savedConfig,
+  } = filterState;
+
+  // Derived config fields
+  const layout = activeConfig.layout;
+  const groupBy = activeConfig.groupBy;
+  const displayProperties = activeConfig.displayProperties;
+  const projectIds = activeConfig.projectIds;
+
+  // ─── Data fetching (preserved from original) ───────────
+
   const { data: allProjects = [] } = useProjects({
     workspaceId: workspace.id,
     includeStats: false,
   });
 
-  // Fetch workspace members for assignee selector
   const { data: workspaceMembers = [] } = useQuery({
     queryKey: ['workspace-members', workspace.id],
     queryFn: async () => {
       const response = await fetch(`/api/workspaces/${workspace.id}/members`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch members');
-      }
+      if (!response.ok) throw new Error('Failed to fetch members');
       const members = await response.json();
-
-      // Transform the data to extract user objects from members
       return members.map((member: any) => ({
         id: member.user.id,
         name: member.user.name,
@@ -172,50 +171,32 @@ export default function ViewRenderer({
         avatarSkinTone: member.user.avatarSkinTone,
       }));
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch workspace labels for labels selector
   const { data: workspaceLabels = [] } = useQuery({
     queryKey: ['workspace-labels', workspace.id],
     queryFn: async () => {
       const response = await fetch(`/api/workspaces/${workspace.id}/labels`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch labels');
-      }
+      if (!response.ok) throw new Error('Failed to fetch labels');
       const data = await response.json();
       return data.labels || [];
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 
-
-
-  // Realtime: subscribe to workspace-level events to keep issues and positions fresh
-  // Allow invalidations so view positions update after drag-and-drop unless feature flag disables it for Kanban
-  const suppressRealtimeForKanban = view.displayType === 'KANBAN' && !IS_KANBAN_REALTIME_ENABLED;
+  // Realtime subscriptions
+  const suppressRealtimeForKanban = layout === 'KANBAN' && !IS_KANBAN_REALTIME_ENABLED;
   useRealtimeWorkspaceEvents({ workspaceId: workspace.id, viewId: view.id }, suppressRealtimeForKanban);
 
-  // Temporary state for filters and display (resets on refresh)
-  const [tempFilters, setTempFilters] = useState<Record<string, string[] | ActionFilter[]>>({});
-  const [tempDisplayType, setTempDisplayType] = useState(view.displayType);
-  const [tempGrouping, setTempGrouping] = useState(view.grouping?.field || 'none');
-  const [tempOrdering, setTempOrdering] = useState('manual');
-  const [tempDisplayProperties, setTempDisplayProperties] = useState<string[]>(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
-  // For dynamic views, use projectIds from URL params; otherwise use projects array
-  const [tempProjectIds, setTempProjectIds] = useState(
-    view.projectIds?.length ? view.projectIds : view.projects.map(p => p.id)
-  );
-  const [recentIssueCreated, setRecentIssueCreated] = useState(false);
-
-  // Fetch view-specific issue positions for proper ordering (KANBAN or manual ordering)
-  // Skip for dynamic views since they don't have saved positions
+  // View positions for Kanban ordering
   const { data: viewPositionsData, isLoading: isLoadingViewPositions } = useViewPositions(
     view.id,
-    !view.isDynamic && (view.displayType === 'KANBAN' || tempOrdering === 'manual'),
+    !view.isDynamic && (layout === 'KANBAN' || true), // always load for manual ordering
   );
-  // Load project follow status (for the primary project of this view)
-  const primaryProjectId = useMemo(() => (tempProjectIds?.[0] || view.projects?.[0]?.id || ''), [tempProjectIds, view.projects]);
+
+  // Follow state
+  const primaryProjectId = useMemo(() => (projectIds?.[0] || view.projects?.[0]?.id || ''), [projectIds, view.projects]);
   useEffect(() => {
     let active = true;
     (async () => {
@@ -226,7 +207,7 @@ export default function ViewRenderer({
           const data = await res.json();
           if (active) setIsFollowingProject(!!data.isFollowing);
         }
-      } catch (e) {
+      } catch {
         // ignore
       }
     })();
@@ -239,703 +220,238 @@ export default function ViewRenderer({
     try {
       const method = isFollowingProject ? 'DELETE' : 'POST';
       const res = await fetch(`/api/projects/${primaryProjectId}/follow`, { method });
-      if (res.ok) {
-        setIsFollowingProject(prev => !prev);
-      }
+      if (res.ok) setIsFollowingProject(prev => !prev);
     } finally {
       setIsTogglingFollow(false);
     }
   }, [primaryProjectId, isFollowingProject, isTogglingFollow]);
-  const [tempShowSubIssues, setTempShowSubIssues] = useState(true);
 
-  // Update ordering selection and invalidate caches; positions are not reset here
-  // Sorting is locked to manual; no-op for ordering changes
-  const handleOrderingChange = useCallback(async () => {
-    setTempOrdering('manual');
-  }, []);
+  // ─── Issue data merging ────────────────────────────────
 
-  // Determine which projects are newly selected (not in original view)
   const originalProjectIds = useMemo(() => view.projects.map(p => p.id).sort(), [view.projects]);
   const additionalProjectIds = useMemo(() => {
-    return tempProjectIds.filter(id => !originalProjectIds.includes(id));
-  }, [tempProjectIds, originalProjectIds]);
+    return projectIds.filter(id => !originalProjectIds.includes(id));
+  }, [projectIds, originalProjectIds]);
 
-  // Check if view has active filters (other than just project filtering)
-  const hasActiveFilters = useMemo(() => {
+  // Check if view has active DB-saved filters
+  const hasActiveDbFilters = useMemo(() => {
     if (!view.filters || typeof view.filters !== 'object') return false;
-
     const filters = view.filters as Record<string, any>;
     return Object.entries(filters).some(([key, value]) => {
-      // Skip project filtering as that's handled separately
       if (key === 'project') return false;
       return Array.isArray(value) && value.length > 0;
     });
   }, [view.filters]);
 
-  // Check if any temp filters differ from the view's original filters
-  const tempFiltersChanged = useMemo(() => {
-    if (Object.keys(tempFilters).length === 0) return false;
+  // Detect if active filters differ from saved DB filters
+  const hasFilterOverrides = useMemo(() => {
+    const saved = view.filters || {};
+    const simpleKeys = ['status', 'priority', 'type', 'assignee', 'reporter', 'labels', 'updatedAt'];
+    for (const key of simpleKeys) {
+      const activeArr = (activeFilters as any)[key] || [];
+      const savedArr = saved[key] || [];
+      if (JSON.stringify([...activeArr].sort()) !== JSON.stringify([...savedArr].sort())) return true;
+    }
+    if (JSON.stringify(activeFilters.actions || []) !== JSON.stringify(saved.actions || [])) return true;
+    return false;
+  }, [activeFilters, view.filters]);
 
-    // Check each temp filter against the original view filter
-    return Object.entries(tempFilters).some(([filterKey, tempValues]) => {
-      const viewValues = view.filters?.[filterKey] || [];
+  const shouldFetchLiveData = !hasActiveDbFilters || hasFilterOverrides || recentIssueCreated;
 
-      // Handle ActionFilter[] type for actions
-      if (filterKey === 'actions') {
-        return JSON.stringify(tempValues) !== JSON.stringify(viewValues);
-      }
-
-      // Handle string[] type for other filters
-      const tempArray = Array.isArray(tempValues) ? tempValues : [];
-      const viewArray = Array.isArray(viewValues) ? viewValues : [];
-
-      return JSON.stringify(tempArray.sort()) !== JSON.stringify(viewArray.sort());
-    });
-  }, [tempFilters, view.filters]);
-
-  // Fetch live data if:
-  // 1. View has no active filters, OR
-  // 2. User has added/changed any filters that weren't in the original view, OR
-  // 3. An issue was recently created (to ensure new issues appear in filtered views)
-  const shouldFetchLiveData = !hasActiveFilters || tempFiltersChanged || recentIssueCreated;
-
-  // Fetch live workspace issues to supplement initialIssues, filtered by view's projects
   const { data: liveIssuesData } = useIssuesByWorkspace(
     shouldFetchLiveData ? workspace.id : '',
-    shouldFetchLiveData ? (tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)) : undefined
+    shouldFetchLiveData ? (projectIds.length > 0 ? projectIds : view.projects.map(p => p.id)) : undefined
   );
 
-  // Fetch issues from additional projects if any are selected
   const { data: additionalIssuesData, isLoading: isLoadingAdditionalIssues } = useQuery({
     queryKey: ['additional-issues', workspace.id, additionalProjectIds.sort().join(',')],
     queryFn: async () => {
       if (additionalProjectIds.length === 0) return { issues: [] };
-
       const params = new URLSearchParams({
         workspaceId: workspace.id,
         projectIds: additionalProjectIds.join(',')
       });
-
       const response = await fetch(`/api/issues?${params}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch additional issues');
-      }
+      if (!response.ok) throw new Error('Failed to fetch additional issues');
       return response.json();
     },
     enabled: additionalProjectIds.length > 0,
     staleTime: 5000,
   });
 
-  // Merge original issues with live data and additional issues from newly selected projects
   const allIssues = useMemo(() => {
-    // When view has filters and no temp filters changed AND no recent issue creation, prioritize server-side filtered initialIssues
-    // When no filters OR temp filters changed OR recent issue created, use live data for real-time updates
-    const baseIssues = (hasActiveFilters && !tempFiltersChanged && !recentIssueCreated)
+    const baseIssues = (hasActiveDbFilters && !hasFilterOverrides && !recentIssueCreated)
       ? initialIssues
       : (liveIssuesData?.issues || initialIssues);
     const additional = additionalIssuesData?.issues || [];
-
-    // Remove duplicates by ID when merging
     const issueMap = new Map();
-    [...baseIssues, ...additional].forEach(issue => {
-      issueMap.set(issue.id, issue);
-    });
-
+    [...baseIssues, ...additional].forEach(issue => issueMap.set(issue.id, issue));
     return Array.from(issueMap.values());
-  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveFilters, tempFiltersChanged, recentIssueCreated]);
+  }, [initialIssues, liveIssuesData, additionalIssuesData, hasActiveDbFilters, hasFilterOverrides, recentIssueCreated]);
 
-  // Use merged issues for filtering directly
+  // ─── 3-Layer Filter Pipeline ───────────────────────────
+  // Layer 1: Action filters (async)
+  // Layer 2: Scope + all unified filters
+  // Layer 3: Search
 
-  // Helper function to handle filter changes and trigger data refetch when needed
-  const handleFilterChange = useCallback((filterKey: string, newValues: string[] | ActionFilter[], originalValues: string[] | ActionFilter[]) => {
-    const isDifferent = JSON.stringify(newValues) !== JSON.stringify(originalValues);
+  const actionFilters = useMemo<ActionFilter[]>(() => {
+    return (activeFilters.actions as ActionFilter[]) || [];
+  }, [activeFilters.actions]);
 
-    if (isDifferent) {
-      setTempFilters(prev => ({ ...prev, [filterKey]: newValues }));
-
-      // Invalidate and refetch workspace issues to get newly filtered issues
-      queryClient.invalidateQueries({
-        queryKey: [...issueKeys.byWorkspace(workspace.id)]
-      });
-    } else {
-      // Remove the filter if it matches the original view filter
-      setTempFilters(prev => {
-        const { [filterKey]: removed, ...rest } = prev;
-        return rest;
-      });
-    }
-  }, [queryClient, workspace.id]);
-
-  // Keep ref updated with latest handleFilterChange
-  useEffect(() => {
-    handleFilterChangeRef.current = handleFilterChange;
-  }, [handleFilterChange]);
-
-  // Track the last saved state to properly detect changes
-  const [lastSavedState, setLastSavedState] = useState({
-    displayType: view.displayType,
-    grouping: view.grouping?.field || 'none',
-    ordering: 'manual',
-    displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
-    filters: view.filters || {}
-  });
-
-  // Update lastSavedState when view changes (e.g., switching views or data refetch)
-  useEffect(() => {
-    setLastSavedState({
-      displayType: view.displayType,
-      grouping: view.grouping?.field || 'none',
-      ordering: 'manual',
-      displayProperties: Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"],
-      filters: view.filters || {}
-    });
-    // Reset temp project IDs when view changes
-    // For dynamic views, prefer projectIds (from URL) if specified; otherwise use projects array
-    setTempProjectIds(
-      view.projectIds?.length ? view.projectIds : view.projects.map(p => p.id)
-    );
-    // Sync temp display properties with view on view change
-    setTempDisplayProperties(Array.isArray(view.fields) ? view.fields : ["Priority", "Status", "Assignee"]);
-    // Reset temp filters when view changes
-    setTempFilters({});
-  }, [view.id, view.displayType, view.grouping?.field, view.sorting?.field, view.fields, view.filters, view.projects, view.projectIds]);
-
-  // Update ViewFilters context with current data and reset context filters on view change
-  useEffect(() => {
-    setCurrentView(view);
-    setWorkspace(workspace);
-    setCurrentUser(currentUser);
-    // Reset ViewFilters context state when view changes to prevent filter bleeding between views
-    setViewFiltersState({
-      assignees: view.filters?.assignee || [],
-      labels: view.filters?.labels || [],
-      priority: view.filters?.priority || [],
-      projects: view.projects?.map((p: any) => p.id) || []
-    });
-  }, [view.id, view, workspace, currentUser, setCurrentView, setWorkspace, setCurrentUser, setViewFiltersState]);
-
-
-  // Issue type filtering state
-  const [issueFilterType, setIssueFilterType] = useState<'all' | 'active' | 'backlog'>('all');
-
-  // AI Filter state
-  const [aiFilters, setAiFilters] = useState<ParsedFilter[]>([]);
-  const [showAIFilter, setShowAIFilter] = useState(false);
-
-  // Handle AI filter changes
-  const handleAIFiltersChange = useCallback((filters: ParsedFilter[]) => {
-    setAiFilters(filters);
-
-    // Convert AI filters to view filter format and apply
-    const viewFilters = convertToViewFilters(filters);
-
-    // Apply each filter type
-    if (viewFilters.status) {
-      setTempFilters(prev => ({ ...prev, status: viewFilters.status }));
-    }
-    if (viewFilters.priority) {
-      setTempFilters(prev => ({ ...prev, priority: viewFilters.priority }));
-    }
-    if (viewFilters.assigneeId) {
-      const assigneeValue = viewFilters.assigneeId === 'currentUser'
-        ? [currentUser.id]
-        : viewFilters.assigneeId === null
-          ? ['unassigned']
-          : [viewFilters.assigneeId];
-      setTempFilters(prev => ({ ...prev, assignee: assigneeValue }));
-    }
-    if (viewFilters.labels) {
-      setTempFilters(prev => ({ ...prev, labels: viewFilters.labels }));
-    }
-    if (viewFilters.search) {
-      setSearchQuery(viewFilters.search);
-    }
-
-    // Trigger data refetch
-    queryClient.invalidateQueries({
-      queryKey: [...issueKeys.byWorkspace(workspace.id)]
-    });
-  }, [currentUser.id, queryClient, workspace.id]);
-
-  // Check if current state differs from last saved state
-  const hasChanges = useMemo(() => {
-    const sortedTemp = [...tempDisplayProperties].sort();
-    const sortedSaved = [...(lastSavedState.displayProperties || [])].sort();
-    // For dynamic views, compare against projectIds; otherwise use projects array
-    const originalProjIds = view.projectIds?.length ? view.projectIds : view.projects.map(p => p.id);
-    return (
-      Object.keys(tempFilters).length > 0 ||
-      tempDisplayType !== lastSavedState.displayType ||
-      tempGrouping !== lastSavedState.grouping ||
-      tempOrdering !== lastSavedState.ordering ||
-      JSON.stringify(sortedTemp) !== JSON.stringify(sortedSaved) ||
-      JSON.stringify([...tempProjectIds].sort()) !== JSON.stringify([...originalProjIds].sort())
-    );
-  }, [tempFilters, tempDisplayType, tempGrouping, tempOrdering, tempDisplayProperties, tempProjectIds, lastSavedState, view.projects, view.projectIds]);
-
-  // Reset to view defaults
-  const resetToDefaults = () => {
-    setTempFilters({});
-    setTempDisplayType(lastSavedState.displayType);
-    setTempGrouping(lastSavedState.grouping);
-    setTempOrdering(lastSavedState.ordering);
-    setTempDisplayProperties(lastSavedState.displayProperties);
-    // For dynamic views, prefer projectIds if specified
-    setTempProjectIds(
-      view.projectIds?.length ? view.projectIds : view.projects.map(p => p.id)
-    );
-    setTempShowSubIssues(true);
-  };
-
-  // Apply all filters (view + temp)
-  const allFilters = useMemo(() => {
-    const combinedFilters = { ...(view.filters || {}), ...tempFilters };
-    return combinedFilters;
-  }, [view.filters, tempFilters]);
-
-  // Sync dropdown assignees to View Options for bidirectional sync
-  const isSyncingFromViewOptionsRef = useRef(false);
-  const previousDropdownAssigneesRef = useRef<string[]>([]);
-  const previousViewOptionsAssigneesRef = useRef<string[]>([]);
-  
-  // Sync Dropdown → View Options
-  useEffect(() => {
-    const dropdownAssignees = allFilters.assignee || [];
-    const currentViewAssignees = viewFiltersState.assignees || [];
-    
-    // Only sync if dropdown actually changed (not when View Options changes)
-    const dropdownChanged = JSON.stringify([...dropdownAssignees].sort()) !== JSON.stringify([...previousDropdownAssigneesRef.current].sort());
-    
-    if (isSyncingFromViewOptionsRef.current) {
-      isSyncingFromViewOptionsRef.current = false;
-      previousDropdownAssigneesRef.current = dropdownAssignees;
-      return;
-    }
-    
-    // Only sync if dropdown changed, not when View Options changed
-    if (dropdownChanged) {
-      // Preserve 'unassigned' from View Options if it exists, merge with dropdown member IDs
-      const currentHasUnassigned = currentViewAssignees.includes('unassigned');
-      const memberIdsFromViewOptions = currentViewAssignees.filter(id => id !== 'unassigned');
-      
-      // Compare only member IDs (excluding 'unassigned')
-      const memberIdsChanged = JSON.stringify([...dropdownAssignees].sort()) !== JSON.stringify([...memberIdsFromViewOptions].sort());
-      
-      if (memberIdsChanged) {
-        // Merge: keep 'unassigned' if it was in View Options, add dropdown member IDs
-        const newAssignees = currentHasUnassigned 
-          ? ['unassigned', ...dropdownAssignees]
-          : dropdownAssignees;
-        
-        setViewFiltersState({
-          ...viewFiltersState,
-          assignees: newAssignees
-        });
-      }
-    }
-    
-    previousDropdownAssigneesRef.current = dropdownAssignees;
-  }, [allFilters.assignee, setViewFiltersState, viewFiltersState.assignees]);
-  
-  // Sync View Options → Dropdown
-  useEffect(() => {
-    const currentViewAssignees = viewFiltersState.assignees || [];
-    const currentDropdownAssignees = allFilters.assignee || [];
-    
-    // Only sync if View Options actually changed (not when dropdown changes)
-    const viewOptionsChanged = JSON.stringify([...currentViewAssignees].sort()) !== JSON.stringify([...previousViewOptionsAssigneesRef.current].sort());
-    
-    if (!viewOptionsChanged) {
-      previousViewOptionsAssigneesRef.current = currentViewAssignees;
-      return;
-    }
-    
-    // Filter out 'unassigned' since AssigneeSelector doesn't support it
-    const memberIdsOnly = currentViewAssignees.filter((id: string) => id !== 'unassigned');
-    const memberIdsFromDropdown = currentDropdownAssignees.filter((id: string) => id !== 'unassigned');
-    
-    // Compare only member IDs (excluding 'unassigned')
-    const memberIdsChanged = JSON.stringify([...memberIdsOnly].sort()) !== JSON.stringify([...memberIdsFromDropdown].sort());
-    
-    if (memberIdsChanged) {
-      isSyncingFromViewOptionsRef.current = true;
-      
-      // Update tempFilters to match View Options selection (only member IDs)
-      setTempFilters(prev => {
-        const viewAssignees = view.filters?.assignee || [];
-        const sortedNewAssignees = [...memberIdsOnly].sort();
-        const sortedViewAssignees = [...viewAssignees].sort();
-        
-        // If matches view filter, remove from tempFilters
-        if (JSON.stringify(sortedNewAssignees) === JSON.stringify(sortedViewAssignees)) {
-          const { assignee, ...rest } = prev;
-          return rest;
-        }
-        
-        // Otherwise, update tempFilters with member IDs only
-        return {
-          ...prev,
-          assignee: memberIdsOnly
-        };
-      });
-    }
-    
-    previousViewOptionsAssigneesRef.current = currentViewAssignees;
-  }, [viewFiltersState.assignees, view.filters?.assignee, allFilters.assignee,setTempFilters]);
-
-  // Callback for View Options to update dropdown filter
-  // This is called immediately when View Options changes, but the actual sync
-  // is handled by the useEffect that watches viewFiltersState.assignees
-  const handleViewOptionsAssigneeChange = useCallback((assignees: unknown) => {
-    // Guard against Event objects and ensure assignees is an array
-    if (
-      !assignees ||
-      assignees instanceof Event ||
-      (typeof assignees === 'object' && assignees !== null && !Array.isArray(assignees))
-    ) {
-      console.warn('Invalid assignees passed to handleViewOptionsAssigneeChange:', assignees);
-      return;
-    }
-    
-    // This callback is called but the actual sync is handled by useEffect
-    // that watches viewFiltersState.assignees to avoid timing issues
-  }, []);
-
-  // Set callback in context for View Options
-  useEffect(() => {
-    setOnAssigneesChangeFromViewOptions(handleViewOptionsAssigneeChange);
-    return () => setOnAssigneesChangeFromViewOptions(undefined);
-  }, [handleViewOptionsAssigneeChange, setOnAssigneesChangeFromViewOptions]);
-
-  // Memoize action filters to prevent reference instability
-  const actionFilters = useMemo(() => {
-    return (allFilters.actions as ActionFilter[]) || [];
-  }, [allFilters.actions]);
-
-  // Apply action filters first (async filtering)
-  const {
-    filteredIssues: actionFilteredIssues
-  } = useActionFilteredIssues({
+  const { filteredIssues: actionFilteredIssues } = useActionFilteredIssues({
     issues: allIssues,
     actionFilters,
     workspaceId: workspace.id
   });
 
-  // Create a sorted copy of tempProjectIds for stable comparison and filtering
-  const sortedTempProjectIds = useMemo(() =>
-    [...tempProjectIds].sort(), [tempProjectIds]
-  );
+  const sortedProjectIds = useMemo(() => [...projectIds].sort(), [projectIds]);
 
-  // Apply view filters and search
   const filteredIssues = useMemo(() => {
-    // Start with action-filtered issues instead of all issues
     let filtered = mergeIssuesWithViewPositions(actionFilteredIssues, viewPositionsData?.positions || []);
-    // Apply project filtering if tempProjectIds differs from original view projects
-    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(sortedTempProjectIds);
 
+    // Project filtering
+    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(sortedProjectIds);
     if (projectSelectionChanged) {
-      if (tempProjectIds.length === 0) {
-        // If no projects selected, show no issues
+      if (projectIds.length === 0) {
         filtered = [];
       } else {
-        // Filter to selected projects
-        filtered = filtered.filter(issue => {
-          return sortedTempProjectIds.includes(issue.projectId);
-        });
+        filtered = filtered.filter(issue => sortedProjectIds.includes(issue.projectId));
       }
     }
 
-    // Apply issue type filter (all/active/backlog)
-    switch (issueFilterType) {
+    // Layer 2a: Scope filter
+    switch (scope) {
       case 'active':
         filtered = filtered.filter(issue => {
-          // Use projectStatus if available, otherwise fallback to legacy fields
           const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
           const statusLower = status.toLowerCase();
-          return statusLower !== 'done' &&
-            statusLower !== 'backlog' &&
-            statusLower !== 'cancelled' &&
-            statusLower !== 'to_do'; // Todo items should be in backlog, not active
+          return statusLower !== 'done' && statusLower !== 'backlog' && statusLower !== 'cancelled' && statusLower !== 'to_do';
         });
         break;
       case 'backlog':
         filtered = filtered.filter(issue => {
-          // Use projectStatus if available, otherwise fallback to legacy fields
           const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
           const statusLower = status.toLowerCase();
           return statusLower === 'backlog' || statusLower === 'to_do';
         });
         break;
-      default:
-        // 'all' - no filtering
-        break;
     }
 
-    // Apply search filter
-    if (searchQuery) {
-      filtered = filtered.filter(issue =>
-        issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        issue.issueKey?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        issue.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
+    // Layer 2b: Unified filters (single pass through all filter keys)
+    Object.entries(activeFilters).forEach(([filterKey, filterValues]) => {
+      if (filterKey === 'actions') return; // Already handled by useActionFilteredIssues
+      if (!Array.isArray(filterValues) || filterValues.length === 0) return;
 
-    // Apply combined filters (from view settings and temp filters)
-    Object.entries(allFilters).forEach(([filterKey, filterValues]) => {
-      if (Array.isArray(filterValues) && filterValues.length > 0) {
-        filtered = filtered.filter(issue => {
-          switch (filterKey) {
-            case 'status':
-              return filterValues.includes(issue.statusId);
-            case 'priority':
-              return filterValues.includes(issue.priority);
-            case 'type':
-              const fvs = (filterValues as string[]).map(v => v.toUpperCase());
-              return fvs.includes((issue.type || '').toUpperCase());
-            case 'assignee':
-              const assigneeId = issue.assigneeId || 'unassigned';
-              return filterValues.includes(assigneeId);
-            case 'reporter':
-              const reporterId = issue.reporterId || 'unassigned';
-              return filterValues.includes(reporterId);
-            case 'labels':
-              if (!issue.labels || issue.labels.length === 0) {
-                return filterValues.includes('no-labels');
-              }
-              return issue.labels.some((label: any) => filterValues.includes(label.id));
-            case 'project':
-              return filterValues.includes(issue.projectId);
-            case 'updatedAt':
-              // Handle updatedAt filters
-              if (!issue.updatedAt) return false;
-
-              const issueUpdatedAt = new Date(issue.updatedAt);
-              const today = new Date();
-
-              return filterValues.some(filterValue => {
-                if (filterValue === 'today') {
-                  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-                  return issueUpdatedAt >= startOfDay && issueUpdatedAt < endOfDay;
-                } else if (filterValue === 'yesterday') {
-                  const yesterday = new Date(today);
-                  yesterday.setDate(today.getDate() - 1);
-                  const startOfYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-                  const endOfYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate() + 1);
-                  return issueUpdatedAt >= startOfYesterday && issueUpdatedAt < endOfYesterday;
-                } else if (filterValue === 'last-3-days') {
-                  const threeDaysAgo = new Date(today);
-                  threeDaysAgo.setDate(today.getDate() - 3);
-                  const startOfThreeDaysAgo = new Date(threeDaysAgo.getFullYear(), threeDaysAgo.getMonth(), threeDaysAgo.getDate());
-                  return issueUpdatedAt >= startOfThreeDaysAgo;
-                } else if (filterValue === 'last-7-days') {
-                  const sevenDaysAgo = new Date(today);
-                  sevenDaysAgo.setDate(today.getDate() - 7);
-                  const startOfSevenDaysAgo = new Date(sevenDaysAgo.getFullYear(), sevenDaysAgo.getMonth(), sevenDaysAgo.getDate());
-                  return issueUpdatedAt >= startOfSevenDaysAgo;
-                } else if (filterValue === 'last-30-days') {
-                  const thirtyDaysAgo = new Date(today);
-                  thirtyDaysAgo.setDate(today.getDate() - 30);
-                  const startOfThirtyDaysAgo = new Date(thirtyDaysAgo.getFullYear(), thirtyDaysAgo.getMonth(), thirtyDaysAgo.getDate());
-                  return issueUpdatedAt >= startOfThirtyDaysAgo;
-                } else if (filterValue.includes(':')) {
-                  // Handle custom date range (format: "YYYY-MM-DD:YYYY-MM-DD")
-                  try {
-                    const [startStr, endStr] = filterValue.split(':');
-                    const startDate = new Date(startStr + 'T00:00:00');
-                    const endDate = new Date(endStr + 'T23:59:59');
-
-                    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
-                      return issueUpdatedAt >= startDate && issueUpdatedAt <= endDate;
-                    }
-                  } catch (error) {
-                    console.warn('Invalid date range format:', filterValue);
-                  }
-                }
-                return false;
-              });
-
-            default:
-              return true;
+      filtered = filtered.filter(issue => {
+        switch (filterKey) {
+          case 'status':
+            return (filterValues as string[]).includes(issue.statusId);
+          case 'priority':
+            return (filterValues as string[]).includes(issue.priority);
+          case 'type': {
+            const fvs = (filterValues as string[]).map(v => v.toUpperCase());
+            return fvs.includes((issue.type || '').toUpperCase());
           }
-        });
-      }
+          case 'assignee': {
+            const assigneeId = issue.assigneeId || 'unassigned';
+            return (filterValues as string[]).includes(assigneeId);
+          }
+          case 'reporter': {
+            const reporterId = issue.reporterId || 'unassigned';
+            return (filterValues as string[]).includes(reporterId);
+          }
+          case 'labels':
+            if (!issue.labels || issue.labels.length === 0) {
+              return (filterValues as string[]).includes('no-labels');
+            }
+            return issue.labels.some((label: any) => (filterValues as string[]).includes(label.id));
+          case 'project':
+            return (filterValues as string[]).includes(issue.projectId);
+          case 'updatedAt': {
+            if (!issue.updatedAt) return false;
+            const issueUpdatedAt = new Date(issue.updatedAt);
+            const today = new Date();
+            return (filterValues as string[]).some(filterValue => {
+              if (filterValue === 'today') {
+                const s = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                const e = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+                return issueUpdatedAt >= s && issueUpdatedAt < e;
+              } else if (filterValue === 'yesterday') {
+                const y = new Date(today); y.setDate(today.getDate() - 1);
+                const s = new Date(y.getFullYear(), y.getMonth(), y.getDate());
+                const e = new Date(y.getFullYear(), y.getMonth(), y.getDate() + 1);
+                return issueUpdatedAt >= s && issueUpdatedAt < e;
+              } else if (filterValue === 'last-3-days') {
+                const d = new Date(today); d.setDate(today.getDate() - 3);
+                return issueUpdatedAt >= new Date(d.getFullYear(), d.getMonth(), d.getDate());
+              } else if (filterValue === 'last-7-days') {
+                const d = new Date(today); d.setDate(today.getDate() - 7);
+                return issueUpdatedAt >= new Date(d.getFullYear(), d.getMonth(), d.getDate());
+              } else if (filterValue === 'last-30-days') {
+                const d = new Date(today); d.setDate(today.getDate() - 30);
+                return issueUpdatedAt >= new Date(d.getFullYear(), d.getMonth(), d.getDate());
+              } else if (filterValue.includes(':')) {
+                try {
+                  const [startStr, endStr] = filterValue.split(':');
+                  const startDate = new Date(startStr + 'T00:00:00');
+                  const endDate = new Date(endStr + 'T23:59:59');
+                  if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+                    return issueUpdatedAt >= startDate && issueUpdatedAt <= endDate;
+                  }
+                } catch {
+                  console.warn('Invalid date range format:', filterValue);
+                }
+              }
+              return false;
+            });
+          }
+          default:
+            return true;
+        }
+      });
     });
 
-    // Apply ViewFilters sidebar filters
-    // Assignee filter
-    if (viewFiltersState.assignees.length > 0) {
-      filtered = filtered.filter(issue => {
-        const assigneeId = issue.assigneeId || 'unassigned';
-        return viewFiltersState.assignees.includes(assigneeId);
-      });
-    }
-
-    // Labels filter
-    if (viewFiltersState.labels.length > 0) {
-      filtered = filtered.filter(issue => {
-        if (!issue.labels || issue.labels.length === 0) {
-          return viewFiltersState.labels.includes('no-labels');
-        }
-        return issue.labels.some((label: any) =>
-          viewFiltersState.labels.includes(label.id)
-        );
-      });
-    }
-
-    // Priority filter
-    if (viewFiltersState.priority.length > 0) {
-      filtered = filtered.filter(issue => {
-        const priority = issue.priority || 'no-priority';
-        return viewFiltersState.priority.includes(priority);
-      });
-    }
-
-    // Projects filter
-    if (viewFiltersState.projects.length > 0) {
-      filtered = filtered.filter(issue => {
-        const projectId = issue.project?.id || 'no-project';
-        return viewFiltersState.projects.includes(projectId);
-      });
+    // Layer 3: Search
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(issue =>
+        issue.title.toLowerCase().includes(q) ||
+        issue.issueKey?.toLowerCase().includes(q) ||
+        issue.description?.toLowerCase().includes(q)
+      );
     }
 
     return filtered;
   }, [
     actionFilteredIssues,
-    issueFilterType,
-    searchQuery,
-    allFilters,
-    viewFiltersState,
+    scope,
+    search,
+    activeFilters,
     viewPositionsData?.positions,
-    sortedTempProjectIds,
+    sortedProjectIds,
     originalProjectIds,
-    tempProjectIds.length
+    projectIds.length
   ]);
 
-  // Update issues in context with allIssues (unfiltered) so ViewFilters shows all options
-  useEffect(() => {
-    setIssues(allIssues);
-  }, [allIssues, setIssues]);
+  // ─── Issue counts for scope tabs ───────────────────────
 
-  const handleUpdateView = async () => {
-    try {
-      const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          displayType: tempDisplayType,
-          filters: allFilters,
-          sorting: { field: 'manual', direction: 'desc' },
-          grouping: { field: tempGrouping },
-          fields: tempDisplayProperties,
-          projectIds: tempProjectIds,
-        })
-      });
-
-      if (response.ok) {
-        toast({
-          title: 'Success',
-          description: 'View updated successfully'
-        });
-
-        // Update the last saved state to reflect what we just saved
-        setLastSavedState({
-          displayType: tempDisplayType,
-          grouping: tempGrouping,
-          ordering: tempOrdering,
-          displayProperties: tempDisplayProperties,
-          filters: allFilters
-        });
-
-        // Reset temporary filters since they're now saved
-        setTempFilters({});
-
-        // Now hasChanges will be false and buttons will disappear
-
-        // Invalidate and refetch views to get updated data
-        queryClient.invalidateQueries({ queryKey: ['views', workspace.id] });
-        queryClient.refetchQueries({ queryKey: ['views', workspace.id] });
-
-        router.refresh();
-      }
-    } catch (error) {
-      console.error('Error updating view:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update view',
-        variant: 'destructive'
-      });
-    }
-  };
-
-  const handleSaveAsNewView = async () => {
-    if (!newViewName.trim()) {
-      toast({
-        title: 'Error',
-        description: 'View name is required',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/workspaces/${workspace.id}/views`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newViewName,
-          description: `Copy of ${view.name}`,
-          displayType: tempDisplayType,
-          visibility: 'PERSONAL',
-          projectIds: tempProjectIds,
-          filters: allFilters,
-          sorting: { field: 'manual', direction: 'desc' },
-          grouping: { field: tempGrouping },
-          fields: tempDisplayProperties,
-        })
-      });
-
-      if (response.ok) {
-        toast({
-          title: 'Success',
-          description: 'New view created successfully'
-        });
-        setShowSaveDialog(false);
-        setNewViewName('');
-      }
-    } catch (error) {
-      console.error('Error creating view:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to create view',
-        variant: 'destructive'
-      });
-    }
-  };
-
-
-
-  const handleToggleViewFilters = () => {
-    toggleViewFilters();
-  };
-
-  // Count issues for filter buttons (must match PageHeader filtering semantics)
   const issueCounts = useMemo(() => {
-    let countingIssues = [...actionFilteredIssues];
+    // Use same base as filtered but without scope and search applied
+    let countingIssues = mergeIssuesWithViewPositions(actionFilteredIssues, viewPositionsData?.positions || []);
 
-    // Project selection (same logic as filteredIssues)
-    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(sortedTempProjectIds);
+    // Project filtering (same as above)
+    const projectSelectionChanged = JSON.stringify(originalProjectIds) !== JSON.stringify(sortedProjectIds);
     if (projectSelectionChanged) {
-      if (sortedTempProjectIds.length === 0) {
+      if (sortedProjectIds.length === 0) {
         countingIssues = [];
       } else {
-        countingIssues = countingIssues.filter(issue => sortedTempProjectIds.includes(issue.projectId));
+        countingIssues = countingIssues.filter(issue => sortedProjectIds.includes(issue.projectId));
       }
     }
 
     // Search filter
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+    if (search) {
+      const q = search.toLowerCase();
       countingIssues = countingIssues.filter(issue =>
         issue.title.toLowerCase().includes(q) ||
         issue.issueKey?.toLowerCase().includes(q) ||
@@ -943,94 +459,44 @@ export default function ViewRenderer({
       );
     }
 
-    // Combined view filters (view + temp)
-    Object.entries(allFilters).forEach(([filterKey, filterValues]) => {
-      if (Array.isArray(filterValues) && filterValues.length > 0) {
-        countingIssues = countingIssues.filter(issue => {
-          switch (filterKey) {
-            case 'status':
-              return filterValues.includes(issue.statusId);
-            case 'priority':
-              return filterValues.includes(issue.priority);
-            case 'type':
-              return filterValues.includes(issue.type);
-            case 'assignee': {
-              const assigneeId = issue.assigneeId || 'unassigned';
-              return filterValues.includes(assigneeId);
-            }
-            case 'reporter': {
-              const reporterId = issue.reporterId || 'unassigned';
-              return filterValues.includes(reporterId);
-            }
-            case 'labels':
-              if (!issue.labels || issue.labels.length === 0) {
-                return filterValues.includes('no-labels');
-              }
-              return issue.labels.some((label: any) => filterValues.includes(label.id));
-            case 'project':
-              return filterValues.includes(issue.projectId);
+    // Apply all unified filters (except scope-related)
+    Object.entries(activeFilters).forEach(([filterKey, filterValues]) => {
+      if (filterKey === 'actions') return;
+      if (!Array.isArray(filterValues) || filterValues.length === 0) return;
 
-            default:
-              return true;
-          }
-        });
-      }
+      countingIssues = countingIssues.filter(issue => {
+        switch (filterKey) {
+          case 'status': return (filterValues as string[]).includes(issue.statusId);
+          case 'priority': return (filterValues as string[]).includes(issue.priority);
+          case 'type': return (filterValues as string[]).includes(issue.type);
+          case 'assignee': return (filterValues as string[]).includes(issue.assigneeId || 'unassigned');
+          case 'reporter': return (filterValues as string[]).includes(issue.reporterId || 'unassigned');
+          case 'labels':
+            if (!issue.labels || issue.labels.length === 0) return (filterValues as string[]).includes('no-labels');
+            return issue.labels.some((label: any) => (filterValues as string[]).includes(label.id));
+          case 'project': return (filterValues as string[]).includes(issue.projectId);
+          default: return true;
+        }
+      });
     });
 
-    // Sidebar ViewFilters (assignees, labels, priority, projects)
-    if (viewFiltersState.assignees.length > 0) {
-      countingIssues = countingIssues.filter(issue => {
-        const assigneeId = issue.assigneeId || 'unassigned';
-        return viewFiltersState.assignees.includes(assigneeId);
-      });
-    }
-    if (viewFiltersState.labels.length > 0) {
-      countingIssues = countingIssues.filter(issue => {
-        if (!issue.labels || issue.labels.length === 0) {
-          return viewFiltersState.labels.includes('no-labels');
-        }
-        return issue.labels.some((label: any) => viewFiltersState.labels.includes(label.id));
-      });
-    }
-    if (viewFiltersState.priority.length > 0) {
-      countingIssues = countingIssues.filter(issue => {
-        const priority = issue.priority || 'no-priority';
-        return viewFiltersState.priority.includes(priority);
-      });
-    }
-    if (viewFiltersState.projects.length > 0) {
-      countingIssues = countingIssues.filter(issue => {
-        const projectId = issue.project?.id || 'no-project';
-        return viewFiltersState.projects.includes(projectId);
-      });
-    }
-
-    // Now compute counts per tab from the filtered dataset
     const allIssuesCount = countingIssues.length;
     const activeIssuesCount = countingIssues.filter((issue: any) => {
-      // Use projectStatus if available, otherwise fallback to legacy fields
       const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
-      const statusLower = status.toLowerCase();
-      return statusLower !== 'done' && statusLower !== 'backlog' && statusLower !== 'cancelled' && statusLower !== 'to_do';
+      const sl = status.toLowerCase();
+      return sl !== 'done' && sl !== 'backlog' && sl !== 'cancelled' && sl !== 'to_do';
     }).length;
     const backlogIssuesCount = countingIssues.filter((issue: any) => {
-      // Use projectStatus if available, otherwise fallback to legacy fields  
       const status = issue.projectStatus?.name || issue.statusValue || issue.status || '';
-      const statusLower = status.toLowerCase();
-      return statusLower === 'backlog' || statusLower === 'to_do';
+      const sl = status.toLowerCase();
+      return sl === 'backlog' || sl === 'to_do';
     }).length;
 
     return { allIssuesCount, activeIssuesCount, backlogIssuesCount };
-  }, [
-    actionFilteredIssues,
-    sortedTempProjectIds,
-    originalProjectIds,
-    searchQuery,
-    allFilters,
-    viewFiltersState
-  ]);
+  }, [actionFilteredIssues, sortedProjectIds, originalProjectIds, search, activeFilters, viewPositionsData?.positions]);
 
-  // Issue update handler - no page refresh, just API call
+  // ─── View save/update ──────────────────────────────────
+
   const handleIssueUpdate = async (issueId: string, updates: any) => {
     try {
       const response = await fetch(`/api/issues/${issueId}`, {
@@ -1038,25 +504,86 @@ export default function ViewRenderer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to update issue');
-      }
-
-      // No page refresh - let React handle the optimistic update
+      if (!response.ok) throw new Error('Failed to update issue');
       return await response.json();
     } catch (error) {
       console.error('Error updating issue:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update issue",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Failed to update issue", variant: "destructive" });
       throw error;
     }
   };
 
-  // Persist Kanban column order with debounce batching
+  const handleUpdateView = async () => {
+    try {
+      const saveData = getConfigForSave();
+      const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saveData)
+      });
+
+      if (response.ok) {
+        toast({ title: 'Success', description: 'View updated successfully' });
+        // Clear URL params after save — saved state is now in DB
+        resetAll();
+        queryClient.invalidateQueries({ queryKey: ['views', workspace.id] });
+        queryClient.refetchQueries({ queryKey: ['views', workspace.id] });
+        router.refresh();
+      }
+    } catch (error) {
+      console.error('Error updating view:', error);
+      toast({ title: 'Error', description: 'Failed to update view', variant: 'destructive' });
+    }
+  };
+
+  const handleSaveAsNewView = async () => {
+    if (!newViewName.trim()) {
+      toast({ title: 'Error', description: 'View name is required', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const saveData = getConfigForSave();
+      const response = await fetch(`/api/workspaces/${workspace.id}/views`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newViewName,
+          description: `Copy of ${view.name}`,
+          visibility: 'PERSONAL',
+          ...saveData,
+        })
+      });
+
+      if (response.ok) {
+        toast({ title: 'Success', description: 'New view created successfully' });
+        setShowSaveDialog(false);
+        setNewViewName('');
+      }
+    } catch (error) {
+      console.error('Error creating view:', error);
+      toast({ title: 'Error', description: 'Failed to create view', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteView = async () => {
+    try {
+      const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        toast({ title: 'Success', description: 'View deleted successfully' });
+        queryClient.invalidateQueries({ queryKey: ['views', workspace.id] });
+        router.push(`/${workspace.id}/views`);
+      }
+    } catch (error) {
+      console.error('Error deleting view:', error);
+      toast({ title: 'Error', description: 'Failed to delete view', variant: 'destructive' });
+    }
+  };
+
+  // ─── Column order persistence (Kanban) ─────────────────
+
   const handleColumnUpdate = (columnId: string, updates: any) => {
     if (typeof updates?.order !== 'number') return;
 
@@ -1070,31 +597,25 @@ export default function ViewRenderer({
       const orders = pendingColumnOrdersRef.current;
       pendingColumnOrdersRef.current = {};
 
-      const groupField = (tempGrouping || view.grouping?.field || 'status');
+      const groupField = (groupBy || view.grouping?.field || 'status');
 
       try {
         if (groupField === 'status') {
-          // Persist status column order to project statuses
-          const projectIdsToUpdate = (tempProjectIds.length > 0
-            ? tempProjectIds
-            : view.projects.map(p => p.id));
-
+          const projectIdsToUpdate = (projectIds.length > 0 ? projectIds : view.projects.map(p => p.id));
           const updatesArray = Object.entries(orders)
             .map(([name, order]) => ({ name, order }))
             .sort((a, b) => a.order - b.order);
 
-          await Promise.all(projectIdsToUpdate.map((projectId) =>
-            fetch(`/api/projects/${projectId}/statuses/reorder`, {
+          await Promise.all(projectIdsToUpdate.map((pid) =>
+            fetch(`/api/projects/${pid}/statuses/reorder`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ updates: updatesArray })
             })
           ));
 
-          // Refresh statuses used by Kanban columns
           queryClient.invalidateQueries({ queryKey: ['multiple-project-statuses'] });
         } else {
-          // Persist non-status column order per grouping into view.layout.kanbanColumnOrder
           const orderedIds = Object.entries(orders)
             .sort((a, b) => (a[1] as number) - (b[1] as number))
             .map(([id]) => id);
@@ -1103,10 +624,7 @@ export default function ViewRenderer({
           const existingOrder = existingLayout.kanbanColumnOrder || {};
           const updatedLayout = {
             ...existingLayout,
-            kanbanColumnOrder: {
-              ...existingOrder,
-              [groupField]: orderedIds
-            }
+            kanbanColumnOrder: { ...existingOrder, [groupField]: orderedIds }
           };
 
           const response = await fetch(`/api/workspaces/${workspace.id}/views/${view.id}`, {
@@ -1115,10 +633,7 @@ export default function ViewRenderer({
             body: JSON.stringify({ layout: updatedLayout })
           });
 
-          if (!response.ok) {
-            throw new Error('Failed to update view layout');
-          }
-          // Invalidate cached views so layout order is refreshed
+          if (!response.ok) throw new Error('Failed to update view layout');
           queryClient.invalidateQueries({ queryKey: ['views', workspace.id] });
         }
 
@@ -1130,54 +645,43 @@ export default function ViewRenderer({
     }, 150);
   };
 
+  // ─── View content rendering ────────────────────────────
+
   const renderViewContent = () => {
-    // Single source of truth for Kanban sorting:
     const sharedProps = {
       view: {
         ...view,
-        displayType: tempDisplayType,
-        grouping: { field: tempGrouping },
-        ordering: tempOrdering,
-        sorting: { field: tempOrdering, direction: 'desc' },
-        fields: tempDisplayProperties
+        displayType: layout,
+        grouping: { field: groupBy },
+        ordering: 'manual',
+        sorting: { field: 'manual', direction: 'desc' },
+        fields: displayProperties
       },
-      // Pass filtered (unsorted) issues to Kanban; Kanban columns handle sorting per selected ordering
       issues: filteredIssues,
       workspace,
       currentUser,
-      activeFilters: allFilters,
-      // Additional props needed by KanbanViewRenderer  
-      projectId: tempProjectIds?.[0] || view.projects?.[0]?.id || '',
+      activeFilters,
+      projectId: projectIds?.[0] || view.projects?.[0]?.id || '',
       workspaceId: workspace.id,
       currentUserId: currentUser.id,
       onIssueCreated: () => {
-        // Set flag to force using live data for recent issue creations
         setRecentIssueCreated(true);
-
-        // Invalidate queries to refresh data - use the correct query keys
-        const currentProjectIds = tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id);
+        const currentProjectIds = projectIds.length > 0 ? projectIds : view.projects.map(p => p.id);
         queryClient.invalidateQueries({
           queryKey: [...issueKeys.byWorkspace(workspace.id), ...currentProjectIds.sort()]
         });
         queryClient.invalidateQueries({ queryKey: ['additional-issues', workspace.id] });
         queryClient.invalidateQueries({ queryKey: ['issues'] });
       },
-      // ViewFilters props - these will be passed but individual renderers can choose to use them or not
-      isViewFiltersOpen,
-      onToggleViewFilters: handleToggleViewFilters,
-      viewFiltersState,
-      onViewFiltersChange: setViewFiltersState,
-      showSubIssues: tempShowSubIssues,
-      onSubIssuesToggle: () => setTempShowSubIssues(prev => !prev),
-      // Kanban callbacks
+      showSubIssues: true,
+      onSubIssuesToggle: () => {},
       onIssueUpdate: handleIssueUpdate,
       onColumnUpdate: handleColumnUpdate,
     };
 
-    switch (tempDisplayType) {
+    switch (layout) {
       case 'KANBAN':
       case 'BOARD':
-        // Show loading state until view positions are loaded to prevent order flickering
         if (isLoadingViewPositions) {
           return (
             <div className="flex items-center justify-center h-64">
@@ -1188,11 +692,8 @@ export default function ViewRenderer({
         return (
           <KanbanViewRenderer
             {...sharedProps}
-            searchQuery={searchQuery}
-            onOrderingChange={() => {
-              // Sorting is locked; always enforce manual
-              setTempOrdering('manual');
-            }}
+            searchQuery={search}
+            onOrderingChange={() => {}}
           />
         );
       case 'LIST':
@@ -1208,372 +709,52 @@ export default function ViewRenderer({
     }
   };
 
+  // ─── Render ────────────────────────────────────────────
+
   return (
     <div className="h-full flex flex-col bg-collab-900">
-      {/* Header */}
-      <PageHeader
-        icon={VIEW_TYPE_ICONS[view.type as keyof typeof VIEW_TYPE_ICONS] || List}
-        title={view.name}
-        subtitle={`${filteredIssues.length} ${filteredIssues.length === 1 ? 'issue' : 'issues'}`}
-        leftContent={
-          <>
-            {/* Dynamic view indicator and save button */}
-            {view.isDynamic && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-violet-400 bg-violet-500/10 px-2 py-1 rounded-md border border-violet-500/20 flex items-center gap-1.5">
-                  <Sparkles className="h-3 w-3" />
-                  <span className="hidden sm:inline">AI View</span>
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowSaveDialog(true)}
-                  className="h-7 px-2.5 text-xs bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 border border-violet-500/20"
-                >
-                  <Save className="h-3 w-3 mr-1.5" />
-                  Save View
-                </Button>
-              </div>
-            )}
-            {/* Regular view change buttons */}
-            {!view.isDynamic && hasChanges && (
-              <div className="flex items-center gap-1 md:gap-2 flex-wrap min-w-0">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={resetToDefaults}
-                  className={pageHeaderButtonStyles.reset}
-                >
-                  <RotateCcw className="h-3 w-3 lg:mr-1" />
-                  <span className="hidden lg:inline">Reset</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleUpdateView}
-                  className={pageHeaderButtonStyles.update}
-                >
-                  <Save className="h-3 w-3 lg:mr-1" />
-                  <span className="hidden lg:inline">Update</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowSaveDialog(true)}
-                  className={pageHeaderButtonStyles.danger}
-                >
-                  <Save className="h-3 w-3 lg:mr-1" />
-                  <span className="hidden lg:inline">Save as new</span>
-                </Button>
-              </div>
-            )}
-          </>
-        }
-        search={
-          view.displayType !== 'PLANNING' ? (
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground z-10" />
-              <Input
-                placeholder="Search issues..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={pageHeaderSearchStyles}
-              />
-            </div>
-          ) : null
-        }
-        actions={
-          <>
-            {/* AI Filter Toggle - Hidden for Planning view */}
-            {view.displayType !== 'PLANNING' && (
-              <Button
-                variant={showAIFilter ? "ai" : "ghost"}
-                size="sm"
-                onClick={() => setShowAIFilter(!showAIFilter)}
-                className={cn(
-                  pageHeaderButtonStyles.ghost,
-                  showAIFilter && "bg-violet-500/10 text-violet-500 border-violet-500/30"
-                )}
-              >
-                <Sparkles className="h-3 w-3 md:mr-1" />
-                <span className="hidden md:inline ml-1">AI Filter</span>
-              </Button>
-            )}
-            {/* Follow Project Toggle - Hidden for Planning view */}
-            {view.displayType !== 'PLANNING' && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleProjectFollow}
-                className={cn(
-                  pageHeaderButtonStyles.ghost,
-                  isFollowingProject ? "text-red-400 hover:bg-red-500/10" : "text-green-400 hover:bg-green-500/10"
-                )}
-                disabled={isTogglingFollow}
-                aria-pressed={isFollowingProject}
-                aria-label={isFollowingProject ? 'Unfollow' : 'Follow'}
-              >
-                {isFollowingProject ? (
-                  <BellOff className="h-3 w-3 md:mr-1" />
-                ) : (
-                  <Bell className="h-3 w-3 md:mr-1" />
-                )}
-                <span className="hidden md:inline ml-1">
-                  {isFollowingProject ? 'Unfollow' : 'Follow'}
-                </span>
-              </Button>
-            )}
-            {/* View Options - Hidden for Planning view */}
-            {view.displayType !== 'PLANNING' && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleToggleViewFilters}
-                className={pageHeaderButtonStyles.ghost}
-              >
-                {isViewFiltersOpen ? <EyeOff className="h-3 w-3 md:mr-1" /> : <Eye className="h-3 w-3 md:mr-1" />}
-                <span data-text className="hidden md:inline ml-1">View Options</span>
-              </Button>
-            )}
-            {/* New Issue - Hidden for Planning view */}
-            {view.displayType !== 'PLANNING' && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className={pageHeaderButtonStyles.primary}
-                onClick={() => setIsNewIssueOpen(true)}
-              >
-                <Plus className="h-3 w-3 md:mr-1" />
-                <span data-text className="hidden md:inline ml-1">New Issue</span>
-              </Button>
-            )}
-          </>
-        }
-      />
-
-      {/* Save Dialog */}
-      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent className="bg-collab-900 border-collab-700 text-white">
-          <DialogHeader>
-            <DialogTitle>Save as new view</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              placeholder="View name"
-              value={newViewName}
-              onChange={(e) => setNewViewName(e.target.value)}
-              className="bg-collab-700 border-collab-600 text-white"
-            />
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => setShowSaveDialog(false)}
-                className="text-collab-500"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSaveAsNewView}
-                className="bg-blue-500 hover:bg-blue-600"
-              >
-                Save view
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* New Issue Modal */}
-      <NewIssueModal
-        open={isNewIssueOpen}
-        onOpenChange={setIsNewIssueOpen}
+      {/* View Top Bar — Breadcrumb + Filter + Display + Overflow */}
+      <ViewTopBar
+        workspace={workspace}
+        view={view}
+        scope={scope}
+        onScopeChange={setScope}
+        search={search}
+        onSearchChange={setSearch}
+        filters={activeFilters}
+        onFilterChange={setFilter}
+        onClearAllFilters={clearAllFilters}
+        activeFilterCount={activeFilterCount}
+        issueCounts={issueCounts}
+        filteredIssuesCount={filteredIssues.length}
+        projectIds={projectIds}
+        workspaceMembers={workspaceMembers}
+        workspaceLabels={workspaceLabels}
         workspaceId={workspace.id}
-        projectId={tempProjectIds?.length === 1 ? tempProjectIds[0] : undefined}
-        onCreated={() => {
-          setIsNewIssueOpen(false);
-          queryClient.invalidateQueries();
-          router.refresh();
+        allProjects={allProjects}
+        layout={layout}
+        onLayoutChange={setLayout}
+        groupBy={groupBy}
+        onGroupByChange={setGroupBy}
+        sortBy={activeConfig.sortBy}
+        onSortByChange={setSortBy}
+        displayProperties={displayProperties}
+        onDisplayPropertiesChange={setDisplayProperties}
+        onProjectIdsChange={setProjectIds}
+        isDefaultView={view.isDefault}
+        hasChanges={hasChanges}
+        onSave={handleUpdateView}
+        onReset={resetAll}
+        isFollowing={isFollowingProject}
+        isTogglingFollow={isTogglingFollow}
+        onToggleFollow={toggleProjectFollow}
+        onSaveAsNew={() => setShowSaveDialog(true)}
+        onDelete={!view.isDefault ? handleDeleteView : undefined}
+        onNewIssue={() => setIsNewIssueOpen(true)}
+        onLabelCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ['workspace-labels', workspace.id] });
         }}
       />
-
-      {/* Filters and Display Controls Bar - Hidden for PLANNING view */}
-      {tempDisplayType !== 'PLANNING' && (
-      <div className={cn(
-        "border-b bg-collab-900 transition-colors",
-        // Mobile: Glassmorphism styling
-        "border-white/10 bg-black/60 backdrop-blur-xl px-4 py-3",
-        // Desktop: Original styling
-        "md:border-collab-700 md:bg-collab-900 md:backdrop-blur-none md:px-6 md:py-2"
-      )}>
-        {/* AI Filter Bar */}
-        {showAIFilter && (
-          <div className="mb-3">
-            <AIFilterBar
-              onFiltersChange={handleAIFiltersChange}
-              currentFilters={aiFilters}
-              workspaceId={workspace.id}
-              placeholder="Describe what you're looking for (e.g., 'urgent bugs assigned to me')"
-            />
-          </div>
-        )}
-
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-2">
-          {/* Issue Type Filter Buttons - Full width on mobile */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 md:mr-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIssueFilterType('all')}
-              className={cn(
-                "h-7 px-3 text-xs border whitespace-nowrap shrink-0",
-                "md:h-6 md:px-2",
-                issueFilterType === 'all'
-                  ? 'border-blue-400 text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 hover:border-blue-400'
-                  : 'border-white/20 text-gray-400 hover:text-white hover:border-white/30 bg-white/5 hover:bg-white/10'
-              )}
-            >
-              All Issues
-              <span className="ml-1.5 text-xs opacity-70">{issueCounts.allIssuesCount}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIssueFilterType('active')}
-              className={cn(
-                "h-7 px-3 text-xs border whitespace-nowrap shrink-0",
-                "md:h-6 md:px-2",
-                issueFilterType === 'active'
-                  ? 'border-red-400 text-red-400 bg-red-500/20 hover:bg-red-500/30 hover:border-red-400'
-                  : 'border-white/20 text-gray-400 hover:text-white hover:border-white/30 bg-white/5 hover:bg-white/10'
-              )}
-            >
-              Active
-              <span className="ml-1.5 text-xs opacity-70">{issueCounts.activeIssuesCount}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIssueFilterType('backlog')}
-              className={cn(
-                "h-7 px-3 text-xs border whitespace-nowrap shrink-0",
-                "md:h-6 md:px-2",
-                issueFilterType === 'backlog'
-                  ? 'border-gray-400 text-gray-400 bg-gray-500/20 hover:bg-gray-500/30 hover:border-gray-400'
-                  : 'border-white/20 text-gray-400 hover:text-white hover:border-white/30 bg-white/5 hover:bg-white/10'
-              )}
-            >
-              Backlog
-              <span className="ml-1.5 text-xs opacity-70">{issueCounts.backlogIssuesCount}</span>
-            </Button>
-          </div>
-
-          {/* Mobile: Filters and View Type in Column */}
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-2 md:flex-1">
-            {/* Badge-like selectors - wrap on mobile */}
-            <div className="flex flex-wrap gap-3 md:gap-4">
-              <div className="flex flex-wrap gap-1.5 md:gap-1">
-
-                {!view.isDefault && <ViewProjectSelector
-                  value={tempProjectIds}
-                  onChange={(projectIds) => {
-                    setTempProjectIds(projectIds);
-                  }}
-                  projects={allProjects}
-                />}
-                <ViewGroupingSelector
-                  value={tempGrouping}
-                  onChange={setTempGrouping}
-                  displayType={tempDisplayType}
-                />
-                <ViewDisplayPropertiesSelector
-                  value={tempDisplayProperties}
-                  onChange={setTempDisplayProperties}
-                />
-              </div>
-              <div className="flex flex-wrap gap-1.5 md:gap-1">
-                <StatusSelector
-                  value={allFilters.status || []}
-                  projectIds={tempProjectIds}
-                  onChange={(statuses) => {
-                    const viewStatuses = view.filters?.status || [];
-                    handleFilterChange('status', statuses.sort(), viewStatuses.sort());
-                  }}
-                />
-                <PrioritySelector
-                  value={allFilters.priority || []}
-                  onChange={(priorities) => {
-                    const viewPriorities = view.filters?.priority || [];
-                    handleFilterChange('priority', priorities.sort(), viewPriorities.sort());
-                  }}
-                />
-                <TypeSelector
-                  value={allFilters.type || []}
-                  onChange={(types) => {
-                    const viewTypes = view.filters?.type || [];
-                    handleFilterChange('type', types.sort(), viewTypes.sort());
-                  }}
-                />
-                <AssigneeSelector
-                  value={allFilters.assignee || []}
-                  onChange={(assignees) => {
-                    const viewAssignees = view.filters?.assignee || [];
-                    handleFilterChange('assignee', assignees.sort(), viewAssignees.sort());
-                  }}
-                  assignees={workspaceMembers}
-                />
-                <ReporterSelector
-                  value={allFilters.reporter || []}
-                  onChange={(reporters) => {
-                    const viewReporters = view.filters?.reporter || [];
-                    handleFilterChange('reporter', reporters.sort(), viewReporters.sort());
-                  }}
-                  reporters={workspaceMembers}
-                />
-                <LabelsSelector
-                  value={allFilters.labels || []}
-                  onChange={(labels) => {
-                    const viewLabels = view.filters?.labels || [];
-                    handleFilterChange('labels', labels.sort(), viewLabels.sort());
-                  }}
-                  labels={workspaceLabels}
-                  workspaceId={workspace.id}
-                  onLabelCreated={(newLabel) => {
-                    // Invalidate and refetch workspace labels
-                    queryClient.invalidateQueries({ queryKey: ['workspace-labels', workspace.id] });
-                  }}
-                />
-                <ViewUpdatedAtSelector
-                  value={allFilters.updatedAt || []}
-                  onChange={(updatedAtFilters) => {
-                    const viewUpdatedAt = view.filters?.updatedAt || [];
-                    handleFilterChange('updatedAt', updatedAtFilters.sort(), viewUpdatedAt.sort());
-                  }}
-                />
-                <ActionFiltersSelector
-                  value={allFilters.actions || []}
-                  onChange={(actionFilters: ActionFilter[]) => {
-                    const viewActions = view.filters?.actions || [];
-                    handleFilterChange('actions', actionFilters, viewActions);
-                  }}
-                  projectIds={tempProjectIds.length > 0 ? tempProjectIds : view.projects.map(p => p.id)}
-                  workspaceMembers={workspaceMembers}
-                />
-              </div>
-            </div>
-
-            {/* View Type Toggle - Right aligned on desktop, left on mobile */}
-            <div className="flex items-center justify-start md:justify-end">
-              <ViewTypeSelector
-                selectedType={tempDisplayType}
-                onTypeChange={setTempDisplayType}
-                variant="toolbar"
-                availableTypes={['LIST', 'KANBAN']}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-      )}
 
       {/* View Content */}
       <div className="flex-1 min-h-0 relative overflow-hidden">

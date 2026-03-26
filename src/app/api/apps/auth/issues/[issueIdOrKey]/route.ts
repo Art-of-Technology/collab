@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
+import { emitIssueUpdated, emitIssueDeleted } from '@/lib/event-bus';
 
 // Schema for updating issues
 const UpdateIssueSchema = z.object({
@@ -384,6 +385,20 @@ export const PATCH = withAppAuth(
         });
       }
 
+      // Fire-and-forget Qdrant sync
+      emitIssueUpdated(
+        updatedIssue,
+        changes,
+        {
+          userId: context.user.id,
+          workspaceId: context.workspace.id,
+          workspaceName: context.workspace.name || '',
+          workspaceSlug: context.workspace.slug || '',
+          source: 'mcp-api',
+        },
+        { async: true }
+      ).catch(() => {});
+
       return NextResponse.json(updatedIssue);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -428,6 +443,19 @@ export const DELETE = withAppAuth(
       await prisma.issue.delete({
         where: { id: existingIssue.id },
       });
+
+      // Fire-and-forget Qdrant sync
+      emitIssueDeleted(
+        { id: existingIssue.id },
+        {
+          userId: context.user.id,
+          workspaceId: context.workspace.id,
+          workspaceName: context.workspace.name || '',
+          workspaceSlug: context.workspace.slug || '',
+          source: 'mcp-api',
+        },
+        { async: true }
+      ).catch(() => {});
 
       return NextResponse.json({
         message: 'Issue deleted successfully',

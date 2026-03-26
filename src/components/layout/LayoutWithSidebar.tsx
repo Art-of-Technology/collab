@@ -2,9 +2,7 @@
 
 import React, { useMemo } from "react";
 import SimplifiedSidebar from "@/components/layout/SimplifiedSidebar";
-import RightSidebar from "@/components/layout/RightSidebar";
 import { useSidebar } from "@/components/providers/SidebarProvider";
-import { ViewFiltersProvider } from "@/context/ViewFiltersContext";
 import { AIProvider } from "@/context/AIContext";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
@@ -36,7 +34,6 @@ export default function LayoutWithSidebar({
 
   return (
     <AIProvider>
-      <ViewFiltersProvider>
         <div className="app-layout">
         {/* Desktop Sidebar */}
         <div
@@ -58,8 +55,6 @@ export default function LayoutWithSidebar({
           </div>
         </main>
 
-        {/* Right Sidebar */}
-        <RightSidebar />
 
         {/* Mobile overlay sidebar */}
         <div
@@ -108,7 +103,6 @@ export default function LayoutWithSidebar({
 
       {/* Persistent AI Chat Bar (unified search + AI) */}
       <ChatBar />
-      </ViewFiltersProvider>
     </AIProvider>
   );
 }

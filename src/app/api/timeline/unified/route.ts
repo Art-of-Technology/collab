@@ -86,6 +86,24 @@ export async function GET(request: NextRequest) {
             image: true,
           },
         },
+        oldStatus: {
+          select: {
+            id: true,
+            name: true,
+            displayName: true,
+            color: true,
+            iconName: true,
+          },
+        },
+        newStatus: {
+          select: {
+            id: true,
+            name: true,
+            displayName: true,
+            color: true,
+            iconName: true,
+          },
+        },
       },
     });
 
@@ -186,6 +204,9 @@ export async function GET(request: NextRequest) {
         newValue,
         details: activity.details ? safeJsonParse(activity.details) : null,
         user: activity.user,
+        // Status change FK relations — proper displayName from DB
+        oldStatus: activity.oldStatus || null,
+        newStatus: activity.newStatus || null,
         issue: issue
           ? {
               id: issue.id,
@@ -195,6 +216,7 @@ export async function GET(request: NextRequest) {
               status: issue.projectStatus ? {
                 id: issue.projectStatus.id,
                 name: issue.projectStatus.name,
+                displayName: issue.projectStatus.displayName,
                 color: issue.projectStatus.color,
               } : null,
               project: issue.project ? {
