@@ -220,13 +220,13 @@ export function getIssuePriorityBadge(priority: IssuePriority | null | undefined
 }
 
 // Generate status badge configuration
-export function getIssueStatusBadge(status: string) {
+export function getIssueStatusBadge(status: string, displayName?: string) {
   // Try to match against known statuses, fallback to default
   const normalizedStatus = status?.toUpperCase().replace(/\s+/g, '_') as keyof typeof STATUS_CONFIG;
   const config = STATUS_CONFIG[normalizedStatus] || STATUS_CONFIG.TODO;
 
   return {
-    label: status || "Todo",
+    label: displayName || status || "Todo",
     icon: config.icon,
     className: `
       ${config.color} flex items-center gap-1.5 px-2.5 py-1 font-medium

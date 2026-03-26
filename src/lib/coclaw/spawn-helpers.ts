@@ -7,7 +7,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { resolveApiKey } from '@/lib/coclaw/key-resolver';
+import { resolveApiKey, getGitHubToken, getGitHubTokenStatus } from '@/lib/coclaw/key-resolver';
 import { getMcpToken } from '@/lib/ai/mcp-token';
 import { decryptVariable } from '@/lib/secrets/crypto';
 import type { CoclawSpawnConfig } from '@/lib/coclaw/types';
@@ -56,11 +56,22 @@ export async function buildSpawnConfig(
     // Channel loading failure is non-fatal
   }
 
-  // 4. Resolve embedding config (local container or env override)
-  const embeddingApiUrl = process.env.EMBEDDING_API_URL || 'http://embeddings:3360';
-  const embeddingProvider = `custom:${embeddingApiUrl}`;
-  const embeddingModel = process.env.EMBEDDING_MODEL || 'all-MiniLM-L6-v2';
-  const embeddingDimensions = parseInt(process.env.EMBEDDING_DIMENSIONS || '384', 10);
+  // 5. Resolve GitHub integration token
+  let githubToken: string | undefined;
+  let githubDefaultOwner: string | undefined;
+  let githubDefaultRepo: string | undefined;
+  try {
+    const ghToken = await getGitHubToken(userId, workspaceId);
+    if (ghToken) {
+      githubToken = ghToken;
+      // Also fetch default owner/repo metadata
+      const ghStatus = await getGitHubTokenStatus(userId, workspaceId);
+      githubDefaultOwner = ghStatus.defaultOwner;
+      githubDefaultRepo = ghStatus.defaultRepo;
+    }
+  } catch {
+    // GitHub token is optional — continue without it
+  }
 
   return {
     provider: apiKeyResolution.provider,
@@ -77,6 +88,9 @@ export async function buildSpawnConfig(
     embeddingModel,
     embeddingDimensions,
     channels,
+    githubToken,
+    githubDefaultOwner,
+    githubDefaultRepo,
     port: 0, // Allocated by instance manager
   };
 }

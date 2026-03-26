@@ -26,7 +26,7 @@ export interface UpdateIssueData {
   status?: string;
   statusValue?: string;
   priority?: string;
-  assigneeId?: string;
+  assigneeId?: string | null;
   reporterId?: string;
   labels?: string[];
   dueDate?: Date;

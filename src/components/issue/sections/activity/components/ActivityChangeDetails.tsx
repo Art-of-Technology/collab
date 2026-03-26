@@ -30,6 +30,31 @@ export function ActivityChangeDetails({ activity }: ActivityChangeDetailsProps) 
     );
   }
 
+  // Special handling for status changes — use FK relation for proper displayName
+  if (action === 'STATUS_CHANGED' && (activity.oldStatus || activity.newStatus)) {
+    return (
+      <div className="mt-1 text-[10px] text-collab-500 flex items-center gap-1.5">
+        <span
+          className="px-1.5 py-0.5 rounded text-red-500"
+          style={activity.oldStatus?.color ? {
+            backgroundColor: `${activity.oldStatus.color}15`,
+          } : undefined}
+        >
+          {activity.oldStatus?.displayName || oldValue || 'None'}
+        </span>
+        <ArrowRight className="h-2.5 w-2.5" />
+        <span
+          className="px-1.5 py-0.5 rounded text-green-500"
+          style={activity.newStatus?.color ? {
+            backgroundColor: `${activity.newStatus.color}15`,
+          } : undefined}
+        >
+          {activity.newStatus?.displayName || newValue || 'None'}
+        </span>
+      </div>
+    );
+  }
+
   // Special handling for column/movement changes
   if (action === 'MOVED' && details?.fromColumn && details?.toColumn) {
     return (

@@ -16,7 +16,6 @@ import {
   EyeOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import ViewFilters from '@/components/views/shared/ViewFilters';
 import { IssueDetailModal } from '@/components/issue/IssueDetailModal';
 
 interface Issue {

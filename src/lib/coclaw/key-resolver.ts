@@ -318,3 +318,159 @@ export async function getUsageStats(
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// GitHub Token Management (same encrypted Note pattern as API keys)
+// ---------------------------------------------------------------------------
+
+const GITHUB_TOKEN_NOTE_TITLE = 'Coclaw GitHub Token';
+
+/**
+ * Retrieve the user's stored GitHub token.
+ */
+export async function getGitHubToken(
+  userId: string,
+  workspaceId: string,
+): Promise<string | null> {
+  const note = await prisma.note.findFirst({
+    where: {
+      authorId: userId,
+      workspaceId,
+      type: 'API_KEYS',
+      scope: 'PERSONAL',
+      isEncrypted: true,
+      title: GITHUB_TOKEN_NOTE_TITLE,
+    },
+    select: { secretVariables: true },
+  });
+
+  if (!note?.secretVariables) return null;
+
+  try {
+    const vars = JSON.parse(note.secretVariables) as SecretVariable[];
+    const decrypted = decryptVariables(vars, workspaceId);
+    const entry = decrypted.find((v) => v.key === 'github_token');
+    return entry?.value ?? null;
+  } catch (err) {
+    console.error('[CoclawKeyResolver] Failed to decrypt GitHub token:', err);
+    return null;
+  }
+}
+
+/**
+ * Store (or update) a user's GitHub personal access token.
+ */
+export async function storeGitHubToken(
+  userId: string,
+  workspaceId: string,
+  token: string,
+  defaultOwner?: string,
+  defaultRepo?: string,
+): Promise<void> {
+  const { encryptVariables } = await import('@/lib/secrets/crypto');
+
+  const vars = [
+    { key: 'github_token', value: token, masked: true, description: 'GitHub personal access token' },
+    ...(defaultOwner ? [{ key: 'github_default_owner', value: defaultOwner, masked: false, description: 'Default GitHub owner/org' }] : []),
+    ...(defaultRepo ? [{ key: 'github_default_repo', value: defaultRepo, masked: false, description: 'Default GitHub repository' }] : []),
+  ];
+  const encrypted = encryptVariables(vars, workspaceId);
+
+  const existing = await prisma.note.findFirst({
+    where: {
+      authorId: userId,
+      workspaceId,
+      type: 'API_KEYS',
+      scope: 'PERSONAL',
+      title: GITHUB_TOKEN_NOTE_TITLE,
+    },
+    select: { id: true },
+  });
+
+  if (existing) {
+    await prisma.note.update({
+      where: { id: existing.id },
+      data: { secretVariables: JSON.stringify(encrypted) },
+    });
+  } else {
+    await prisma.note.create({
+      data: {
+        title: GITHUB_TOKEN_NOTE_TITLE,
+        content: '',
+        type: 'API_KEYS',
+        scope: 'PERSONAL',
+        isEncrypted: true,
+        isRestricted: true,
+        isAiContext: false,
+        secretVariables: JSON.stringify(encrypted),
+        authorId: userId,
+        workspaceId,
+      },
+    });
+  }
+}
+
+/**
+ * Remove a user's stored GitHub token.
+ * Returns true if a token was found and deleted.
+ */
+export async function removeGitHubToken(
+  userId: string,
+  workspaceId: string,
+): Promise<boolean> {
+  const note = await prisma.note.findFirst({
+    where: {
+      authorId: userId,
+      workspaceId,
+      type: 'API_KEYS',
+      scope: 'PERSONAL',
+      title: GITHUB_TOKEN_NOTE_TITLE,
+    },
+    select: { id: true },
+  });
+
+  if (!note) return false;
+
+  await prisma.note.delete({ where: { id: note.id } });
+  return true;
+}
+
+/**
+ * Get GitHub token configuration status (without revealing the token).
+ */
+export async function getGitHubTokenStatus(
+  userId: string,
+  workspaceId: string,
+): Promise<{ configured: boolean; lastUpdated: Date | null; defaultOwner?: string; defaultRepo?: string }> {
+  const note = await prisma.note.findFirst({
+    where: {
+      authorId: userId,
+      workspaceId,
+      type: 'API_KEYS',
+      scope: 'PERSONAL',
+      isEncrypted: true,
+      title: GITHUB_TOKEN_NOTE_TITLE,
+    },
+    select: { secretVariables: true, updatedAt: true },
+  });
+
+  if (!note) {
+    return { configured: false, lastUpdated: null };
+  }
+
+  // Extract non-sensitive metadata (owner/repo) without revealing the token
+  let defaultOwner: string | undefined;
+  let defaultRepo: string | undefined;
+  if (note.secretVariables) {
+    try {
+      const vars = JSON.parse(note.secretVariables) as SecretVariable[];
+      const decrypted = decryptVariables(vars, workspaceId);
+      defaultOwner = decrypted.find((v) => v.key === 'github_default_owner')?.value;
+      defaultRepo = decrypted.find((v) => v.key === 'github_default_repo')?.value;
+    } catch {
+      // Ignore decryption errors for status check
+    }
+  }
+
+  return { configured: true, lastUpdated: note.updatedAt, defaultOwner, defaultRepo };
+}

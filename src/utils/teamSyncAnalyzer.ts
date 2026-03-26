@@ -45,6 +45,19 @@ export interface IssueActivity {
   daysInProgress?: number;
   projectName?: string;
   isCarryOver?: boolean;
+  // Status change FK relations — proper displayName from DB
+  oldStatus?: {
+    id: string;
+    name: string;
+    displayName: string;
+    color: string | null;
+  };
+  newStatus?: {
+    id: string;
+    name: string;
+    displayName: string;
+    color: string | null;
+  };
   issue?: {
     id: string;
     title: string;

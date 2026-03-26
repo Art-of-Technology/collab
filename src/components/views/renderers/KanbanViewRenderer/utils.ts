@@ -211,12 +211,17 @@ export const createColumns = (filteredIssues: any[], view: any, projectStatuses?
     // Only create dynamic columns for non-status grouping or when no project statuses exist
     if (!columnsMap.has(groupKey)) {
       if (groupField !== 'status' || !projectStatuses || projectStatuses.length === 0) {
-        columnsMap.set(groupKey, {
+        const columnMeta: any = {
           id: groupKey,
           name: groupValue,
           issues: [],
           order: columnsMap.size
-        });
+        };
+        // For assignee grouping, store the assignee ID for DnD field resolution
+        if (groupField === 'assignee' && issue.assignee?.id) {
+          columnMeta.assigneeId = issue.assignee.id;
+        }
+        columnsMap.set(groupKey, columnMeta);
       } else {
         // For status grouping with project statuses, the column should already exist
         // This is a fallback that shouldn't normally happen

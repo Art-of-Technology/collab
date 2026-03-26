@@ -114,6 +114,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 
   // Agent dropdown state
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const agentDropdownRef = useRef<HTMLDivElement>(null);
   const selectedAgent = availableAgents.find((a) => a.slug === selectedAgentSlug) || availableAgents[0];
 
@@ -406,8 +407,8 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
               value={value}
               onChange={(e) => onValueChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              onFocus={onFocus}
-              onBlur={onBlur}
+              onFocus={(e) => { setIsFocused(true); onFocus?.(); }}
+              onBlur={(e) => { setIsFocused(false); onBlur?.(); }}
               placeholder={dynamicPlaceholder}
               rows={1}
               className={cn(
@@ -460,7 +461,9 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       <div
         className={cn(
           "flex items-center gap-1 px-3 pb-2.5 pt-0.5 transition-opacity duration-200",
-          isRecording ? "opacity-0 pointer-events-none" : "opacity-100"
+          isFocused || hasContent
+            ? (isRecording ? "opacity-0 pointer-events-none" : "opacity-100")
+            : "opacity-0 pointer-events-none h-0 overflow-hidden p-0"
         )}
       >
         {/* Left side: Web Search toggle */}

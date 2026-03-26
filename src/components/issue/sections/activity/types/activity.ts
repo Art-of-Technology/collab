@@ -1,3 +1,11 @@
+export interface ActivityStatusRef {
+  id: string;
+  name: string;
+  displayName: string;
+  color: string | null;
+  iconName?: string | null;
+}
+
 export interface IssueActivity {
   id: string;
   action: string;
@@ -6,6 +14,9 @@ export interface IssueActivity {
   fieldName?: string;
   oldValue?: any;
   newValue?: any;
+  // Status change FK relations — proper displayName from DB
+  oldStatus?: ActivityStatusRef | null;
+  newStatus?: ActivityStatusRef | null;
   user: {
     id: string;
     name: string | null;

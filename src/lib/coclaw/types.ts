@@ -66,6 +66,12 @@ export interface CoclawSpawnConfig {
   /** Channel configs loaded from DB */
   channels: ChannelConfigEntry[];
 
+
+  /** GitHub integration */
+  githubToken?: string;
+  githubDefaultOwner?: string;
+  githubDefaultRepo?: string;
+
   /** Runtime */
   port: number;
 }

@@ -98,6 +98,22 @@ function buildCoclawConfig(config: CoclawSpawnConfig, instanceDir: string): stri
     `workspace_id = "${tomlEscape(config.workspaceId)}"`,
     'poll_interval_secs = 2',
   ];
+
+  // GitHub integration section (separate from channels_config.github)
+  if (config.githubToken) {
+    lines.push(
+      '',
+      '# GitHub integration — agent-driven repository operations',
+      '[github]',
+      `token = "${tomlEscape(config.githubToken)}"`,
+    );
+    if (config.githubDefaultOwner) {
+      lines.push(`default_owner = "${tomlEscape(config.githubDefaultOwner)}"`);
+    }
+    if (config.githubDefaultRepo) {
+      lines.push(`default_repo = "${tomlEscape(config.githubDefaultRepo)}"`);
+    }
+  }
   for (const channel of config.channels.filter((entry) => entry.enabled)) {
     lines.push('', ...renderChannelConfig(channel));
   }

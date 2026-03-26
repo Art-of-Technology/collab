@@ -755,6 +755,10 @@ model ProjectStatus {
   // Relationships - issues that use this status
   issues Issue[] @relation("IssueStatus")
 
+  // Activity tracking - back-relations for status change history
+  activitiesAsOldStatus IssueActivity[] @relation("ActivityOldStatus")
+  activitiesAsNewStatus IssueActivity[] @relation("ActivityNewStatus")
+
   // Ensure unique status names per project
   @@unique([projectId, name])
   @@index([projectId])
@@ -792,6 +796,12 @@ model IssueActivity {
   oldValue  String? // Previous value (JSON string for complex values)
   newValue  String? // New value (JSON string for complex values)
 
+  // Status change tracking with proper FK relations
+  oldStatusId String? // FK to ProjectStatus for status change tracking
+  newStatusId String? // FK to ProjectStatus for status change tracking
+  oldStatus   ProjectStatus? @relation("ActivityOldStatus", fields: [oldStatusId], references: [id], onDelete: SetNull)
+  newStatus   ProjectStatus? @relation("ActivityNewStatus", fields: [newStatusId], references: [id], onDelete: SetNull)
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([itemId, itemType])
@@ -803,6 +813,8 @@ model IssueActivity {
   // Performance indexes for team sync/planning view
   @@index([workspaceId, itemType, action, createdAt(sort: Desc)], name: "IssueActivity_team_sync_idx")
   @@index([itemId, itemType, action, createdAt], name: "IssueActivity_item_history_idx")
+  @@index([oldStatusId])
+  @@index([newStatusId])
   @@map("BoardItemActivity")
 }
 

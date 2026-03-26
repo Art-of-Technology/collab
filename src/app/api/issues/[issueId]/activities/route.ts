@@ -70,6 +70,24 @@ export async function GET(
             avatarAccessory: true,
           },
         },
+        oldStatus: {
+          select: {
+            id: true,
+            name: true,
+            displayName: true,
+            color: true,
+            iconName: true,
+          },
+        },
+        newStatus: {
+          select: {
+            id: true,
+            name: true,
+            displayName: true,
+            color: true,
+            iconName: true,
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
@@ -86,6 +104,8 @@ export async function GET(
       fieldName: activity.fieldName,
       oldValue: activity.oldValue,
       newValue: activity.newValue,
+      oldStatus: activity.oldStatus || null,
+      newStatus: activity.newStatus || null,
       user: activity.user,
     }));
 

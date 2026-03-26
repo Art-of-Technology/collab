@@ -32,6 +32,8 @@ export interface Column {
   issues: any[];
   order: number;
   color?: string;
+  assigneeId?: string; // For assignee grouping: the actual user ID for DnD resolution
+  iconName?: string;
 }
 
 export interface KanbanState {

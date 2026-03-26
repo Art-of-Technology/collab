@@ -68,26 +68,32 @@ export function useMultipleProjectStatuses(projectIds: string[], enabled: boolea
         });
       });
       
-      // Create unified column definitions
+      // Create unified column definitions with deterministic ordering
+      // When multiple projects have the same status name, use the LOWEST order value
+      // and prefer the template-linked displayName for consistency
       const unifiedStatuses = Array.from(statusNames)
         .map(statusName => {
-          // Find the first occurrence of this status name to use as template
-          const template = allStatuses.find(s => s.name === statusName);
-          if (!template) return null;
+          const matches = allStatuses.filter(s => s.name === statusName);
+          if (matches.length === 0) return null;
+          
+          // Use the match with the lowest order for deterministic column ordering
+          const sorted = [...matches].sort((a, b) => a.order - b.order);
+          const primary = sorted[0];
+          
+          // Use the minimum order across all projects for this status
+          const minOrder = Math.min(...matches.map(s => s.order));
           
           return {
             id: statusName,
             name: statusName,
-            displayName: template.displayName,
-            description: template.description,
-            color: template.color,
-            iconName: template.iconName,
-            order: template.order,
-            isDefault: template.isDefault,
-            isFinal: template.isFinal,
-            issueCount: allStatuses
-              .filter(s => s.name === statusName)
-              .reduce((sum, s) => sum + s.issueCount, 0)
+            displayName: primary.displayName,
+            description: primary.description,
+            color: primary.color,
+            iconName: primary.iconName,
+            order: minOrder,
+            isDefault: matches.some(s => s.isDefault),
+            isFinal: matches.some(s => s.isFinal),
+            issueCount: matches.reduce((sum, s) => sum + s.issueCount, 0)
           };
         })
         .filter(Boolean)

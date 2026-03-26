@@ -1,12 +1,13 @@
 "use client";
 
-import { forwardRef, useCallback, useMemo, type MutableRefObject } from "react";
+import { forwardRef, useCallback, useMemo, useState, type MutableRefObject } from "react";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Plus,
   GripVertical,
-  AlertCircle
+  AlertCircle,
+  ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Draggable, Droppable } from "@hello-pangea/dnd";
@@ -14,6 +15,7 @@ import { getColumnColor } from '../utils';
 import KanbanIssueCard from './KanbanIssueCard';
 import QuickIssueCreate from './QuickIssueCreate';
 import type { KanbanColumnProps } from '../types';
+import { INITIAL_COLUMN_ITEMS, LOAD_MORE_INCREMENT } from '../constants';
 
 const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function KanbanColumn({
   column,
@@ -33,6 +35,10 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
   onCancelCreatingIssue,
   onIssueCreated
 }: KanbanColumnProps, ref) {
+
+  const [visibleCount, setVisibleCount] = useState(INITIAL_COLUMN_ITEMS);
+  const visibleIssues = useMemo(() => column.issues.slice(0, visibleCount), [column.issues, visibleCount]);
+  const hiddenCount = column.issues.length - visibleIssues.length;
 
   const shouldShowDisabledState = hoverColumnId === column.id && !hoverState.canDrop;
   const cannotDropReason = useMemo(() => {
@@ -105,7 +111,7 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
                   ref={provided.innerRef}
                   {...provided.droppableProps}
                   className={cn(
-                    "relative flex-1 min-h-0 space-y-2 rounded-lg transition-all duration-200 overflow-y-auto px-1",
+                    "kanban-column-scroll relative flex-1 min-h-0 space-y-2 rounded-lg transition-all duration-200 overflow-y-auto px-1",
                     isDraggingOver && draggedIssue && !shouldShowDisabledState && "bg-collab-800/50 border border-blue-500/40 rounded-xl",
                     isDraggingOver && draggedIssue && shouldShowDisabledState && "bg-red-500/5 border border-red-500/40 rounded-xl",
                 )}>
@@ -130,7 +136,7 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
                     />
                   )}
                   {/* Issues */}
-                  {column.issues.map((issue: any, index: number) => (
+                  {visibleIssues.map((issue: any, index: number) => (
                     <KanbanIssueCard
                       key={issue.id}
                       issue={issue}
@@ -142,6 +148,18 @@ const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(function Kanb
                   ))}
 
                   {provided.placeholder}
+
+                  {/* Load More */}
+                  {hiddenCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleCount(prev => prev + LOAD_MORE_INCREMENT)}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 my-1 text-xs text-collab-400 hover:text-collab-200 hover:bg-collab-800/60 rounded-lg transition-colors"
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                      <span>Show {Math.min(hiddenCount, LOAD_MORE_INCREMENT)} more ({hiddenCount} remaining)</span>
+                    </button>
+                  )}
 
                   {/* Empty Column */}
                   {column.issues.length === 0 && !isCreatingIssue && !isDraggingOver && (

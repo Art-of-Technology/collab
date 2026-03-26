@@ -523,6 +523,9 @@ class RemoteCoclawManager implements ICoclawManager {
             embeddingModel: spawnConfig.embeddingModel,
             embeddingDimensions: spawnConfig.embeddingDimensions,
             channels,
+            githubToken: spawnConfig.githubToken,
+            githubDefaultOwner: spawnConfig.githubDefaultOwner,
+            githubDefaultRepo: spawnConfig.githubDefaultRepo,
           },
         }),
       });

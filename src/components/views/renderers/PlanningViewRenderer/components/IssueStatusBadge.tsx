@@ -65,18 +65,19 @@ export function getStatusConfig(status: StatusCategory) {
 
 interface IssueStatusBadgeProps {
   status: string;
+  displayName?: string;
   statusSymbol?: string | null;
   className?: string;
 }
 
-export function IssueStatusBadge({ status, statusSymbol, className }: IssueStatusBadgeProps) {
+export function IssueStatusBadge({ status, displayName, statusSymbol, className }: IssueStatusBadgeProps) {
   const category = emojiToStatusCategory(statusSymbol);
   const config = statusConfig[category];
 
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
       <StatusIcon status={category} size="sm" />
-      <span className="text-xs text-collab-400">{status}</span>
+      <span className="text-xs text-collab-400">{displayName || status}</span>
     </div>
   );
 }
