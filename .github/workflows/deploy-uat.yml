@@ -65,19 +65,6 @@ jobs:
           # Also tag as uat-latest
           docker tag collab:$VERSION collab:uat-latest
 
-      - name: Checkout Coclaw repo
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository_owner }}/coclaw
-          path: coclaw
-          token: ${{ secrets.COCLAW_REPO_TOKEN }}
-
-      - name: Build Coclaw Manager Docker image
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          docker build -t coclaw-manager:$VERSION -f coclaw/manager/Dockerfile coclaw/
-          docker tag coclaw-manager:$VERSION coclaw-manager:uat-latest
-
       - name: Prune old Docker images
         run: |
           docker image prune -a --force --filter "until=24h" --filter "label=org.opencontainers.image.title=Collab" || true
@@ -114,74 +101,15 @@ jobs:
           
           # Deploy Collab stack
           docker stack deploy -c docker-compose.swarm.yml collab-uat --prune
-          
-          # Deploy Qdrant (no special capabilities needed)
-          docker stack deploy -c coclaw/docker-compose.swarm.qdrant.yml collab-uat --prune
         env:
           IMAGE_VERSION: ${{ env.VERSION }}
           APP_PORT: 3004
           NODE_OPTIONS: "--max-old-space-size=2048"
 
-      - name: Create Coclaw env file
-        env:
-          COCLAW_ENV_FILE: ${{ secrets.COCLAW_ENV_UAT }}
-        run: |
-          echo "$COCLAW_ENV_FILE" > coclaw.env
-
-      - name: Deploy Coclaw Manager (with bubblewrap sandbox)
-        run: |
-          SERVICE_NAME="collab-uat_coclaw-manager"
-          IMAGE="coclaw-manager:$VERSION"
-          VOLUME_NAME="coclaw_data"
-          NETWORK="collab_default"
-          
-          # Ensure volume exists
-          docker volume create $VOLUME_NAME 2>/dev/null || true
-          
-          # Remove existing service to ensure clean config (cap_add can't be updated in-place)
-          if docker service inspect $SERVICE_NAME >/dev/null 2>&1; then
-            echo "Updating existing coclaw-manager service..."
-            docker service rm $SERVICE_NAME
-            sleep 5
-          fi
-          
-          # Build -e flags from coclaw.env (all config comes from COCLAW_ENV_UAT secret)
-          ENV_ARGS=""
-          while IFS= read -r line || [ -n "$line" ]; do
-            [[ -z "$line" || "$line" == \#* ]] && continue
-            ENV_ARGS="$ENV_ARGS -e $line"
-          done < coclaw.env
-          
-          echo "Creating coclaw-manager service with SYS_ADMIN for bubblewrap sandbox..."
-          docker service create \
-            --name $SERVICE_NAME \
-            --network $NETWORK \
-            --cap-add SYS_ADMIN \
-            --mount type=volume,source=$VOLUME_NAME,target=/coclaw-data \
-            --replicas 1 \
-            --limit-cpu 2.0 \
-            --limit-memory 2g \
-            --reserve-cpu 0.5 \
-            --reserve-memory 512m \
-            --restart-condition on-failure \
-            --restart-delay 5s \
-            --restart-max-attempts 3 \
-            --restart-window 120s \
-            --update-delay 10s \
-            --update-parallelism 1 \
-            --update-order stop-first \
-            --update-failure-action rollback \
-            $ENV_ARGS \
-            $IMAGE
-          
-          echo "coclaw-manager deployed with bubblewrap sandbox enabled"
-
       - name: Wait for services to be ready
         run: |
           sleep 30
           docker service ps collab-uat_collab --no-trunc
-          docker service ps collab-uat_coclaw-manager --no-trunc || true
-          docker service ps collab-uat_qdrant --no-trunc || true
           
       - name: Show service logs
         run: |
@@ -189,9 +117,4 @@ jobs:
           echo "Service logs (last 100 lines):"
           echo "=========================================="
           docker service logs collab-uat_collab --tail 100
-          echo ""
-          echo "========================================="
-          echo "Coclaw Manager logs (last 50 lines):"
-          echo "========================================="
-          docker service logs collab-uat_coclaw-manager --tail 50 || true
         if: always()
