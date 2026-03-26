@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { cn } from "@/lib/utils";
 import { fontSans } from "@/lib/fonts";
 import SessionProvider from "@/providers/SessionProvider";
-import Script from "next/script";
+
 import { UiProvider } from "@/context/UiContext";
 import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
@@ -81,11 +81,6 @@ export default async function RootLayout({
                               {children}
                             </div>
                             <Toaster />
-                          <Script
-                            src="https://api.chatproject.io/chat-widget.js"
-                            id="chat-widget-script"
-                            strategy="lazyOnload"
-                          />
                         </DockProvider>
                       </CustomThemeProvider>
                     </UiProvider>

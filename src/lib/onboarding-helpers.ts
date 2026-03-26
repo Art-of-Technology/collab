@@ -241,9 +241,15 @@ export async function createPersonalWorkspaceForUser(userId: string, userName: s
 
     // Set up user's notification preferences for the new workspace
     await tx.notificationPreferences.upsert({
-      where: { userId },
+      where: { 
+        userId_workspaceId: {
+          userId,
+          workspaceId: workspace.id
+        }
+      },
       create: {
         userId,
+        workspaceId: workspace.id,
         // Default to minimal notifications for personal workspace
         taskCreated: true,
         taskStatusChanged: true,

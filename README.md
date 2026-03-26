@@ -151,11 +151,6 @@ Collab is designed to streamline internal communication and work tracking by off
    APP_TOKENS_KEY="your-32-character-encryption-key-here"  # Generate with: openssl rand -hex 32
    ```
 
-   #### Chat Integration (optional)
-   ```bash
-   CHAT_PROJECT_API_KEY="your-chat-project-api-key"  # For chat widget integration
-   ```
-
    #### Error Monitoring (Sentry - optional)
    ```bash
    SENTRY_DSN="https://your-sentry-dsn@sentry.io/project-id"

@@ -187,8 +187,27 @@ export function hasAllScopes(
 }
 
 /**
+ * Check if at least one of the required scopes is present in the provided scope set
+ *
+ * @param requiredScopes - Scopes where at least one must be present
+ * @param providedScopes - Scopes that are provided
+ * @returns True if at least one required scope is present
+ */
+export function hasAnyScope(
+  requiredScopes: string | string[],
+  providedScopes: string | string[] | null | undefined
+): boolean {
+  const normalizedRequired = normalizeScopes(requiredScopes);
+  const normalizedProvided = normalizeScopes(providedScopes);
+
+  return normalizedRequired.some(scope =>
+    normalizedProvided.includes(scope)
+  );
+}
+
+/**
  * Get default scopes for new app installations
- * 
+ *
  * @returns Array of default scope strings
  */
 export function getDefaultScopes(): string[] {
@@ -293,10 +312,37 @@ export function isValidCustomProtocolRedirect(redirectUri: string): boolean {
 }
 
 /**
+ * Check if a redirect URI is a valid remote agent HTTPS callback URL.
+ * Used for system apps when an AI agent running on a remote server
+ * needs to authenticate via MCP OAuth on behalf of a user.
+ *
+ * Security requirements:
+ * - Must use HTTPS protocol
+ * - Must have a valid hostname (not localhost/127.0.0.1)
+ * - Must have a path ending with /callback (e.g., /api/mcp/oauth/callback)
+ *
+ * @param redirectUri - The redirect URI to validate
+ * @returns True if it's a valid remote agent HTTPS callback URL
+ */
+export function isValidRemoteAgentRedirect(redirectUri: string): boolean {
+  try {
+    const url = new URL(redirectUri);
+    const isHttps = url.protocol === 'https:';
+    const isNotLocalhost = url.hostname !== 'localhost' && url.hostname !== '127.0.0.1';
+    const hasCallbackPath = url.pathname.endsWith('/callback');
+
+    return isHttps && isNotLocalhost && hasCallbackPath;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Validate redirect URI against allowed URIs, with special handling for system apps.
  * System apps (like MCP) are allowed to use:
  * - Any localhost callback URL with dynamic ports (for CLI tools like Claude Code)
  * - Custom protocol schemes (for desktop apps like Cursor, VS Code)
+ * - Remote HTTPS callback URLs ending with /callback (for AI agents)
  *
  * @param redirectUri - The redirect URI to validate
  * @param allowedUris - Array of allowed redirect URIs
@@ -321,6 +367,10 @@ export function isAllowedRedirectUri(
     }
     // Allow custom protocol schemes (Cursor, VS Code, other desktop apps)
     if (isValidCustomProtocolRedirect(redirectUri)) {
+      return true;
+    }
+    // Allow remote HTTPS callbacks for AI agents
+    if (isValidRemoteAgentRedirect(redirectUri)) {
       return true;
     }
   }
