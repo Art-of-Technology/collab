@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { useSidebar } from "@/components/providers/SidebarProvider";
 import { useMention } from "@/context/MentionContext";
 import { useCurrentUser } from "@/hooks/queries/useUser";
