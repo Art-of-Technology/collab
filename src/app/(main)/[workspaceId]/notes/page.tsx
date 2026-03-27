@@ -859,7 +859,7 @@ export default function NotesPage({
         {/* Notes List */}
         {filteredNotes.length === 0 ? (
           <EmptyState
-            icon={FileText}
+            icon={<FileText className="h-6 w-6 text-collab-500" />}
             title="No context found"
             description={
               hasActiveFilters
