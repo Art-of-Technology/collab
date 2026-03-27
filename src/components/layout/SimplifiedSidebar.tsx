@@ -18,8 +18,6 @@ import {
   MessageSquare,
   FolderKanban,
   ChevronDown,
-  HelpCircle,
-  ExternalLink,
   Bot,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
@@ -364,24 +362,6 @@ export default function SimplifiedSidebar({
 
       {/* Footer */}
       <div className="mt-auto px-2 pb-4 space-y-1">
-        {/* Support Link */}
-        <Link
-          href="/support"
-          className="flex items-center gap-4 rounded-lg px-2 py-2 text-sm text-collab-400 hover:text-white hover:bg-collab-800 transition-colors"
-        >
-          <HelpCircle className="h-4 w-4 text-collab-500" />
-          <span>Support</span>
-        </Link>
-
-        {/* Documentation Link */}
-        <Link
-          href="/docs"
-          className="flex items-center gap-4 rounded-lg px-2 py-2 text-sm text-collab-400 hover:text-white hover:bg-collab-800 transition-colors"
-        >
-          <ExternalLink className="h-4 w-4 text-collab-500" />
-          <span>Documentation</span>
-        </Link>
-
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
