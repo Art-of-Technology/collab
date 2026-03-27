@@ -882,12 +882,16 @@ async function createCoclawProxyStream(
           }
         })();
 
-        // Proxy to Coclaw gateway with streaming
+        // Proxy to Coclaw gateway with streaming (5 minute timeout for long agent runs)
+        const gatewayAbort = new AbortController();
+        const gatewayTimeout = setTimeout(() => gatewayAbort.abort(), 5 * 60 * 1000);
+
         let gatewayResponse;
         try {
           gatewayResponse = await fetch(gatewayUrl, {
             method: 'POST',
             headers: gatewayHeaders,
+            signal: gatewayAbort.signal,
             body: JSON.stringify({
               model: 'default',
               messages: openaiMessages,
@@ -895,15 +899,25 @@ async function createCoclawProxyStream(
             }),
           });
         } catch (fetchError) {
+          clearTimeout(gatewayTimeout);
           console.error('[coclaw-proxy] Gateway fetch failed:', fetchError);
           eventsAbort.abort();
+
+          // Differentiate between timeout and connection errors
+          const isTimeout = fetchError instanceof Error && fetchError.name === 'AbortError';
+          const errorMessage = isTimeout
+            ? 'Request timed out. Your Coclaw agent may be processing a complex task. Please try again.'
+            : 'Coclaw agent is starting up. Please try again in a few seconds.';
+
           sendEvent(controller, {
             type: 'error',
-            message: 'Coclaw agent is starting up. Please try again in a few seconds.',
+            message: errorMessage,
           });
           controller.close();
           return;
         }
+
+        clearTimeout(gatewayTimeout);
 
         if (!gatewayResponse.ok) {
           const errText = await gatewayResponse.text().catch(() => 'Unknown error');
@@ -915,14 +929,36 @@ async function createCoclawProxyStream(
           try {
             const parsed = JSON.parse(errText);
             const msg = parsed?.error?.message || parsed?.error || parsed?.message;
+            const errType = parsed?.error?.type;
+
             if (msg && typeof msg === 'string') {
-              errorDetail = msg;
+              // Provide user-friendly messages for common errors
+              if (errType === 'provider_error' || msg.includes('API request failed')) {
+                errorDetail = 'AI provider error. Please check your API key in Settings → AI Provider Keys.';
+              } else if (errType === 'authentication_error' || msg.includes('authentication') || msg.includes('api_key')) {
+                errorDetail = 'Invalid API key. Please update your API key in Settings → AI Provider Keys.';
+              } else if (errType === 'rate_limit_error' || msg.includes('rate limit')) {
+                errorDetail = 'Rate limit reached. Please wait a moment and try again.';
+              } else if (msg.includes('overloaded') || msg.includes('capacity')) {
+                errorDetail = 'AI service is temporarily overloaded. Please try again in a few moments.';
+              } else {
+                errorDetail = msg;
+              }
             }
           } catch {
             // Not JSON — use raw text if short enough
             if (errText.length > 0 && errText.length < 300) {
               errorDetail = errText;
             }
+          }
+
+          // Handle specific HTTP status codes
+          if (gatewayResponse.status === 408) {
+            errorDetail = 'Request timed out. Your Coclaw agent may be busy. Please try again.';
+          } else if (gatewayResponse.status === 502 || gatewayResponse.status === 503) {
+            errorDetail = 'Coclaw agent is temporarily unavailable. Please try again in a few seconds.';
+          } else if (gatewayResponse.status === 504) {
+            errorDetail = 'Gateway timeout. Your Coclaw agent may be processing a complex task.';
           }
 
           sendEvent(controller, {

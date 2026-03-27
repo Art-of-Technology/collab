@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { qdrantClient } from './qdrant-client';
+import { qdrantClient, withQdrantRetry } from './qdrant-client';
 import { createEmbeddingService, type EmbeddingService } from './embedding';
 
 /**
@@ -40,16 +40,19 @@ export async function ensureCollection(): Promise<void> {
   if (initialized) return;
 
   try {
-    const collections = await qdrantClient.getCollections();
+    // Use retry logic for transient DNS/connection failures
+    const collections = await withQdrantRetry(() => qdrantClient.getCollections());
     const exists = collections.collections.some((c) => c.name === COLLECTION_NAME);
 
     if (!exists) {
       embeddingService = createEmbeddingService();
       const dimensions = embeddingService?.dimensions || DEFAULT_DIMENSIONS;
 
-      await qdrantClient.createCollection(COLLECTION_NAME, {
-        vectors: { size: dimensions, distance: 'Cosine' },
-      });
+      await withQdrantRetry(() =>
+        qdrantClient.createCollection(COLLECTION_NAME, {
+          vectors: { size: dimensions, distance: 'Cosine' },
+        })
+      );
       console.log(`✅ Created Qdrant collection: ${COLLECTION_NAME} (${dimensions}d)`);
     } else {
       // Still need to initialise the embedding service even if collection exists
@@ -58,6 +61,7 @@ export async function ensureCollection(): Promise<void> {
 
     initialized = true;
   } catch (error) {
+    // Log but don't throw - allows app to start even if Qdrant is temporarily unavailable
     console.error('❌ Failed to initialize Qdrant collection:', error);
   }
 }
@@ -91,31 +95,33 @@ export async function syncIssueToQdrant(issue: {
     ? await embeddingService.embed(text)
     : new Array(DEFAULT_DIMENSIONS).fill(0);
 
-  await qdrantClient.upsert(COLLECTION_NAME, {
-    points: [
-      {
-        id: cuidToUuid(issue.id),
-        vector,
-        payload: {
-          type: 'issue',
-          source_id: issue.id,
-          title: issue.title,
-          content: issue.description || '',
-          issueKey: issue.issueKey || '',
-          issueType: issue.type || '',
-          priority: issue.priority || '',
-          status: issue.status || '',
-          statusId: issue.statusId || '',
-          projectId: issue.projectId || '',
-          workspaceId: issue.workspaceId,
-          assigneeId: issue.assigneeId || '',
-          reporterId: issue.reporterId || '',
-          createdAt: issue.createdAt ? new Date(issue.createdAt).toISOString() : '',
-          updatedAt: issue.updatedAt ? new Date(issue.updatedAt).toISOString() : '',
+  await withQdrantRetry(() =>
+    qdrantClient.upsert(COLLECTION_NAME, {
+      points: [
+        {
+          id: cuidToUuid(issue.id),
+          vector,
+          payload: {
+            type: 'issue',
+            source_id: issue.id,
+            title: issue.title,
+            content: issue.description || '',
+            issueKey: issue.issueKey || '',
+            issueType: issue.type || '',
+            priority: issue.priority || '',
+            status: issue.status || '',
+            statusId: issue.statusId || '',
+            projectId: issue.projectId || '',
+            workspaceId: issue.workspaceId,
+            assigneeId: issue.assigneeId || '',
+            reporterId: issue.reporterId || '',
+            createdAt: issue.createdAt ? new Date(issue.createdAt).toISOString() : '',
+            updatedAt: issue.updatedAt ? new Date(issue.updatedAt).toISOString() : '',
+          },
         },
-      },
-    ],
-  });
+      ],
+    })
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -145,29 +151,31 @@ export async function syncContextToQdrant(context: {
     ? await embeddingService.embed(text)
     : new Array(DEFAULT_DIMENSIONS).fill(0);
 
-  await qdrantClient.upsert(COLLECTION_NAME, {
-    points: [
-      {
-        id: cuidToUuid(context.id),
-        vector,
-        payload: {
-          type: 'context',
-          source_id: context.id,
-          title: context.title,
-          content: context.content,
-          contextType: context.type || 'GENERAL',
-          scope: context.scope || 'WORKSPACE',
-          isAiContext: context.isAiContext || false,
-          aiContextPriority: context.aiContextPriority || 0,
-          projectId: context.projectId || '',
-          workspaceId: context.workspaceId || '',
-          authorId: context.authorId || '',
-          createdAt: context.createdAt ? new Date(context.createdAt).toISOString() : '',
-          updatedAt: context.updatedAt ? new Date(context.updatedAt).toISOString() : '',
+  await withQdrantRetry(() =>
+    qdrantClient.upsert(COLLECTION_NAME, {
+      points: [
+        {
+          id: cuidToUuid(context.id),
+          vector,
+          payload: {
+            type: 'context',
+            source_id: context.id,
+            title: context.title,
+            content: context.content,
+            contextType: context.type || 'GENERAL',
+            scope: context.scope || 'WORKSPACE',
+            isAiContext: context.isAiContext || false,
+            aiContextPriority: context.aiContextPriority || 0,
+            projectId: context.projectId || '',
+            workspaceId: context.workspaceId || '',
+            authorId: context.authorId || '',
+            createdAt: context.createdAt ? new Date(context.createdAt).toISOString() : '',
+            updatedAt: context.updatedAt ? new Date(context.updatedAt).toISOString() : '',
+          },
         },
-      },
-    ],
-  });
+      ],
+    })
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -200,28 +208,30 @@ export async function syncIssueActivityToQdrant(activity: {
     ? await embeddingService.embed(text)
     : new Array(DEFAULT_DIMENSIONS).fill(0);
 
-  await qdrantClient.upsert(COLLECTION_NAME, {
-    points: [
-      {
-        id: cuidToUuid(activity.id),
-        vector,
-        payload: {
-          type: 'issue_activity',
-          source_id: activity.id,
-          action: activity.action,
-          itemId: activity.itemId,
-          fieldName: activity.fieldName || '',
-          oldValue: activity.oldValue || '',
-          newValue: activity.newValue || '',
-          details: activity.details || '',
-          workspaceId: activity.workspaceId,
-          projectId: activity.projectId || '',
-          userId: activity.userId || '',
-          createdAt: activity.createdAt ? new Date(activity.createdAt).toISOString() : '',
+  await withQdrantRetry(() =>
+    qdrantClient.upsert(COLLECTION_NAME, {
+      points: [
+        {
+          id: cuidToUuid(activity.id),
+          vector,
+          payload: {
+            type: 'issue_activity',
+            source_id: activity.id,
+            action: activity.action,
+            itemId: activity.itemId,
+            fieldName: activity.fieldName || '',
+            oldValue: activity.oldValue || '',
+            newValue: activity.newValue || '',
+            details: activity.details || '',
+            workspaceId: activity.workspaceId,
+            projectId: activity.projectId || '',
+            userId: activity.userId || '',
+            createdAt: activity.createdAt ? new Date(activity.createdAt).toISOString() : '',
+          },
         },
-      },
-    ],
-  });
+      ],
+    })
+  );
 }
 
 // ---------------------------------------------------------------------------
