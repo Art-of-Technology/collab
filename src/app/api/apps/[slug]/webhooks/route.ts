@@ -231,7 +231,6 @@ export async function POST(
 
     console.log(`🪝 Webhook: Created webhook for app ${slug}`, {
       webhookId: webhook.id,
-      url,
       eventTypes,
       workspaceId,
       userId: session.user.id

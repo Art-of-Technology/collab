@@ -202,22 +202,33 @@ export function isValidWebhookUrl(url: string): boolean {
       return false;
     }
     
-    // No localhost/private IPs in production
+    // No localhost/private/link-local/metadata IPs in production.
+    // (Local dev is allowed to target localhost/private hosts for testing;
+    //  the authoritative SSRF guard runs at fetch time in webhook-delivery.)
     if (process.env.NODE_ENV === 'production') {
-      const hostname = parsed.hostname;
+      const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
       if (
         hostname === 'localhost' ||
-        hostname === '127.0.0.1' ||
+        hostname.endsWith('.localhost') ||
+        hostname === '0.0.0.0' ||
+        hostname === '::1' ||
+        hostname === '::' ||
+        hostname.startsWith('127.') ||
         hostname.startsWith('10.') ||
         hostname.startsWith('192.168.') ||
-        (hostname.startsWith('172.') && 
-         parseInt(hostname.split('.')[1]) >= 16 && 
-         parseInt(hostname.split('.')[1]) <= 31)
+        hostname.startsWith('169.254.') || // link-local incl. cloud metadata
+        hostname.startsWith('0.') ||
+        (hostname.startsWith('172.') &&
+         parseInt(hostname.split('.')[1]) >= 16 &&
+         parseInt(hostname.split('.')[1]) <= 31) ||
+        hostname.startsWith('fc') || // fc00::/7 unique-local IPv6
+        hostname.startsWith('fd') ||
+        hostname.startsWith('fe80') // link-local IPv6
       ) {
         return false;
       }
     }
-    
+
     return true;
   } catch {
     return false;

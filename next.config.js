@@ -46,6 +46,22 @@ const nextConfig = {
         },
     ],
   },
+  // Baseline security headers. Conservative set that does not risk breaking
+  // app functionality. CSP and HSTS are intentionally left to deploy/edge
+  // config so they can be tuned to the runtime environment.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'X-DNS-Prefetch-Control', value: 'off' },
+        ],
+      },
+    ];
+  },
   // Remove old API config as App Router uses different mechanism
 }
 

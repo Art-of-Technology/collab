@@ -12,6 +12,7 @@ import {
   isValidWebhookEvent
 } from './webhooks';
 import { decrypt } from './apps/crypto';
+import { assertSafeUrl } from './ssrf';
 
 const prisma = new PrismaClient();
 
@@ -84,11 +85,22 @@ export async function deliverWebhook(
       'X-Collab-Installation-ID': webhook.installationId,
     };
 
-    console.log(`🪝 Webhook: Delivering ${event.type} to ${webhook.url}`, {
-      eventId: event.id,
-      webhookId,
-      timestamp
-    });
+    // SSRF guard: resolve the target host and reject private/loopback/
+    // link-local/metadata destinations before fetching. Skipped in local dev
+    // so developers can test against localhost webhooks.
+    if (process.env.NODE_ENV === 'production') {
+      try {
+        await assertSafeUrl(webhook.url, { allowedProtocols: ['https:'] });
+      } catch {
+        return {
+          success: false,
+          error: 'Webhook URL is not allowed',
+          shouldRetry: false,
+          timestamp: Date.now(),
+          signature: ''
+        };
+      }
+    }
 
     // Make HTTP request
     const controller = new AbortController();
@@ -99,7 +111,8 @@ export async function deliverWebhook(
         method: 'POST',
         headers,
         body: payload,
-        signal: controller.signal
+        signal: controller.signal,
+        redirect: 'manual' // Do not follow redirects (SSRF bypass vector)
       });
 
       clearTimeout(timeoutId);

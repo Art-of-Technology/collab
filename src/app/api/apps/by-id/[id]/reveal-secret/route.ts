@@ -30,6 +30,13 @@ export async function POST(
       return NextResponse.json({ error: 'App not found' }, { status: 404 });
     }
 
+    // Only the app's publisher (owner) or a system admin may reveal the client
+    // secret. Return 404 (not 403) so non-owners cannot even confirm the app
+    // exists by ID.
+    if (app.publisherId !== session.user.id && session.user.role !== 'SYSTEM_ADMIN') {
+      return NextResponse.json({ error: 'App not found' }, { status: 404 });
+    }
+
     if (!app.oauthClient) {
       return NextResponse.json({ error: 'App has no OAuth client' }, { status: 404 });
     }

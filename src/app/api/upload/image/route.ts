@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
+import { getAuthSession } from '@/lib/auth';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -15,15 +16,31 @@ cloudinary.config({
  */
 export async function POST(req: NextRequest) {
   try {
+    // Require an authenticated session; this is not a public upload endpoint.
+    const session = await getAuthSession();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { image, filename } = await req.json();
-    
-    if (!image) {
+
+    if (!image || typeof image !== 'string') {
       return NextResponse.json(
         { error: 'Image data is required' },
         { status: 400 }
       );
     }
-    
+
+    // Cap the decoded payload size server-side (base64 is ~4/3 of raw bytes).
+    // ~10MB decoded => ~13.4MB of base64 characters.
+    const MAX_BASE64_LENGTH = 14 * 1024 * 1024;
+    if (image.length > MAX_BASE64_LENGTH) {
+      return NextResponse.json(
+        { error: 'Image is too large' },
+        { status: 413 }
+      );
+    }
+
     // Upload image to Cloudinary using base64
     // Note: Need to prepend the data URL prefix that was removed in the client
     const result = await cloudinary.uploader.upload(
@@ -31,7 +48,7 @@ export async function POST(req: NextRequest) {
       {
         folder: 'devitter',
         public_id: filename ? filename.split('.')[0] : undefined,
-        resource_type: 'auto', // Auto-detect the file type
+        resource_type: 'image', // Force image; never auto-detect arbitrary types
       }
     );
     
