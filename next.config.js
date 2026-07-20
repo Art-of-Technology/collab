@@ -52,8 +52,8 @@ const nextConfig = {
   // (CSP, HSTS, X-Content-Type-Options, Referrer-Policy, Permissions-Policy,
   // X-DNS-Prefetch-Control, and clickjacking protection via the env-tunable
   // `frame-ancestors` CSP directive). Its matcher, however, deliberately
-  // excludes static assets and a few infra routes. We re-apply the two
-  // non-negotiable, non-configurable headers here so those excluded paths are
+  // excludes static assets and a few infra routes. We re-apply the single
+  // non-negotiable, non-configurable header here so those excluded paths are
   // still covered, without duplicating logic the middleware already owns on
   // the paths it handles.
   //
