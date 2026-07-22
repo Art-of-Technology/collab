@@ -19,13 +19,14 @@ export interface CreateIssueData {
 
 export interface UpdateIssueData {
   id: string;
+  workspaceId?: string; // Workspace ID to scope updates; callers should provide this when the issue ID is an issue key (e.g., COF-123) that may exist in multiple workspaces
   title?: string;
   description?: string;
   type?: string;
   status?: string;
   statusValue?: string;
   priority?: string;
-  assigneeId?: string;
+  assigneeId?: string | null;
   reporterId?: string;
   labels?: string[];
   dueDate?: Date;
@@ -80,11 +81,16 @@ export function useIssuesByWorkspace(workspaceId: string, projectIds?: string[])
 }
 
 // Hook for fetching a single issue
-export function useIssue(issueId: string) {
+export function useIssue(issueId: string, workspaceId?: string) {
   return useQuery({
-    queryKey: issueKeys.detail(issueId),
+    // Always include workspaceId in query key for consistent caching
+    queryKey: [...issueKeys.detail(issueId), workspaceId ?? null],
     queryFn: async () => {
-      const response = await fetch(`/api/issues/${issueId}`);
+      const url = new URL(`/api/issues/${issueId}`, window.location.origin);
+      if (workspaceId) {
+        url.searchParams.set('workspaceId', workspaceId);
+      }
+      const response = await fetch(url.toString());
       if (!response.ok) {
         throw new Error('Failed to fetch issue');
       }
@@ -145,12 +151,17 @@ export function useUpdateIssue() {
 
   return useMutation({
     mutationFn: async (data: UpdateIssueData & { skipInvalidate?: boolean }): Promise<any> => {
-      const { id, skipInvalidate, ...updateData } = data;
+      const { id, workspaceId, skipInvalidate, ...updateData } = data;
       // Normalize issue type casing
       if (updateData.type) {
         updateData.type = updateData.type.toUpperCase();
       }
-      const response = await fetch(`/api/issues/${id}`, {
+      // Build URL with workspace context for proper scoping
+      const url = new URL(`/api/issues/${id}`, window.location.origin);
+      if (workspaceId) {
+        url.searchParams.set('workspaceId', workspaceId);
+      }
+      const response = await fetch(url.toString(), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -164,6 +175,63 @@ export function useUpdateIssue() {
       }
 
       return response.json();
+    },
+    onSuccess: (data, variables) => {
+      if (!variables.skipInvalidate) {
+        // Update the issue cache with the response
+        const updatedIssue = data.issue || data;
+        if (updatedIssue) {
+          // Update cache for all possible query key variants (with and without workspaceId)
+          // The useIssue hook uses [...issueKeys.detail(issueId), workspaceId ?? null]
+          queryClient.setQueryData(issueKeys.detail(variables.id), { issue: updatedIssue });
+
+          // Update with workspaceId included in key (used by modal)
+          if (variables.workspaceId) {
+            queryClient.setQueryData([...issueKeys.detail(variables.id), variables.workspaceId], { issue: updatedIssue });
+          }
+          // Also update with issue's actual workspaceId
+          if (updatedIssue.workspaceId) {
+            queryClient.setQueryData([...issueKeys.detail(variables.id), updatedIssue.workspaceId], { issue: updatedIssue });
+          }
+          // Update with null workspaceId variant
+          queryClient.setQueryData([...issueKeys.detail(variables.id), null], { issue: updatedIssue });
+
+          // Also update by issueKey if different
+          if (updatedIssue.issueKey && variables.id !== updatedIssue.issueKey) {
+            queryClient.setQueryData(issueKeys.detail(updatedIssue.issueKey), { issue: updatedIssue });
+            if (variables.workspaceId) {
+              queryClient.setQueryData([...issueKeys.detail(updatedIssue.issueKey), variables.workspaceId], { issue: updatedIssue });
+            }
+            if (updatedIssue.workspaceId) {
+              queryClient.setQueryData([...issueKeys.detail(updatedIssue.issueKey), updatedIssue.workspaceId], { issue: updatedIssue });
+            }
+            queryClient.setQueryData([...issueKeys.detail(updatedIssue.issueKey), null], { issue: updatedIssue });
+          }
+        }
+
+        // Invalidate related queries - use predicate to match all variants with this issue id
+        // Use refetchType: 'active' to trigger refetch for queries being watched (e.g., by modal)
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            query.queryKey[0] === 'issues' &&
+            query.queryKey[1] === 'detail' &&
+            (query.queryKey[2] === variables.id || query.queryKey[2] === updatedIssue?.issueKey),
+          refetchType: 'active'
+        });
+
+        // Invalidate workspace and project queries
+        if (updatedIssue.workspaceId) {
+          queryClient.invalidateQueries({
+            predicate: (query) =>
+              query.queryKey[0] === 'issues' &&
+              query.queryKey[1] === 'workspace' &&
+              query.queryKey[2] === updatedIssue.workspaceId
+          });
+        }
+        if (updatedIssue.projectId) {
+          queryClient.invalidateQueries({ queryKey: issueKeys.byProject(updatedIssue.projectId) });
+        }
+      }
     }
   });
 }

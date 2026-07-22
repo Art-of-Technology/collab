@@ -37,6 +37,10 @@ const nextConfig = {
     'bcrypt',
   ],
   images: {
+    // Allow SVG images (for logo-text.svg and other SVGs)
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     remotePatterns: [
         {
             protocol: 'https',

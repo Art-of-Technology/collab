@@ -12,10 +12,16 @@ export interface Issue {
   issueKey: string | null;
   type: 'EPIC' | 'STORY' | 'TASK' | 'BUG' | 'MILESTONE' | 'SUBTASK';
   status?: string;
+  statusValue?: string;
   priority: string;
   project: {
     id: string;
     name: string;
+    color?: string;
+  } | null;
+  projectStatus?: {
+    displayName?: string;
+    name?: string;
     color?: string;
   } | null;
   assignee?: {

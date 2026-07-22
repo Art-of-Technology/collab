@@ -22,7 +22,7 @@ export const SUPPORTED_SCOPES = [
   'user:write',
   'issues:read',
   'issues:write',
-  'posts:read', 
+  'posts:read',
   'posts:write',
   'workspace:read',
   'workspace:write',
@@ -31,7 +31,19 @@ export const SUPPORTED_SCOPES = [
   'comments:read',
   'comments:write',
   'leave:read',
-  'leave:write'
+  'leave:write',
+  'projects:read',
+  'projects:write',
+  'views:read',
+  'views:write',
+  'labels:read',
+  'labels:write',
+  // Context & Knowledge System (Phase 6)
+  'context:read',
+  'context:write',
+  'knowledge:read',
+  'prompts:read',
+  'secrets:read',
 ] as const;
 
 export type SupportedScope = typeof SUPPORTED_SCOPES[number];
@@ -51,7 +63,7 @@ export function normalizeScopes(scopes: string | string[] | null | undefined): s
 
   if (Array.isArray(scopes)) {
     // Handle array of scopes
-    scopeArray = scopes.flatMap(scope => 
+    scopeArray = scopes.flatMap(scope =>
       typeof scope === 'string' ? scope.split(/\s+/) : []
     );
   } else if (typeof scopes === 'string') {
@@ -134,8 +146,8 @@ export function filterGrantedScopes(
 ): string[] {
   const normalizedRequested = normalizeScopes(requestedScopes);
   const normalizedAvailable = normalizeScopes(availableScopes);
-  
-  return normalizedRequested.filter(scope => 
+
+  return normalizedRequested.filter(scope =>
     normalizedAvailable.includes(scope)
   );
 }
@@ -148,7 +160,7 @@ export function filterGrantedScopes(
  * @returns True if the target scope is included
  */
 export function hasScope(
-  targetScope: string, 
+  targetScope: string,
   scopes: string | string[] | null | undefined
 ): boolean {
   const normalizedScopes = normalizeScopes(scopes);
@@ -168,15 +180,34 @@ export function hasAllScopes(
 ): boolean {
   const normalizedRequired = normalizeScopes(requiredScopes);
   const normalizedProvided = normalizeScopes(providedScopes);
-  
-  return normalizedRequired.every(scope => 
+
+  return normalizedRequired.every(scope =>
+    normalizedProvided.includes(scope)
+  );
+}
+
+/**
+ * Check if at least one of the required scopes is present in the provided scope set
+ *
+ * @param requiredScopes - Scopes where at least one must be present
+ * @param providedScopes - Scopes that are provided
+ * @returns True if at least one required scope is present
+ */
+export function hasAnyScope(
+  requiredScopes: string | string[],
+  providedScopes: string | string[] | null | undefined
+): boolean {
+  const normalizedRequired = normalizeScopes(requiredScopes);
+  const normalizedProvided = normalizeScopes(providedScopes);
+
+  return normalizedRequired.some(scope =>
     normalizedProvided.includes(scope)
   );
 }
 
 /**
  * Get default scopes for new app installations
- * 
+ *
  * @returns Array of default scope strings
  */
 export function getDefaultScopes(): string[] {
@@ -223,8 +254,126 @@ export function getScopeDescription(scope: string): string {
     'comments:read': 'Read access to comments',
     'comments:write': 'Create and modify comments',
     'leave:read': 'Read access to leave requests',
-    'leave:write': 'Create and modify leave requests'
+    'leave:write': 'Create and modify leave requests',
+    // Context & Knowledge System (Phase 6)
+    'context:read': 'Read context documents and knowledge base articles',
+    'context:write': 'Create and modify context documents',
+    'knowledge:read': 'Access knowledge base and documentation',
+    'prompts:read': 'Read AI system prompts and context',
+    'secrets:read': 'Read encrypted secrets (requires explicit grant)',
   };
 
   return descriptions[scope] || `Access to ${scope}`;
+}
+
+/**
+ * Check if a redirect URI is a valid localhost callback URL.
+ * Used for system apps (like MCP) that use dynamic ports.
+ *
+ * @param redirectUri - The redirect URI to validate
+ * @returns True if it's a valid localhost callback URL
+ */
+export function isValidLocalhostRedirect(redirectUri: string): boolean {
+  try {
+    const url = new URL(redirectUri);
+    const isLocalhost = url.protocol === 'http:' &&
+                        (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+    const hasValidPort = /^\d+$/.test(url.port) &&
+                         parseInt(url.port, 10) >= 1 &&
+                         parseInt(url.port, 10) <= 65535;
+    const hasCallbackPath = url.pathname === '/callback';
+
+    return isLocalhost && hasValidPort && hasCallbackPath;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a redirect URI uses a custom protocol scheme (e.g., cursor://, vscode://).
+ * These are used by desktop apps for OAuth callbacks.
+ *
+ * @param redirectUri - The redirect URI to validate
+ * @returns True if it's a valid custom protocol callback URL
+ */
+export function isValidCustomProtocolRedirect(redirectUri: string): boolean {
+  try {
+    const url = new URL(redirectUri);
+    // Allow custom protocols (not http/https) that end with /callback or /oauth/callback
+    const isCustomProtocol = !['http:', 'https:'].includes(url.protocol);
+    const hasCallbackPath = url.pathname === '/callback' ||
+                            url.pathname === '/oauth/callback' ||
+                            url.pathname.endsWith('/callback');
+
+    return isCustomProtocol && hasCallbackPath;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a redirect URI is a valid remote agent HTTPS callback URL.
+ * Used for system apps when an AI agent running on a remote server
+ * needs to authenticate via MCP OAuth on behalf of a user.
+ *
+ * Security requirements:
+ * - Must use HTTPS protocol
+ * - Must have a valid hostname (not localhost/127.0.0.1)
+ * - Must have a path ending with /callback (e.g., /api/mcp/oauth/callback)
+ *
+ * @param redirectUri - The redirect URI to validate
+ * @returns True if it's a valid remote agent HTTPS callback URL
+ */
+export function isValidRemoteAgentRedirect(redirectUri: string): boolean {
+  try {
+    const url = new URL(redirectUri);
+    const isHttps = url.protocol === 'https:';
+    const isNotLocalhost = url.hostname !== 'localhost' && url.hostname !== '127.0.0.1';
+    const hasCallbackPath = url.pathname.endsWith('/callback');
+
+    return isHttps && isNotLocalhost && hasCallbackPath;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate redirect URI against allowed URIs, with special handling for system apps.
+ * System apps (like MCP) are allowed to use:
+ * - Any localhost callback URL with dynamic ports (for CLI tools like Claude Code)
+ * - Custom protocol schemes (for desktop apps like Cursor, VS Code)
+ * - Remote HTTPS callback URLs ending with /callback (for AI agents)
+ *
+ * @param redirectUri - The redirect URI to validate
+ * @param allowedUris - Array of allowed redirect URIs
+ * @param isSystemApp - Whether this is a system app
+ * @returns True if the redirect URI is allowed
+ */
+export function isAllowedRedirectUri(
+  redirectUri: string,
+  allowedUris: string[],
+  isSystemApp: boolean
+): boolean {
+  // First check exact match against registered URIs
+  if (allowedUris.includes(redirectUri)) {
+    return true;
+  }
+
+  // For system apps, allow flexible redirect URIs
+  if (isSystemApp) {
+    // Allow localhost callbacks with dynamic ports (Claude Code, CLI tools)
+    if (isValidLocalhostRedirect(redirectUri)) {
+      return true;
+    }
+    // Allow custom protocol schemes (Cursor, VS Code, other desktop apps)
+    if (isValidCustomProtocolRedirect(redirectUri)) {
+      return true;
+    }
+    // Allow remote HTTPS callbacks for AI agents
+    if (isValidRemoteAgentRedirect(redirectUri)) {
+      return true;
+    }
+  }
+
+  return false;
 }

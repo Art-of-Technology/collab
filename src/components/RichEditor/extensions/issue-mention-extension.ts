@@ -106,7 +106,7 @@ export const IssueMentionExtension = Node.create({
           'data-label': label,
           'data-title': title,
           'data-issue-type': type,
-          class: 'issue-mention inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs h-5 leading-tight border border-[#2d2d30] bg-[#181818] text-[#cccccc] cursor-pointer hover:border-[#464649] hover:bg-[#1a1a1a] transition-colors',
+          class: 'issue-mention inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs h-5 leading-tight border border-collab-600 bg-collab-800 text-collab-400 cursor-pointer hover:border-collab-600 hover:bg-collab-800 transition-colors',
           title: `Click to view issue: ${title || label}`,
         },
         HTMLAttributes
@@ -121,7 +121,7 @@ export const IssueMentionExtension = Node.create({
       ],
       [
         'span',
-        { class: 'text-[#cccccc] text-xs' },
+        { class: 'text-collab-400 text-xs' },
         label,
       ],
       [

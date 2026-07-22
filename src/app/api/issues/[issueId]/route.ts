@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { trackFieldChanges, createActivity, compareObjects, trackAssignment } from "@/lib/board-item-activity-service";
+import { trackFieldChanges, createActivity, compareObjects, trackAssignment, trackStatusChange } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
 import { emitIssueUpdated, emitIssueDeleted } from "@/lib/event-bus";
 import { findIssueByIdOrKey, STANDARD_ISSUE_INCLUDE, userHasWorkspaceAccess } from "@/lib/issue-finder";
+import { normalizeDescriptionHTML } from "@/utils/html-normalizer";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -105,10 +106,18 @@ export async function PUT(
     // Handle status updates to work with new ProjectStatus system
     let updateData = { ...body, updatedAt: new Date() };
 
+    // Normalize description if provided
+    if (updateData.description !== undefined && typeof updateData.description === 'string') {
+      updateData.description = normalizeDescriptionHTML(updateData.description);
+    }
+
     // Normalize type casing if provided
     if (typeof updateData.type === 'string') {
       updateData.type = updateData.type.toUpperCase();
     }
+
+    // Update lifecycle tracking
+    updateData.lastProgressAt = new Date();
     
     // Handle labels relation updates
     let relationalUpdates: any = {};
@@ -151,6 +160,15 @@ export async function PUT(
         updateData.statusId = projectStatus.id;
         updateData.statusValue = projectStatus.name; // Use the canonical name
         updateData.status = projectStatus.name; // Keep legacy field for compatibility
+        
+        // Lifecycle tracking: track first time moved to in-progress
+        const isMovingToInProgress = projectStatus.name.toLowerCase().includes('in_progress') || 
+                                      projectStatus.name.toLowerCase().includes('in progress');
+        const wasNotInProgress = !existingIssue.statusValue?.toLowerCase().includes('in_progress');
+        
+        if (isMovingToInProgress && wasNotInProgress && !existingIssue.firstStartedAt) {
+          updateData.firstStartedAt = new Date();
+        }
       } else {
         // No ProjectStatus found, just update the legacy status field
         updateData.status = statusValue;
@@ -226,14 +244,14 @@ export async function PUT(
         }) : null;
         
         // Use the specialized trackAssignment function
-        await trackAssignment(
-          'ISSUE',
-          updatedIssue.id,
-          currentUser.id,
-          updatedIssue.workspaceId,
-          oldAssignee ? { id: oldAssignee.id, name: oldAssignee.name || 'Unknown User' } : null,
-          newAssignee ? { id: newAssignee.id, name: newAssignee.name || 'Unknown User' } : null
-        );
+        await trackAssignment({
+          itemType: 'ISSUE',
+          itemId: updatedIssue.id,
+          userId: currentUser.id,
+          workspaceId: updatedIssue.workspaceId,
+          oldAssigneeId: oldAssignee?.id || null,
+          assigneeId: newAssignee?.id || null,
+        });
       }
 
       // Handle reporter changes separately with proper user name resolution
@@ -267,31 +285,45 @@ export async function PUT(
         });
       }
 
-      // Track other field changes (excluding assigneeId and reporterId since we handled them above)
+      // Handle status changes separately with proper FK relations
+      const statusChanged = oldIssue.statusId !== updatedIssue.statusId;
+      if (statusChanged) {
+        await trackStatusChange({
+          itemType: 'ISSUE',
+          itemId: updatedIssue.id,
+          userId: currentUser.id,
+          workspaceId: updatedIssue.workspaceId,
+          projectId: updatedIssue.projectId,
+          oldStatusId: oldIssue.statusId || null,
+          newStatusId: updatedIssue.statusId || null,
+          oldStatusName: oldIssue.status || null,
+          newStatusName: updatedIssue.status || null,
+        });
+      }
+
+      // Track other field changes (excluding assigneeId, reporterId, and status since we handled them above)
       const fieldsToTrack = [
         'title',
         'description',
-        'status',
         'priority',
-        'columnId',
         'dueDate',
         'storyPoints',
         'type',
         'color',
         'parentId'
       ];
-      
+
       // Use the existing compareObjects function to detect changes
       changes = compareObjects(oldIssue, updatedIssue, fieldsToTrack);
 
       if (changes.length > 0) {
-        await trackFieldChanges(
-          'ISSUE',
-          updatedIssue.id,
-          currentUser.id,
-          updatedIssue.workspaceId,
-          changes
-        );
+        await trackFieldChanges({
+          itemType: 'ISSUE',
+          itemId: updatedIssue.id,
+          userId: currentUser.id,
+          workspaceId: updatedIssue.workspaceId,
+          changes,
+        });
       }
     } catch (e) {
       console.warn('Issue activity tracking failed:', e);
@@ -306,7 +338,6 @@ export async function PUT(
       status: updatedIssue.status ?? undefined,
       statusId: updatedIssue.statusId ?? undefined,
       statusValue: updatedIssue.statusValue ?? undefined,
-      columnId: updatedIssue.columnId ?? undefined,
       updatedAt: updatedIssue.updatedAt
     });
 
@@ -342,21 +373,6 @@ export async function PUT(
       // Assignee and reporter
       if (updatedIssue.assigneeId) recipientIds.add(updatedIssue.assigneeId);
       if (updatedIssue.reporterId) recipientIds.add(updatedIssue.reporterId);
-
-      // Board followers via legacy column->board mapping, if any
-      if (updatedIssue.columnId) {
-        const column = await prisma.taskColumn.findUnique({
-          where: { id: updatedIssue.columnId },
-          select: { taskBoardId: true }
-        });
-        if (column?.taskBoardId) {
-          const boardFollowers = await prisma.boardFollower.findMany({
-            where: { boardId: column.taskBoardId },
-            select: { userId: true }
-          });
-          boardFollowers.forEach(bf => recipientIds.add(bf.userId));
-        }
-      }
 
       // Project followers and type selection set
       const projectFollowerList = await prisma.projectFollower.findMany({
@@ -482,20 +498,6 @@ export async function DELETE(
       // Assignee and reporter
       if ((existingIssue as any).assigneeId) recipientIds.add((existingIssue as any).assigneeId as string);
       if ((existingIssue as any).reporterId) recipientIds.add((existingIssue as any).reporterId as string);
-      // Board followers via legacy column->board mapping, if any
-      if ((existingIssue as any).columnId) {
-        const column = await prisma.taskColumn.findUnique({
-          where: { id: (existingIssue as any).columnId as string },
-          select: { taskBoardId: true }
-        });
-        if (column?.taskBoardId) {
-          const boardFollowers = await prisma.boardFollower.findMany({
-            where: { boardId: column.taskBoardId },
-            select: { userId: true }
-          });
-          boardFollowers.forEach(bf => recipientIds.add(bf.userId));
-        }
-      }
       // Project followers
       const projectFollowers = await prisma.projectFollower.findMany({
         where: { projectId: (existingIssue as any).projectId as string },

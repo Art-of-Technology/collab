@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { decryptToken } from '@/lib/apps/crypto';
-import { hasScope, hasAllScopes, normalizeScopes } from '@/lib/oauth-scopes';
+import { hasScope, hasAllScopes, hasAnyScope, normalizeScopes } from '@/lib/oauth-scopes';
 
 const prisma = new PrismaClient();
 
@@ -46,6 +46,12 @@ export interface AppAuthContext {
 
 export interface AuthMiddlewareOptions {
   requiredScopes?: string | string[];
+  /**
+   * How to evaluate required scopes:
+   * - 'all' (default): Token must have ALL listed scopes
+   * - 'any': Token must have at least ONE of the listed scopes
+   */
+  scopeMode?: 'all' | 'any';
   allowExpired?: boolean;
 }
 
@@ -66,7 +72,7 @@ export async function authenticateAppRequest(
   request: NextRequest,
   options: AuthMiddlewareOptions = {}
 ): Promise<AuthMiddlewareResult> {
-  const { requiredScopes = [], allowExpired = false } = options;
+  const { requiredScopes = [], scopeMode = 'all', allowExpired = false } = options;
 
   try {
     // Extract Bearer token from Authorization header
@@ -119,8 +125,12 @@ export async function authenticateAppRequest(
       };
     }
 
-    // Check if installation is active
-    if (installation.status !== 'ACTIVE') {
+    // For system app tokens, we skip the installation status check
+    // since they don't have real installations
+    const isSystemAppToken = (installation as any).isSystemAppToken === true;
+
+    // Check if installation is active (skip for system app tokens)
+    if (!isSystemAppToken && installation.status !== 'ACTIVE') {
       return {
         success: false,
         error: {
@@ -146,13 +156,16 @@ export async function authenticateAppRequest(
     // Validate required scopes
     const normalizedRequired = normalizeScopes(requiredScopes);
     if (normalizedRequired.length > 0) {
-      const hasRequiredScopes = hasAllScopes(normalizedRequired, installation.scopes);
+      const hasRequiredScopes = scopeMode === 'any'
+        ? hasAnyScope(normalizedRequired, installation.scopes)
+        : hasAllScopes(normalizedRequired, installation.scopes);
       if (!hasRequiredScopes) {
+        const modeLabel = scopeMode === 'any' ? 'one of' : 'all of';
         return {
           success: false,
           error: {
             code: 'insufficient_scope',
-            message: `Insufficient scope. Required: ${normalizedRequired.join(', ')}`,
+            message: `Insufficient scope. Required ${modeLabel}: ${normalizedRequired.join(', ')}`,
             statusCode: 403
           }
         };
@@ -211,23 +224,61 @@ export async function authenticateAppRequest(
 }
 
 /**
- * Find app installation by access token
+ * Find app installation or system app token by access token
+ * Now searches in AppToken table which supports:
+ * 1. Multiple tokens per installation (regular apps)
+ * 2. System app tokens (no installation required)
  */
 async function findInstallationByAccessToken(token: string) {
   try {
-    // Find installations that have access tokens
-    const installations = await prisma.appInstallation.findMany({
+    // Find tokens from active installations OR system app tokens
+    const appTokens = await prisma.appToken.findMany({
       where: {
-        accessToken: { not: null },
-        status: 'ACTIVE'
+        isRevoked: false,
+        OR: [
+          // Regular app tokens (linked to installation)
+          {
+            installation: {
+              status: 'ACTIVE'
+            }
+          },
+          // System app tokens (no installation, linked directly to app and workspace)
+          {
+            installationId: null,
+            appId: { not: null },
+            workspaceId: { not: null }
+          }
+        ]
       },
       include: {
+        installation: {
+          include: {
+            app: {
+              select: {
+                id: true,
+                slug: true,
+                name: true,
+                status: true,
+                isSystemApp: true
+              }
+            },
+            workspace: {
+              select: {
+                id: true,
+                slug: true,
+                name: true
+              }
+            }
+          }
+        },
+        // Include direct app and workspace relations for system app tokens
         app: {
           select: {
             id: true,
             slug: true,
             name: true,
-            status: true
+            status: true,
+            isSystemApp: true
           }
         },
         workspace: {
@@ -240,40 +291,78 @@ async function findInstallationByAccessToken(token: string) {
       }
     });
 
-    // Check each installation's access token
-    for (const installation of installations) {
+    // Check each token's access token
+    for (const appToken of appTokens) {
       try {
-        if (!installation.accessToken) continue;
+        if (!appToken.accessToken) continue;
 
         // Decrypt the stored token
-        const storedTokenData = Buffer.from(installation.accessToken, 'base64');
+        const storedTokenData = Buffer.from(appToken.accessToken, 'base64');
         const decryptedToken = await decryptToken(storedTokenData);
 
         // Compare with provided token
         if (decryptedToken === token) {
-          // Fetch the user who installed the app separately since the relation doesn't exist in schema
-          const installedByUser = await prisma.user.findUnique({
-            where: { id: installation.installedById },
-            select: {
-              id: true,
-              email: true,
-              name: true
+          // Check if this is a system app token (no installation)
+          if (!appToken.installation && appToken.app && appToken.workspace) {
+            // System app token - verify it's actually a system app
+            if (!appToken.app.isSystemApp) {
+              console.warn('Non-system app token found without installation:', appToken.id);
+              continue;
             }
-          });
 
-          // If user not found, skip this installation
-          if (!installedByUser) {
-            continue;
+            // Return virtual installation data for system app
+            return {
+              id: `system_${appToken.id}`, // Virtual installation ID
+              appId: appToken.app.id,
+              workspaceId: appToken.workspace.id,
+              installedById: appToken.userId || 'system',
+              status: 'ACTIVE',
+              scopes: appToken.scopes,
+              tokenExpiresAt: appToken.tokenExpiresAt,
+              app: appToken.app,
+              workspace: appToken.workspace,
+              installedBy: {
+                id: appToken.userId || 'system',
+                email: null,
+                name: 'System'
+              },
+              isSystemAppToken: true
+            };
           }
 
-          return {
-            ...installation,
-            installedBy: installedByUser
-          };
+          // Regular installation-based token
+          if (appToken.installation) {
+            const installation = appToken.installation;
+
+            // Fetch the user who generated this token (or fallback to installer for legacy tokens)
+            const tokenUserId = appToken.userId || installation.installedById;
+            const tokenUser = await prisma.user.findUnique({
+              where: { id: tokenUserId },
+              select: {
+                id: true,
+                email: true,
+                name: true
+              }
+            });
+
+            // If user not found, skip this token
+            if (!tokenUser) {
+              continue;
+            }
+
+            return {
+              ...installation,
+              // Use scopes from the token if available, fallback to installation scopes
+              scopes: appToken.scopes.length > 0 ? appToken.scopes : installation.scopes,
+              tokenExpiresAt: appToken.tokenExpiresAt,
+              installedBy: tokenUser, // Now returns the token's user, not the installer
+              isSystemAppToken: false
+            };
+          }
         }
       } catch (error) {
-        // If decryption fails for this installation, continue to next
-        console.error('Failed to decrypt access token for installation:', installation.id, error);
+        // If decryption fails for this token, continue to next
+        console.error('Failed to decrypt access token for appToken:', appToken.id, error);
         continue;
       }
     }
@@ -321,9 +410,78 @@ export function withAppAuth(
 ) {
   return async (request: NextRequest, routeParams?: any) => {
     const authResult = await authenticateAppRequest(request, options);
-    
+
     if (!authResult.success) {
       return createAuthErrorResponse(authResult.error!);
+    }
+
+    // Check for workspace override via query parameter (system apps only)
+    // Supports both workspace slug (preferred) and workspace ID
+    const url = new URL(request.url);
+    const workspaceSlugOverride = url.searchParams.get('workspace');
+    const workspaceIdOverride = url.searchParams.get('workspaceId');
+    const workspaceOverride = workspaceSlugOverride || workspaceIdOverride;
+
+    if (workspaceOverride) {
+      // Only allow workspace switching for system apps
+      const app = await prisma.app.findUnique({
+        where: { id: authResult.context!.app.id },
+        select: { isSystemApp: true }
+      });
+
+      if (!app?.isSystemApp) {
+        return createAuthErrorResponse({
+          code: 'workspace_switch_not_allowed',
+          message: 'Only system apps can switch workspace context',
+          statusCode: 403
+        });
+      }
+
+      // Find workspace by slug or ID
+      const targetWorkspace = await prisma.workspace.findFirst({
+        where: workspaceSlugOverride
+          ? { slug: workspaceSlugOverride }
+          : { id: workspaceIdOverride! },
+        select: { id: true, slug: true, name: true }
+      });
+
+      if (!targetWorkspace) {
+        return createAuthErrorResponse({
+          code: 'workspace_not_found',
+          message: `Workspace '${workspaceOverride}' not found`,
+          statusCode: 404
+        });
+      }
+
+      // Skip if already in the target workspace
+      if (targetWorkspace.id === authResult.context!.workspace.id) {
+        return handler(request, authResult.context!, routeParams);
+      }
+
+      // Verify user has access to the target workspace
+      const membership = await prisma.workspaceMember.findFirst({
+        where: {
+          userId: authResult.context!.user.id,
+          workspaceId: targetWorkspace.id,
+          status: true // status is a boolean field
+        }
+      });
+
+      if (!membership) {
+        return createAuthErrorResponse({
+          code: 'workspace_access_denied',
+          message: `User does not have access to workspace '${workspaceOverride}'`,
+          statusCode: 403
+        });
+      }
+
+      // Update context with the new workspace
+      authResult.context!.workspace = {
+        id: targetWorkspace.id,
+        slug: targetWorkspace.slug,
+        name: targetWorkspace.name
+      };
+      authResult.context!.installation.workspaceId = targetWorkspace.id;
     }
 
     return handler(request, authResult.context!, routeParams);

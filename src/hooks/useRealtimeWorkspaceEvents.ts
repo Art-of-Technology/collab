@@ -4,7 +4,6 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { issueKeys } from '@/hooks/queries/useIssues';
-import { boardItemsKeys } from '@/hooks/queries/useBoardItems';
 
 export interface RealtimeOptions {
   workspaceId?: string;
@@ -173,10 +172,7 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
           if (data.workspaceId && !isDragRelated) {
             queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(String(data.workspaceId)) });
           }
-          
-          if (boardId && !isDragRelated) {
-            queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardId) });
-          }
+
           if (data.issueId) {
             queryClient.invalidateQueries({ queryKey: issueKeys.detail(String(data.issueId)) });
           }
@@ -192,9 +188,6 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
         if (data?.type === 'issue.created') {
           if (data.workspaceId) {
             queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(String(data.workspaceId)) });
-          }
-          if (boardId) {
-            queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardId) });
           }
           if (data.issueId) {
             queryClient.invalidateQueries({ queryKey: issueKeys.detail(String(data.issueId)) });
@@ -292,17 +285,7 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
           }
         }
 
-        if (data?.type === 'board.items.reordered') {
-          if (boardId && data.boardId === boardId) {
-            queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardId) });
-          }
-        }
-
-        if (data?.type === 'board.updated') {
-          if (boardId && data.boardId === boardId) {
-            queryClient.invalidateQueries({ queryKey: boardItemsKeys.board(boardId) });
-          }
-        }
+        // Board events removed - boards have been replaced with views
       } catch {
         // ignore invalid messages
       }

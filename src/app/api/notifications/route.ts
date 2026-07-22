@@ -51,31 +51,7 @@ export async function GET(req: NextRequest) {
             message: true,
           },
         },
-        task: {
-          select: {
-            id: true,
-            title: true,
-          },
-        },
         featureRequest: {
-          select: {
-            id: true,
-            title: true,
-          },
-        },
-        epic: {
-          select: {
-            id: true,
-            title: true,
-          },
-        },
-        story: {
-          select: {
-            id: true,
-            title: true,
-          },
-        },
-        milestone: {
           select: {
             id: true,
             title: true,

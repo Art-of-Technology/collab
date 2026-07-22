@@ -37,12 +37,36 @@ export async function POST(req: NextRequest) {
         }
 
         // Get user's assigned issues
+        // Exclude issues with isFinal: true, projectStatus: null (archived), or statusValue: "Done"
         const issues = await prisma.issue.findMany({
             where: {
                 assigneeId: user.id,
-                statusValue: {
-                    not: 'Done'
-                }
+                AND: [
+                    {
+                        NOT: {
+                            projectStatus: {
+                                isFinal: true
+                            }
+                        }
+                    },
+                    {
+                        projectStatus: {
+                            isNot: null
+                        }
+                    },
+                    {
+                        OR: [
+                            {
+                                statusValue: {
+                                    notIn: ['Done', 'done', 'DONE']
+                                }
+                            },
+                            {
+                                statusValue: null
+                            }
+                        ]
+                    }
+                ]
             },
             include: {
                 project: {
@@ -54,6 +78,11 @@ export async function POST(req: NextRequest) {
                 workspace: {
                     select: {
                         id: true
+                    }
+                },
+                projectStatus: {
+                    select: {
+                        isFinal: true
                     }
                 }
             },

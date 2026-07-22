@@ -4,12 +4,6 @@ import { getAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SidebarProvider from "@/components/providers/SidebarProvider";
 import LayoutWithSidebar from "@/components/layout/LayoutWithSidebar";
-import BoardGenerationStatus from "@/components/tasks/BoardGenerationStatus";
-import { BoardGenerationProvider } from "@/context/BoardGenerationContext";
-import TaskGenerationStatus from "@/components/tasks/TaskGenerationStatus";
-import { TaskGenerationProvider } from "@/context/TaskGenerationContext";
-import StoryGenerationStatus from "@/components/stories/StoryGenerationStatus";
-import { StoryGenerationProvider } from "@/context/StoryGenerationContext";
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
@@ -23,14 +17,14 @@ export default async function WorkspaceLayout({
   params,
 }: WorkspaceLayoutProps) {
   const { workspaceId } = await params;
-  
+
   // Get the current user session
   const session = await getAuthSession();
-  
+
   if (!session?.user) {
     redirect("/login");
   }
-  
+
     // Verify the workspace exists and user has access to it
   // First try to find by slug, then by ID for backward compatibility
   let workspace = await prisma.workspace.findFirst({
@@ -59,23 +53,14 @@ export default async function WorkspaceLayout({
   if (!workspace) {
     redirect("/welcome");
   }
-  
+
   return (
     <SidebarProvider>
-      <BoardGenerationProvider workspaceId={workspaceId}>
-        <TaskGenerationProvider workspaceId={workspaceId}>
-          <StoryGenerationProvider workspaceId={workspaceId}>
-            <LayoutWithSidebar 
-              pathname={`/${workspaceId}`}
-            >
-              {children}
-              <BoardGenerationStatus />
-              <TaskGenerationStatus />
-              <StoryGenerationStatus />
-            </LayoutWithSidebar>
-          </StoryGenerationProvider>
-        </TaskGenerationProvider>
-      </BoardGenerationProvider>
+      <LayoutWithSidebar
+        pathname={`/${workspaceId}`}
+      >
+        {children}
+      </LayoutWithSidebar>
     </SidebarProvider>
   );
-} 
+}

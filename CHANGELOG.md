@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.8] - 2025-11-03
+
+### Added
+- Per-workspace user profiles: users can set different display names, roles/titles, bios, teams, focuses, expertise, and Slack IDs per workspace
+
+### Changed
+- Profile pages under `/{workspaceSlug}/profile` now read and show workspace-scoped profile data instead of global user fields
+
+### Fixed
+- Resolved expectation mismatch where editing a profile in one workspace propagated to all other workspaces
+
+### Technical
+- Extended Prisma `WorkspaceMember` with workspace-scoped profile fields: `displayName`, `team`, `currentFocus`, `expertise`, `slackId`
+- Updated server actions to fetch/update workspace-scoped profile data and UI to pass `workspaceId`
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),

@@ -5,8 +5,6 @@ import { useCurrentUser } from "@/hooks/queries/useUser";
 
 interface UiContextType {
   isLoggedIn: boolean;
-  isChatOpen: boolean;
-  toggleChat: () => void;
   isAssistantOpen: boolean;
   toggleAssistant: () => void;
   isAssistantFullScreen: boolean;
@@ -15,8 +13,6 @@ interface UiContextType {
 
 const UiContext = createContext<UiContextType>({
   isLoggedIn: false,
-  isChatOpen: false,
-  toggleChat: () => {},
   isAssistantOpen: false,
   toggleAssistant: () => {},
   isAssistantFullScreen: false,
@@ -31,14 +27,12 @@ interface UiProviderProps {
 
 export const UiProvider = ({ children }: UiProviderProps) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isAssistantFullScreen, setIsAssistantFullScreen] = useState(false);
   
   // Use TanStack Query hook instead of direct fetch
   const { data: userData, isError } = useCurrentUser();
 
-  const toggleChat = () => setIsChatOpen(prev => !prev);
   const toggleAssistant = () => {
     setIsAssistantOpen(prev => !prev);
     // Close fullscreen when closing assistant
@@ -57,8 +51,6 @@ export const UiProvider = ({ children }: UiProviderProps) => {
     <UiContext.Provider
       value={{
         isLoggedIn,
-        isChatOpen,
-        toggleChat,
         isAssistantOpen,
         toggleAssistant,
         isAssistantFullScreen,

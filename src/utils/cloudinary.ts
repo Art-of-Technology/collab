@@ -1,11 +1,6 @@
-import { v2 as cloudinary } from 'cloudinary';
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+// Note: The cloudinary SDK is only used in API routes (server-side)
+// This file contains client-side utilities that use API routes for uploads
+// Do NOT import 'cloudinary' here as it uses Node.js 'fs' module
 
 /**
  * Allowed file extensions for different media types

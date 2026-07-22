@@ -8,11 +8,13 @@ import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  Calendar, 
-  Clock, 
-  GitBranch, 
-  Tag, 
+import { useRouter } from 'next/navigation';
+import { useWorkspace } from '@/context/WorkspaceContext';
+import {
+  Calendar,
+  Clock,
+  GitBranch,
+  Tag,
   Search,
   Download,
   Sparkles,
@@ -21,7 +23,9 @@ import {
   ArrowRight,
   GitCommit,
   Rocket,
-  Target
+  Target,
+  ExternalLink,
+  Code,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { VersionTimeline } from './VersionTimeline';
@@ -86,9 +90,12 @@ interface Version {
 interface ChangelogPageProps {
   repositoryId: string;
   projectName: string;
+  projectSlug?: string;
 }
 
-export function ChangelogPage({ repositoryId, projectName }: ChangelogPageProps) {
+export function ChangelogPage({ repositoryId, projectName, projectSlug }: ChangelogPageProps) {
+  const router = useRouter();
+  const { currentWorkspace } = useWorkspace();
   const [versions, setVersions] = useState<Version[]>([]);
   const [filteredVersions, setFilteredVersions] = useState<Version[]>([]);
   const [loading, setLoading] = useState(true);
@@ -200,6 +207,15 @@ ${bugfixes.map(vi => `- ${vi.aiTitle || vi.issue.title}`).join('\n')}
           </p>
         </div>
         <div className="flex gap-2">
+          {projectSlug && currentWorkspace && (
+            <Button
+              variant="default"
+              onClick={() => router.push(`/${currentWorkspace.slug || currentWorkspace.id}/projects/${projectSlug}/github`)}
+            >
+              <Code className="h-4 w-4 mr-2" />
+              New GitHub Dashboard
+            </Button>
+          )}
           <Button variant="outline" onClick={exportChangelog}>
             <Download className="h-4 w-4 mr-2" />
             Export

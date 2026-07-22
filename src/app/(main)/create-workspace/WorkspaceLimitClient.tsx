@@ -20,24 +20,24 @@ export function WorkspaceLimitClient({
   if (isLoading) {
     return (
       <div className="flex justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin text-[#8b949e]" />
+        <Loader2 className="h-6 w-6 animate-spin text-collab-400" />
       </div>
     );
   }
   
   if (isError) {
     return (
-      <div className="p-6 bg-[#f85149]/10 border border-[#f85149]/20 rounded-md text-center mb-6">
-        <p className="text-[#f85149] text-sm">Error checking workspace limits. Please try refreshing the page.</p>
+      <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-md text-center mb-6">
+        <p className="text-red-500 text-sm">Error checking workspace limits. Please try refreshing the page.</p>
       </div>
     );
   }
   
   if (!canCreateWorkspace) {
     return (
-      <div className="bg-[#f59e0b]/10 p-6 rounded-md border border-[#f59e0b]/20 mb-6">
-        <h3 className="font-medium text-[#f59e0b] text-lg">Workspace limit reached</h3>
-        <p className="text-sm text-[#8b949e] mt-2">
+      <div className="bg-amber-500/10 p-6 rounded-md border border-amber-500/20 mb-6">
+        <h3 className="font-medium text-amber-500 text-lg">Workspace limit reached</h3>
+        <p className="text-sm text-collab-400 mt-2">
           You have reached the maximum number of workspaces ({data?.maxCount || 3}) allowed on the free plan.
           Please upgrade your account to create more workspaces or manage your existing ones.
         </p>
@@ -45,7 +45,7 @@ export function WorkspaceLimitClient({
           <Button 
             variant="default" 
             size="sm"
-            className="bg-[#f59e0b] hover:bg-[#d97706] text-white border-0"
+            className="bg-amber-500 hover:bg-amber-600 text-white border-0"
           >
             Upgrade Plan
           </Button>
@@ -53,7 +53,7 @@ export function WorkspaceLimitClient({
             <Button 
               variant="outline" 
               size="sm"
-              className="border-[#30363d] text-[#8b949e] hover:bg-[#1a1a1a] hover:text-[#e6edf3]"
+              className="border-collab-600 text-collab-400 hover:bg-collab-800 hover:text-collab-50"
             >
               Manage Existing Workspaces
             </Button>

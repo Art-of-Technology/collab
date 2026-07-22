@@ -151,6 +151,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   const containerRef = useRef<HTMLDivElement>(null);
   const hocuspocusManagerRef = useRef<HocuspocusManager | null>(null);
   const [collabReady, setCollabReady] = useState(0);
+  const [collabError, setCollabError] = useState(false);
   const { toast } = useToast();
   const { data: session } = useSession();
   const { data: currentUser } = useCurrentUser();
@@ -665,8 +666,12 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
       try {
         await manager.initialize();
         setCollabReady((v) => v + 1);
+        setCollabError(false);
       } catch (e) {
         console.error('Failed to initialize collaboration:', e);
+        setCollabError(true);
+        // Allow editor to render without collaboration on error
+        setCollabReady(1);
       }
     };
 
@@ -722,11 +727,40 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   // Add link preview extension
   additionalExtensions.push(LinkPreviewExtension);
 
+    // Wait for collaboration to be ready before rendering editor to prevent flicker
+    // Don't wait if collaboration failed - render editor without collaboration
+    const isWaitingForCollab = isCollaborationEnabled && hasCollabDocumentId && collabReady === 0 && !collabError;
+
+    if (isWaitingForCollab) {
+      return (
+        <div 
+          ref={containerRef}
+          className={cn("relative", className)}
+          style={{ minHeight, maxHeight }}
+        >
+          <div 
+            className="w-full bg-collab-950 border border-collab-700 rounded-lg p-4"
+            style={{ minHeight }}
+            role="status"
+            aria-live="polite"
+            aria-label="Loading editor"
+          >
+            <span className="sr-only">Loading issue content...</span>
+            <div className="space-y-3">
+              <div className="h-4 bg-collab-700 rounded w-3/4 animate-pulse" />
+              <div className="h-4 bg-collab-700 rounded w-full animate-pulse" />
+              <div className="h-4 bg-collab-700 rounded w-5/6 animate-pulse" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
   return (
     <div ref={containerRef} className="relative">
       <RichEditor
         autofocus={true}
-        key={isCollaborationEnabled ? `collab-${collabDocumentId}-${collabReady}` : 'nocollab'}
+        key={collabDocumentId ? `collab-${collabDocumentId}` : `nocollab-${issueId || 'editor'}`}
         ref={editorRef}
         value={value}
         onChange={onChange}
@@ -825,10 +859,10 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-col">
-                      <span className="text-xs text-[#c9d1d9] leading-tight tracking-tight">
+                      <span className="text-xs text-collab-400 leading-tight tracking-tight">
                         {historyPreview.meta?.actor} made changes
                       </span>
-                      <span className="text-[10px] text-[#7d8590] leading-tight tracking-tight">
+                      <span className="text-[10px] text-collab-500 leading-tight tracking-tight">
                         {formatDistanceToNow(new Date(historyPreview.meta?.ts || Date.now()), { addSuffix: true })}
                       </span>
                     </div>
@@ -903,10 +937,11 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
                     <div className="p-3 text-sm text-muted-foreground">No history entries</div>
                   ) : (
                     activities.map((a) => (
-                      <button
+                      <Button
                         key={a.id}
+                        variant="ghost"
                         className={cn(
-                          "w-full text-left p-3 hover:bg-[#0d0d0d]",
+                          "w-full text-left p-3 hover:bg-collab-950 h-auto justify-start",
                           selectedEntryId === a.id ? "bg-muted/60" : ""
                         )}
                         onClick={() => {
@@ -926,10 +961,10 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 mb-0.5">
-                              <span className="text-xs text-[#c9d1d9]">
+                              <span className="text-xs text-collab-400">
                                 {a.user.name} made changes
                               </span>
-                              <span className="text-[10px] text-[#7d8590]">
+                              <span className="text-[10px] text-collab-500">
                                 {formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}
                               </span>
                             </div>
@@ -938,7 +973,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
                             <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </div>
                         </div>
-                      </button>
+                      </Button>
                     ))
                   )}
                 </div>

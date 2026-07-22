@@ -72,12 +72,12 @@ export interface Issue {
   status?: string;
   priority: IssuePriority;
   storyPoints?: number;
-  
+
   // Hierarchy
   parentId?: string;
   parent?: Issue;
   children?: Issue[];
-  
+
   // Relationships
   assigneeId?: string;
   assignee?: IssueUser;
@@ -93,7 +93,7 @@ export interface Issue {
   } | null;
   columnId?: string;
   column?: IssueColumn;
-  
+
   // Status system
   statusId?: string;
   projectStatus?: {
@@ -104,25 +104,29 @@ export interface Issue {
     iconName?: string;
     order: number;
   } | null;
-  
+
   // Dates
   dueDate?: Date;
   startDate?: Date;
   createdAt: Date;
   updatedAt: Date;
-  
+
+  // Time tracking
+  timeEstimateMinutes?: number;
+  timeSpentMinutes?: number;
+
   // Metadata
   issueKey?: string;
   key?: string; // Alias for issueKey for backward compatibility
   position?: number;
   progress?: number;
   color?: string;
-  
+
   // Related data
   labels?: IssueLabel[];
   comments?: IssueComment[];
   activities?: IssueActivity[];
-  
+
   // Legacy support
   postId?: string;
 }
@@ -184,4 +188,50 @@ export interface IssueListResponse {
 export interface PlayTime {
   totalTimeMs: number;
   formattedTime: string;
+}
+
+// Work log for time tracking
+export interface WorkLog {
+  id: string;
+  issueId: string;
+  userId: string;
+  timeSpent: number; // minutes
+  description?: string;
+  loggedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    image?: string;
+  };
+}
+
+export interface WorkLogResponse {
+  workLog: WorkLog;
+  issue: {
+    issueKey: string;
+    timeEstimateMinutes: number | null;
+    timeSpentMinutes: number;
+    timeRemaining: number | null;
+  };
+}
+
+export interface WorkLogsListResponse {
+  issueKey: string;
+  issueId: string;
+  workLogs: WorkLog[];
+  summary: {
+    totalTimeSpent: number;
+    timeEstimate: number | null;
+    timeRemaining: number | null;
+    logCount: number;
+  };
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
 }

@@ -5,6 +5,7 @@ import { toast } from "react-hot-toast";
 import { User } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import { useUpdateUserProfile } from "@/hooks/queries/useUser";
+import { Button } from "@/components/ui/button";
 
 interface EditProfileFormProps {
   user: Partial<User>;
@@ -132,13 +133,13 @@ export default function EditProfileForm({ user, onCancel }: EditProfileFormProps
               }
             }}
           />
-          <button
+          <Button
             type="button"
             onClick={handleAddExpertise}
             className="ml-2 mt-1 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             Add
-          </button>
+          </Button>
         </div>
         {expertise.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
@@ -148,13 +149,14 @@ export default function EditProfileForm({ user, onCancel }: EditProfileFormProps
                 className="bg-gray-100 px-3 py-1 rounded-full text-sm flex items-center"
               >
                 <span>{skill}</span>
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
                   onClick={() => handleRemoveExpertise(skill)}
-                  className="ml-1.5 text-gray-400 hover:text-gray-600"
+                  className="ml-1.5 text-gray-400 hover:text-gray-600 h-auto p-0"
                 >
                   &times;
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -162,20 +164,21 @@ export default function EditProfileForm({ user, onCancel }: EditProfileFormProps
       </div>
       
       <div className="flex justify-end space-x-3">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={onCancel}
           className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
           disabled={isLoading}
           className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
         >
           {isLoading ? "Saving..." : "Save Changes"}
-        </button>
+        </Button>
       </div>
     </form>
   );

@@ -25,6 +25,75 @@ export function createSlug(text: string): string {
 }
 
 /**
+ * Generate an uppercase workspace slug from a name or custom slug input.
+ * - Uses initials for multi-word names
+ * - Uses first letters for single-word names (minimum 3 characters)
+ */
+export function generateWorkspaceSlug(input: string): string {
+  const trimmed = input.trim()
+
+  if (!trimmed) {
+    return ''
+  }
+
+  const words = trimmed
+    .split(/\s+/)
+    .map((word) => word.replace(/[^a-zA-Z0-9]/g, ''))
+    .filter(Boolean)
+
+  if (!words.length) {
+    return ''
+  }
+
+  const upperWords = words.map((word) => word.toUpperCase())
+  let slug = ''
+
+  if (upperWords.length > 1) {
+    slug = upperWords.map((word) => word[0]).join('')
+
+    if (slug.length < 3) {
+      let index = 1
+      while (slug.length < 3) {
+        let added = false
+
+        for (const word of upperWords) {
+          if (word.length > index) {
+            slug += word[index]
+            added = true
+
+            if (slug.length >= 3) {
+              break
+            }
+          }
+        }
+
+        if (!added) {
+          break
+        }
+
+        index++
+      }
+    }
+  } else {
+    const singleWord = upperWords[0]
+    slug = singleWord.slice(0, 3)
+  }
+
+  const fallbackSource = upperWords[0]
+  const fallbackChar = fallbackSource ? fallbackSource[fallbackSource.length - 1] : 'X'
+
+  while (slug.length < 3) {
+    slug += fallbackChar ?? 'X'
+  }
+
+  if (slug.length > 30) {
+    slug = slug.slice(0, 30)
+  }
+
+  return slug
+}
+
+/**
  * Generate a random string for making slugs unique
  */
 export function generateRandomSuffix(length: number = 4): string {

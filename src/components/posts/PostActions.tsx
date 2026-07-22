@@ -5,14 +5,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
   ChatBubbleLeftIcon,
-  BookmarkIcon,
   HeartIcon,
   ShareIcon,
   CheckIcon,
   ClipboardDocumentIcon,
 } from "@heroicons/react/24/outline";
 import {
-  BookmarkIcon as BookmarkSolidIcon,
   HeartIcon as HeartSolidIcon,
 } from "@heroicons/react/24/solid";
 import {
@@ -24,14 +22,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useAddReaction, useRemoveReaction } from "@/hooks/queries/useReaction";
-import { useIsPostBookmarked, useAddBookmark, useRemoveBookmark } from "@/hooks/queries/useBookmark";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import PostFollowButton from "./PostFollowButton";
 
 interface PostActionsProps {
   postId: string;
   initialLiked: boolean;
-  initialBookmarked: boolean;
   isFollowing: boolean;
   onLikeChange: (newLikedState: boolean) => void;
   onToggleExpand: () => void;
@@ -40,7 +36,6 @@ interface PostActionsProps {
 export default function PostActions({
   postId,
   initialLiked,
-  initialBookmarked,
   isFollowing,
   onLikeChange,
   onToggleExpand,
@@ -50,11 +45,6 @@ export default function PostActions({
   const [liked, setLiked] = useState(initialLiked);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  // TanStack Query hooks for bookmarks
-  const { data: isBookmarked = initialBookmarked } = useIsPostBookmarked(postId);
-  const addBookmarkMutation = useAddBookmark();
-  const removeBookmarkMutation = useRemoveBookmark();
 
   // TanStack Query hooks for reactions (likes)
   const addReactionMutation = useAddReaction();
@@ -93,27 +83,6 @@ export default function PostActions({
       toast({
         title: "Error",
         description: "Failed to like post",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleBookmark = async () => {
-    try {
-      if (isBookmarked) {
-        await removeBookmarkMutation.mutateAsync(postId);
-      } else {
-        await addBookmarkMutation.mutateAsync(postId);
-      }
-
-      toast({
-        description: isBookmarked ? "Removed bookmark" : "Added bookmark"
-      });
-    } catch (error) {
-      console.error("Failed to bookmark post:", error);
-      toast({
-        title: "Error",
-        description: "Failed to bookmark post",
         variant: "destructive"
       });
     }
@@ -170,20 +139,6 @@ export default function PostActions({
         >
           <ChatBubbleLeftIcon className="h-4 w-4" />
           <span className="hidden sm:inline">Comment</span>
-        </Button>
-        <Button
-          onClick={handleBookmark}
-          variant="ghost"
-          size="sm"
-          className="flex items-center gap-1 hover-effect"
-          disabled={addBookmarkMutation.isPending || removeBookmarkMutation.isPending}
-        >
-          {isBookmarked ? (
-            <BookmarkSolidIcon className="h-4 w-4 text-indigo-500" />
-          ) : (
-            <BookmarkIcon className="h-4 w-4" />
-          )}
-          <span className="hidden sm:inline">Bookmark</span>
         </Button>
         <PostFollowButton postId={postId} initialIsFollowing={isFollowing} />
         <Button

@@ -20,7 +20,7 @@ interface AppsPageProps {
   }>;
 }
 
-async function AppsPageContent({ workspaceId: id }: { workspaceId: string }) {
+async function AppsPageContent({ workspaceId }: { workspaceId: string }) {
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.id) {
@@ -29,7 +29,7 @@ async function AppsPageContent({ workspaceId: id }: { workspaceId: string }) {
 
   // Get workspace info
   const workspace = await prisma.workspace.findUnique({
-    where: { slug: id },
+    where: { id: workspaceId },
     select: {
       id: true,
       name: true,
@@ -42,7 +42,6 @@ async function AppsPageContent({ workspaceId: id }: { workspaceId: string }) {
     notFound();
   }
 
-  const workspaceId = workspace.id;
   
   // Check if user has permission to manage workspace apps
   const hasPermission = await checkUserPermission(
@@ -92,10 +91,11 @@ async function AppsPageContent({ workspaceId: id }: { workspaceId: string }) {
     }
   });
 
-  // Get available apps for installation
+  // Get available apps for installation (excluding system apps which are auto-available)
   const availableApps = await prisma.app.findMany({
     where: {
       status: 'PUBLISHED',
+      isSystemApp: false,  // Hide system apps from app store
       NOT: {
         installations: {
           some: {

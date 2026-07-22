@@ -39,20 +39,22 @@ interface LinkPreviewCardProps {
 
 const PreviewControls = ({ onRefresh, onRemove, isLoading }: { onRefresh: () => void; onRemove: () => void; isLoading: boolean }) => (
     <div className="flex flex-row items-center gap-1">
-        <button
+        <Button
+            variant="ghost"
             onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-            className="p-1 rounded text-muted-foreground bg-background/90 hover:bg-primary/10 hover:text-primary border border-border/30 hover:border-primary/30 transition-colors"
+            className="p-1 rounded text-muted-foreground bg-background/90 hover:bg-primary/10 hover:text-primary border border-border/30 hover:border-primary/30 transition-colors h-auto"
             title="Refresh preview"
         >
             <RefreshCw className={cn("size-4", isLoading && "animate-spin")} />
-        </button>
-        <button
+        </Button>
+        <Button
+            variant="ghost"
             onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="p-1 rounded bg-background/90 text-muted-foreground hover:bg-destructive/10 hover:text-destructive border border-border/30 hover:border-destructive/30 transition-controls"
+            className="p-1 rounded bg-background/90 text-muted-foreground hover:bg-destructive/10 hover:text-destructive border border-border/30 hover:border-destructive/30 transition-controls h-auto"
             title="Remove preview"
         >
             <X className="size-4" />
-        </button>
+        </Button>
     </div>
 );
 

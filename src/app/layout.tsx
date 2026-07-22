@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { cn } from "@/lib/utils";
 import { fontSans } from "@/lib/fonts";
 import SessionProvider from "@/providers/SessionProvider";
-import Script from "next/script";
+
 import { UiProvider } from "@/context/UiContext";
 import { ThemeProvider as CustomThemeProvider } from "@/context/ThemeContext";
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
@@ -12,7 +12,6 @@ import { WorkspaceLoadingWrapper } from '@/components/layout/WorkspaceLoadingWra
 import { MentionProvider } from '@/context/MentionContext';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { DockProvider } from '@/context/DockContext';
-import { ActivityProvider } from '@/context/ActivityContext';
 import Hotjar from "@/components/analytics/Hotjar";
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
@@ -61,7 +60,7 @@ export default async function RootLayout({
       </head>
 
       <body
-        className={cn("bg-background font-sans antialiased", fontSans.variable, inter.className)}
+        className={cn("font-sans antialiased dark:bg-collab-950 dark:text-white", fontSans.variable, inter.className)}
         style={{ "--sidebar-width": width } as React.CSSProperties}
       >
         <ThemeProvider
@@ -72,29 +71,22 @@ export default async function RootLayout({
         >
           <SessionProvider>
             <QueryProvider>
-              <ActivityProvider>
                 <WorkspaceProvider>
                   <WorkspaceLoadingWrapper>
                     <MentionProvider>
                       <UiProvider>
                         <CustomThemeProvider>
                           <DockProvider>
-                            <main className="h-screen flex flex-col">
+                            <div className="h-full">
                               {children}
-                            </main>
+                            </div>
                             <Toaster />
-                          <Script
-                            src="https://api.chatproject.io/chat-widget.js"
-                            id="chat-widget-script"
-                            strategy="lazyOnload"
-                          />
                         </DockProvider>
                       </CustomThemeProvider>
                     </UiProvider>
                   </MentionProvider>
                 </WorkspaceLoadingWrapper>
               </WorkspaceProvider>
-              </ActivityProvider>
             </QueryProvider>
           </SessionProvider>
         </ThemeProvider>

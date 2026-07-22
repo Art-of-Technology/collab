@@ -42,14 +42,14 @@ export function SubIssueManager({
   return (
     <div className={cn("space-y-4", className)}>
       <div className="flex items-center gap-2">
-        <h4 className="text-sm font-medium text-[#e1e7ef]">Sub-issues</h4>
-        <span className="text-xs text-[#8b949e] bg-[#1a1a1a] px-2 py-0.5 rounded-full">
+        <h4 className="text-sm font-medium text-collab-50">Sub-issues</h4>
+        <span className="text-xs text-collab-400 bg-collab-800 px-2 py-0.5 rounded-full">
           {subIssues.length}
         </span>
       </div>
       
       {/* Sub-issues container with similar styling to AddRelationModal */}
-      <div className="border border-[#1a1a1a] rounded-lg p-1 space-y-1 bg-[#0e0e0e]">
+      <div className="border border-collab-700 rounded-lg p-1 space-y-1 bg-collab-900">
         {subIssues.map((subIssue) => (
           <SubIssueItem
             key={subIssue.id}

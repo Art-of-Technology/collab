@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { getAuthSession } from '@/lib/auth';
+import { generateWorkspaceSlug } from '@/lib/utils';
 
 /**
  * Get all workspaces for the current user
@@ -224,7 +225,12 @@ export async function createWorkspace(data: {
   }
   
   // Generate a slug if not provided
-  const workspaceSlug = slug?.trim() || name.trim().toLowerCase().replace(/\s+/g, '-');
+  const baseSlug = generateWorkspaceSlug(slug?.trim() ? slug.trim() : name.trim());
+  
+  // Ensure slug is not empty after sanitization
+  if (!baseSlug) {
+    throw new Error('Workspace name must contain at least one alphanumeric character');
+  }
   
   // Get the current user
   const user = await prisma.user.findUnique({
@@ -237,15 +243,22 @@ export async function createWorkspace(data: {
     throw new Error('User not found');
   }
   
-  // Check if a workspace with the same slug already exists
-  const existingWorkspace = await prisma.workspace.findFirst({
-    where: {
-      slug: workspaceSlug
+  // Ensure slug is unique by appending numbers if necessary
+  let workspaceSlug = baseSlug;
+  let counter = 1;
+  while (true) {
+    const existingWorkspace = await prisma.workspace.findFirst({
+      where: {
+        slug: workspaceSlug
+      }
+    });
+    
+    if (!existingWorkspace) {
+      break;
     }
-  });
-  
-  if (existingWorkspace) {
-    throw new Error('A workspace with this name or slug already exists');
+    
+    workspaceSlug = `${baseSlug}-${counter}`;
+    counter++;
   }
   
   // Create the workspace

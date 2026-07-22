@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -12,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { useSession } from "next-auth/react";
 import { Label } from "@/components/ui/label";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
@@ -45,7 +44,6 @@ export default function CreatePostForm() {
   const [formData, setFormData] = useState({
     message: "",
     type: "UPDATE",
-    tags: "",
     priority: "normal",
   });
 
@@ -73,7 +71,7 @@ export default function CreatePostForm() {
     }));
   };
 
-  const handleAiImprove = async (text: string): Promise<string> => {
+  const handleAiImprove = async (text: string): Promise<any> => {
     if (isImproving || !text.trim()) {
       return text;
     }
@@ -93,32 +91,70 @@ export default function CreatePostForm() {
         body: JSON.stringify({ text })
       });
 
+      // Check if the API response is ok before parsing JSON
       if (!response.ok) {
-        throw new Error("Failed to improve text");
+        let errorMessage = "Failed to process request";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // If response is not valid JSON (e.g., HTML error page), use default error message
+          errorMessage = `Request failed with status ${response.status}`;
+        }
+        return {
+          invalid_content: true,
+          error: errorMessage,
+          message: "",
+          category: ""
+        };
       }
 
       const data = await response.json();
-      handleSelectChange("type", data.category.toUpperCase() || "UPDATE");
 
-      // Extract message from the response
-      const improvedText = data.message || data.improvedText || text;
+      // Check if the content is invalid
+      if (data.invalid_content) {
+        return {
+          invalid_content: true,
+          error: "Please enter meaningful text that can be improved and classified.",
+          message: "",
+          category: ""
+        };
+      }
+
+      // Check if the message or category is missing (undefined/null)
+      // This distinguishes between missing fields and intentionally empty strings
+      if (data.message === undefined || data.category === undefined || data.message === null || data.category === null) {
+        return {
+          invalid_content: true,
+          error: "No improvements suggested",
+          message: "",
+          category: ""
+        };
+      }
+
+      // Update the category if the AI suggests a type change
+      handleSelectChange("type", data.category.toUpperCase() || "UPDATE");
 
       // Ensure options are open if AI suggests a type change
       if (data.category && !optionsOpen) {
         setOptionsOpen(true);
       }
 
-      // Return the improved text to be displayed in the popup
-      return improvedText;
+      // Return the full response object
+      return {
+        message: data.message,
+        category: data.category,
+        invalid_content: false
+      };
+
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to improve text. Please try again.",
-        variant: "destructive"
-      });
       console.error(error);
-      // Return original text if there was an error
-      return text;
+      return {
+        invalid_content: true,
+        error: "Failed to improve text. Please try again.",
+        message: "",
+        category: ""
+      };
     } finally {
       setIsImproving(false);
     }
@@ -203,16 +239,11 @@ export default function CreatePostForm() {
 
     setIsSubmitting(true);
     try {
-      // Process tags into an array
-      const tagsArray = formData.tags
-        ? formData.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
-        : [];
-
       // Use TanStack Query mutation
       await createPostMutation.mutateAsync({
         message: formData.message,
         type: formData.type as 'UPDATE' | 'BLOCKER' | 'IDEA' | 'QUESTION',
-        tags: tagsArray,
+        tags: [],
         priority: formData.priority as 'normal' | 'high' | 'critical',
         workspaceId: currentWorkspace.id,
       });
@@ -221,7 +252,6 @@ export default function CreatePostForm() {
       setFormData({
         message: "",
         type: "UPDATE",
-        tags: "",
         priority: "normal",
       });
       setOptionsOpen(false); // Close options on successful submit
@@ -249,27 +279,22 @@ export default function CreatePostForm() {
     return currentUser.useCustomAvatar ? (
       <CustomAvatar user={currentUser} size="sm" />
     ) : (
-      <Avatar className="h-8 w-8">
-        <AvatarImage src={session?.user?.image || undefined} alt={session?.user?.name || "User"} />
-        <AvatarFallback className="bg-primary/10 text-primary">
-          {session?.user?.name?.charAt(0).toUpperCase() || "U"}
-        </AvatarFallback>
-      </Avatar>
+      <UserAvatar user={{ name: session?.user?.name, image: session?.user?.image }} size="lg" />
     );
   };
 
   return (
-    <Card className="mb-6 shadow-lg hover:shadow-xl transition-all duration-300 bg-[#0e0e0e] border-[#1a1a1a] hover:border-[#333]">
-      <CardHeader className="pb-3 relative border-b border-[#1a1a1a]">
+    <Card className="mb-0 shadow-none transition-all duration-300 bg-collab-800 border-collab-700 hover:border-collab-600 rounded-2xl">
+      <CardHeader className="pb-3 relative border-b border-collab-700 px-5 pt-5">
         <div className="flex space-x-4">
           {renderAvatar()}
           <div className="flex-1 space-y-1">
-            <p className="text-sm font-medium leading-none text-[#e6edf3]">{session?.user?.name || "Anonymous"}</p>
-            <p className="text-xs text-[#8b949e]">@{session?.user?.email?.split('@')[0] || "username"}</p>
+            <p className="text-sm font-medium leading-none text-collab-50">{session?.user?.name || "Anonymous"}</p>
+            <p className="text-xs text-collab-500">@{session?.user?.email?.split('@')[0] || "username"}</p>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pt-4">
+      <CardContent className="pt-4 px-5 pb-5">
         <Collapsible open={optionsOpen} onOpenChange={setOptionsOpen} className="space-y-0">
           <div className="space-y-2 mb-1">
             <CollabInput
@@ -288,18 +313,22 @@ export default function CreatePostForm() {
             />
           </div>
 
-          {/* Centered Chevron Trigger */}
-          <div className="flex justify-center items-center h-4">
+          {/* Collapsible Trigger with label */}
+          <div className="flex justify-center items-center pt-2">
             <CollapsibleTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 className={cn(
-                  "h-6 w-6 rounded-md transition-transform duration-300 data-[state=open]:rotate-180",
-                  "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  "h-7 px-3 gap-1.5 rounded-lg transition-all duration-300",
+                  "text-collab-500 hover:text-collab-50 hover:bg-collab-600"
                 )}
               >
-                <ChevronDown className="h-4 w-4" />
+                <span className="text-xs">More options</span>
+                <ChevronDown className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-300",
+                  optionsOpen && "rotate-180"
+                )} />
               </Button>
             </CollapsibleTrigger>
           </div>
@@ -312,16 +341,16 @@ export default function CreatePostForm() {
           >
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="postType">Post Type</Label>
+                <Label htmlFor="postType" className="text-collab-400 text-sm">Post Type</Label>
                 <Select
                   value={formData.type}
                   onValueChange={(value) => handleSelectChange("type", value)}
                   disabled={isSubmitting}
                 >
-                  <SelectTrigger className="w-full bg-background border-border/60">
+                  <SelectTrigger className="w-full bg-collab-900 border-collab-700 text-collab-50 rounded-xl h-10">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-collab-800 border-collab-700">
                     <SelectItem value="UPDATE">Update</SelectItem>
                     <SelectItem value="BLOCKER">Blocker</SelectItem>
                     <SelectItem value="IDEA">Idea</SelectItem>
@@ -331,34 +360,22 @@ export default function CreatePostForm() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="priority">Priority</Label>
+                <Label htmlFor="priority" className="text-collab-400 text-sm">Priority</Label>
                 <Select
                   value={formData.priority}
                   onValueChange={(value) => handleSelectChange("priority", value)}
                   disabled={isSubmitting}
                 >
-                  <SelectTrigger className="w-full bg-background border-border/60">
+                  <SelectTrigger className="w-full bg-collab-900 border-collab-700 text-collab-50 rounded-xl h-10">
                     <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-collab-800 border-collab-700">
                     <SelectItem value="normal">Normal</SelectItem>
                     <SelectItem value="high">High</SelectItem>
                     <SelectItem value="critical">Critical</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tags">Tags (comma separated)</Label>
-              <Input
-                id="tags"
-                name="tags"
-                placeholder="e.g. react, typescript, nextjs"
-                className="bg-background border-border/60 focus:border-primary focus:ring-primary"
-                value={formData.tags}
-                onChange={handleChange}
-                disabled={isSubmitting}
-              />
             </div>
           </CollapsibleContent>
         </Collapsible>

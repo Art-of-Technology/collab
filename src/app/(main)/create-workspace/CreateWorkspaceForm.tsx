@@ -25,12 +25,6 @@ import { workspaceKeys } from '@/hooks/queries/useWorkspace';
 
 const workspaceFormSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters').max(50, 'Name cannot exceed 50 characters'),
-  slug: z
-    .string()
-    .min(3, 'Slug must be at least 3 characters')
-    .max(30, 'Slug cannot exceed 30 characters')
-    .regex(/^[a-z0-9-]+$/, 'Slug can only contain lowercase letters, numbers, and hyphens')
-    .refine(val => !val.startsWith('-') && !val.endsWith('-'), 'Slug cannot start or end with a hyphen'),
   description: z.string().max(500, 'Description cannot exceed 500 characters').optional(),
   logoUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
 });
@@ -42,43 +36,28 @@ export function CreateWorkspaceForm() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createWorkspaceMutation = useCreateWorkspace();
-  
+
   const form = useForm<WorkspaceFormValues>({
     resolver: zodResolver(workspaceFormSchema),
     defaultValues: {
       name: '',
-      slug: '',
       description: '',
       logoUrl: '',
     },
   });
-  
-  // Auto-generate slug from name
-  const watchName = form.watch('name');
-  React.useEffect(() => {
-    if (watchName && !form.getValues('slug')) {
-      const generatedSlug = watchName
-        .toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]/g, '')
-        .replace(/-+/g, '-');
-      
-      form.setValue('slug', generatedSlug, { shouldValidate: true });
-    }
-  }, [watchName, form]);
-  
+
   async function onSubmit(data: WorkspaceFormValues) {
     try {
       const workspace = await createWorkspaceMutation.mutateAsync(data);
-      
+
       // Invalidate workspace queries to refresh workspaces everywhere
       queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
-      
+
       toast({
         title: "Success",
         description: "Workspace created successfully!"
       });
-      
+
       // Navigate to workspace dashboard using slug if available, otherwise use ID
       const workspaceSlugOrId = workspace.slug || workspace.id;
       router.push(`/${workspaceSlugOrId}/dashboard`);
@@ -91,7 +70,7 @@ export function CreateWorkspaceForm() {
       });
     }
   }
-  
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -100,87 +79,66 @@ export function CreateWorkspaceForm() {
           name="name"
           render={({ field }) => (
             <FormItem className="space-y-1.5">
-              <FormLabel className="text-[#e6edf3] text-sm font-medium">Workspace Name</FormLabel>
+              <FormLabel className="text-collab-50 text-sm font-medium">Workspace Name</FormLabel>
               <FormControl>
-                <Input 
-                  placeholder="My Team" 
-                  {...field} 
-                  className="bg-transparent border-[#30363d] text-[#e6edf3] placeholder-[#6e7681] focus:border-[#58a6ff] hover:border-[#444c56] transition-colors h-8 text-sm"
-                />
-              </FormControl>
-              <FormMessage className="text-[#f85149] text-xs" />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="slug"
-          render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabel className="text-[#e6edf3] text-sm font-medium">Workspace Slug</FormLabel>
-              <FormControl>
-                <Input 
-                  placeholder="my-team" 
+                <Input
+                  placeholder="My Team"
                   {...field}
-                  className="bg-transparent border-[#30363d] text-[#e6edf3] placeholder-[#6e7681] focus:border-[#58a6ff] hover:border-[#444c56] transition-colors h-8 text-sm font-mono"
+                  className="bg-transparent border-collab-600 text-collab-50 placeholder:text-collab-500 focus:border-blue-400 hover:border-collab-600 transition-colors h-8 text-sm"
                 />
               </FormControl>
-              <FormDescription className="text-[#6e7681] text-xs">
-                Used in URLs • Only lowercase letters, numbers, and hyphens
-              </FormDescription>
-              <FormMessage className="text-[#f85149] text-xs" />
+              <FormMessage className="text-red-500 text-xs" />
             </FormItem>
           )}
         />
-        
+
         <FormField
           control={form.control}
           name="description"
           render={({ field }) => (
             <FormItem className="space-y-1.5">
-              <FormLabel className="text-[#e6edf3] text-sm font-medium">Description</FormLabel>
+              <FormLabel className="text-collab-50 text-sm font-medium">Description</FormLabel>
               <FormControl>
-                <Textarea 
-                  placeholder="A brief description of your workspace" 
-                  {...field} 
+                <Textarea
+                  placeholder="A brief description of your workspace"
+                  {...field}
                   value={field.value || ''}
-                  className="bg-transparent border-[#30363d] text-[#e6edf3] placeholder-[#6e7681] focus:border-[#58a6ff] hover:border-[#444c56] transition-colors resize-none text-sm min-h-[60px]"
+                  className="bg-transparent border-collab-600 text-collab-50 placeholder:text-collab-500 focus:border-blue-400 hover:border-collab-600 transition-colors resize-none text-sm min-h-[60px]"
                   rows={2}
                 />
               </FormControl>
-              <FormMessage className="text-[#f85149] text-xs" />
+              <FormMessage className="text-red-500 text-xs" />
             </FormItem>
           )}
         />
-        
+
         <FormField
           control={form.control}
           name="logoUrl"
           render={({ field }) => (
             <FormItem className="space-y-1.5">
-              <FormLabel className="text-[#e6edf3] text-sm font-medium">Logo URL</FormLabel>
+              <FormLabel className="text-collab-50 text-sm font-medium">Logo URL</FormLabel>
               <FormControl>
-                <Input 
-                  placeholder="https://example.com/logo.png" 
-                  {...field} 
+                <Input
+                  placeholder="https://example.com/logo.png"
+                  {...field}
                   value={field.value || ''}
-                  className="bg-transparent border-[#30363d] text-[#e6edf3] placeholder-[#6e7681] focus:border-[#58a6ff] hover:border-[#444c56] transition-colors h-8 text-sm"
+                  className="bg-transparent border-collab-600 text-collab-50 placeholder:text-collab-500 focus:border-blue-400 hover:border-collab-600 transition-colors h-8 text-sm"
                 />
               </FormControl>
-              <FormDescription className="text-[#6e7681] text-xs">
+              <FormDescription className="text-collab-500 text-xs">
                 Optional • Provide a URL to your workspace logo
               </FormDescription>
-              <FormMessage className="text-[#f85149] text-xs" />
+              <FormMessage className="text-red-500 text-xs" />
             </FormItem>
           )}
         />
-        
+
         <div className="pt-6">
-          <Button 
-            type="submit" 
-            disabled={createWorkspaceMutation.isPending} 
-            className="bg-[#238636] hover:bg-[#2ea043] text-white border-0 h-8 px-3 text-sm font-medium transition-colors disabled:opacity-50"
+          <Button
+            type="submit"
+            disabled={createWorkspaceMutation.isPending}
+            className="bg-green-700 hover:bg-green-600 text-white border-0 h-8 px-3 text-sm font-medium transition-colors disabled:opacity-50"
           >
             {createWorkspaceMutation.isPending ? (
               <>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { generateWorkspaceSlug } from '@/lib/utils';
 
 // GET /api/workspaces - Get all workspaces where user is a member
 export async function GET() {
@@ -60,16 +61,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate unique slug from name
-    const generateSlug = (name: string) => {
-      return name
-        .toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]/g, '')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '');
-    };
+    const baseSlug = generateWorkspaceSlug(name);
 
-    let baseSlug = generateSlug(name);
+    if (!baseSlug) {
+      return NextResponse.json(
+        { error: 'Name must contain at least one alphanumeric character' },
+        { status: 400 }
+      );
+    }
+
     let slug = baseSlug;
     let counter = 1;
 

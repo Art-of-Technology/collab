@@ -71,6 +71,7 @@ interface MentionContextType {
   searchUsers: (query: string, workspaceId?: string) => Promise<User[]>;
   notifications: Notification[];
   unreadCount: number;
+  unreadCoclawCount: number;
   markNotificationAsRead: (id: string) => Promise<void>;
   markAllNotificationsAsRead: () => Promise<void>;
   loading: boolean;
@@ -87,6 +88,7 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
 
   // Calculate unread notifications count
   const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCoclawCount = notifications.filter(n => !n.read && n.type.startsWith('COCLAW_')).length;
 
   // Function to search users for mentions
   const searchUsers = useCallback(async (query: string, workspaceId?: string): Promise<User[]> => {
@@ -160,6 +162,7 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
         searchUsers,
         notifications,
         unreadCount,
+        unreadCoclawCount,
         markNotificationAsRead,
         markAllNotificationsAsRead,
         loading,

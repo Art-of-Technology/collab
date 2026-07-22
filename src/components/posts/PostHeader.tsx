@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,12 +100,7 @@ export default function PostHeader({
       {hasCustomAvatar ? (
         <CustomAvatar user={author} size="md" className="mr-3 border border-primary/10" />
       ) : (
-        <Avatar className="h-10 w-10 mr-3 border border-primary/10">
-          <AvatarImage src={authorImage || undefined} alt={authorName || "User"} />
-          <AvatarFallback className="bg-primary/10 text-primary">
-            {authorName?.charAt(0).toUpperCase() || "U"}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar user={{ name: authorName, image: authorImage }} size="lg" className="h-10 w-10 mr-3 border border-primary/10" />
       )}
       <div className="flex-1">
         <div className="flex justify-between items-start mb-1">

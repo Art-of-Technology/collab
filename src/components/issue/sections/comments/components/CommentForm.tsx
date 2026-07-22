@@ -46,7 +46,7 @@ export function CommentForm({
         {showUserInfo && (
           <div className="flex items-center gap-2">
             <CustomAvatar user={currentUser || {}} size="xs" />
-            <span className="text-xs font-medium text-[#e1e7ef]">
+            <span className="text-xs font-medium text-collab-50">
               {currentUser?.name || "You"}
             </span>
           </div>
@@ -54,7 +54,7 @@ export function CommentForm({
         <Button
           onClick={handleSubmit}
           disabled={!content.trim() || isLoading}
-          className="bg-[#238636] hover:bg-[#2ea043] text-white text-xs px-3 py-1 h-7"
+          className="bg-green-700 hover:bg-green-600 text-white text-xs px-3 py-1 h-7"
           size="sm"
         >
           {isLoading ? "..." : "Comment"}

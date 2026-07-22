@@ -129,41 +129,43 @@ export function AddRelationModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl w-full p-0 bg-[#0e0e0e] border-[#1a1a1a] overflow-hidden max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-3xl w-full p-0 bg-collab-900 border-collab-700 overflow-hidden max-h-[80vh] flex flex-col">
         <VisuallyHidden>
           <DialogTitle>Add {config.label}</DialogTitle>
         </VisuallyHidden>
         
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a1a]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-sm bg-purple-500 flex items-center justify-center">
               <span className="text-xs text-white font-medium">+</span>
             </div>
-            <span className="text-[#9ca3af] text-sm">Add {config.label}</span>
+            <span className="text-gray-400 text-sm">Add {config.label}</span>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleClose}
-            className="text-[#6e7681] hover:text-white transition-colors p-1 rounded-md hover:bg-[#1a1a1a]"
+            className="text-collab-500 hover:text-white transition-colors p-1 rounded-md hover:bg-collab-800 h-auto"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
 
         {/* Content */}
         <div className="px-4 py-4 flex-1 overflow-hidden flex flex-col">
-          <p className="text-sm text-[#8b949e] mb-4">
+          <p className="text-sm text-collab-400 mb-4">
             {config.description}
           </p>
 
           {/* Search Input */}
           <div className="relative mb-4">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-[#8b949e]" />
+            <Search className="absolute left-3 top-3 h-4 w-4 text-collab-400" />
             <Input
               placeholder={config.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-[#0e0e0e] border-[#1a1a1a] text-[#e1e7ef] placeholder-[#8b949e] focus:border-[#333] focus:ring-0"
+              className="pl-10 bg-collab-900 border-collab-700 text-collab-50 placeholder-collab-400 focus:border-collab-600 focus:ring-0"
             />
           </div>
 
@@ -172,74 +174,76 @@ export function AddRelationModal({
             {/* Type Filter with All Types Option */}
             <Popover modal={true}>
               <PopoverTrigger asChild>
-                <button
+                <Button
                   type="button"
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px] border border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a] text-[#cccccc] focus:outline-none bg-[#181818]"
+                  variant="ghost"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px] border border-collab-600 hover:border-collab-600 hover:bg-collab-800 text-collab-400 focus:outline-none bg-collab-800"
                 >
                   {typeFilter === "all" ? (
                     <>
                       <div className="h-3 w-3 rounded-sm bg-gradient-to-r from-blue-500 to-purple-500"></div>
-                      <span className="text-[#cccccc] text-xs">All types</span>
+                      <span className="text-collab-400 text-xs">All types</span>
                     </>
                   ) : typeFilter === "issue" ? (
                     <>
                       <CheckSquare className="h-3 w-3" style={{ color: "#6366f1" }} />
-                      <span className="text-[#cccccc] text-xs">Issue</span>
+                      <span className="text-collab-400 text-xs">Issue</span>
                     </>
                   ) : typeFilter === "story" ? (
                     <>
                       <Circle className="h-3 w-3" style={{ color: "#22c55e" }} />
-                      <span className="text-[#cccccc] text-xs">Story</span>
+                      <span className="text-collab-400 text-xs">Story</span>
                     </>
                   ) : typeFilter === "epic" ? (
                     <>
                       <GitBranch className="h-3 w-3" style={{ color: "#a855f7" }} />
-                      <span className="text-[#cccccc] text-xs">Epic</span>
+                      <span className="text-collab-400 text-xs">Epic</span>
                     </>
                   ) : typeFilter === "milestone" ? (
                     <>
                       <Flag className="h-3 w-3" style={{ color: "#f59e0b" }} />
-                      <span className="text-[#cccccc] text-xs">Milestone</span>
+                      <span className="text-collab-400 text-xs">Milestone</span>
                     </>
                   ) : typeFilter === "defect" ? (
                     <>
                       <Bug className="h-3 w-3" style={{ color: "#ef4444" }} />
-                      <span className="text-[#cccccc] text-xs">Bug</span>
+                      <span className="text-collab-400 text-xs">Bug</span>
                     </>
                   ) : (
                     <>
                       <div className="h-3 w-3 rounded-sm bg-gradient-to-r from-blue-500 to-purple-500"></div>
-                      <span className="text-[#cccccc] text-xs">All types</span>
+                      <span className="text-collab-400 text-xs">All types</span>
                     </>
                   )}
-                </button>
+                </Button>
               </PopoverTrigger>
               
               <PopoverContent 
-                className="w-48 p-1 bg-[#1c1c1e] border-[#333] shadow-lg"
+                className="w-48 p-1 bg-collab-800 border-collab-600 shadow-lg"
                 align="start"
                 side="bottom"
                 sideOffset={4}
               >
-                <div className="text-xs text-[#9ca3af] px-2 py-1.5 border-b border-[#333] mb-1">
+                <div className="text-xs text-gray-400 px-2 py-1.5 border-b border-collab-600 mb-1">
                   Filter by type
                 </div>
                 
                 <div className="space-y-0.5">
-                  <button
+                  <Button
                     type="button"
-                    className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
+                    variant="ghost"
+                    className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-collab-600 transition-colors justify-start h-auto"
                     onClick={() => setTypeFilter("all")}
                   >
                     <div className="h-4 w-4 rounded-sm bg-gradient-to-r from-blue-500 to-purple-500 flex-shrink-0"></div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[#e6edf3] font-medium">All types</div>
+                      <div className="text-collab-50 font-medium">All types</div>
                     </div>
                     {typeFilter === "all" && (
-                      <span className="text-xs text-[#6e7681]">✓</span>
+                      <span className="text-xs text-collab-500">✓</span>
                     )}
-                  </button>
-                  
+                  </Button>
+
                   {[
                     { value: "issue", label: "Issue", icon: CheckSquare, color: "#6366f1" },
                     { value: "story", label: "Story", icon: Circle, color: "#22c55e" },
@@ -249,23 +253,24 @@ export function AddRelationModal({
                   ].map((type) => {
                     const Icon = type.icon;
                     return (
-                      <button
+                      <Button
                         key={type.value}
                         type="button"
-                        className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-[#2a2a2a] transition-colors text-left"
+                        variant="ghost"
+                        className="w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md hover:bg-collab-600 transition-colors justify-start h-auto"
                         onClick={() => setTypeFilter(type.value as RelatedItemType)}
                       >
-                        <Icon 
-                          className="h-4 w-4 flex-shrink-0" 
+                        <Icon
+                          className="h-4 w-4 flex-shrink-0"
                           style={{ color: type.color }}
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="text-[#e6edf3] font-medium">{type.label}</div>
+                          <div className="text-collab-50 font-medium">{type.label}</div>
                         </div>
                         {typeFilter === type.value && (
-                          <span className="text-xs text-[#6e7681]">✓</span>
+                          <span className="text-xs text-collab-500">✓</span>
                         )}
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
@@ -282,7 +287,7 @@ export function AddRelationModal({
           {/* Selected Items */}
           {selectedItems.length > 0 && (
             <div className="space-y-2 mb-4 flex-shrink-0">
-              <h4 className="text-sm font-medium text-[#e1e7ef]">
+              <h4 className="text-sm font-medium text-collab-50">
                 Selected ({selectedItems.length})
               </h4>
               <div className="space-y-1">
@@ -301,9 +306,9 @@ export function AddRelationModal({
           )}
 
           {/* Search Results */}
-          <div className="border border-[#1a1a1a] rounded-lg flex-1 min-h-0 overflow-y-auto mb-4">
+          <div className="border border-collab-700 rounded-lg flex-1 min-h-0 overflow-y-auto mb-4">
             {searchQuery.length < 2 ? (
-              <div className="p-8 text-center text-[#8b949e]">
+              <div className="p-8 text-center text-collab-400">
                 <Search className="h-8 w-8 mx-auto mb-2" />
                 <p className="text-sm">Type at least 2 characters to search</p>
               </div>
@@ -312,7 +317,7 @@ export function AddRelationModal({
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
               </div>
             ) : searchResults.length === 0 ? (
-              <div className="p-8 text-center text-[#8b949e]">
+              <div className="p-8 text-center text-collab-400">
                 <p className="text-sm">No items found</p>
               </div>
             ) : (
@@ -330,18 +335,18 @@ export function AddRelationModal({
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#1a1a1a] flex-shrink-0">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-collab-700 flex-shrink-0">
             <Button
               variant="outline"
               onClick={handleClose}
-              className="border-[#333] text-[#6e7681] hover:bg-[#1a1a1a] hover:text-white h-8 px-3 text-sm"
+              className="border-collab-600 text-collab-500 hover:bg-collab-800 hover:text-white h-8 px-3 text-sm"
             >
               Cancel
             </Button>
             <Button
               onClick={handleSubmit}
               disabled={selectedItems.length === 0 || isSubmitting}
-              className="bg-[#238636] hover:bg-[#2ea043] text-white border-0 h-8 px-3 text-sm font-medium"
+              className="bg-green-700 hover:bg-green-600 text-white border-0 h-8 px-3 text-sm font-medium"
             >
               {isSubmitting ? "Adding..." : `Add ${selectedItems.length} item${selectedItems.length !== 1 ? 's' : ''}`}
             </Button>

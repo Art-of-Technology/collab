@@ -32,7 +32,7 @@ export const IssueTitleInput = forwardRef<IssueTitleInputRef, IssueTitleInputPro
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className={cn(
-          "w-full text-xl font-medium text-white bg-transparent border-none outline-none placeholder-[#6e7681]",
+          "w-full text-xl font-medium text-white bg-transparent border-none outline-none placeholder:text-collab-500",
           "focus:ring-0 focus:border-none focus:outline-none resize-none",
           "focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
           className

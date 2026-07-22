@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useMemo, useRef, useCallback, useEffect, type MouseEvent } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { DropResult } from "@hello-pangea/dnd";
 import { createColumns, countIssuesByType } from '../utils';
 import { DEFAULT_DISPLAY_PROPERTIES } from '../constants';
 import { useMultipleProjectStatuses } from '@/hooks/queries/useProjectStatuses';
@@ -37,18 +35,122 @@ function detectTightSpacing(bulk: Array<{issueId: string, columnId: string, posi
   
   return false; // Spacing is fine
 }
-import type { 
-  KanbanViewRendererProps 
+import type {
+  KanbanViewRendererProps,
+  KanbanDragUpdate,
+  KanbanDropResult,
 } from '../types';
 
+// Helper: check if an issue belongs to a column based on the current grouping field
+function issueMatchesColumn(issue: any, columnId: string, groupField: string): boolean {
+  switch (groupField) {
+    case 'status':
+      return issue.status === columnId || issue.statusValue === columnId ||
+             issue.projectStatus?.name === columnId;
+    case 'assignee': {
+      const assigneeKey = issue.assignee?.name
+        ? issue.assignee.name.toLowerCase().replace(/\s+/g, '-')
+        : 'unassigned';
+      return assigneeKey === columnId || issue.assigneeId === columnId;
+    }
+    case 'priority': {
+      const PRIORITY_LABELS: Record<string, string> = { 'URGENT': 'Urgent', 'HIGH': 'High', 'MEDIUM': 'Medium', 'LOW': 'Low' };
+      const label = PRIORITY_LABELS[(issue.priority || '').toUpperCase()] || 'Medium';
+      return label.toLowerCase() === columnId || (issue.priority || '').toLowerCase() === columnId;
+    }
+    case 'type': {
+      const ISSUE_TYPE_LABELS: Record<string, string> = { 'EPIC': 'Epic', 'STORY': 'Story', 'TASK': 'Task', 'BUG': 'Bug', 'MILESTONE': 'Milestone', 'SUBTASK': 'Subtask' };
+      const label = ISSUE_TYPE_LABELS[(issue.type || '').toUpperCase()] || 'Task';
+      return label.toLowerCase() === columnId || (issue.type || '').toLowerCase() === columnId;
+    }
+    default:
+      return issue.status === columnId || issue.statusValue === columnId ||
+             issue.projectStatus?.name === columnId;
+  }
+}
+
+// Helper: compute the API mutation payload for a cross-column move based on grouping field
+function buildCrossColumnMutationPayload(
+  groupField: string,
+  targetColumnId: string,
+  targetColumnName: string,
+  columns: any[]
+): Record<string, any> {
+  switch (groupField) {
+    case 'assignee': {
+      // Column ID for assignee is the lowercased name slug, column name is the display name
+      // Find the actual assignee ID from column metadata or use 'unassigned'
+      const targetCol = columns.find(c => c.id === targetColumnId);
+      const assigneeId = targetCol?.assigneeId || (targetColumnId === 'unassigned' ? null : undefined);
+      // If we can't resolve an assignee ID, use null to unassign
+      return { assigneeId: assigneeId ?? null };
+    }
+    case 'priority': {
+      // Column names are like 'Urgent', 'High', etc. — need to map back to enum values
+      const PRIORITY_REVERSE: Record<string, string> = { 'urgent': 'URGENT', 'high': 'HIGH', 'medium': 'MEDIUM', 'low': 'LOW' };
+      const priority = PRIORITY_REVERSE[targetColumnId.toLowerCase()] || targetColumnId.toUpperCase();
+      return { priority };
+    }
+    case 'type': {
+      const TYPE_REVERSE: Record<string, string> = { 'epic': 'EPIC', 'story': 'STORY', 'task': 'TASK', 'bug': 'BUG', 'milestone': 'MILESTONE', 'subtask': 'SUBTASK' };
+      const type = TYPE_REVERSE[targetColumnId.toLowerCase()] || targetColumnId.toUpperCase();
+      return { type };
+    }
+    case 'status':
+    default:
+      return { status: targetColumnId, statusValue: targetColumnId };
+  }
+}
+
+// Helper: apply optimistic field updates on the dragged issue for non-status groupings
+function applyOptimisticGroupFieldUpdate(
+  issue: any,
+  groupField: string,
+  targetColumnId: string,
+  targetColumnName: string,
+  columns: any[]
+): any {
+  const updated = { ...issue };
+  switch (groupField) {
+    case 'assignee': {
+      const targetCol = columns.find(c => c.id === targetColumnId);
+      if (targetColumnId === 'unassigned') {
+        updated.assignee = null;
+        updated.assigneeId = null;
+      } else {
+        updated.assignee = { ...(issue.assignee || {}), name: targetColumnName, id: targetCol?.assigneeId || issue.assignee?.id };
+        updated.assigneeId = targetCol?.assigneeId || issue.assigneeId;
+      }
+      break;
+    }
+    case 'priority': {
+      const PRIORITY_REVERSE: Record<string, string> = { 'urgent': 'URGENT', 'high': 'HIGH', 'medium': 'MEDIUM', 'low': 'LOW' };
+      updated.priority = PRIORITY_REVERSE[targetColumnId.toLowerCase()] || targetColumnId.toUpperCase();
+      break;
+    }
+    case 'type': {
+      const TYPE_REVERSE: Record<string, string> = { 'epic': 'EPIC', 'story': 'STORY', 'task': 'TASK', 'bug': 'BUG', 'milestone': 'MILESTONE', 'subtask': 'SUBTASK' };
+      updated.type = TYPE_REVERSE[targetColumnId.toLowerCase()] || targetColumnId.toUpperCase();
+      break;
+    }
+    case 'status':
+    default: {
+      updated.status = targetColumnId;
+      updated.statusValue = targetColumnId;
+      updated.projectStatus = { name: targetColumnId, displayName: targetColumnName };
+      break;
+    }
+  }
+  return updated;
+}
 export const useKanbanState = ({
   view,
   issues,
   workspace,
   onColumnUpdate,
-  onCreateIssue,
   activeFilters,
-  onOrderingChange
+  onOrderingChange,
+  searchQuery
 }: KanbanViewRendererProps) => {
   const { toast } = useToast();
   const isDraggingRef = useRef(false);
@@ -58,13 +160,10 @@ export const useKanbanState = ({
   const requestSequenceRef = useRef(0);
   const pendingRequestsRef = useRef<Map<string, { sequence: number, batchId: string }>>(new Map());
   const lastDragOperationRef = useRef<number>(0);
-  const router = useRouter();
   const updateIssueMutation = useUpdateIssue();
   
   // State management with optimistic updates
   const [isCreatingIssue, setIsCreatingIssue] = useState<string | null>(null);
-  const [newIssueTitle, setNewIssueTitle] = useState('');
-  const [showSubIssues, setShowSubIssues] = useState(true);
   const [operationsInProgress, setOperationsInProgress] = useState<Set<string>>(new Set());
   
   // Removed corruption watcher - React closure issue identified and resolved
@@ -79,20 +178,35 @@ export const useKanbanState = ({
   const [localColumnOrder, setLocalColumnOrder] = useState<string[] | null>(null);
   const previousIssuesRef = useRef<any[] | null>(null);
   const previousOrderingMethod = useRef<string | null>(null);
+  const previousSearchQueryRef = useRef<string>(searchQuery || '');
   
   // Update local issues when props change (from server),
   // but don't override while a drag/drop optimistic update is in-flight
   useEffect(() => {
+    // Track search query changes first - this must happen even during drag operations
+    // to ensure the ref is updated when operations complete
+    const searchQueryChanged = previousSearchQueryRef.current !== (searchQuery || '');
+    if (searchQueryChanged) {
+      previousSearchQueryRef.current = searchQuery || '';
+    }
+    
     if (isDraggingRef.current || operationsInProgressRef.current.size > 0) return;
     
     // Additional protection: don't override if we have recent local changes that might not be reflected yet
+    // IMPORTANT: Only check for status differences in issues that exist in BOTH localIssues and issues prop
+    // This prevents blocking updates when search query changes (which filters the issues prop)
     const hasRecentLocalChanges = localIssues.some(localIssue => {
       const serverIssue = issues.find(issue => issue.id === localIssue.id);
+      // Only check differences if the issue exists in both arrays
       if (!serverIssue) return false;
       
-      // Check if local issue has different status than server issue (recent cross-column move)
+      // Check if local issue has different field values than server issue (recent cross-column move)
+      // This covers status, assignee, priority, and type groupings
       return localIssue.status !== serverIssue.status || 
-             localIssue.statusValue !== serverIssue.statusValue;
+             localIssue.statusValue !== serverIssue.statusValue ||
+             localIssue.assigneeId !== serverIssue.assigneeId ||
+             localIssue.priority !== serverIssue.priority ||
+             localIssue.type !== serverIssue.type;
     });
     
     // Allow server data update if enough time has passed since last drag operation (60 seconds)
@@ -100,8 +214,8 @@ export const useKanbanState = ({
     const shouldAllowServerUpdate = timeSinceLastDrag > 60000; // Fixed: 60 seconds = 60000ms
     
     // Sync check for server data vs local optimistic changes
-    
-    if (hasRecentLocalChanges && !shouldAllowServerUpdate) {
+    // Skip update if we have recent local changes AND search query hasn't changed AND enough time hasn't passed
+    if (hasRecentLocalChanges && !searchQueryChanged && !shouldAllowServerUpdate) {
       // Skip server data update to preserve recent local changes
       return;
     }
@@ -118,7 +232,7 @@ export const useKanbanState = ({
     
     stateVersionRef.current += 1;
     setLocalIssues(issues);
-  }, [issues]); // Removed localIssues dependency to prevent infinite loop when optimistic updates occur
+  }, [issues, searchQuery]); // Removed localIssues dependency to prevent infinite loop when optimistic updates occur
   
   // Removed state corruption watcher - identified as React closure issue, not actual corruption
   
@@ -184,16 +298,36 @@ export const useKanbanState = ({
     }
     const baseColumns = createColumns(filteredIssues, view, projectStatuses as any[], allowedStatusNames, previousOrderingMethod.current);
     previousOrderingMethod.current = view?.ordering || view?.sorting?.field || 'manual';
-    if (localColumnOrder && view.grouping?.field === 'status') {
+
+    // Start with base columns
+    let orderedColumns = baseColumns;
+
+    // Apply saved layout order from view for non-status groupings
+    if (groupField !== 'status') {
+      const savedOrder: string[] | undefined = view?.layout?.kanbanColumnOrder?.[groupField];
+      if (Array.isArray(savedOrder) && savedOrder.length > 0) {
+        const indexById = new Map(savedOrder.map((id, idx) => [id, idx]));
+        orderedColumns = orderedColumns
+          .map((col: any) => ({
+            ...col,
+            order: indexById.has(col.id) ? (indexById.get(col.id) as number) : col.order,
+          }))
+          .sort((a: any, b: any) => a.order - b.order);
+      }
+    }
+
+    // Apply local drag-reordered order for all groupings (takes precedence during session)
+    if (localColumnOrder) {
       const indexById = new Map(localColumnOrder.map((id, idx) => [id, idx]));
-      return baseColumns
+      orderedColumns = orderedColumns
         .map((col: any) => ({
           ...col,
           order: indexById.has(col.id) ? (indexById.get(col.id) as number) : col.order,
         }))
         .sort((a: any, b: any) => a.order - b.order);
     }
-    return baseColumns;
+
+    return orderedColumns;
   }, [filteredIssues, view, projectStatusData, isLoadingStatuses, localColumnOrder, activeFilters]);
 
   // Count issues for filter buttons
@@ -203,35 +337,37 @@ export const useKanbanState = ({
 
   // Helper function to validate if an issue can be moved to a target column
   const canIssueMoveTo = useCallback((issue: any, targetColumnId: string): boolean => {
+    const groupField = view?.grouping?.field || 'status';
+
     // Allow movement within the same column (reordering)
-    if (issue.projectStatus?.name === targetColumnId || 
-        issue.statusValue === targetColumnId || 
-        issue.status === targetColumnId) {
+    if (issueMatchesColumn(issue, targetColumnId, groupField)) {
       return true;
     }
 
-    // If we don't have project statuses data, allow movement (fallback behavior)
+    // For non-status groupings, always allow moves (no cross-project status constraints)
+    if (groupField !== 'status') {
+      return true;
+    }
+
+    // Status-specific validation: check if target status exists in the issue's project
     if (!projectStatusData?.projectStatuses) {
       return true;
     }
 
-    // Find the project-specific statuses for the issue's project
     const projectSpecificStatuses = projectStatusData.projectStatuses.filter(
       (ps: any) => ps.projectId === issue.projectId
     );
 
-    // If no project-specific statuses found, allow movement to common columns
     if (projectSpecificStatuses.length === 0) {
       return true;
     }
 
-    // Check if the target column exists in the issue's project statuses
     const targetStatusExists = projectSpecificStatuses.some(
       (ps: any) => ps.name === targetColumnId
     );
 
     return targetStatusExists;
-  }, [projectStatusData]);
+  }, [projectStatusData, view?.grouping?.field]);
 
   // Track the currently dragged issue and hover state for visual feedback
   const [draggedIssue, setDraggedIssue] = useState<any>(null);
@@ -266,28 +402,37 @@ export const useKanbanState = ({
     }
   }, [localIssues, columns, view?.ordering, view?.sorting?.field]);
 
-  const handleDragUpdate = useCallback((update: any) => {
-    if (!update.destination) {
+  const handleDragUpdate = useCallback((update: KanbanDragUpdate) => {
+    let destination = update.destination;
+    if(update.overrideColumnId) {
+      destination = {
+        droppableId: update.overrideColumnId,
+        index: 0,
+      };
+    }
+
+    if (!destination) {
       setHoverState({ canDrop: true, columnId: '' });
       return;
     }
-    
-    if (update.type === 'issue' && update.destination) {
-      const targetColumnId = update.destination.droppableId;
-      
-      // Find the dragged issue and check if it can be moved to the target column
+
+    if (update.type === 'issue') {
+      const targetColumnId = destination.droppableId;
+
       if (draggedIssue) {
         const canDrop = canIssueMoveTo(draggedIssue, targetColumnId);
-
         setHoverState({ canDrop, columnId: targetColumnId });
+      } else {
+        setHoverState({ canDrop: true, columnId: targetColumnId });
       }
     } else {
       setHoverState({ canDrop: true, columnId: '' });
     }
   }, [draggedIssue, canIssueMoveTo]);
 
-  const handleDragEnd = useCallback(async (result: DropResult) => {
-    const { destination, source, draggableId, type } = result;
+  const handleDragEnd = useCallback(async (result: KanbanDropResult) => {
+    const { source, draggableId, type } = result;
+    const destination = result.overrideDestination ?? result.destination;
 
     // Safety check: if this specific issue operation is already in progress, ignore
     if (operationsInProgressRef.current.has(draggableId) && !isDraggingRef.current) {
@@ -389,17 +534,10 @@ export const useKanbanState = ({
 
       // Compute neighbor context using current optimistic state (localIssues)
       // This ensures we consider any pending optimistic updates from previous drag operations
+      const groupField = view?.grouping?.field || 'status';
       const getCurrentColumnItems = (columnId: string) => {
         return localIssues
-          .filter((issue: any) => {
-            // For status-based grouping, check status fields
-            if ((view?.grouping?.field || 'status') === 'status') {
-              return issue.status === columnId || issue.statusValue === columnId ||
-                     issue.projectStatus?.name === columnId;
-            }
-            // For other grouping fields, add logic as needed
-            return issue.status === columnId;
-          })
+          .filter((issue: any) => issueMatchesColumn(issue, columnId, groupField))
           .sort((a: any, b: any) => {
             const posA = a?.viewPosition ?? a?.position ?? 0;
             const posB = b?.viewPosition ?? b?.position ?? 0;
@@ -424,17 +562,9 @@ export const useKanbanState = ({
       // This ensures consistency between what the user sees and how we calculate positions
       const visualColumnItems = localIssues
         .filter((issue: any) => {
-          // Filter to items in this column (including optimistic status changes)
-          if ((view?.grouping?.field || 'status') === 'status') {
-            return (issue.status === targetColumnId || 
-                    issue.statusValue === targetColumnId ||
-                    issue.projectStatus?.name === targetColumnId) && 
-                   issue.id !== draggableId;
-          }
-          return issue.status === targetColumnId && issue.id !== draggableId;
+          return issueMatchesColumn(issue, targetColumnId, groupField) && issue.id !== draggableId;
         })
         .sort((a: any, b: any) => {
-          // Sort by viewPosition (which includes optimistic position updates)
           const posA = a?.viewPosition ?? a?.position ?? 0;
           const posB = b?.viewPosition ?? b?.position ?? 0;
           return posA - posB;
@@ -442,17 +572,13 @@ export const useKanbanState = ({
       
       // Position calculation for drag and drop
       
-      // Handle stale destination.index when pending operations exist
+      // Position calculation: always clamp destination index to valid range
       let adjustedDestIndex = destIndex;
+      // ALWAYS clamp — not just when operations are pending
+      // This prevents off-by-one errors from pointer override and stale DnD library state
+      adjustedDestIndex = Math.max(0, Math.min(adjustedDestIndex, visualColumnItems.length));
       
-      // When there are pending operations, verify the destination index
-      if (operationsInProgressRef.current.size > 0 && !isSameColumn) {
-        // The DnD library's destination.index is correct for the current visual state
-        // Even when pending items are added above, the visual layout shifts are handled properly
-        adjustedDestIndex = Math.max(0, Math.min(adjustedDestIndex, visualColumnItems.length));
-      }
-      
-      const clampedIndex = Math.max(0, Math.min(adjustedDestIndex, visualColumnItems.length));
+      const clampedIndex = adjustedDestIndex;
       prev = clampedIndex > 0 ? visualColumnItems[clampedIndex - 1] : undefined;
       next = clampedIndex < visualColumnItems.length ? visualColumnItems[clampedIndex] : undefined;
       
@@ -464,8 +590,8 @@ export const useKanbanState = ({
         const gap = nextPos - prevPos;
         
         if (!Number.isFinite(gap) || gap <= 1) {
-          // Not enough space, put right after prev
-          optimisticPosition = prevPos + 1;
+          // Not enough space — trigger full repositioning
+          optimisticPosition = (clampedIndex + 1) * VIEW_POSITION_GAP;
         } else {
           // Use middle of gap
           optimisticPosition = prevPos + Math.floor(gap / 2);
@@ -475,17 +601,15 @@ export const useKanbanState = ({
         optimisticPosition = Number.isFinite(prevPos) ? prevPos + VIEW_POSITION_GAP : VIEW_POSITION_GAP;
       } else if (!prev && next) {
         const nextPos = getPos(next);
-        // When placing before the first item, ensure we create a unique position
+        // Placing before the first item — need position < nextPos
         if (nextPos > VIEW_POSITION_GAP) {
-          // If next position is large, use half
           optimisticPosition = Math.floor(nextPos / 2);
-        } else if (nextPos > 512) {
-          // If next position is medium, use half
+        } else if (nextPos > 2) {
+          // If next is small but > 2, halve it (gives at least position 1)
           optimisticPosition = Math.floor(nextPos / 2);
         } else {
-          // If next position is too small (≤512), we need to reposition all items
-          // Instead of trying to squeeze in, we'll push everything down
-          optimisticPosition = 1; // Temporary - will trigger repositioning
+          // Next position is too small (≤2), trigger full repositioning
+          optimisticPosition = VIEW_POSITION_GAP; // Will be corrected by repositioning
         }
       } else {
         optimisticPosition = VIEW_POSITION_GAP; // first item in empty column
@@ -494,17 +618,18 @@ export const useKanbanState = ({
       // Ensure position is always positive (integers only for database compatibility)
       optimisticPosition = Math.max(1, Math.floor(optimisticPosition));
       
-      // Check if we're creating a position conflict (placing at top when items have small positions)
+      // Determine if we need full repositioning:
+      // 1. Placing before first item when first item has small position
+      // 2. Gap between prev/next is too small for clean insertion
+      // 3. Optimistic position would create a conflict
       const needsRepositioning = (
-        // Placing before first item AND first item has small position
-        (!prev && next && getPos(next) <= 8) ||
-        // Or if optimistic position would conflict with existing positions
-        (optimisticPosition <= 8 && visualColumnItems.some(item => getPos(item) <= 8))
+        (!prev && next && getPos(next) <= VIEW_POSITION_GAP / 2) ||
+        (prev && next && (getPos(next) - getPos(prev)) <= 1) ||
+        (optimisticPosition <= 1 && visualColumnItems.length > 0)
       );
       
       if (needsRepositioning) {
-        // When repositioning is needed, use position that will be correct after repositioning
-        // If we're placing at the top (destIndex 0), we'll get position 1024 after repositioning
+        // Full reindex: use predictable positions based on visual order
         optimisticPosition = (clampedIndex + 1) * VIEW_POSITION_GAP;
       }
       
@@ -519,11 +644,11 @@ export const useKanbanState = ({
       };
       
       if (!isSameColumn) {
-        updatedIssue.status = targetColumnId;
-        updatedIssue.statusValue = targetColumnId;
-        if ((view?.grouping?.field || 'status') === 'status') {
-          updatedIssue.projectStatus = { name: targetColumnId, displayName: targetColumn.name };
-        }
+        // Apply optimistic field updates based on current groupBy setting
+        const optimisticUpdates = applyOptimisticGroupFieldUpdate(
+          updatedIssue, groupField, targetColumnId, targetColumn.name, columns
+        );
+        Object.assign(updatedIssue, optimisticUpdates);
       }
 
       // Optimistically update UI immediately with synchronous state update
@@ -538,14 +663,7 @@ export const useKanbanState = ({
       
       // Immediately verify the state update took effect
       const immediateColumnItems = newLocalIssues
-        .filter((issue: any) => {
-          if ((view?.grouping?.field || 'status') === 'status') {
-            return (issue.status === targetColumnId || 
-                    issue.statusValue === targetColumnId ||
-                    issue.projectStatus?.name === targetColumnId);
-          }
-          return issue.status === targetColumnId;
-        })
+        .filter((issue: any) => issueMatchesColumn(issue, targetColumnId, groupField))
         .sort((a: any, b: any) => {
           const posA = a?.viewPosition ?? a?.position ?? 0;
           const posB = b?.viewPosition ?? b?.position ?? 0;
@@ -596,13 +714,16 @@ export const useKanbanState = ({
         pendingRequestsRef.current.set(view.id, { sequence: currentSequence, batchId });
         setHasPendingPositionUpdates(true);
         
-        // Handle status updates first (for cross-column moves)
+        // Handle field updates for cross-column moves (status, assignee, priority, type)
         if (!isSameColumn) {
-          await updateIssueMutation.mutateAsync({ 
-            id: draggableId, 
-            status: updatedIssue.status, 
-            statusValue: updatedIssue.statusValue, 
-            skipInvalidate: true 
+          const mutationPayload = buildCrossColumnMutationPayload(
+            groupField, targetColumnId, targetColumn.name, columns
+          );
+          await updateIssueMutation.mutateAsync({
+            id: draggableId,
+            workspaceId: workspace?.id,
+            ...mutationPayload,
+            skipInvalidate: true
           });
         }
         
@@ -647,21 +768,29 @@ export const useKanbanState = ({
           
           bulk = reorderedBulk;
           
-          // CRITICAL: Update the optimistic position to match the final repositioned position
+          // CRITICAL: Update ALL items' optimistic positions to match the repositioned values
           // This prevents visual jumping when the database response comes back
-          const droppedItemInBulk = bulk.find(b => b.issueId === draggableId);
-          if (droppedItemInBulk) {
-            // Update both the optimistic position and the newLocalIssues state
-            optimisticPosition = droppedItemInBulk.position;
-            const issueIndex = newLocalIssues.findIndex((i: any) => i.id === draggableId);
-            if (issueIndex !== -1) {
-              newLocalIssues[issueIndex] = {
-                ...newLocalIssues[issueIndex],
-                viewPosition: optimisticPosition,
-                position: optimisticPosition
-              };
-            }
+          const positionMap = new Map(bulk.map(b => [b.issueId, b.position]));
+          
+          // Update the dragged item's optimistic position
+          const droppedPos = positionMap.get(draggableId);
+          if (droppedPos !== undefined) {
+            optimisticPosition = droppedPos;
           }
+          
+          // Update ALL local issues that were repositioned
+          newLocalIssues = newLocalIssues.map((issue: any) => {
+            const newPos = positionMap.get(issue.id);
+            if (newPos !== undefined) {
+              return { ...issue, viewPosition: newPos, position: newPos };
+            }
+            return issue;
+          });
+          
+          // Flush the full reposition to UI immediately
+          flushSync(() => {
+            setLocalIssues(newLocalIssues);
+          });
         }
         
         
@@ -701,13 +830,17 @@ export const useKanbanState = ({
               const pos = updatedMap.get(it.id) as number;
               const updates: any = { ...it, viewPosition: pos, position: pos };
               
-              // For cross-column moves, preserve the status changes that were applied optimistically
+              // For cross-column moves, preserve ALL field changes that were applied optimistically
+              // This handles status, assignee, priority, and type groupings
               if (!isSameColumn && it.id === draggableId) {
-                updates.status = updatedIssue.status;
-                updates.statusValue = updatedIssue.statusValue;
-                if (updatedIssue.projectStatus) {
-                  updates.projectStatus = updatedIssue.projectStatus;
-                }
+                // Copy all optimistic changes from updatedIssue (which was built via applyOptimisticGroupFieldUpdate)
+                if (updatedIssue.status !== undefined) updates.status = updatedIssue.status;
+                if (updatedIssue.statusValue !== undefined) updates.statusValue = updatedIssue.statusValue;
+                if (updatedIssue.projectStatus) updates.projectStatus = updatedIssue.projectStatus;
+                if (updatedIssue.assignee !== undefined) updates.assignee = updatedIssue.assignee;
+                if (updatedIssue.assigneeId !== undefined) updates.assigneeId = updatedIssue.assigneeId;
+                if (updatedIssue.priority !== undefined) updates.priority = updatedIssue.priority;
+                if (updatedIssue.type !== undefined) updates.type = updatedIssue.type;
               }
               
               return updates;
@@ -763,7 +896,7 @@ export const useKanbanState = ({
   }, [localIssues, columns, updateIssueMutation, onColumnUpdate, view.id, hoverState.canDrop, hoverState.columnId, draggedIssue?.title, toast, view?.grouping?.field, onOrderingChange, view?.ordering, view?.sorting?.field]);
 
   // Issue handlers
-  const handleIssueClick = useCallback((issueIdOrKey: string) => {
+  const handleIssueClick = useCallback((issueIdOrKey: string, event?: MouseEvent) => {
     // Navigate directly to the issue page (Linear-style)
     // Use workspace slug if available, else id; fallback to issue's workspaceId
     const sampleIssue = issues.find((i) => i.id === issueIdOrKey || i.issueKey === issueIdOrKey) || issues[0];
@@ -772,44 +905,16 @@ export const useKanbanState = ({
     // Build URL with view context for proper back navigation
     const viewParams = view?.slug ? `?view=${view.slug}&viewName=${encodeURIComponent(view.name)}` : '';
     
-    if (workspaceSegment) {
-      router.push(`/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`);
-    } else {
-      router.push(`/issues/${issueIdOrKey}${viewParams}`);
+    const url = workspaceSegment 
+      ? `/${workspaceSegment}/issues/${issueIdOrKey}${viewParams}`
+      : `/issues/${issueIdOrKey}${viewParams}`;
+    
+    // Only open programmatically for normal left-clicks
+    // Ctrl/Cmd+click and middle click use native browser behavior
+    if (!event || (!event.ctrlKey && !event.metaKey)) {
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
-  }, [issues, router, view, workspace]);
-
-  const handleCreateIssue = useCallback(async (columnId: string) => {
-    if (!newIssueTitle.trim()) return;
-    
-    const column = columns.find(col => col.id === columnId);
-    if (!column) return;
-    
-    const issueData = {
-      title: newIssueTitle,
-      status: column.id,  // Use internal name, not display name
-      statusValue: column.id,
-      type: 'TASK'
-    };
-    
-    if (onCreateIssue) {
-      await onCreateIssue(columnId, issueData);
-    }
-    
-    setNewIssueTitle('');
-    setIsCreatingIssue(null);
-    
-    toast({
-      title: "Issue created",
-      description: `${newIssueTitle} created in ${column.name}`
-    });
-  }, [newIssueTitle, columns, onCreateIssue, toast]);
-
-
-  // Sub-issues toggle handler
-  const handleToggleSubIssues = useCallback(() => {
-    setShowSubIssues(prev => !prev);
-  }, []);
+  }, [issues, view, workspace]);
 
   // Display properties: use raw values; respect empty array; fallback only if undefined
   const displayProperties = useMemo(() => {
@@ -824,30 +929,18 @@ export const useKanbanState = ({
 
   const handleCancelCreatingIssue = useCallback(() => {
     setIsCreatingIssue(null);
-    setNewIssueTitle('');
   }, []);
-
-  const handleIssueKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && isCreatingIssue) {
-      handleCreateIssue(isCreatingIssue);
-    } else if (e.key === 'Escape') {
-      handleCancelCreatingIssue();
-    }
-  }, [isCreatingIssue, handleCreateIssue, handleCancelCreatingIssue]);
 
 
   return {
     // State
     isCreatingIssue,
-    newIssueTitle,
-    setNewIssueTitle,
     
     // Computed values
     filteredIssues,
     columns,
     issueCounts,
     displayProperties,
-    showSubIssues,
     isLoadingStatuses,
     draggedIssue,
     hoverState,
@@ -859,10 +952,7 @@ export const useKanbanState = ({
     handleDragUpdate,
     handleDragEnd,
     handleIssueClick,
-    handleCreateIssue,
-    handleToggleSubIssues,
     handleStartCreatingIssue,
-    handleCancelCreatingIssue,
-    handleIssueKeyDown
+    handleCancelCreatingIssue
   };
 };

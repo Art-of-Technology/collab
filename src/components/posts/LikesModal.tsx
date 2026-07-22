@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -61,15 +61,7 @@ export default function LikesModal({ postId, isOpen, onOpenChange, initialLikes 
             <div className="space-y-3">
               {likesWithAuthor.map((reaction) => (
                 <div key={reaction.id} className="flex items-center gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage 
-                      src={reaction.author.image || undefined} 
-                      alt={reaction.author.name || "User"} 
-                    />
-                    <AvatarFallback className="bg-primary/10 text-primary">
-                      {reaction.author.name?.charAt(0).toUpperCase() || "U"}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar user={reaction.author} size="lg" />
                   <div className="flex-1">
                     <Link
                       href={currentWorkspace ? `/${currentWorkspace.id}/profile/${reaction.author.id}` : `#`}

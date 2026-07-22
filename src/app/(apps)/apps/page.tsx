@@ -10,7 +10,8 @@ import GlobalAppDiscovery from '@/components/apps/GlobalAppDiscovery';
 async function getPublishedApps() {
   const apps = await prisma.app.findMany({
     where: {
-      status: 'PUBLISHED'
+      status: 'PUBLISHED',
+      isSystemApp: false  // Hide system apps from app store
     },
     select: {
       id: true,
@@ -43,7 +44,7 @@ async function getPublishedApps() {
 async function getAppStats() {
   const [totalApps, totalInstallations, recentApps] = await Promise.all([
     prisma.app.count({
-      where: { status: 'PUBLISHED' }
+      where: { status: 'PUBLISHED', isSystemApp: false }
     }),
     prisma.appInstallation.count({
       where: { status: 'ACTIVE' }
@@ -51,6 +52,7 @@ async function getAppStats() {
     prisma.app.count({
       where: {
         status: 'PUBLISHED',
+        isSystemApp: false,
         createdAt: {
           gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
         }

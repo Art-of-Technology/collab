@@ -202,20 +202,20 @@ export function TextDiff({ oldText, newText, maxHeight = 200 }: TextDiffProps) {
   }
   
   return (
-    <div className="mt-2 border border-[#2d2d30] rounded-md overflow-hidden bg-[#0a0a0a]">
+    <div className="mt-2 border border-collab-600 rounded-md overflow-hidden bg-collab-950">
       {/* Header */}
       <div 
-        className="flex items-center justify-between px-3 py-2 bg-[#1a1a1a] border-b border-[#2d2d30] cursor-pointer hover:bg-[#1f1f1f] transition-colors"
+        className="flex items-center justify-between px-3 py-2 bg-collab-800 border-b border-collab-600 cursor-pointer hover:bg-collab-700 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="flex items-center gap-2 text-xs text-[#8b949e]">
+        <div className="flex items-center gap-2 text-xs text-collab-400">
           {isExpanded ? (
             <ChevronDown className="h-3 w-3" />
           ) : (
             <ChevronRight className="h-3 w-3" />
           )}
           <span>Description changes</span>
-          <span className="text-[#666]">
+          <span className="text-collab-500">
             ({changedLines} {changedLines === 1 ? 'line' : 'lines'} changed)
           </span>
         </div>
@@ -232,16 +232,16 @@ export function TextDiff({ oldText, newText, maxHeight = 200 }: TextDiffProps) {
               key={index}
               className={`flex ${
                 line.type === 'added' 
-                  ? 'bg-[#0d4711] border-l-2 border-l-[#238636]' 
+                  ? 'bg-green-500/10 border-l-2 border-l-green-600' 
                   : line.type === 'removed'
-                  ? 'bg-[#53212b] border-l-2 border-l-[#f85149]'
+                  ? 'bg-red-500/20 border-l-2 border-l-red-500'
                   : line.type === 'modified'
-                  ? 'bg-[#3d2a00] border-l-2 border-l-[#d29922]'
-                  : 'hover:bg-[#0d0d0d]'
+                  ? 'bg-amber-500/10 border-l-2 border-l-amber-600'
+                  : 'hover:bg-collab-950'
               }`}
             >
               {/* Line numbers */}
-              <div className="flex-shrink-0 w-16 px-2 py-1 text-[#6e7681] text-right bg-[#0d1117] border-r border-[#2d2d30]">
+              <div className="flex-shrink-0 w-16 px-2 py-1 text-collab-500 text-right bg-collab-900 border-r border-collab-600">
                 <div className="flex justify-between text-[10px]">
                   <span>{line.oldLineNum || ''}</span>
                   <span>{line.newLineNum || ''}</span>
@@ -252,18 +252,18 @@ export function TextDiff({ oldText, newText, maxHeight = 200 }: TextDiffProps) {
               <div className="flex-1 px-3 py-1">
                 {line.type === 'modified' && line.oldContent ? (
                   <div>
-                    <div className="text-[#f85149] line-through opacity-70">
+                    <div className="text-red-500 line-through opacity-70">
                       - {line.oldContent}
                     </div>
-                    <div className="text-[#56d364]">
+                    <div className="text-green-400">
                       + {line.content}
                     </div>
                   </div>
                 ) : (
                   <div className={`${
-                    line.type === 'added' ? 'text-[#56d364]' :
-                    line.type === 'removed' ? 'text-[#f85149]' :
-                    'text-[#c9d1d9]'
+                    line.type === 'added' ? 'text-green-400' :
+                    line.type === 'removed' ? 'text-red-500' :
+                    'text-collab-400'
                   }`}>
                     {line.type === 'added' ? '+ ' : line.type === 'removed' ? '- ' : '  '}
                     {line.content}
@@ -286,9 +286,9 @@ export function TextDiff({ oldText, newText, maxHeight = 200 }: TextDiffProps) {
                 <div
                   key={index}
                   className={`flex items-center gap-2 ${
-                    line.type === 'added' ? 'text-[#56d364]' :
-                    line.type === 'removed' ? 'text-[#f85149]' :
-                    'text-[#d29922]'
+                    line.type === 'added' ? 'text-green-400' :
+                    line.type === 'removed' ? 'text-red-500' :
+                    'text-yellow-600'
                   }`}
                 >
                   <span className="flex-shrink-0 w-4">
@@ -300,7 +300,7 @@ export function TextDiff({ oldText, newText, maxHeight = 200 }: TextDiffProps) {
                 </div>
               ))}
             {changedLines > 3 && (
-              <div className="text-[#6e7681] italic">
+              <div className="text-collab-500 italic">
                 and {changedLines - 3} more {changedLines - 3 === 1 ? 'change' : 'changes'}...
               </div>
             )}

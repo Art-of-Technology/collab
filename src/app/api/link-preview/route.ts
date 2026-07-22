@@ -46,8 +46,8 @@ export async function POST(req: NextRequest) {
               ],
             },
             OR: [
-              // Note is public
-              { isPublic: true },
+              // Note is visible to workspace or public
+              { scope: { in: ['WORKSPACE', 'PUBLIC'] } },
               // Or user is a member of the workspace
               {
                 workspace: {
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
           select: {
             id: true,
             title: true,
-            isPublic: true,
+            scope: true,
             isFavorite: true,
             updatedAt: true,
             author: {
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
             metadata: {
               workspace: note.workspace?.name,
               author: note.author.name,
-              isPublic: note.isPublic,
+              scope: note.scope,
               isFavorite: note.isFavorite,
               updatedAt: note.updatedAt,
             },

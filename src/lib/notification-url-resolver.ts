@@ -57,8 +57,8 @@ export const extractNotificationIssueId = (
   const normalizedType = normalizeNotificationType(notification.type);
 
   if (normalizedType.includes("issue")) {
-    if (notification.taskId) {
-      return notification.taskId;
+    if (notification.issueId) {
+      return notification.issueId;
     }
 
     if (notification.task?.id) {
@@ -92,7 +92,7 @@ const resolveTaskCommentNotification: NotificationRouteResolver = (
     return undefined;
   }
 
-  const taskId = notification.taskId || notification.task?.id;
+  const taskId = notification.issueId || notification.task?.id;
   const path = taskId ? `tasks/${taskId}` : "tasks";
   return buildWorkspaceUrl(workspaceSegment, path);
 };
@@ -106,7 +106,7 @@ const resolveTaskNotification: NotificationRouteResolver = (
     return undefined;
   }
 
-  const taskId = notification.taskId || notification.task?.id;
+  const taskId = notification.issueId || notification.task?.id;
   const path = taskId ? `tasks/${taskId}` : "tasks";
   return buildWorkspaceUrl(workspaceSegment, path);
 };

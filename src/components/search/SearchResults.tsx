@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MagnifyingGlassIcon, TagIcon, UserIcon } from "@heroicons/react/24/outline";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PostList from "@/components/posts/PostList";
@@ -153,12 +153,7 @@ export default function SearchResults({
                   <Card key={user.id} className="overflow-hidden hover:shadow-md transition-shadow border-border/40 bg-card/95">
                     <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${user.id}` : `#`} className="block p-4">
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10 border-2 border-primary/10">
-                          <AvatarImage src={user.image ? user.image : ""} />
-                          <AvatarFallback className="bg-primary/10 text-primary">
-                            {user.name?.charAt(0).toUpperCase() || "U"}
-                          </AvatarFallback>
-                        </Avatar>
+                        <UserAvatar user={user} size="lg" className="h-10 w-10 border-2 border-primary/10" />
                         <div>
                           <p className="font-medium">{user.name}</p>
                           <div className="flex flex-wrap gap-2 mt-1">
@@ -248,12 +243,7 @@ export default function SearchResults({
                 <Card key={user.id} className="overflow-hidden hover:shadow-md transition-shadow border-border/40 bg-card/95">
                   <Link href={currentWorkspace ? `/${currentWorkspace.id}/profile/${user.id}` : `#`} className="block p-4">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10 border-2 border-primary/10">
-                        <AvatarImage src={user.image ? user.image : ""} />
-                        <AvatarFallback className="bg-primary/10 text-primary">
-                          {user.name?.charAt(0).toUpperCase() || "U"}
-                        </AvatarFallback>
-                      </Avatar>
+                      <UserAvatar user={user} size="lg" className="h-10 w-10 border-2 border-primary/10" />
                       <div>
                         <p className="font-medium">{user.name}</p>
                         <div className="flex flex-wrap gap-2 mt-1">

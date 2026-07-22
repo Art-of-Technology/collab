@@ -8,7 +8,7 @@ import { ArrowLeft, Building2, Users, Mail, Bell, Loader2, Shield, UserCheck, Us
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -188,7 +188,7 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
     <div className="w-full mx-auto">
       <PageHeader
         title={
-          <Button variant="ghost" size="sm" onClick={handleBackNavigation} className="h-6 px-2 text-xs text-[#7d8590] hover:text-[#e6edf3]">
+          <Button variant="ghost" size="sm" onClick={handleBackNavigation} className="h-6 px-2 text-xs text-collab-500 hover:text-collab-50">
             <ArrowLeft className="h-3 w-3 mr-1" />
             Back to Workspaces
           </Button>
@@ -294,15 +294,7 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
                       {member.user.useCustomAvatar ? (
                         <CustomAvatar user={member.user} size="lg" className="h-8 w-8 border border-border/30" />
                       ) : (
-                        <Avatar className="h-8 w-8 border border-border/30">
-                          {member.user.image ? (
-                            <AvatarImage src={member.user.image} alt={member.user.name || ""} />
-                          ) : (
-                            <AvatarFallback className="bg-muted/50 text-muted-foreground text-xs">
-                              {member.user.name?.substring(0, 2).toUpperCase() || "U"}
-                            </AvatarFallback>
-                          )}
-                        </Avatar>
+                        <UserAvatar user={member.user} size="lg" className="border border-border/30" />
                       )}
                       <div>
                         <div className="font-medium text-sm">{member.user.name}</div>
@@ -353,15 +345,7 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
                           {member.user.useCustomAvatar ? (
                             <CustomAvatar user={member.user} size="lg" className="h-8 w-8 border border-border/30" />
                           ) : (
-                            <Avatar className="h-8 w-8 border border-border/30">
-                              {member.user.image ? (
-                                <AvatarImage src={member.user.image} alt={member.user.name || ""} />
-                              ) : (
-                                <AvatarFallback className="bg-muted/50 text-muted-foreground text-xs">
-                                  {member.user.name?.substring(0, 2).toUpperCase() || "U"}
-                                </AvatarFallback>
-                              )}
-                            </Avatar>
+                            <UserAvatar user={member.user} size="lg" className="border border-border/30" />
                           )}
                           <div>
                             <div className="font-medium text-sm">{member.user.name}</div>

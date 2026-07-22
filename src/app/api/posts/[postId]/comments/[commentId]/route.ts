@@ -121,7 +121,7 @@ export async function DELETE(
         postId: postId,
       },
       include: {
-        replies: true, // Include replies to check if comment has children
+        children: true, // Include children to check if comment has replies
       },
     });
 

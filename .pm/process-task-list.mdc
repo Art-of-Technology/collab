@@ -1,0 +1,132 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Task List Management
+
+Guidelines for managing task lists in markdown files to track progress on completing a PRD
+
+# Task List Management
+
+Guidelines for managing task lists in markdown files to track progress on completing a PRD
+
+## Tech Stack & Architecture
+- **Frontend Stack:**
+  - Next.js 14+ with App Router
+  - TypeScript (strict mode enabled)
+  - Tailwind CSS with custom design system tokens
+  - Shadcn/ui components as base layer
+  - Server Components by default, Client Components only when needed
+  - Semantic HTML5 with proper ARIA labels
+  - Dark mode as primary theme via next-themes
+  
+- **Backend Stack:**
+  - Node.js with TypeScript
+  - Domain-driven architecture
+  - Repository pattern for data access
+  - Service layer for business logic
+  
+- **Quality Gates:**
+  - ESLint + Prettier configured
+  - TypeScript strict mode
+  - No any types allowed
+  - All functions must have return types
+  - All promises must be awaited or handled
+
+## Code Quality Rules
+
+**Type Safety:**
+- Define types before implementation
+- Use interfaces for contracts, types for unions
+- No type assertions unless absolutely necessary
+- Prefer unknown over any when type is unclear
+
+**Component Structure:**
+- Keep components under 200 lines
+- Extract logic into custom hooks
+- One component per file
+- Props interface defined at top of file
+- Use const assertions for static data
+
+**Data Fetching:**
+- Server Components for data fetching when possible
+- Use React Server Actions for mutations
+- Implement proper error boundaries
+- Show loading states for async operations
+
+**Naming Conventions:**
+- Components: PascalCase
+- Hooks: camelCase with "use" prefix
+- Utils: camelCase
+- Types: PascalCase with descriptive names
+- Avoid generic names like "data", "info", "manager"
+
+**File Organization:**
+- Group by feature, not by type
+- Keep related files close together
+- Max 3 levels of nesting in components
+- Use index.ts for clean imports
+
+**Common Mistakes to Avoid:**
+- Don't use useState for derived state
+- Don't fetch data in useEffect (use Server Components)
+- Don't pass complex objects through URL params
+- Don't ignore TypeScript errors
+- Don't skip error handling
+- Don't mix Server and Client Component logic
+- Don't use CSS-in-JS (stick to Tailwind)
+- Don't create barrel exports that cause circular dependencies
+
+**SEO & Performance:**
+- Metadata object in every page
+- Semantic HTML (header, nav, main, footer, article, section)
+- Alt text on all images
+- Proper heading hierarchy (h1 > h2 > h3)
+- Use Next.js Image component
+- Implement lazy loading for heavy components
+
+## Task Implementation
+- ** Tech stack**
+  1. use modern design with tailwind components and its utilities. follow seo best practices and semantic html. use nextjs, use dark mode theme primarily unless you asked to otherwise. 
+- **Completion protocol:**  
+  1. When you finish a **sub‑task**, immediately mark it as completed by changing `[ ]` to `[x]`.
+  2. If **all** subtasks underneath a parent task are now `[x]`, follow this sequence:
+    - **First**: Run the full test suite (`pytest`, `npm test`, `bin/rails test`, etc.)
+    - **Only if all tests pass**: Stage changes (`git add .`)
+    - **Clean up**: Remove any temporary files and temporary code before committing
+    - **Commit**: Use a descriptive commit message that:
+      - Uses conventional commit format (`feat:`, `fix:`, `refactor:`, etc.)
+      - Summarizes what was accomplished in the parent task
+      - Lists key changes and additions
+      - References the task number and PRD context
+      - **Formats the message as a single-line command using `-m` flags**, e.g.:
+
+        ```
+        git commit -m "feat: add payment validation logic" -m "- Validates card type and expiry" -m "- Adds unit tests for edge cases" -m "Related to T123 in PRD"
+        ```
+  3. Once all the subtasks are marked completed and changes have been committed, mark the **parent task** as completed.
+- Stop after each sub‑task and wait for the user's go‑ahead.
+
+## Task List Maintenance
+
+1. **Update the task list as you work:**
+   - Mark tasks and subtasks as completed (`[x]`) per the protocol above.
+   - Add new tasks as they emerge.
+
+2. **Maintain the "Relevant Files" section:**
+   - List every file created or modified.
+   - Give each file a one‑line description of its purpose.
+
+## AI Instructions
+
+When working with task lists, the AI must:
+
+1. Regularly update the task list file after finishing any significant work.
+2. Follow the completion protocol:
+   - Mark each finished **sub‑task** `[x]`.
+   - Mark the **parent task** `[x]` once **all** its subtasks are `[x]`.
+3. Add newly discovered tasks.
+4. Keep "Relevant Files" accurate and up to date.
+5. Before starting work, check which sub‑task is next.
+6. After implementing a sub‑task, update the file and then pause for user approval.

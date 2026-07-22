@@ -51,42 +51,43 @@ export function UnsavedChangesModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md p-0 bg-[#0e0e0e] border-[#1a1a1a] overflow-hidden">
+      <DialogContent className="max-w-md p-0 bg-collab-900 border-collab-700 overflow-hidden">
         <DialogHeader className="sr-only">
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a1a]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-collab-700">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-sm bg-amber-500 flex items-center justify-center">
               <AlertTriangle className="h-2.5 w-2.5 text-white" />
             </div>
-            <span className="text-[#9ca3af] text-sm">{title}</span>
+            <span className="text-gray-400 text-sm">{title}</span>
           </div>
-          <button
+          <Button
+            variant="ghost"
             onClick={onClose}
-            className="text-[#6e7681] hover:text-white transition-colors p-1 rounded-md hover:bg-[#1a1a1a]"
+            className="h-auto w-auto p-1 text-collab-500 hover:text-white hover:bg-collab-800"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
 
         {/* Content */}
         <div className="px-4 py-4">
-          <DialogDescription className="text-[#e6edf3] text-sm leading-relaxed">
+          <DialogDescription className="text-collab-50 text-sm leading-relaxed">
             {description}
           </DialogDescription>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-[#1a1a1a]">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-collab-700">
           <div></div>
           <div className="flex items-center gap-2">
             <Button 
               variant="ghost" 
               onClick={onClose}
-              className="text-[#6e7681] hover:text-white h-8 px-3 text-sm"
+              className="text-collab-500 hover:text-white h-8 px-3 text-sm"
             >
               Cancel
             </Button>
@@ -99,7 +100,7 @@ export function UnsavedChangesModal({
             </Button>
             <Button
               onClick={onSave}
-              className="bg-[#238636] hover:bg-[#2ea043] text-white border-0 h-8 px-3 text-sm font-medium"
+              className="bg-green-700 hover:bg-green-600 text-white border-0 h-8 px-3 text-sm font-medium"
             >
               {saveLabel}
             </Button>

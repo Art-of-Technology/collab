@@ -22,7 +22,7 @@ export default async function WorkspacesPage() {
       : [];
 
     return (
-      <div className="h-full bg-[#101011]">
+      <div className="h-full bg-collab-900">
         <WorkspacesClient 
           initialWorkspaces={workspacesData.all} 
           initialInvitations={pendingInvitations}
@@ -35,7 +35,7 @@ export default async function WorkspacesPage() {
     
     // In case of an error, return the client component with empty initial data
     return (
-      <div className="h-full bg-[#101011]">
+      <div className="h-full bg-collab-900">
         <WorkspacesClient 
           initialWorkspaces={[]} 
           initialInvitations={[]}

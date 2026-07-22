@@ -17,19 +17,19 @@ export function TimelineEmpty({
   onCreateStory
 }: TimelineEmptyProps) {
   return (
-    <div className="flex h-full items-center justify-center bg-[#101011] p-8">
-      <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg shadow-lg p-8 max-w-lg text-center">
+    <div className="flex h-full items-center justify-center bg-collab-900 p-8">
+      <div className="bg-collab-900 border border-collab-700 rounded-lg shadow-lg p-8 max-w-lg text-center">
         {/* Icon */}
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#1a1a1a] border border-[#333] mb-6">
-          <Calendar className="h-8 w-8 text-[#8b949e]" />
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-collab-800 border border-collab-600 mb-6">
+          <Calendar className="h-8 w-8 text-collab-400" />
         </div>
         
         {/* Content */}
         <div className="space-y-4 mb-8">
-          <h3 className="text-xl font-semibold text-[#e6edf3]">
+          <h3 className="text-xl font-semibold text-collab-50">
             No timeline items yet
           </h3>
-          <p className="text-[#8b949e] text-sm leading-relaxed">
+          <p className="text-collab-400 text-sm leading-relaxed">
             Create milestones, epics, and stories with start and due dates to visualize your project timeline.
           </p>
         </div>
@@ -40,7 +40,7 @@ export function TimelineEmpty({
             size="sm" 
             onClick={onCreateMilestone}
             className={cn(
-              "w-full h-9 bg-[#0969da] hover:bg-[#0860ca] text-white",
+              "w-full h-9 bg-blue-600 hover:bg-blue-700 text-white",
               "border-0 transition-colors"
             )}
           >
@@ -54,8 +54,8 @@ export function TimelineEmpty({
               onClick={onCreateEpic}
               variant="outline"
               className={cn(
-                "h-8 border-[#333] bg-[#1a1a1a] text-[#e6edf3]",
-                "hover:bg-[#2a2a2a] hover:text-[#e6edf3] hover:border-[#444]"
+                "h-8 border-collab-600 bg-collab-800 text-collab-50",
+                "hover:bg-collab-600 hover:text-collab-50 hover:border-collab-600"
               )}
             >
               <Layers className="h-3.5 w-3.5 mr-1.5" />
@@ -66,8 +66,8 @@ export function TimelineEmpty({
               onClick={onCreateStory}
               variant="outline"
               className={cn(
-                "h-8 border-[#333] bg-[#1a1a1a] text-[#e6edf3]",
-                "hover:bg-[#2a2a2a] hover:text-[#e6edf3] hover:border-[#444]"
+                "h-8 border-collab-600 bg-collab-800 text-collab-50",
+                "hover:bg-collab-600 hover:text-collab-50 hover:border-collab-600"
               )}
             >
               <BookOpen className="h-3.5 w-3.5 mr-1.5" />
@@ -77,8 +77,8 @@ export function TimelineEmpty({
         </div>
         
         {/* Help Text */}
-        <div className="mt-6 pt-4 border-t border-[#333]">
-          <p className="text-xs text-[#666]">
+        <div className="mt-6 pt-4 border-t border-collab-600">
+          <p className="text-xs text-collab-500">
             💡 Tip: Use timeline view to track project milestones and coordinate team deliverables
           </p>
         </div>

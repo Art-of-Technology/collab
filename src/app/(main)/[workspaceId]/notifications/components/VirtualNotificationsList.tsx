@@ -1,6 +1,7 @@
 "use client";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { formatDistanceToNow } from "date-fns";
@@ -251,9 +252,10 @@ export default function VirtualNotificationsList({
                 ) : (
                   // Group header
                   <div className="px-3 md:px-4 py-1.5 bg-muted/30">
-                    <button
+                    <Button
                       onClick={() => toggleGroup(item.groupKey!)}
-                      className="flex items-center justify-between w-full text-left"
+                      variant="ghost"
+                      className="flex items-center justify-between w-full text-left h-auto p-0"
                     >
                       <h3 className="text-xs md:text-sm font-medium text-muted-foreground truncate">
                         {item.groupKey} ({item.groupNotifications!.length})
@@ -261,7 +263,7 @@ export default function VirtualNotificationsList({
                       <span className="text-muted-foreground">
                         {item.isExpanded ? '−' : '+'}
                       </span>
-                    </button>
+                    </Button>
                   </div>
                 )
               ) : (

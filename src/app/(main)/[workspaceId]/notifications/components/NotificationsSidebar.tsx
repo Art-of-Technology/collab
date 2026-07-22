@@ -139,7 +139,7 @@ export default function NotificationsSidebar({
       {/* Manage notifications */}
       <div className="p-3 border-t border-border/50">
         <Link
-          href={`/${currentWorkspace?.id}/profile`}
+          href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/profile` : '#'}
           className="flex flex-row gap-2 w-full text-center h-8 px-2.5 text-xs md:text-sm font-normal text-muted-foreground"
         >
           <Settings className="h-4 w-4 relative top-0.5" />

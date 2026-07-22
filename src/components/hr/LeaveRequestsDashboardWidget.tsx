@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -224,13 +224,7 @@ export function LeaveRequestsDashboardWidget({
                     }`}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <Avatar className="h-8 w-8 flex-shrink-0">
-                        <AvatarImage src={request.user.avatar || request.user.image || ""} />
-                        <AvatarFallback className="text-xs">
-                          {request.user.name?.charAt(0)?.toUpperCase() || 
-                           request.user.email?.charAt(0)?.toUpperCase() || "?"}
-                        </AvatarFallback>
-                      </Avatar>
+                      <UserAvatar user={{ name: request.user.name, image: request.user.avatar || request.user.image }} size="lg" className="flex-shrink-0" />
                       
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">

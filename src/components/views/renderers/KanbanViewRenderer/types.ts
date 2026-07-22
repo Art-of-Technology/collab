@@ -1,3 +1,6 @@
+import type { MouseEvent, KeyboardEvent } from 'react';
+import type { DragUpdate, DropResult } from '@hello-pangea/dnd';
+
 export interface KanbanViewRendererProps {
   view: any;
   issues: any[];
@@ -8,6 +11,7 @@ export interface KanbanViewRendererProps {
   onColumnUpdate?: (columnId: string, updates: any) => void;
   onCreateIssue?: (columnId: string, issueData: any) => void;
   onOrderingChange?: (ordering: string) => void;
+  searchQuery?: string;
 }
 
 
@@ -28,6 +32,8 @@ export interface Column {
   issues: any[];
   order: number;
   color?: string;
+  assigneeId?: string; // For assignee grouping: the actual user ID for DnD resolution
+  iconName?: string;
 }
 
 export interface KanbanState {
@@ -39,12 +45,11 @@ export interface KanbanState {
 
 export interface KanbanColumnProps {
   column: Column;
-  issues: any[];
+  hoverColumnId?: string;
   index: number;
   groupField: string;
   displayProperties: string[];
   isCreatingIssue: boolean;
-  newIssueTitle: string;
   projects: Array<{
     id: string;
     name: string;
@@ -57,12 +62,9 @@ export interface KanbanColumnProps {
   draggedIssue?: any;
   hoverState: { canDrop: boolean, columnId: string };
   operationsInProgress?: Set<string>;
-  onIssueClick: (issueId: string) => void;
-  onCreateIssue: (columnId: string) => void;
+  onIssueClick: (issueId: string, event?: MouseEvent) => void;
   onStartCreatingIssue: (columnId: string) => void;
   onCancelCreatingIssue: () => void;
-  onIssueKeyDown: (e: React.KeyboardEvent) => void;
-  onIssueInputChange: (value: string) => void;
   onIssueCreated: (issue: any) => void;
 }
 
@@ -71,18 +73,30 @@ export interface KanbanIssueCardProps {
   index: number;
   displayProperties: string[];
   operationsInProgress?: Set<string>;
-  onCardClick: (issueId: string) => void;
+  onCardClick: (issueId: string, event?: MouseEvent) => void;
 }
+
+
+export interface OverrideDestination {
+  droppableId: string;
+  index: number;
+}
+
+export type KanbanDragUpdate = DragUpdate & {
+  overrideColumnId?: string;
+};
+
+export type KanbanDropResult = DropResult & {
+  overrideDestination?: OverrideDestination;
+};
 
 
 
 export interface KanbanBoardProps {
   columns: Column[];
-  issues: any[];
   displayProperties: string[];
   groupField: string;
   isCreatingIssue: string | null;
-  newIssueTitle: string;
   projects: Array<{
     id: string;
     name: string;
@@ -95,14 +109,11 @@ export interface KanbanBoardProps {
   draggedIssue?: any;
   hoverState: { canDrop: boolean, columnId: string };
   operationsInProgress?: Set<string>;
-  onDragEnd: (result: any) => void;
+  onDragEnd: (result: KanbanDropResult) => void;
   onDragStart: (start: any) => void;
-  onDragUpdate: (update: any) => void;
-  onIssueClick: (issueId: string) => void;
-  onCreateIssue: (columnId: string) => void;
+  onDragUpdate: (update: KanbanDragUpdate) => void;
+  onIssueClick: (issueId: string, event?: MouseEvent) => void;
   onStartCreatingIssue: (columnId: string) => void;
   onCancelCreatingIssue: () => void;
-  onIssueKeyDown: (e: React.KeyboardEvent) => void;
-  onIssueInputChange: (value: string) => void;
   onIssueCreated: (issue: any) => void;
 }

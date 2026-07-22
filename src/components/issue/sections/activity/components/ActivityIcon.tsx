@@ -70,7 +70,7 @@ export function ActivityIcon({ action, className }: ActivityIconProps) {
       case 'VIEWED':
         return <Eye className="h-3 w-3 text-slate-500" />;
       default:
-        return <Clock className="h-3 w-3 text-[#666]" />;
+        return <Clock className="h-3 w-3 text-collab-500" />;
     }
   };
 

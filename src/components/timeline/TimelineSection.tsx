@@ -42,13 +42,13 @@ export function TimelineSection({
   const getTypeIcon = () => {
     switch (type) {
       case 'milestone':
-        return <Star className="h-3.5 w-3.5 text-[#fbbf24]" />;
+        return <Star className="h-3.5 w-3.5 text-amber-400" />;
       case 'epic':
-        return <Layers className="h-3.5 w-3.5 text-[#8b5cf6]" />;
+        return <Layers className="h-3.5 w-3.5 text-violet-500" />;
       case 'story':
-        return <BookOpen className="h-3.5 w-3.5 text-[#06b6d4]" />;
+        return <BookOpen className="h-3.5 w-3.5 text-cyan-500" />;
       default:
-        return <Calendar className="h-3.5 w-3.5 text-[#8b949e]" />;
+        return <Calendar className="h-3.5 w-3.5 text-collab-400" />;
     }
   };
   
@@ -57,8 +57,8 @@ export function TimelineSection({
       {/* Section Header */}
       <div 
         className={cn(
-          "grid items-center sticky left-0 z-10 cursor-pointer transition-colors border-b border-[#1a1a1a]",
-          "bg-[#0e0e0e] hover:bg-[#161616]"
+          "grid items-center sticky left-0 z-10 cursor-pointer transition-colors border-b border-collab-700",
+          "bg-collab-900 hover:bg-collab-900"
         )}
         style={{ 
           gridTemplateColumns: `150px repeat(${totalDays}, ${dayWidth}px)`,
@@ -66,18 +66,18 @@ export function TimelineSection({
         }}
         onClick={() => toggleSection(type)}
       >
-        <div className="flex items-center px-3 py-2 font-medium border-r border-[#333] bg-[#1a1a1a]">
+        <div className="flex items-center px-3 py-2 font-medium border-r border-collab-600 bg-collab-800">
           <div className="flex items-center gap-2 flex-1">
             {getTypeIcon()}
-            <span className="text-sm text-[#e6edf3]">{title}</span>
-            <span className="text-xs text-[#8b949e] bg-[#333] px-1.5 py-0.5 rounded">
+            <span className="text-sm text-collab-50">{title}</span>
+            <span className="text-xs text-collab-400 bg-collab-600 px-1.5 py-0.5 rounded">
               {items.length}
             </span>
           </div>
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-5 w-5 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#333]"
+            className="h-5 w-5 text-collab-400 hover:text-collab-50 hover:bg-collab-600"
             onClick={(e) => {
               e.stopPropagation();
               toggleSection(type);
@@ -100,8 +100,8 @@ export function TimelineSection({
             <div 
               key={item.id} 
               className={cn(
-                "relative transition-colors hover:bg-[#161616]/50",
-                index % 2 === 0 ? "bg-[#0e0e0e]" : "bg-[#131313]"
+                "relative transition-colors hover:bg-collab-900/50",
+                index % 2 === 0 ? "bg-collab-900" : "bg-collab-900"
               )}
               style={{ 
                 height: "36px", 

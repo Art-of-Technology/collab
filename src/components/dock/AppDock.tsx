@@ -3,7 +3,6 @@
 import React from 'react';
 import { MessageSquarePlus, NotebookPen } from 'lucide-react';
 import { ModernDock, DockItem } from './ModernDock';
-import { ActivityStatusWidget } from './ActivityStatusWidget';
 import { TimelineWidget } from './TimelineWidget';
 import { QuickNotesWidget } from './QuickNotesWidget';
 import { useWorkspaceSettings } from '@/hooks/useWorkspaceSettings';
@@ -41,9 +40,8 @@ export function AppDock({ className }: AppDockProps) {
   ];
 
   return (
-    <ModernDock 
+    <ModernDock
       items={dockItems}
-      leftContent={<ActivityStatusWidget />}
       className={className}
     />
   );

@@ -430,8 +430,12 @@ export class VersionManager {
         return productionVersion;
       } else {
         // Fallback: create new production version if no development version found
-        const versionCalc = await this.calculateNextVersion(repositoryId, issues, 'production');
-        return await this.createVersion(repositoryId, versionCalc, issues);
+        const config = await this.getRepositoryConfig(repositoryId);
+        const versionCalc = await this.calculateNextVersion(repositoryId, issues, 'production', config.defaultBranch || 'main', config);
+        return await this.createVersion(repositoryId, versionCalc, issues.map(issue => ({
+          ...issue,
+          description: issue.description || undefined
+        })));
       }
     } catch (error) {
       console.error('Error handling production merge:', error);
@@ -467,9 +471,10 @@ export class VersionManager {
       // Only calculate versions for main deployment branches
       if (['development', 'staging', 'production'].includes(environment)) {
         const issues = pullRequest.issue ? [pullRequest.issue] : [];
-        
+
         if (issues.length > 0) {
-          const versionCalc = await this.calculateNextVersion(repositoryId, issues, environment);
+          const config = await this.getRepositoryConfig(repositoryId);
+          const versionCalc = await this.calculateNextVersion(repositoryId, issues, environment, mergeInfo.baseBranch, config);
           const version = await this.createVersion(repositoryId, versionCalc, issues.map(issue => ({
             ...issue,
             description: issue.description || undefined

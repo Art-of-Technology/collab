@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { useCreateComment } from "@/hooks/queries/useComment";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { useCurrentUser } from "@/hooks/queries/useUser";
@@ -120,12 +120,7 @@ export function AddCommentForm({ postId }: AddCommentFormProps) {
       {currentUser.useCustomAvatar ? (
         <CustomAvatar user={currentUser} size="sm" />
       ) : (
-        <Avatar className="h-8 w-8">
-          <AvatarImage src={currentUser.image || undefined} alt={currentUser.name || "User"} />
-          <AvatarFallback>
-            {currentUser.name?.charAt(0).toUpperCase() || "U"}
-          </AvatarFallback>
-        </Avatar>
+        <UserAvatar user={currentUser} size="lg" />
       )}
       <div className="flex-1">
         <CollabInput

@@ -14,9 +14,17 @@ import {
 export const featureKeys = {
   all: ['features'] as const,
   lists: () => [...featureKeys.all, 'list'] as const,
-  filtered: (filters: { page?: number; limit?: number; status?: string; orderBy?: string }) => 
-    [...featureKeys.lists(), filters] as const,
+  filtered: (filters: { 
+    page?: number; 
+    limit?: number; 
+    status?: string; 
+    orderBy?: string;
+    projectId?: string;
+    workspaceId?: string;
+  }) => [...featureKeys.lists(), filters] as const,
   detail: (id: string) => [...featureKeys.all, 'detail', id] as const,
+  byProject: (projectId: string) => [...featureKeys.all, 'project', projectId] as const,
+  byWorkspace: (workspaceId: string) => [...featureKeys.all, 'workspace', workspaceId] as const,
 };
 
 // Get all feature requests with filtering and pagination
@@ -25,7 +33,9 @@ export const useFeatureRequests = (
     page?: number; 
     limit?: number; 
     status?: string; 
-    orderBy?: string 
+    orderBy?: string;
+    projectId?: string;
+    workspaceId?: string;
   } = {}
 ) => {
   return useQuery({

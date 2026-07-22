@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from '@/components/ui/user-avatar';
 import {
   Hourglass,
   CheckCircle,
@@ -494,12 +494,7 @@ export default function FeatureRequestDetail({
           <div className="flex-1 space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Avatar className="h-8 w-8 border border-border/40">
-                  <AvatarImage src={featureRequest.author.image || undefined} alt={featureRequest.author.name || "User"} />
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    {featureRequest.author.name?.charAt(0) || "U"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={featureRequest.author} size="lg" className="border border-border/40" />
                 <span className="font-medium text-sm sm:text-base tracking-tight sm:tracking-normal">{featureRequest.author.name}</span>
               </div>
 

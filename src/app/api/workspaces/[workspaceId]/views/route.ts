@@ -179,7 +179,7 @@ export async function POST(
     }
 
     // Validate display type
-    const validDisplayTypes = ['KANBAN', 'LIST', 'TABLE', 'CALENDAR', 'TIMELINE', 'GANTT', 'BOARD'];
+    const validDisplayTypes = ['KANBAN', 'LIST', 'TABLE', 'CALENDAR', 'TIMELINE', 'GANTT', 'BOARD', 'PLANNING'];
     if (!validDisplayTypes.includes(displayType)) {
       return NextResponse.json(
         { error: 'Invalid display type' }, 

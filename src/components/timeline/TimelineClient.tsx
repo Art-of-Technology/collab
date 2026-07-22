@@ -33,13 +33,13 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
         filter === 'questions' ? 'QUESTION' : undefined;
 
   // TanStack Query for infinite posts with filters
-  const { 
-    data: infiniteData, 
-    fetchNextPage, 
-    hasNextPage, 
-    isFetchingNextPage, 
-    isLoading, 
-    isError 
+  const {
+    data: infiniteData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError
   } = useInfinitePosts({
     type: filterType,
     tag: tag || undefined,
@@ -49,46 +49,39 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
 
   // Get post statistics efficiently
   const { data: postStats } = usePostStats(currentWorkspace?.id);
-  
+
   // Get all posts for detailed calculations (with higher limit)
   const { data: allPosts } = usePosts({
     workspaceId: currentWorkspace?.id,
-    limit: 1000 // High limit for detailed calculations
+    limit: 1000, // High limit for detailed calculations
+    tag: tag || undefined,
   });
 
   // Flatten infinite pages data or fallback to initial posts
-  const displayPosts = infiniteData 
+  const displayPosts = infiniteData
     ? infiniteData.pages.flatMap((page: any) => {
-        // Handle both old and new response formats
-        if (Array.isArray(page)) {
-          return page; // Old format: direct array
-        }
-        return page.posts || []; // New format: object with posts property
-      })
+      // Handle both old and new response formats
+      if (Array.isArray(page)) {
+        return page; // Old format: direct array
+      }
+      return page.posts || []; // New format: object with posts property
+    })
     : initialPosts;
 
   // Calculate counts for each filter type (use stats for accurate totals)
   const postCounts = useMemo(() => {
-    if (postStats) {
-      return {
-        all: postStats.total,
-        updates: postStats.updates,
-        blockers: postStats.blockers,
-        ideas: postStats.ideas,
-        questions: postStats.questions,
-      };
-    }
-    
-    // Fallback to calculated counts from loaded posts
     const allPostsList = allPosts || initialPosts;
+
+    const filteredPosts = tag ? allPostsList.filter((p: any) => p.tags.some((t: any) => t.name === tag)) : allPostsList;
+
     return {
-      all: allPostsList.length,
-      updates: allPostsList.filter((p: any) => p.type === 'UPDATE').length,
-      blockers: allPostsList.filter((p: any) => p.type === 'BLOCKER').length,
-      ideas: allPostsList.filter((p: any) => p.type === 'IDEA').length,
-      questions: allPostsList.filter((p: any) => p.type === 'QUESTION').length,
+      all: filteredPosts.length,
+      updates: filteredPosts.filter((p: any) => p.type === 'UPDATE').length,
+      blockers: filteredPosts.filter((p: any) => p.type === 'BLOCKER').length,
+      ideas: filteredPosts.filter((p: any) => p.type === 'IDEA').length,
+      questions: filteredPosts.filter((p: any) => p.type === 'QUESTION').length,
     };
-  }, [postStats, allPosts, initialPosts]);
+  }, [allPosts, initialPosts, tag]);
 
   // Calculate activity statistics
   const activityStats = useMemo(() => {
@@ -96,29 +89,29 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    
+
     const todaysPosts = allPostsList.filter((p: any) => {
       const postDate = new Date(p.createdAt);
       return postDate >= today;
     });
-    
+
     const thisWeeksPosts = allPostsList.filter((p: any) => {
       const postDate = new Date(p.createdAt);
       return postDate >= weekAgo;
     });
-    
+
     const activeAuthorsToday = new Set(
       todaysPosts.map((p: any) => p.authorId)
     ).size;
-    
+
     const activeAuthorsThisWeek = new Set(
       thisWeeksPosts.map((p: any) => p.authorId)
     ).size;
-    
-    const priorityPosts = allPostsList.filter((p: any) => 
+
+    const priorityPosts = allPostsList.filter((p: any) =>
       p.priority === 'high' || p.priority === 'critical'
     ).length;
-    
+
     return {
       total: postStats?.total || allPostsList.length,
       today: todaysPosts.length,
@@ -132,13 +125,13 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
 
   const handleFilterChange = (newFilter: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    
+
     if (newFilter === 'all') {
       params.delete('filter');
     } else {
       params.set('filter', newFilter);
     }
-    
+
     const newPath = `${window.location.pathname}?${params.toString()}`;
     router.push(newPath);
   };
@@ -153,17 +146,17 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
         leftContent={
           tag && (
             <div className="flex items-center">
-              <span className="text-sm text-[#8b949e] mr-2">Filtered by:</span>
+              <span className="text-sm text-collab-400 mr-2">Filtered by:</span>
               <div className="flex items-center">
-                <Badge 
-                  variant="secondary" 
-                  className="bg-[#1a1a1a] text-[#e6edf3] border-[#333] px-2 py-1 text-xs"
+                <Badge
+                  variant="secondary"
+                  className="bg-collab-800 text-collab-50 border-collab-600 px-2 py-1 text-xs"
                 >
                   #{tag}
                 </Badge>
                 <Link
                   href={currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/timeline` : '#'}
-                  className="ml-2 text-[#8b949e] hover:text-[#e6edf3] transition-colors"
+                  className="ml-2 text-collab-400 hover:text-collab-50 transition-colors"
                   aria-label="Clear tag filter"
                 >
                   <XCircleIcon className="h-4 w-4" />
@@ -175,17 +168,16 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
       />
 
       {/* Filter Buttons */}
-      <div className="flex-shrink-0 px-6 py-3 border-b border-[#1a1a1a]">
+      <div className="flex-shrink-0 px-6 py-3 border-b border-collab-700">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => handleFilterChange('all')}
-            className={`h-6 px-2 text-xs border ${
-              !filter || filter === 'all'
-                ? 'border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]' 
-                : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-            }`}
+            className={`h-6 px-2 text-xs border ${!filter || filter === 'all'
+              ? 'border-blue-400 text-blue-400 bg-blue-500/20 hover:bg-blue-500/20 hover:border-blue-400'
+              : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
+              }`}
           >
             All
             <span className="ml-1 text-xs opacity-70">{postCounts.all}</span>
@@ -194,11 +186,10 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             variant="ghost"
             size="sm"
             onClick={() => handleFilterChange('updates')}
-            className={`h-6 px-2 text-xs border ${
-              filter === 'updates'
-                ? 'border-[#58a6ff] text-[#58a6ff] bg-[#0d1421] hover:bg-[#0d1421] hover:border-[#58a6ff]' 
-                : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-            }`}
+            className={`h-6 px-2 text-xs border ${filter === 'updates'
+              ? 'border-blue-400 text-blue-400 bg-blue-500/20 hover:bg-blue-500/20 hover:border-blue-400'
+              : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
+              }`}
           >
             Updates
             <span className="ml-1 text-xs opacity-70">{postCounts.updates}</span>
@@ -207,11 +198,10 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             variant="ghost"
             size="sm"
             onClick={() => handleFilterChange('blockers')}
-            className={`h-6 px-2 text-xs border ${
-              filter === 'blockers'
-                ? 'border-[#f85149] text-[#f85149] bg-[#21110f] hover:bg-[#21110f] hover:border-[#f85149]' 
-                : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-            }`}
+            className={`h-6 px-2 text-xs border ${filter === 'blockers'
+              ? 'border-red-500 text-red-500 bg-red-500/10 hover:bg-red-500/10 hover:border-red-500'
+              : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
+              }`}
           >
             Blockers
             <span className="ml-1 text-xs opacity-70">{postCounts.blockers}</span>
@@ -220,11 +210,10 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             variant="ghost"
             size="sm"
             onClick={() => handleFilterChange('ideas')}
-            className={`h-6 px-2 text-xs border ${
-              filter === 'ideas'
-                ? 'border-[#a5a5a5] text-[#a5a5a5] bg-[#1a1a1a] hover:bg-[#1a1a1a] hover:border-[#a5a5a5]' 
-                : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-            }`}
+            className={`h-6 px-2 text-xs border ${filter === 'ideas'
+              ? 'border-collab-400 text-collab-400 bg-collab-800 hover:bg-collab-800 hover:border-collab-400'
+              : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
+              }`}
           >
             Ideas
             <span className="ml-1 text-xs opacity-70">{postCounts.ideas}</span>
@@ -233,11 +222,10 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             variant="ghost"
             size="sm"
             onClick={() => handleFilterChange('questions')}
-            className={`h-6 px-2 text-xs border ${
-              filter === 'questions'
-                ? 'border-[#a5a5a5] text-[#a5a5a5] bg-[#1a1a1a] hover:bg-[#1a1a1a] hover:border-[#a5a5a5]' 
-                : 'border-[#21262d] text-[#7d8590] hover:text-[#e6edf3] hover:border-[#30363d] bg-[#0d1117] hover:bg-[#161b22]'
-            }`}
+            className={`h-6 px-2 text-xs border ${filter === 'questions'
+              ? 'border-collab-400 text-collab-400 bg-collab-800 hover:bg-collab-800 hover:border-collab-400'
+              : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
+              }`}
           >
             Questions
             <span className="ml-1 text-xs opacity-70">{postCounts.questions}</span>
@@ -254,20 +242,20 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
               <div className="mb-4">
                 <CreatePostForm />
               </div>
-              
+
               <div className="pb-8">
                 {isLoading && initialPosts.length === 0 ? (
-                  <div className="flex items-center gap-2 text-[#8b949e] py-8">
+                  <div className="flex items-center gap-2 text-collab-400 py-8">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span className="text-sm">Loading posts...</span>
                   </div>
                 ) : isError ? (
-                  <div className="text-[#ef4444] text-sm py-8">
+                  <div className="text-red-500 text-sm py-8">
                     Something went wrong loading posts.
                   </div>
                 ) : (
-                  <PostList 
-                    posts={displayPosts} 
+                  <PostList
+                    posts={displayPosts}
                     currentUserId={currentUserId}
                     hasNextPage={hasNextPage}
                     isFetchingNextPage={isFetchingNextPage}
@@ -281,61 +269,61 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
             <div className="hidden xl:block w-64 flex-shrink-0">
               <div className="sticky top-4 space-y-4">
                 {/* Activity Overview */}
-                <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-[#e6edf3] mb-3 flex items-center gap-2">
+                <div className="bg-collab-900 border border-collab-700 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-collab-50 mb-3 flex items-center gap-2">
                     📊 Activity Overview
                   </h3>
                   <div className="space-y-2.5">
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Total Posts</span>
-                      <span className="text-[#e6edf3] font-medium">{activityStats.total}</span>
+                      <span className="text-collab-400">Total Posts</span>
+                      <span className="text-collab-50 font-medium">{activityStats.total}</span>
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Today</span>
-                      <span className="text-[#22c55e] font-medium">{activityStats.today}</span>
+                      <span className="text-collab-400">Today</span>
+                      <span className="text-green-500 font-medium">{activityStats.today}</span>
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">This Week</span>
-                      <span className="text-[#58a6ff] font-medium">{activityStats.thisWeek}</span>
+                      <span className="text-collab-400">This Week</span>
+                      <span className="text-blue-400 font-medium">{activityStats.thisWeek}</span>
                     </div>
                     {activityStats.blockers > 0 && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-[#8b949e]">🚫 Blockers</span>
-                        <span className="text-[#f85149] font-medium">{activityStats.blockers}</span>
+                        <span className="text-collab-400">🚫 Blockers</span>
+                        <span className="text-red-500 font-medium">{activityStats.blockers}</span>
                       </div>
                     )}
                     {activityStats.priorityPosts > 0 && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-[#8b949e]">⚡ Priority</span>
-                        <span className="text-[#fbbf24] font-medium">{activityStats.priorityPosts}</span>
+                        <span className="text-collab-400">⚡ Priority</span>
+                        <span className="text-amber-400 font-medium">{activityStats.priorityPosts}</span>
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* Team Activity */}
-                <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-[#e6edf3] mb-3 flex items-center gap-2">
+                <div className="bg-collab-900 border border-collab-700 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-collab-50 mb-3 flex items-center gap-2">
                     👥 Team Activity
                   </h3>
                   <div className="space-y-2.5">
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Active Today</span>
-                      <span className="text-[#22c55e] font-medium">
+                      <span className="text-collab-400">Active Today</span>
+                      <span className="text-green-500 font-medium">
                         {activityStats.activeAuthorsToday} {activityStats.activeAuthorsToday === 1 ? 'person' : 'people'}
                       </span>
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Active This Week</span>
-                      <span className="text-[#58a6ff] font-medium">
+                      <span className="text-collab-400">Active This Week</span>
+                      <span className="text-blue-400 font-medium">
                         {activityStats.activeAuthorsThisWeek} {activityStats.activeAuthorsThisWeek === 1 ? 'person' : 'people'}
                       </span>
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="text-[#8b949e]">Avg. per Person</span>
-                      <span className="text-[#e6edf3] font-medium">
-                        {activityStats.activeAuthorsThisWeek > 0 
-                          ? Math.round(activityStats.thisWeek / activityStats.activeAuthorsThisWeek) 
+                      <span className="text-collab-400">Avg. per Person</span>
+                      <span className="text-collab-50 font-medium">
+                        {activityStats.activeAuthorsThisWeek > 0
+                          ? Math.round(activityStats.thisWeek / activityStats.activeAuthorsThisWeek)
                           : 0}
                       </span>
                     </div>
@@ -343,28 +331,28 @@ export default function TimelineClient({ initialPosts, currentUserId }: Timeline
                 </div>
 
                 {/* Quick Actions */}
-                <div className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-[#e6edf3] mb-3 flex items-center gap-2">
+                <div className="bg-collab-900 border border-collab-700 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-collab-50 mb-3 flex items-center gap-2">
                     ⚡ Quick Stats
                   </h3>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-[#1a1a1a] rounded p-2 text-center">
-                      <div className="text-[#58a6ff] font-bold">{postCounts.updates}</div>
-                      <div className="text-[#8b949e]">Updates</div>
+                    <div className="bg-collab-800 rounded p-2 text-center">
+                      <div className="text-blue-400 font-bold">{postCounts.updates}</div>
+                      <div className="text-collab-400">Updates</div>
                     </div>
-                    <div className="bg-[#1a1a1a] rounded p-2 text-center">
-                      <div className="text-[#a5a5a5] font-bold">{postCounts.ideas}</div>
-                      <div className="text-[#8b949e]">Ideas</div>
+                    <div className="bg-collab-800 rounded p-2 text-center">
+                      <div className="text-collab-400 font-bold">{postCounts.ideas}</div>
+                      <div className="text-collab-400">Ideas</div>
                     </div>
-                    <div className="bg-[#1a1a1a] rounded p-2 text-center">
-                      <div className="text-[#a5a5a5] font-bold">{postCounts.questions}</div>
-                      <div className="text-[#8b949e]">Questions</div>
+                    <div className="bg-collab-800 rounded p-2 text-center">
+                      <div className="text-collab-400 font-bold">{postCounts.questions}</div>
+                      <div className="text-collab-400">Questions</div>
                     </div>
-                    <div className="bg-[#1a1a1a] rounded p-2 text-center">
-                      <div className="text-[#22c55e] font-bold">
+                    <div className="bg-collab-800 rounded p-2 text-center">
+                      <div className="text-green-500 font-bold">
                         {activityStats.total > 0 ? Math.round((activityStats.today / activityStats.total) * 100) : 0}%
                       </div>
-                      <div className="text-[#8b949e]">Today</div>
+                      <div className="text-collab-400">Today</div>
                     </div>
                   </div>
                 </div>

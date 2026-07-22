@@ -9,12 +9,16 @@ export async function getFeatureRequests({
   page = 1,
   limit = 10,
   status = 'all',
-  orderBy = 'most_votes'
+  orderBy = 'most_votes',
+  projectId,
+  workspaceId
 }: {
   page?: number;
   limit?: number;
   status?: string;
   orderBy?: string;
+  projectId?: string;
+  workspaceId?: string;
 }) {
   try {
     const session = await getAuthSession();
@@ -30,6 +34,16 @@ export async function getFeatureRequests({
         in: [status.toLowerCase(), status.toUpperCase(), status]
       };
     }
+    
+    // Filter by project if provided
+    if (projectId) {
+      where.projectId = projectId;
+    }
+    
+    // Filter by workspace if provided (for workspace-level view)
+    if (workspaceId) {
+      where.workspaceId = workspaceId;
+    }
 
     // First, fetch ALL matching feature requests
     const allFeatures = await prisma.featureRequest.findMany({
@@ -40,6 +54,14 @@ export async function getFeatureRequests({
             id: true,
             name: true,
             image: true,
+          },
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            color: true,
           },
         },
         votes: {
@@ -209,6 +231,14 @@ export async function getFeatureRequestById(id: string, workspaceId?: string) {
             image: true,
           },
         },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            color: true,
+          },
+        },
         votes: {
           where: {
             userId: session.user.id,
@@ -318,23 +348,53 @@ export async function createFeatureRequest(formData: FormData) {
     const description = formData.get("description") as string;
     // Get markdown HTML version if available
     const html = formData.get("html") as string || description;
+    const projectId = formData.get("projectId") as string;
+    const workspaceId = formData.get("workspaceId") as string | null;
 
     if (!title || !description) {
       throw new Error("Title and description are required");
     }
 
+    if (!projectId) {
+      throw new Error("Project is required for feature requests");
+    }
+
+    // Build the data object
+    const data: any = {
+      title,
+      description,
+      html, // Store HTML version for markdown rendering
+      status: "PENDING",
+      author: {
+        connect: { id: session.user.id }
+      },
+      project: {
+        connect: { id: projectId }
+      }
+    };
+
+    // Connect to workspace if provided
+    if (workspaceId) {
+      data.workspace = { connect: { id: workspaceId } };
+    }
+
     const featureRequest = await prisma.featureRequest.create({
-      data: {
-        title,
-        description,
-        html, // Store HTML version for markdown rendering
-        status: "PENDING",
-        author: {
-          connect: { id: session.user.id }
-        }
+      data,
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
       },
     });
 
+    // Revalidate paths
+    if (projectId) {
+      revalidatePath(`/features`);
+    }
     revalidatePath("/features");
     return featureRequest;
   } catch (error) {

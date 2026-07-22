@@ -72,6 +72,30 @@ export async function GET(
         },
         include: {
           checks: true,
+          reviews: {
+            include: {
+              reviewer: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                },
+              },
+            },
+            orderBy: { submittedAt: 'desc' },
+          },
+          aiReviews: {
+            include: {
+              triggeredBy: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                },
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+          },
         },
         orderBy: { githubUpdatedAt: 'desc' },
       }),
@@ -123,6 +147,7 @@ export async function GET(
         fullName: repository.fullName,
         owner: repository.owner,
         name: repository.name,
+        aiReviewEnabled: repository.aiReviewEnabled,
       },
       branch,
       pullRequests: enrichedPullRequests,

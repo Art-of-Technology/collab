@@ -22,8 +22,8 @@ export default function MessageInput() {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
-    <div className="bg-[#313338] p-1.5 rounded-md w-full max-w-xl border border-[#1e1f22]">
-      <div className={`flex flex-wrap gap-3 px-2 py-1 border-b border-[#1e1f22] transition-opacity duration-200 ${isFocused ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+    <div className="bg-collab-600 p-1.5 rounded-md w-full max-w-xl border border-collab-700">
+      <div className={`flex flex-wrap gap-3 px-2 py-1 border-b border-collab-700 transition-opacity duration-200 ${isFocused ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <Bold className="w-4 h-4 text-white/70 cursor-pointer" />
         <Italic className="w-4 h-4 text-white/70 cursor-pointer" />
         <Strikethrough className="w-4 h-4 text-white/70 cursor-pointer" />

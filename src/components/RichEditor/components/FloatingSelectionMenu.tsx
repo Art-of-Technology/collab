@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -17,6 +17,8 @@ import {
   WandSparkles,
   Loader2,
   GitBranch,
+  FileCode,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,12 +39,33 @@ export function FloatingSelectionMenu({
   onCreateSubIssue,
   isImproving = false,
 }: FloatingSelectionMenuProps) {
+  const setLink = useCallback(() => {
+    if (!editor) return;
+
+    const previousUrl = editor.getAttributes('link').href;
+    const url = window.prompt('URL', previousUrl);
+
+    // cancelled
+    if (url === null) {
+      return;
+    }
+
+    // empty
+    if (url === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+
+    // update
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  }, [editor]);
+
   if (!isVisible || !editor) return null;
 
   // Render in a portal to avoid clipping by overflow-hidden ancestors
   const menu = (
     <div
-      className="fixed z-[99999] bg-[#1c1c1e] border border-[#333] rounded-lg shadow-xl p-1 flex items-center gap-0.5 backdrop-blur-sm pointer-events-auto"
+      className="fixed z-[99999] bg-collab-800 border border-collab-600 rounded-lg shadow-xl p-1 flex items-center gap-0.5 backdrop-blur-sm pointer-events-auto"
       style={{
         top: position.top,
         left: position.left,
@@ -60,8 +83,8 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white pointer-events-auto",
-                editor.isActive('bold') ? "bg-[#333] text-white" : "text-[#e6edf3]"
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white pointer-events-auto",
+                editor.isActive('bold') ? "bg-collab-600 text-white" : "text-collab-50"
               )}
               onClick={(e) => {
                 e.preventDefault();
@@ -83,8 +106,8 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
-                editor.isActive('italic') ? "bg-[#333] text-white" : "text-[#e6edf3]"
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white",
+                editor.isActive('italic') ? "bg-collab-600 text-white" : "text-collab-50"
               )}
               onClick={(e) => {
                 e.preventDefault();
@@ -105,8 +128,8 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
-                editor.isActive('underline') ? "bg-[#333] text-white" : "text-[#e6edf3]"
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white",
+                editor.isActive('underline') ? "bg-collab-600 text-white" : "text-collab-50"
               )}
               onClick={(e) => {
                 e.preventDefault();
@@ -127,8 +150,8 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
-                editor.isActive('strike') ? "bg-[#333] text-white" : "text-[#e6edf3]"
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white",
+                editor.isActive('strike') ? "bg-collab-600 text-white" : "text-collab-50"
               )}
               onClick={(e) => {
                 e.preventDefault();
@@ -149,8 +172,8 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
-                editor.isActive('code') ? "bg-[#333] text-white" : "text-[#e6edf3]"
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white",
+                editor.isActive('code') ? "bg-collab-600 text-white" : "text-collab-50"
               )}
               onClick={(e) => {
                 e.preventDefault();
@@ -164,8 +187,56 @@ export function FloatingSelectionMenu({
           <TooltipContent side="top">Code</TooltipContent>
         </Tooltip>
 
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white",
+                editor.isActive('codeBlock') ? "bg-collab-600 text-white" : "text-collab-50"
+              )}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                editor.chain().focus().toggleCodeBlock().run();
+              }}
+            >
+              <FileCode className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">Code Block</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white",
+                editor.isActive('link') ? "bg-collab-600 text-white" : "text-collab-50"
+              )}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (editor.isActive('link')) {
+                  editor.chain().focus().unsetLink().run();
+                } else {
+                  setLink();
+                }
+              }}
+            >
+              <LinkIcon className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">Link</TooltipContent>
+        </Tooltip>
+
         {/* Separator */}
-        <div className="w-px h-6 bg-[#444] mx-1" />
+        <div className="w-px h-6 bg-collab-600 mx-1" />
 
         {/* Headings */}
         <Tooltip>
@@ -175,8 +246,8 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
-                editor.isActive('heading', { level: 1 }) ? "bg-[#333] text-white" : "text-[#e6edf3]"
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white",
+                editor.isActive('heading', { level: 1 }) ? "bg-collab-600 text-white" : "text-collab-50"
               )}
               onClick={(e) => {
                 e.preventDefault();
@@ -197,8 +268,8 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
-                editor.isActive('heading', { level: 2 }) ? "bg-[#333] text-white" : "text-[#e6edf3]"
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white",
+                editor.isActive('heading', { level: 2 }) ? "bg-collab-600 text-white" : "text-collab-50"
               )}
               onClick={(e) => {
                 e.preventDefault();
@@ -219,8 +290,8 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
-                editor.isActive('heading', { level: 3 }) ? "bg-[#333] text-white" : "text-[#e6edf3]"
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white",
+                editor.isActive('heading', { level: 3 }) ? "bg-collab-600 text-white" : "text-collab-50"
               )}
               onClick={(e) => {
                 e.preventDefault();
@@ -235,7 +306,7 @@ export function FloatingSelectionMenu({
         </Tooltip>
 
         {/* Separator */}
-        <div className="w-px h-6 bg-[#444] mx-1" />
+        <div className="w-px h-6 bg-collab-600 mx-1" />
 
         {/* Lists and Quote */}
         <Tooltip>
@@ -245,8 +316,8 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
-                editor.isActive('bulletList') ? "bg-[#333] text-white" : "text-[#e6edf3]"
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white",
+                editor.isActive('bulletList') ? "bg-collab-600 text-white" : "text-collab-50"
               )}
               onClick={(e) => {
                 e.preventDefault();
@@ -267,8 +338,8 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
-                editor.isActive('orderedList') ? "bg-[#333] text-white" : "text-[#e6edf3]"
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white",
+                editor.isActive('orderedList') ? "bg-collab-600 text-white" : "text-collab-50"
               )}
               onClick={(e) => {
                 e.preventDefault();
@@ -289,8 +360,8 @@ export function FloatingSelectionMenu({
               variant="ghost"
               size="icon"
               className={cn(
-                "h-8 w-8 transition-colors hover:bg-[#2a2a2a] hover:text-white",
-                editor.isActive('blockquote') ? "bg-[#333] text-white" : "text-[#e6edf3]"
+                "h-8 w-8 transition-colors hover:bg-collab-600 hover:text-white",
+                editor.isActive('blockquote') ? "bg-collab-600 text-white" : "text-collab-50"
               )}
               onClick={(e) => {
                 e.preventDefault();
@@ -305,7 +376,7 @@ export function FloatingSelectionMenu({
         </Tooltip>
 
         {/* Separator */}
-        <div className="w-px h-6 bg-[#444] mx-1" />
+        <div className="w-px h-6 bg-collab-600 mx-1" />
 
         {/* AI Improve */}
         {onAiImprove && (

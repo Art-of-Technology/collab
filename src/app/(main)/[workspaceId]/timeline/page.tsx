@@ -1,60 +1,47 @@
 import { getCurrentUser } from "@/lib/session";
-import { getPosts } from "@/actions/post";
 import { verifyWorkspaceAccess } from "@/lib/workspace-helpers";
-import TimelineClient from "@/components/timeline/TimelineClient";
+import { prisma } from "@/lib/prisma";
+import TimelinePageClient from "./TimelinePageClient";
+
+export const dynamic = "force-dynamic";
 
 interface TimelinePageProps {
-  searchParams: { 
-    filter?: string;
-    tag?: string;
-  };
+  params: { workspaceId: string };
 }
 
-export const dynamic = 'force-dynamic';
-
-export default async function TimelinePage({
-  searchParams,
-}: TimelinePageProps) {
-  const _searchParams = await searchParams;
+export default async function TimelinePage({ params }: TimelinePageProps) {
+  const { workspaceId } = await params;
   const user = await getCurrentUser();
-  
+
   // Verify workspace access and redirect if needed
-  const workspaceId = await verifyWorkspaceAccess(user);
-  
-  // Safely handle searchParams
-  const filterParam = _searchParams?.filter;
-  const tagParam = _searchParams?.tag;
-  
-  const filter = typeof filterParam === 'string' ? filterParam.toLowerCase() : undefined;
-  const tag = typeof tagParam === 'string' ? tagParam : undefined;
-  
-  // Map URL filter to database filter
-  const filterMap: { [key: string]: string } = {
-    'updates': 'UPDATE',
-    'blockers': 'BLOCKER',
-    'ideas': 'IDEA',
-    'questions': 'QUESTION',
-  };
-  
-  // Get the type filter value if it exists
-  const typeFilter = filter && filterMap[filter] ? filterMap[filter] as any : undefined;
-  
-  // Fetch initial posts using the server action
-  const initialPostsData = await getPosts({
-    type: typeFilter,
-    tag: tag,
-    workspaceId,
-    limit: 10
+  await verifyWorkspaceAccess(user);
+
+  // Get workspace slug
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { slug: true },
   });
-  
-  // Handle both old and new response formats
-  const initialPosts = Array.isArray(initialPostsData) 
-    ? initialPostsData 
-    : initialPostsData.posts || [];
+
+  // Handle slug-based URLs
+  let actualWorkspaceId = workspaceId;
+  let workspaceSlug = workspace?.slug || workspaceId;
+
+  if (!workspace) {
+    // workspaceId might be a slug
+    const workspaceBySlug = await prisma.workspace.findUnique({
+      where: { slug: workspaceId },
+      select: { id: true, slug: true },
+    });
+    if (workspaceBySlug) {
+      actualWorkspaceId = workspaceBySlug.id;
+      workspaceSlug = workspaceBySlug.slug;
+    }
+  }
+
   return (
-    <TimelineClient 
-      initialPosts={initialPosts} 
-      currentUserId={user?.id || ''} 
+    <TimelinePageClient
+      workspaceId={actualWorkspaceId}
+      workspaceSlug={workspaceSlug}
     />
   );
-} 
+}

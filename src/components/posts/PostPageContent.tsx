@@ -5,8 +5,6 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import PostItem from "@/components/posts/PostItem";
 import { PrismaPost } from "./types";
-import CreateTaskButton from "./CreateTaskButton";
-import LinkedTasks from "./LinkedTasks";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { urls } from "@/lib/url-resolver";
 
@@ -36,27 +34,14 @@ export default function PostPageContent({ post, currentUserId }: PostPageContent
             See All Posts
           </Link>
         </Button>
-        
-        <CreateTaskButton 
-          postId={post.id} 
-          postTitle={post.message.substring(0, 50) + (post.message.length > 50 ? '...' : '')} 
-          postContent={post.message}
-        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2">
-      <PostItem 
+      <PostItem
         post={post}
         isExpanded={true}
         toggleExpand={() => {}}
         currentUserId={currentUserId}
       />
-        </div>
-        <div className="space-y-6">
-          <LinkedTasks postId={post.id} />
-        </div>
-      </div>
     </div>
   );
 } 

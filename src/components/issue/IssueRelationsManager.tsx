@@ -281,7 +281,7 @@ export function IssueRelationsManager({
       const Icon = itemType.icon;
       return <Icon className="h-3.5 w-3.5" style={{ color: itemType.color }} />;
     }
-    return <CheckSquare className="h-3.5 w-3.5 text-[#6366f1]" />;
+    return <CheckSquare className="h-3.5 w-3.5 text-indigo-500" />;
   };
 
   return (
@@ -289,10 +289,10 @@ export function IssueRelationsManager({
       {/* Show relations if any */}
       {relations.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm font-medium text-[#e1e7ef]">
+          <div className="flex items-center gap-2 text-sm font-medium text-collab-50">
             <GitBranch className="h-4 w-4" />
             <span>Relations</span>
-            <Badge variant="secondary" className="h-5 px-2 text-[10px] bg-[#333] text-[#ccc] border-0">
+            <Badge variant="secondary" className="h-5 px-2 text-[10px] bg-collab-600 text-collab-400 border-0">
               {relationsSummary.total}
             </Badge>
           </div>
@@ -302,10 +302,10 @@ export function IssueRelationsManager({
             {relations.map((relation) => (
               <div
                 key={relation.id}
-                className="flex items-center gap-2 p-2 bg-[#111] border border-[#1a1a1a] rounded group hover:bg-[#141414] transition-colors"
+                className="flex items-center gap-2 p-2 bg-collab-900 border border-collab-700 rounded group hover:bg-collab-900 transition-colors"
               >
                 <span className="text-sm">{getRelationTypeIcon(relation.relationType)}</span>
-                <span className="text-xs text-[#8b949e] uppercase tracking-wide min-w-0">
+                <span className="text-xs text-collab-400 uppercase tracking-wide min-w-0">
                   {getRelationTypeLabel(relation.relationType)}
                 </span>
                 
@@ -314,23 +314,23 @@ export function IssueRelationsManager({
                     <>
                       <div className="flex items-center gap-2">
                         {getItemIcon(relation.targetIssue.type)}
-                        <span className="text-xs text-[#6e7681] font-mono">
+                        <span className="text-xs text-collab-500 font-mono">
                           {relation.targetIssue.issueKey}
                         </span>
-                        <span className="text-sm text-[#e1e7ef] truncate">
+                        <span className="text-sm text-collab-50 truncate">
                           {relation.targetIssue.title}
                         </span>
                       </div>
                       {relation.targetIssue.workspace && (
                         <div className="flex items-center gap-2 ml-5">
-                          <span className="text-xs text-[#8b949e]">in</span>
-                          <span className="text-xs px-1.5 py-0.5 bg-[#333] text-[#9ca3af] rounded">
+                          <span className="text-xs text-collab-400">in</span>
+                          <span className="text-xs px-1.5 py-0.5 bg-collab-600 text-gray-400 rounded">
                             {relation.targetIssue.workspace.name}
                           </span>
                           {relation.targetIssue.project && (
                             <>
-                              <span className="text-xs text-[#8b949e]">•</span>
-                              <span className="text-xs text-[#8b949e]">
+                              <span className="text-xs text-collab-400">•</span>
+                              <span className="text-xs text-collab-400">
                                 {relation.targetIssue.project.name}
                               </span>
                             </>
@@ -340,21 +340,23 @@ export function IssueRelationsManager({
                     </>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-[#8b949e]">New:</span>
-                      <span className="text-sm text-[#e1e7ef] truncate">
+                      <span className="text-xs text-collab-400">New:</span>
+                      <span className="text-sm text-collab-50 truncate">
                         {relation.title}
                       </span>
                     </div>
                   )}
                 </div>
                 
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => handleRemoveRelation(relation.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[#2a2a2a] rounded text-[#6e7681] hover:text-red-400"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 hover:bg-collab-600 text-collab-500 hover:text-red-400"
                 >
                   <Trash2 className="h-3 w-3" />
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -367,7 +369,7 @@ export function IssueRelationsManager({
           type="button"
           variant="outline"
           onClick={handleStartAdding}
-          className="w-full border-dashed border-[#2d2d30] hover:border-[#464649] hover:bg-[#1a1a1a] text-[#9ca3af] hover:text-white h-9"
+          className="w-full border-dashed border-collab-600 hover:border-collab-600 hover:bg-collab-800 text-gray-400 hover:text-white h-9"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add relation
@@ -375,12 +377,12 @@ export function IssueRelationsManager({
       ) : (
         <div ref={containerRef} className="relative">
           {/* Input row */}
-          <div className="flex items-center gap-2 p-2 border border-[#1a1a1a] rounded bg-[#111]">
+          <div className="flex items-center gap-2 p-2 border border-collab-700 rounded bg-collab-900">
             <Select value={selectedRelationType} onValueChange={(value) => setSelectedRelationType(value as RelationType)}>
-              <SelectTrigger className="w-32 h-7 text-xs bg-[#0e0e0e] border-[#2d2d30] text-[#e1e7ef] focus:border-[#464649]">
+              <SelectTrigger className="w-32 h-7 text-xs bg-collab-900 border-collab-600 text-collab-50 focus:border-collab-600">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#1c1c1e] border-[#2d2d30]">
+              <SelectContent className="bg-collab-800 border-collab-600">
                 {RELATION_TYPES.map((type) => (
                   <SelectItem key={type.value} value={type.value}>
                     <div className="flex items-center gap-2">
@@ -398,7 +400,7 @@ export function IssueRelationsManager({
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Link existing issue or create new..."
-              className="flex-1 h-7 text-sm bg-[#0e0e0e] border-[#2d2d30] text-[#e1e7ef] placeholder-[#8b949e] focus:border-[#464649]"
+              className="flex-1 h-7 text-sm bg-collab-900 border-collab-600 text-collab-50 placeholder-collab-400 focus:border-collab-600"
             />
             
             <Button
@@ -406,7 +408,7 @@ export function IssueRelationsManager({
               variant="ghost"
               size="sm"
               onClick={handleCancelAdding}
-              className="h-7 px-2 text-[#6e7681] hover:text-white hover:bg-[#2a2a2a]"
+              className="h-7 px-2 text-collab-500 hover:text-white hover:bg-collab-600"
             >
               ×
             </Button>
@@ -420,7 +422,7 @@ export function IssueRelationsManager({
           createPortal(
             <div 
               ref={dropdownRef}
-              className="fixed border border-[#1a1a1a] rounded bg-[#1c1c1e] shadow-xl max-h-48 overflow-y-auto"
+              className="fixed border border-collab-700 rounded bg-collab-800 shadow-xl max-h-48 overflow-y-auto"
               style={{
                 top: dropdownPosition.top,
                 left: dropdownPosition.left,
@@ -430,35 +432,37 @@ export function IssueRelationsManager({
               }}
             >
               {isLoading ? (
-                <div className="p-3 text-center text-[#8b949e] text-sm">
+                <div className="p-3 text-center text-collab-400 text-sm">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mx-auto mb-2"></div>
                   Searching...
                 </div>
               ) : searchResults.length === 0 ? (
                 <div className="p-3 space-y-2">
-                  <p className="text-[#8b949e] text-sm">No existing issues found</p>
-                  <button
+                  <p className="text-collab-400 text-sm">No existing issues found</p>
+                  <Button
                     type="button"
+                    variant="ghost"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       handleCreateNew();
                     }}
-                    className="w-full flex items-center gap-2 p-2 text-sm rounded hover:bg-[#2a2a2a] transition-colors text-left text-[#e1e7ef]"
+                    className="w-full flex items-center gap-2 p-2 text-sm rounded hover:bg-collab-600 transition-colors justify-start text-collab-50 h-auto"
                   >
-                    <Plus className="h-3.5 w-3.5 text-[#22c55e]" />
+                    <Plus className="h-3.5 w-3.5 text-green-500" />
                     Create new issue: "{inputValue}"
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-0">
                   {searchResults.map((item: RelationItem, index: number) => (
-                    <button
+                    <Button
                       key={item.id}
                       type="button"
+                      variant="ghost"
                       className={cn(
-                        "w-full flex items-center gap-2 p-2 text-sm hover:bg-[#2a2a2a] transition-colors text-left",
-                        index === selectedIndex && "bg-[#2a2a2a]"
+                        "w-full flex items-center gap-2 p-2 text-sm hover:bg-collab-600 transition-colors justify-start h-auto",
+                        index === selectedIndex && "bg-collab-600"
                       )}
                       onClick={(e) => {
                         e.preventDefault();
@@ -469,23 +473,23 @@ export function IssueRelationsManager({
                       {getItemIcon(item.type || 'issue')}
                       <div className="flex flex-col gap-1 flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-[#6e7681] font-mono">
+                          <span className="text-xs text-collab-500 font-mono">
                             {item.issueKey || `${item.type?.toUpperCase()}-${item.id.slice(-4)}`}
                           </span>
-                          <span className="text-[#e1e7ef] truncate">
+                          <span className="text-collab-50 truncate">
                             {item.title}
                           </span>
                         </div>
                         {item.workspace && (
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-[#8b949e]">in</span>
-                            <span className="text-xs px-1.5 py-0.5 bg-[#333] text-[#9ca3af] rounded">
+                            <span className="text-xs text-collab-400">in</span>
+                            <span className="text-xs px-1.5 py-0.5 bg-collab-600 text-gray-400 rounded">
                               {item.workspace.name}
                             </span>
                             {item.project && (
                               <>
-                                <span className="text-xs text-[#8b949e]">•</span>
-                                <span className="text-xs text-[#8b949e]">
+                                <span className="text-xs text-collab-400">•</span>
+                                <span className="text-xs text-collab-400">
                                   {item.project.name}
                                 </span>
                               </>
@@ -493,22 +497,23 @@ export function IssueRelationsManager({
                           </div>
                         )}
                       </div>
-                    </button>
+                    </Button>
                   ))}
-                  
-                  <div className="border-t border-[#2d2d30]">
-                    <button
+
+                  <div className="border-t border-collab-600">
+                    <Button
                       type="button"
+                      variant="ghost"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         handleCreateNew();
                       }}
-                      className="w-full flex items-center gap-2 p-2 text-sm hover:bg-[#2a2a2a] transition-colors text-left text-[#e1e7ef]"
+                      className="w-full flex items-center gap-2 p-2 text-sm hover:bg-collab-600 transition-colors justify-start text-collab-50 h-auto"
                     >
-                      <Plus className="h-3.5 w-3.5 text-[#22c55e]" />
+                      <Plus className="h-3.5 w-3.5 text-green-500" />
                       Create new: "{inputValue}"
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}

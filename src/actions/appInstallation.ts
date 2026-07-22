@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { logAppInstallAttempt, logAppInstallSuccess, logAppInstallFailed } from '@/lib/audit';
 import { validateAppManifestSecurity } from '@/lib/security';
+import { checkUserPermission, Permission } from '@/lib/permissions';
 
 const prisma = new PrismaClient();
 
@@ -39,17 +40,16 @@ export async function installApp(formData: FormData) {
     // Log installation attempt
     await logAppInstallAttempt(workspaceId, session.user.id, appSlug, { scopes });
 
-    // Check if user is workspace admin
-    const member = await prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId,
-        userId: session.user.id,
-        role: { in: ['OWNER', 'ADMIN'] }
-      }
-    });
+    // Check if user has permission to install apps
+    const hasPermission = await checkUserPermission(
+      session.user.id,
+      workspaceId,
+      Permission.MANAGE_APPS
+    );
 
-    if (!member) {
-      throw new Error('Insufficient permissions. Only workspace admins can install apps.');
+    if (!hasPermission.hasPermission) {
+      await logAppInstallFailed(workspaceId, session.user.id, appSlug, 'Insufficient permissions to install apps');
+      throw new Error('Insufficient permissions. Only workspace owners and admins can install apps.');
     }
 
     // Get the app
@@ -93,21 +93,36 @@ export async function installApp(formData: FormData) {
       }
     });
 
+    let installation;
     if (existingInstallation) {
-      throw new Error('App is already installed in this workspace');
-    }
-
-    // Create installation record
-    const installation = await prisma.appInstallation.create({
-      data: {
-        appId: app.id,
-        workspaceId,
-        installedById: session.user.id,
-        status: 'PENDING',
-        scopes: scopes || app.scopes.map(p => p.scope),
-        settings: {}
+      // If installation is ACTIVE, return error
+      if (existingInstallation.status === 'ACTIVE') {
+        throw new Error('App is already installed in this workspace');
       }
-    });
+
+      // If installation exists but is not ACTIVE, update it
+      installation = await prisma.appInstallation.update({
+        where: { id: existingInstallation.id },
+        data: {
+          status: 'PENDING',
+          scopes: scopes || app.scopes.map(s => s.scope),
+          installedById: session.user.id,
+          settings: {}
+        }
+      });
+    } else {
+      // Create new installation record - always start as PENDING
+      installation = await prisma.appInstallation.create({
+        data: {
+          appId: app.id,
+          workspaceId,
+          installedById: session.user.id,
+          status: 'PENDING',
+          scopes: scopes || app.scopes.map(s => s.scope),
+          settings: {}
+        }
+      });
+    }
 
     // Return installation data for OAuth flow
     return {
@@ -138,17 +153,15 @@ export async function uninstallApp(formData: FormData) {
 
     const { installationId, workspaceId } = UninstallAppSchema.parse(data);
 
-    // Check if user is workspace admin
-    const member = await prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId,
-        userId: session.user.id,
-        role: { in: ['OWNER', 'ADMIN'] }
-      }
-    });
+    // Check if user has permission to install/uninstall apps
+    const hasPermission = await checkUserPermission(
+      session.user.id,
+      workspaceId,
+      Permission.MANAGE_APPS
+    );
 
-    if (!member) {
-      throw new Error('Insufficient permissions. Only workspace admins can uninstall apps.');
+    if (!hasPermission.hasPermission) {
+      throw new Error('Insufficient permissions. Only workspace owners and admins can uninstall apps.');
     }
 
     // Get installation with app details
@@ -201,6 +214,7 @@ export async function getWorkspaceInstallations(workspaceId: string) {
       throw new Error('Access denied to workspace');
     }
 
+    // Get explicitly installed apps
     const installations = await prisma.appInstallation.findMany({
       where: { workspaceId },
       include: {
@@ -210,14 +224,59 @@ export async function getWorkspaceInstallations(workspaceId: string) {
             name: true,
             slug: true,
             iconUrl: true,
-            publisherId: true
+            publisherId: true,
+            permissions: true
           }
         }
       },
       orderBy: { createdAt: 'desc' }
     });
 
-    return installations;
+    // Get system apps (available to all workspaces without installation)
+    // Use raw query to access isSystemApp field
+    const systemApps = await prisma.$queryRaw<Array<{
+      id: string;
+      name: string;
+      slug: string;
+      iconUrl: string | null;
+      publisherId: string;
+      permissions: any;
+    }>>`
+      SELECT id, name, slug, "iconUrl", "publisherId", permissions
+      FROM "App"
+      WHERE "isSystemApp" = true AND status = 'PUBLISHED'
+    `;
+
+    // Get scopes for system apps
+    const systemAppIds = systemApps.map(a => a.id);
+    const systemAppScopes = systemAppIds.length > 0
+      ? await prisma.appScope.findMany({
+          where: { appId: { in: systemAppIds } },
+          select: { appId: true, scope: true }
+        })
+      : [];
+
+    // Convert system apps to installation-like format for consistency
+    const installedAppIds = installations.map(inst => inst.app.id);
+    const systemAppInstallations = systemApps
+      .filter(sysApp => !installedAppIds.includes(sysApp.id)) // Exclude if already installed
+      .map(sysApp => ({
+        id: `system-${sysApp.id}`,
+        status: 'ACTIVE' as const,
+        createdAt: new Date(),
+        scopes: systemAppScopes.filter(s => s.appId === sysApp.id).map(s => s.scope),
+        app: {
+          id: sysApp.id,
+          name: sysApp.name,
+          slug: sysApp.slug,
+          iconUrl: sysApp.iconUrl,
+          publisherId: sysApp.publisherId,
+          permissions: sysApp.permissions
+        }
+      }));
+
+    // Combine regular installations with system app "installations"
+    return [...installations, ...systemAppInstallations];
 
   } catch (error) {
     console.error('Error fetching installations:', error);

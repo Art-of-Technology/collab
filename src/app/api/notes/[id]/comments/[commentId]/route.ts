@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { CommentWhereInputExtension } from '@/types/prisma-extensions';
+import { NoteScope } from "@prisma/client";
 
 // Get a specific comment
 export async function GET(
@@ -24,7 +25,8 @@ export async function GET(
         id: id,
         OR: [
           { authorId: session.user.id },
-          { isPublic: true }
+          { scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC] } },
+          { sharedWith: { some: { userId: session.user.id } } }
         ]
       }
     });
@@ -97,7 +99,8 @@ export async function PATCH(
         id: id,
         OR: [
           { authorId: session.user.id },
-          { isPublic: true }
+          { scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC] } },
+          { sharedWith: { some: { userId: session.user.id } } }
         ]
       }
     });
@@ -173,7 +176,8 @@ export async function DELETE(
         id: id,
         OR: [
           { authorId: session.user.id },
-          { isPublic: true }
+          { scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC] } },
+          { sharedWith: { some: { userId: session.user.id } } }
         ]
       }
     });

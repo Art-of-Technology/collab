@@ -1,0 +1,310 @@
+'use client';
+
+import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Tag,
+  GitBranch,
+  Save,
+  Loader2,
+  Info,
+  Package,
+  GitMerge,
+  Sparkles,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+
+interface VersioningConfigProps {
+  repositoryId: string;
+  currentConfig: {
+    versioningStrategy: 'SEMANTIC' | 'CALVER' | 'CUSTOM';
+    autoVersioning: boolean;
+    versionPrefix: string;
+    releaseBranch: string;
+    autoGenerateChangelog: boolean;
+    includeCommitsInChangelog: boolean;
+    includePRsInChangelog: boolean;
+  };
+  branches: string[];
+}
+
+const VERSION_STRATEGIES = [
+  {
+    id: 'SEMANTIC',
+    name: 'Semantic Versioning',
+    description: 'MAJOR.MINOR.PATCH (e.g., 1.2.3)',
+    example: '1.0.0 → 1.0.1 → 1.1.0 → 2.0.0',
+    icon: Package,
+  },
+  {
+    id: 'CALVER',
+    name: 'Calendar Versioning',
+    description: 'YYYY.MM.PATCH (e.g., 2024.01.1)',
+    example: '2024.01.1 → 2024.01.2 → 2024.02.1',
+    icon: Tag,
+  },
+  {
+    id: 'CUSTOM',
+    name: 'Custom Pattern',
+    description: 'Use your own versioning pattern',
+    example: 'Define your own format',
+    icon: Sparkles,
+  },
+];
+
+export function VersioningConfig({
+  repositoryId,
+  currentConfig,
+  branches,
+}: VersioningConfigProps) {
+  const [config, setConfig] = useState(currentConfig);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const response = await fetch(`/api/github/repositories/${repositoryId}/configuration`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+
+      if (response.ok) {
+        toast.success('Versioning configuration saved');
+      } else {
+        toast.error('Failed to save configuration');
+      }
+    } catch (error) {
+      toast.error('Failed to save configuration');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const hasChanges = JSON.stringify(config) !== JSON.stringify(currentConfig);
+
+  return (
+    <div className="space-y-6 max-w-4xl">
+      {/* Version Strategy */}
+      <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
+        <div className="px-4 py-3 border-b border-collab-700">
+          <h3 className="text-sm font-medium text-collab-50 flex items-center gap-2">
+            <Tag className="h-4 w-4 text-collab-500" />
+            Version Strategy
+          </h3>
+          <p className="text-xs text-collab-500 mt-0.5">
+            Choose how versions are numbered and incremented
+          </p>
+        </div>
+        <div className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {VERSION_STRATEGIES.map(strategy => (
+              <Button
+                key={strategy.id}
+                variant="ghost"
+                onClick={() => setConfig(prev => ({ ...prev, versioningStrategy: strategy.id as typeof prev.versioningStrategy }))}
+                className={cn(
+                  "p-4 rounded-lg border-2 text-left transition-all h-auto",
+                  config.versioningStrategy === strategy.id
+                    ? "border-blue-400 bg-blue-400/5"
+                    : "border-collab-700 bg-collab-900 hover:border-collab-600"
+                )}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <strategy.icon className={cn(
+                    "h-4 w-4",
+                    config.versioningStrategy === strategy.id ? "text-blue-400" : "text-collab-500"
+                  )} />
+                  <span className={cn(
+                    "text-sm font-medium",
+                    config.versioningStrategy === strategy.id ? "text-blue-400" : "text-collab-50"
+                  )}>
+                    {strategy.name}
+                  </span>
+                </div>
+                <p className="text-xs text-collab-500 mb-2">{strategy.description}</p>
+                <code className="text-[10px] text-collab-500 bg-collab-900 px-2 py-1 rounded">
+                  {strategy.example}
+                </code>
+              </Button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Auto Versioning */}
+      <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
+        <div className="px-4 py-3 border-b border-collab-700">
+          <h3 className="text-xs font-medium text-collab-50 flex items-center gap-2">
+            <GitMerge className="h-3.5 w-3.5 text-collab-500" />
+            Automatic Versioning
+          </h3>
+          <p className="text-[10px] text-collab-500 mt-0.5">
+            Configure automatic version creation from GitHub releases
+          </p>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-sm text-collab-50">Enable Auto-Versioning</Label>
+              <p className="text-xs text-collab-500 mt-0.5">
+                Automatically create versions when GitHub releases are published
+              </p>
+            </div>
+            <Switch
+              checked={config.autoVersioning}
+              onCheckedChange={(checked) => setConfig(prev => ({ ...prev, autoVersioning: checked }))}
+            />
+          </div>
+
+          <div className="pt-2 border-t border-collab-700 space-y-4">
+            <div>
+              <Label className="text-sm text-collab-50 mb-2 block">Release Branch</Label>
+              <Select
+                value={config.releaseBranch}
+                onValueChange={(value) => setConfig(prev => ({ ...prev, releaseBranch: value }))}
+              >
+                <SelectTrigger className="h-9 bg-collab-900 border-collab-700 text-collab-50">
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map(branch => (
+                    <SelectItem key={branch} value={branch}>
+                      <div className="flex items-center gap-2">
+                        <GitBranch className="h-3 w-3" />
+                        {branch}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-collab-500 mt-1">
+                Releases from this branch will trigger version creation
+              </p>
+            </div>
+
+            <div>
+              <Label className="text-sm text-collab-50 mb-2 block">Version Prefix</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  value={config.versionPrefix}
+                  onChange={(e) => setConfig(prev => ({ ...prev, versionPrefix: e.target.value }))}
+                  placeholder="v"
+                  className="w-16 h-9 px-3 bg-collab-900 border border-collab-700 rounded-md text-collab-50 text-sm focus:border-blue-400 focus:outline-none"
+                />
+                <span className="text-xs text-collab-500">+ version number</span>
+                <Badge variant="secondary" className="text-[10px] bg-collab-900 text-collab-400">
+                  Example: {config.versionPrefix}1.0.0
+                </Badge>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Changelog Configuration */}
+      <div className="rounded-lg border border-collab-700 bg-collab-900 overflow-hidden">
+        <div className="px-4 py-3 border-b border-collab-700">
+          <h3 className="text-xs font-medium text-collab-50 flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-collab-500" />
+            AI Changelog Generation
+          </h3>
+          <p className="text-[10px] text-collab-500 mt-0.5">
+            Configure automatic changelog generation with AI
+          </p>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-sm text-collab-50">Auto-Generate Changelog</Label>
+              <p className="text-xs text-collab-500 mt-0.5">
+                Use AI to automatically generate changelogs for new releases
+              </p>
+            </div>
+            <Switch
+              checked={config.autoGenerateChangelog}
+              onCheckedChange={(checked) => setConfig(prev => ({ ...prev, autoGenerateChangelog: checked }))}
+            />
+          </div>
+
+          <div className="pt-4 border-t border-collab-700 space-y-3">
+            <p className="text-xs text-collab-500 font-medium">Include in Changelog:</p>
+
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <Label className="text-sm text-collab-50">Commit Messages</Label>
+                <p className="text-xs text-collab-500 mt-0.5">
+                  Include commit messages in generated changelogs
+                </p>
+              </div>
+              <Switch
+                checked={config.includeCommitsInChangelog}
+                onCheckedChange={(checked) => setConfig(prev => ({ ...prev, includeCommitsInChangelog: checked }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <Label className="text-sm text-collab-50">Pull Request Descriptions</Label>
+                <p className="text-xs text-collab-500 mt-0.5">
+                  Include PR titles and descriptions in generated changelogs
+                </p>
+              </div>
+              <Switch
+                checked={config.includePRsInChangelog}
+                onCheckedChange={(checked) => setConfig(prev => ({ ...prev, includePRsInChangelog: checked }))}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Info Alert */}
+      <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3 flex items-start gap-3">
+        <Info className="h-4 w-4 text-blue-400 mt-0.5" />
+        <div>
+          <p className="text-xs text-blue-200">
+            <strong>How versioning works:</strong> When a release is published on GitHub,
+            a version will be automatically created using the configured strategy.
+            The changelog will include release notes from GitHub plus any additional
+            sources you've enabled above.
+          </p>
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <div className="flex justify-end">
+        <Button
+          onClick={handleSave}
+          disabled={isSaving || !hasChanges}
+          size="sm"
+          className={cn(
+            "h-8",
+            hasChanges
+              ? "bg-green-700 hover:bg-green-600 text-white"
+              : "bg-collab-900 text-collab-400"
+          )}
+        >
+          {isSaving ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+          ) : (
+            <Save className="h-3.5 w-3.5 mr-1.5" />
+          )}
+          Save Configuration
+        </Button>
+      </div>
+    </div>
+  );
+}
