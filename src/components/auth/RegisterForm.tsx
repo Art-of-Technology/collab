@@ -38,7 +38,15 @@ export default function RegisterForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        // `role` is intentionally not sent: it is a privileged authorization
+        // field assigned server-side, never chosen by the registrant.
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          team: formData.team,
+          currentFocus: formData.currentFocus,
+        }),
       });
 
       const data = await response.json();

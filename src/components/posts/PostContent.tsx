@@ -6,6 +6,7 @@ import { ChatBubbleLeftIcon, HeartIcon } from "@heroicons/react/24/outline";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { formatMentions } from "@/utils/mentions";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import DOMPurify from "dompurify";
 
 type Tag = {
   id: string;
@@ -31,8 +32,11 @@ export default function PostContent({
 }: PostContentProps) {
   const { currentWorkspace } = useWorkspace();
   
-  // Format message to display clickable mentions
-  const formattedMessage = formatMentions(message);
+  // Format message to display clickable mentions. formatMentions already
+  // HTML-escapes the raw input; sanitize again with DOMPurify as
+  // defense-in-depth so safety does not rely solely on the escape helper
+  // (mirrors MarkdownContent).
+  const formattedMessage = DOMPurify.sanitize(formatMentions(message));
   
   return (
     <div>

@@ -1,7 +1,27 @@
 import { z } from 'zod';
+import { assertSafeUrl } from '@/lib/ssrf';
 
 // JWKS (JSON Web Key Set) validation utilities
 // Based on RFC 7517 and RFC 7518
+
+// SSRF guard for the user-supplied jwks_uri. Resolves the host and rejects
+// private/loopback/link-local/metadata destinations. Allows http in local dev
+// only; production is https-only and always IP-checked. Returns null when safe,
+// or an error message when the URL must be rejected.
+async function checkJwksUriSafety(jwksUri: string): Promise<string | null> {
+  const allowedProtocols =
+    process.env.NODE_ENV === 'production' ? ['https:'] : ['https:', 'http:'];
+  // In local dev, developers may point at localhost/private JWKS endpoints.
+  if (process.env.NODE_ENV !== 'production') {
+    return null;
+  }
+  try {
+    await assertSafeUrl(jwksUri, { allowedProtocols });
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : 'JWKS URI is not allowed';
+  }
+}
 
 // Supported key types for OAuth client authentication
 const SupportedKeyTypes = ['RSA', 'EC', 'OKP'] as const;
@@ -78,6 +98,12 @@ export async function validateJWKS(jwksUri: string): Promise<JWKSValidationResul
       };
     }
 
+    // SSRF guard: reject private/loopback/link-local/metadata destinations.
+    const safetyError = await checkJwksUriSafety(jwksUri);
+    if (safetyError) {
+      return { valid: false, error: safetyError };
+    }
+
     // Fetch JWKS
     const response = await fetch(jwksUri, {
       method: 'GET',
@@ -85,6 +111,7 @@ export async function validateJWKS(jwksUri: string): Promise<JWKSValidationResul
         'Accept': 'application/json',
         'User-Agent': 'Collab-App-Platform/1.0'
       },
+      redirect: 'manual',
       signal: AbortSignal.timeout(10000) // 10 seconds timeout
     });
 
@@ -220,12 +247,18 @@ export function validateJWK(jwk: unknown): { valid: boolean; error?: string } {
  */
 export async function getJWKSKeyIds(jwksUri: string): Promise<string[]> {
   try {
+    // SSRF guard before fetching a user-supplied URI.
+    if (await checkJwksUriSafety(jwksUri)) {
+      return [];
+    }
+
     const response = await fetch(jwksUri, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
         'User-Agent': 'Collab-App-Platform/1.0'
       },
+      redirect: 'manual',
       signal: AbortSignal.timeout(5000)
     });
 
@@ -252,8 +285,14 @@ export async function getJWKSKeyIds(jwksUri: string): Promise<string[]> {
  */
 export async function isJWKSReachable(jwksUri: string): Promise<boolean> {
   try {
+    // SSRF guard before fetching a user-supplied URI.
+    if (await checkJwksUriSafety(jwksUri)) {
+      return false;
+    }
+
     const response = await fetch(jwksUri, {
       method: 'HEAD',
+      redirect: 'manual',
       signal: AbortSignal.timeout(5000)
     });
     return response.ok;
