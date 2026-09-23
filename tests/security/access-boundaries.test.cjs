@@ -83,7 +83,7 @@ const enums = {
   NoteActivityAction: {},
 };
 const { checkNoteAccess } = load('src/lib/secrets/access.ts', {
-  '@/lib/prisma': { prisma }, '@prisma/client': enums,
+  '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
 });
 const note = {
   id: 'note', authorId: 'bob', scope: 'WORKSPACE', workspaceId: 'joined', projectId: null,
@@ -337,7 +337,7 @@ test('note authorization resolves project workspace and requires active membersh
         };
       } },
     };
-    const { canAccessNote } = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: db }, '@prisma/client': enums });
+    const { canAccessNote } = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: db }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess } });
     assert.equal((await canAccessNote('alice', 'note')).canAccess, ['own', 'joined'].includes(workspace.id));
   }
 });
@@ -475,7 +475,7 @@ test('protected notes cannot publish their content as workspace templates', asyn
 
 test('collection predicates match the single-note read policy across scope and membership', async () => {
   const { noteAccessWhere } = load('src/lib/secrets/access.ts', {
-    '@/lib/prisma': { prisma }, '@prisma/client': enums,
+    '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
   });
   function matches(row, where) {
     return Object.entries(where).every(([key, value]) => {
@@ -573,4 +573,73 @@ test('template use requires workspace access and scopes custom template reads', 
     assert.equal(response.status, workspaceId === 'joined' ? 404 : 403);
   }
   assert.equal(templateReads, 1);
+});
+
+test('note destinations reject foreign/revoked workspaces and mismatched projects', async () => {
+  const { canWriteNoteDestination } = load('src/lib/secrets/access.ts', {
+    '@/lib/issue-finder': { userHasWorkspaceAccess }, '@prisma/client': enums,
+    '@/lib/prisma': { prisma: { project: { findUnique: async ({ where }) =>
+      workspaces.some(w => w.id === where.id) ? { workspaceId: where.id } : null } } },
+  });
+  for (const workspace of workspaces) {
+    const allowed = ['own', 'joined'].includes(workspace.id);
+    assert.equal(await canWriteNoteDestination('alice', workspace.id, null), allowed);
+    assert.equal(await canWriteNoteDestination('alice', null, workspace.id), allowed);
+    assert.equal(await canWriteNoteDestination('alice', workspace.id, workspace.id), allowed);
+  }
+  assert.equal(await canWriteNoteDestination('alice', 'joined', 'own'), false);
+  assert.equal(await canWriteNoteDestination('alice', 'joined', 'missing'), false);
+  assert.equal(await canWriteNoteDestination('alice', null, null), true);
+  assert.equal(await canWriteNoteDestination('', null, null), false);
+});
+
+test('note creation and project reassignment reject inaccessible destinations before writes', async () => {
+  let checked = 0;
+  const dependencies = {
+    'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
+    'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+    '@/app/api/auth/[...nextauth]/route': { authOptions: {} },
+    '@/lib/prisma': { prisma: {
+      user: { findUnique: async () => ({ id: 'alice' }) },
+      note: {
+        findFirst: async () => ({ ...note, authorId: 'alice' }),
+        findUnique: async () => ({ versioningEnabled: false }),
+      },
+    } },
+    '@/lib/secrets/access': {
+      canAccessNote: async () => ({ canEdit: true }),
+      canWriteNoteDestination: async (_, workspace, project) => {
+        assert.equal(project, 'foreign'); checked++; return false;
+      },
+    },
+    '@/lib/secrets/crypto': { isSecretNoteType: () => false },
+    '@/lib/versioning': {}, '@/lib/event-bus': {}, '@prisma/client': enums,
+  };
+  for (const [file, method] of [['route.ts', 'POST'], ['[id]/route.ts', 'PATCH']]) {
+    const route = load(`src/app/api/notes/${file}`, dependencies);
+    const response = await route[method](new Request('https://example.test/note', {
+      method, body: JSON.stringify({ title: 'Title', content: 'Content', projectId: 'foreign' }),
+    }), { params: Promise.resolve({ id: 'note' }) });
+    assert.equal(response.status, 403, file);
+  }
+  assert.equal(checked, 2);
+});
+
+test('AI issue suggestions and relations resolve their source issue inside the authorized workspace', async () => {
+  for (const endpoint of ['related', 'suggestions']) {
+    let reads = 0;
+    const { GET } = load(`src/app/api/ai/issues/${endpoint}/route.ts`, {
+      'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
+      'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+      '@/lib/auth': { authConfig: {} }, '@/lib/issue-finder': { userHasWorkspaceAccess },
+      '@/lib/prisma': { prisma: { issue: { findFirst: async ({ where }) => {
+        reads++; assert.equal(where.workspaceId, 'joined'); assert.equal(where.id, 'foreign-issue'); return null;
+      } } } },
+    }, { URL });
+    for (const workspace of ['revoked', 'foreign', 'joined']) {
+      const response = await GET(new Request(`https://example.test/?workspaceId=${workspace}&issueId=foreign-issue`));
+      assert.equal(response.status, workspace === 'joined' ? 404 : 403);
+    }
+    assert.equal(reads, 1);
+  }
 });

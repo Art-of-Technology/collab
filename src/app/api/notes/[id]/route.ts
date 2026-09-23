@@ -12,7 +12,7 @@ import {
   isSecretsEnabled,
   SecretVariable
 } from "@/lib/secrets/crypto";
-import { logNoteAccess, canAccessNote } from "@/lib/secrets/access";
+import { canWriteNoteDestination, logNoteAccess, canAccessNote } from "@/lib/secrets/access";
 import { createVersion, hasSignificantChange, detectChangeType } from "@/lib/versioning";
 import { emitContextUpdated, emitContextDeleted } from "@/lib/event-bus";
 
@@ -243,33 +243,16 @@ export async function PATCH(
       );
     }
 
-    // Validate project exists if projectId is being set
-    if (projectId) {
-      const projectExists = await prisma.project.findUnique({
-        where: { id: projectId },
-        select: { id: true }
-      });
-
-      if (!projectExists) {
-        return NextResponse.json(
-          { error: "Project not found" },
-          { status: 400 }
-        );
-      }
+    const finalScope = scope ?? (isPublic !== undefined && isOwner
+      ? (isPublic ? NoteScope.WORKSPACE : NoteScope.PERSONAL) : existingNote.scope);
+    const finalProjectId = isOwner && projectId !== undefined ? projectId : existingNote.projectId;
+    if ((finalScope === NoteScope.PROJECT && !finalProjectId) ||
+        (finalScope === NoteScope.WORKSPACE && !existingNote.workspaceId)) {
+      return NextResponse.json({ error: "Scope requires a workspace or project" }, { status: 400 });
     }
-
-    // Handle scope conversion from legacy isPublic
-    let finalScope = scope;
-    if (!scope && isPublic !== undefined && isOwner) {
-      finalScope = isPublic ? NoteScope.WORKSPACE : NoteScope.PERSONAL;
-    }
-
-    // Validate scope requirements
-    if (finalScope === NoteScope.PROJECT && !projectId && !existingNote.projectId) {
-      return NextResponse.json(
-        { error: "Project ID is required for PROJECT scope notes" },
-        { status: 400 }
-      );
+    if (isOwner && (projectId !== undefined || scope !== undefined || isPublic !== undefined) &&
+        !await canWriteNoteDestination(session.user.id, existingNote.workspaceId, finalProjectId)) {
+      return NextResponse.json({ error: "Workspace or project access required" }, { status: 403 });
     }
 
     // Handle secrets encryption for secret note types

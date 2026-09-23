@@ -141,3 +141,18 @@ and optional projects within that workspace. Twenty security checks pass.
 Remaining security review includes Notes creation/reassignment and template
 management siblings, plus other HTML output surfaces. Do not treat these local
 slices as a completed repository security review or release authorization.
+
+## Resumed implementation
+
+Notes creation and project reassignment now validate the destination workspace
+and project, including active membership and consistent tenant IDs. Template
+management requires active membership. The two AI issue suggestion/related
+routes now scope their source issue to the authorized workspace while using
+current schema relationships. Twenty-three local security checks pass.
+
+Type repair removed an unreferenced legacy assistant widget, repaired editor
+command declarations and stale schema references, and preserved compiler checks.
+The latest completed typecheck is down to 72 diagnostics; subsequent repairs
+are pending the next complete typecheck. Lint and strict build remain blockers.
+Claude Tag's real Forge issue creation is user-confirmed PASS; do not recreate
+acceptance issues or change existing records or the live dashboard.

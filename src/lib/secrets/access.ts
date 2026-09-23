@@ -1,3 +1,4 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 /**
  * Secrets Access Control Helpers
  *
@@ -449,4 +450,15 @@ export async function getNoteAuditLog(
     total,
     hasMore: offset + logs.length < total
   };
+}
+
+
+/** Validate the destination before creating a note or changing its project. */
+export async function canWriteNoteDestination(userId: string, workspaceId: string | null, projectId: string | null): Promise<boolean> {
+  if (!userId) return false;
+  if (workspaceId && !await userHasWorkspaceAccess(userId, workspaceId)) return false;
+  if (!projectId) return true;
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } });
+  if (!project || (workspaceId && project.workspaceId !== workspaceId)) return false;
+  return workspaceId ? true : userHasWorkspaceAccess(userId, project.workspaceId);
 }
