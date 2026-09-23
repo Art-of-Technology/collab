@@ -175,3 +175,14 @@ is derived directly. Undo/redo buttons subscribe to editor transactions, and
 issue modal selection is URL-derived with back navigation and stale-parent
 cleanup checked. The earlier strict production build passed; final-head build
 and dependency review still precede release review/CI and product acceptance.
+
+Prisma/client are updated together to 6.19.3; generation, typecheck and all 26
+behavior checks pass. A fresh full audit reports 41 affected package entries:
+0 critical, 3 high and 38 moderate. The three high entries represent one
+DeepmergeTS recursive-object stack-exhaustion advisory propagated through
+Prisma's config/CLI dependency chain. Its trigger requires recursive in-memory
+objects; plain JSON cannot create that condition. This is not a demonstrated
+request path in this application, and no incompatible major dependency override
+was applied. Source: https://github.com/advisories/GHSA-ggr8-5vv4-36mx
+Tiptap-related moderate findings remain; an editor-major migration is separate
+work and must not be represented as fixed by these patches.
