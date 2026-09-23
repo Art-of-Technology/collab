@@ -7,6 +7,7 @@
     "build": "npx prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
+    "test:security": "node --test tests/security/*.test.cjs",
     "prod": "cross-env NODE_ENV=production next start",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",

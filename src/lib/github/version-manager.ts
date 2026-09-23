@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { PrismaClient, IssueType, VersioningStrategy } from "@prisma/client";
+import { IssueType, VersioningStrategy } from "@prisma/client";
 import semver from "semver";
 
 interface CommitInfo {
@@ -46,7 +46,7 @@ interface RepositoryConfig {
 }
 
 export class VersionManager {
-  private prisma: PrismaClient;
+  private prisma: typeof prisma;
 
   constructor() {
     this.prisma = prisma;

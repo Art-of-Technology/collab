@@ -153,7 +153,7 @@ export async function checkUserPermission(
       where: { id: userId },
       include: {
         workspaceMemberships: {
-          where: { workspaceId },
+          where: { workspaceId, status: true },
           select: { role: true },
         },
         ownedWorkspaces: {
@@ -248,7 +248,7 @@ export async function getUserPermissions(
       where: { id: userId },
       include: {
         workspaceMemberships: {
-          where: { workspaceId },
+          where: { workspaceId, status: true },
           select: { role: true },
         },
         ownedWorkspaces: {
@@ -306,7 +306,7 @@ export async function getUserWorkspaceRole(
       where: { id: userId },
       include: {
         workspaceMemberships: {
-          where: { workspaceId },
+          where: { workspaceId, status: true },
           select: { role: true },
         },
         ownedWorkspaces: {

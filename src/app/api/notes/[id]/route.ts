@@ -28,6 +28,11 @@ export async function GET(
     }
 
     const { id } = await params;
+    const access = await canAccessNote(session.user.id, id);
+    if (!access.canAccess) {
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    }
+
 
     const note = await prisma.note.findFirst({
       where: {
@@ -157,6 +162,11 @@ export async function PATCH(
     }
 
     const { id } = await params;
+    const access = await canAccessNote(session.user.id, id);
+    if (!access.canEdit) {
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    }
+
     const body = await request.json();
     const {
       title,
@@ -481,6 +491,11 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const access = await canAccessNote(session.user.id, id);
+    if (!access.canDelete) {
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    }
+
 
     // Check if note exists and user owns it
     const existingNote = await prisma.note.findFirst({

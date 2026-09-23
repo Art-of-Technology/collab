@@ -11,8 +11,8 @@ export interface FindIssueOptions {
   select?: any;
   /** Specific workspace ID to search in (optional) */
   workspaceId?: string;
-  /** User ID for workspace access scoping (required for issue key searches without workspaceId) */
-  userId?: string;
+  /** Authenticated user ID for workspace access scoping */
+  userId: string;
 }
 
 /**
@@ -24,43 +24,26 @@ export interface FindIssueOptions {
  */
 export async function findIssueByIdOrKey<T = any>(
   idOrKey: string, 
-  options: FindIssueOptions = {}
+  options: FindIssueOptions
 ): Promise<T | null> {
   const { include, select, workspaceId, userId } = options;
 
-  if (isIssueKey(idOrKey)) {
-    // Issue key format - requires workspace scoping
-    const whereClause: any = { issueKey: idOrKey };
-    
-    if (workspaceId) {
-      // If workspaceId is provided, use it directly
-      whereClause.workspaceId = workspaceId;
-    } else if (userId) {
-      // If no workspaceId but userId is provided, scope to user's accessible workspaces
-      whereClause.workspace = {
+  if (!userId || !idOrKey) return null;
+
+  return prisma.issue.findFirst({
+    where: {
+      ...(isIssueKey(idOrKey) ? { issueKey: idOrKey } : { id: idOrKey }),
+      ...(workspaceId && { workspaceId }),
+      workspace: {
         OR: [
           { ownerId: userId },
-          { members: { some: { userId } } }
+          { members: { some: { userId, status: true } } }
         ]
-      };
-    } else {
-      // No workspace scoping - this could be dangerous but we allow it for backward compatibility
-      console.warn(`Finding issue by key "${idOrKey}" without workspace scoping. This may return unexpected results.`);
-    }
-    
-    return prisma.issue.findFirst({ 
-      where: whereClause,
-      ...(include && { include }),
-      ...(select && { select })
-    }) as Promise<T | null>;
-  } else {
-    // Direct ID format - no workspace scoping needed
-    return prisma.issue.findUnique({ 
-      where: { id: idOrKey },
-      ...(include && { include }),
-      ...(select && { select })
-    }) as Promise<T | null>;
-  }
+      }
+    },
+    ...(include && { include }),
+    ...(select && { select })
+  }) as Promise<T | null>;
 }
 
 /**
@@ -104,12 +87,14 @@ export const STANDARD_ISSUE_INCLUDE = {
  * Helper function to check if a user has access to a workspace
  */
 export async function userHasWorkspaceAccess(userId: string, workspaceId: string): Promise<boolean> {
+  if (!userId || !workspaceId) return false;
+
   const workspace = await prisma.workspace.findFirst({
     where: {
       id: workspaceId,
       OR: [
         { ownerId: userId },
-        { members: { some: { userId } } }
+        { members: { some: { userId, status: true } } }
       ]
     }
   });
