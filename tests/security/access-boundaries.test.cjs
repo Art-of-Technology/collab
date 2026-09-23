@@ -472,3 +472,77 @@ test('protected notes cannot publish their content as workspace templates', asyn
     assert.match(response.body.error, /Protected notes/);
   }
 });
+
+test('collection predicates match the single-note read policy across scope and membership', async () => {
+  const { noteAccessWhere } = load('src/lib/secrets/access.ts', {
+    '@/lib/prisma': { prisma }, '@prisma/client': enums,
+  });
+  function matches(row, where) {
+    return Object.entries(where).every(([key, value]) => {
+      if (key === 'AND') return value.every(clause => matches(row, clause));
+      if (key === 'OR') return value.some(clause => matches(row, clause));
+      const actual = row?.[key];
+      if (value === null || typeof value !== 'object') return actual === value;
+      if ('some' in value) return actual?.some(item => matches(item, value.some)) ?? false;
+      if ('in' in value) return value.in.includes(actual);
+      if ('notIn' in value) return !value.notIn.includes(actual);
+      if ('gte' in value) return actual != null && actual >= value.gte;
+      return actual != null && matches(actual, value);
+    });
+  }
+  for (const scope of Object.values(enums.NoteScope))
+  for (const role of [null, 'MEMBER', 'ADMIN', 'OWNER'])
+  for (const isRestricted of [false, true])
+  for (const isEncrypted of [false, true])
+  for (const authorId of ['alice', 'bob'])
+  for (const shared of [false, true])
+  for (const expired of [false, true])
+  for (const projectFallback of [false, true]) {
+    const workspace = { ownerId: role === 'OWNER' ? 'alice' : 'bob', members: [
+      { userId: 'alice', status: !!role, role: role || 'ADMIN' },
+    ] };
+    const row = { ...note, scope, isRestricted, isEncrypted, authorId,
+      workspaceId: projectFallback ? null : 'joined',
+      projectId: projectFallback ? 'project' : null,
+      workspace: projectFallback ? null : workspace,
+      project: projectFallback ? { workspace } : null,
+      sharedWith: shared ? [{ userId: 'alice', permission: 'EDIT' }] : [],
+      expiresAt: expired ? new Date(0) : null,
+    };
+    const expected = (await checkNoteAccess('alice', row, role ? { role } : null)).canAccess;
+    assert.equal(matches(row, noteAccessWhere('alice')), expected, JSON.stringify({ scope, role, isRestricted, isEncrypted, authorId, shared, expired, projectFallback }));
+  }
+  assert.equal(matches(note, noteAccessWhere('')), false);
+});
+
+test('all Notes collections constrain both result reads and search counts', async () => {
+  for (const [file, query] of [
+    ['route.ts', 'scope=WORKSPACE&workspace=foreign'],
+    ['route.ts', 'sharedWithMe=true'],
+    ['pinned/route.ts', 'workspaceId=foreign'],
+    ['search/route.ts', 'workspaceId=foreign&q=secret'],
+    ['shared-with-me/route.ts', 'workspace=foreign'],
+  ]) {
+    let reads = 0;
+    const boundary = { id: { in: [] } };
+    const check = ({ where }) => {
+      reads++;
+      assert.ok(where.AND.includes(boundary), `${file} omitted its access boundary`);
+    };
+    const { GET } = load(`src/app/api/notes/${file}`, {
+      'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
+      'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+      '@/app/api/auth/[...nextauth]/route': { authOptions: {} },
+      '@/lib/prisma': { prisma: { note: {
+        findMany: async args => { check(args); return []; },
+        count: async args => { check(args); return 0; },
+      } } },
+      '@/lib/secrets/access': { noteAccessWhere: () => boundary },
+      '@/lib/secrets/crypto': {}, '@/lib/versioning': {}, '@/lib/event-bus': {},
+      '@prisma/client': enums,
+    }, { URL, console });
+    const response = await GET(new Request(`https://example.test/notes?${query}`));
+    assert.equal(response.status, 200, file);
+    assert.equal(reads, file === 'search/route.ts' ? 2 : 1);
+  }
+});

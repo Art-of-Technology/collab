@@ -6,7 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { NoteScope, NoteSharePermission, NoteActivityAction } from '@prisma/client';
+import { NoteScope, NoteSharePermission, NoteActivityAction, Prisma } from '@prisma/client';
 
 interface NoteWithAccess {
   id: string;
@@ -207,6 +207,41 @@ export async function checkNoteAccess(
         reason: 'Unknown note scope'
       };
   }
+}
+
+/** Apply the same read boundary to collections before content or counts are fetched. */
+export function noteAccessWhere(userId: string): Prisma.NoteWhereInput {
+  if (!userId) return { id: { in: [] } };
+  const membership: Prisma.WorkspaceWhereInput = {
+    OR: [{ ownerId: userId }, { members: { some: { userId, status: true } } }]
+  };
+  const admin: Prisma.WorkspaceWhereInput = {
+    OR: [{ ownerId: userId }, { members: { some: { userId, status: true, role: { in: ['ADMIN', 'OWNER'] } } } }]
+  };
+  // A direct workspace takes precedence over a project's workspace, as in canAccessNote.
+  const inWorkspace = (where: Prisma.WorkspaceWhereInput): Prisma.NoteWhereInput => ({
+    OR: [{ workspace: where }, { workspaceId: null, project: { workspace: where } }]
+  });
+  return {
+    AND: [
+      { OR: [
+        inWorkspace(membership),
+        { scope: { notIn: [NoteScope.PROJECT, NoteScope.WORKSPACE] }, OR: [
+          { isEncrypted: false, isRestricted: false },
+          { workspaceId: null, projectId: null }
+        ] }
+      ] },
+      { OR: [{ authorId: userId }, { expiresAt: null }, { expiresAt: { gte: new Date() } }] },
+      { OR: [
+        { authorId: userId },
+        { sharedWith: { some: { userId } } },
+        { isRestricted: false, OR: [
+          inWorkspace(admin),
+          { scope: { in: [NoteScope.PROJECT, NoteScope.WORKSPACE, NoteScope.PUBLIC] } }
+        ] }
+      ] }
+    ]
+  };
 }
 
 /**

@@ -1,3 +1,4 @@
+import { noteAccessWhere } from '@/lib/secrets/access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -128,11 +129,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Get total count for pagination
-    const total = await prisma.note.count({ where });
+    const total = await prisma.note.count({ where: { AND: [where, noteAccessWhere(session.user.id)] } });
 
     // Fetch matching notes
     const notes = await prisma.note.findMany({
-      where,
+      where: { AND: [where, noteAccessWhere(session.user.id)] },
       include: {
         author: {
           select: {

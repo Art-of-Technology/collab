@@ -127,3 +127,11 @@ profile membership escalation, protected template publication, webhook origin
 and redirect enforcement, validation wrappers and retained follow operations.
 Notes collection/search/template-use authorization and other remaining audit
 surfaces still require review. No push, PR, deployment or live configuration change.
+
+Notes list, pinned, search and shared collections now compose a shared database
+read predicate before fetching content or computing counts. A policy parity
+check covers scopes, active/revoked membership, ownership, restriction,
+encryption, shares, expiration and project workspace fallback. Handler checks
+verify both ordinary and shared list paths and search counts use the predicate.
+Nineteen security checks pass. Latest full typecheck has 113 diagnostics, with
+none in the updated Notes access/collection code; lint is still unpassed.
