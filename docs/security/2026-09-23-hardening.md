@@ -58,6 +58,37 @@ without new error categories. The upgraded build compiles but route collection
 exposed the missing bcrypt binary from the script-disabled install; native
 password dependency validation and the subsequent build remain in progress.
 
+## Dependency and build verification
+
+Next 16.3.6, React 19.3.0, NextAuth 4.24.15, DOMPurify 3.4.16,
+isomorphic-dompurify 2.36.0, bcrypt 6.0.0 and Nodemailer 10.0.10 are installed.
+Compatible transitive updates are locked. Native hashing/comparison and
+stream-only email rendering pass; no email was sent. The production build
+completed with a dummy localhost database URL and without AI credentials.
+
+The build still ignores TypeScript errors under the inherited configuration;
+this is not a release gate pass. Generated Next route types exposed 36 legacy
+parameter-signature failures in addition to remaining application diagnostics.
+Lint now runs through the flat Next config and its code findings are being fixed.
+The latest full dependency audit reports 0 critical, 4 high and 38 moderate
+entries; remaining high entries are in Prisma's CLI/config dependency chain.
+
+## Outbound webhook boundary
+
+Delivery requires `COLLAB_WEBHOOK_ALLOWED_ORIGINS`, a comma-separated list of
+exact HTTPS origins (scheme, canonical hostname and port). Unset or invalid
+configuration denies delivery. Credentials, paths, queries and fragments are
+not accepted in configured origins; delivery URLs reject userinfo/fragments.
+Redirect responses are not followed or retried. Existing webhook records stay
+intact. Tests cover absent configuration, lookalike domains, alternate ports,
+invalid origins and redirect attempts.
+
+This is a trust boundary, not general protection for arbitrary destinations:
+operators must control the allowed services, DNS and destination addresses.
+DNS rebinding and internal-target risks remain if an untrusted origin is
+allowed. Do not populate production origins or deploy until current consumers
+have been inventoried with Network Doctor. No production allowlist was set.
+
 ## Approved product direction
 
 Forge owns project issues and durable context. Collab projects this state and
