@@ -6,11 +6,14 @@ import { getServerSession } from 'next-auth';
 import { extractMentionUserIds } from '@/utils/mentions';
 import { NotificationService, NotificationType } from '@/lib/notification-service';
 import { sanitizeHtmlToPlainText } from '@/lib/html-sanitizer';
+import { requirePostAccess } from '@/lib/post-access';
 
 /**
  * Get comments for a post
  */
 export async function getComments(postId: string) {
+  await requirePostAccess(postId);
+
   // First, get all top-level comments (those without a parent)
   const topLevelComments = await prisma.comment.findMany({
     where: {

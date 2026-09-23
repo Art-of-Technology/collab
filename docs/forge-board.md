@@ -38,10 +38,12 @@ Reads verify repository ID before pagination, reject redirects, use a shared
 15-second deadline and 2 MiB per-response limit, and cap the view at 1,000
 records with an explicit partial-results warning. Failed refreshes retain
 previous data with a stale warning; initial failures never resemble emptiness.
+Descriptions and task metadata are projected in full within that response
+limit; oversized responses fail explicitly instead of returning shortened data.
 
 ## Validation
 
-Run `node --test tests/security/forge-*.test.cjs` for seven executable checks
+Run `node --test tests/security/forge-*.test.cjs` for executable checks
 covering projection, tenant denial, configuration and bounded upstream reads.
 Targeted ESLint and nonincremental TypeScript also passed for this slice.
 
