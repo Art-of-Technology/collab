@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { noteAccessWhere } from "@/lib/secrets/access";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
         id: workspaceId,
         OR: [
           { ownerId: currentUser.id },
-          { members: { some: { userId: currentUser.id } } }
+          { members: { some: { userId: currentUser.id, status: true } } }
         ]
       },
       select: { id: true, slug: true }
@@ -226,6 +227,7 @@ export async function GET(req: NextRequest) {
     // Search Notes
     const notes = await prisma.note.findMany({
       where: {
+        AND: [noteAccessWhere(currentUser.id)],
         workspaceId,
         OR: [
           { title: { contains: query, mode: 'insensitive' } },

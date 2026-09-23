@@ -23,6 +23,24 @@ function load(file, dependencies = {}, globals = {}) {
   return exports;
 }
 
+function matches(row, where) {
+  return Object.entries(where).every(([key, value]) => {
+    if (key === 'AND') return value.every(clause => matches(row, clause));
+    if (key === 'OR') return value.some(clause => matches(row, clause));
+    const actual = row?.[key];
+    if (value === undefined) return true;
+    if (value === null || typeof value !== 'object') return actual === value;
+    if (Object.prototype.toString.call(value) === '[object Date]') return actual?.getTime() === value.getTime();
+    if ('some' in value) return actual?.some(item => matches(item, value.some)) ?? false;
+    if ('in' in value) return value.in.includes(actual);
+    if ('notIn' in value) return !value.notIn.includes(actual);
+    if ('not' in value) return actual !== value.not;
+    if ('contains' in value) return typeof actual === 'string' && actual.toLowerCase().includes(value.contains.toLowerCase());
+    if ('gte' in value) return actual != null && actual >= value.gte;
+    return actual != null && matches(actual, value);
+  });
+}
+
 const workspaces = [
   { id: 'own', ownerId: 'alice', members: [] },
   { id: 'joined', ownerId: 'bob', members: [{ userId: 'alice', status: true }] },
@@ -253,11 +271,13 @@ test('issue mutations reject mass assignment, foreign relations and read-only us
   let writes = 0;
   const existing = { id: 'issue', workspaceId: 'own', projectId: 'project', reporterId: 'alice', title: 'Before' };
   const db = {
-    issue: { findFirst: async () => null, findUnique: async () => existing, delete: async () => { writes++; } },
-    projectStatus: { findFirst: async () => null },
+    issue: { findFirst: async ({ where }) => where.id === existing.id ? existing : null, findUnique: async () => existing, delete: async () => { writes++; },
+      update: async ({ data }) => { writes++; return { ...existing, ...data }; } },
+    project: { findFirst: async () => null },
+    projectStatus: { findMany: async () => [] },
     taskLabel: { count: async () => 0 },
     issueFollower: { findMany: async () => [] }, projectFollower: { findMany: async () => [] },
-    $transaction: async fn => fn({ issue: { update: async ({ data }) => { writes++; return { ...existing, ...data }; } } }),
+    $transaction: async fn => fn(db),
   };
   const permissionModule = load('src/lib/permissions.ts', { './prisma': { prisma: {} } });
   const dependencies = {
@@ -283,7 +303,7 @@ test('issue mutations reject mass assignment, foreign relations and read-only us
   const route = load('src/app/api/issues/[issueId]/route.ts', dependencies, { URL, console });
   const context = { params: Promise.resolve({ issueId: 'issue' }) };
   for (const body of [
-    { workspaceId: 'foreign' }, { projectId: 'foreign' }, { id: 'new-id' },
+    {}, { workspaceId: 'foreign' }, { projectId: 'foreign' }, { id: 'new-id' },
     { workspace: { connect: { id: 'foreign' } } }, { createdAt: '2020-01-01' },
     { title: 42 }, { priority: 'root' }, { assigneeId: 'outsider' },
     { reporterId: 'outsider' }, { parentId: 'foreign' }, { labels: ['foreign'] }, { statusId: 'foreign' },
@@ -477,19 +497,6 @@ test('collection predicates match the single-note read policy across scope and m
   const { noteAccessWhere } = load('src/lib/secrets/access.ts', {
     '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
   });
-  function matches(row, where) {
-    return Object.entries(where).every(([key, value]) => {
-      if (key === 'AND') return value.every(clause => matches(row, clause));
-      if (key === 'OR') return value.some(clause => matches(row, clause));
-      const actual = row?.[key];
-      if (value === null || typeof value !== 'object') return actual === value;
-      if ('some' in value) return actual?.some(item => matches(item, value.some)) ?? false;
-      if ('in' in value) return value.in.includes(actual);
-      if ('notIn' in value) return !value.notIn.includes(actual);
-      if ('gte' in value) return actual != null && actual >= value.gte;
-      return actual != null && matches(actual, value);
-    });
-  }
   for (const scope of Object.values(enums.NoteScope))
   for (const role of [null, 'MEMBER', 'ADMIN', 'OWNER'])
   for (const isRestricted of [false, true])
@@ -711,4 +718,262 @@ test('issue modal state follows URL and navigation clears stale parent context',
   assert.equal(new URL(pushed, 'https://example.test').searchParams.has('selectedIssue'), false);
   params = new URLSearchParams('selectedIssue=back');
   assert.equal(useIssueModalUrlState().selectedIssueId, 'back');
+});
+
+test('review: alternate Notes handlers filter content and metadata with the real access policy', async () => {
+  const workspace = { id: 'joined', slug: 'joined', name: 'Workspace', ownerId: 'bob',
+    members: [{ userId: 'alice', status: true, role: 'MEMBER' }] };
+  const rows = [
+    { id: 'restricted', scope: 'WORKSPACE', isRestricted: true },
+    { id: 'restricted-project', scope: 'PROJECT', isRestricted: true },
+    { id: 'personal', scope: 'PERSONAL' },
+    { id: 'expired', scope: 'WORKSPACE', expiresAt: new Date(0) },
+    { id: 'visible', scope: 'WORKSPACE' },
+    { id: 'shared', scope: 'PROJECT', isRestricted: true, sharedWith: [{ userId: 'alice', permission: 'VIEW' }] },
+    { id: 'owned', scope: 'PROJECT', authorId: 'alice', isRestricted: true },
+  ].map(row => ({ ...note, isEncrypted: false, title: 'matching-text', content: 'matching-text secret ' + row.id,
+    createdAt: new Date(), updatedAt: new Date(), tags: [], comments: [], author: { name: 'Author' },
+    workspace, projectId: 'project', project: { workspace }, ...row }));
+  const access = load('src/lib/secrets/access.ts', {
+    '@/lib/prisma': { prisma: {} }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
+  });
+  const db = {
+    workspace: { findFirst: async ({ where }) => matchesWorkspace(workspace, where) ? workspace : null },
+    workspaceMember: { findFirst: async () => workspace.members[0].status ? { userId: 'alice' } : null },
+    note: {
+      findMany: async ({ where }) => rows.filter(row => matches(row, where)),
+      findFirst: async ({ where }) => rows.find(row => matches(row, where)) ?? null,
+    },
+    project: { findMany: async () => [], findUnique: async () => ({ id: 'project', workspaceId: 'joined' }) },
+    issue: { findMany: async () => [], groupBy: async () => [], count: async () => 0 },
+    repository: { findFirst: async () => null },
+  };
+  for (const model of ['user', 'view', 'post', 'tag', 'projectStatus', 'featureRequest']) {
+    db[model] = { findMany: async () => [] };
+  }
+  const dependencies = {
+    'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
+    'next-auth': { getServerSession: async () => ({ user: { id: 'alice', email: 'alice@example.test' } }) },
+    'next-auth/next': { getServerSession: async () => ({ user: { id: 'alice', email: 'alice@example.test' } }) },
+    '@/lib/session': { getCurrentUser: async () => ({ id: 'alice' }) },
+    '@/app/api/auth/[...nextauth]/route': { authOptions: {} }, '@/lib/auth': { authConfig: {} },
+    '@/lib/prisma': { prisma: db }, '@/lib/secrets/access': access,
+  };
+  const search = load('src/app/api/search/route.ts', dependencies, { URL, console });
+  const summary = load('src/app/api/projects/[projectId]/summary/route.ts', dependencies, { console });
+  const preview = load('src/app/api/link-preview/route.ts', dependencies, { URL, console });
+  const allowed = ['owned', 'shared', 'visible'];
+  const searchResponse = await search.GET(new Request('https://example.test/api/search?workspace=joined&q=matching-text'));
+  assert.equal(searchResponse.status, 200);
+  assert.deepEqual(Array.from(searchResponse.body, result => result.id).sort(), allowed);
+  const summaryResponse = await summary.GET({}, { params: Promise.resolve({ projectId: 'project' }) });
+  assert.equal(summaryResponse.status, 200);
+  assert.deepEqual(Array.from(summaryResponse.body.notes, result => result.id).sort(), allowed);
+  for (const row of rows) {
+    const response = await preview.POST(new Request('https://example.test/api/link-preview', {
+      method: 'POST', body: JSON.stringify({ url: `https://example.test/joined/notes/${row.id}` }),
+    }));
+    assert.equal(response.status, 200);
+    assert.equal(response.body.metadata.notFound === true, !allowed.includes(row.id), row.id);
+    if (!allowed.includes(row.id)) assert.equal(response.body.title, 'Not Found');
+  }
+  workspace.members[0].status = false;
+  assert.equal((await search.GET(new Request('https://example.test/api/search?workspace=joined&q=matching-text'))).status, 403);
+  assert.equal((await summary.GET({}, { params: Promise.resolve({ projectId: 'project' }) })).status, 403);
+  const revokedPreview = await preview.POST(new Request('https://example.test/api/link-preview', {
+    method: 'POST', body: JSON.stringify({ url: 'https://example.test/joined/notes/owned' }),
+  }));
+  assert.equal(revokedPreview.body.metadata.notFound, true);
+});
+
+test('review: favorite PATCH preserves concurrent visibility and explicit scope updates still work', async () => {
+  let state;
+  const payloads = [];
+  const route = load('src/app/api/notes/[id]/route.ts', {
+    'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
+    'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+    '@/app/api/auth/[...nextauth]/route': { authOptions: {} }, '@prisma/client': enums,
+    '@/lib/prisma': { prisma: { note: {
+      findFirst: async () => {
+        const snapshot = { ...state };
+        state.scope = 'PERSONAL';
+        return snapshot;
+      },
+      findUnique: async () => ({ versioningEnabled: false }),
+      update: async ({ data }) => { payloads.push(data); Object.assign(state, data); return state; },
+    } } },
+    '@/lib/secrets/access': { canAccessNote: async () => ({ canEdit: true }), canWriteNoteDestination: async () => true },
+    '@/lib/secrets/crypto': { isSecretNoteType: () => false }, '@/lib/versioning': {}, '@/lib/event-bus': {},
+  }, { console });
+  for (const [body, expectedScope] of [
+    [{ isFavorite: true }, 'PERSONAL'], [{ scope: 'WORKSPACE' }, 'WORKSPACE'],
+    [{ isPublic: true }, 'WORKSPACE'], [{ isPublic: false }, 'PERSONAL'],
+  ]) {
+    state = { ...note, authorId: 'alice', isEncrypted: false };
+    const response = await route.PATCH(new Request('https://example.test/note', {
+      method: 'PATCH', body: JSON.stringify(body),
+    }), { params: Promise.resolve({ id: 'note' }) });
+    assert.equal(response.status, 200);
+    assert.equal(state.scope, expectedScope);
+  }
+  assert.equal(Object.hasOwn(payloads[0], 'scope'), false);
+});
+
+test('review: issue field grants and atomic same-workspace project moves preserve rights and relations', async () => {
+  const client = require('@prisma/client');
+  const permissionModule = load('src/lib/permissions.ts', { './prisma': { prisma: {} } });
+  const defaults = load('src/lib/role-permission-defaults.ts', { '@prisma/client': client, '@/lib/prisma': { prisma: {} } });
+  let grants;
+  let active;
+  let state;
+  let writes;
+  let assignments;
+  const statuses = [
+    { id: 'old-todo', projectId: 'source', name: 'todo', displayName: 'To Do', isActive: true },
+    { id: 'old-progress', projectId: 'source', name: 'in_progress', displayName: 'In Progress', isActive: true },
+    { id: 'new-todo', projectId: 'destination', name: 'todo', displayName: 'To Do', isActive: true },
+    { id: 'new-progress', projectId: 'destination', name: 'in_progress', displayName: 'In Progress', isActive: true },
+    { id: 'inactive', projectId: 'destination', name: 'closed', displayName: 'Closed', isActive: false },
+  ];
+  const projects = [{ id: 'source', workspaceId: 'joined' }, { id: 'destination', workspaceId: 'joined' },
+    { id: 'no-status', workspaceId: 'joined' }, { id: 'foreign', workspaceId: 'foreign' }];
+  const issueRows = () => [state, { id: 'parent', projectId: 'source', workspaceId: 'joined' }];
+  const db = {
+    issue: {
+      findFirst: async ({ where }) => issueRows().find(row => matches(row, where)) ?? null,
+      update: async ({ data }) => { writes++; Object.assign(state, data); return { ...state }; },
+    },
+    project: { findFirst: async ({ where }) => projects.find(row => matches(row, where)) ?? null },
+    projectStatus: {
+      findFirst: async ({ where }) => statuses.find(row => matches(row, where)) ?? null,
+      findMany: async ({ where }) => statuses.filter(row => matches(row, where)),
+    },
+    taskLabel: { count: async ({ where }) => [{ id: 'label', workspaceId: 'joined' }].filter(row => matches(row, where)).length },
+    issueAssignee: { upsert: async () => { assignments++; } },
+    user: { findUnique: async ({ where }) => ({ id: where.id, name: where.id }) },
+    issueFollower: { findMany: async () => [] }, projectFollower: { findMany: async () => [] },
+    $transaction: async (fn, options) => {
+      assert.equal(options.isolationLevel, 'Serializable');
+      const before = structuredClone(state);
+      const result = await fn(db);
+      if (result.error) assert.deepEqual(state, before);
+      return result;
+    },
+  };
+  const route = load('src/app/api/issues/[issueId]/route.ts', {
+    zod: require('zod'), '@prisma/client': client,
+    'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
+    '@/lib/prisma': { prisma: db }, '@/lib/session': { getCurrentUser: async () => ({ id: 'alice' }) },
+    '@/lib/permissions': { ...permissionModule,
+      checkUserPermissions: async (_user, _workspace, requested) => Object.fromEntries(requested.map(p => [p, { hasPermission: grants.includes(p) }])) },
+    '@/lib/issue-finder': { STANDARD_ISSUE_INCLUDE: {},
+      findIssueByIdOrKey: async () => ({ ...state }),
+      userHasWorkspaceAccess: async (user, workspace) => active && workspace === 'joined' && ['alice', 'bob'].includes(user) },
+    '@/lib/board-item-activity-service': { compareObjects: () => [], trackStatusChange: async () => {}, trackAssignment: async () => {} },
+    '@/lib/redis': { publishEvent: async () => {} }, '@/utils/mentions': { extractMentionUserIds: () => [] },
+    '@/lib/notification-service': {}, '@/lib/event-bus': { emitIssueUpdated: async () => {} },
+    '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
+  }, { URL, console });
+  function reset() {
+    state = { id: 'issue', workspaceId: 'joined', projectId: 'source', reporterId: 'bob', assigneeId: 'alice',
+      statusId: 'old-todo', statusValue: 'todo', status: 'todo', title: 'Keep', issueKey: 'SOURCE-1',
+      updatedAt: new Date('2026-09-23T00:00:00Z'), parentId: null, labels: [{ id: 'label', workspaceId: 'joined' }],
+      children: [], branches: [], commits: [], pullRequests: [], versionIssues: [], description: 'Keep content' };
+    active = true; writes = 0; assignments = 0;
+    grants = defaults.defaultRolePermissions.DEVELOPER;
+  }
+  const put = body => route.PUT(new Request('https://example.test/issues/issue', {
+    method: 'PUT', body: JSON.stringify(body),
+  }), { params: Promise.resolve({ issueId: 'issue' }) });
+  for (const body of [{ status: 'in_progress', statusValue: 'in_progress' }, { statusId: 'old-progress' }, { assigneeId: 'bob' }]) {
+    reset();
+    const response = await put(body);
+    assert.equal(response.status, 200, JSON.stringify(body));
+    assert.equal(writes, 1);
+    assert.equal(state.title, 'Keep');
+    if (body.assigneeId) { assert.equal(state.assigneeId, 'bob'); assert.equal(assignments, 1); }
+    else { assert.equal(state.statusId, 'old-progress'); assert.equal(state.status, 'in_progress'); }
+  }
+  for (const body of [{ title: 'Denied' }, { status: 'in_progress', title: 'Denied' }, { status: 'in_progress', position: 5 }, { projectId: 'destination' }]) {
+    reset(); assert.equal((await put(body)).status, 403, JSON.stringify(body)); assert.equal(writes, 0);
+  }
+  reset(); grants = ['CHANGE_TASK_STATUS'];
+  assert.equal((await put({ status: 'in_progress', assigneeId: 'bob' })).status, 403);
+  assert.equal(writes, 0);
+  reset(); active = false;
+  assert.equal((await put({ status: 'in_progress' })).status, 403); assert.equal(writes, 0);
+  reset(); state.workspaceId = 'foreign';
+  assert.equal((await put({ status: 'in_progress' })).status, 403); assert.equal(writes, 0);
+  reset(); grants = ['ASSIGN_TASK'];
+  assert.equal((await put({ assigneeId: 'outsider' })).status, 400); assert.equal(writes, 0);
+  reset(); state.reporterId = 'alice';
+  assert.equal((await put({ title: 'Own edit' })).status, 200);
+  reset(); grants = ['EDIT_ANY_TASK'];
+  const beforeMove = structuredClone(state);
+  assert.equal((await put({ projectId: 'destination' })).status, 200);
+  assert.equal(state.projectId, 'destination'); assert.equal(state.statusId, 'new-todo');
+  for (const field of ['labels', 'parentId', 'issueKey', 'description', 'assigneeId', 'reporterId', 'workspaceId']) {
+    assert.deepEqual(state[field], beforeMove[field], field);
+  }
+  for (const body of [
+    { projectId: 'foreign' }, { projectId: 'missing' }, { projectId: 'no-status' },
+    { projectId: 'destination', labels: ['foreign'] }, { projectId: 'destination', parentId: 'parent' },
+    { projectId: 'destination', statusId: 'old-todo' }, { projectId: 'destination', statusId: 'inactive' },
+    { status: 'in_progress', statusValue: 'todo' }, { statusId: 'old-todo', status: 'in_progress' },
+  ]) {
+    reset(); grants = ['EDIT_ANY_TASK'];
+    assert.equal((await put(body)).status, 400, JSON.stringify(body)); assert.equal(writes, 0);
+  }
+  for (const relations of [
+    { parentId: 'parent' }, { children: [{ projectId: 'source' }] },
+    { labels: [{ workspaceId: 'foreign' }] }, { branches: [{ repository: { projectId: 'source' } }] },
+    { commits: [{ repository: { projectId: 'source' } }] }, { pullRequests: [{ repository: { projectId: 'source' } }] },
+    { versionIssues: [{ version: { repository: { projectId: 'source' } } }] },
+  ]) {
+    reset(); grants = ['EDIT_ANY_TASK']; Object.assign(state, relations);
+    assert.equal((await put({ projectId: 'destination' })).status, 400, JSON.stringify(relations));
+    assert.equal(writes, 0);
+  }
+  reset(); grants = ['EDIT_ANY_TASK']; state.parentId = 'parent';
+  assert.equal((await put({ projectId: 'destination', parentId: null, statusId: 'new-progress' })).status, 200);
+  assert.equal(state.parentId, null); assert.equal(state.statusId, 'new-progress');
+});
+
+test('review: encryption roundtrip and generated Prisma Bytes assignments retain concrete allocation types', async () => {
+  const env = { APP_TOKENS_KEY: '0123456789abcdef0123456789abcdef' };
+  const crypto = load('src/lib/apps/crypto.ts', {
+    crypto: require('node:crypto'), util: require('node:util'), bcrypt: { default: require('bcrypt') },
+  }, { Buffer, process: { env }, console: { error() {} } });
+  const plaintext = 'dummy-token-✓';
+  const encrypted = await crypto.encryptToken(plaintext);
+  assert.ok(Buffer.isBuffer(encrypted));
+  assert.ok(encrypted.buffer instanceof ArrayBuffer);
+  assert.equal(await crypto.decryptToken(encrypted), plaintext);
+  assert.equal(await crypto.decrypt(await crypto.encrypt(plaintext)), plaintext);
+  const newKey = 'abcdef0123456789abcdef0123456789';
+  const rotated = await crypto.rotateTokenEncryption(encrypted, env.APP_TOKENS_KEY, newKey);
+  env.APP_TOKENS_KEY = newKey;
+  assert.equal(await crypto.decryptToken(rotated), plaintext);
+  const tampered = Buffer.from(rotated); tampered[tampered.length - 1] ^= 1;
+  await assert.rejects(crypto.decryptToken(tampered), /Failed to decrypt token/);
+
+  const file = resolve('tests/security/prisma-bytes-contract.ts');
+  const contract = `import { Prisma } from '@prisma/client';
+    import { encryptToken, encrypt, rotateTokenEncryption } from '../../src/lib/apps/crypto';
+    async function check() {
+      const secret: Prisma.AppOAuthClientCreateInput['clientSecret'] = await encryptToken('dummy');
+      const webhook: Prisma.AppWebhookCreateInput['secretEnc'] = await encrypt('dummy');
+      const rotated: Prisma.AppOAuthClientCreateInput['clientSecret'] = await rotateTokenEncryption(Buffer.alloc(64), '', '');
+      return [secret, webhook, rotated];
+    }`;
+  const options = { noEmit: true, incremental: false, strict: true, skipLibCheck: true,
+    esModuleInterop: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS };
+  const host = ts.createCompilerHost(options);
+  const read = host.readFile;
+  host.readFile = name => name === file ? contract : read(name);
+  const program = ts.createProgram([file], options, host);
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+  assert.equal(diagnostics.length, 0, ts.formatDiagnosticsWithColorAndContext(diagnostics, {
+    getCanonicalFileName: name => name, getCurrentDirectory: () => process.cwd(), getNewLine: () => '\n',
+  }));
 });

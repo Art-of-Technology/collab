@@ -176,8 +176,11 @@ issue modal selection is URL-derived with back navigation and stale-parent
 cleanup checked. The earlier strict production build passed; final-head build
 and dependency review still precede release review/CI and product acceptance.
 
-Prisma/client are updated together to 6.19.3; generation, typecheck and all 26
-behavior checks pass. A fresh full audit reports 41 affected package entries:
+Prisma/client are updated together to 6.19.3; generation and all 26 behavior
+checks passed. The earlier incremental typecheck result was stale: the final-head
+strict production build failed with six Prisma Bytes assignment errors
+(`Buffer<ArrayBufferLike>` versus `Uint8Array<ArrayBuffer>`). The earlier build
+pass does not establish a passing final dependency head. A fresh full audit reports 41 affected package entries:
 0 critical, 3 high and 38 moderate. The three high entries represent one
 DeepmergeTS recursive-object stack-exhaustion advisory propagated through
 Prisma's config/CLI dependency chain. Its trigger requires recursive in-memory
@@ -186,3 +189,29 @@ request path in this application, and no incompatible major dependency override
 was applied. Source: https://github.com/advisories/GHSA-ggr8-5vv4-36mx
 Tiptap-related moderate findings remain; an editor-major migration is separate
 work and must not be represented as fixed by these patches.
+
+
+## Review corrections
+
+Universal search, project summaries and note link previews now apply the shared
+Notes read predicate. Favorite-only edits leave scope unchanged. Issue edits
+preserve operation-specific status and assignment grants, while mixed payloads
+require permission for every field. Same-workspace project moves validate the
+destination, status and retained relations before writing in one transaction;
+incompatible relations fail without clearing data. Encryption helpers retain
+the concrete ArrayBuffer allocation type, including the approval consumer.
+
+The outer executor still owns Prisma generation, fresh nonincremental typecheck,
+lint, security test and strict production build gates. These fixes do not claim
+those gates passed or authorize deployment.
+
+Review-phase verification: Prisma 6.19.3 regenerated locally, then six focused
+checks passed using `node --test --test-name-pattern='review:|issue mutations|collection predicates' tests/security/access-boundaries.test.cjs`.
+These execute the repaired handlers, reproduce the visibility race, exercise
+operation-specific rights and project-move failures, and run real encryption
+roundtrip/tamper checks plus a fresh TypeScript/Prisma Bytes contract compilation.
+The issue tests use an in-memory transaction adapter, not a live database;
+this does not establish PostgreSQL concurrency behavior. Full validation remains
+with the outer executor. Dependency setup used the existing lockfile with
+`npm ci --ignore-scripts --legacy-peer-deps` because api-scanner's Next peer
+range excludes the locked Next major; no dependency versions were changed.

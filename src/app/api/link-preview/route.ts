@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -45,20 +46,7 @@ export async function POST(req: NextRequest) {
                 { id: workspaceIdentifier }
               ],
             },
-            OR: [
-              // Note is visible to workspace or public
-              { scope: { in: ['WORKSPACE', 'PUBLIC'] } },
-              // Or user is a member of the workspace
-              {
-                workspace: {
-                  members: {
-                    some: {
-                      userId: session.user.id,
-                    },
-                  },
-                },
-              },
-            ],
+            AND: [noteAccessWhere(session.user.id)],
           },
           select: {
             id: true,

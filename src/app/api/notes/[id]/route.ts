@@ -353,7 +353,7 @@ export async function PATCH(
         ...(isFavorite !== undefined && { isFavorite }),
         // Only owner can update these fields
         ...(isOwner && type !== undefined && { type }),
-        ...(isOwner && finalScope !== undefined && { scope: finalScope }),
+        ...(isOwner && (scope !== undefined || isPublic !== undefined) && { scope: finalScope }),
         ...(isOwner && projectId !== undefined && {
           project: projectId ? { connect: { id: projectId } } : { disconnect: true }
         }),
@@ -441,7 +441,7 @@ export async function PATCH(
           projectId: note.projectId,
           authorId: note.authorId,
         },
-        { title, content, scope: finalScope, isAiContext, aiContextPriority },
+        { title, content, ...(isOwner && (scope !== undefined || isPublic !== undefined) && { scope: finalScope }), isAiContext, aiContextPriority },
         {
           workspaceId: note.workspace.id,
           workspaceName: note.workspace.name,
