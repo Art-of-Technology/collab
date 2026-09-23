@@ -14,6 +14,10 @@ const bindingSchema = z.object({
   slackWorkspaceId: z.string().regex(/^T[A-Z0-9]+$/),
   slackChannelId: z.string().regex(/^[CG][A-Z0-9]+$/),
   readTokenFile: z.string().startsWith('/').max(1024),
+  memory: z.object({
+    branch: z.string().regex(/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}$/).refine(value => !value.includes('..') && !value.endsWith('.')),
+    writeTokenFile: z.string().startsWith('/').max(1024),
+  }).strict().optional(),
 }).strict();
 const configSchema = z.object({
   origin: z.string().url().refine(value => {
@@ -43,7 +47,7 @@ export async function readForgeBindings(): Promise<ForgeBinding[]> {
   return config.bindings.map(binding => ({ ...binding, origin: new URL(config.origin).origin }));
 }
 
-async function boundedJson(response: Response): Promise<unknown> {
+export async function boundedJson(response: Response): Promise<unknown> {
   const maxBytes = 2 * 1024 * 1024;
   if (!response.ok || !response.body) throw new Error('Could not read project issues');
   if (Number(response.headers.get('content-length')) > maxBytes) {

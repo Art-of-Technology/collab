@@ -117,6 +117,9 @@ export default async function ProjectNotesPage({ params }: ProjectNotesPageProps
       />
 
       <Suspense fallback={<NotesListSkeleton />}>
+        <Link className="inline-block my-4 text-sm underline" href={`/${workspaceSlugOrId}/projects/${projectSlug}/notes/memory`}>
+          Approved project memory
+        </Link>
         <ProjectNotesList
           projectId={project.id}
           workspaceSlug={workspace.slug}
