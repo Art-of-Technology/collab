@@ -3,6 +3,7 @@
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 
 /**
  * Get the current user profile
@@ -133,6 +134,9 @@ export async function updateUserProfile(
   
   // If a workspace is provided, update WorkspaceMember (workspace-scoped profile)
   if (workspaceId) {
+    if (!await userHasWorkspaceAccess(currentUser.id, workspaceId)) {
+      throw new Error('Workspace access required');
+    }
     const updatedMember = await prisma.workspaceMember.upsert({
       where: {
         userId_workspaceId: {

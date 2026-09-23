@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { getNoteAuditLog } from '@/lib/secrets/access';
+import { canAccessNote, getNoteAuditLog } from '@/lib/secrets/access';
 
 export async function GET(
   request: NextRequest,
@@ -23,6 +23,11 @@ export async function GET(
     }
 
     const { id: noteId } = await params;
+    const access = await canAccessNote(session.user.id, noteId);
+    if (!access.canAccess) {
+      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
+    }
+
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
@@ -54,10 +59,10 @@ export async function GET(
             workspaceId: note.workspaceId
           }
         },
-        select: { role: true }
+        select: { role: true, status: true }
       });
 
-      isAdmin = membership?.role === 'ADMIN' || membership?.role === 'OWNER';
+      isAdmin = membership?.status === true && (membership.role === 'ADMIN' || membership.role === 'OWNER');
     }
 
     if (!isOwner && !isAdmin) {

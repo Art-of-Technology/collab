@@ -107,3 +107,23 @@ Inspect existing task-manager/MCP/orchestration before adding execution code.
 Search indexes are derived; no separate knowledge app or large RAG system is
 needed. Domain choice is unresolved; no domains, migrations or cutover are
 performed in this security slice. The current Team Space dashboard stays live.
+
+
+## Follow-up local repairs
+
+- All 36 reported asynchronous route parameter signatures now satisfy the
+  generated Next route validators. Application type/lint errors remain.
+- Pinning, template creation, audit logs, comment detail/edit/delete and sharing
+  also call the shared Notes access check. Existing operation-specific author
+  checks remain. Protected notes cannot publish their content as workspace
+  templates; template creation also requires active destination membership.
+- Workspace profile edits cannot create membership in an inaccessible workspace.
+- Removed unused legacy board/task helpers against deleted Prisma models and
+  duplicate notification methods. Global notification preferences use their
+  nullable workspace scope. Existing agent stream/config references are repaired.
+
+Seventeen local behavior checks pass, including denied Notes sibling handlers,
+profile membership escalation, protected template publication, webhook origin
+and redirect enforcement, validation wrappers and retained follow operations.
+Notes collection/search/template-use authorization and other remaining audit
+surfaces still require review. No push, PR, deployment or live configuration change.

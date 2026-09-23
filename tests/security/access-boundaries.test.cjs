@@ -114,6 +114,7 @@ test('denied note requests stop before database content, history or decryption',
     '@/app/api/auth/[...nextauth]/route': { authOptions: {} },
     '@/lib/prisma': { prisma: denied }, '@prisma/client': enums,
     '@/lib/secrets/access': { canAccessNote: async () => ({ canAccess: false, canEdit: false, canDelete: false }) },
+    'zod': require('zod'), '@/lib/issue-finder': { userHasWorkspaceAccess },
     '@/lib/secrets/crypto': denied, '@/lib/versioning': denied, '@/lib/event-bus': denied,
   };
   for (const [file, methods] of [
@@ -121,6 +122,11 @@ test('denied note requests stop before database content, history or decryption',
     ['versions/route.ts', ['GET']],
     ['versions/[version]/route.ts', ['GET', 'POST']],
     ['versions/compare/route.ts', ['GET']],
+    ['pin/route.ts', ['POST']],
+    ['comments/[commentId]/route.ts', ['GET', 'PATCH', 'DELETE']],
+    ['share/route.ts', ['GET', 'POST', 'DELETE']],
+    ['save-as-template/route.ts', ['POST']],
+    ['secrets/audit-log/route.ts', ['GET']],
   ]) {
     const route = load(`src/app/api/notes/[id]/${file}`, dependencies);
     for (const method of methods) {
@@ -333,5 +339,136 @@ test('note authorization resolves project workspace and requires active membersh
     };
     const { canAccessNote } = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: db }, '@prisma/client': enums });
     assert.equal((await canAccessNote('alice', 'note')).canAccess, ['own', 'joined'].includes(workspace.id));
+  }
+});
+
+test('password hashing and email rendering work without contacting external services', async () => {
+  const bcrypt = require('bcrypt');
+  const hash = await bcrypt.hash('test-password', 4);
+  assert.equal(await bcrypt.compare('test-password', hash), true);
+  assert.equal(await bcrypt.compare('incorrect', hash), false);
+  const mail = require('nodemailer').createTransport({ streamTransport: true, buffer: true });
+  const result = await mail.sendMail({ from: 'a@example.test', to: 'b@example.test', subject: 'Test', text: 'Local only' });
+  assert.match(result.message.toString(), /Local only/);
+});
+
+test('validation wrapper rejects bad body/query/params and passes validated values', async () => {
+  const { z } = require('zod');
+  const { withValidation } = load('src/lib/validation.ts', {
+    zod: { z }, 'next/server': { NextResponse: { json: (body, init) => ({ body, status: init.status }) } },
+  }, { URL });
+  let calls = 0;
+  const handler = withValidation(async (_req, context) => { calls++; return { status: 200, context }; }, {
+    body: z.object({ title: z.string() }), query: z.object({ q: z.string() }), params: z.object({ id: z.string() }),
+  });
+  for (const [body, query, id] of [[{ title: 1 }, '?q=x', 'id'], [{ title: 'x' }, '', 'id'], [{ title: 'x' }, '?q=x', 1]]) {
+    const response = await handler(new Request('https://example.test/' + query, { method: 'POST', body: JSON.stringify(body) }), { params: Promise.resolve({ id }) });
+    assert.equal(response.status, 400);
+  }
+  assert.equal(calls, 0);
+  const response = await handler(new Request('https://example.test/?q=x', { method: 'POST', body: '{"title":"ok"}' }), { params: Promise.resolve({ id: 'id' }) });
+  assert.equal(response.status, 200);
+  assert.equal(response.context.body.title, 'ok');
+  assert.equal(calls, 1);
+});
+
+test('retained issue follow methods and global notification preferences still work', async () => {
+  const writes = [];
+  const db = {
+    issueFollower: { upsert: async value => writes.push(value), deleteMany: async value => writes.push(value) },
+    notificationPreferences: { findFirst: async ({ where }) => {
+      assert.equal(where.userId, 'alice'); assert.equal(where.workspaceId, null);
+      return { emailNotificationsEnabled: false };
+    } },
+  };
+  const { NotificationService } = load('src/lib/notification-service.ts', {
+    '@/lib/prisma': { prisma: db }, '@/lib/push-notifications': {}, '@/lib/permissions': {},
+    'date-fns': {}, '@/lib/logger': { logger: {} }, '@/lib/html-sanitizer': {},
+  });
+  await NotificationService.addIssueFollower('issue', 'alice');
+  await NotificationService.removeIssueFollower('issue', 'alice');
+  assert.equal(writes[0].create.issueId, 'issue');
+  assert.equal(writes[1].where.userId, 'alice');
+  assert.equal((await NotificationService.getUserPreferences('alice')).emailNotificationsEnabled, false);
+});
+
+test('webhook delivery requires exact trusted HTTPS origins and never follows redirects', async () => {
+  const env = {};
+  const webhooks = load('src/lib/webhooks.ts', { crypto: { default: require('node:crypto') } }, { process: { env }, URL, Buffer });
+  const allowed = webhooks.isAllowedWebhookDeliveryUrl;
+  assert.equal(allowed('https://hooks.example.test/event'), false);
+  env.COLLAB_WEBHOOK_ALLOWED_ORIGINS = 'https://hooks.example.test';
+  assert.equal(allowed('https://hooks.example.test/event?x=1'), true);
+  assert.equal(allowed('https://HOOKS.example.test:443/event'), true);
+  for (const url of ['https://hooks.example.test.evil.test/', 'https://hooks.example.test:8443/', 'http://hooks.example.test/', 'https://user@hooks.example.test/', '//hooks.example.test/', 'https://hooks.example.test/#secret']) {
+    assert.equal(allowed(url), false, url);
+  }
+  for (const origin of ['invalid', 'http://hooks.example.test', 'https://user@hooks.example.test', 'https://hooks.example.test/path', 'https://hooks.example.test/?x=1']) {
+    env.COLLAB_WEBHOOK_ALLOWED_ORIGINS = origin;
+    assert.equal(allowed('https://hooks.example.test/event'), false, origin);
+  }
+  env.COLLAB_WEBHOOK_ALLOWED_ORIGINS = 'https://hooks.example.test:8443';
+  assert.equal(allowed('https://hooks.example.test:8443/event'), true);
+  assert.equal(allowed('https://hooks.example.test/event'), false);
+  let requests = 0;
+  const webhook = { isActive: true, url: 'https://hooks.example.test/event', eventTypes: ['issue.updated'], secretEnc: 'test' };
+  const { deliverWebhook } = load('src/lib/webhook-delivery.ts', {
+    '@/lib/prisma': { prisma: { appWebhook: { findUnique: async () => webhook } } },
+    './webhooks': webhooks, './apps/crypto': { decrypt: async () => 'test-secret' },
+  }, {
+    Buffer, AbortController, setTimeout, clearTimeout, console: { log() {}, warn() {}, error() {} },
+    fetch: async (_url, options) => {
+      requests++;
+      assert.equal(options.redirect, 'manual');
+      return new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/private' } });
+    },
+  });
+  const event = { id: 'event', type: 'issue.updated', timestamp: Date.now(), data: {}, workspace: { id: 'own', name: 'Test', slug: 'test' }, app: { id: 'app', name: 'Test', slug: 'test' } };
+  assert.equal((await deliverWebhook('hook', event)).success, false);
+  assert.equal(requests, 0);
+  env.COLLAB_WEBHOOK_ALLOWED_ORIGINS = 'https://hooks.example.test';
+  const response = await deliverWebhook('hook', event);
+  assert.equal(response.success, false);
+  assert.equal(response.status, 302);
+  assert.equal(response.shouldRetry, false);
+  assert.equal(requests, 1);
+});
+
+
+test('profile edits cannot create membership in an inaccessible workspace', async () => {
+  let writes = 0;
+  const { updateUserProfile } = load('src/actions/user.ts', {
+    '@/app/api/auth/[...nextauth]/route': { authOptions: {} },
+    'next-auth': { getServerSession: async () => ({ user: { email: 'alice@example.test' } }) },
+    '@/lib/issue-finder': { userHasWorkspaceAccess },
+    '@/lib/prisma': { prisma: {
+      user: { findUnique: async () => ({ id: 'alice' }) },
+      workspaceMember: { upsert: async () => { writes++; return {}; } },
+    } },
+  });
+  for (const workspace of ['foreign', 'revoked']) {
+    await assert.rejects(updateUserProfile({ name: 'Alice' }, workspace), /Workspace access required/);
+  }
+  assert.equal(writes, 0);
+  await updateUserProfile({ name: 'Alice' }, 'joined');
+  assert.equal(writes, 1);
+});
+
+test('protected notes cannot publish their content as workspace templates', async () => {
+  for (const flags of [{ isEncrypted: true }, { isRestricted: true }]) {
+    const { POST } = load('src/app/api/notes/[id]/save-as-template/route.ts', {
+      'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
+      'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+      '@/app/api/auth/[...nextauth]/route': { authOptions: {} },
+      '@/lib/secrets/access': { canAccessNote: async () => ({ canAccess: true }) },
+      '@/lib/issue-finder': { userHasWorkspaceAccess },
+      '@/lib/prisma': { prisma: { note: { findUnique: async () => ({ ...note, isEncrypted: false, isRestricted: false, ...flags }) } } },
+      '@prisma/client': enums, 'zod': require('zod'),
+    });
+    const response = await POST(new Request('https://example.test/template', {
+      method: 'POST', body: JSON.stringify({ name: 'Template' }),
+    }), { params: Promise.resolve({ id: 'note' }) });
+    assert.equal(response.status, 400);
+    assert.match(response.body.error, /Protected notes/);
   }
 });

@@ -1,3 +1,4 @@
+import { canAccessNote } from '@/lib/secrets/access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -18,22 +19,11 @@ export async function GET(
     }
 
     const { id, commentId } = await params;
-
-    // Check if the note exists and user has access to it
-    const note = await prisma.note.findFirst({
-      where: {
-        id: id,
-        OR: [
-          { authorId: session.user.id },
-          { scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC] } },
-          { sharedWith: { some: { userId: session.user.id } } }
-        ]
-      }
-    });
-
-    if (!note) {
-      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    const access = await canAccessNote(session.user.id, id);
+    if (!access.canAccess) {
+      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
     }
+
 
     // Get the comment
     const comment = await prisma.comment.findFirst({
@@ -90,24 +80,13 @@ export async function PATCH(
     }
 
     const { id, commentId } = await params;
+    const access = await canAccessNote(session.user.id, id);
+    if (!access.canAccess) {
+      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
+    }
+
     const body = await request.json();
     const { message, html } = body;
-
-    // Check if the note exists and user has access to it
-    const note = await prisma.note.findFirst({
-      where: {
-        id: id,
-        OR: [
-          { authorId: session.user.id },
-          { scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC] } },
-          { sharedWith: { some: { userId: session.user.id } } }
-        ]
-      }
-    });
-
-    if (!note) {
-      return NextResponse.json({ error: "Note not found" }, { status: 404 });
-    }
 
     // Check if the comment exists
     const comment = await prisma.comment.findFirst({
@@ -169,22 +148,11 @@ export async function DELETE(
     }
 
     const { id, commentId } = await params;
-
-    // Check if the note exists and user has access to it
-    const note = await prisma.note.findFirst({
-      where: {
-        id: id,
-        OR: [
-          { authorId: session.user.id },
-          { scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC] } },
-          { sharedWith: { some: { userId: session.user.id } } }
-        ]
-      }
-    });
-
-    if (!note) {
-      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    const access = await canAccessNote(session.user.id, id);
+    if (!access.canAccess) {
+      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
     }
+
 
     // Check if the comment exists
     const comment = await prisma.comment.findFirst({

@@ -1,3 +1,4 @@
+import { canAccessNote } from '@/lib/secrets/access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -17,6 +18,11 @@ export async function POST(
     }
 
     const { id: noteId } = await params;
+    const access = await canAccessNote(session.user.id, noteId);
+    if (!access.canAccess) {
+      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
+    }
+
     const body = await request.json();
     const { pin } = body;
 
@@ -34,7 +40,7 @@ export async function POST(
         workspace: {
           include: {
             members: {
-              where: { userId: session.user.id },
+              where: { userId: session.user.id, status: true },
               select: { role: true }
             }
           }
