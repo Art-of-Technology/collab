@@ -15,9 +15,9 @@ function isNextRedirect(error: unknown): boolean {
 }
 
 interface WorkspacePageProps {
-  params: {
+  params: Promise<{
     workspaceId: string;
-  };
+  }>;
 }
 
 export const dynamic = 'force-dynamic';

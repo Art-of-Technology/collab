@@ -179,7 +179,7 @@ test('denied note requests stop before database content, history or decryption',
   const dependencies = {
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
     'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
-    '@/app/api/auth/[...nextauth]/route': { authOptions: {} },
+    '@/lib/auth-options': { authOptions: {} },
     '@/lib/prisma': { prisma: denied }, '@prisma/client': enums,
     '@/lib/secrets/access': { canAccessNote: async () => ({ canAccess: false, canEdit: false, canDelete: false }) },
     'zod': require('zod'), '@/lib/issue-finder': { userHasWorkspaceAccess },
@@ -263,8 +263,29 @@ test('shared role checks reject inactive memberships', async () => {
   }
 });
 
+test('error page renders the resolved search message and fallback', async () => {
+  const { default: ErrorPage } = load('src/app/error/page.tsx', {
+    react: require('react'),
+    'react/jsx-runtime': require('react/jsx-runtime'),
+    'next/link': { default: 'a' },
+    '@/components/ui/card': Object.fromEntries(
+      ['Card', 'CardContent', 'CardDescription', 'CardHeader', 'CardTitle'].map(name => [name, 'div'])
+    ),
+    '@/components/ui/button': { Button: ({ children }) => children },
+    'lucide-react': { AlertTriangle: 'span', Home: 'span', ArrowLeft: 'span' },
+  });
+  const { renderToStaticMarkup } = require('react-dom/server');
+  for (const [searchParams, message] of [
+    [{ message: 'Access denied' }, 'Access denied'],
+    [{}, 'An unexpected error occurred'],
+  ]) {
+    const page = await ErrorPage({ searchParams: Promise.resolve(searchParams) });
+    assert.ok(renderToStaticMarkup(page).includes(message));
+  }
+});
+
 test('login redirects stay on the exact application origin', async () => {
-  const { authOptions } = load('src/app/api/auth/[...nextauth]/route.ts', {
+  const { authOptions } = load('src/lib/auth-options.ts', {
     'next-auth': { default: () => () => {} },
     'next-auth/providers/google': { default: () => ({}) },
     '@/lib/prisma': { prisma: {} },
@@ -508,7 +529,7 @@ test('webhook delivery requires exact trusted HTTPS origins and never follows re
 test('profile edits cannot create membership in an inaccessible workspace', async () => {
   let writes = 0;
   const { updateUserProfile } = load('src/actions/user.ts', {
-    '@/app/api/auth/[...nextauth]/route': { authOptions: {} },
+    '@/lib/auth-options': { authOptions: {} },
     'next-auth': { getServerSession: async () => ({ user: { email: 'alice@example.test' } }) },
     '@/lib/issue-finder': { userHasWorkspaceAccess },
     '@/lib/prisma': { prisma: {
@@ -529,7 +550,7 @@ test('protected notes cannot publish their content as workspace templates', asyn
     const { POST } = load('src/app/api/notes/[id]/save-as-template/route.ts', {
       'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
       'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
-      '@/app/api/auth/[...nextauth]/route': { authOptions: {} },
+      '@/lib/auth-options': { authOptions: {} },
       '@/lib/secrets/access': { canAccessNote: async () => ({ canAccess: true }) },
       '@/lib/issue-finder': { userHasWorkspaceAccess },
       '@/lib/prisma': { prisma: { note: { findUnique: async () => ({ ...note, isEncrypted: false, isRestricted: false, ...flags }) } } },
@@ -589,7 +610,7 @@ test('all Notes collections constrain both result reads and search counts', asyn
     const { GET } = load(`src/app/api/notes/${file}`, {
       'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
       'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
-      '@/app/api/auth/[...nextauth]/route': { authOptions: {} },
+      '@/lib/auth-options': { authOptions: {} },
       '@/lib/prisma': { prisma: { note: {
         findMany: async args => { check(args); return []; },
         count: async args => { check(args); return 0; },
@@ -609,7 +630,7 @@ test('template use requires workspace access and scopes custom template reads', 
   const { POST } = load('src/app/api/notes/templates/[id]/use/route.ts', {
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
     'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
-    '@/app/api/auth/[...nextauth]/route': { authOptions: {} },
+    '@/lib/auth-options': { authOptions: {} },
     '@/lib/issue-finder': { userHasWorkspaceAccess },
     '@/lib/prisma': { prisma: {
       user: { findUnique: async () => ({ name: 'Alice' }) },
@@ -655,7 +676,7 @@ test('note creation and project reassignment reject inaccessible destinations be
   const dependencies = {
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
     'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
-    '@/app/api/auth/[...nextauth]/route': { authOptions: {} },
+    '@/lib/auth-options': { authOptions: {} },
     '@/lib/prisma': { prisma: {
       user: { findUnique: async () => ({ id: 'alice' }) },
       note: {
@@ -806,7 +827,7 @@ test('review: alternate Notes handlers filter content and metadata with the real
     'next-auth': { getServerSession: async () => ({ user: { id: 'alice', email: 'alice@example.test' } }) },
     'next-auth/next': { getServerSession: async () => ({ user: { id: 'alice', email: 'alice@example.test' } }) },
     '@/lib/session': { getCurrentUser: async () => ({ id: 'alice' }) },
-    '@/app/api/auth/[...nextauth]/route': { authOptions: {} }, '@/lib/auth': { authConfig: {} },
+    '@/lib/auth-options': { authOptions: {} }, '@/lib/auth': { authConfig: {} },
     '@/lib/prisma': { prisma: db }, '@/lib/secrets/access': access,
   };
   const search = load('src/app/api/search/route.ts', dependencies, { URL, console });
@@ -842,7 +863,7 @@ test('review: favorite PATCH preserves concurrent visibility and explicit scope 
   const route = load('src/app/api/notes/[id]/route.ts', {
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
     'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
-    '@/app/api/auth/[...nextauth]/route': { authOptions: {} }, '@prisma/client': enums,
+    '@/lib/auth-options': { authOptions: {} }, '@prisma/client': enums,
     '@/lib/prisma': { prisma: { note: {
       findFirst: async () => {
         const snapshot = { ...state };
@@ -1047,7 +1068,7 @@ test('disclosure: post GET reuses authenticated reads and denies foreign or revo
     } },
   };
   const actions = load('src/actions/post.ts', {
-    '@/app/api/auth/[...nextauth]/route': { authOptions: {} }, '@/lib/prisma': { prisma: db },
+    '@/lib/auth-options': { authOptions: {} }, '@/lib/prisma': { prisma: db },
     'next-auth': { getServerSession: async () => session },
     '@/utils/mentions': {}, '@/lib/notification-service': {},
   }, { Error });
@@ -1349,7 +1370,7 @@ test('app-notes: leave policy reads require active membership while preserving o
   let session = null;
   const { GET } = load('src/app/api/leave/policies/[policyId]/route.ts', {
     'next/server': { NextResponse: Response }, 'next-auth': { getServerSession: async () => session },
-    '@/app/api/auth/[...nextauth]/route': { authOptions: {} }, '@/lib/issue-finder': { userHasWorkspaceAccess },
+    '@/lib/auth-options': { authOptions: {} }, '@/lib/issue-finder': { userHasWorkspaceAccess },
     '@/lib/permissions': {}, zod: require('zod'),
     '@/lib/prisma': { prisma: {
       user: { findUnique: async () => ({ id: 'alice' }) },

@@ -30,7 +30,7 @@ async function checkPolicyManagementPermissions(workspaceId: string, userId: str
 export default async function LeavePolicyManagementPage({
   params,
 }: {
-  params: { workspaceId: string };
+  params: Promise<{ workspaceId: string }>;
 }) {
   const session = await getAuthSession();
   const { workspaceId: id } = await params;

@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { logAppInstallAttempt, logAppInstallSuccess, logAppInstallFailed } from '@/lib/audit';
 import { validateAppManifestSecurity } from '@/lib/security';
 import { checkUserPermission, Permission } from '@/lib/permissions';

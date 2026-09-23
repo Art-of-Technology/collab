@@ -49,14 +49,15 @@ function ErrorContent({ searchParams }: { searchParams: { message?: string } }) 
   );
 }
 
-export default function ErrorPage({ 
-  searchParams 
-}: { 
-  searchParams: { message?: string } 
+export default async function ErrorPage({
+  searchParams
+}: {
+  searchParams: Promise<{ message?: string }>
 }) {
+  const resolvedSearchParams = await searchParams;
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <ErrorContent searchParams={searchParams} />
+      <ErrorContent searchParams={resolvedSearchParams} />
     </Suspense>
   );
 }
