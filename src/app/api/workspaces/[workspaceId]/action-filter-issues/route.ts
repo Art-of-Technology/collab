@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { ActionFilter } from '@/components/views/selectors/ActionFiltersSelector';

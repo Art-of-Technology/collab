@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { notFound } from "next/navigation";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";

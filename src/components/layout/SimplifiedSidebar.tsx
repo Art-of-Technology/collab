@@ -20,7 +20,8 @@ import {
   ChevronDown,
   Bot,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { signOutCurrentSession } from '@/lib/sign-out';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -56,6 +57,7 @@ export default function SimplifiedSidebar({
   isCollapsed = false,
 }: SimplifiedSidebarProps) {
   const router = useRouter();
+  const { data: session } = useSession();
   const { toast } = useToast();
   const { currentWorkspace } = useWorkspace();
   const { data: userData } = useCurrentUser();
@@ -87,7 +89,7 @@ export default function SimplifiedSidebar({
   }, [views]);
 
   const handleSignOut = async () => {
-    await signOut({ redirect: false });
+    if (!await signOutCurrentSession(session)) return;
     toast({ title: "Signed out", description: "You have been signed out" });
     router.push("/");
   };

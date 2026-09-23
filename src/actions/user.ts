@@ -2,7 +2,7 @@
 
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 
 /**
@@ -11,13 +11,13 @@ import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 export async function getCurrentUser() {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     return null;
   }
   
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     },
     select: {
       id: true,
@@ -380,4 +380,4 @@ export async function getUserProfile(userId: string, workspaceId?: string) {
     currentUser,
     existingConversation
   };
-} 
+}

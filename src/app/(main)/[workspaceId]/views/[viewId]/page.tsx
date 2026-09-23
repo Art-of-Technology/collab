@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import ViewRenderer from '@/components/views/ViewRenderer';

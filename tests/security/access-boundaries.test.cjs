@@ -32,7 +32,7 @@ test('feature pages preserve Next.js missing-feature and wrong-project navigatio
     'next/navigation': require('next/navigation'),
     'next/link': { default: 'a' },
     'lucide-react': { ChevronLeft: 'span' },
-    'next-auth': { getServerSession: async () => session },
+    '@/lib/request-session': { getServerSession: async () => session },
     '@/lib/auth': { getAuthSession: async () => session, authConfig: {} },
     '@/lib/slug-resolvers': { resolveWorkspaceSlug: async () => 'workspace' },
     '@/lib/prisma': { prisma: {
@@ -178,7 +178,7 @@ test('denied note requests stop before database content, history or decryption',
   const denied = new Proxy({}, { get() { throw new Error('Content accessed before authorization'); } });
   const dependencies = {
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
-    'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+    '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/prisma': { prisma: denied }, '@prisma/client': enums,
     '@/lib/secrets/access': { canAccessNote: async () => ({ canAccess: false, canEdit: false, canDelete: false }) },
@@ -598,7 +598,7 @@ test('profile edits cannot create membership in an inaccessible workspace', asyn
   let writes = 0;
   const { updateUserProfile } = load('src/actions/user.ts', {
     '@/lib/auth-options': { authOptions: {} },
-    'next-auth': { getServerSession: async () => ({ user: { email: 'alice@example.test' } }) },
+    '@/lib/request-session': { getServerSession: async () => ({ user: { email: 'alice@example.test' } }) },
     '@/lib/issue-finder': { userHasWorkspaceAccess },
     '@/lib/prisma': { prisma: {
       user: { findUnique: async () => ({ id: 'alice' }) },
@@ -617,7 +617,7 @@ test('protected notes cannot publish their content as workspace templates', asyn
   for (const flags of [{ isEncrypted: true }, { isRestricted: true }]) {
     const { POST } = load('src/app/api/notes/[id]/save-as-template/route.ts', {
       'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
-      'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+      '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
       '@/lib/auth-options': { authOptions: {} },
       '@/lib/secrets/access': { canAccessNote: async () => ({ canAccess: true }) },
       '@/lib/issue-finder': { userHasWorkspaceAccess },
@@ -677,7 +677,7 @@ test('all Notes collections constrain both result reads and search counts', asyn
     };
     const { GET } = load(`src/app/api/notes/${file}`, {
       'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
-      'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+      '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
       '@/lib/auth-options': { authOptions: {} },
       '@/lib/prisma': { prisma: { note: {
         findMany: async args => { check(args); return []; },
@@ -697,7 +697,7 @@ test('template use requires workspace access and scopes custom template reads', 
   let templateReads = 0;
   const { POST } = load('src/app/api/notes/templates/[id]/use/route.ts', {
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
-    'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+    '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/issue-finder': { userHasWorkspaceAccess },
     '@/lib/prisma': { prisma: {
@@ -743,7 +743,7 @@ test('note creation and project reassignment reject inaccessible destinations be
   let checked = 0;
   const dependencies = {
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
-    'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+    '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/prisma': { prisma: {
       user: { findUnique: async () => ({ id: 'alice' }) },
@@ -776,7 +776,7 @@ test('AI issue suggestions and relations resolve their source issue inside the a
     let reads = 0;
     const { GET } = load(`src/app/api/ai/issues/${endpoint}/route.ts`, {
       'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
-      'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+      '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
       '@/lib/auth': { authConfig: {} }, '@/lib/issue-finder': { userHasWorkspaceAccess },
       '@/lib/prisma': { prisma: { issue: { findFirst: async ({ where }) => {
         reads++; assert.equal(where.workspaceId, 'joined'); assert.equal(where.id, 'foreign-issue'); return null;
@@ -892,8 +892,7 @@ test('review: alternate Notes handlers filter content and metadata with the real
   }
   const dependencies = {
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
-    'next-auth': { getServerSession: async () => ({ user: { id: 'alice', email: 'alice@example.test' } }) },
-    'next-auth/next': { getServerSession: async () => ({ user: { id: 'alice', email: 'alice@example.test' } }) },
+    '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice', email: 'alice@example.test' } }) },
     '@/lib/session': { getCurrentUser: async () => ({ id: 'alice' }) },
     '@/lib/auth-options': { authOptions: {} }, '@/lib/auth': { authConfig: {} },
     '@/lib/prisma': { prisma: db }, '@/lib/secrets/access': access,
@@ -930,7 +929,7 @@ test('review: favorite PATCH preserves concurrent visibility and explicit scope 
   const payloads = [];
   const route = load('src/app/api/notes/[id]/route.ts', {
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
-    'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+    '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
     '@/lib/auth-options': { authOptions: {} }, '@prisma/client': enums,
     '@/lib/prisma': { prisma: { note: {
       findFirst: async () => {
@@ -1137,7 +1136,7 @@ test('disclosure: post GET reuses authenticated reads and denies foreign or revo
   };
   const actions = load('src/actions/post.ts', {
     '@/lib/auth-options': { authOptions: {} }, '@/lib/prisma': { prisma: db },
-    'next-auth': { getServerSession: async () => session },
+    '@/lib/request-session': { getServerSession: async () => session },
     '@/utils/mentions': {}, '@/lib/notification-service': {},
   }, { Error });
   const { GET } = load('src/app/api/posts/[postId]/route.ts', {
@@ -1437,7 +1436,7 @@ test('app-notes: anonymous and revoked tokens stop all sibling reads and writes'
 test('app-notes: leave policy reads require active membership while preserving owner access', async () => {
   let session = null;
   const { GET } = load('src/app/api/leave/policies/[policyId]/route.ts', {
-    'next/server': { NextResponse: Response }, 'next-auth': { getServerSession: async () => session },
+    'next/server': { NextResponse: Response }, '@/lib/request-session': { getServerSession: async () => session },
     '@/lib/auth-options': { authOptions: {} }, '@/lib/issue-finder': { userHasWorkspaceAccess },
     '@/lib/permissions': {}, zod: require('zod'),
     '@/lib/prisma': { prisma: {

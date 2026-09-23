@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import Image from 'next/image';
 import { authOptions } from '@/lib/auth-options';
 import { AppHost } from '@/components/apps/AppHost';

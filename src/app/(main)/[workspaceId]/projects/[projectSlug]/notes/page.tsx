@@ -2,7 +2,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { ChevronLeft, FileText, Plus } from "lucide-react";
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";

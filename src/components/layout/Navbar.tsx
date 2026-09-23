@@ -4,7 +4,8 @@ import { useState } from "react";
 import Image from "next/image"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { signOutCurrentSession } from '@/lib/sign-out';
 import {
   BellIcon,
   MagnifyingGlassIcon,
@@ -91,7 +92,7 @@ export default function Navbar({
   };
 
   const handleSignOut = async () => {
-    await signOut({ redirect: false });
+    if (!await signOutCurrentSession(session)) return;
     toast({
       title: "Signed out successfully",
       description: "You have been signed out of your account",
@@ -443,4 +444,4 @@ export default function Navbar({
       </div>
     </nav>
   );
-} 
+}

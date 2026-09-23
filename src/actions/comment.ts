@@ -2,7 +2,7 @@
 
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { extractMentionUserIds } from '@/utils/mentions';
 import { NotificationService, NotificationType } from '@/lib/notification-service';
 import { sanitizeHtmlToPlainText } from '@/lib/html-sanitizer';

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
 import { exchangeCodeForToken, getGitHubUser } from "@/lib/github/oauth-config";
 import { prisma } from "@/lib/prisma";

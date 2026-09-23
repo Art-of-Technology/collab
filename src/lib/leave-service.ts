@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth-options";
 import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
 import { differenceInDays } from "date-fns";

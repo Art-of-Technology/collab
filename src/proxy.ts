@@ -1,5 +1,7 @@
 // src/middleware.ts
 import { NextResponse, type NextRequest } from "next/server";
+import { authMode, gatewayMutationAllowed, readGatewayIdentity } from '@/lib/gateway-identity';
+import { getGatewaySession } from '@/lib/request-session';
 
 /**
  * Comprehensive security middleware
@@ -12,7 +14,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // Run this middleware on almost everything except static assets, next internals, and streaming endpoints
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|assets/|fonts/|images/|api/health|api/realtime).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|assets/|fonts/|images/).*)",
   ],
 };
 
@@ -28,8 +30,20 @@ function boolFromEnv(name: string, fallback = false) {
   return ["1", "true", "yes", "y", "on"].includes(String(v).toLowerCase());
 }
 
-export function proxy(req: NextRequest) {
+export async function proxy(req: NextRequest) {
+  const mode = authMode();
+  if (mode === 'invalid') return new NextResponse('Authentication configuration unavailable', { status: 503 });
+  if (mode === 'gateway' && !(req.nextUrl.pathname === '/api/health' && req.method === 'GET')) {
+    if (!readGatewayIdentity(req.headers, process.env.COLLAB_GATEWAY_ISSUER ?? ''))
+      return new NextResponse('Authentication required', { status: 401 });
+    if (!gatewayMutationAllowed(req.method, req.headers, process.env.COLLAB_PUBLIC_ORIGIN ?? ''))
+      return new NextResponse('Request origin denied', { status: 403 });
+    try {
+      if (!await getGatewaySession(req.headers)) return new NextResponse('Account mapping required', { status: 403 });
+    } catch { return new NextResponse('Authentication unavailable', { status: 503 }); }
+  }
   const res = NextResponse.next();
+  if (mode === 'gateway') res.headers.set('Cache-Control', 'private, no-store');
 
   // Build a strong, environment-aware CSP
   const isDev = process.env.NODE_ENV !== "production";

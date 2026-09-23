@@ -2,7 +2,7 @@
 
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
 import {
   approveLeaveRequestWithBalance,

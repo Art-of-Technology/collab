@@ -1,7 +1,7 @@
 "use server";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { classifyStatus } from "@/utils/teamSyncAnalyzer";

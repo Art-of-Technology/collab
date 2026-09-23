@@ -1,6 +1,6 @@
 import { canWriteNoteDestination, noteAccessWhere } from '@/lib/secrets/access';
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { NoteIncludeExtension } from '@/types/prisma-extensions';
