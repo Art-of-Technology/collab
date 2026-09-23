@@ -161,4 +161,4 @@ export async function GET(
     console.error("Error fetching comments:", error);
     return new NextResponse("Internal error", { status: 500 });
   }
-} 
+}

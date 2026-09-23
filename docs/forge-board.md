@@ -5,10 +5,18 @@ This first slice is read-only: board/list/attention views, filters and issue
 details retain existing issue numbers, descriptions and follow-up metadata.
 Comments show their source count; comment reading and writes remain pending.
 
+Search matches issue number, title, owner and next action, and combines with
+the status filter in every view. Needs attention includes unfinished issues
+that are critical, blocked, overdue or due for follow-up today or earlier.
+Date comparisons use the Europe/London calendar date at load or refresh.
+Select an issue to open its details; use Project notes to reach the existing
+Notes view. The existing project dashboard and Notes routes remain available.
+
 The server requires an authenticated active workspace member (or owner), a
 project in that workspace, and an exact configured project binding before
 opening the credential file or contacting Forge. The browser receives only
-projected issue data. Revoked access returns 404; refresh rechecks access.
+projected issue data. Denied initial access returns 404; refresh rechecks access
+and clears loaded issues when access is denied.
 
 Set `COLLAB_FORGE_CONFIG_FILE` to an operator-managed JSON file outside Git:
 
@@ -57,4 +65,5 @@ Enter opens details, Close receives focus, and Escape restores the originating
 card. No Forge requests were issued by the browser.
 
 Live connection, full comments, mutations with readback/conflict handling,
-staging acceptance and replacement cutover remain outstanding.
+Forge-backed Notes publication, agent execution, staging acceptance and
+replacement cutover remain outstanding.
