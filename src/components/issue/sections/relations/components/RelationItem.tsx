@@ -1,4 +1,6 @@
 "use client";
+import { createElement } from "react";
+
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -103,7 +105,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 
   return (
     <InfoBadge>
-      <Icon className={cn("h-3 w-3", colorClass)} />
+      {createElement(Icon, { className: cn("h-3 w-3", colorClass) })}
       {displayName}
     </InfoBadge>
   );
@@ -158,7 +160,7 @@ export function RelationItem({
         <div className="flex items-center flex-1 min-w-0">
           {relationTypeConfig && (
             <InfoBadge className="mr-2 flex-shrink-0">
-              <RelationIcon className={cn("h-3 w-3", relationColorClass)} />
+              {createElement(RelationIcon, { className: cn("h-3 w-3", relationColorClass) })}
               {relationTypeConfig.label}
             </InfoBadge>
           )}

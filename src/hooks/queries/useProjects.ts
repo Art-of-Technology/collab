@@ -25,6 +25,7 @@ export interface Repository {
   // Aggregation counts (optional, included when stats are requested)
   _count?: {
     branches: number;
+    pullRequests?: number;
     commits: number;
     releases: number;
     versions: number;

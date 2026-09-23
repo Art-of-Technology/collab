@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useSyncExternalStore, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { RichTextRenderer } from '../RichTextRenderer';
@@ -23,11 +23,7 @@ export function AIImprovePopover({
   onCancel,
   isImproving = false
 }: AIImprovePopoverProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(subscribeToMount, () => true, () => false);
 
   if (!isVisible || !improvedText || !mounted) {
     return null;
@@ -89,3 +85,5 @@ export function AIImprovePopover({
   if (typeof window === 'undefined' || !document?.body) return null;
   return createPortal(popover, document.body);
 }
+
+const subscribeToMount = () => () => {};

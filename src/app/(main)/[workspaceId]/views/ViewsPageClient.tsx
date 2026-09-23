@@ -1,4 +1,6 @@
 "use client";
+import { createElement } from "react";
+
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -39,7 +41,7 @@ import { PageLayout } from '@/components/ui/page-layout';
 import { PageHeader } from '@/components/ui/page-header';
 import { SearchBar } from '@/components/ui/search-bar';
 import { FilterToggle } from '@/components/ui/filter-toggle';
-import { ShadowListGroup } from '@/components/ui/shadow-list-group';
+import { ShadowListGroup, ShadowListGroupItem } from '@/components/ui/shadow-list-group';
 import { EmptyState } from '@/components/ui/empty-state';
 
 interface ViewsPageClientProps {
@@ -230,7 +232,7 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
       {filteredViews.length > 0 ? (
         <ShadowListGroup>
           {filteredViews.map((view) => (
-            <ShadowListGroup.Item key={view.id} className="!p-0">
+            <ShadowListGroupItem key={view.id} className="!p-0">
               <ViewListItem
                 view={view}
                 onViewClick={() => handleViewClick(view.slug || view.id)}
@@ -239,7 +241,7 @@ export default function ViewsPageClient({ workspaceId }: ViewsPageClientProps) {
                 onDelete={(e) => handleDeleteView(view.id, view.name, e)}
                 isFavoriteLoading={toggleViewFavoriteMutation.isPending}
               />
-            </ShadowListGroup.Item>
+            </ShadowListGroupItem>
           ))}
         </ShadowListGroup>
       ) : searchQuery ? (
@@ -361,7 +363,7 @@ function ViewListItem({
 
         <div className="flex items-center gap-3 mt-2">
           <div className="flex items-center gap-1 text-[11px] text-collab-500">
-            <VisibilityIcon className={cn("h-3 w-3", getVisibilityColor(view.visibility))} />
+            {createElement(VisibilityIcon, { className: cn("h-3 w-3", getVisibilityColor(view.visibility)) })}
             <span className={getVisibilityColor(view.visibility)}>
               {view.visibility === 'WORKSPACE' ? 'Team' :
                view.visibility === 'PERSONAL' ? 'Personal' : 'Shared'}

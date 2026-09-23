@@ -9,6 +9,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
@@ -38,6 +40,12 @@ const CreateNoteSchema = z.object({
 export const GET = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
     try {
+      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
+        return NextResponse.json(
+          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
+          { status: 403 }
+        );
+      }
       const { searchParams } = new URL(request.url);
       const projectId = searchParams.get('projectId');
       const type = searchParams.get('type') as NoteType | null;
@@ -50,6 +58,7 @@ export const GET = withAppAuth(
       // Build where clause - only show context docs accessible via MCP
       // PERSONAL context is excluded (it's private to the owner)
       const where: any = {
+        AND: [noteAccessWhere(context.user.id)],
         workspaceId: context.workspace.id,
         scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },
       };
@@ -81,7 +90,7 @@ export const GET = withAppAuth(
       }
 
       // Exclude secret context types (use secrets endpoint instead)
-      const secretTypes = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
+      const secretTypes: NoteType[] = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
 
       // Handle type filter: if specific type requested, validate and use it
       // Otherwise, exclude secret types from results
@@ -184,6 +193,12 @@ export const GET = withAppAuth(
 export const POST = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
     try {
+      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
+        return NextResponse.json(
+          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
+          { status: 403 }
+        );
+      }
       const body = await request.json();
       const noteData = CreateNoteSchema.parse(body);
 
@@ -213,7 +228,7 @@ export const POST = withAppAuth(
       }
 
       // Prevent creating secret context documents via this endpoint
-      const secretTypes = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
+      const secretTypes: NoteType[] = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
       if (secretTypes.includes(noteData.type)) {
         return NextResponse.json(
           { error: 'forbidden', error_description: 'Cannot create secret context documents via this endpoint' },

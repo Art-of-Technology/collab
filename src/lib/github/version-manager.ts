@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { PrismaClient, IssueType, VersioningStrategy } from "@prisma/client";
+import { IssueType, VersioningStrategy } from "@prisma/client";
 import semver from "semver";
 
 interface CommitInfo {
@@ -39,6 +39,7 @@ interface VersionCalculation {
 }
 
 interface RepositoryConfig {
+  defaultBranch?: string;
   versioningStrategy: VersioningStrategy;
   developmentBranch?: string;
   branchEnvironmentMap: Record<string, string>;
@@ -46,7 +47,7 @@ interface RepositoryConfig {
 }
 
 export class VersionManager {
-  private prisma: PrismaClient;
+  private prisma: typeof prisma;
 
   constructor() {
     this.prisma = prisma;
@@ -150,6 +151,7 @@ export class VersionManager {
       where: { id: repositoryId },
       select: {
         versioningStrategy: true,
+        defaultBranch: true,
         developmentBranch: true,
         branchEnvironmentMap: true,
         issueTypeMapping: true,
@@ -186,6 +188,7 @@ export class VersionManager {
 
     return {
       versioningStrategy: repository.versioningStrategy,
+      defaultBranch: repository.defaultBranch,
       developmentBranch: repository.developmentBranch || 'dev',
       branchEnvironmentMap: {
         ...defaultBranchEnvironmentMap,
@@ -868,7 +871,7 @@ export class VersionManager {
       if (bump === 'MAJOR') {
         highestBump = 'MAJOR';
         break; // MAJOR is the highest, no need to continue
-      } else if (bump === 'MINOR' && highestBump !== 'MAJOR') {
+      } else if (bump === 'MINOR') {
         highestBump = 'MINOR';
       }
       // PATCH is the default, so no need to explicitly set it

@@ -5,17 +5,17 @@ import { prisma } from '@/lib/prisma';
 import ViewRenderer from '@/components/views/ViewRenderer';
 
 interface DynamicViewPageProps {
-  params: {
+  params: Promise<{
     workspaceId: string;
-  };
-  searchParams: {
+  }>;
+  searchParams: Promise<{
     name?: string;
     displayType?: string;
     filters?: string;
     grouping?: string;
     sorting?: string;
     projects?: string;
-  };
+  }>;
 }
 
 export default async function DynamicViewPage({ params, searchParams }: DynamicViewPageProps) {

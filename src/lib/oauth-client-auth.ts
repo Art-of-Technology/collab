@@ -1,10 +1,9 @@
 import { NextRequest } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { validateClientAssertion, getTokenEndpointUrl } from '@/lib/apps/jwt-assertion';
 import { decryptToken } from '@/lib/apps/crypto';
 import { TokenEndpointAuthMethod } from '@/lib/apps/types';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 /**
  * OAuth client type representing the structure returned from the database

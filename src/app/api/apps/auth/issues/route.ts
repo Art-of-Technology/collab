@@ -243,7 +243,7 @@ export const POST = withAppAuth(
 
       // Create the issue with proper issue key generation using transaction
       // to avoid race conditions with concurrent requests
-      const newIssue = await prisma.$transaction(async (tx: typeof prisma) => {
+      const newIssue = await prisma.$transaction(async (tx) => {
         // Get project with current nextIssueNumbers counter
         const projectWithCounter = await tx.project.findUnique({
           where: { id: issueData.projectId },

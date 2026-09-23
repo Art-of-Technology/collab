@@ -1,6 +1,7 @@
+import { canWriteNoteDestination, noteAccessWhere } from '@/lib/secrets/access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { NoteIncludeExtension } from '@/types/prisma-extensions';
 import { NoteScope, NoteType } from "@prisma/client";
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
       };
 
       const notes = await prisma.note.findMany({
-        where,
+        where: { AND: [where, noteAccessWhere(session.user.id)] },
         include: {
           tags: true,
           author: {
@@ -184,7 +185,7 @@ export async function GET(request: NextRequest) {
     }
 
     const notes = await prisma.note.findMany({
-      where,
+      where: { AND: [where, noteAccessWhere(session.user.id)] },
       include: {
         tags: true,
         author: {
@@ -308,19 +309,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate project exists if projectId is provided
-    if (projectId) {
-      const projectExists = await prisma.project.findUnique({
-        where: { id: projectId },
-        select: { id: true, workspaceId: true }
-      });
-
-      if (!projectExists) {
-        return NextResponse.json(
-          { error: "Project not found" },
-          { status: 400 }
-        );
-      }
+    if (!await canWriteNoteDestination(session.user.id, workspaceId || null, projectId || null)) {
+      return NextResponse.json({ error: "Workspace or project access required" }, { status: 403 });
     }
 
     // Determine scope (with legacy support)
@@ -336,6 +326,10 @@ export async function POST(request: NextRequest) {
         { error: "Project ID is required for PROJECT scope notes" },
         { status: 400 }
       );
+    }
+
+    if (finalScope === NoteScope.WORKSPACE && !workspaceId) {
+      return NextResponse.json({ error: "Workspace ID is required" }, { status: 400 });
     }
 
     // Handle secrets encryption for secret note types

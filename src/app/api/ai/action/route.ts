@@ -179,7 +179,6 @@ export async function POST(req: Request) {
             priority: params.priority || 'medium',
             status: 'backlog',
             issueKey,
-            issueNumber,
             projectId,
             workspaceId: workspace.id,
             reporterId: currentUser.id,

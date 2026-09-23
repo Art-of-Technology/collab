@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 import { validateClientAssertion, getTokenEndpointUrl } from '@/lib/apps/jwt-assertion';
 import { encryptToken, decryptToken } from '@/lib/apps/crypto';
@@ -7,7 +6,7 @@ import { normalizeScopes, scopesToString, isAllowedRedirectUri } from '@/lib/oau
 import { createWebhooksFromManifest, WebhookCreationResult } from '@/lib/apps/webhook-auto-creation';
 import { AppManifestV1 } from '@/lib/apps/types';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 // CORS headers for OAuth token endpoint
 // Allow cross-origin requests from MCP server and other authorized origins
@@ -176,8 +175,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('OAuth token endpoint error:', error);
     return oauthError("server_error", "Internal server error", 500, corsHeaders);
-  } finally {
-    await prisma.$disconnect();
   }
 }
 

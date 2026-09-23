@@ -8,13 +8,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
 import { stripHtmlToPlainText as stripHtml } from '@/lib/html-sanitizer';
 
 // Note types that are considered knowledge base articles
-const KNOWLEDGE_TYPES = [
+const KNOWLEDGE_TYPES: NoteType[] = [
   NoteType.GUIDE,
   NoteType.README,
   NoteType.ARCHITECTURE,
@@ -30,6 +32,12 @@ const KNOWLEDGE_TYPES = [
 export const GET = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
     try {
+      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
+        return NextResponse.json(
+          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
+          { status: 403 }
+        );
+      }
       const { searchParams } = new URL(request.url);
       const q = searchParams.get('q'); // Search query
       const type = searchParams.get('type') as NoteType | null;
@@ -39,6 +47,7 @@ export const GET = withAppAuth(
 
       // Build where clause
       const where: any = {
+        AND: [noteAccessWhere(context.user.id)],
         workspaceId: context.workspace.id,
         type: { in: KNOWLEDGE_TYPES },
         scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },

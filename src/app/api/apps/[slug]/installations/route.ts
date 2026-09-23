@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { logAppInstallAttempt, logAppInstallFailed } from '@/lib/audit';
 import { validateAppManifestSecurity } from '@/lib/security';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export async function POST(
   request: NextRequest,
@@ -153,7 +152,5 @@ export async function POST(
       { error: 'Internal server error' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

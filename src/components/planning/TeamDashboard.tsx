@@ -764,7 +764,7 @@ export function TeamDashboard({
   const selectedMember = useMemo(() => {
     if (!effectiveMemberId || !data?.members) return null;
     return data.members.find(m => m.user.id === effectiveMemberId) || null;
-  }, [effectiveMemberId, data?.members]);
+  }, [effectiveMemberId, data]);
 
   if (isLoading) {
     return (

@@ -1,3 +1,4 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 /**
  * API Routes for Note Templates
  *
@@ -7,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { BUILT_IN_TEMPLATES } from '@/lib/note-templates';
@@ -41,6 +42,10 @@ export async function GET(request: NextRequest) {
     const workspaceId = searchParams.get('workspaceId');
     const type = searchParams.get('type') as NoteType | null;
     const includeBuiltIn = searchParams.get('includeBuiltIn') !== 'false';
+
+    if (workspaceId && !await userHasWorkspaceAccess(session.user.id, workspaceId)) {
+      return NextResponse.json({ error: 'Workspace access required' }, { status: 403 });
+    }
 
     // Build templates list
     const templates: Array<{
@@ -165,14 +170,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify user is a member of the workspace
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId,
-        },
-      },
-    });
+    const membership = await userHasWorkspaceAccess(session.user.id, workspaceId);
 
     if (!membership) {
       return NextResponse.json({ error: 'Not a member of this workspace' }, { status: 403 });

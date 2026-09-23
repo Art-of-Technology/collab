@@ -1,4 +1,6 @@
 "use client";
+import { createElement } from "react";
+
 
 import { useState, useMemo } from 'react';
 import { UserAvatar } from '@/components/ui/user-avatar';
@@ -89,16 +91,16 @@ interface IssueItemProps {
 }
 
 function IssueItem({ issue, workspaceSlug, onOpenModal }: IssueItemProps) {
-  const statusDotColor = getStatusDotColor(issue.statusText);
-  const StatusIcon = getStatusIcon(issue.statusText);
-  const statusIconColor = getStatusIconColor(issue.statusText);
+  const statusDotColor = getStatusDotColor(issue.statusText ?? "");
+  const StatusIcon = getStatusIcon(issue.statusText ?? "");
+  const statusIconColor = getStatusIconColor(issue.statusText ?? "");
   const statusLabel = issue.statusDisplayName || issue.statusText;
   const showDaysWarning = issue.daysInProgress !== undefined && issue.daysInProgress >= 5;
 
   // Priority
   const priorityBadge = issue.priority ? getIssuePriorityBadge(issue.priority as IssuePriority) : null;
   const PriorityIcon = priorityBadge?.icon;
-  const priorityConfig = issue.priority 
+  const priorityConfig = issue.priority
     ? (PRIORITY_CONFIG[issue.priority.toUpperCase() as IssuePriority] || PRIORITY_CONFIG.MEDIUM)
     : null;
 
@@ -107,7 +109,7 @@ function IssueItem({ issue, workspaceSlug, onOpenModal }: IssueItemProps) {
   const TypeIcon = typeConfig.icon;
 
   return (
-    <div 
+    <div
       className="group flex items-center gap-3 px-3 py-2 rounded-md hover:bg-collab-800 cursor-pointer transition-colors"
       onClick={() => onOpenModal(issue.issueId)}
     >
@@ -128,7 +130,7 @@ function IssueItem({ issue, workspaceSlug, onOpenModal }: IssueItemProps) {
       <div className="flex items-center gap-1.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
         {/* Status */}
         <Badge>
-          <StatusIcon className={cn("h-3 w-3", statusIconColor)} />
+          {createElement(StatusIcon, { className: cn("h-3 w-3", statusIconColor) })}
           <span>{statusLabel}</span>
         </Badge>
 
@@ -173,7 +175,7 @@ interface GroupHeaderProps {
 
 function GroupHeader({ title, count }: GroupHeaderProps) {
   if (count === 0) return null;
-  
+
   return (
     <div className="flex items-center gap-2 px-3 pt-4 pb-1">
       <span className="text-[11px] font-medium text-collab-500">
@@ -198,31 +200,31 @@ interface DayColumnProps {
   onOpenModal: (issueId: string) => void;
 }
 
-function DayColumn({ 
-  title, 
-  date, 
-  activity, 
-  workspaceSlug, 
-  isToday, 
+function DayColumn({
+  title,
+  date,
+  activity,
+  workspaceSlug,
+  isToday,
   yesterdayInProgressIds,
-  onOpenModal 
+  onOpenModal
 }: DayColumnProps) {
   // Separate carried over vs new in progress for today (excluding blocked)
   const { carriedOver, currentInProgress, carriedOverBlocked, currentBlocked } = useMemo(() => {
     if (!activity || !isToday || !yesterdayInProgressIds) {
-      return { 
-        carriedOver: [], 
+      return {
+        carriedOver: [],
         currentInProgress: activity?.inProgress || [],
         carriedOverBlocked: [],
         currentBlocked: activity?.blocked || []
       };
     }
-    
+
     const carried: IssueActivity[] = [];
     const current: IssueActivity[] = [];
     const carriedBlocked: IssueActivity[] = [];
     const newBlocked: IssueActivity[] = [];
-    
+
     // Separate in progress issues
     activity.inProgress.forEach(issue => {
       if (yesterdayInProgressIds.has(issue.issueId)) {
@@ -240,9 +242,9 @@ function DayColumn({
         newBlocked.push(issue);
       }
     });
-    
-    return { 
-      carriedOver: carried, 
+
+    return {
+      carriedOver: carried,
       currentInProgress: current,
       carriedOverBlocked: carriedBlocked,
       currentBlocked: newBlocked
@@ -410,7 +412,7 @@ interface StatBadgeProps {
 
 function StatBadge({ count, label, color, showZero = false }: StatBadgeProps) {
   if (count === 0 && !showZero) return null;
-  
+
   const colorStyles = {
     emerald: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
     blue: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
@@ -457,7 +459,7 @@ function MemberCard({
 }: MemberCardProps) {
   const yesterdayActivity = member.days[yesterdayDate];
   const todayActivity = member.days[todayDate];
-  
+
   // IDs of issues that were in progress/blocked yesterday (for carried over detection)
   const yesterdayInProgressIds = useMemo(() => {
     if (!yesterdayActivity) return new Set<string>();
@@ -469,7 +471,7 @@ function MemberCard({
   }, [yesterdayActivity]);
 
   const hasWarnings = member.insights.warnings.length > 0;
-  
+
   // Stats
   const completed = (yesterdayActivity?.completed.length || 0) + (todayActivity?.completed.length || 0);
   const sentToReview = (yesterdayActivity?.movedToReview?.length || 0) + (todayActivity?.movedToReview?.length || 0);
@@ -477,7 +479,7 @@ function MemberCard({
   const inReview = todayActivity?.inReview.length || 0;
   const blocked = todayActivity?.blocked?.length || 0;
   const planned = todayActivity?.planned.length || 0;
-  const carriedOver = yesterdayInProgressIds.size > 0 
+  const carriedOver = yesterdayInProgressIds.size > 0
     ? ((todayActivity?.inProgress.filter(i => yesterdayInProgressIds.has(i.issueId)).length || 0) +
        (todayActivity?.blocked?.filter(i => yesterdayInProgressIds.has(i.issueId)).length || 0))
     : 0;
@@ -491,7 +493,7 @@ function MemberCard({
         className="w-full px-4 py-3 flex items-center gap-3 hover:bg-collab-800 transition-colors h-auto rounded-none"
       >
         <UserAvatar user={{ name: member.userName, image: member.userImage }} size="lg" className="flex-shrink-0" />
-        
+
         {/* Name */}
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[13px] font-medium text-collab-50 truncate">
@@ -572,7 +574,7 @@ export function PlanningDayView({
   workspaceSlug,
   selectedDate,
 }: PlanningDayViewProps) {
-  const [expandedMembers, setExpandedMembers] = useState<Set<string>>(() => 
+  const [expandedMembers, setExpandedMembers] = useState<Set<string>>(() =>
     new Set(members.map(m => m.userId))
   );
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
@@ -582,7 +584,7 @@ export function PlanningDayView({
 
   // Sort members consistently by name (alphabetical)
   const sortedMembers = useMemo(() => {
-    return [...members].sort((a, b) => 
+    return [...members].sort((a, b) =>
       a.userName.localeCompare(b.userName)
     );
   }, [members]);

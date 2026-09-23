@@ -3,7 +3,7 @@ import { resolveBlockerPost } from "@/actions/post";
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
     const _params = await params;

@@ -81,7 +81,7 @@ export default function ViewFilters({
   const [activeFilterTab, setActiveFilterTab] = useState<FilterTab>('assignees');
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(view?.name || '');
-  
+
   // Use TanStack Query for workspace members with caching
   const { data: workspaceMembers = [], isLoading: isLoadingMembers } = useWorkspaceMembers(workspace?.id);
 
@@ -107,16 +107,12 @@ export default function ViewFilters({
     includeStats: false,
   });
 
-  // Update editedName when view name changes
-  useEffect(() => {
-    setEditedName(view?.name || '');
-  }, [view?.name]);
 
   // Name editing handlers
   const handleNameSave = useCallback((e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
-    
+
     if (editedName.trim() && editedName !== view?.name) {
       onNameChange?.(editedName.trim());
     }
@@ -126,7 +122,7 @@ export default function ViewFilters({
   const handleNameDiscard = useCallback((e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
-    
+
     setEditedName(view?.name || '');
     setIsEditingName(false);
   }, [view?.name]);
@@ -145,13 +141,13 @@ export default function ViewFilters({
   const handleFilterToggle = useCallback((filterType: keyof typeof selectedFilters, filterId: string) => {
     const currentFilters = selectedFilters[filterType];
     const isSelected = currentFilters.includes(filterId);
-    
+
     const newFilters = isSelected
       ? { ...selectedFilters, [filterType]: currentFilters.filter(id => id !== filterId) }
       : { ...selectedFilters, [filterType]: [...currentFilters, filterId] };
-    
+
     onFiltersChange(newFilters);
-    
+
     // Update dropdown filter when assignees change from View Options
     if (filterType === 'assignees' && onAssigneesChangeFromViewOptions) {
       const assignees = newFilters.assignees;
@@ -174,7 +170,7 @@ export default function ViewFilters({
       projects: []
     };
     onFiltersChange(emptyFilters);
-    
+
     // Update dropdown filter when clearing assignees
     if (onAssigneesChangeFromViewOptions) {
       try {
@@ -191,7 +187,7 @@ export default function ViewFilters({
     const labels = new Map();
     const priorities = new Map();
     const projects = new Map();
-    
+
     // Initialize all assignees from workspace members
     assignees.set('unassigned', {
       id: 'unassigned',
@@ -207,7 +203,7 @@ export default function ViewFilters({
         count: 0
       });
     });
-    
+
     // Initialize all labels from workspace
     labels.set('no-labels', {
       id: 'no-labels',
@@ -223,7 +219,7 @@ export default function ViewFilters({
         count: 0
       });
     });
-    
+
     // Initialize all priority options
     const priorityOptions = [
       { id: 'URGENT', name: 'Urgent' },
@@ -239,7 +235,7 @@ export default function ViewFilters({
         count: 0
       });
     });
-    
+
     // Initialize all projects from workspace
     projects.set('no-project', {
       id: 'no-project',
@@ -255,7 +251,7 @@ export default function ViewFilters({
         count: 0
       });
     });
-    
+
     // Count from issues
     issues.forEach((issue: any) => {
       // Count assignees
@@ -264,7 +260,7 @@ export default function ViewFilters({
       if (assigneeData) {
         assigneeData.count++;
       }
-      
+
       // Count labels
       if (!issue.labels || issue.labels.length === 0) {
         const noLabelsData = labels.get('no-labels');
@@ -277,14 +273,14 @@ export default function ViewFilters({
           }
         });
       }
-      
+
       // Count priorities
       const priority = issue.priority || 'no-priority';
       const priorityData = priorities.get(priority);
       if (priorityData) {
         priorityData.count++;
       }
-      
+
       // Count projects
       const projectId = issue.project?.id || 'no-project';
       const projectData = projects.get(projectId);
@@ -292,7 +288,7 @@ export default function ViewFilters({
         projectData.count++;
       }
     });
-    
+
     return {
       assignees: Array.from(assignees.values()).sort((a, b) => b.count - a.count),
       labels: Array.from(labels.values()).sort((a, b) => b.count - a.count),
@@ -302,9 +298,9 @@ export default function ViewFilters({
   }, [issues, workspaceMembers, workspaceLabels, allProjects]);
 
   // Check if any filters are active
-  const hasActiveFilters = selectedFilters.assignees.length > 0 || 
-                          selectedFilters.labels.length > 0 || 
-                          selectedFilters.priority.length > 0 || 
+  const hasActiveFilters = selectedFilters.assignees.length > 0 ||
+                          selectedFilters.labels.length > 0 ||
+                          selectedFilters.priority.length > 0 ||
                           selectedFilters.projects.length > 0;
 
   if (!isOpen) return null;
@@ -315,8 +311,8 @@ export default function ViewFilters({
       <div className="p-3 border-b border-collab-700">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium text-collab-50">View Options</h3>
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
             onClick={onToggle}
             className="h-6 w-6 p-0 text-collab-500 hover:text-white"
@@ -324,7 +320,7 @@ export default function ViewFilters({
             <X className="h-3 w-3" />
           </Button>
         </div>
-        
+
         {/* Editable View Name */}
         <div className="mb-3">
           <div className="flex items-center justify-between">
@@ -370,7 +366,7 @@ export default function ViewFilters({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setIsEditingName(true)}
+                onClick={() => { setEditedName(view?.name || ''); setIsEditingName(true); }}
                 className={cn(
                   "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors h-auto leading-tight min-h-[20px]",
                   "border border-collab-600 hover:border-collab-600 hover:bg-collab-800",
@@ -382,7 +378,7 @@ export default function ViewFilters({
             )}
           </div>
         </div>
-        
+
         {/* Visibility and Owner Selectors */}
         <div className="space-y-2 mb-3">
           {/* Visibility Selector */}
@@ -412,7 +408,7 @@ export default function ViewFilters({
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent 
+              <PopoverContent
                 className="w-56 p-0 bg-collab-900 border-collab-700 shadow-xl"
                 align="start"
                 side="bottom"
@@ -423,7 +419,7 @@ export default function ViewFilters({
                     Change visibility
                   </div>
                 </div>
-                
+
                 <div className="max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-collab-600 scrollbar-track-transparent p-1">
                   <Button
                     type="button"
@@ -454,12 +450,12 @@ export default function ViewFilters({
             </Popover>
           </div>
         </div>
-        
+
         {/* Clear Filters */}
         {hasActiveFilters && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={clearAllFilters}
             className="w-full justify-start text-collab-400 hover:text-white h-7 text-xs"
           >
@@ -468,7 +464,7 @@ export default function ViewFilters({
           </Button>
         )}
       </div>
-      
+
       {/* Compact Filter Tabs */}
       <div className="border-b border-collab-700">
         <div className="flex">
@@ -494,7 +490,7 @@ export default function ViewFilters({
           ))}
         </div>
       </div>
-      
+
       {/* Filter Content */}
       <div className="flex-1 overflow-y-auto p-3">
         {/* Assignees Tab */}
@@ -528,7 +524,7 @@ export default function ViewFilters({
             ))}
           </div>
         )}
-        
+
         {/* Labels Tab */}
         {activeFilterTab === 'labels' && (
           <div className="space-y-0.5">
@@ -544,7 +540,7 @@ export default function ViewFilters({
                 onClick={() => handleFilterToggle('labels', label.id)}
               >
                 <div className="flex items-center gap-2">
-                  <div 
+                  <div
                     className="w-2.5 h-2.5 rounded"
                     style={{ backgroundColor: label.color || '#6b7280' }}
                   />
@@ -557,7 +553,7 @@ export default function ViewFilters({
             ))}
           </div>
         )}
-        
+
         {/* Priority Tab */}
         {activeFilterTab === 'priority' && (
           <div className="space-y-0.5">
@@ -590,7 +586,7 @@ export default function ViewFilters({
             ))}
           </div>
         )}
-        
+
         {/* Projects Tab */}
         {activeFilterTab === 'projects' && (
           <div className="space-y-0.5">
@@ -606,7 +602,7 @@ export default function ViewFilters({
                 onClick={() => handleFilterToggle('projects', project.id)}
               >
                 <div className="flex items-center gap-2">
-                  <div 
+                  <div
                     className="w-2.5 h-2.5 rounded"
                     style={{ backgroundColor: project.color || '#6b7280' }}
                   />
@@ -620,7 +616,7 @@ export default function ViewFilters({
           </div>
         )}
       </div>
-      
+
       {/* Compact Display Options Footer */}
       <div className="border-t border-collab-700 p-3">
         {/* View-specific options */}
@@ -629,13 +625,13 @@ export default function ViewFilters({
             Drag & drop to reorganize
           </div>
         )}
-        
+
         {viewType === 'list' && (
           <div className="text-[10px] text-collab-600 text-center">
             Click to view details
           </div>
         )}
-        
+
         {viewType === 'timeline' && (
           <div className="text-[10px] text-collab-600 text-center">
             Timeline view
@@ -692,7 +688,7 @@ function OwnerSelector({
   // Separate current user from others to prioritize current user
   const currentUser = filteredUsers.find(member => member.id === currentUserId);
   const otherUsers = filteredUsers.filter(member => member.id !== currentUserId);
-  
+
   // Combine: current user first, then others in original order
   const prioritizedUsers = currentUser ? [currentUser, ...otherUsers] : otherUsers;
 
@@ -721,8 +717,8 @@ function OwnerSelector({
           )}
         </Button>
       </PopoverTrigger>
-      
-      <PopoverContent 
+
+      <PopoverContent
         className="w-72 p-0 bg-collab-900 border-collab-700 shadow-xl"
         align="start"
         side="bottom"
@@ -742,7 +738,7 @@ function OwnerSelector({
             />
           </div>
         </div>
-        
+
         <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-collab-600 scrollbar-track-transparent p-1">
           {isLoading ? (
             <div className="px-2 py-4 text-center text-collab-500 text-xs">
@@ -753,7 +749,7 @@ function OwnerSelector({
               {prioritizedUsers.length > 0 && (
                 <div className="px-2 pt-2 pb-1 text-xs text-collab-500">Team members</div>
               )}
-              
+
               {prioritizedUsers.map((member) => (
             <Button
               key={member.id}
@@ -775,13 +771,13 @@ function OwnerSelector({
               )}
             </Button>
               ))}
-              
+
               {!prioritizedUsers.length && workspaceMembers.length > 0 && (
                 <div className="px-2 py-4 text-center text-collab-500 text-xs">
                   No people match your search
                 </div>
               )}
-              
+
               {!isLoading && workspaceMembers.length === 0 && (
                 <div className="px-2 py-4 text-center text-collab-500 text-xs">
                   No members found

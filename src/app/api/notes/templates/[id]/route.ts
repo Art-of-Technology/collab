@@ -1,3 +1,4 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 /**
  * API Routes for Individual Note Template
  *
@@ -8,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { BUILT_IN_TEMPLATES, getBuiltInTemplateByName } from '@/lib/note-templates';
@@ -101,14 +102,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     // Verify user has access to the workspace
     if (template.workspaceId) {
-      const membership = await prisma.workspaceMember.findUnique({
-        where: {
-          userId_workspaceId: {
-            userId: session.user.id,
-            workspaceId: template.workspaceId,
-          },
-        },
-      });
+      const membership = await userHasWorkspaceAccess(session.user.id, template.workspaceId);
 
       if (!membership) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
@@ -167,14 +161,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     // Verify user has access to the workspace
     if (existingTemplate.workspaceId) {
-      const membership = await prisma.workspaceMember.findUnique({
-        where: {
-          userId_workspaceId: {
-            userId: session.user.id,
-            workspaceId: existingTemplate.workspaceId,
-          },
-        },
-      });
+      const membership = await userHasWorkspaceAccess(session.user.id, existingTemplate.workspaceId);
 
       if (!membership) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
@@ -255,14 +242,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     // Verify user has access to the workspace
     if (existingTemplate.workspaceId) {
-      const membership = await prisma.workspaceMember.findUnique({
-        where: {
-          userId_workspaceId: {
-            userId: session.user.id,
-            workspaceId: existingTemplate.workspaceId,
-          },
-        },
-      });
+      const membership = await userHasWorkspaceAccess(session.user.id, existingTemplate.workspaceId);
 
       if (!membership) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });

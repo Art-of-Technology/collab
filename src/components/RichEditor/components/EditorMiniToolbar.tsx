@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useCallback, useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -16,10 +16,10 @@ interface EditorMiniToolbarProps {
   className?: string;
 }
 
-export function EditorMiniToolbar({ 
-  editorRef, 
-  onHistoryClick, 
-  className = "" 
+export function EditorMiniToolbar({
+  editorRef,
+  onHistoryClick,
+  className = ""
 }: EditorMiniToolbarProps) {
   const handleUndo = () => {
     editorRef.current?.getEditor()?.chain().focus().undo().run();
@@ -29,8 +29,17 @@ export function EditorMiniToolbar({
     editorRef.current?.getEditor()?.chain().focus().redo().run();
   };
 
-  const canUndo = editorRef.current?.getEditor()?.can().undo();
-  const canRedo = editorRef.current?.getEditor()?.can().redo();
+  const subscribe = useCallback((onChange: () => void) => {
+    const editor = editorRef.current?.getEditor();
+    editor?.on('transaction', onChange);
+    return () => { editor?.off('transaction', onChange); };
+  }, [editorRef]);
+  const history = useSyncExternalStore(subscribe, () => {
+    const editor = editorRef.current?.getEditor();
+    return (editor?.can().undo() ? 1 : 0) | (editor?.can().redo() ? 2 : 0);
+  }, () => 0);
+  const canUndo = (history & 1) !== 0;
+  const canRedo = (history & 2) !== 0;
 
   return (
     <div className={`flex items-center gap-1 ${className}`}>

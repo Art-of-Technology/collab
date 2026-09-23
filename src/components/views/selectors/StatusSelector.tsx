@@ -36,7 +36,6 @@ export function StatusSelector({
     enabled: projectIds.length > 0
   });
 
-  if (isError) return null;
 
   // Create unique statuses map using Name as key to ensure lookup by Name works correctly
   const uniqueStatuses = Array.from(new Map(statuses.map(s => [s.name, s])).values());
@@ -147,6 +146,9 @@ export function StatusSelector({
       </>
     );
   };
+
+
+  if (isError) return null;
 
   return (
     <GlobalFilterSelector

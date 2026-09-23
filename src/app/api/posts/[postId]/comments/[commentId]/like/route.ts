@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 
 export async function POST(
   req: Request,
-  { params }: { params: { postId: string; commentId: string } }
+  { params }: { params: Promise<{ postId: string; commentId: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -111,7 +111,7 @@ export async function POST(
 
 export async function GET(
   req: Request,
-  { params }: { params: { postId: string; commentId: string } }
+  { params }: { params: Promise<{ postId: string; commentId: string }> }
 ) {
   try { 
     const _params = await params;

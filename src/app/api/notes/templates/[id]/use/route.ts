@@ -1,3 +1,4 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 /**
  * API Route for Using a Template
  *
@@ -6,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { BUILT_IN_TEMPLATES } from '@/lib/note-templates';
@@ -49,6 +50,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const { title, projectId, workspaceId, customPlaceholders } = parsed.data;
 
+    if (!await userHasWorkspaceAccess(session.user.id, workspaceId)) {
+      return NextResponse.json({ error: 'Workspace access required' }, { status: 403 });
+    }
+
     // Get user and workspace info for context
     const [user, workspace, project] = await Promise.all([
       prisma.user.findUnique({
@@ -60,8 +65,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         select: { name: true },
       }),
       projectId
-        ? prisma.project.findUnique({
-            where: { id: projectId },
+        ? prisma.project.findFirst({
+            where: { id: projectId, workspaceId },
             select: { name: true },
           })
         : null,
@@ -69,6 +74,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (!workspace) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
+    if (projectId && !project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
     let templateData: {
@@ -103,8 +112,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         isBuiltIn: true,
       };
     } else {
-      const customTemplate = await prisma.noteTemplate.findUnique({
-        where: { id },
+      const customTemplate = await prisma.noteTemplate.findFirst({
+        where: { id, workspaceId },
       });
 
       if (!customTemplate) {

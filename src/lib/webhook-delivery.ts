@@ -1,4 +1,3 @@
-import { PrismaClient } from '@prisma/client';
 import { 
   WebhookEvent, 
   WebhookDeliveryOptions,
@@ -9,11 +8,12 @@ import {
   isPermanentFailure,
   createWebhookPayload,
   createSignatureHeader,
-  isValidWebhookEvent
+  isValidWebhookEvent,
+  isAllowedWebhookDeliveryUrl
 } from './webhooks';
 import { decrypt } from './apps/crypto';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export interface WebhookDeliveryResult {
   success: boolean;
@@ -63,6 +63,10 @@ export async function deliverWebhook(
       };
     }
 
+    if (!isAllowedWebhookDeliveryUrl(webhook.url)) {
+      return { success: false, error: 'Webhook origin is not authorized', shouldRetry: false };
+    }
+
     // Decrypt webhook secret
     const secret = await decrypt(Buffer.from(webhook.secretEnc));
     
@@ -97,6 +101,7 @@ export async function deliverWebhook(
     try {
       const response = await fetch(webhook.url, {
         method: 'POST',
+        redirect: 'manual',
         headers,
         body: payload,
         signal: controller.signal
@@ -106,7 +111,8 @@ export async function deliverWebhook(
 
       const responseText = await response.text().catch(() => '');
       const success = isSuccessStatus(response.status);
-      const shouldRetry = !success && !isPermanentFailure(response.status);
+      const shouldRetry = !success && !isPermanentFailure(response.status) &&
+        !(response.status >= 300 && response.status < 400);
 
       console.log(`🪝 Webhook: ${success ? 'Success' : 'Failed'} ${response.status}`, {
         eventId: event.id,

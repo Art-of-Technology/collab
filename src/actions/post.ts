@@ -1,6 +1,6 @@
 'use server';
 
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { extractMentionUserIds } from '@/utils/mentions';
@@ -394,7 +394,8 @@ export async function getPostById(postId: string) {
           name: true,
           members: {
             where: {
-              userId: user.id
+              userId: user.id,
+              status: true
             },
             select: {
               id: true

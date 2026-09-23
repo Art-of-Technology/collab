@@ -10,7 +10,7 @@ const commentSchema = z.object({
 // GET /api/features/:id/comments - Get comments for a feature request
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const _params = await params;
@@ -74,7 +74,7 @@ export async function GET(
 // POST /api/features/:id/comments - Create a comment on a feature request
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getAuthSession();

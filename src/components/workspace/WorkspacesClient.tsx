@@ -22,38 +22,39 @@ interface WorkspacesClientProps {
   userId: string;
 }
 
-export default function WorkspacesClient({ 
-  initialWorkspaces, 
+export default function WorkspacesClient({
+  initialWorkspaces,
   initialInvitations,
   userId
 }: WorkspacesClientProps) {
   const { data: session } = useSession();
   const router = useRouter();
+  const [renderTime] = useState(() => Date.now());
   const searchParams = useSearchParams();
-  
+
   // Get the active tab from URL params
   const activeTab = searchParams?.get('tab') === 'invitations' ? 'invitations' : 'workspaces';
   const [currentTab, setCurrentTab] = useState(activeTab);
-  
+
   // Fetch workspaces with TanStack Query
   const { data: workspacesData, isLoading: isLoadingWorkspaces } = useUserWorkspaces();
-  
+
   // Fetch pending invitations with TanStack Query
   const { data: pendingInvitationsData, isLoading: isLoadingInvitations } = usePendingInvitations(
     session?.user?.email || null
   );
-  
+
   // Get workspace limit
   const { data: workspaceLimit } = useWorkspaceLimit();
-  
+
   // Use the fetched data or fall back to the initial data
   const workspaces = workspacesData || initialWorkspaces;
   const pendingInvitations = pendingInvitationsData || initialInvitations;
-  
+
   // Handle tab change
   const handleTabChange = (value: string) => {
     setCurrentTab(value);
-    
+
     // Update URL
     const params = new URLSearchParams(searchParams?.toString());
     if (value === 'invitations') {
@@ -61,7 +62,7 @@ export default function WorkspacesClient({
     } else {
       params.delete('tab');
     }
-    
+
     const newPath = `${window.location.pathname}?${params.toString()}`;
     router.push(newPath, { scroll: false });
   };
@@ -85,10 +86,10 @@ export default function WorkspacesClient({
               Create Workspace
             </Button>
           ) : (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              disabled 
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled
               className={pageHeaderButtonStyles.ghost}
             >
               <DollarSign className="h-3 w-3 mr-1" />
@@ -108,8 +109,8 @@ export default function WorkspacesClient({
               size="sm"
               onClick={() => handleTabChange('workspaces')}
               className={`h-6 px-2 text-xs border ${
-                currentTab === 'workspaces' 
-                  ? 'border-blue-400 text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 hover:border-blue-400' 
+                currentTab === 'workspaces'
+                  ? 'border-blue-400 text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 hover:border-blue-400'
                   : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
               }`}
             >
@@ -121,8 +122,8 @@ export default function WorkspacesClient({
               size="sm"
               onClick={() => handleTabChange('invitations')}
               className={`h-6 px-2 text-xs border relative ${
-                currentTab === 'invitations' 
-                  ? 'border-red-400 text-red-400 bg-red-500/20 hover:bg-red-500/20 hover:border-red-400' 
+                currentTab === 'invitations'
+                  ? 'border-red-400 text-red-400 bg-red-500/20 hover:bg-red-500/20 hover:border-red-400'
                   : 'border-collab-700 text-collab-500 hover:text-collab-50 hover:border-collab-600 bg-collab-900 hover:bg-collab-800'
               }`}
             >
@@ -149,8 +150,8 @@ export default function WorkspacesClient({
             ) : workspaces.length > 0 ? (
               <div>
                 {workspaces.map((workspace: any) => (
-                  <div 
-                    key={workspace.id} 
+                  <div
+                    key={workspace.id}
                     className="group flex items-center px-6 py-2 border-b border-collab-700 hover:bg-collab-800 hover:border-collab-600 transition-all duration-150 cursor-pointer"
                   >
                     {/* Workspace Icon */}
@@ -183,10 +184,10 @@ export default function WorkspacesClient({
                           </Badge>
                         )}
                       </div>
-                      
+
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-collab-400 text-xs font-mono">@{workspace.slug}</span>
-                        
+
                         {/* Privacy Badge */}
                         <Badge className="h-3.5 px-1.5 text-[8px] font-medium bg-collab-500/20 text-collab-400 border-0 rounded flex items-center gap-1">
                           {workspace.isPublic ? (
@@ -266,8 +267,8 @@ export default function WorkspacesClient({
                   <p className="text-xs text-collab-500 mt-1 mb-3">
                     Create a workspace to start collaborating with your team
                   </p>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     className="bg-green-600 hover:bg-green-700 text-white border-0"
                     onClick={() => router.push('/create-workspace')}
                   >
@@ -285,8 +286,8 @@ export default function WorkspacesClient({
             ) : pendingInvitations.length > 0 ? (
               <div>
                 {pendingInvitations.map((invitation: any) => (
-                  <div 
-                    key={invitation.id} 
+                  <div
+                    key={invitation.id}
                     className="group flex items-center px-6 py-2 border-b border-collab-700 hover:bg-collab-800 hover:border-collab-600 transition-all duration-150 cursor-pointer"
                   >
                     {/* Invitation Icon */}
@@ -317,10 +318,10 @@ export default function WorkspacesClient({
                           Pending
                         </Badge>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-collab-400 text-xs font-mono">@{invitation.workspace.slug}</span>
-                        
+
                         {/* Invited by Badge */}
                         <Badge className="h-3.5 px-1.5 text-[8px] font-medium bg-collab-500/20 text-collab-400 border-0 rounded flex items-center gap-1">
                           <Users className="h-2 w-2" />
@@ -347,7 +348,7 @@ export default function WorkspacesClient({
                     {/* Metrics and Actions */}
                     <div className="flex items-center gap-2 flex-shrink-0 mr-4">
                       {/* Urgency Badge */}
-                      {new Date(invitation.expiresAt) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) && (
+                      {new Date(invitation.expiresAt) < new Date(renderTime + 7 * 24 * 60 * 60 * 1000) && (
                         <Badge className="h-5 px-2 text-[10px] font-medium leading-none bg-amber-500/20 text-amber-500 border-0 rounded-md">
                           Expires Soon
                         </Badge>
@@ -356,10 +357,10 @@ export default function WorkspacesClient({
 
                     {/* Action */}
                     <div className="flex items-center flex-shrink-0">
-                      <Button 
-                        asChild 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
                         className="border-green-600 text-green-600 hover:bg-green-600 hover:text-white"
                       >
                         <Link href={`/workspace-invitation/${invitation.token}`}>
@@ -387,4 +388,4 @@ export default function WorkspacesClient({
       </div>
     </div>
   );
-} 
+}

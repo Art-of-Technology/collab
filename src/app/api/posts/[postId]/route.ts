@@ -1,3 +1,4 @@
+import { getPostById } from "@/actions/post";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -5,34 +6,21 @@ import { getCurrentUser } from "@/lib/session";
 // Get a single post
 export async function GET(
   req: Request,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
-    const post = await prisma.post.findUnique({
-      where: {
-        id: params.postId,
-      },
-      include: {
-        author: true,
-        tags: true,
-        comments: {
-          include: {
-            author: true,
-          },
-          orderBy: {
-            createdAt: "asc",
-          },
-        },
-        reactions: true,
-      },
-    });
-
-    if (!post) {
-      return new NextResponse("Post not found", { status: 404 });
-    }
+    const post = await getPostById((await params).postId);
 
     return NextResponse.json(post);
   } catch (error) {
+    if (error instanceof Error) {
+      if (['Unauthorized', 'User not found'].includes(error.message)) {
+        return new NextResponse("Unauthorized", { status: 401 });
+      }
+      if (['Post not found', 'You do not have access to this post'].includes(error.message)) {
+        return new NextResponse("Post not found", { status: 404 });
+      }
+    }
     console.error("[POST_GET]", error);
     return new NextResponse("Internal error", { status: 500 });
   }
@@ -41,7 +29,7 @@ export async function GET(
 // Update a post
 export async function PATCH(
   req: Request,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -159,7 +147,7 @@ export async function PATCH(
 // Delete a post
 export async function DELETE(
   req: Request,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
     const user = await getCurrentUser();

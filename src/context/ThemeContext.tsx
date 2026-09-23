@@ -47,16 +47,7 @@ interface ThemeProviderProps {
 
 export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   const { resolvedTheme } = useNextTheme();
-  const [theme, setTheme] = useState(defaultTheme);
-
-  useEffect(() => {
-    // Update theme based on next-themes
-    if (resolvedTheme === "dark") {
-      setTheme(darkTheme);
-    } else {
-      setTheme(defaultTheme);
-    }
-  }, [resolvedTheme]);
+  const theme = resolvedTheme === "dark" ? darkTheme : defaultTheme;
 
   return (
     <ThemeContext.Provider
@@ -67,4 +58,4 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
       {children}
     </ThemeContext.Provider>
   );
-}; 
+};

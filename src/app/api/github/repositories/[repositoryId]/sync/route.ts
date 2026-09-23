@@ -1,3 +1,4 @@
+import type { PRState } from '@prisma/client';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authConfig } from "@/lib/auth";
@@ -239,7 +240,7 @@ export async function POST(
 
       for (const pr of allPRs) {
         // Determine state
-        let state = 'OPEN';
+        let state: PRState = 'OPEN';
         if (pr.merged_at) {
           state = 'MERGED';
         } else if (pr.closed_at) {

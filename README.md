@@ -151,6 +151,8 @@ Collab is designed to streamline internal communication and work tracking by off
    APP_TOKENS_KEY="your-32-character-encryption-key-here"  # Generate with: openssl rand -hex 32
    ```
 
+   For outbound webhook configuration, see [Webhooks](docs/apps/README.md#webhooks).
+
    #### Error Monitoring (Sentry - optional)
    ```bash
    SENTRY_DSN="https://your-sentry-dsn@sentry.io/project-id"
@@ -228,6 +230,20 @@ Collab is designed to streamline internal communication and work tracking by off
 - Create or join a workspace to start sharing updates.
 - Use the timeline to post status updates, tasks, and feature requests.
 - Organize work using boards, milestones, and stories.
+
+### Integration availability
+
+The legacy Slack `/api/slack/my-tasks` and `/api/slack/create-issue` commands
+return HTTP 503 with an ephemeral unavailable message. Editable profile `slackId`
+values are not verified identities; existing configuration, profile IDs and
+issues are retained. Use Collab's existing task UI while the separately planned
+Forge-backed commands await verified workspace/channel/project binding.
+Inventory command consumers before deploying this retirement.
+
+For Notes visibility, sharing and template restrictions, see the
+[Notes access contract](docs/security/2026-09-23-hardening.md#notes-access).
+For issue edits and project moves, see the
+[issue mutation contract](docs/security/2026-09-23-hardening.md#issue-access-and-mutations).
 
 ## API
 

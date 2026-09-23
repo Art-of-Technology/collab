@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import DOMPurify from "isomorphic-dompurify";
 import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import {
@@ -87,9 +88,10 @@ const getContentPreview = (content: string, maxLength: number = 100) => {
 const getChangeTypeColor = (changeType: NoteVersionChangeType) => {
   switch (changeType) {
     case "CREATED": return "#22c55e";
-    case "UPDATED": return "#3b82f6";
-    case "RESTORED": return "#f59e0b";
-    case "PUBLISHED": return "#a855f7";
+    case "EDIT":
+    case "TITLE": return "#3b82f6";
+    case "RESTORE": return "#f59e0b";
+    case "MERGE": return "#a855f7";
     default: return "#6366f1";
   }
 };
@@ -262,7 +264,7 @@ export function VersionHistoryPanel({
                           [&_pre]:bg-collab-800 [&_pre]:border [&_pre]:border-collab-600 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:my-3
                           [&_blockquote]:border-l-2 [&_blockquote]:border-collab-600 [&_blockquote]:pl-3 [&_blockquote]:text-collab-400 [&_blockquote]:italic
                           [&_a]:text-blue-400 [&_a]:underline"
-                        dangerouslySetInnerHTML={{ __html: selectedVersion.content }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedVersion.content) }}
                       />
                     </div>
                   </div>

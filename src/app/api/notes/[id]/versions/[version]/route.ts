@@ -1,6 +1,7 @@
+import { canAccessNote } from "@/lib/secrets/access";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { NoteScope } from "@prisma/client";
 import { getVersion, restoreVersion, compareVersions } from "@/lib/versioning";
@@ -21,6 +22,11 @@ export async function GET(
     }
 
     const { id, version: versionParam } = await params;
+    const access = await canAccessNote(session.user.id, id);
+    if (!access.canAccess) {
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    }
+
     const versionNumber = parseInt(versionParam);
 
     if (isNaN(versionNumber) || versionNumber < 1) {
@@ -78,6 +84,11 @@ export async function POST(
     }
 
     const { id, version: versionParam } = await params;
+    const access = await canAccessNote(session.user.id, id);
+    if (!access.canEdit) {
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    }
+
     const versionNumber = parseInt(versionParam);
 
     if (isNaN(versionNumber) || versionNumber < 1) {

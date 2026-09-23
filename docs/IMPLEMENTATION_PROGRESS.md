@@ -25,10 +25,14 @@ This document tracks the implementation progress of transforming Collab into an 
 | AI Context | ✅ Complete | `src/context/AIContext.tsx` | Full state management |
 | useAI hook | ✅ Complete | `src/hooks/useAI.ts` | Convenience hooks |
 
-### 1.3 AI Assistant Widget
+### 1.3 AI Assistant Surface
+
+The active layout uses `src/components/ai/ChatBar/ChatBar.tsx`. The unused legacy
+`AIAssistantWidget.tsx` and its exports were removed during foundation cleanup;
+the dated progress entries below describe the earlier implementation.
+
 | Task | Status | File | Notes |
 |------|--------|------|-------|
-| Main widget | ✅ Complete | `src/components/ai/AIAssistantWidget.tsx` | Floating widget with expand/collapse |
 | Message component | ✅ Complete | `src/components/ai/AIMessage.tsx` | Markdown support, actions |
 | Quick actions | ✅ Complete | `src/components/ai/AIQuickActions.tsx` | Context-aware suggestions |
 | Suggestion component | ✅ Complete | `src/components/ai/AISuggestion.tsx` | Insight cards, priority variants |
@@ -45,7 +49,7 @@ This document tracks the implementation progress of transforming Collab into an 
 | Task | Status | File | Notes |
 |------|--------|------|-------|
 | AIProvider in layout | ✅ Complete | `src/components/layout/LayoutWithSidebar.tsx` | Widget accessible everywhere |
-| AIAssistantWidget | ✅ Complete | `src/components/layout/LayoutWithSidebar.tsx` | Fixed bottom-right position |
+| Assistant integration | ✅ Complete | `src/components/layout/LayoutWithSidebar.tsx` | See [AI Assistant Surface](#13-ai-assistant-surface) |
 
 ---
 
@@ -137,7 +141,6 @@ src/hooks/
 └── useAI.ts              # Convenience hooks
 
 src/components/ai/
-├── AIAssistantWidget.tsx # Main floating widget
 ├── AIMessage.tsx         # Chat message component
 ├── AIQuickActions.tsx    # Quick action buttons
 ├── AISuggestion.tsx      # Insight/suggestion cards

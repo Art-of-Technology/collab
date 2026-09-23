@@ -101,19 +101,24 @@ export default async function ProjectFeatureRequestPage({ params }: FeatureReque
     redirect('/login');
   }
 
+  let featureRequest;
   try {
-    const featureRequest = await getFeatureRequestById(id, workspaceId);
+    featureRequest = await getFeatureRequestById(id, workspaceId);
+  } catch (error) {
+    console.error("Error loading feature request:", error);
+    return <div>Something went wrong</div>;
+  }
 
-    if (!featureRequest) {
-      notFound();
-    }
+  if (!featureRequest) {
+    notFound();
+  }
 
-    // Verify the feature request belongs to this project
-    if (featureRequest.projectId && featureRequest.projectId !== project.id) {
-      redirect(`/${workspaceSlugOrId}/projects/${projectSlug}/features`);
-    }
+  // Verify the feature request belongs to this project
+  if (featureRequest.projectId && featureRequest.projectId !== project.id) {
+    redirect(`/${workspaceSlugOrId}/projects/${projectSlug}/features`);
+  }
 
-    return (
+  return (
       <div className="container max-w-4xl py-4 sm:py-8 px-0 sm:px-0">
         <div className="mb-6 text-left">
           <Link href={`/${workspaceSlugOrId}/projects/${projectSlug}/features`}>
@@ -131,7 +136,7 @@ export default async function ProjectFeatureRequestPage({ params }: FeatureReque
             isAdmin={featureRequest.isAdmin}
             currentUserId={user.id}
           />
-          
+
           <div className="mt-8 bg-card/95 backdrop-blur-sm border rounded-lg border-border/50 p-4 sm:p-6">
             <FeatureRequestComments
               featureRequestId={id}
@@ -142,9 +147,4 @@ export default async function ProjectFeatureRequestPage({ params }: FeatureReque
         </div>
       </div>
     );
-  } catch (error) {
-    console.error("Error loading feature request:", error);
-    return <div>Something went wrong</div>;
-  }
 }
-

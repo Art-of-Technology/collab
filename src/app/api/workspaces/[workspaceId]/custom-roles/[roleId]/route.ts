@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { checkUserPermission, Permission as PermissionEnum } from '@/lib/permissions';
 import { Permission } from '@prisma/client';
@@ -8,7 +8,7 @@ import { Permission } from '@prisma/client';
 // GET /api/workspaces/[workspaceId]/custom-roles/[roleId] - Get custom role details
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string; roleId: string } }
+  { params }: { params: Promise<{ workspaceId: string; roleId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -73,7 +73,7 @@ export async function GET(
 // PUT /api/workspaces/[workspaceId]/custom-roles/[roleId] - Update custom role
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { workspaceId: string; roleId: string } }
+  { params }: { params: Promise<{ workspaceId: string; roleId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -198,7 +198,7 @@ export async function PUT(
 // DELETE /api/workspaces/[workspaceId]/custom-roles/[roleId] - Delete custom role
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { workspaceId: string; roleId: string } }
+  { params }: { params: Promise<{ workspaceId: string; roleId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);

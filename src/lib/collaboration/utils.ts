@@ -35,7 +35,7 @@ export function createCollaborationUser(session: any, currentUser?: any): Collab
   }
   
   // Generate initials from name
-  const name = session.user.name || 'User';
+  const name: string = session.user.name || 'User';
   const initials = name
     .split(' ')
     .map(word => word[0]?.toUpperCase() || '')

@@ -1,10 +1,10 @@
+import type { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { PrismaClient } from '@prisma/client';
+import { authOptions } from '@/lib/auth-options';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 const UpdateManifestSchema = z.object({
   entrypoint_url: z.string().url().optional(),
@@ -69,7 +69,6 @@ export async function GET(
       return NextResponse.json({ error: 'Version not found' }, { status: 404 });
     }
 
-    await prisma.$disconnect();
 
     return NextResponse.json({
       version: {
@@ -82,7 +81,7 @@ export async function GET(
     });
   } catch (error) {
     console.error('Error getting app version:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -148,10 +147,10 @@ export async function PATCH(
     }
 
     // Parse current manifest
-    const currentManifest = currentVersion.manifest as Record<string, unknown>;
+    const currentManifest = currentVersion.manifest as Prisma.JsonObject;
 
     // Build updated manifest
-    const updatedManifest = {
+    const updatedManifest: Prisma.JsonObject = {
       ...currentManifest,
       ...(updates.entrypoint_url && { entrypoint_url: updates.entrypoint_url }),
       ...(updates.name && { name: updates.name }),
@@ -162,7 +161,7 @@ export async function PATCH(
 
     // Handle OAuth updates
     if (updates.oauth) {
-      const currentOAuth = (currentManifest.oauth as Record<string, unknown>) || {};
+      const currentOAuth = (currentManifest.oauth as Prisma.JsonObject) || {};
       updatedManifest.oauth = {
         ...currentOAuth,
         ...(updates.oauth.redirect_uris && { redirect_uris: updates.oauth.redirect_uris }),
@@ -171,7 +170,7 @@ export async function PATCH(
 
     // Handle CSP updates
     if (updates.csp) {
-      const currentCsp = (currentManifest.csp as Record<string, unknown>) || {};
+      const currentCsp = (currentManifest.csp as Prisma.JsonObject) || {};
       updatedManifest.csp = {
         ...currentCsp,
         ...(updates.csp.connectSrc && { connectSrc: updates.csp.connectSrc }),
@@ -216,7 +215,6 @@ export async function PATCH(
       changes: Object.keys(updates),
     });
 
-    await prisma.$disconnect();
 
     return NextResponse.json({
       success: true,
@@ -229,7 +227,7 @@ export async function PATCH(
     });
   } catch (error) {
     console.error('Error updating app version:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

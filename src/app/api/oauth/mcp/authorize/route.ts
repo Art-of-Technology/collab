@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { randomBytes } from 'crypto';
 import { isAllowedRedirectUri } from '@/lib/oauth-scopes';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 /**
  * OAuth Authorization Endpoint for MCP/System Apps
@@ -197,12 +196,11 @@ export async function GET(request: NextRequest) {
     if (state) callbackUrl.searchParams.set('state', state);
     callbackUrl.searchParams.set('workspace_id', workspaceId);
 
-    await prisma.$disconnect();
     return NextResponse.redirect(callbackUrl);
 
   } catch (error) {
     console.error('MCP OAuth authorization error:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       {
         error: 'server_error',

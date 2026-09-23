@@ -248,6 +248,20 @@ For `mfe_remote` app types, the `mfe` configuration object is required:
 - Supported event types: `issue.created`, `issue.updated`, `issue.deleted`, `post.created`, `post.updated`, `workspace.member_added`, `workspace.member_removed`, `app.installed`, `app.uninstalled` (`WEBHOOK_EVENT_TYPES`).
 - Deliveries record attempts, exponential backoff schedules and status codes. Analytics view surfaces aggregate delivery counts and success rate (currently mocked for UI testing).
 
+Delivery requires `COLLAB_WEBHOOK_ALLOWED_ORIGINS`, a comma-separated list of
+exact HTTPS origins (scheme, canonical hostname and port), for example
+`https://hooks.example.com,https://events.example.com:8443`. Unset or invalid
+configuration denies delivery. Configured origins must not contain credentials,
+non-root paths, queries or fragments; delivery URLs reject credentials and
+fragments. Redirect responses are neither followed nor retried. Stored webhook
+records alone do not authorize outbound delivery and remain intact when blocked.
+
+Operators must control the allowed services, DNS and destination addresses.
+This allowlist does not protect against DNS rebinding or internal targets if an
+untrusted origin is allowed. Before production configuration or deployment,
+inventory consumers with Network Doctor. This security slice sets no production
+allowlist and does not authorize deployment.
+
 ## Security Guarantees
 - Manifests validated with Zod before storage; reserved slug list blocks collisions with core routes.
 - `validateAppManifestSecurity` enforces HTTPS entrypoints and flags suspicious scopes during install.

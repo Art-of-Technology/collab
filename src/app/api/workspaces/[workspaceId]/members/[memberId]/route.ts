@@ -6,7 +6,7 @@ import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 // PATCH /api/workspaces/[workspaceId]/members/[memberId] - Update member status
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { workspaceId: string; memberId: string } }
+  { params }: { params: Promise<{ workspaceId: string; memberId: string }> }
 ) {
   const _params = await params;
   try {

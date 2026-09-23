@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import { AppManifestV1 } from './apps/types';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 /**
  * Security utilities for the Collab App Platform

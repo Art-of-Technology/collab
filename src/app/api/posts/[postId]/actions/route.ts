@@ -3,7 +3,7 @@ import { getPostActions } from "@/actions/post";
 
 export async function GET(
   req: Request,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
     const _params = await params;

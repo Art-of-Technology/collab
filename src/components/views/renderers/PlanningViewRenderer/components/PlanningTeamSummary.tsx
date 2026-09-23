@@ -18,7 +18,7 @@ import { format } from 'date-fns';
 
 interface PlanningTeamSummaryProps {
   summary: TeamRangeSummary;
-  dateRange: { startDate: string; endDate: string };
+  dateRange: { startDate: Date; endDate: Date };
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -166,7 +166,7 @@ export function PlanningTeamSummary({
         />
         <StatCard
           label="Movements"
-          value={summary.totalMovements}
+          value={summary.totalMoved}
           icon={<Activity className="h-5 w-5" />}
           color="text-orange-400"
           bgColor="bg-orange-500/10"

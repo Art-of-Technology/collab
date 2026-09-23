@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { PrismaClient } from '@prisma/client';
+import { authOptions } from '@/lib/auth-options';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 
 export async function POST(
@@ -59,7 +58,6 @@ export async function POST(
     // TODO: Send notification to app developer about rejection
     // This could be implemented later with an email service or in-app notifications
 
-    await prisma.$disconnect();
 
     return NextResponse.json({ 
       success: true, 
@@ -68,7 +66,7 @@ export async function POST(
 
   } catch (error) {
     console.error('Error rejecting app:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
