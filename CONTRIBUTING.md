@@ -47,6 +47,42 @@ Prisma and runs the production build with TypeScript errors enforced. An earlier
 incremental typecheck or build pass does not validate a later dependency head.
 Use local dummy configuration for validation, never live credentials or data.
 
+### API documentation generation
+
+Run `npx --no-install api-scanner --config .api-scanner.json` from the repository
+root. The scanner configuration excludes the exact retired Slack command routes;
+their availability is documented in [Integration availability](README.md#integration-availability).
+Do not hand-edit generated endpoint contracts. Review generated diffs before
+committing: a full scan can also refresh unrelated endpoints and examples.
+
+The following offline regression generates JSON with the installed scanner and
+checks that the exclusion removes only those two POST endpoints. It also checks
+the published reference and its endpoint count, without contacting any API:
+
+```sh
+node <<'JS'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const { ApiScanner, Formatter } = require('api-scanner');
+const config = require('./.api-scanner.json');
+const retired = ['POST /api/slack/create-issue', 'POST /api/slack/my-tasks'];
+const key = endpoint => `${endpoint.method} ${endpoint.url}`;
+const keys = doc => doc.endpoints.map(key).sort();
+(async () => {
+  const scanner = new ApiScanner(config);
+  const all = await new ApiScanner({ ...config, ignore: [] }).scan();
+  const generated = JSON.parse(await new Formatter(config).format(await scanner.scan(), 'json'));
+  assert.deepEqual(keys(all).filter(key => retired.includes(key)), retired);
+  assert.deepEqual(keys(generated), keys(all).filter(key => !retired.includes(key)));
+  const published = JSON.parse(fs.readFileSync('public/api-documentation.json', 'utf8'));
+  for (const doc of [generated, published]) {
+    assert.equal(doc.totalEndpoints, doc.endpoints.length);
+    assert.equal(keys(doc).some(key => retired.includes(key)), false);
+  }
+})().catch(error => { console.error(error); process.exitCode = 1; });
+JS
+```
+
 > ### Legal Notice <!-- omit in toc -->
 > When contributing to this project, you must agree that you have authored 100% of the content, that you have the necessary rights to the content and that the content you contribute may be provided under the project licence.
 

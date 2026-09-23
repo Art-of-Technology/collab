@@ -196,3 +196,24 @@ restricted and expired denial, collection/count parity, revoked membership,
 and real secret decryption with a dummy key. No live credentials, database,
 integration, migration or deployment was used. Broader validation remains with
 the outer executor.
+
+## Deferred UX/editor lint checklist
+
+The documentation-phase full lint pass exited 0 with zero errors and 58 warnings.
+The following changed-file warnings are accepted follow-ups, retained without
+suppression or callback/collaboration behavior changes in this security slice:
+
+- [ ] `src/app/(main)/[workspaceId]/notes/page.tsx:493`: review the missing
+  `fetchNotes`/`fetchTags` effect dependencies; verify workspace switches and
+  refresh behavior without introducing a fetch loop.
+- [ ] `src/components/RichEditor/RichEditor.tsx:434` (callbacks at 608 and 614):
+  review unstable mention-trigger dependencies; verify selection and mention
+  handling before changing callback identity.
+- [ ] `src/components/ai/ChatBar/ChatInput.tsx:71,311`: review unoptimized image
+  loading and its LCP/bandwidth cost while preserving attachment previews.
+- [ ] `src/components/ui/markdown-editor.tsx:1234,1260`: review initial-content
+  effect dependencies and the imperative handle's extra `collabDocumentId`
+  dependency; verify collaborative initialization and document switching before
+  changing effects that could overwrite synchronized content.
+
+Other warnings occur in unchanged files; this result is not a zero-warning claim.
