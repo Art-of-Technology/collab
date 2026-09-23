@@ -6,7 +6,7 @@ import { checkUserPermission, Permission } from '@/lib/permissions';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);

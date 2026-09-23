@@ -6,7 +6,7 @@ import { findIssueByIdOrKey } from "@/lib/issue-finder";
 // PUT /api/issues/[issueId]/comments/[commentId] - Update a comment
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { issueId: string; commentId: string } }
+  { params }: { params: Promise<{ issueId: string; commentId: string }> }
 ) {
   try {
     const currentUser = await getCurrentUser();
@@ -77,7 +77,7 @@ export async function PUT(
 // DELETE /api/issues/[issueId]/comments/[commentId] - Delete a comment
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { issueId: string; commentId: string } }
+  { params }: { params: Promise<{ issueId: string; commentId: string }> }
 ) {
   try {
     const currentUser = await getCurrentUser();

@@ -7,7 +7,7 @@ import { generateInternalStatusName } from '@/constants/project-statuses';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string; projectSlug: string } }
+  { params }: { params: Promise<{ workspaceId: string; projectSlug: string }> }
 ) {
   try {
     const session = await getServerSession(authConfig);
@@ -103,7 +103,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { workspaceId: string; projectSlug: string } }
+  { params }: { params: Promise<{ workspaceId: string; projectSlug: string }> }
 ) {
   try {
     const session = await getServerSession(authConfig);

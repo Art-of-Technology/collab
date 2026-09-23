@@ -5,12 +5,12 @@ import { getCurrentUser } from "@/lib/session";
 // Get a single post
 export async function GET(
   req: Request,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
     const post = await prisma.post.findUnique({
       where: {
-        id: params.postId,
+        id: (await params).postId,
       },
       include: {
         author: true,
@@ -41,7 +41,7 @@ export async function GET(
 // Update a post
 export async function PATCH(
   req: Request,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -159,7 +159,7 @@ export async function PATCH(
 // Delete a post
 export async function DELETE(
   req: Request,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
     const user = await getCurrentUser();

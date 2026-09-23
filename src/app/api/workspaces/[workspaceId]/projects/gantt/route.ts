@@ -6,7 +6,7 @@ import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     const session = await getServerSession(authConfig);

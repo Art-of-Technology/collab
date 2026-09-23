@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 // GET /api/workspaces/[workspaceId] - Get workspace details
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -111,7 +111,7 @@ export async function GET(
 // PATCH /api/workspaces/[workspaceId] - Update workspace
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -183,7 +183,7 @@ export async function PATCH(
 // DELETE /api/workspaces/[workspaceId] - Delete workspace
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);

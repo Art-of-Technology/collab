@@ -8,7 +8,7 @@ import { Permission } from '@prisma/client';
 // GET /api/workspaces/[workspaceId]/custom-roles - List custom roles
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -73,7 +73,7 @@ export async function GET(
 // POST /api/workspaces/[workspaceId]/custom-roles - Create custom role
 export async function POST(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);

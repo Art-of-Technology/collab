@@ -6,7 +6,7 @@ import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 // GET /api/workspaces/[workspaceId]/members - Get all members of a workspace
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   const _params = await params;
   try {

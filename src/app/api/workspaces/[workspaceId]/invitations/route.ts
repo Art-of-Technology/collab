@@ -9,7 +9,7 @@ import { checkUserPermission, Permission } from '@/lib/permissions';
 // GET /api/workspaces/[workspaceId]/invitations - Get invitations for a workspace
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -68,7 +68,7 @@ export async function GET(
 // POST /api/workspaces/[workspaceId]/invitations - Create a new invitation
 export async function POST(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -197,7 +197,7 @@ export async function POST(
 // DELETE /api/workspaces/[workspaceId]/invitations?id=invitationId - Cancel/delete an invitation
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);

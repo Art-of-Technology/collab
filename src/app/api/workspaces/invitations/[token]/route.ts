@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 // GET /api/workspaces/invitations/[token] - Get invitation details
 export async function GET(
   request: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
     const _params = await params;
@@ -55,7 +55,7 @@ export async function GET(
 // POST /api/workspaces/invitations/[token] - Accept an invitation
 export async function POST(
   request: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);

@@ -8,7 +8,7 @@ import { ensureRolePermissionsForWorkspaceRole } from '@/lib/role-permission-def
 // PUT /api/workspaces/[workspaceId]/members/[memberId]/role - Update member role
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { workspaceId: string; memberId: string } }
+  { params }: { params: Promise<{ workspaceId: string; memberId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);

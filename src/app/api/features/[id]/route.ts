@@ -13,7 +13,7 @@ const updateFeatureRequestSchema = z.object({
 // GET /api/features/:id - Get a specific feature request
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const _params = await params;
@@ -73,7 +73,7 @@ export async function GET(
 // PATCH /api/features/:id - Update a feature request
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getAuthSession();
@@ -174,7 +174,7 @@ export async function PATCH(
 // DELETE /api/features/:id - Delete a feature request
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getAuthSession();

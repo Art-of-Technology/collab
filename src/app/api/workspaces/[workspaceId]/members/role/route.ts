@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 // GET /api/workspaces/[workspaceId]/members/role - Get current user's role in a workspace
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   const _params = await params;
   try {
