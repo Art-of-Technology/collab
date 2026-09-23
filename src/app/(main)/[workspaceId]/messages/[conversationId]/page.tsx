@@ -11,7 +11,7 @@ import { getConversationById } from "@/actions/message";
 export default async function ConversationPage({
   params,
 }: {
-  params: { conversationId: string };
+  params: Promise<{ conversationId: string }>;
 }) {
   const _params = await params;
   const { conversationId } = _params;

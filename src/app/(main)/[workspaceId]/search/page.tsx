@@ -4,10 +4,10 @@ import { getAuthSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
 interface SearchPageProps {
-  searchParams: {
+  searchParams: Promise<{
     q?: string;
     tab?: string;
-  };
+  }>;
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {

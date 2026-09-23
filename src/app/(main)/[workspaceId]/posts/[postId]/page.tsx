@@ -6,10 +6,10 @@ import { getPostById } from "@/actions/post";
 import PostDetailClient from "@/components/posts/PostDetailClient";
 
 interface PostPageProps {
-  params: {
+  params: Promise<{
     postId: string;
     workspaceId: string;
-  };
+  }>;
 }
 
 export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {

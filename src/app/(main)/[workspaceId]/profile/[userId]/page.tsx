@@ -4,10 +4,10 @@ import { getUserProfile } from "@/actions/user";
 import UserProfileClient from "@/components/profile/UserProfileClient";
 
 interface UserProfilePageProps {
-  params: {
+  params: Promise<{
     userId: string;
     workspaceId: string;
-  };
+  }>;
 }
 
 export default async function UserProfilePage({ params }: UserProfilePageProps) {

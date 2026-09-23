@@ -6,7 +6,7 @@ import TimelinePageClient from "./TimelinePageClient";
 export const dynamic = "force-dynamic";
 
 interface TimelinePageProps {
-  params: { workspaceId: string };
+  params: Promise<{ workspaceId: string }>;
 }
 
 export default async function TimelinePage({ params }: TimelinePageProps) {

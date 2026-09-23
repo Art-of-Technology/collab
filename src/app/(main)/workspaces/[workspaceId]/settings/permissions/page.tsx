@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { checkUserPermission, Permission, getUserWorkspaceRole } from '@/lib/permissions';
 import PermissionsManager from '@/components/workspace/PermissionsManager';
@@ -15,9 +15,9 @@ import { Shield, Users, ArrowLeft, Sparkles } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface PermissionsPageProps {
-  params: {
+  params: Promise<{
     workspaceId: string;
-  };
+  }>;
 }
 
 async function PermissionsPageContent({ workspaceId }: { workspaceId: string }) {

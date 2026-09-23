@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth-options";
 import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
 import { differenceInDays } from "date-fns";
 import { checkUserPermission, Permission } from "@/lib/permissions";

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { generateClientCredentials, encryptToken } from '@/lib/apps/crypto';
 import { z } from 'zod';
 import { isReservedSlug } from '@/lib/apps/validation';

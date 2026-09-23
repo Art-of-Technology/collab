@@ -72,13 +72,10 @@ export async function processUserProfileImageServer(
       return null;
     }
 
-    // If already a Cloudinary URL, return as is
-    if (imageUrl.includes("cloudinary.com")) {
-      return imageUrl;
-    }
-
     // If it's a Google profile image, upload to Cloudinary
-    if (imageUrl.includes("googleusercontent.com")) {
+    const url = new URL(imageUrl);
+    if (url.protocol === "https:" &&
+        (url.hostname === "googleusercontent.com" || url.hostname.endsWith(".googleusercontent.com"))) {
       console.log(
         "📷 Uploading Google profile image to Cloudinary for user:",
         userId
@@ -121,20 +118,5 @@ export async function updateUserProfileImageIfNeededServer(
   currentImageUrl: string | null,
   userId: string
 ): Promise<string | null> {
-  try {
-    // Skip if no image or already using Cloudinary
-    if (!currentImageUrl || currentImageUrl.includes("cloudinary.com")) {
-      return currentImageUrl;
-    }
-
-    // Only process Google images for now
-    if (currentImageUrl.includes("googleusercontent.com")) {
-      return await processUserProfileImageServer(currentImageUrl, userId);
-    }
-
-    return currentImageUrl;
-  } catch (error) {
-    console.error("Error updating user profile image:", error);
-    return currentImageUrl;
-  }
+  return processUserProfileImageServer(currentImageUrl, userId);
 }
