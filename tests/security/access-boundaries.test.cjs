@@ -23,6 +23,56 @@ function load(file, dependencies = {}, globals = {}) {
   return exports;
 }
 
+test('feature pages preserve Next.js missing-feature and wrong-project navigation', async () => {
+  const session = { user: { id: 'alice', email: 'alice@example.test' } };
+  let feature;
+  let fetchError;
+  const dependencies = {
+    'react/jsx-runtime': require('react/jsx-runtime'),
+    'next/navigation': require('next/navigation'),
+    'next/link': { default: 'a' },
+    'lucide-react': { ChevronLeft: 'span' },
+    'next-auth': { getServerSession: async () => session },
+    '@/lib/auth': { getAuthSession: async () => session, authConfig: {} },
+    '@/lib/slug-resolvers': { resolveWorkspaceSlug: async () => 'workspace' },
+    '@/lib/prisma': { prisma: {
+      workspace: { findFirst: async () => ({ id: 'workspace' }) },
+      project: { findFirst: async () => ({ id: 'project', name: 'Project' }) },
+      user: { findUnique: async () => session.user },
+    } },
+    '@/components/ui/button': { Button: 'button' },
+    '@/components/features/FeatureRequestDetail': { default: 'article' },
+    '@/components/features/FeatureRequestComments': { default: 'section' },
+    '@/actions/feature': { getFeatureRequestById: async (id, workspaceId) => {
+      assert.equal(id, 'feature');
+      assert.equal(workspaceId, 'workspace');
+      if (fetchError) throw fetchError;
+      return feature;
+    } },
+  };
+  const props = { params: Promise.resolve({ workspaceId: 'workspace', projectSlug: 'project', id: 'feature' }) };
+  for (const route of ['features/[id]', 'projects/[projectSlug]/features/[id]']) {
+    const page = load(`src/app/(main)/[workspaceId]/${route}/page.tsx`, dependencies, {
+      console: { error() {} },
+    }).default;
+    feature = null;
+    await assert.rejects(page(props), { digest: 'NEXT_HTTP_ERROR_FALLBACK;404' });
+    if (route.startsWith('projects/')) {
+      feature = { projectId: 'another-project' };
+      await assert.rejects(page(props), {
+        digest: 'NEXT_REDIRECT;replace;/workspace/projects/project/features;307;',
+      });
+    }
+    feature = { projectId: 'project', comments: [], userVote: null, isAdmin: false };
+    assert.equal(require('react').isValidElement(await page(props)), true);
+    fetchError = new Error('Feature storage unavailable');
+    const fallback = await page(props);
+    assert.equal(fallback.type, 'div');
+    assert.equal(fallback.props.children, 'Something went wrong');
+    fetchError = undefined;
+  }
+});
+
 function matches(row, where) {
   return Object.entries(where).every(([key, value]) => {
     if (key === 'AND') return value.every(clause => matches(row, clause));
