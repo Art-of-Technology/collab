@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import DOMPurify from "isomorphic-dompurify";
 import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import {
@@ -262,7 +263,7 @@ export function VersionHistoryPanel({
                           [&_pre]:bg-collab-800 [&_pre]:border [&_pre]:border-collab-600 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:my-3
                           [&_blockquote]:border-l-2 [&_blockquote]:border-collab-600 [&_blockquote]:pl-3 [&_blockquote]:text-collab-400 [&_blockquote]:italic
                           [&_a]:text-blue-400 [&_a]:underline"
-                        dangerouslySetInnerHTML={{ __html: selectedVersion.content }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedVersion.content) }}
                       />
                     </div>
                   </div>

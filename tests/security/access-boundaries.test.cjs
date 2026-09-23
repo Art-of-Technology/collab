@@ -10,7 +10,7 @@ function load(file, dependencies = {}, globals = {}) {
   const exports = {};
   const source = readFileSync(resolve(process.env.SECURITY_TEST_ROOT || resolve(__dirname, '../../'), file), 'utf8');
   const { outputText } = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   });
   runInNewContext(outputText, {
     exports,
@@ -187,4 +187,57 @@ test('shared role checks reject inactive memberships', async () => {
     assert.equal((await permissions.getUserPermissions('alice', 'joined')).length, active ? 1 : 0);
     assert.equal(await permissions.getUserWorkspaceRole('alice', 'joined'), active ? 'MEMBER' : null);
   }
+});
+
+test('login redirects stay on the exact application origin', async () => {
+  const { authOptions } = load('src/app/api/auth/[...nextauth]/route.ts', {
+    'next-auth': { default: () => () => {} },
+    'next-auth/providers/google': { default: () => ({}) },
+    '@/lib/prisma': { prisma: {} },
+    '@/utils/user-image-handler': {},
+    '@/lib/custom-prisma-adapter': { CustomPrismaAdapter: () => ({}) },
+  }, { process: { env: {} }, URL });
+  const baseUrl = 'https://collab.example';
+  for (const url of ['https://collab.example.evil.test/', '//evil.test/', '/\\evil.test/', 'javascript:alert(1)', 'http://collab.example/', 'https://[invalid']) {
+    assert.equal(await authOptions.callbacks.redirect({ url, baseUrl }), baseUrl, url);
+  }
+  for (const url of ['/projects', 'https://collab.example/projects']) {
+    assert.equal(await authOptions.callbacks.redirect({ url, baseUrl }), baseUrl + '/projects');
+  }
+});
+
+test('note history sanitizes stored HTML before rendering while retaining normal text', () => {
+  const version = {
+    content: '<p>Keep this note</p><img src=x onerror="alert(1)"><script>alert(1)</script><a href="javascript:alert(1)">link</a>',
+    createdAt: new Date().toISOString(), author: { name: 'Alice' }, version: 1,
+  };
+  let stateIndex = 0;
+  const dependencies = {
+    'react': { useState: () => [[true, version, null, null][stateIndex++], () => {}] },
+    'react/jsx-runtime': require('react/jsx-runtime'),
+    '@tanstack/react-query': { useQuery: () => ({ data: undefined }) },
+    'date-fns': { format: () => '', formatDistanceToNow: () => '' },
+    'isomorphic-dompurify': { default: require('isomorphic-dompurify') },
+    'lucide-react': {},
+    '@/lib/utils': { cn: (...values) => values.join(' ') },
+    '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts'),
+  };
+  for (const [path, names] of [
+    ['ui/button', ['Button']], ['ui/scroll-area', ['ScrollArea']],
+    ['ui/sheet', ['Sheet', 'SheetContent', 'SheetHeader', 'SheetTitle', 'SheetTrigger']],
+    ['notes/VersionBadge', ['VersionBadge']], ['notes/VersionDiff', ['VersionDiff']],
+    ['notes/RestoreVersionDialog', ['RestoreVersionDialog']], ['ui/user-avatar', ['UserAvatar']],
+  ]) dependencies[`@/components/${path}`] = Object.fromEntries(names.map(name => [name, name]));
+  const { VersionHistoryPanel } = load('src/components/notes/VersionHistoryPanel.tsx', dependencies);
+  const html = [];
+  function visit(element) {
+    if (Array.isArray(element)) return element.forEach(visit);
+    if (!element?.props) return;
+    if (element.props.dangerouslySetInnerHTML) html.push(element.props.dangerouslySetInnerHTML.__html);
+    visit(element.props.children);
+  }
+  visit(VersionHistoryPanel({ noteId: 'note' }));
+  assert.equal(html.length, 1);
+  assert.match(html[0], /<p>Keep this note<\/p>/);
+  assert.doesNotMatch(html[0], /onerror|<script|javascript:/i);
 });

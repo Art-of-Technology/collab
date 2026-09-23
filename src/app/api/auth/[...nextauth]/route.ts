@@ -143,9 +143,11 @@ export const authOptions: AuthOptions = {
         return baseUrl;
       }
       
-      // Otherwise follow the normal redirect rules
-      if (url.startsWith(baseUrl) || url.startsWith("/")) {
-        return url;
+      try {
+        const target = new URL(url, baseUrl);
+        if (target.origin === new URL(baseUrl).origin) return target.href;
+      } catch {
+        // Invalid callback URLs fall back to the application home page.
       }
       return baseUrl;
     },

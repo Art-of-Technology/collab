@@ -27,6 +27,16 @@ selection, with the engine request intercepted before any database connection.
 Global omission uses the supported Prisma 6 API:
 https://docs.prisma.io/docs/orm/v6/prisma-client/queries/excluding-fields
 
+## Second slice
+
+- Note-history previews sanitize stored HTML with the installed DOMPurify.
+- Authentication redirects compare parsed origins, rejecting lookalike hosts,
+  protocol-relative external URLs, alternate schemes and malformed URLs.
+- Docker context excludes `.env` and `.env.*`, retaining `.env.example` only.
+
+Eight behavior checks now pass. The two new output/redirect regressions fail
+against the preceding commit. Dependency security updates remain outstanding.
+
 Initial full typecheck has 160 pre-existing diagnostics. The security tests are
 not a claim that build, lint, CI, all authorization surfaces or deployment pass.
 Remaining audit work includes mutation validation, verified Slack identity,
