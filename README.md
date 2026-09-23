@@ -230,6 +230,9 @@ Collab is designed to streamline internal communication and work tracking by off
 - Create or join a workspace to start sharing updates.
 - Use the timeline to post status updates, tasks, and feature requests.
 - Organize work using boards, milestones, and stories.
+- Open **Project board** from a project dashboard; see the
+  [Forge board guide](docs/forge-board.md) for views, connection requirements
+  and the limits of this read-only slice.
 
 ### Integration availability
 

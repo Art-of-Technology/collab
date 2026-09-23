@@ -86,7 +86,7 @@ export const STANDARD_ISSUE_INCLUDE = {
 /**
  * Helper function to check if a user has access to a workspace
  */
-export async function userHasWorkspaceAccess(userId: string, workspaceId: string): Promise<boolean> {
+export async function userHasWorkspaceAccess(userId: string, workspaceId: string | null): Promise<boolean> {
   if (!userId || !workspaceId) return false;
 
   const workspace = await prisma.workspace.findFirst({

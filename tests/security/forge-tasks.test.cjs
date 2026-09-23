@@ -13,6 +13,22 @@ const { projectForgeTask, needsAttention, taskDate } = loaded.exports;
 const issue = { number: 42, title: 'Existing task', state: 'open', updated_at: '2026-09-23T10:00:00Z', comments: 3 };
 const body = metadata => `Keep this discussion.\n\n\`\`\`channel-task\n${JSON.stringify(metadata)}\n\`\`\``;
 
+test('preserves long descriptions, trailing metadata and long next actions without projection truncation', () => {
+  const description = 'Existing discussion. '.repeat(4000) + 'Final paragraph.';
+  const metadata = { status: 'waiting', priority: 'high', owner: 'Owner '.repeat(50),
+    dueDate: '2026-09-24', followUpDate: '2026-09-23', nextAction: 'Follow up. '.repeat(100) + 'Final action.' };
+  const title = 'Long title '.repeat(40);
+  const task = projectForgeTask({ ...issue, title, body: description + '\n\n' + body(metadata) });
+  assert.equal(task.description, description + '\n\nKeep this discussion.');
+  assert.equal(task.title, title);
+  assert.equal(task.number, issue.number);
+  assert.equal(task.comments, issue.comments);
+  for (const [key, value] of Object.entries(metadata)) assert.equal(task[key], value, key);
+  assert.equal(task.warning, '');
+  assert.equal(projectForgeTask({ ...issue, body: description }).description, description);
+  assert.equal(projectForgeTask({ ...issue, body: body(metadata) }).nextAction, metadata.nextAction);
+});
+
 test('projects existing issue identity, discussion and follow-up metadata', () => {
   const task = projectForgeTask({ ...issue, body: body({ status: 'waiting', priority: 'high', owner: 'Sam',
     dueDate: '2026-09-24', followUpDate: '2026-09-23', nextAction: 'Ask for update', sourceUrl: 'https://example.slack.com/archives/C123/p456' }) });

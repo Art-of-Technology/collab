@@ -59,6 +59,24 @@ test('fails visibly on upstream errors, redirects, oversized or malformed payloa
   await assert.rejects(readForgeIssues(binding, async url => Response.json(url.includes('/issues?') ? [{ bad: true }] : { id: 123 })), /Invalid issue/);
 });
 
+test('returns complete long issue data and explicitly rejects oversized issue responses', async t => {
+  const binding = fixture(t);
+  const description = 'Preserved discussion. '.repeat(4000) + 'Final paragraph.';
+  const nextAction = 'Next step. '.repeat(100) + 'Final action.';
+  const metadata = { status: 'blocked', owner: 'Sam', dueDate: '2026-09-24', followUpDate: '2026-09-23', nextAction };
+  const body = description + '\n\n```channel-task\n' + JSON.stringify(metadata) + '\n```';
+  const result = await readForgeIssues(binding, async url => Response.json(url.includes('/issues?')
+    ? [{ ...issue(42), body }] : { id: 123 }));
+  assert.equal(result.tasks[0].description, description);
+  for (const [key, value] of Object.entries(metadata)) assert.equal(result.tasks[0][key], value, key);
+  assert.equal(result.tasks[0].warning, '');
+  for (const headers of [{}, { 'content-length': String(3 * 1024 * 1024) }]) {
+    await assert.rejects(readForgeIssues(binding, async url => url.includes('/issues?')
+      ? new Response(JSON.stringify([{ ...issue(42), body: 'x'.repeat(2 * 1024 * 1024) }]), { headers })
+      : Response.json({ id: 123 })), /Project response is too large/);
+  }
+});
+
 test('requires complete unique server bindings and safe configured origins', async t => {
   const binding = fixture(t);
   const file = path.join(path.dirname(binding.readTokenFile), 'config.json');

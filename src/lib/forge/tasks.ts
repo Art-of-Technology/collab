@@ -20,7 +20,7 @@ export interface ForgeTask {
   warning: string;
 }
 
-const text = (value: unknown, max = 200): string => typeof value === 'string' ? value.slice(0, max) : '';
+const text = (value: unknown): string => typeof value === 'string' ? value : '';
 const record = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
@@ -34,7 +34,7 @@ export function projectForgeTask(value: unknown): ForgeTask | null {
   const issue = record(value);
   if (!Number.isSafeInteger(issue.number) || Number(issue.number) <= 0 || issue.pull_request) return null;
   if (typeof issue.title !== 'string' || !['open', 'closed'].includes(String(issue.state))) return null;
-  const body = text(issue.body, 65536);
+  const body = text(issue.body);
   const blocks = [...body.matchAll(/^```channel-task\r?\n([\s\S]*?)^```\s*$/gm)];
   let metadata: Record<string, unknown> = {};
   let warning = '';
@@ -55,19 +55,18 @@ export function projectForgeTask(value: unknown): ForgeTask | null {
   if ((metadata.dueDate && !taskDate(metadata.dueDate)) || (metadata.followUpDate && !taskDate(metadata.followUpDate))) {
     warning = 'Invalid date; review the source issue';
   }
-  if (typeof issue.body === 'string' && issue.body.length > 65536) warning = 'Issue text is too long to display in full';
   let sourceUrl = '';
   try {
     const url = new URL(String(metadata.sourceUrl));
     if (url.protocol === 'https:' && /(^|\.)slack\.com$/.test(url.hostname) && !url.username && !url.password) sourceUrl = url.href;
   } catch { /* Missing discussion links are valid. */ }
   return {
-    number: Number(issue.number), title: text(issue.title, 300),
+    number: Number(issue.number), title: text(issue.title),
     description: body.replace(/^```channel-task\r?\n[\s\S]*?^```\s*$/gm, '').trim(),
     status, priority: taskPriorities.includes(metadata.priority as TaskPriority) ? metadata.priority as TaskPriority : 'normal',
     owner: text(metadata.owner) || text(record(issue.assignee).login),
     dueDate: taskDate(metadata.dueDate), followUpDate: taskDate(metadata.followUpDate),
-    nextAction: text(metadata.nextAction, 500), sourceUrl, updatedAt: text(issue.updated_at, 40),
+    nextAction: text(metadata.nextAction), sourceUrl, updatedAt: text(issue.updated_at),
     comments: Number.isSafeInteger(issue.comments) && Number(issue.comments) >= 0 ? Number(issue.comments) : 0,
     warning,
   };
