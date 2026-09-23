@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
@@ -18,7 +19,7 @@ import {
   SecretVariable,
   isSecretsEnabled,
 } from '@/lib/secrets/crypto';
-import { logNoteAccess } from '@/lib/secrets/access';
+import { noteAccessWhere, logNoteAccess } from '@/lib/secrets/access';
 import { z } from 'zod';
 
 // Note types that are considered secrets
@@ -42,6 +43,12 @@ export const POST = withAppAuth(
   // with structure { params: Promise<{ id: string }> } due to async params in App Router
   async (request: NextRequest, context: AppAuthContext, routeParams: { params: Promise<{ id: string }> }) => {
     try {
+      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
+        return NextResponse.json(
+          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
+          { status: 403 }
+        );
+      }
       const { id } = await routeParams.params;
 
       // Check if secrets feature is enabled
@@ -78,6 +85,7 @@ export const POST = withAppAuth(
       // Find the secret note
       const note = await prisma.note.findFirst({
         where: {
+          AND: [noteAccessWhere(context.user.id)],
           id,
           workspaceId: context.workspace.id,
           type: { in: SECRET_TYPES },

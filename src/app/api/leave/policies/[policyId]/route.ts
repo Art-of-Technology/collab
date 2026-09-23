@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { userHasWorkspaceAccess } from "@/lib/issue-finder";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermission, Permission } from "@/lib/permissions";
 import { z } from "zod";
@@ -64,13 +65,6 @@ export async function GET(
     const policy = await prisma.leavePolicy.findUnique({
       where: { id: (await params).policyId },
       include: {
-        workspace: {
-          include: {
-            members: {
-              where: { userId: user.id },
-            },
-          },
-        },
         _count: {
           select: {
             leaveRequests: {
@@ -88,20 +82,14 @@ export async function GET(
     }
 
     // Check workspace access
-    const isOwner = policy.workspace.ownerId === user.id;
-    const isMember = policy.workspace.members.length > 0;
-
-    if (!isOwner && !isMember) {
+    if (!await userHasWorkspaceAccess(user.id, policy.workspaceId)) {
       return NextResponse.json(
         { error: "Access denied to workspace" },
         { status: 403 }
       );
     }
 
-    // Remove workspace from response
-    const { workspace, ...policyData } = policy;
-
-    return NextResponse.json(policyData);
+    return NextResponse.json(policy);
   } catch (error) {
     console.error("Error fetching leave policy:", error);
     return NextResponse.json(

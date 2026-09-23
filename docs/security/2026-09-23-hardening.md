@@ -229,3 +229,23 @@ They execute the real post action and Notes policy with in-memory Prisma
 adapters, covering anonymous, foreign and revoked denial; member/owner access;
 and private, restricted, shared and expired Notes across filters and pagination.
 No live database or broader validation gates were run in this review round.
+
+## User-bound app Notes and leave-policy follow-up
+
+App context, knowledge, system-prompts, combined AI-context and secrets reads
+now apply the shared Notes predicate before fetching content or counting rows.
+Each handler requires current workspace membership or ownership in addition to
+its existing token checks. Context edits require `canEdit`, keep note settings
+owner-only, validate destinations, and reject secret documents through the
+ordinary context editor. Secret reveals retain their scope and expiry checks
+and authorize the note before decryption. Leave-policy reads use the shared
+active-workspace helper while preserving owner access.
+
+Four focused regressions passed with
+`node --test --test-name-pattern='app-notes:' tests/security/access-boundaries.test.cjs`.
+They execute the token middleware and shared Notes policy against in-memory
+Prisma adapters, including author/shared reader/shared editor permissions,
+restricted and expired denial, collection/count parity, revoked membership,
+and real secret decryption with a dummy key. No live credentials, database,
+integration, migration or deployment was used. Broader validation remains with
+the outer executor.
