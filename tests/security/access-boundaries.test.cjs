@@ -688,3 +688,27 @@ test('planning activity conversion and child relations preserve IDs, statuses an
   const result = organizeRelationsData([{ relationType: 'child', relatedItem: { id: 'child' } }]);
   assert.equal(result.children[0].dbId, 'child');
 });
+
+test('issue modal state follows URL and navigation clears stale parent context', () => {
+  let params = new URLSearchParams('selectedIssue=old&parentTitle=Parent&parentKey=P-1&keep=yes');
+  let pushed;
+  const { useIssueModalUrlState } = load('src/hooks/useIssueModalUrlState.ts', {
+    react: { useMemo: fn => fn(), useCallback: fn => fn },
+    'next/navigation': {
+      useSearchParams: () => params, usePathname: () => '/workspace/issues',
+      useRouter: () => ({ push: url => { pushed = url; } }),
+    },
+  }, { URLSearchParams });
+  const state = useIssueModalUrlState();
+  assert.equal(state.selectedIssueId, 'old');
+  assert.equal(state.parentIssueInfo.key, 'P-1');
+  state.setSelectedIssueId('new');
+  const next = new URL(pushed, 'https://example.test');
+  assert.equal(next.searchParams.get('selectedIssue'), 'new');
+  assert.equal(next.searchParams.has('parentKey'), false);
+  assert.equal(next.searchParams.get('keep'), 'yes');
+  state.closeModal();
+  assert.equal(new URL(pushed, 'https://example.test').searchParams.has('selectedIssue'), false);
+  params = new URLSearchParams('selectedIssue=back');
+  assert.equal(useIssueModalUrlState().selectedIssueId, 'back');
+});

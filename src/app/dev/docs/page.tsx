@@ -128,30 +128,19 @@ export default function ApiDocsPage() {
     };
   }, [searchQuery, filteredEndpoints, oauthContent, thirdPartyContent]);
 
-  const prevSearchQueryRef = useRef<string>('');
-  
-  useEffect(() => {
-    // Only auto-switch when search query actually changes, not when section changes
-    if (!searchQuery.trim() || searchQuery === prevSearchQueryRef.current) {
-      prevSearchQueryRef.current = searchQuery;
-      return;
+  const [previousSearchQuery, setPreviousSearchQuery] = useState(searchQuery);
+  if (searchQuery !== previousSearchQuery) {
+    setPreviousSearchQuery(searchQuery);
+    if (searchQuery.trim()) {
+      if (searchResults.oauth) setSelectedSection('oauth');
+      else if (searchResults.thirdParty) setSelectedSection('third-party');
+      else if (searchResults.endpoints) setSelectedSection('endpoints');
     }
-    
-    prevSearchQueryRef.current = searchQuery;
-    
-    // Auto-switch to section with matches, prioritizing OAuth > Third-party > Endpoints
-    if (searchResults.oauth) {
-      setSelectedSection('oauth');
-    } else if (searchResults.thirdParty) {
-      setSelectedSection('third-party');
-    } else if (searchResults.endpoints && filteredEndpoints.length > 0) {
-      setSelectedSection('endpoints');
-    }
-  }, [searchQuery, searchResults.oauth, searchResults.thirdParty, searchResults.endpoints, filteredEndpoints.length]);
+  }
 
   const currentEndpoint = useMemo(() => {
     if (!selectedEndpoint || !data?.endpoints) return null;
-    return data.endpoints.find((ep) => 
+    return data.endpoints.find((ep) =>
       ep.url === selectedEndpoint && (!selectedMethod || ep.method === selectedMethod)
     ) || null;
   }, [selectedEndpoint, selectedMethod, data]);
@@ -224,14 +213,14 @@ export default function ApiDocsPage() {
               )
             )}
             {selectedSection === 'oauth' && (
-                <MarkdownDocViewer 
-                  title="OAuth 2.0 Endpoints for Third-Party Apps" 
+                <MarkdownDocViewer
+                  title="OAuth 2.0 Endpoints for Third-Party Apps"
                   content={oauthContent}
                 />
             )}
             {selectedSection === 'third-party' && (
-                <MarkdownDocViewer 
-                  title="Third-Party App API Documentation" 
+                <MarkdownDocViewer
+                  title="Third-Party App API Documentation"
                   content={thirdPartyContent}
                 />
             )}
@@ -329,15 +318,15 @@ export default function ApiDocsPage() {
         )}
 
         {selectedSection === 'oauth' && (
-          <MarkdownDocViewer 
-            title="OAuth 2.0 Endpoints for Third-Party Apps" 
+          <MarkdownDocViewer
+            title="OAuth 2.0 Endpoints for Third-Party Apps"
             content={oauthContent}
           />
         )}
 
         {selectedSection === 'third-party' && (
-          <MarkdownDocViewer 
-            title="Third-Party App API Documentation" 
+          <MarkdownDocViewer
+            title="Third-Party App API Documentation"
             content={thirdPartyContent}
           />
         )}

@@ -26,10 +26,9 @@ interface UiProviderProps {
 }
 
 export const UiProvider = ({ children }: UiProviderProps) => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isAssistantFullScreen, setIsAssistantFullScreen] = useState(false);
-  
+
   // Use TanStack Query hook instead of direct fetch
   const { data: userData, isError } = useCurrentUser();
 
@@ -42,10 +41,7 @@ export const UiProvider = ({ children }: UiProviderProps) => {
   };
   const toggleAssistantFullScreen = () => setIsAssistantFullScreen(prev => !prev);
 
-  // Update login status based on user data
-  useEffect(() => {
-    setIsLoggedIn(!!userData && !isError);
-  }, [userData, isError]);
+  const isLoggedIn = !!userData && !isError;
 
   return (
     <UiContext.Provider
@@ -60,4 +56,4 @@ export const UiProvider = ({ children }: UiProviderProps) => {
       {children}
     </UiContext.Provider>
   );
-}; 
+};

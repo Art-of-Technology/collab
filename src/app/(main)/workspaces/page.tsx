@@ -14,34 +14,37 @@ export default async function WorkspacesPage() {
     redirect('/login');
   }
 
+  let workspacesData;
+  let pendingInvitations;
   try {
     // Fetch initial data using server actions
-    const workspacesData = await getUserWorkspaces();
-    const pendingInvitations = session.user.email 
+    workspacesData = await getUserWorkspaces();
+    pendingInvitations = session.user.email
       ? await getPendingInvitations(session.user.email)
       : [];
 
-    return (
-      <div className="h-full bg-collab-900">
-        <WorkspacesClient 
-          initialWorkspaces={workspacesData.all} 
-          initialInvitations={pendingInvitations}
-          userId={session.user.id}
-        />
-      </div>
-    );
+
   } catch (error) {
     console.error("Error loading workspace data:", error);
-    
+
     // In case of an error, return the client component with empty initial data
     return (
       <div className="h-full bg-collab-900">
-        <WorkspacesClient 
-          initialWorkspaces={[]} 
+        <WorkspacesClient
+          initialWorkspaces={[]}
           initialInvitations={[]}
           userId={session.user.id}
         />
       </div>
     );
   }
-} 
+  return (
+      <div className="h-full bg-collab-900">
+        <WorkspacesClient
+          initialWorkspaces={workspacesData.all}
+          initialInvitations={pendingInvitations}
+          userId={session.user.id}
+        />
+      </div>
+    );
+}

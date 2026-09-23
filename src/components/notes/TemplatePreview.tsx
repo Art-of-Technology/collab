@@ -1,4 +1,6 @@
 "use client";
+import { createElement } from "react";
+
 
 import { useMemo } from "react";
 import { NoteType } from "@prisma/client";
@@ -52,7 +54,7 @@ export function TemplatePreview({ template, className }: TemplatePreviewProps) {
               typeConfig.bgColor
             )}
           >
-            <Icon className={cn("h-5 w-5", typeConfig.color)} />
+            {createElement(Icon, { className: cn("h-5 w-5", typeConfig.color) })}
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-[14px] font-semibold text-collab-50 mb-1">

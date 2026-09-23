@@ -1,4 +1,6 @@
 "use client";
+import { createElement } from "react";
+
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -361,7 +363,7 @@ function ViewListItem({
 
         <div className="flex items-center gap-3 mt-2">
           <div className="flex items-center gap-1 text-[11px] text-collab-500">
-            <VisibilityIcon className={cn("h-3 w-3", getVisibilityColor(view.visibility))} />
+            {createElement(VisibilityIcon, { className: cn("h-3 w-3", getVisibilityColor(view.visibility)) })}
             <span className={getVisibilityColor(view.visibility)}>
               {view.visibility === 'WORKSPACE' ? 'Team' :
                view.visibility === 'PERSONAL' ? 'Personal' : 'Shared'}

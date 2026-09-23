@@ -164,3 +164,14 @@ scope/clearing and planning activity/child-relation conversion. Strict build
 is running. Fresh lint has 92 errors: 24 server JSX try/catch, 25 render-time
 component identity, and remaining hook/effect/ref/immutability/CommonJS findings.
 These remain release blockers; the replacement and release are not complete.
+
+## Quality gate progress
+
+Full lint now exits successfully (zero errors), and full typecheck remains
+clean. Twenty-six behavior checks pass. Server pages catch data-fetch failures
+before rendering; hooks run in a consistent order; nested stateless renderers
+and icon selection preserve stable component identity; redundant effect state
+is derived directly. Undo/redo buttons subscribe to editor transactions, and
+issue modal selection is URL-derived with back navigation and stale-parent
+cleanup checked. The earlier strict production build passed; final-head build
+and dependency review still precede release review/CI and product acceptance.

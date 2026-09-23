@@ -85,9 +85,11 @@ export default function DevLayout({ children }: { children: React.ReactNode }) {
     }
   }, [status, router]);
 
-  useEffect(() => {
+  const [menuPath, setMenuPath] = useState(pathname);
+  if (menuPath !== pathname) {
+    setMenuPath(pathname);
     setMobileMenuOpen(false);
-  }, [pathname]);
+  }
 
   if (status === "loading") {
     return (
@@ -109,7 +111,7 @@ export default function DevLayout({ children }: { children: React.ReactNode }) {
     pathname !== "/dev/apps" &&
     pathname !== "/dev/apps/new";
 
-  const SidebarContent = () => (
+  const sidebarContent = (
     <>
       {/* Header - Collab Logo with Developer Console subtitle */}
       <div className="p-3 border-b border-collab-700">
@@ -232,7 +234,7 @@ export default function DevLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-collab-950 flex">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 border-r border-collab-700 flex-col h-screen sticky top-0 bg-collab-950">
-        <SidebarContent />
+        {sidebarContent}
       </aside>
 
       {/* Mobile Header */}
@@ -271,7 +273,7 @@ export default function DevLayout({ children }: { children: React.ReactNode }) {
             onClick={() => setMobileMenuOpen(false)}
           />
           <aside className="md:hidden fixed top-[57px] left-0 bottom-0 w-64 bg-collab-950 border-r border-collab-700 z-50 flex flex-col">
-            <SidebarContent />
+            {sidebarContent}
           </aside>
         </>
       )}

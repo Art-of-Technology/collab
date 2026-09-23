@@ -31,16 +31,12 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     redirect('/login');
   }
 
+  let initialWorkspace;
   try {
     // Fetch initial workspace data
-    const initialWorkspace = await getDetailedWorkspaceById(workspaceId);
+    initialWorkspace = await getDetailedWorkspaceById(workspaceId);
 
-    return (
-      <WorkspaceDetailClient
-        workspaceId={workspaceId}
-        initialWorkspace={initialWorkspace}
-      />
-    );
+
   } catch (error) {
     // Re-throw redirect errors - they're not actual errors
     if (isNextRedirect(error)) {
@@ -66,4 +62,10 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
       />
     );
   }
-} 
+  return (
+      <WorkspaceDetailClient
+        workspaceId={workspaceId}
+        initialWorkspace={initialWorkspace}
+      />
+    );
+}

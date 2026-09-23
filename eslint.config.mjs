@@ -5,7 +5,7 @@ export default [
   ...nextVitals,
   ...nextTypescript,
   {
-    files: ['tests/**/*.cjs'],
+    files: ['tests/**/*.cjs', 'tailwind.config.js'],
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   {

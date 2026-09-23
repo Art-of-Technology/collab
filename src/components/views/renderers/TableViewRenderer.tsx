@@ -22,11 +22,11 @@ interface TableViewRendererProps {
 type SortField = 'key' | 'title' | 'status' | 'priority' | 'assignee' | 'project' | 'dueDate';
 type SortDirection = 'asc' | 'desc';
 
-export default function TableViewRenderer({ 
-  view, 
-  issues, 
-  workspace, 
-  currentUser 
+export default function TableViewRenderer({
+  view,
+  issues,
+  workspace,
+  currentUser
 }: TableViewRendererProps) {
   const [sortField, setSortField] = useState<SortField>('key');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -42,7 +42,7 @@ export default function TableViewRenderer({
 
   const sortedIssues = [...issues].sort((a, b) => {
     let aValue, bValue;
-    
+
     switch (sortField) {
       case 'key':
         aValue = a.issueKey;
@@ -102,10 +102,10 @@ export default function TableViewRenderer({
     }
   };
 
-  const SortIcon = ({ field }: { field: SortField }) => {
+  const renderSortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return null;
-    return sortDirection === 'asc' ? 
-      <ChevronUp className="h-3 w-3" /> : 
+    return sortDirection === 'asc' ?
+      <ChevronUp className="h-3 w-3" /> :
       <ChevronDown className="h-3 w-3" />;
   };
 
@@ -132,43 +132,43 @@ export default function TableViewRenderer({
                   className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('key')}
                 >
-                  <span className="flex items-center gap-1">Key <SortIcon field="key" /></span>
+                  <span className="flex items-center gap-1">Key {renderSortIcon({ field: "key" })}</span>
                 </th>
                 <th
                   className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('title')}
                 >
-                  <span className="flex items-center gap-1">Title <SortIcon field="title" /></span>
+                  <span className="flex items-center gap-1">Title {renderSortIcon({ field: "title" })}</span>
                 </th>
                 <th
                   className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('status')}
                 >
-                  <span className="flex items-center gap-1">Status <SortIcon field="status" /></span>
+                  <span className="flex items-center gap-1">Status {renderSortIcon({ field: "status" })}</span>
                 </th>
                 <th
                   className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('priority')}
                 >
-                  <span className="flex items-center gap-1">Priority <SortIcon field="priority" /></span>
+                  <span className="flex items-center gap-1">Priority {renderSortIcon({ field: "priority" })}</span>
                 </th>
                 <th
                   className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('assignee')}
                 >
-                  <span className="flex items-center gap-1">Assignee <SortIcon field="assignee" /></span>
+                  <span className="flex items-center gap-1">Assignee {renderSortIcon({ field: "assignee" })}</span>
                 </th>
                 <th
                   className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('project')}
                 >
-                  <span className="flex items-center gap-1">Project <SortIcon field="project" /></span>
+                  <span className="flex items-center gap-1">Project {renderSortIcon({ field: "project" })}</span>
                 </th>
                 <th
                   className="px-3 py-2 text-left text-[11px] font-medium text-collab-400 uppercase tracking-wider cursor-pointer hover:text-collab-300 transition-colors"
                   onClick={() => handleSort('dueDate')}
                 >
-                  <span className="flex items-center gap-1">Due <SortIcon field="dueDate" /></span>
+                  <span className="flex items-center gap-1">Due {renderSortIcon({ field: "dueDate" })}</span>
                 </th>
                 <th className="px-3 py-2 text-center text-[11px] font-medium text-collab-400 uppercase tracking-wider">
                   Meta
@@ -275,4 +275,4 @@ export default function TableViewRenderer({
       )}
     </div>
   );
-} 
+}

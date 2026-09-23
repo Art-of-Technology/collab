@@ -1,4 +1,6 @@
 "use client";
+import { createElement } from "react";
+
 
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from '@/components/ui/user-avatar';
@@ -90,7 +92,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 
   return (
     <InfoBadge>
-      <Icon className={cn("h-2.5 w-2.5", colorClass)} />
+      {createElement(Icon, { className: cn("h-2.5 w-2.5", colorClass) })}
       {displayName}
     </InfoBadge>
   );

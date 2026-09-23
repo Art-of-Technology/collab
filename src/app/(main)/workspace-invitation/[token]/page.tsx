@@ -15,30 +15,26 @@ export const dynamic = 'force-dynamic';
 export default async function WorkspaceInvitationPage({ params }: InvitationPageProps) {
   const { token } = await params;
   const session = await getAuthSession();
-  
+
   if (!session?.user) {
     console.log("Redirecting to login: callbackUrl", `/workspace-invitation/${token}`);
     redirect(`/login?callbackUrl=${encodeURIComponent(`/workspace-invitation/${token}`)}`);
   }
-  
+
+  let invitation;
   try {
     // Fetch invitation data
-    const invitation = await getInvitationByToken(token);
-    
-    return (
-      <InvitationClient 
-        invitation={invitation} 
-        token={token}
-      />
-    );
+    invitation = await getInvitationByToken(token);
+
+
   } catch (error) {
     console.error("Error loading invitation:", error);
-    
+
     // Handle different error cases
     if ((error as Error).message.includes('Invitation not found')) {
       notFound();
     }
-    
+
     // Render error state
     return (
       <div className="container max-w-lg py-16 text-center">
@@ -49,4 +45,10 @@ export default async function WorkspaceInvitationPage({ params }: InvitationPage
       </div>
     );
   }
-} 
+  return (
+      <InvitationClient
+        invitation={invitation}
+        token={token}
+      />
+    );
+}
