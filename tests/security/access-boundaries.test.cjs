@@ -241,3 +241,97 @@ test('note history sanitizes stored HTML before rendering while retaining normal
   assert.match(html[0], /<p>Keep this note<\/p>/);
   assert.doesNotMatch(html[0], /onerror|<script|javascript:/i);
 });
+
+test('issue mutations reject mass assignment, foreign relations and read-only users', async () => {
+  let allowed = true;
+  let writes = 0;
+  const existing = { id: 'issue', workspaceId: 'own', projectId: 'project', reporterId: 'alice', title: 'Before' };
+  const db = {
+    issue: { findFirst: async () => null, findUnique: async () => existing, delete: async () => { writes++; } },
+    projectStatus: { findFirst: async () => null },
+    taskLabel: { count: async () => 0 },
+    issueFollower: { findMany: async () => [] }, projectFollower: { findMany: async () => [] },
+    $transaction: async fn => fn({ issue: { update: async ({ data }) => { writes++; return { ...existing, ...data }; } } }),
+  };
+  const permissionModule = load('src/lib/permissions.ts', { './prisma': { prisma: {} } });
+  const dependencies = {
+    'zod': require('zod'), '@prisma/client': require('@prisma/client'),
+    'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
+    '@/lib/prisma': { prisma: db },
+    '@/lib/session': { getCurrentUser: async () => ({ id: 'alice' }) },
+    '@/lib/permissions': {
+      ...permissionModule,
+      checkUserPermissions: async (_user, _workspace, permissions) => Object.fromEntries(permissions.map(p => [p, { hasPermission: allowed }])),
+    },
+    '@/lib/issue-finder': {
+      findIssueByIdOrKey: async () => existing, STANDARD_ISSUE_INCLUDE: {},
+      userHasWorkspaceAccess: async user => user === 'alice',
+    },
+    '@/lib/board-item-activity-service': { compareObjects: () => [] },
+    '@/lib/redis': { publishEvent: async () => {} },
+    '@/utils/mentions': { extractMentionUserIds: () => [] },
+    '@/lib/notification-service': {},
+    '@/lib/event-bus': { emitIssueUpdated: async () => {}, emitIssueDeleted: async () => {} },
+    '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
+  };
+  const route = load('src/app/api/issues/[issueId]/route.ts', dependencies, { URL, console });
+  const context = { params: Promise.resolve({ issueId: 'issue' }) };
+  for (const body of [
+    { workspaceId: 'foreign' }, { projectId: 'foreign' }, { id: 'new-id' },
+    { workspace: { connect: { id: 'foreign' } } }, { createdAt: '2020-01-01' },
+    { title: 42 }, { priority: 'root' }, { assigneeId: 'outsider' },
+    { reporterId: 'outsider' }, { parentId: 'foreign' }, { labels: ['foreign'] }, { statusId: 'foreign' },
+  ]) {
+    const response = await route.PUT(new Request('https://example.test/issues/issue', {
+      method: 'PUT', body: JSON.stringify(body),
+    }), context);
+    assert.equal(response.status, 400, JSON.stringify(body));
+    assert.equal(writes, 0);
+  }
+  allowed = false;
+  assert.equal((await route.PUT(new Request('https://example.test/issues/issue', {
+    method: 'PUT', body: JSON.stringify({ title: 'After' }),
+  }), context)).status, 403);
+  assert.equal((await route.DELETE(new Request('https://example.test/issues/issue'), context)).status, 403);
+  assert.equal(writes, 0);
+  allowed = true;
+  const response = await route.PUT(new Request('https://example.test/issues/issue', {
+    method: 'PUT', body: JSON.stringify({ title: 'After' }),
+  }), context);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.issue.title, 'After');
+  assert.equal(response.body.issue.workspaceId, 'own');
+  assert.equal(writes, 1);
+});
+
+test('optional AI initialization does not require credentials during route import', async () => {
+  let creations = 0;
+  class MissingCredentials {
+    constructor() { creations++; throw new Error('Missing test credentials'); }
+  }
+  const { AIContentGenerator } = load('src/lib/ai/content-generator.ts', {
+    'openai': { default: MissingCredentials }, '@prisma/client': require('@prisma/client'),
+  }, { process: { env: {} }, console: { error() {} } });
+  const generator = new AIContentGenerator();
+  assert.equal(creations, 0);
+  assert.equal(await generator.enhanceIssueTitle('Original title'), 'Original title');
+  assert.equal(creations, 1);
+});
+
+test('note authorization resolves project workspace and requires active membership', async () => {
+  for (const workspace of workspaces) {
+    const db = {
+      note: { findUnique: async () => ({ ...note, workspaceId: null, projectId: 'project', project: { workspaceId: workspace.id } }) },
+      workspace: { findFirst: async ({ where, select }) => {
+        if (!matchesWorkspace(workspace, where)) return null;
+        return {
+          ownerId: workspace.ownerId,
+          members: workspace.members.filter(member => member.userId === select.members.where.userId &&
+            (!select.members.where.status || member.status)).map(() => ({ role: 'MEMBER' })),
+        };
+      } },
+    };
+    const { canAccessNote } = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: db }, '@prisma/client': enums });
+    assert.equal((await canAccessNote('alice', 'note')).canAccess, ['own', 'joined'].includes(workspace.id));
+  }
+});

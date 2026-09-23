@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 /**
  * DELETE /api/apps/[slug]/delete - Delete an app
@@ -110,7 +109,6 @@ export async function DELETE(
       });
     });
 
-    await prisma.$disconnect();
 
     return NextResponse.json({
       success: true,
@@ -119,7 +117,7 @@ export async function DELETE(
 
   } catch (error) {
     console.error('Error deleting app:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

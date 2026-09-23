@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { getAuthSession } from '@/lib/auth';
 import { z } from 'zod';
 import { emitAppUninstalled } from '@/lib/event-bus';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 const UninstallAppSchema = z.object({
   workspaceId: z.string().cuid('Invalid workspace ID')

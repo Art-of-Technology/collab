@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { PrismaClient } from '@prisma/client';
 import { generateClientCredentials, encryptToken } from '@/lib/apps/crypto';
 import { z } from 'zod';
 import { isReservedSlug } from '@/lib/apps/validation';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 // Schema for creating a draft app
 const CreateDraftAppSchema = z.object({
@@ -108,7 +107,6 @@ export async function POST(request: NextRequest) {
       return { app: newApp, oauthClient, plainSecret: credentials.clientSecret };
     });
 
-    await prisma.$disconnect();
 
     // Return the app data and credentials (IMPORTANT: plainSecret is only shown once)
     return NextResponse.json({
@@ -129,7 +127,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error creating draft app:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

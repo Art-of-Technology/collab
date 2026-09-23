@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { sendWorkspaceInvitationEmail } from '@/lib/email';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 
@@ -152,7 +152,7 @@ export async function POST(
     }
 
     // Create new invitation
-    const token = uuidv4();
+    const token = randomUUID();
     const expirationDate = new Date();
     expirationDate.setDate(expirationDate.getDate() + 7); // Expires in 7 days
 

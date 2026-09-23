@@ -1,3 +1,6 @@
+import { z } from 'zod';
+import { IssueType, Prisma } from '@prisma/client';
+import { checkUserPermissions, canActOnOwnContent, Permission } from '@/lib/permissions';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -8,6 +11,27 @@ import { NotificationService, NotificationType } from "@/lib/notification-servic
 import { emitIssueUpdated, emitIssueDeleted } from "@/lib/event-bus";
 import { findIssueByIdOrKey, STANDARD_ISSUE_INCLUDE, userHasWorkspaceAccess } from "@/lib/issue-finder";
 import { normalizeDescriptionHTML } from "@/utils/html-normalizer";
+
+const UpdateIssueSchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  description: z.string().max(100000).nullable().optional(),
+  type: z.string().transform(value => value.toUpperCase()).pipe(z.nativeEnum(IssueType)).optional(),
+  priority: z.string().transform(value => value.toLowerCase()).pipe(z.enum(['low', 'medium', 'high', 'urgent'])).optional(),
+  status: z.string().min(1).max(100).optional(),
+  statusValue: z.string().min(1).max(100).optional(),
+  statusId: z.string().min(1).nullable().optional(),
+  assigneeId: z.string().min(1).nullable().optional(),
+  reporterId: z.string().min(1).nullable().optional(),
+  parentId: z.string().min(1).nullable().optional(),
+  dueDate: z.string().datetime({ offset: true }).nullable().optional(),
+  startDate: z.string().datetime({ offset: true }).nullable().optional(),
+  storyPoints: z.number().int().nonnegative().nullable().optional(),
+  progress: z.number().int().min(0).max(100).optional(),
+  position: z.number().int().optional(),
+  color: z.string().max(100).nullable().optional(),
+  timeEstimateMinutes: z.number().int().nonnegative().nullable().optional(),
+  labels: z.array(z.union([z.string().min(1), z.object({ id: z.string().min(1) })])).max(100).optional(),
+}).strict();
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -77,7 +101,11 @@ export async function PUT(
     }
 
     const { issueId } = await params;
-    const body = await req.json();
+    const parsed = UpdateIssueSchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid issue update' }, { status: 400 });
+    }
+    const body = parsed.data;
     const url = new URL(req.url);
     const workspaceId = url.searchParams.get('workspaceId');
 
@@ -103,39 +131,56 @@ export async function PUT(
       );
     }
 
-    // Handle status updates to work with new ProjectStatus system
-    let updateData = { ...body, updatedAt: new Date() };
+    const permissions = await checkUserPermissions(currentUser.id, existingIssue.workspaceId, [
+      Permission.EDIT_ANY_TASK, Permission.EDIT_SELF_TASK
+    ]);
+    if (!canActOnOwnContent(existingIssue.reporterId, currentUser.id,
+      permissions[Permission.EDIT_ANY_TASK].hasPermission,
+      permissions[Permission.EDIT_SELF_TASK].hasPermission)) {
+      return NextResponse.json({ error: 'No permission to edit this issue' }, { status: 403 });
+    }
+
+    // Related records must belong to the same authorized tenant.
+    for (const userId of [body.assigneeId, body.reporterId]) {
+      if (userId && !await userHasWorkspaceAccess(userId, existingIssue.workspaceId)) {
+        return NextResponse.json({ error: 'Invalid issue participant' }, { status: 400 });
+      }
+    }
+    if (body.parentId && (body.parentId === existingIssue.id || !await prisma.issue.findFirst({
+      where: { id: body.parentId, workspaceId: existingIssue.workspaceId, projectId: existingIssue.projectId },
+      select: { id: true }
+    }))) {
+      return NextResponse.json({ error: 'Invalid parent issue' }, { status: 400 });
+    }
+    const labelIds = body.labels?.map(label => typeof label === 'string' ? label : label.id);
+    if (labelIds?.length && await prisma.taskLabel.count({
+      where: { id: { in: [...new Set(labelIds)] }, workspaceId: existingIssue.workspaceId }
+    }) !== new Set(labelIds).size) {
+      return NextResponse.json({ error: 'Invalid issue labels' }, { status: 400 });
+    }
+    if (body.statusId && !await prisma.projectStatus.findFirst({
+      where: { id: body.statusId, projectId: existingIssue.projectId, isActive: true },
+      select: { id: true }
+    })) {
+      return NextResponse.json({ error: 'Invalid issue status' }, { status: 400 });
+    }
+
+    const { labels, ...fields } = body;
+    const updateData: Prisma.IssueUncheckedUpdateInput = { ...fields, updatedAt: new Date() };
 
     // Normalize description if provided
     if (updateData.description !== undefined && typeof updateData.description === 'string') {
       updateData.description = normalizeDescriptionHTML(updateData.description);
     }
 
-    // Normalize type casing if provided
-    if (typeof updateData.type === 'string') {
-      updateData.type = updateData.type.toUpperCase();
-    }
-
     // Update lifecycle tracking
     updateData.lastProgressAt = new Date();
     
-    // Handle labels relation updates
-    let relationalUpdates: any = {};
-    if (Array.isArray(body.labels)) {
-      // Handle both arrays of IDs and arrays of label objects
-      const labelIds = body.labels.map((label: any) => 
-        typeof label === 'string' ? label : label.id
-      ).filter(Boolean);
-      
-      relationalUpdates.labels = {
-        set: labelIds.map((id: string) => ({ id }))
-      };
-      delete (updateData as any).labels;
-    }
-    
+    const relationalUpdates = labelIds ? { labels: { set: labelIds.map(id => ({ id })) } } : {};
+
     // If status or statusValue is being updated, find the corresponding ProjectStatus
-    if (body.status || body.statusValue) {
-      const statusValue = body.status || body.statusValue;
+    const statusValue = body.status || body.statusValue;
+    if (statusValue) {
       
       // Find the ProjectStatus record for this status in this project
       // Try multiple ways to find the status: by name, displayName, or similar variations
@@ -483,6 +528,15 @@ export async function DELETE(
         { error: "You don't have permission to delete this issue" },
         { status: 403 }
       );
+    }
+
+    const permissions = await checkUserPermissions(currentUser.id, existingIssue.workspaceId, [
+      Permission.DELETE_ANY_TASK, Permission.DELETE_SELF_TASK
+    ]);
+    if (!canActOnOwnContent(existingIssue.reporterId, currentUser.id,
+      permissions[Permission.DELETE_ANY_TASK].hasPermission,
+      permissions[Permission.DELETE_SELF_TASK].hasPermission)) {
+      return NextResponse.json({ error: 'No permission to delete this issue' }, { status: 403 });
     }
 
     // Prepare notifications before deletion

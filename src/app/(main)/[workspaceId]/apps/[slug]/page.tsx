@@ -1,12 +1,11 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import Image from 'next/image';
-import { PrismaClient } from '@prisma/client';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { AppHost } from '@/components/apps/AppHost';
 import { AppManifestV1, AppScope } from '@/lib/apps/types';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 async function getAppData(slug: string, workspaceSlug: string, userId: string) {
   try {

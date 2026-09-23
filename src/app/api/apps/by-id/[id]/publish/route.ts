@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient, AppStatus } from '@prisma/client';
+import { AppStatus } from '@prisma/client';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 const PublishRequestSchema = z.object({
   status: z.enum(['IN_REVIEW', 'PUBLISHED', 'DRAFT', 'SUSPENDED', 'REJECTED'], {
@@ -129,8 +129,6 @@ export async function PATCH(
       { error: 'Internal server error' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
 

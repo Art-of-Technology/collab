@@ -24,10 +24,10 @@ interface PRReviewResult {
 }
 
 export class AIContentGenerator {
-  private openai: OpenAI;
+  private client?: OpenAI;
 
-  constructor() {
-    this.openai = new OpenAI({
+  private get openai(): OpenAI {
+    return this.client ??= new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
   }

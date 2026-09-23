@@ -1,4 +1,3 @@
-import { PrismaClient } from '@prisma/client';
 import { AppManifestV1 } from './types';
 import { 
   generateWebhookSecret, 
@@ -7,7 +6,7 @@ import {
 } from '../webhooks';
 import { encrypt } from './crypto';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export interface WebhookCreationResult {
   success: boolean;

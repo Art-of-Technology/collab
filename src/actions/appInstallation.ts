@@ -1,6 +1,5 @@
 'use server';
 
-import { PrismaClient } from '@prisma/client';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getServerSession } from 'next-auth';
@@ -9,7 +8,7 @@ import { logAppInstallAttempt, logAppInstallSuccess, logAppInstallFailed } from 
 import { validateAppManifestSecurity } from '@/lib/security';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 const InstallAppSchema = z.object({
   appSlug: z.string(),
@@ -134,8 +133,6 @@ export async function installApp(formData: FormData) {
   } catch (error) {
     console.error('Error installing app:', error);
     throw error;
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
@@ -190,8 +187,6 @@ export async function uninstallApp(formData: FormData) {
   } catch (error) {
     console.error('Error uninstalling app:', error);
     throw error;
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
@@ -281,7 +276,5 @@ export async function getWorkspaceInstallations(workspaceId: string) {
   } catch (error) {
     console.error('Error fetching installations:', error);
     throw error;
-  } finally {
-    await prisma.$disconnect();
   }
 }

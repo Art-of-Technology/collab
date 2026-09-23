@@ -6,11 +6,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { decryptToken } from '@/lib/apps/crypto';
 import { hasScope, hasAllScopes, hasAnyScope, normalizeScopes } from '@/lib/oauth-scopes';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export interface AppAuthContext {
   installation: {

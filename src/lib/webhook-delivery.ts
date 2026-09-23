@@ -1,4 +1,3 @@
-import { PrismaClient } from '@prisma/client';
 import { 
   WebhookEvent, 
   WebhookDeliveryOptions,
@@ -13,7 +12,7 @@ import {
 } from './webhooks';
 import { decrypt } from './apps/crypto';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export interface WebhookDeliveryResult {
   success: boolean;

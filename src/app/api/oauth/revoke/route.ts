@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { decryptToken } from '@/lib/apps/crypto';
 import { authenticateOAuthClient } from '@/lib/oauth-client-auth';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 // OAuth 2.0 Token Revocation Endpoint (RFC 7009)
 // Allows clients to notify the authorization server that a token is no longer needed
@@ -88,8 +87,6 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
 

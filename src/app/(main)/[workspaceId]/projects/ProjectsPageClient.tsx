@@ -26,7 +26,7 @@ import { PageLayout } from '@/components/ui/page-layout';
 import { PageHeader } from '@/components/ui/page-header';
 import { SearchBar } from '@/components/ui/search-bar';
 import { FilterToggle } from '@/components/ui/filter-toggle';
-import { ShadowListGroup } from '@/components/ui/shadow-list-group';
+import { ShadowListGroup, ShadowListGroupItem } from '@/components/ui/shadow-list-group';
 import { EmptyState } from '@/components/ui/empty-state';
 
 type ProjectStatusFilter = 'active' | 'archived' | 'all';
@@ -168,7 +168,7 @@ export default function ProjectsPageClient() {
       {filteredProjects.length > 0 ? (
         <ShadowListGroup>
           {filteredProjects.map((project: Project) => (
-            <ShadowListGroup.Item key={project.id} className="!p-0">
+            <ShadowListGroupItem key={project.id} className="!p-0">
               <ProjectListItem
                 project={project}
                 workspaceSlug={currentWorkspace?.slug || currentWorkspace?.id || ''}
@@ -178,7 +178,7 @@ export default function ProjectsPageClient() {
                 onNavigateToChangelog={() => router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug}/changelog`)}
                 onNavigateToSettings={() => router.push(`/${currentWorkspace?.slug || currentWorkspace?.id}/projects/${project.slug}/settings`)}
               />
-            </ShadowListGroup.Item>
+            </ShadowListGroupItem>
           ))}
         </ShadowListGroup>
       ) : searchQuery ? (

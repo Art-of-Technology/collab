@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 const ToggleSystemAppSchema = z.object({
   isSystemApp: z.boolean()
@@ -90,7 +89,6 @@ export async function PATCH(
       newValue: isSystemApp
     });
 
-    await prisma.$disconnect();
 
     return NextResponse.json({
       success: true,
@@ -102,7 +100,7 @@ export async function PATCH(
 
   } catch (error) {
     console.error('Error toggling system app status:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -140,7 +138,6 @@ export async function GET(
       return NextResponse.json({ error: 'App not found' }, { status: 404 });
     }
 
-    await prisma.$disconnect();
 
     return NextResponse.json({
       isSystemApp: app.isSystemApp,
@@ -149,7 +146,7 @@ export async function GET(
 
   } catch (error) {
     console.error('Error getting system app status:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

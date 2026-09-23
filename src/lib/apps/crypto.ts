@@ -1,7 +1,6 @@
-import { createCipheriv, createDecipheriv, randomBytes, scrypt } from 'crypto';
+import { createCipheriv, createDecipheriv, randomBytes, randomUUID, scrypt } from 'crypto';
 import bcrypt from 'bcrypt';
 import { promisify } from 'util';
-import { v4 as uuidv4 } from 'uuid';
 
 const algorithm = 'aes-256-gcm';
 const scryptAsync = promisify(scrypt);
@@ -12,7 +11,7 @@ export function generateAuthorizationCode() {
 
 export async function generateClientCredentials() {
   return {
-    clientId: uuidv4(),
+    clientId: randomUUID(),
     clientSecret: randomBytes(32).toString('hex'),
     apiKey: randomBytes(24).toString('hex'),
   };

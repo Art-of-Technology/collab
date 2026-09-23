@@ -42,6 +42,22 @@ not a claim that build, lint, CI, all authorization surfaces or deployment pass.
 Remaining audit work includes mutation validation, verified Slack identity,
 HTML sanitization, outgoing webhooks, dependency updates and build repair.
 
+## Third slice
+
+- Issue writes use a strict field allowlist and existing role permissions;
+  assignments, labels, parent and status cannot cross the authorized tenant.
+- All application Prisma entry points reuse the shared credential-safe client.
+  Request handlers no longer disconnect a shared connection after each request.
+- Optional AI client construction is deferred until use. Missing AI credentials
+  no longer prevent route imports; the existing fallback behavior is preserved.
+- Project/view list items use the existing exported component; theme types use
+  the package's public export. Invitations and client IDs use native randomUUID.
+
+Eleven behavior checks pass. Full typecheck is down to 155 existing diagnostics
+without new error categories. The upgraded build compiles but route collection
+exposed the missing bcrypt binary from the script-disabled install; native
+password dependency validation and the subsequent build remain in progress.
+
 ## Approved product direction
 
 Forge owns project issues and durable context. Collab projects this state and

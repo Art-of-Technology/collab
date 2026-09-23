@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { PrismaClient, AppStatus } from '@prisma/client';
+import { AppStatus } from '@prisma/client';
 import { z } from 'zod';
 import { fetchManifest, validateAppManifest } from '@/lib/apps/validation';
 import { AppManifestV1 } from '@/lib/apps/types';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 // Schema for submitting manifest
 const SubmitManifestSchema = z.object({
@@ -142,7 +142,6 @@ export async function POST(
       return { app: updatedApp, version };
     });
 
-    await prisma.$disconnect();
 
     return NextResponse.json({
       success: true,
@@ -162,7 +161,7 @@ export async function POST(
 
   } catch (error) {
     console.error('Error submitting manifest:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

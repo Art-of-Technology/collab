@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { getAuthSession } from '@/lib/auth';
 import { z } from 'zod';
 import { WebhookEvent } from '@/lib/webhooks';
 import { processWebhookEvent } from '@/lib/webhook-delivery';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 const TestWebhookSchema = z.object({
   workspaceId: z.string().min(1, 'Workspace ID is required'),
