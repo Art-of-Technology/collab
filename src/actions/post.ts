@@ -394,7 +394,8 @@ export async function getPostById(postId: string) {
           name: true,
           members: {
             where: {
-              userId: user.id
+              userId: user.id,
+              status: true
             },
             select: {
               id: true

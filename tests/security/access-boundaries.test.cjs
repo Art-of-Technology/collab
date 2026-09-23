@@ -977,3 +977,120 @@ test('review: encryption roundtrip and generated Prisma Bytes assignments retain
     getCanonicalFileName: name => name, getCurrentDirectory: () => process.cwd(), getNewLine: () => '\n',
   }));
 });
+
+test('disclosure: post GET reuses authenticated reads and denies foreign or revoked members', async () => {
+  let session = null;
+  let reads = 0;
+  const author = { id: 'bob', name: 'Bob', email: 'bob@example.test' };
+  const db = {
+    user: { findUnique: async () => session?.user.email === 'alice@example.test' ? { id: 'alice' } : null },
+    post: { findUnique: async ({ where, include }) => {
+      reads++;
+      const workspace = workspaces.find(row => row.id === where.id);
+      if (!workspace) return null;
+      const memberWhere = include?.workspace?.select.members.where;
+      return {
+        id: where.id, message: 'Private post content', author, tags: [{ name: 'Important' }],
+        comments: [{ id: 'comment', message: 'Private comment', author, reactions: [] }], reactions: [],
+        workspace: { ...workspace, members: workspace.members.filter(row => !memberWhere || matches(row, memberWhere)) },
+      };
+    } },
+  };
+  const actions = load('src/actions/post.ts', {
+    '@/app/api/auth/[...nextauth]/route': { authOptions: {} }, '@/lib/prisma': { prisma: db },
+    'next-auth': { getServerSession: async () => session },
+    '@/utils/mentions': {}, '@/lib/notification-service': {},
+  }, { Error });
+  const { GET } = load('src/app/api/posts/[postId]/route.ts', {
+    'next/server': { NextResponse: Response }, '@/actions/post': actions,
+    '@/lib/prisma': { prisma: db }, '@/lib/session': {},
+  }, { Error, console });
+  const get = id => GET(new Request('https://example.test/api/posts/' + id), { params: Promise.resolve({ postId: id }) });
+  assert.equal((await get('joined')).status, 401);
+  assert.equal(reads, 0);
+  session = { user: { email: 'deleted@example.test' } };
+  assert.equal((await get('joined')).status, 401);
+  assert.equal(reads, 0);
+  session = { user: { email: 'alice@example.test' } };
+  for (const id of ['foreign', 'revoked', 'missing']) {
+    const response = await get(id);
+    assert.equal(response.status, 404, id);
+    assert.equal(await response.text(), 'Post not found');
+    await assert.rejects(actions.getPostById(id), /Post not found|You do not have access/);
+  }
+  for (const id of ['joined', 'own']) {
+    const response = await get(id);
+    assert.equal(response.status, 200, id);
+    const post = await response.json();
+    assert.equal(post.id, id);
+    assert.equal(post.message, 'Private post content');
+    assert.deepEqual(post.author, author);
+    assert.equal(post.comments[0].message, 'Private comment');
+    assert.equal(post.tags[0].name, 'Important');
+  }
+});
+
+test('disclosure: Coclaw memory enforces active access and Notes result/count parity', async () => {
+  let session = { user: { id: 'alice' } };
+  let reads = 0;
+  let counts = 0;
+  const workspace = workspaces.find(row => row.id === 'joined');
+  const rows = [
+    { id: 'private', scope: 'PERSONAL' },
+    { id: 'restricted', isRestricted: true },
+    { id: 'expired', expiresAt: new Date(0) },
+    { id: 'visible' },
+    { id: 'shared', isRestricted: true, isAiContext: true, sharedWith: [{ userId: 'alice', permission: 'VIEW' }] },
+    { id: 'shared-personal', type: 'NOTE', scope: 'PERSONAL', isAiContext: true, sharedWith: [{ userId: 'alice', permission: 'EDIT' }] },
+    { id: 'owned-expired', authorId: 'alice', expiresAt: new Date(0), isAiContext: true },
+    { id: 'ordinary', type: 'NOTE' },
+    { id: 'foreign', workspaceId: 'foreign', workspace: workspaces.find(row => row.id === 'foreign') },
+  ].map(row => ({ ...note, workspace, isEncrypted: false, type: 'ARCHITECTURE', isAiContext: false,
+    aiContextPriority: 1, title: 'Memory ' + row.id, content: 'needle ' + row.id + ' '.repeat(510) + 'end',
+    tags: [], createdAt: new Date('2026-09-23T00:00:00Z'), updatedAt: new Date('2026-09-23T00:00:00Z'), ...row }));
+  const access = load('src/lib/secrets/access.ts', {
+    '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
+  });
+  const { GET } = load('src/app/api/workspaces/[workspaceId]/coclaw/memory/route.ts', {
+    'next/server': { NextResponse: Response }, '@/lib/auth': { getAuthSession: async () => session },
+    '@/lib/issue-finder': { userHasWorkspaceAccess }, '@/lib/secrets/access': access,
+    '@/lib/prisma': { prisma: { ...prisma, note: {
+      findMany: async ({ where, take }) => { reads++; return rows.filter(row => matches(row, where)).slice(0, take); },
+      count: async ({ where }) => { counts++; return rows.filter(row => matches(row, where)).length; },
+    } } },
+  }, { console });
+  const get = (workspaceId, query = '') => GET({ nextUrl: new URL('https://example.test/memory?' + query) }, {
+    params: Promise.resolve({ workspaceId }),
+  });
+  session = null;
+  assert.equal((await get('joined')).status, 401);
+  session = { user: { id: 'alice' } };
+  for (const id of ['foreign', 'revoked', 'missing']) assert.equal((await get(id)).status, 404, id);
+  assert.equal(reads, 0); assert.equal(counts, 0);
+  const visibleIds = ['visible', 'shared', 'shared-personal', 'owned-expired'];
+  for (const category of ['all', 'architecture', 'ai-context']) {
+    for (const search of ['', 'needle', 'shared', 'absent']) {
+      const expected = rows.filter(row => visibleIds.includes(row.id) &&
+        (category !== 'architecture' || row.type === 'ARCHITECTURE') &&
+        (category !== 'ai-context' || row.isAiContext) &&
+        (!search || row.title.includes(search) || row.content.includes(search)));
+      for (const limit of [1, 50]) {
+        const response = await get('joined', new URLSearchParams({ category, search, limit: String(limit) }));
+        assert.equal(response.status, 200);
+        const body = await response.json();
+        assert.equal(body.total, expected.length, `${category}/${search}/${limit}`);
+        assert.deepEqual(body.memories.map(row => row.id), expected.slice(0, limit).map(row => row.id));
+        for (const memory of body.memories) {
+          const row = expected.find(row => row.id === memory.id);
+          assert.equal(memory.fullContent, row.content);
+          assert.equal(memory.content, row.content.substring(0, 500));
+          assert.equal(memory.createdAt, row.createdAt.toISOString());
+        }
+      }
+    }
+  }
+  const ownerResponse = await get('own');
+  assert.equal(ownerResponse.status, 200);
+  assert.deepEqual(await ownerResponse.json(), { memories: [], total: 0 });
+  assert.equal(reads, 25); assert.equal(counts, 25);
+});

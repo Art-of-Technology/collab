@@ -215,3 +215,17 @@ this does not establish PostgreSQL concurrency behavior. Full validation remains
 with the outer executor. Dependency setup used the existing lockfile with
 `npm ci --ignore-scripts --legacy-peer-deps` because api-scanner's Next peer
 range excludes the locked Next major; no dependency versions were changed.
+
+## Post and Coclaw disclosure follow-up
+
+Post GET now reuses `getPostById`; the shared action excludes inactive workspace
+members, preserving owner access and authorized post/comment responses. Coclaw
+memory requires active workspace access and applies the shared Notes predicate
+to both its content query and total count, including filtered searches.
+
+Two focused handler regressions passed with
+`node --test --test-name-pattern='disclosure:' tests/security/access-boundaries.test.cjs`.
+They execute the real post action and Notes policy with in-memory Prisma
+adapters, covering anonymous, foreign and revoked denial; member/owner access;
+and private, restricted, shared and expired Notes across filters and pagination.
+No live database or broader validation gates were run in this review round.
