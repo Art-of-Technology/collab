@@ -5,9 +5,9 @@ import { getInvitationByToken } from '@/actions/invitation';
 import InvitationClient from '@/components/workspace/InvitationClient';
 
 interface InvitationPageProps {
-  params: {
+  params: Promise<{
     token: string;
-  };
+  }>;
 }
 
 export const dynamic = 'force-dynamic';
