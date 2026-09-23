@@ -37,6 +37,16 @@ We will then take care of the issue as soon as possible.
 
 ## I Want To Contribute
 
+### Local checks
+
+Use the scripts in `package.json`: `npm run lint` runs the Next.js flat ESLint
+configuration; `npm run test:security` runs the offline behavior regressions.
+For a fresh type check after dependency changes, run `npm run prisma:generate`
+followed by `npm run typecheck -- --incremental false`. `npm run build` regenerates
+Prisma and runs the production build with TypeScript errors enforced. An earlier
+incremental typecheck or build pass does not validate a later dependency head.
+Use local dummy configuration for validation, never live credentials or data.
+
 > ### Legal Notice <!-- omit in toc -->
 > When contributing to this project, you must agree that you have authored 100% of the content, that you have the necessary rights to the content and that the content you contribute may be provided under the project licence.
 

@@ -2,50 +2,46 @@
 
 Status: local implementation; not deployed or release-approved.
 
-## First slice
+## Issue access and mutations
 
 - Issue ID and key resolution always requires workspace ownership or active
   membership. A caller-supplied workspace only narrows that authorized set.
+- Issue updates reject empty, unknown or invalid fields using `UpdateIssueSchema`
+  in `src/app/api/issues/[issueId]/route.ts`. General edits require
+  `EDIT_ANY_TASK` or reporter-based `EDIT_SELF_TASK`; `CHANGE_TASK_STATUS` only
+  authorizes status fields and `ASSIGN_TASK` only authorizes assignment. Every
+  field in a mixed payload must be authorized. Deletion uses the corresponding
+  delete permissions.
+- Same-workspace project moves require edit rights, an accessible destination,
+  a valid destination status and compatible retained parent/child, label and
+  repository relations. Invalid moves fail atomically without clearing relations;
+  cross-workspace moves are rejected. Conflicts return 409 for reload and retry.
+- Shared workspace permission queries ignore inactive memberships.
+
+## Notes access
+
 - Notes detail, edit, delete, history, comparison and restoration enforce the
   shared access check before content is read or decrypted. Tenant notes require
   active workspace access, including former authors. Restricted notes require
   authorship or an explicit share; administrator role alone does not bypass it.
-- Prisma omits user password hashes and GitHub credentials by default, including
-  nested users. Authentication explicitly requests the password hash; existing
-  server GitHub integrations already explicitly select their token.
-- `/api/slack/my-tasks` and `/api/slack/create-issue` return explicit 503
-  unavailable responses. Both relied on user-editable, unverified `slackId`.
-  No configuration, profile IDs or existing issues are deleted. The replacement
-  will use Forge authority and verified workspace/channel/project binding.
-  Check current consumers before deploying this local retirement.
-- Shared workspace permission queries ignore inactive memberships.
 
-Validation: `npm run test:security`; tests run without a database or credentials.
-The first three access-control checks reproduce failures against the original
-commit. Prisma protocol checks use the installed client to validate its generated
-selection, with the engine request intercepted before any database connection.
-Global omission uses the supported Prisma 6 API:
-https://docs.prisma.io/docs/orm/v6/prisma-client/queries/excluding-fields
+Offline regression coverage lives in
+[`tests/security/access-boundaries.test.cjs`](../../tests/security/access-boundaries.test.cjs).
+See [local check mechanics](../../CONTRIBUTING.md#local-checks). Prisma protocol
+checks intercept engine requests before any database connection.
 
-## Second slice
+## Preview, redirect and packaging boundaries
 
 - Note-history previews sanitize stored HTML with the installed DOMPurify.
 - Authentication redirects compare parsed origins, rejecting lookalike hosts,
   protocol-relative external URLs, alternate schemes and malformed URLs.
 - Docker context excludes `.env` and `.env.*`, retaining `.env.example` only.
 
-Eight behavior checks now pass. The two new output/redirect regressions fail
-against the preceding commit. Dependency security updates remain outstanding.
+## Shared clients and build repairs
 
-Initial full typecheck has 160 pre-existing diagnostics. The security tests are
-not a claim that build, lint, CI, all authorization surfaces or deployment pass.
-Remaining audit work includes mutation validation, verified Slack identity,
-HTML sanitization, outgoing webhooks, dependency updates and build repair.
-
-## Third slice
-
-- Issue writes use a strict field allowlist and existing role permissions;
-  assignments, labels, parent and status cannot cross the authorized tenant.
+- Prisma omits user password hashes and GitHub credentials by default, including
+  nested users. Authentication explicitly requests the password hash; existing
+  server GitHub integrations already explicitly select their token.
 - All application Prisma entry points reuse the shared credential-safe client.
   Request handlers no longer disconnect a shared connection after each request.
 - Optional AI client construction is deferred until use. Missing AI credentials
@@ -53,43 +49,21 @@ HTML sanitization, outgoing webhooks, dependency updates and build repair.
 - Project/view list items use the existing exported component; theme types use
   the package's public export. Invitations and client IDs use native randomUUID.
 
-Eleven behavior checks pass. Full typecheck is down to 155 existing diagnostics
-without new error categories. The upgraded build compiles but route collection
-exposed the missing bcrypt binary from the script-disabled install; native
-password dependency validation and the subsequent build remain in progress.
-
-## Dependency and build verification
-
-Next 16.3.6, React 19.3.0, NextAuth 4.24.15, DOMPurify 3.4.16,
-isomorphic-dompurify 2.36.0, bcrypt 6.0.0 and Nodemailer 10.0.10 are installed.
-Compatible transitive updates are locked. Native hashing/comparison and
-stream-only email rendering pass; no email was sent. The production build
-completed with a dummy localhost database URL and without AI credentials.
-
-The build still ignores TypeScript errors under the inherited configuration;
-this is not a release gate pass. Generated Next route types exposed 36 legacy
-parameter-signature failures in addition to remaining application diagnostics.
-Lint now runs through the flat Next config and its code findings are being fixed.
-The latest full dependency audit reports 0 critical, 4 high and 38 moderate
-entries; remaining high entries are in Prisma's CLI/config dependency chain.
+Dependency versions are owned by `package.json` and `package-lock.json`.
+The inherited `ignoreBuildErrors` option is removed: production builds enforce
+TypeScript errors. See [validation evidence](#validation-evidence-and-limitations)
+for the distinction between earlier passes and the failed dependency-head build.
 
 ## Outbound webhook boundary
 
-Delivery requires `COLLAB_WEBHOOK_ALLOWED_ORIGINS`, a comma-separated list of
-exact HTTPS origins (scheme, canonical hostname and port). Unset or invalid
-configuration denies delivery. Credentials, paths, queries and fragments are
-not accepted in configured origins; delivery URLs reject userinfo/fragments.
-Redirect responses are not followed or retried. Existing webhook records stay
-intact. Tests cover absent configuration, lookalike domains, alternate ports,
-invalid origins and redirect attempts.
+The [app webhook documentation](../apps/README.md#webhooks) owns outbound
+configuration, redirect behavior and operator trust requirements. The origin
+and redirect regressions are in the security behavior suite.
 
-This is a trust boundary, not general protection for arbitrary destinations:
-operators must control the allowed services, DNS and destination addresses.
-DNS rebinding and internal-target risks remain if an untrusted origin is
-allowed. Do not populate production origins or deploy until current consumers
-have been inventoried with Network Doctor. No production allowlist was set.
+Legacy Slack availability and rollout constraints are documented in the
+[README](../../README.md#integration-availability).
 
-## Approved product direction
+## Approved product direction (future slices, not implemented here)
 
 Forge owns project issues and durable context. Collab projects this state and
 reuses Notes as the memory UI. Markdown in the bound repository is canonical;
@@ -112,7 +86,7 @@ performed in this security slice. The current Team Space dashboard stays live.
 ## Follow-up local repairs
 
 - All 36 reported asynchronous route parameter signatures now satisfy the
-  generated Next route validators. Application type/lint errors remain.
+  generated Next route validators.
 - Pinning, template creation, audit logs, comment detail/edit/delete and sharing
   also call the shared Notes access check. Existing operation-specific author
   checks remain. Protected notes cannot publish their content as workspace
@@ -122,25 +96,14 @@ performed in this security slice. The current Team Space dashboard stays live.
   duplicate notification methods. Global notification preferences use their
   nullable workspace scope. Existing agent stream/config references are repaired.
 
-Seventeen local behavior checks pass, including denied Notes sibling handlers,
-profile membership escalation, protected template publication, webhook origin
-and redirect enforcement, validation wrappers and retained follow operations.
-Notes collection/search/template-use authorization and other remaining audit
-surfaces still require review. No push, PR, deployment or live configuration change.
-
 Notes list, pinned, search and shared collections now compose a shared database
 read predicate before fetching content or computing counts. A policy parity
 check covers scopes, active/revoked membership, ownership, restriction,
 encryption, shares, expiration and project workspace fallback. Handler checks
 verify both ordinary and shared list paths and search counts use the predicate.
-Nineteen security checks pass. Latest full typecheck has 113 diagnostics, with
-none in the updated Notes access/collection code; lint is still unpassed.
 
-Template use now requires active workspace access and resolves custom templates
-and optional projects within that workspace. Twenty security checks pass.
-Remaining security review includes Notes creation/reassignment and template
-management siblings, plus other HTML output surfaces. Do not treat these local
-slices as a completed repository security review or release authorization.
+Template use requires active workspace access and resolves custom templates
+and optional projects within that workspace.
 
 ## Resumed implementation
 
@@ -148,39 +111,28 @@ Notes creation and project reassignment now validate the destination workspace
 and project, including active membership and consistent tenant IDs. Template
 management requires active membership. The two AI issue suggestion/related
 routes now scope their source issue to the authorized workspace while using
-current schema relationships. Twenty-three local security checks pass.
+current schema relationships.
 
 Type repair removed an unreferenced legacy assistant widget, repaired editor
 command declarations and stale schema references, and preserved compiler checks.
-The latest completed typecheck is down to 72 diagnostics; subsequent repairs
-are pending the next complete typecheck. Lint and strict build remain blockers.
 Claude Tag's real Forge issue creation is user-confirmed PASS; do not recreate
 acceptance issues or change existing records or the live dashboard.
 
-Full `npm run typecheck` now passes with zero diagnostics, without exclusions
-or error suppression. The inherited `ignoreBuildErrors` option is removed.
-Twenty-five local behavior checks pass, including global push subscription
-scope/clearing and planning activity/child-relation conversion. Strict build
-is running. Fresh lint has 92 errors: 24 server JSX try/catch, 25 render-time
-component identity, and remaining hook/effect/ref/immutability/CommonJS findings.
-These remain release blockers; the replacement and release are not complete.
+## Validation evidence and limitations
 
-## Quality gate progress
+Earlier implementation checkpoints reported 26 passing behavior checks, lint
+with zero errors but remaining warnings, and a strict production build pass.
+Those results precede the final dependency head and are not current release proof. Native
+hashing/comparison and stream-only email rendering also passed locally; no email
+was sent. The build used a dummy localhost database URL without AI credentials.
 
-Full lint now exits successfully (zero errors), and full typecheck remains
-clean. Twenty-six behavior checks pass. Server pages catch data-fetch failures
-before rendering; hooks run in a consistent order; nested stateless renderers
-and icon selection preserve stable component identity; redundant effect state
-is derived directly. Undo/redo buttons subscribe to editor transactions, and
-issue modal selection is URL-derived with back navigation and stale-parent
-cleanup checked. The earlier strict production build passed; final-head build
-and dependency review still precede release review/CI and product acceptance.
-
-Prisma/client are updated together to 6.19.3; generation and all 26 behavior
-checks passed. The earlier incremental typecheck result was stale: the final-head
-strict production build failed with six Prisma Bytes assignment errors
+After Prisma/client were updated together to 6.19.3, generation and the
+then-current 26 behavior checks passed. The earlier incremental typecheck result
+was stale: the dependency-head strict production build failed with six Prisma
+Bytes assignment errors
 (`Buffer<ArrayBufferLike>` versus `Uint8Array<ArrayBuffer>`). The earlier build
-pass does not establish a passing final dependency head. A fresh full audit reports 41 affected package entries:
+pass does not establish a passing final dependency head. The recorded dependency
+audit reported 41 affected package entries:
 0 critical, 3 high and 38 moderate. The three high entries represent one
 DeepmergeTS recursive-object stack-exhaustion advisory propagated through
 Prisma's config/CLI dependency chain. Its trigger requires recursive in-memory
@@ -194,16 +146,15 @@ work and must not be represented as fixed by these patches.
 ## Review corrections
 
 Universal search, project summaries and note link previews now apply the shared
-Notes read predicate. Favorite-only edits leave scope unchanged. Issue edits
-preserve operation-specific status and assignment grants, while mixed payloads
-require permission for every field. Same-workspace project moves validate the
-destination, status and retained relations before writing in one transaction;
-incompatible relations fail without clearing data. Encryption helpers retain
-the concrete ArrayBuffer allocation type, including the approval consumer.
+Notes read predicate. Favorite-only edits leave scope unchanged.
+Issue mutation behavior is documented [above](#issue-access-and-mutations).
+Encryption helpers retain the concrete ArrayBuffer allocation type, including
+the approval consumer.
 
-The outer executor still owns Prisma generation, fresh nonincremental typecheck,
-lint, security test and strict production build gates. These fixes do not claim
-those gates passed or authorize deployment.
+The outer executor owns Prisma generation, fresh nonincremental typecheck,
+security tests and strict production build gates; this documentation phase owns
+its scoped lint pass. These fixes do not claim those gates passed or authorize
+deployment.
 
 Review-phase verification: Prisma 6.19.3 regenerated locally, then six focused
 checks passed using `node --test --test-name-pattern='review:|issue mutations|collection predicates' tests/security/access-boundaries.test.cjs`.
@@ -232,14 +183,10 @@ No live database or broader validation gates were run in this review round.
 
 ## User-bound app Notes and leave-policy follow-up
 
-App context, knowledge, system-prompts, combined AI-context and secrets reads
-now apply the shared Notes predicate before fetching content or counting rows.
-Each handler requires current workspace membership or ownership in addition to
-its existing token checks. Context edits require `canEdit`, keep note settings
-owner-only, validate destinations, and reject secret documents through the
-ordinary context editor. Secret reveals retain their scope and expiry checks
-and authorize the note before decryption. Leave-policy reads use the shared
-active-workspace helper while preserving owner access.
+The served API reference owns the
+[app Notes authorization contract](../../public/docs/third-party-api.md#notes-context-and-secrets).
+Leave-policy reads use the shared active-workspace helper while preserving owner
+access.
 
 Four focused regressions passed with
 `node --test --test-name-pattern='app-notes:' tests/security/access-boundaries.test.cjs`.

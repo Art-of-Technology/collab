@@ -682,7 +682,6 @@ export default function ViewTopBar({
                 sideOffset={4}
               >
                 {/* Sticky search */}
-                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
                 <div
                   className="px-2.5 pt-2.5 pb-1.5"
                   onKeyDown={e => e.stopPropagation()}

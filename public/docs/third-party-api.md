@@ -19,6 +19,22 @@ Authorization: Bearer <your_access_token>
 
 Access tokens are obtained through the OAuth 2.0 authorization flow. See the [OAuth documentation](#oauth) for details.
 
+### Notes context and secrets
+
+User-bound app/MCP context, knowledge, system-prompts, AI-context and secrets
+endpoints require active workspace membership or ownership in addition to token
+validation. Token scopes narrow the user's Notes rights; they never grant access
+to otherwise inaccessible notes. Reads and counts apply the same Notes access
+policy before returning content. Restricted notes require authorship or an
+explicit share, even for workspace administrators; expiry also limits access.
+
+Context updates require edit access. Shared readers cannot edit, and shared
+editors cannot change owner-only settings (`type`, `scope`, `projectId`,
+`isAiContext`, `aiContextPriority`). Project destinations must belong to the
+authorized workspace. The context editor rejects secret documents; secret
+revelation uses `POST /secrets/{id}/reveal` and retains its token-scope, expiry
+and Notes access checks before decryption.
+
 ## Scopes
 
 The following scopes are available for third-party applications:

@@ -148,7 +148,7 @@ Create a persistent, always-accessible AI widget at the bottom of the screen:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Component Location:** `src/components/ai/AIAssistantWidget.tsx`
+**Current implementation:** see [AI Assistant Surface](IMPLEMENTATION_PROGRESS.md#13-ai-assistant-surface); this mockup describes the original proposal.
 
 ---
 
@@ -421,7 +421,7 @@ const aiWidgetStyles = {
    - `src/lib/ai/actions.ts` - AI action handlers (create issue, update, etc.)
 
 2. **Build AI Widget Component**
-   - `src/components/ai/AIAssistantWidget.tsx`
+   - See [AI Assistant Surface](IMPLEMENTATION_PROGRESS.md#13-ai-assistant-surface) for the current implementation.
    - `src/components/ai/AIMessage.tsx`
    - `src/components/ai/AIQuickActions.tsx`
    - `src/components/ai/AISuggestion.tsx`
@@ -577,7 +577,6 @@ type AIAction =
 ### New Files
 ```
 src/components/ai/
-├── AIAssistantWidget.tsx
 ├── AIMessage.tsx
 ├── AIQuickActions.tsx
 ├── AISuggestion.tsx

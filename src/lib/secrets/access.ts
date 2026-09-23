@@ -40,7 +40,7 @@ export interface AccessCheckResult {
  *
  * @param userId - ID of the user trying to access
  * @param note - Note with access-related fields
- * @param workspaceMembership - User's workspace membership (for admin check)
+ * @param workspaceMembership - Verified active membership or workspace ownership; null if inaccessible
  * @returns Access check result with permissions
  */
 export async function checkNoteAccess(
@@ -75,7 +75,7 @@ export async function checkNoteAccess(
     };
   }
 
-  // Owner always has full access
+  // Authorship grants full access only after the tenant check above.
   if (isOwner) {
     return {
       canAccess: true,
@@ -165,7 +165,7 @@ export async function checkNoteAccess(
       };
 
     case NoteScope.PUBLIC:
-      // Public notes: accessible to everyone
+      // Public notes: accessible to authenticated users after the tenant check above.
       return {
         canAccess: true,
         canEdit: hasEditPermission,

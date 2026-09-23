@@ -19,6 +19,8 @@ Authorization: Bearer <your_access_token>
 
 Access tokens are obtained through the OAuth 2.0 authorization flow. See the [OAuth documentation](oauth-endpoints.md) for details.
 
+The served reference owns the [Notes context and secrets authorization contract](../public/docs/third-party-api.md#notes-context-and-secrets).
+
 ## Scopes
 
 The following scopes are available for third-party applications:
@@ -630,7 +632,7 @@ task = client.tasks.create({
 
 ## Webhooks
 
-Third-party apps can receive real-time notifications about events in Collab through webhooks. See the [Webhook Documentation](webhooks.md) for details on setting up and handling webhook events.
+See the [Webhook Documentation](apps/README.md#webhooks) for delivery configuration and restrictions.
 
 ## Support
 
