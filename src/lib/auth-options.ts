@@ -23,7 +23,7 @@ export const authOptions: AuthOptions = {
   events: {
     async createUser({ user }) {
       // Process Google profile image and upload to Cloudinary if needed
-      if (user.image && user.image.includes('googleusercontent.com')) {
+      if (user.image) {
         try {
           console.log('🔄 Processing Google profile image for new user:', user.id);
           const cloudinaryUrl = await processUserProfileImage(user.image, user.id);
@@ -73,34 +73,31 @@ export const authOptions: AuthOptions = {
       // Handle profile image processing for existing users signing in with Google
       if (account?.provider === 'google' && user.id && user.image) {
         try {
-          // Check if the current image is still a Google URL and needs migration
-          if (user.image.includes('googleusercontent.com')) {
-            // First verify the user actually exists in DB (signIn callback may receive provider ID for new users)
-            const existingUser = await prisma.user.findUnique({
+          // First verify the user actually exists in DB (signIn callback may receive provider ID for new users)
+          const existingUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { id: true, image: true }
+          });
+
+          if (!existingUser) {
+            // User doesn't exist yet - the createUser event will handle profile image
+            console.log('ℹ️ User not found in DB during sign-in, skipping image processing (will be handled by createUser event)');
+            return true;
+          }
+
+          console.log('🔄 Processing Google profile image for existing user sign-in:', user.id);
+          const cloudinaryUrl = await processUserProfileImage(user.image, user.id);
+
+          if (cloudinaryUrl && cloudinaryUrl !== user.image) {
+            // Update the user's image URL to the Cloudinary URL
+            await prisma.user.update({
               where: { id: user.id },
-              select: { id: true, image: true }
+              data: { image: cloudinaryUrl }
             });
+            console.log('✅ Updated existing user profile image to Cloudinary URL during sign-in');
 
-            if (!existingUser) {
-              // User doesn't exist yet - the createUser event will handle profile image
-              console.log('ℹ️ User not found in DB during sign-in, skipping image processing (will be handled by createUser event)');
-              return true;
-            }
-
-            console.log('🔄 Processing Google profile image for existing user sign-in:', user.id);
-            const cloudinaryUrl = await processUserProfileImage(user.image, user.id);
-
-            if (cloudinaryUrl && cloudinaryUrl !== user.image) {
-              // Update the user's image URL to the Cloudinary URL
-              await prisma.user.update({
-                where: { id: user.id },
-                data: { image: cloudinaryUrl }
-              });
-              console.log('✅ Updated existing user profile image to Cloudinary URL during sign-in');
-
-              // Update the user object so the session gets the new URL
-              user.image = cloudinaryUrl;
-            }
+            // Update the user object so the session gets the new URL
+            user.image = cloudinaryUrl;
           }
         } catch (error) {
           console.error('❌ Failed to process user profile image during sign-in:', error);

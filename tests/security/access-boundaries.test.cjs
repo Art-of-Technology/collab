@@ -284,6 +284,74 @@ test('error page renders the resolved search message and fallback', async () => 
   }
 });
 
+test('auth image migration uploads only HTTPS Google hosts across all callbacks', async () => {
+  const uploads = [];
+  const updates = [];
+  let uploadFails = false;
+  let userExists = true;
+  const uploadedUrl = 'https://res.cloudinary.com/example/profile.png';
+  const globals = { process: { env: {} }, URL, console: { log() {}, error() {} } };
+  const imageHandler = load('src/utils/cloudinary-server.ts', {
+    'server-only': {},
+    cloudinary: { v2: { config() {}, uploader: { async upload(url) {
+      uploads.push(url);
+      if (uploadFails) throw new Error('Upload unavailable');
+      return { secure_url: uploadedUrl };
+    } } } },
+  }, globals);
+  const { authOptions } = load('src/lib/auth-options.ts', {
+    'next-auth/providers/google': { default: () => ({}) },
+    '@/lib/prisma': { prisma: { user: {
+      findUnique: async () => userExists ? { id: 'alice' } : null,
+      update: async args => updates.push(args),
+    } } },
+    '@/utils/user-image-handler': { processUserProfileImage: imageHandler.processUserProfileImageServer },
+    '@/lib/custom-prisma-adapter': { CustomPrismaAdapter: () => ({}) },
+  }, globals);
+  const rejected = [
+    null, 'not a URL', uploadedUrl,
+    'https://evil.test/googleusercontent.com/avatar',
+    'https://evil.test/?image=googleusercontent.com',
+    'https://googleusercontent.com.evil.test/avatar',
+    'https://evilgoogleusercontent.com/avatar',
+    'https://googleusercontent.com@evil.test/avatar',
+    'http://lh3.googleusercontent.com/avatar',
+    'ftp://lh3.googleusercontent.com/avatar',
+    '//lh3.googleusercontent.com/avatar',
+  ];
+  const allowed = [
+    'https://googleusercontent.com/avatar',
+    'https://lh3.googleusercontent.com/avatar',
+    'https://LH3.GOOGLEUSERCONTENT.COM/avatar?old=cloudinary.com',
+  ];
+  for (const image of [...rejected, ...allowed]) {
+    const shouldUpload = allowed.includes(image);
+    for (const callback of ['createUser', 'linkAccount', 'signIn', 'updateImage']) {
+      uploads.length = 0;
+      updates.length = 0;
+      const user = { id: 'alice', image };
+      const args = { user, account: { provider: 'google' }, profile: { picture: image } };
+      if (callback === 'signIn') {
+        assert.equal(await authOptions.callbacks.signIn(args), true);
+        assert.equal(user.image, shouldUpload ? uploadedUrl : image);
+      } else if (callback === 'updateImage') {
+        assert.equal(await imageHandler.updateUserProfileImageIfNeededServer(image, user.id), shouldUpload ? uploadedUrl : image);
+      } else {
+        await authOptions.events[callback](args);
+      }
+      assert.deepEqual(uploads, shouldUpload ? [image] : [], `${callback}: ${image}`);
+      assert.equal(updates.length, shouldUpload && callback !== 'updateImage' ? 1 : 0);
+      if (updates.length) assert.equal(updates[0].data.image, uploadedUrl);
+    }
+  }
+  userExists = false;
+  uploads.length = 0;
+  assert.equal(await authOptions.callbacks.signIn({ user: { id: 'new', image: allowed[0] }, account: { provider: 'google' } }), true);
+  assert.equal(uploads.length, 0);
+  uploadFails = true;
+  assert.equal(await imageHandler.processUserProfileImageServer(allowed[0], 'alice'), allowed[0]);
+});
+
 test('login redirects stay on the exact application origin', async () => {
   const { authOptions } = load('src/lib/auth-options.ts', {
     'next-auth': { default: () => () => {} },
