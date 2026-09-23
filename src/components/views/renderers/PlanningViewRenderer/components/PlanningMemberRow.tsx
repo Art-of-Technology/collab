@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { IssueStatusBadge, StatusIcon, emojiToStatusCategory } from './IssueStatusBadge';
 import type { TeamMemberRangeSync, DayActivity, IssueActivity } from '../types';
+import { createEmptyDayActivity } from '@/utils/teamSyncAnalyzer';
 import { format } from 'date-fns';
 
 interface PlanningMemberRowProps {
@@ -38,7 +39,7 @@ interface IssueRowProps {
 }
 
 function IssueRow({ issue, workspaceSlug, compact = false }: IssueRowProps) {
-  const statusCategory = emojiToStatusCategory(issue.statusSymbol);
+  const statusCategory = emojiToStatusCategory(issue.issue?.statusSymbol);
   
   return (
     <div className={cn(
@@ -150,15 +151,7 @@ export function PlanningMemberRow({
     }
     
     // If showing all days or no specific date, aggregate
-    const aggregated: DayActivity = {
-      date: selectedDate || '',
-      completed: [],
-      started: [],
-      inProgress: [],
-      inReview: [],
-      planned: [],
-      movements: [],
-    };
+    const aggregated = createEmptyDayActivity(selectedDate ? new Date(selectedDate) : new Date());
     
     const seenIssues = new Set<string>();
     

@@ -89,9 +89,9 @@ interface IssueItemProps {
 }
 
 function IssueItem({ issue, workspaceSlug, onOpenModal }: IssueItemProps) {
-  const statusDotColor = getStatusDotColor(issue.statusText);
-  const StatusIcon = getStatusIcon(issue.statusText);
-  const statusIconColor = getStatusIconColor(issue.statusText);
+  const statusDotColor = getStatusDotColor(issue.statusText ?? "");
+  const StatusIcon = getStatusIcon(issue.statusText ?? "");
+  const statusIconColor = getStatusIconColor(issue.statusText ?? "");
   const statusLabel = issue.statusDisplayName || issue.statusText;
   const showDaysWarning = issue.daysInProgress !== undefined && issue.daysInProgress >= 5;
 

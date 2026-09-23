@@ -496,7 +496,7 @@ export default function ViewTopBar({
     switch (catKey) {
       case 'status':
         return uniqueStatuses.map(status => {
-          const Icon = STATUS_ICON_MAP[status.iconName] || Circle;
+          const Icon = STATUS_ICON_MAP[status.iconName ?? ""] || Circle;
           const selected = isStatusSelected(status.name);
           return (
             <DropdownMenuItem

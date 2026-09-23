@@ -109,7 +109,7 @@ export async function PATCH(
       select: { role: true },
     });
 
-    const isAdmin = user?.role === "admin";
+    const isAdmin = user?.role === "SYSTEM_ADMIN";
     const isAuthor = featureRequest.authorId === session.user.id;
 
     // Only the author can update title and description
@@ -202,7 +202,7 @@ export async function DELETE(
       select: { role: true },
     });
 
-    const isAdmin = user?.role === "ADMIN";
+    const isAdmin = user?.role === "SYSTEM_ADMIN";
     const isAuthor = featureRequest.authorId === session.user.id;
 
     // Only the author or admins can delete

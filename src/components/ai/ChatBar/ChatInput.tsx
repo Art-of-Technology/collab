@@ -110,7 +110,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval>>();
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   // Agent dropdown state
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);

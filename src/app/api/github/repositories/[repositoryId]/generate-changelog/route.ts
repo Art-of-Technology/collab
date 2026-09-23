@@ -229,7 +229,7 @@ export async function POST(
         pullRequests: changelogData.pullRequests,
         issues: changelogData.issues,
       },
-      format
+      typeof format === 'string' ? format : 'markdown'
     );
 
     console.log('[GENERATE_CHANGELOG] Generating with prompt length:', prompt.length);

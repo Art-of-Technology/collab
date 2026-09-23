@@ -420,8 +420,8 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
       const context = buildAIContext({
         user: {
           id: session.user.id || "",
-          name: session.user.name,
-          email: session.user.email,
+          name: session.user.name ?? null,
+          email: session.user.email ?? null,
         },
         workspace: {
           id: currentWorkspace.id,

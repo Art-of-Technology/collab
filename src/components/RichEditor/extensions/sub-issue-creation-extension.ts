@@ -1,5 +1,13 @@
 import { Extension } from '@tiptap/core';
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    subIssueCreation: {
+      createSubIssueFromSelection: () => ReturnType;
+    };
+  }
+}
+
 export interface SubIssueCreationOptions {
   onCreateSubIssue?: (selectedText: string) => void;
 }

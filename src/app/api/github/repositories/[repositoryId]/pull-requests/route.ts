@@ -1,3 +1,4 @@
+import { PRState, Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -24,9 +25,13 @@ export async function GET(
     }
 
     // Build where clause
-    const where: { repositoryId: string; state?: string } = { repositoryId };
+    const where: Prisma.PullRequestWhereInput = { repositoryId };
     if (state) {
-      where.state = state.toUpperCase();
+      const normalized = state.toUpperCase();
+      if (!Object.values(PRState).includes(normalized as PRState)) {
+        return NextResponse.json({ error: 'Invalid pull request state' }, { status: 400 });
+      }
+      where.state = normalized as PRState;
     }
 
     // Get pull requests with pagination

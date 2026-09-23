@@ -168,7 +168,7 @@ async function revokeTokenFromInstallations(
     for (const appToken of tokens) {
       try {
         const storedToken = appToken[tokenField as keyof typeof appToken] as string | null;
-        if (!storedToken) continue;
+        if (!storedToken || !appToken.installation) continue;
 
         // Decrypt the stored token
         const storedTokenData = Buffer.from(storedToken, 'base64');

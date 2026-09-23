@@ -156,3 +156,11 @@ The latest completed typecheck is down to 72 diagnostics; subsequent repairs
 are pending the next complete typecheck. Lint and strict build remain blockers.
 Claude Tag's real Forge issue creation is user-confirmed PASS; do not recreate
 acceptance issues or change existing records or the live dashboard.
+
+Full `npm run typecheck` now passes with zero diagnostics, without exclusions
+or error suppression. The inherited `ignoreBuildErrors` option is removed.
+Twenty-five local behavior checks pass, including global push subscription
+scope/clearing and planning activity/child-relation conversion. Strict build
+is running. Fresh lint has 92 errors: 24 server JSX try/catch, 25 render-time
+component identity, and remaining hook/effect/ref/immutability/CommonJS findings.
+These remain release blockers; the replacement and release are not complete.

@@ -1,5 +1,7 @@
 "use client";
 
+import { activityToMovement } from "@/utils/teamSyncAnalyzer";
+
 // Feature flag to switch between old and new planning view
 const USE_NEW_PLANNING_VIEW = true;
 
@@ -371,7 +373,7 @@ function PlanningViewRendererLegacy({
           <div className="flex-1 overflow-hidden flex flex-col">
             {viewMode === 'activity' ? (
               <PlanningActivityFeed
-                activities={activityData?.feed || []}
+                activities={(activityData?.feed || []).map(activityToMovement)}
                 workspaceSlug={workspace.slug}
                 isLoading={isLoadingActivity}
               />

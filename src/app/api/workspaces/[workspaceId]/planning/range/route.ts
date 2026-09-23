@@ -30,7 +30,7 @@ function issueToActivity(
     issueKey: string | null;
     type: string;
     priority: string;
-    status: string;
+    status: string | null;
     assigneeId: string | null;
     dueDate: Date | null;
     createdAt: Date;

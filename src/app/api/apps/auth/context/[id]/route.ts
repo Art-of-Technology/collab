@@ -77,7 +77,7 @@ export const GET = withAppAuth(
       }
 
       // Check if it's a secret type - mask content unless secrets:read scope
-      const secretTypes = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
+      const secretTypes: NoteType[] = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
       if (secretTypes.includes(note.type) || note.isEncrypted) {
         // Check if user has secrets:read scope
         const hasSecretsScope = context.token.scopes.includes('secrets:read');
@@ -180,7 +180,7 @@ export const PUT = withAppAuth(
       }
 
       // Prevent updating TO secret types
-      const secretTypes = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
+      const secretTypes: NoteType[] = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
       if (updateData.type && secretTypes.includes(updateData.type)) {
         return NextResponse.json(
           { error: 'invalid_request', error_description: 'Cannot update to secret types' },

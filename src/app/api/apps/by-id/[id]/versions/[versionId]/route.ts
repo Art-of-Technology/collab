@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
@@ -146,10 +147,10 @@ export async function PATCH(
     }
 
     // Parse current manifest
-    const currentManifest = currentVersion.manifest as Record<string, unknown>;
+    const currentManifest = currentVersion.manifest as Prisma.JsonObject;
 
     // Build updated manifest
-    const updatedManifest = {
+    const updatedManifest: Prisma.JsonObject = {
       ...currentManifest,
       ...(updates.entrypoint_url && { entrypoint_url: updates.entrypoint_url }),
       ...(updates.name && { name: updates.name }),
@@ -160,7 +161,7 @@ export async function PATCH(
 
     // Handle OAuth updates
     if (updates.oauth) {
-      const currentOAuth = (currentManifest.oauth as Record<string, unknown>) || {};
+      const currentOAuth = (currentManifest.oauth as Prisma.JsonObject) || {};
       updatedManifest.oauth = {
         ...currentOAuth,
         ...(updates.oauth.redirect_uris && { redirect_uris: updates.oauth.redirect_uris }),
@@ -169,7 +170,7 @@ export async function PATCH(
 
     // Handle CSP updates
     if (updates.csp) {
-      const currentCsp = (currentManifest.csp as Record<string, unknown>) || {};
+      const currentCsp = (currentManifest.csp as Prisma.JsonObject) || {};
       updatedManifest.csp = {
         ...currentCsp,
         ...(updates.csp.connectSrc && { connectSrc: updates.csp.connectSrc }),

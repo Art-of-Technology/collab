@@ -643,3 +643,48 @@ test('AI issue suggestions and relations resolve their source issue inside the a
     assert.equal(reads, 1);
   }
 });
+
+test('global push subscriptions reuse existing rows and clear only global preferences', async () => {
+  const writes = [];
+  let existing = null;
+  const dbNull = Symbol('DbNull');
+  const route = load('src/app/api/notifications/push/subscribe/route.ts', {
+    '@prisma/client': { Prisma: { DbNull: dbNull } },
+    'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
+    '@/lib/session': { getCurrentUser: async () => ({ id: 'alice' }) },
+    '@/lib/prisma': { prisma: { notificationPreferences: {
+      findFirst: async ({ where }) => { assert.equal(where.workspaceId, null); return existing; },
+      upsert: async args => { writes.push(args); },
+      updateMany: async args => { writes.push(args); },
+    } } },
+    '@/lib/encryption': { EncryptionService: { encrypt: () => 'encrypted-test' } },
+    '@/lib/rate-limit': { withRateLimit: fn => fn },
+    '@/lib/validation': { withValidation: fn => req => fn(req, { body: { subscription: {} } }) },
+    '@/lib/cors': { withCors: fn => fn, getCorsConfig: () => ({}) },
+  });
+  assert.equal((await route.POST({})).status, 200);
+  assert.equal(writes[0].where.id, writes[0].create.id);
+  assert.equal(writes[0].where.id, 'global:alice');
+  existing = { id: 'legacy-row' };
+  await route.POST({});
+  assert.equal(writes[1].where.id, 'legacy-row');
+  await route.DELETE({});
+  assert.equal(writes[2].where.workspaceId, null);
+  assert.equal(writes[2].data.pushSubscription, dbNull);
+  assert.equal(writes[2].data.pushNotificationsEnabled, false);
+});
+
+test('planning activity conversion and child relations preserve IDs, statuses and timestamps', () => {
+  const { activityToMovement } = load('src/utils/teamSyncAnalyzer.ts');
+  const base = { issueId: 'issue', action: 'STATUS_CHANGED', userId: 'alice', createdAt: '2026-09-23T10:00:00Z',
+    oldValue: 'backlog', newValue: 'done', issue: { issueKey: 'P-1', title: 'Title', type: 'TASK', priority: 'high' } };
+  const movement = activityToMovement(base);
+  assert.equal(movement.movementType, 'completed');
+  assert.equal(movement.timestamp.toISOString(), new Date(base.createdAt).toISOString());
+  assert.equal(movement.issueKey, 'P-1');
+  assert.equal(activityToMovement({ ...base, action: 'CREATED' }).movementType, 'created');
+  assert.equal(activityToMovement({ ...base, action: 'ASSIGNED' }).movementType, 'assigned');
+  const { organizeRelationsData } = load('src/components/issue/sections/relations/utils/relationHelpers.ts');
+  const result = organizeRelationsData([{ relationType: 'child', relatedItem: { id: 'child' } }]);
+  assert.equal(result.children[0].dbId, 'child');
+});
