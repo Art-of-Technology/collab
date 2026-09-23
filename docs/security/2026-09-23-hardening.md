@@ -135,3 +135,9 @@ encryption, shares, expiration and project workspace fallback. Handler checks
 verify both ordinary and shared list paths and search counts use the predicate.
 Nineteen security checks pass. Latest full typecheck has 113 diagnostics, with
 none in the updated Notes access/collection code; lint is still unpassed.
+
+Template use now requires active workspace access and resolves custom templates
+and optional projects within that workspace. Twenty security checks pass.
+Remaining security review includes Notes creation/reassignment and template
+management siblings, plus other HTML output surfaces. Do not treat these local
+slices as a completed repository security review or release authorization.

@@ -546,3 +546,31 @@ test('all Notes collections constrain both result reads and search counts', asyn
     assert.equal(reads, file === 'search/route.ts' ? 2 : 1);
   }
 });
+
+test('template use requires workspace access and scopes custom template reads', async () => {
+  let templateReads = 0;
+  const { POST } = load('src/app/api/notes/templates/[id]/use/route.ts', {
+    'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
+    'next-auth': { getServerSession: async () => ({ user: { id: 'alice' } }) },
+    '@/app/api/auth/[...nextauth]/route': { authOptions: {} },
+    '@/lib/issue-finder': { userHasWorkspaceAccess },
+    '@/lib/prisma': { prisma: {
+      user: { findUnique: async () => ({ name: 'Alice' }) },
+      workspace: { findUnique: async () => ({ name: 'Workspace' }) },
+      noteTemplate: { findFirst: async ({ where }) => {
+        templateReads++;
+        assert.equal(where.workspaceId, 'joined');
+        return null;
+      } },
+    } },
+    'zod': require('zod'), '@/lib/note-templates': { BUILT_IN_TEMPLATES: [] },
+    '@/lib/template-placeholders': {},
+  });
+  for (const workspaceId of ['foreign', 'revoked', 'joined']) {
+    const response = await POST(new Request('https://example.test/template', {
+      method: 'POST', body: JSON.stringify({ workspaceId }),
+    }), { params: Promise.resolve({ id: 'custom-template' }) });
+    assert.equal(response.status, workspaceId === 'joined' ? 404 : 403);
+  }
+  assert.equal(templateReads, 1);
+});
