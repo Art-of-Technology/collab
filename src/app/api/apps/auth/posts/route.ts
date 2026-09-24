@@ -88,7 +88,6 @@ export const GET = withAppAuth(
               select: {
                 id: true,
                 name: true,
-                email: true,
                 image: true
               }
             },
@@ -96,7 +95,6 @@ export const GET = withAppAuth(
               select: {
                 id: true,
                 name: true,
-                email: true,
                 image: true
               }
             },
@@ -104,7 +102,6 @@ export const GET = withAppAuth(
               select: {
                 id: true,
                 name: true,
-                email: true,
                 image: true
               }
             },
@@ -189,7 +186,6 @@ export const POST = withAppAuth(
             select: {
               id: true,
               name: true,
-              email: true,
               image: true
             }
           },

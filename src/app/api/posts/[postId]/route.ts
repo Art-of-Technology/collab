@@ -1,3 +1,4 @@
+import { deletePostWithComments } from "@/lib/delete-post-comment";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -190,9 +191,7 @@ export async function DELETE(
     }
 
     // Delete the post - Prisma cascade will handle related records
-    await prisma.post.delete({
-      where: { id: postId },
-    });
+    await deletePostWithComments(postId, user.id);
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {

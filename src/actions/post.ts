@@ -1,5 +1,6 @@
 'use server';
 
+import { deletePostWithComments } from "@/lib/delete-post-comment";
 import { postAccessWhere, postWorkspaceAccessWhere } from "@/lib/post-access";
 import { userSelectFields } from "@/lib/user-utils";
 import { authOptions } from '@/lib/auth-options';
@@ -697,7 +698,7 @@ export async function deletePost(postId: string) {
   }
   
   // Record deletion action and delete the post
-  await prisma.$transaction(async (tx) => {
+  await deletePostWithComments(postId, user.id, async (tx) => {
     // Record the deletion action before deleting using normal Prisma client
     await tx.postAction.create({
       data: {
@@ -718,10 +719,6 @@ export async function deletePost(postId: string) {
       },
     });
 
-    // Delete the post - Prisma cascade will handle related records
-    await tx.post.delete({
-      where: { id: postId },
-    });
   });
   
   return true;
