@@ -1,3 +1,4 @@
+import { validateViewProjects } from '@/lib/view-helpers';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -122,6 +123,10 @@ export async function PUT(
       projectIds,
     } = body;
 
+
+    if (projectIds !== undefined && !await validateViewProjects(projectIds, session.user.id)) {
+      return NextResponse.json({ error: 'Invalid or inaccessible projects' }, { status: 400 });
+    }
 
     // Validate ownerId if provided
     if (body.ownerId !== undefined) {

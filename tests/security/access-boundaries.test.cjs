@@ -124,7 +124,7 @@ const prisma = {
     async findFirst({ where }) { return workspaces.find(workspace => matchesWorkspace(workspace, where)) ?? null; },
   },
 };
-const { findIssueByIdOrKey, userHasWorkspaceAccess } = load('src/lib/issue-finder.ts', {
+const { findIssueByIdOrKey, userHasWorkspaceAccess, issueAccessWhere } = load('src/lib/issue-finder.ts', {
   '@/lib/prisma': { prisma },
   '@/lib/shared-issue-key-utils': load('src/lib/shared-issue-key-utils.ts'),
 });
@@ -780,7 +780,7 @@ test('AI issue suggestions and relations resolve their source issue inside the a
     const { GET } = load(`src/app/api/ai/issues/${endpoint}/route.ts`, {
       'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
       '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
-      '@/lib/auth': { authConfig: {} }, '@/lib/issue-finder': { userHasWorkspaceAccess },
+      '@/lib/auth': { authConfig: {} }, '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
       '@/lib/prisma': { prisma: { issue: { findFirst: async ({ where }) => {
         reads++; assert.equal(where.workspaceId, 'joined'); assert.equal(where.id, 'foreign-issue'); return null;
       } } } },
@@ -1307,6 +1307,7 @@ function appNotesHarness() {
     '@/lib/prisma': { prisma: db }, '@prisma/client': client, '@/lib/issue-finder': finder,
   });
   const auth = load('src/lib/apps/auth-middleware.ts', {
+    '@/lib/issue-finder': finder,
     'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma: db },
     '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), '@/lib/apps/crypto': { decryptToken: async () => 'test-token' },
   }, { URL, Buffer, console });

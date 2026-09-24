@@ -1,4 +1,4 @@
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
     const issue = await prisma.issue.findFirst({
       where: { id: issueId, workspaceId },
       include: {
-        labels: true,
+        labels: { where: issueAccessWhere(session.user.id) },
         projectStatus: true,
         assignee: true,
         project: {

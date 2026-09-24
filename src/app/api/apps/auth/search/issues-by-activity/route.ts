@@ -196,6 +196,7 @@ export const GET = withAppAuth(
               },
             },
             labels: {
+              where: { workspaceId: context.workspace.id },
               select: {
                 id: true,
                 name: true,

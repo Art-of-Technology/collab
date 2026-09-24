@@ -76,7 +76,8 @@ export default async function ViewPage({ params }: ViewPageProps) {
   // Get projects info for the view
   const projects = await prisma.project.findMany({
     where: {
-      id: { in: view.projectIds }
+      id: { in: view.projectIds },
+      ...issueAccessWhere(session.user.id)
     },
     select: {
       id: true,
@@ -97,7 +98,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
       workspaceId: workspace.id,
       // Apply project filter if specified
       ...(view.projectIds.length > 0 && {
-        projectId: { in: view.projectIds }
+        projectId: { in: projects.map(project => project.id) }
       }),
     },
     include: {
@@ -308,7 +309,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
     issuesQuery.where.projectId = { in: workspaceProjects.map(p => p.id) };
   } else {
     // If specific projects are specified, filter by those project IDs
-    issuesQuery.where.projectId = { in: view.projectIds };
+    issuesQuery.where.projectId = { in: projects.map(project => project.id) };
   }
 
   const issues = await prisma.issue.findMany(issuesQuery);
@@ -361,6 +362,8 @@ export default async function ViewPage({ params }: ViewPageProps) {
 }
 
 export async function generateMetadata({ params }: ViewPageProps) {
+  const session = await getServerSession(authConfig);
+  if (!session?.user?.id) return { title: 'View Not Found' };
   const resolvedParams = await params;
   const { workspaceId, viewId: viewSlug } = resolvedParams;
   
@@ -370,7 +373,8 @@ export async function generateMetadata({ params }: ViewPageProps) {
       OR: [
         { id: workspaceId },
         { slug: workspaceId }
-      ]
+      ],
+      AND: issueAccessWhere(session.user.id).workspace
     }
   });
 
@@ -383,7 +387,12 @@ export async function generateMetadata({ params }: ViewPageProps) {
   const view = await prisma.view.findFirst({
     where: {
       slug: viewSlug,
-      workspaceId: workspace.id
+      workspaceId: workspace.id,
+      OR: [
+        { visibility: 'WORKSPACE' },
+        { visibility: 'SHARED', sharedWith: { has: session.user.id } },
+        { visibility: 'PERSONAL', ownerId: session.user.id }
+      ]
     },
     include: {
       workspace: {

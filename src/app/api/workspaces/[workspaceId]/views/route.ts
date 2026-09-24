@@ -1,3 +1,4 @@
+import { validateViewProjects } from '@/lib/view-helpers';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -191,6 +192,10 @@ export async function POST(
         { error: 'Invalid visibility' }, 
         { status: 400 }
       );
+    }
+
+    if (!await validateViewProjects(projectIds, session.user.id)) {
+      return NextResponse.json({ error: 'Invalid or inaccessible projects' }, { status: 400 });
     }
 
     // Generate unique slug for the view

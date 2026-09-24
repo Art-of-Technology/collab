@@ -135,6 +135,7 @@ function fixture() {
   dependencies['@/lib/auth'] = { authConfig: {}, authOptions: {}, getAuthSession: dependencies['@/lib/request-session'].getServerSession };
   dependencies['@/lib/slug-resolvers'] = load('src/lib/slug-resolvers.ts', dependencies);
   dependencies['@/lib/issue-finder'] = load('src/lib/issue-finder.ts', dependencies);
+  dependencies['@/lib/view-helpers'] = load('src/lib/view-helpers.ts', dependencies);
   dependencies['@/lib/issue-references'] = load('src/lib/issue-references.ts', dependencies);
   dependencies['@/lib/session'] = load('src/lib/session.ts', dependencies);
   dependencies['@/lib/post-access'] = load('src/lib/post-access.ts', dependencies);
@@ -1613,3 +1614,173 @@ test('issue creation app update rejects foreign parent and mixed labels without 
     assert.equal(f.calls.writes, 0);
   }
 });
+
+function appTokenFixture(system = false, workspaceIndex = 2) {
+  const f = fixture(), workspace = f.workspaces[workspaceIndex];
+  const app = { id: 'app', name: 'App', slug: 'app', status: 'PUBLISHED', isSystemApp: system };
+  const token = { id: 'token', accessToken: 'Y2lwaGVy', isRevoked: false, userId: 'alice',
+    scopes: ['issues:read', 'issues:write'], tokenExpiresAt: null,
+    ...(system ? { installationId: null, appId: app.id, workspaceId: workspace.id, app, workspace } : {
+      installation: { id: 'installation', appId: app.id, status: 'ACTIVE', workspaceId: workspace.id,
+        installedById: 'installer', scopes: [], app, workspace },
+    }) };
+  f.db.appToken = { findMany: async ({ where }) => matches(token, where) ? [token] : [] };
+  f.db.app = { findUnique: async () => app };
+  f.dependencies['@/lib/oauth-scopes'] = load('src/lib/oauth-scopes.ts');
+  f.dependencies['@/lib/apps/crypto'] = { decryptToken: async () => 'test-token' };
+  const auth = load('src/lib/apps/auth-middleware.ts', f.dependencies);
+  const dispatched = [];
+  const handler = auth.withAppAuth(async (_request, context) => {
+    dispatched.push(context); f.calls.writes++; return Response.json({ ok: true });
+  }, { requiredScopes: 'issues:write' });
+  const request = (query = '') => new Request(`https://collab.example.test/api/apps/auth/issues?${query}`, {
+    headers: { Authorization: 'Bearer test-token' },
+  });
+  return { ...f, token, app, dispatched, handler, request };
+}
+
+for (const system of [false, true]) {
+  test(`app token ${system ? 'system' : 'installed'} rechecks original workspace before dispatch`, async () => {
+    const f = appTokenFixture(system);
+    const queries = system ? ['', 'workspace=revoked', `workspaceId=${f.workspaces[2].id}`] : [''];
+    for (const query of queries) assert.equal((await f.handler(f.request(query))).status, 403);
+    assert.deepEqual(f.dispatched, []); assert.equal(f.calls.writes, 0);
+    f.workspaces[2].members[0].status = true;
+    assert.equal((await f.handler(f.request())).status, 200);
+    assert.equal(f.dispatched[0].user.id, 'alice');
+    assert.equal(f.dispatched[0].installation.userId, 'alice');
+    f.workspaces[2].members[0].status = false;
+    f.workspaces[2].ownerId = 'alice';
+    assert.equal((await f.handler(f.request())).status, 200);
+    f.state.user = null;
+    assert.equal((await f.handler(f.request())).status, 401);
+    assert.equal(f.dispatched.length, 2);
+  });
+}
+
+test('app token keeps scopes, installations and effective workspace access independent', async () => {
+  const f = appTokenFixture(true);
+  for (const target of ['own', 'joined']) assert.equal((await f.handler(f.request(`workspace=${target}`))).status, 200);
+  assert.equal((await f.handler(f.request('workspace=foreign'))).status, 403);
+  f.token.scopes = [];
+  assert.equal((await f.handler(f.request('workspace=own'))).status, 403);
+  assert.equal(f.dispatched.length, 2);
+  const regular = appTokenFixture(false, 0);
+  assert.equal((await regular.handler(regular.request('workspace=joined'))).status, 403);
+  regular.token.installation.status = 'INACTIVE';
+  assert.equal((await regular.handler(regular.request())).status, 401);
+  assert.equal(regular.dispatched.length, 0);
+});
+
+function savedViewFixture() {
+  const f = fixture(), reads = [], writes = [];
+  const projects = f.workspaces.map(workspace => ({ id: `project-${workspace.slug}`, workspace,
+    workspaceId: workspace.id, name: `private-project-${workspace.slug}`, slug: workspace.slug,
+    issuePrefix: workspace.slug, statuses: [{ name: `private-status-${workspace.slug}` }] }));
+  const view = { id: 'view', slug: 'view', name: 'Saved view', displayType: 'LIST', visibility: 'WORKSPACE',
+    workspaceId: f.workspaces[0].id, workspace: f.workspaces[0], ownerId: 'alice', sharedWith: [],
+    projectIds: projects.map(p => p.id), filters: {}, createdAt: new Date(), updatedAt: new Date() };
+  f.db.project.count = async ({ where }) => projects.filter(p => matches(p, where)).length;
+  f.db.project.findMany = async ({ where, select }) => projects.filter(p => matches(p, where)).map(p => {
+    if (select?.name) reads.push(p.name);
+    return p;
+  });
+  f.db.view.findFirst = async ({ where }) => matches(view, where) ? view : null;
+  f.db.view.create = async ({ data }) => { writes.push(data); return { ...view, ...data }; };
+  f.db.view.update = async ({ data }) => { writes.push(data); return { ...view, ...data }; };
+  f.db.issue.findMany = async () => [];
+  f.dependencies['react/jsx-runtime'] = { jsx: (_type, props) => props };
+  f.dependencies['next/navigation'] = { notFound: () => { throw new Error('Not found'); } };
+  f.dependencies['@/components/views/ViewRenderer'] = { default: () => null };
+  return { ...f, projects, view, reads, writes };
+}
+
+for (const endpoint of ['create', 'scoped-update', 'slug-update']) {
+  test(`saved view ${endpoint} rejects mixed inaccessible projects without writes`, async () => {
+    const f = savedViewFixture(), workspaceId = f.workspaces[0].id;
+    const invoke = projectIds => {
+      const creating = endpoint === 'create';
+      const route = f.route(creating ? 'workspaces/[workspaceId]/views' : endpoint === 'scoped-update'
+        ? 'workspaces/[workspaceId]/views/[viewId]' : 'views/[viewId]');
+      return route[creating ? 'POST' : 'PUT'](f.request(creating ? 'POST' : 'PUT', workspaceId,
+        creating ? { name: 'View', displayType: 'LIST', projectIds } : { projectIds }), f.context(workspaceId));
+    };
+    for (const invalid of [['project-own', 'project-revoked'], ['project-foreign'], ['missing']]) {
+      assert.equal((await invoke(invalid)).status, 400);
+      assert.deepEqual(f.writes, []);
+      assert.deepEqual(f.reads, []);
+    }
+    for (const valid of [['project-own', 'project-joined'], [], ['project-own', 'project-own']]) {
+      assert.equal((await invoke(valid)).status, endpoint === 'create' ? 201 : 200);
+    }
+    assert.equal(f.writes.length, 3);
+    f.workspaces[1].members[0].status = false;
+    assert.equal((await invoke(['project-own', 'project-joined'])).status, 400);
+    assert.equal(f.writes.length, 3);
+  });
+}
+
+test('saved view page filters historical project metadata before retrieval across revocation', async () => {
+  const f = savedViewFixture();
+  const page = load('src/app/(main)/[workspaceId]/views/[viewId]/page.tsx', f.dependencies);
+  const params = Promise.resolve({ workspaceId: 'own', viewId: 'view' });
+  let result = await page.default({ params });
+  assert.deepEqual(Array.from(result.view.projects, p => p.id), ['project-own', 'project-joined']);
+  assert.deepEqual(f.reads, ['private-project-own', 'private-project-joined']);
+  assert.equal(JSON.stringify(result.view).includes('revoked'), false);
+  f.workspaces[1].members[0].status = false; f.reads.length = 0;
+  result = await page.default({ params });
+  assert.deepEqual(Array.from(result.view.projects, p => p.id), ['project-own']);
+  assert.deepEqual(f.reads, ['private-project-own']);
+  assert.equal((await page.generateMetadata({ params })).title, 'Saved view - own');
+  f.workspaces[0].ownerId = 'bob';
+  assert.equal((await page.generateMetadata({ params })).title, 'View Not Found');
+  await assert.rejects(page.default({ params }), /Not found/);
+});
+
+for (const endpoint of ['views/[viewId]', 'search/issues-by-activity']) {
+  test(`app ${endpoint} excludes historical foreign labels before response projection`, async () => {
+    const f = relatedIssueFixture(), own = f.workspaces[0];
+    const context = { workspace: own, user: f.state.user };
+    f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => (req, params) => handler(req, context, params) };
+    f.db.view.findFirst = async () => ({ id: 'view', projectIds: ['project-own'] });
+    f.db.view.update = async () => ({});
+    f.db.issueActivity.findMany = async () => [{ itemId: 'issue-own', action: 'UPDATED', userId: 'alice' }];
+    const invoke = async () => {
+      const response = await f.route(`apps/auth/${endpoint}`).GET(new Request(
+        'https://collab.example.test/?includeIssues=true&includeActivity=false'), f.context(own.id));
+      assert.equal(response.status, 200);
+      return response.json();
+    };
+    for (const member of [false, true]) {
+      if (member) { own.ownerId = 'bob'; own.members.push({ userId: 'alice', status: true }); }
+      const body = await invoke();
+      const issues = body.issues || body.results;
+      assert.equal(issues.length, 1);
+      assert.deepEqual(issues[0].labels.map(label => label.id), ['label-own']);
+      for (const suffix of ['joined', 'revoked', 'foreign']) {
+        assert.equal(JSON.stringify(body).includes(`label-secret-${suffix}`), false);
+        assert.equal(f.reads.includes(`label-secret-${suffix}`), false);
+      }
+    }
+  });
+}
+
+for (const endpoint of ['related', 'suggestions']) {
+  test(`AI ${endpoint} excludes historical revoked labels before processing`, async () => {
+    const f = relatedIssueFixture(), retrieved = [];
+    const read = f.db.issue.findFirst;
+    f.db.issue.findFirst = async args => {
+      const row = await read(args);
+      retrieved.push(...row.labels.map(label => label.id));
+      return row;
+    };
+    f.db.issueActivity.findFirst = async () => null;
+    f.db.issueRelation.findMany = async () => [];
+    const response = await f.route(`ai/issues/${endpoint}`).GET(new Request(
+      `https://collab.example.test/?workspaceId=${f.workspaces[0].id}&issueId=issue-own`));
+    assert.equal(response.status, 200);
+    assert.deepEqual(retrieved, ['label-own', 'label-joined']);
+    assert.equal(JSON.stringify(await response.json()).includes('label-secret-revoked'), false);
+  });
+}

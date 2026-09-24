@@ -1,4 +1,4 @@
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
@@ -41,7 +41,7 @@ export async function GET(req: Request) {
     const currentIssue = await prisma.issue.findFirst({
       where: { id: issueId, workspaceId },
       include: {
-        labels: true,
+        labels: { where: issueAccessWhere(session.user.id) },
         project: true,
       },
     });
@@ -107,7 +107,7 @@ export async function GET(req: Request) {
           labels: { some: { id: { in: labelIds } } },
         },
         include: {
-          labels: true,
+          labels: { where: issueAccessWhere(session.user.id) },
           projectStatus: { select: { name: true, color: true } },
         },
         take: 5,
