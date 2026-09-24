@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
+import { getPendingInvitations } from '@/actions/invitation';
 import { 
   getUserWorkspaces, 
   getWorkspaceById, 
@@ -11,7 +12,6 @@ import {
   addWorkspaceMember,
   removeWorkspaceMember,
   checkWorkspaceLimit,
-  getPendingInvitations,
   getDetailedWorkspaceById,
   getWorkspaceMembers
 } from '@/actions/workspace';
@@ -158,7 +158,7 @@ export const useWorkspaceLimit = () => {
 export function usePendingInvitations(email: string | undefined | null) {
   return useQuery({
     queryKey: ['workspaces', 'invitations', 'pending', email],
-    queryFn: () => getPendingInvitations(email as string),
+    queryFn: () => getPendingInvitations(),
     enabled: !!email,
   });
 }

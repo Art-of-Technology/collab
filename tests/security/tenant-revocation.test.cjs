@@ -1316,3 +1316,122 @@ test('repository connection conflict reveals no inaccessible project metadata or
   assert.equal(JSON.stringify(body).includes('Private project revoked'), false);
   assert.equal(f.calls.providerCalls, 0); assert.equal(f.calls.writes, 0);
 });
+
+function issuePreviewFixture() {
+  const f = fixture();
+  const rows = f.workspaces.map(workspace => ({
+    id: `issue-${workspace.slug}`, issueKey: `${workspace.slug}-1`, workspace,
+    title: `Private title ${workspace.slug}`, status: 'OPEN', priority: 'HIGH', type: 'TASK',
+    assignee: { name: `Private assignee ${workspace.slug}` },
+    project: { id: `project-${workspace.slug}`, name: `Project ${workspace.slug}`, slug: 'project', workspace },
+  }));
+  let queries = 0;
+  f.db.issue.findFirst = async ({ where }) => {
+    queries++;
+    const row = rows.find(row => matches(row, where)) ?? null;
+    if (row) f.calls.issueReads++;
+    return row;
+  };
+  return { ...f, queries: () => queries };
+}
+
+test('issue preview denies revoked cross-workspace links before reading metadata', async () => {
+  const f = issuePreviewFixture(), { POST } = f.route('link-preview');
+  const preview = async (workspace, key = workspace.slug) => {
+    const response = await POST(f.request('POST', f.workspaces[0].id, {
+      workspaceId: f.workspaces[0].id, url: `https://collab.example.test/${key}/issues/${workspace.slug}-1`,
+    }));
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  for (const workspace of f.workspaces.slice(2)) {
+    for (const key of [workspace.slug, workspace.id]) {
+      const body = await preview(workspace, key);
+      assert.equal(body.metadata.notFound, true);
+      assert.equal(body.title, 'Not Found');
+      assert.equal(JSON.stringify(body).includes('Private'), false);
+      noContent(f);
+    }
+  }
+  for (const workspace of f.workspaces.slice(0, 2)) {
+    for (const key of [workspace.slug, workspace.id]) {
+      const body = await preview(workspace, key);
+      assert.equal(body.title, `${workspace.slug}-1: Private title ${workspace.slug}`);
+      assert.equal(body.metadata.assignee, `Private assignee ${workspace.slug}`);
+    }
+  }
+  f.workspaces[1].members[0].status = false;
+  const before = f.calls.issueReads;
+  assert.equal((await preview(f.workspaces[1])).metadata.notFound, true);
+  assert.equal(f.calls.issueReads, before);
+  f.state.mapped = false;
+  const queries = f.queries();
+  assert.equal((await POST(f.request('POST', undefined, { url: '/own/issues/own-1' }))).status, 401);
+  assert.equal(f.queries(), queries);
+});
+
+test('issue preview resolver denies revoked metadata and retains owner and active members', async () => {
+  const f = issuePreviewFixture(), { GET } = f.route('issues/resolve');
+  const resolveIssue = workspace => GET(new Request(`https://collab.example.test/api/issues/resolve?issueKey=${workspace.slug}-1`));
+  for (const workspace of f.workspaces.slice(2)) {
+    assert.equal((await resolveIssue(workspace)).status, 404);
+    noContent(f);
+  }
+  for (const workspace of f.workspaces.slice(0, 2)) {
+    const response = await resolveIssue(workspace);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).workspace.id, workspace.id);
+  }
+  f.state.mapped = false;
+  const queries = f.queries();
+  assert.equal((await resolveIssue(f.workspaces[0])).status, 401);
+  assert.equal(f.queries(), queries);
+});
+
+function invitationFixture() {
+  const f = fixture(), queries = [];
+  const rows = ['alice@weezboo.com', 'victim@weezboo.com'].map(email => ({
+    email, status: 'pending', token: `private-token-${email}`, expiresAt: new Date(Date.now() + 86400000),
+  }));
+  f.db.workspaceInvitation = { findMany: async ({ where }) => {
+    queries.push(where.email);
+    return rows.filter(row => row.email === where.email && row.status === where.status && row.expiresAt >= where.expiresAt.gte);
+  } };
+  const actions = load('src/actions/invitation.ts', f.dependencies);
+  return { ...f, queries, actions };
+}
+
+test('pending invitations ignores spoofed recipient and queries only current session email', async () => {
+  const f = invitationFixture();
+  const result = await f.actions.getPendingInvitations('victim@weezboo.com');
+  assert.deepEqual(f.queries, ['alice@weezboo.com']);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].token, 'private-token-alice@weezboo.com');
+  assert.equal(JSON.stringify(result).includes('victim'), false);
+});
+
+for (const invalidation of ['mapped', 'claims', 'user']) {
+  test(`pending invitations denies missing ${invalidation} before any invitation query`, async () => {
+    const f = invitationFixture();
+    f.state[invalidation] = invalidation === 'user' ? null : false;
+    await assert.rejects(f.actions.getPendingInvitations('victim@weezboo.com'), /Unauthorized/);
+    assert.deepEqual(f.queries, []);
+    noContent(f);
+  });
+}
+
+for (const hook of ['useInvitation', 'useWorkspace']) {
+  test(`pending invitations ${hook} caller uses authenticated action for spoofed cache email`, async () => {
+    const f = invitationFixture();
+    const dependencies = { ...f.dependencies,
+      '@tanstack/react-query': { useQuery: options => options.queryFn() },
+      'next-auth/react': {}, './useWorkspace': {},
+      '@/actions/invitation': f.actions,
+      '@/actions/workspace': load('src/actions/workspace.ts', f.dependencies),
+    };
+    const { usePendingInvitations } = load(`src/hooks/queries/${hook}.ts`, dependencies);
+    const rows = await usePendingInvitations('victim@weezboo.com');
+    assert.deepEqual(f.queries, ['alice@weezboo.com']);
+    assert.equal(rows[0].email, 'alice@weezboo.com');
+  });
+}

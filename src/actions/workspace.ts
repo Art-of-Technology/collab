@@ -680,38 +680,6 @@ export async function getUserWorkspacesById(userId: string, limit?: number) {
 }
 
 /**
- * Get pending workspace invitations for user
- */
-export async function getPendingInvitations(email: string) {
-  if (!email) {
-    throw new Error('Email is required');
-  }
-  
-  const pendingInvitations = await prisma.workspaceInvitation.findMany({
-    where: {
-      email: email,
-      status: "pending",
-      expiresAt: {
-        gte: new Date()
-      }
-    },
-    include: {
-      workspace: true,
-      invitedBy: {
-        select: {
-          name: true,
-          email: true,
-          image: true
-        }
-      }
-    },
-    orderBy: { createdAt: "desc" }
-  });
-  
-  return pendingInvitations;
-}
-
-/**
  * Get a workspace by ID with full details for the workspace detail page
  */
 export async function getDetailedWorkspaceById(workspaceId: string) {

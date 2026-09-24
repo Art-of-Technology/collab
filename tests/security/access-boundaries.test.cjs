@@ -898,6 +898,7 @@ test('review: alternate Notes handlers filter content and metadata with the real
     '@/lib/session': { getCurrentUser: async () => ({ id: 'alice' }) },
     '@/lib/auth-options': { authOptions: {} }, '@/lib/auth': { authConfig: {} },
     '@/lib/prisma': { prisma: db }, '@/lib/secrets/access': access,
+    '@/lib/feature-access': load('src/lib/feature-access.ts'),
   };
   const search = load('src/app/api/search/route.ts', dependencies, { URL, console });
   const summary = load('src/app/api/projects/[projectId]/summary/route.ts', dependencies, { console });

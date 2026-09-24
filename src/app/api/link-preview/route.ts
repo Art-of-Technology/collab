@@ -93,12 +93,10 @@ export async function POST(req: NextRequest) {
                 { slug: workspaceIdentifier },
                 { id: workspaceIdentifier }
               ],
-              // User must be a member of the workspace to access issue metadata
-              members: {
-                some: {
-                  userId: session.user.id,
-                },
-              },
+              AND: { OR: [
+                { ownerId: session.user.id },
+                { members: { some: { userId: session.user.id, status: true } } }
+              ] },
             },
           },
           select: {
