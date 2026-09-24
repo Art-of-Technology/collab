@@ -673,3 +673,76 @@ test('chat admission enforces conversation owner and workspace before either str
     }
   }
 });
+
+test('post GET restricts private content to owners and active members', async (t) => {
+  const safeAuthor = { id: 'author', name: 'Author', image: 'https://example.test/avatar', useCustomAvatar: true,
+    avatarSkinTone: 'light', avatarEyes: 'happy', avatarBrows: 'raised', avatarMouth: 'smile',
+    avatarNose: 'small', avatarHair: 'short', avatarEyewear: 'glasses', avatarAccessory: 'none' };
+  const author = { ...safeAuthor, hashedPassword: 'synthetic-only', githubAccessToken: 'synthetic-only', email: 'private@example.test' };
+  const comments = [
+    { id: 'later', message: 'Second private comment', createdAt: '2026-09-24T12:00:00Z', author },
+    { id: 'earlier', message: 'First private comment', createdAt: '2026-09-24T11:00:00Z', author },
+  ];
+  const posts = [...workspaces, null].map(workspace => ({
+    id: workspace?.id ?? 'unscoped', workspace, workspaceId: workspace?.id ?? null,
+    authorId: 'alice', message: 'Private post', author, comments,
+    tags: [{ id: 'tag', name: 'Private tag' }], reactions: [{ id: 'reaction', authorId: 'alice', type: 'LIKE' }],
+  }));
+  let user = null;
+  let reads = 0;
+  function projectAuthor(author, selection) {
+    return selection?.select
+      ? Object.fromEntries(Object.entries(author).filter(([field]) => selection.select[field] === true))
+      : { ...author };
+  }
+  async function findPost({ where, include }) {
+    reads++;
+    const post = posts.find(row => matches(row, where));
+    if (!post) return null;
+    const { workspace, ...data } = post;
+    return { ...data, author: projectAuthor(post.author, include.author),
+      comments: [...post.comments].sort((a, b) => include.comments.orderBy.createdAt === 'asc'
+        ? a.createdAt.localeCompare(b.createdAt) : b.createdAt.localeCompare(a.createdAt))
+        .map(comment => ({ ...comment, author: projectAuthor(comment.author, include.comments.include.author) })) };
+  }
+  const { GET } = load('src/app/api/posts/[postId]/route.ts', {
+    'next/server': { NextResponse: Response },
+    '@/lib/session': { getCurrentUser: async () => user },
+    '@/lib/prisma': { prisma: { post: { findFirst: findPost, findUnique: findPost } } },
+    '@/lib/user-utils': load('src/lib/user-utils.ts'),
+  });
+  const request = id => GET(new Request(`https://example.test/api/posts/${id}`), { params: Promise.resolve({ postId: id }) });
+  await t.test('anonymous', async () => {
+    const anonymous = await request('joined');
+    assert.equal(anonymous.status, 401);
+    assert.equal(await anonymous.text(), 'Unauthorized');
+    assert.equal(reads, 0);
+  });
+  user = { id: 'alice' };
+  for (const id of ['foreign', 'revoked', 'missing', 'unscoped']) {
+    await t.test(id, async () => {
+      const response = await request(id);
+      assert.equal(response.status, 404, id);
+      assert.equal(await response.text(), 'Post not found');
+    });
+  }
+  for (const id of ['own', 'joined']) {
+    await t.test(id, async () => {
+      const response = await request(id);
+      assert.equal(response.status, 200, id);
+      const post = await response.json();
+      assert.equal(post.id, id);
+      assert.equal(post.message, 'Private post');
+      assert.deepEqual(post.tags, posts[0].tags);
+      assert.deepEqual(post.reactions, posts[0].reactions);
+      assert.deepEqual(post.comments.map(comment => comment.id), ['earlier', 'later']);
+      assert.deepEqual(post.comments.map(comment => comment.message), ['First private comment', 'Second private comment']);
+      for (const returnedAuthor of [post.author, ...post.comments.map(comment => comment.author)]) {
+        assert.equal('hashedPassword' in returnedAuthor, false);
+        assert.equal('githubAccessToken' in returnedAuthor, false);
+        assert.deepEqual(Object.keys(returnedAuthor).sort(), Object.keys(safeAuthor).sort());
+        for (const field of Object.keys(safeAuthor)) assert.equal(returnedAuthor[field], safeAuthor[field]);
+      }
+    });
+  }
+});
