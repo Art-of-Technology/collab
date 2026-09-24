@@ -3357,6 +3357,27 @@ for (const destination of ['workspace', 'project', 'personal']) {
   });
 }
 
+for (const holder of ['author', 'share recipient']) {
+  test(`unrestricted personal note in workspace keeps ${holder} notifications after membership removal`, async () => {
+    const f = noteNotificationFixture('workspace');
+    Object.assign(f.note, { scope: 'PERSONAL', isRestricted: false });
+    if (holder === 'author') Object.assign(f.note, { authorId: 'alice', sharedWith: [] });
+    f.workspace.members[0].status = false;
+    assert.equal(await f.notify(), 1);
+    assert.equal(f.stored[0].workspaceId, f.workspace.id);
+    assert.equal((await f.read())[0].comment.message, 'private-comment-body');
+    assert.equal((await f.mention()).status, 200);
+    if (holder === 'author') f.note.isEncrypted = true;
+    else f.note.sharedWith = [];
+    const stored = structuredClone(f.stored), writes = f.calls.writes;
+    assert.deepEqual(await f.read(), []);
+    assert.equal(await f.notify(), 0);
+    assert.equal((await f.mention()).status, 404);
+    assert.deepEqual(f.stored, stored);
+    assert.equal(f.calls.writes, writes);
+  });
+}
+
 test('note notification project destination rejects mixed workspace references before writes', async () => {
   const f = noteNotificationFixture('project');
   assert.equal(await f.NotificationService.notifyUsers(['alice'], 'comment_mention', 'private-preview', 'bob', {

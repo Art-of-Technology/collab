@@ -30,6 +30,7 @@ export async function notificationAccessWhere(userId: string): Promise<Prisma.No
     { members: { some: { userId, status: true } } },
   ] };
   const tenant = { OR: [{ workspaceId: null }, { workspace }] };
+  const note = noteAccessWhere(userId);
   return {
     userId,
     AND: [
@@ -39,6 +40,8 @@ export async function notificationAccessWhere(userId: string): Promise<Prisma.No
       ] },
       { OR: [
         { workspace },
+        { postId: null, issueId: null, featureRequestId: null, leaveRequestId: null,
+          comment: { postId: null, note } },
         { workspaceId: null, issueId: null, OR: [
           { isPersonal: true }, { postId: { not: null } }, { commentId: { not: null } },
           { featureRequestId: { not: null } }, { leaveRequestId: { not: null } },
@@ -49,7 +52,7 @@ export async function notificationAccessWhere(userId: string): Promise<Prisma.No
       { OR: [{ leaveRequestId: null }, { leaveRequest: { policy: { workspace } } }] },
       { OR: [{ commentId: null }, { comment: { AND: [
         { OR: [{ postId: null }, { post: tenant }] },
-        { OR: [{ noteId: null }, { note: noteAccessWhere(userId) }] },
+        { OR: [{ noteId: null }, { note }] },
       ] } }] },
     ],
   };
@@ -101,15 +104,21 @@ export async function resolveNotificationScope(refs: NotificationReferences) {
 
 export async function canReceiveNotification(userId: string, refs: NotificationReferences): Promise<boolean> {
   if (!await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })) return false;
-  if (refs.commentId && !await prisma.comment.findFirst({
-    where: { id: refs.commentId, OR: [{ noteId: null }, { note: noteAccessWhere(userId) }] },
-    select: { id: true },
-  })) return false;
+  let noteOnly = false;
+  if (refs.commentId) {
+    const comment = await prisma.comment.findFirst({
+      where: { id: refs.commentId, OR: [{ noteId: null }, { note: noteAccessWhere(userId) }] },
+      select: { noteId: true, postId: true },
+    });
+    if (!comment) return false;
+    noteOnly = !!comment.noteId && !comment.postId && !refs.workspaceId && !refs.postId &&
+      !refs.issueId && !refs.featureRequestId && !refs.leaveRequestId;
+  }
   if (refs.issueId) {
     if (!await prisma.issue.findFirst({
       where: { id: refs.issueId, ...issueReadAccessWhere(userId) }, select: { id: true },
     })) return false;
   }
   const scope = await resolveNotificationScope(refs);
-  return scope !== null && (scope.isPersonal || await userHasWorkspaceAccess(userId, scope.workspaceId!));
+  return scope !== null && (noteOnly || scope.isPersonal || await userHasWorkspaceAccess(userId, scope.workspaceId!));
 }
