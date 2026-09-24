@@ -89,6 +89,17 @@ export async function GET(
       );
     }
 
+    const canManageLeave = await checkUserPermission(
+      user.id,
+      policy.workspaceId,
+      Permission.MANAGE_LEAVE
+    );
+
+    if (!canManageLeave.hasPermission) {
+      const { id, name, group, isPaid, trackIn } = policy;
+      return NextResponse.json({ id, name, group, isPaid, trackIn });
+    }
+
     return NextResponse.json(policy);
   } catch (error) {
     console.error("Error fetching leave policy:", error);

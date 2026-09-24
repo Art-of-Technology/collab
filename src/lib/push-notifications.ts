@@ -164,7 +164,7 @@ export async function sendPushNotification(
 
     // Get user's notification preferences
     const preferences = await prisma.notificationPreferences.findFirst({
-      where: { userId },
+      where: { userId, workspaceId: null },
       select: {
         pushNotificationsEnabled: true,
         pushSubscription: true,

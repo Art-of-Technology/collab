@@ -25,14 +25,10 @@ This document tracks the implementation progress of transforming Collab into an 
 | AI Context | ✅ Complete | `src/context/AIContext.tsx` | Full state management |
 | useAI hook | ✅ Complete | `src/hooks/useAI.ts` | Convenience hooks |
 
-### 1.3 AI Assistant Surface
-
-The active layout uses `src/components/ai/ChatBar/ChatBar.tsx`. The unused legacy
-`AIAssistantWidget.tsx` and its exports were removed during foundation cleanup;
-the dated progress entries below describe the earlier implementation.
-
+### 1.3 AI Assistant UI
 | Task | Status | File | Notes |
 |------|--------|------|-------|
+| Assistant UI | ✅ Complete | `src/components/ai/ChatBar/ChatBar.tsx` | Persistent chat bar; the unused floating widget has been removed |
 | Message component | ✅ Complete | `src/components/ai/AIMessage.tsx` | Markdown support, actions |
 | Quick actions | ✅ Complete | `src/components/ai/AIQuickActions.tsx` | Context-aware suggestions |
 | Suggestion component | ✅ Complete | `src/components/ai/AISuggestion.tsx` | Insight cards, priority variants |
@@ -48,8 +44,8 @@ the dated progress entries below describe the earlier implementation.
 ### 1.5 Layout Integration
 | Task | Status | File | Notes |
 |------|--------|------|-------|
-| AIProvider in layout | ✅ Complete | `src/components/layout/LayoutWithSidebar.tsx` | Widget accessible everywhere |
-| Assistant integration | ✅ Complete | `src/components/layout/LayoutWithSidebar.tsx` | See [AI Assistant Surface](#13-ai-assistant-surface) |
+| AIProvider in layout | ✅ Complete | `src/components/layout/LayoutWithSidebar.tsx` | Shared AI context |
+| Assistant UI integration | ✅ Complete | `src/components/layout/LayoutWithSidebar.tsx` | See [AI Assistant UI](#13-ai-assistant-ui) |
 
 ---
 
@@ -172,7 +168,7 @@ src/app/(main)/[workspaceId]/dashboard/components/
 
 ### Files Modified
 ```
-src/components/layout/LayoutWithSidebar.tsx  # Added AIProvider, Widget, SimplifiedSidebar
+src/components/layout/LayoutWithSidebar.tsx  # See Layout Integration
 src/components/ui/button.tsx                  # Added AI variants
 src/components/views/ViewRenderer.tsx         # Added AI Filter Bar integration
 src/app/(main)/[workspaceId]/dashboard/page.tsx  # Integrated AI Dashboard
@@ -227,7 +223,7 @@ src/app/(main)/[workspaceId]/projects/[projectSlug]/ProjectDashboard.tsx  # Fixe
 ├─────────────────────────────────────────────────────────────┤
 │  UI Layer                                                    │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │ AI Widget    │  │ AI Dashboard │  │ AI Filter Bar    │  │
+│  │ Assistant UI │  │ AI Dashboard │  │ AI Filter Bar    │  │
 │  │ (Global)     │  │ (Home)       │  │ (Views)          │  │
 │  └──────────────┘  └──────────────┘  └──────────────────┘  │
 │  ┌──────────────┐  ┌──────────────┐                         │
@@ -269,7 +265,7 @@ src/app/(main)/[workspaceId]/projects/[projectSlug]/ProjectDashboard.tsx  # Fixe
 
 - [x] AI Service Layer (Anthropic + OpenAI)
 - [x] AI Context Provider
-- [x] AI Assistant Widget
+- [x] [AI Assistant UI](#13-ai-assistant-ui)
 - [x] AI API Routes
 - [x] SimplifiedSidebar
 - [x] AI Dashboard

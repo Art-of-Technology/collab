@@ -148,7 +148,7 @@ Create a persistent, always-accessible AI widget at the bottom of the screen:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Current implementation:** see [AI Assistant Surface](IMPLEMENTATION_PROGRESS.md#13-ai-assistant-surface); this mockup describes the original proposal.
+This floating-widget design is historical. See [AI Assistant UI](IMPLEMENTATION_PROGRESS.md#13-ai-assistant-ui) for the current implementation.
 
 ---
 
@@ -421,7 +421,7 @@ const aiWidgetStyles = {
    - `src/lib/ai/actions.ts` - AI action handlers (create issue, update, etc.)
 
 2. **Build AI Widget Component**
-   - See [AI Assistant Surface](IMPLEMENTATION_PROGRESS.md#13-ai-assistant-surface) for the current implementation.
+   - See [AI Assistant UI](IMPLEMENTATION_PROGRESS.md#13-ai-assistant-ui) for the implemented entry point.
    - `src/components/ai/AIMessage.tsx`
    - `src/components/ai/AIQuickActions.tsx`
    - `src/components/ai/AISuggestion.tsx`

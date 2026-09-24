@@ -1881,17 +1881,17 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   const handleCommandSelect = useCallback((command: { id: string }) => {
     if (!editor) return;
 
-    const currentPosition = editor.view.state.selection.from;
+    const { $from } = editor.state.selection;
 
     // Find and remove the slash trigger
-    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    const content = $from.parent.textBetween(0, $from.parentOffset, ' ', ' ');
     const lastSlashIndex = content.lastIndexOf('/');
 
     if (lastSlashIndex !== -1) {
       // Delete the slash and any text after it
       editor.chain().focus().deleteRange({
-        from: lastSlashIndex,
-        to: currentPosition
+        from: $from.start() + lastSlashIndex,
+        to: $from.pos
       }).run();
     }
 
@@ -2218,6 +2218,22 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     return () => {
       editor.view.dom.removeEventListener('keydown', handleKeyDown);
     };
+  }, [editor, showCommandMenu]);
+
+  // Escape closes only the command menu; the window capture phase runs before Radix's document listener that dismisses a parent dialog
+  useEffect(() => {
+    if (!showCommandMenu) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setShowCommandMenu(false);
+      editor?.commands.focus();
+    };
+
+    window.addEventListener('keydown', handleEscape, true);
+    return () => window.removeEventListener('keydown', handleEscape, true);
   }, [editor, showCommandMenu]);
 
   // Close mention suggestions when clicking outside
@@ -2943,9 +2959,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
             }}
             className="transition-all duration-200 animate-in slide-in-from-left-1"
           >
-            <Command onKeyDown={(event) => {
-              if (event.key === "Escape") { setShowCommandMenu(false); editor?.commands.focus(); }
-            }}>
+            <Command>
               <CommandInput autoFocus placeholder="Insert mention…" aria-label="Insert mention" />
               <CommandList>
                 {["user", "task", "epic", "story", "milestone"].map(type => (

@@ -1168,7 +1168,7 @@ export class NotificationService {
     // Send push notification if enabled
     if (preferences.pushNotificationsEnabled && preferences.pushSubscription) {
       try {
-        await sendPushNotification(preferences.pushSubscription, {
+        await sendPushNotification(leaveRequest.userId, {
           title: "Leave Request Update",
           body: content,
           icon: "/icon-192x192.png",
@@ -1246,7 +1246,7 @@ export class NotificationService {
         preferences.pushSubscription
       ) {
         try {
-          await sendPushNotification(preferences.pushSubscription, {
+          await sendPushNotification(managerId, {
             title: "Leave Request Alert",
             body: content,
             icon: "/icon-192x192.png",
@@ -1319,7 +1319,7 @@ export class NotificationService {
         preferences.pushSubscription
       ) {
         try {
-          await sendPushNotification(preferences.pushSubscription, {
+          await sendPushNotification(hrId, {
             title: "Leave Request - HR Alert",
             body: content,
             icon: "/icon-192x192.png",

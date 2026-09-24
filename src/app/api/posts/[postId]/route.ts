@@ -1,7 +1,7 @@
-import { getPostById } from "@/actions/post";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { userSelectFields } from "@/lib/user-utils";
 
 // Get a single post
 export async function GET(
@@ -9,7 +9,39 @@ export async function GET(
   { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
-    const post = await getPostById((await params).postId);
+    const user = await getCurrentUser();
+    if (!user?.id) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const post = await prisma.post.findFirst({
+      where: {
+        id: (await params).postId,
+        workspace: {
+          OR: [
+            { ownerId: user.id },
+            { members: { some: { userId: user.id, status: true } } },
+          ],
+        },
+      },
+      include: {
+        author: { select: userSelectFields },
+        tags: true,
+        comments: {
+          include: {
+            author: { select: userSelectFields },
+          },
+          orderBy: {
+            createdAt: "asc",
+          },
+        },
+        reactions: true,
+      },
+    });
+
+    if (!post) {
+      return new NextResponse("Post not found", { status: 404 });
+    }
 
     return NextResponse.json(post);
   } catch (error) {

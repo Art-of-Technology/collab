@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
       where: { id: workspaceId },
       include: {
         members: {
-          where: { userId: user.id },
+          where: { userId: user.id, status: true },
         },
       },
     });
