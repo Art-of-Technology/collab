@@ -1,4 +1,4 @@
-import { noteAccessWhere } from '@/lib/secrets/access';
+import { noteTagAccessWhere, noteAccessWhere } from '@/lib/secrets/access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth-options";
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
             slug: true
           }
         },
-        tags: true
+        tags: { where: noteTagAccessWhere(session.user.id) }
       },
       orderBy: [
         { updatedAt: "desc" }

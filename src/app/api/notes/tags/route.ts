@@ -1,3 +1,4 @@
+import { noteTagAccessWhere } from '@/lib/secrets/access';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
@@ -22,13 +23,7 @@ export async function GET(request: NextRequest) {
 
     const tags = await prisma.noteTag.findMany({
       where: {
-        AND: [{ OR: [
-          { workspaceId: null },
-          { workspace: { OR: [
-            { ownerId: session.user.id },
-            { members: { some: { userId: session.user.id, status: true } } },
-          ] } },
-        ] }],
+        AND: [noteTagAccessWhere(session.user.id)],
         OR: [
           { authorId: session.user.id },
           ...(workspaceId ? [{ workspaceId }] : []),

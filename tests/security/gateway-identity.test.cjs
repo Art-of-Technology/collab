@@ -98,62 +98,77 @@ test('browser session endpoint exposes gateway identity without enabling legacy 
   mode = 'nextauth'; assert.equal((await route.GET(request, context)).status, 200); assert.equal(legacy, 1);
 });
 
-test('gateway sign-out navigates to qualified native local logout without calling NextAuth', async () => {
-  let destination = '', legacy = 0;
-  const previous = global.window, previousFetch = global.fetch;
-  global.fetch = async () => Response.json(null);
-  global.window = { location: { origin: 'https://collab.example.test', assign: value => { destination = value; } } };
-  try {
-    const { signOutCurrentSession } = load('lib/sign-out.ts', { 'next-auth/react': { signOut: async options => {
-      assert.deepEqual(options, { redirect: false }); legacy++; return { url: "/" };
-    } } });
-    assert.equal(await signOutCurrentSession({ authMode: 'gateway', user: { id: 'gateway' } }), false);
-    assert.equal(destination, 'https://collab.example.test/oauth2/callback?logout=get'); assert.equal(legacy, 0);
-    assert.equal(await signOutCurrentSession({ user: { id: 'legacy' } }), true); assert.equal(legacy, 1);
-  } finally { if (previous === undefined) delete global.window; else global.window = previous; global.fetch = previousFetch; }
-});
-
-
-test('unresolved logout resolves session mode and rejects session or logout failures', async () => {
-  const previousWindow = global.window, previousFetch = global.fetch;
-  let destination = '', legacy = 0, reads = 0;
-  let response = () => Response.json({ authMode: 'gateway', user: { id: 'gateway' } });
-  let logout = () => { response = () => Response.json(null); return { url: '/' }; };
+test('logout uses server mode after forbidden session refresh clears gateway identity', async () => {
+  const previousWindow = global.window, previousFetch = global.fetch, previousMode = process.env.COLLAB_AUTH_MODE;
+  let destination = '', legacy = 0, sessionReads = 0;
+  const route = load('app/api/auth/[...nextauth]/route.ts', {
+    'next-auth': () => async () => { legacy++; return Response.json(null); },
+    '@/lib/auth-options': { authOptions: {} }, 'next/server': { NextResponse: Response },
+    '@/lib/gateway-identity': identity,
+    '@/lib/request-session': { getGatewaySession: async () => { throw new Error('Revoked identity must not be queried for mode'); } },
+  });
   global.window = { location: { origin: 'https://collab.example.test', assign: value => { destination = value; } } };
   global.fetch = async (url, options) => {
-    assert.equal(url, '/api/auth/session'); assert.equal(options.cache, 'no-store'); reads++;
-    return response();
+    assert.equal(options.cache, 'no-store');
+    if (url === '/api/auth/session') { sessionReads++; return Response.json({}, { status: 403 }); }
+    assert.equal(url, '/api/auth/mode');
+    const response = await route.GET(new Request('https://collab.example.test' + url), { params: Promise.resolve({ nextauth: ['mode'] }) });
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    return response;
   };
   try {
-    const { signOutCurrentSession } = load('lib/sign-out.ts', {
-      'next-auth/react': { signOut: async () => { legacy++; return logout(); } },
-    });
-    assert.equal(await signOutCurrentSession(undefined), false);
-    assert.equal(destination, 'https://collab.example.test/oauth2/callback?logout=get');
-    assert.equal(legacy, 0); assert.equal(reads, 1);
-    destination = '';
-    response = () => Response.json({ user: { id: 'legacy' } });
-    assert.equal(await signOutCurrentSession(null), true); assert.equal(legacy, 1);
-    assert.equal(destination, '');
-    for (const bad of [
-      () => Response.json({}, { status: 401 }),
-      () => Response.json({}, { status: 503 }),
-      () => Response.json(null),
-      () => Response.json({}),
-      () => new Response('invalid JSON'),
-      () => { throw new Error('Network failure'); },
-    ]) {
-      response = bad;
-      await assert.rejects(signOutCurrentSession(undefined));
-      assert.equal(legacy, 1); assert.equal(destination, '');
+    process.env.COLLAB_AUTH_MODE = 'gateway';
+    const { signOutCurrentSession } = load('lib/sign-out.ts', { 'next-auth/react': { signOut: async () => { legacy++; } } });
+    const refreshed = await fetch('/api/auth/session', { cache: 'no-store' });
+    assert.equal(refreshed.status, 403);
+    for (const clearedSession of [null, undefined]) {
+      destination = '';
+      assert.equal(await signOutCurrentSession(clearedSession), false);
+      assert.equal(destination, 'https://collab.example.test/oauth2/callback?logout=get');
     }
-    response = () => Response.json({ user: { id: 'legacy' } });
-    for (const bad of [() => ({ url: 'https://collab.example.test/api/auth/signout?csrf=true' }), () => ({ error: 'Use the gateway session' }), () => ({}),
-      () => undefined, () => { throw new Error('Network failure'); }]) {
-      logout = bad;
-      await assert.rejects(signOutCurrentSession({ user: { id: 'legacy' } }));
-      assert.equal(destination, '');
+    assert.equal(legacy, 0); assert.equal(sessionReads, 1);
+    process.env.COLLAB_AUTH_MODE = 'invalid'; destination = '';
+    await assert.rejects(signOutCurrentSession());
+    assert.equal(destination, ''); assert.equal(legacy, 0);
+  } finally {
+    if (previousWindow === undefined) delete global.window; else global.window = previousWindow;
+    global.fetch = previousFetch;
+    if (previousMode === undefined) delete process.env.COLLAB_AUTH_MODE; else process.env.COLLAB_AUTH_MODE = previousMode;
+  }
+});
+
+test('logout preserves legacy completion checks and rejects invalid server configuration', async () => {
+  const previousWindow = global.window, previousFetch = global.fetch;
+  let destination = '', legacy = 0;
+  let configuration = () => Response.json({ authMode: 'nextauth' });
+  let remaining = () => Response.json(null);
+  let logout = () => ({ url: '/' });
+  global.window = { location: { origin: 'https://collab.example.test', assign: value => { destination = value; } } };
+  global.fetch = async (url, options) => {
+    assert.equal(options.cache, 'no-store');
+    if (url === '/api/auth/mode') return configuration();
+    assert.equal(url, '/api/auth/session'); return remaining();
+  };
+  try {
+    const { signOutCurrentSession } = load('lib/sign-out.ts', { 'next-auth/react': { signOut: async options => {
+      assert.deepEqual(options, { redirect: false }); legacy++; return logout();
+    } } });
+    assert.equal(await signOutCurrentSession(), true); assert.equal(legacy, 1);
+    remaining = () => Response.json({}); assert.equal(await signOutCurrentSession(), true);
+    for (const bad of [() => Response.json({ user: { id: 'still-active' } }), () => Response.json({}, { status: 403 }),
+      () => new Response('invalid JSON'), () => { throw new Error('Network error'); }]) {
+      remaining = bad; await assert.rejects(signOutCurrentSession());
     }
+    remaining = () => Response.json(null);
+    for (const bad of [() => ({}), () => ({ error: 'Use gateway' }), () => undefined, () => { throw new Error('Logout failed'); }]) {
+      logout = bad; await assert.rejects(signOutCurrentSession());
+    }
+    const calls = legacy;
+    for (const bad of [() => Response.json({ authMode: 'invalid' }), () => Response.json({}), () => Response.json(null),
+      () => Response.json({}, { status: 503 }), () => new Response('invalid JSON'), () => { throw new Error('Network error'); }]) {
+      configuration = bad; await assert.rejects(signOutCurrentSession());
+    }
+    assert.equal(legacy, calls); assert.equal(destination, '');
   } finally {
     if (previousWindow === undefined) delete global.window; else global.window = previousWindow;
     global.fetch = previousFetch;

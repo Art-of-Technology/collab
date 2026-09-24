@@ -93,7 +93,7 @@ export default function Navbar({
 
   const handleSignOut = async () => {
     try {
-      if (!await signOutCurrentSession(session)) return;
+      if (!await signOutCurrentSession()) return;
       toast({
         title: "Signed out successfully",
         description: "You have been signed out of your account",

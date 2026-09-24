@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { noteAccessWhere, canAccessNote, canWriteNoteDestination } from '@/lib/secrets/access';
+import { canUseNoteTags, noteTagAccessWhere, noteAccessWhere, canAccessNote, canWriteNoteDestination } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
@@ -62,6 +62,7 @@ export const GET = withAppAuth(
             },
           },
           tags: {
+            where: noteTagAccessWhere(context.user.id),
             select: {
               id: true,
               name: true,
@@ -221,6 +222,10 @@ export const PUT = withAppAuth(
         );
       }
 
+      if (!await canUseNoteTags(context.user.id, updateData.tagIds, context.workspace.id, finalProjectId)) {
+        return NextResponse.json({ error: "Invalid note tags" }, { status: 400 });
+      }
+
       // Build update object
       const updatePayload: any = {};
       if (updateData.title !== undefined) updatePayload.title = updateData.title;
@@ -270,6 +275,7 @@ export const PUT = withAppAuth(
             },
           },
           tags: {
+            where: noteTagAccessWhere(context.user.id),
             select: {
               id: true,
               name: true,

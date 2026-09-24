@@ -135,6 +135,8 @@ function fixture() {
   dependencies['@/lib/auth'] = { authConfig: {}, authOptions: {}, getAuthSession: dependencies['@/lib/request-session'].getServerSession };
   dependencies['@/lib/slug-resolvers'] = load('src/lib/slug-resolvers.ts', dependencies);
   dependencies['@/lib/issue-finder'] = load('src/lib/issue-finder.ts', dependencies);
+  dependencies['@prisma/client'] = require('@prisma/client');
+  dependencies['@/lib/secrets/access'] = load('src/lib/secrets/access.ts', dependencies);
   dependencies['@/lib/view-helpers'] = load('src/lib/view-helpers.ts', dependencies);
   dependencies['@/lib/issue-references'] = load('src/lib/issue-references.ts', dependencies);
   dependencies['@/lib/session'] = load('src/lib/session.ts', dependencies);
@@ -1503,7 +1505,7 @@ function relatedIssueFixture() {
   f.dependencies['@prisma/client'] = require('@prisma/client');
   f.dependencies['@/utils/html-normalizer'] = { normalizeDescriptionHTML: value => value };
   f.dependencies['@/utils/issueRelations'] = load('src/utils/issueRelations.ts');
-  f.dependencies['@/lib/secrets/access'] = { noteAccessWhere: () => ({}) };
+  f.dependencies['@/lib/secrets/access'] = load('src/lib/secrets/access.ts', f.dependencies);
   f.dependencies['@/lib/board-item-activity-service'] = { trackCreation: async () => { f.calls.writes++; } };
   f.dependencies['@/lib/redis'] = { publishEvent: async () => { f.calls.writes++; } };
   f.dependencies['@/lib/event-bus'] = { emitIssueCreated: async () => { f.calls.writes++; }, emitIssueUpdated: async () => { f.calls.writes++; } };
@@ -2051,3 +2053,107 @@ for (const endpoint of ['workspaces/[workspaceId]/planning/activity', 'timeline/
     assert.equal(activities[0].oldStatus, privateStatus);
   });
 }
+
+function noteTagFixture() {
+  const f = relatedIssueFixture(), own = f.workspaces[0];
+  const tags = f.workspaces.map(workspace => ({ id: `tag-${workspace.slug}`, name: `label-secret-tag-${workspace.slug}`,
+    workspaceId: workspace.id, workspace, authorId: 'alice', color: 'red' }));
+  tags.push({ id: 'personal', name: 'label-secret-tag-personal', authorId: 'alice', workspaceId: null, workspace: null });
+  tags.push({ id: 'private', name: 'label-secret-tag-private', authorId: 'bob', workspaceId: null, workspace: null });
+  const note = { id: 'note', title: 'Note', content: 'Note content', authorId: 'alice', author: { id: 'alice' },
+    scope: 'WORKSPACE', type: 'GUIDE', workspaceId: own.id, workspace: own, projectId: null, project: null,
+    isEncrypted: false, isRestricted: false, expiresAt: null, sharedWith: [{ userId: 'alice', permission: 'EDIT' }],
+    tags, comments: [], isPinned: true, isAiContext: true, version: 1, createdAt: new Date(), updatedAt: new Date() };
+  f.db.noteTag = { count: async ({ where }) => tags.filter(row => matches(row, where)).length };
+  f.db.note = {
+    findUnique: async args => f.project(note, args), findFirst: async args => f.project(note, args),
+    findMany: async args => matches(note, args.where) ? [f.project(note, args)] : [],
+    count: async ({ where }) => matches(note, where) ? 1 : 0,
+    update: async ({ data, ...args }) => {
+      f.writes.push(data);
+      return f.project({ ...note, ...data, tags: data.tags?.set ? tags.filter(tag => data.tags.set.some(ref => ref.id === tag.id)) : note.tags }, args);
+    },
+    create: async ({ data, ...args }) => {
+      f.writes.push(data);
+      return f.project({ ...note, ...data, tags: tags.filter(tag => data.tags?.connect?.some(ref => ref.id === tag.id)) }, args);
+    },
+  };
+  f.dependencies['@/lib/secrets/crypto'] = { isSecretNoteType: () => false };
+  f.dependencies['@/lib/versioning'] = { createInitialVersion: async () => { f.calls.writes++; } };
+  f.dependencies['@/lib/event-bus'] = { emitContextCreated: async () => { f.calls.writes++; }, emitContextUpdated: async () => { f.calls.writes++; } };
+  f.dependencies['@/lib/html-sanitizer'] = { stripHtmlToPlainText: value => value };
+  f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => (req, params) => handler(req,
+    { workspace: own, user: f.state.user }, params) };
+  function call(path, method = 'GET', body = {}) {
+    const request = new Request(`https://collab.example.test/?workspaceId=${own.id}&workspace=${own.id}&q=Note`, {
+      method, ...(method === 'GET' ? {} : { body: JSON.stringify(body) }),
+    });
+    request.nextUrl = new URL(request.url);
+    return f.route(path)[method](request, { params: Promise.resolve({ id: 'note', workspaceId: own.id }) });
+  }
+  return { ...f, tags, note, call };
+}
+
+for (const [path, method] of [
+  ['notes', 'GET'], ['notes/[id]', 'GET'], ['notes/[id]', 'PATCH'], ['notes/[id]/pin', 'POST'],
+  ['notes/pinned', 'GET'], ['notes/shared-with-me', 'GET'], ['notes/search', 'GET'],
+  ['workspaces/[workspaceId]/coclaw/memory', 'GET'],
+  ['apps/auth/context', 'GET'], ['apps/auth/context/[id]', 'GET'], ['apps/auth/context/[id]', 'PUT'],
+  ['apps/auth/context/knowledge', 'GET'], ['apps/auth/context/knowledge/[id]', 'GET'],
+]) {
+  test(`Notes tag projection ${method} ${path} filters historical tags before retrieval`, async () => {
+    const f = noteTagFixture(), joined = f.workspaces[1];
+    const read = async () => {
+      const response = await f.call(path, method, { pin: true });
+      assert.equal(response.status, 200);
+      return JSON.stringify(await response.json());
+    };
+    let body = await read();
+    for (const denied of ['revoked', 'foreign', 'private']) {
+      assert.equal(body.includes(`label-secret-tag-${denied}`), false);
+      assert.equal(f.reads.includes(`label-secret-tag-${denied}`), false);
+    }
+    for (const allowed of ['own', 'joined', 'personal']) assert.equal(body.includes(`label-secret-tag-${allowed}`), true);
+    joined.members[0].status = false; f.reads.length = 0;
+    body = await read();
+    assert.equal(body.includes('label-secret-tag-joined'), false);
+    assert.equal(f.reads.includes('label-secret-tag-joined'), false);
+    joined.ownerId = 'alice';
+    assert.equal((await read()).includes('label-secret-tag-joined'), true);
+    assert.equal(f.note.tags.length, 6);
+  });
+}
+
+for (const [path, method] of [['notes', 'POST'], ['notes/[id]', 'PATCH'], ['apps/auth/context', 'POST'], ['apps/auth/context/[id]', 'PUT']]) {
+  test(`Notes tag writes ${method} ${path} reject mixed foreign references without side effects`, async () => {
+    const f = noteTagFixture();
+    for (const tagIds of [['tag-own', 'tag-revoked'], ['tag-own', 'tag-joined'], ['private'], ['missing'], null, 'tag-own', [7]]) {
+      const response = await f.call(path, method, { title: 'Note', content: 'Note content', workspaceId: f.workspaces[0].id, tagIds });
+      assert.equal(response.status, 400, JSON.stringify(tagIds));
+      assert.deepEqual(f.writes, []);
+      assert.equal(f.calls.writes, 0);
+    }
+    for (const tagIds of [['tag-own', 'personal'], [], ['tag-own', 'tag-own']]) {
+      const response = await f.call(path, method, { title: 'Note', content: 'Note content', workspaceId: f.workspaces[0].id, tagIds });
+      assert.equal(response.status, method === 'POST' ? 201 : 200);
+      const body = JSON.stringify(await response.json());
+      assert.equal(body.includes('label-secret-tag-revoked'), false);
+      assert.equal(body.includes('label-secret-tag-private'), false);
+    }
+  });
+}
+
+test('Notes tag validator preserves personal, owner, active member and project-only destinations', async () => {
+  const f = noteTagFixture(), own = f.workspaces[0], joined = f.workspaces[1];
+  const { canUseNoteTags } = f.dependencies['@/lib/secrets/access'];
+  assert.equal(await canUseNoteTags('alice', ['personal'], null), true);
+  assert.equal(await canUseNoteTags('alice', ['tag-own', 'personal'], own.id), true);
+  assert.equal(await canUseNoteTags('alice', ['tag-joined', 'personal'], joined.id), true);
+  assert.equal(await canUseNoteTags('alice', ['tag-joined'], null, 'project-joined'), true);
+  joined.members[0].status = false;
+  assert.equal(await canUseNoteTags('alice', ['tag-joined'], joined.id), false);
+  joined.ownerId = 'alice';
+  assert.equal(await canUseNoteTags('alice', ['tag-joined'], joined.id), true);
+  assert.equal(await canUseNoteTags('alice', ['private'], null), false);
+  assert.deepEqual(f.writes, []);
+});

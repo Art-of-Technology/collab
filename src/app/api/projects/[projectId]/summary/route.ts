@@ -3,7 +3,7 @@ import { featureAccessWhere } from '@/lib/feature-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
-import { noteAccessWhere } from '@/lib/secrets/access';
+import { noteTagAccessWhere, noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(
@@ -444,7 +444,7 @@ export async function GET(
         ],
       },
       include: {
-        tags: true,
+        tags: { where: noteTagAccessWhere(session.user.id) },
         author: {
           select: { id: true, name: true, image: true },
         },

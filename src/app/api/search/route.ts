@@ -1,6 +1,6 @@
 import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from "next/server";
-import { noteAccessWhere } from "@/lib/secrets/access";
+import { noteTagAccessWhere, noteAccessWhere } from "@/lib/secrets/access";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 
@@ -243,6 +243,7 @@ export async function GET(req: NextRequest) {
           select: { name: true }
         },
         tags: {
+          where: noteTagAccessWhere(currentUser.id),
           select: { name: true }
         }
       },

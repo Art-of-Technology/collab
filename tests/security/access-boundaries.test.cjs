@@ -150,7 +150,7 @@ const enums = {
   NoteSharePermission: { EDIT: 'EDIT', VIEW: 'VIEW' },
   NoteActivityAction: {},
 };
-const { checkNoteAccess } = load('src/lib/secrets/access.ts', {
+const { checkNoteAccess, noteTagAccessWhere, canUseNoteTags } = load('src/lib/secrets/access.ts', {
   '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
 });
 const note = {
@@ -181,7 +181,7 @@ test('denied note requests stop before database content, history or decryption',
     '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/prisma': { prisma: denied }, '@prisma/client': enums,
-    '@/lib/secrets/access': { canAccessNote: async () => ({ canAccess: false, canEdit: false, canDelete: false }) },
+    '@/lib/secrets/access': { noteTagAccessWhere, canUseNoteTags, canAccessNote: async () => ({ canAccess: false, canEdit: false, canDelete: false }) },
     'zod': require('zod'), '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
     '@/lib/secrets/crypto': denied, '@/lib/versioning': denied, '@/lib/event-bus': denied,
   };
@@ -622,7 +622,7 @@ test('protected notes cannot publish their content as workspace templates', asyn
       'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
       '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
       '@/lib/auth-options': { authOptions: {} },
-      '@/lib/secrets/access': { canAccessNote: async () => ({ canAccess: true }) },
+      '@/lib/secrets/access': { noteTagAccessWhere, canUseNoteTags, canAccessNote: async () => ({ canAccess: true }) },
       '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
       '@/lib/prisma': { prisma: { note: { findUnique: async () => ({ ...note, isEncrypted: false, isRestricted: false, ...flags }) } } },
       '@prisma/client': enums, 'zod': require('zod'),
@@ -686,7 +686,7 @@ test('all Notes collections constrain both result reads and search counts', asyn
         findMany: async args => { check(args); return []; },
         count: async args => { check(args); return 0; },
       } } },
-      '@/lib/secrets/access': { noteAccessWhere: () => boundary },
+      '@/lib/secrets/access': { noteTagAccessWhere, canUseNoteTags, noteAccessWhere: () => boundary },
       '@/lib/secrets/crypto': {}, '@/lib/versioning': {}, '@/lib/event-bus': {},
       '@prisma/client': enums,
     }, { URL, console });
@@ -755,7 +755,7 @@ test('note creation and project reassignment reject inaccessible destinations be
         findUnique: async () => ({ versioningEnabled: false }),
       },
     } },
-    '@/lib/secrets/access': {
+    '@/lib/secrets/access': { noteTagAccessWhere, canUseNoteTags,
       canAccessNote: async () => ({ canEdit: true }),
       canWriteNoteDestination: async (_, workspace, project) => {
         assert.equal(project, 'foreign'); checked++; return false;
@@ -952,7 +952,7 @@ test('review: favorite PATCH preserves concurrent visibility and explicit scope 
       findUnique: async () => ({ versioningEnabled: false }),
       update: async ({ data }) => { payloads.push(data); Object.assign(state, data); return state; },
     } } },
-    '@/lib/secrets/access': { canAccessNote: async () => ({ canEdit: true }), canWriteNoteDestination: async () => true },
+    '@/lib/secrets/access': { noteTagAccessWhere, canUseNoteTags, canAccessNote: async () => ({ canEdit: true }), canWriteNoteDestination: async () => true },
     '@/lib/secrets/crypto': { isSecretNoteType: () => false }, '@/lib/versioning': {}, '@/lib/event-bus': {},
   }, { console });
   for (const [body, expectedScope] of [

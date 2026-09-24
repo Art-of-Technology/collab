@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { noteAccessWhere } from '@/lib/secrets/access';
+import { canUseNoteTags, noteTagAccessWhere, noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
@@ -135,6 +135,7 @@ export const GET = withAppAuth(
               },
             },
             tags: {
+              where: noteTagAccessWhere(context.user.id),
               select: {
                 id: true,
                 name: true,
@@ -188,6 +189,10 @@ export const POST = withAppAuth(
     try {
       const body = await request.json();
       const noteData = CreateNoteSchema.parse(body);
+
+      if (!await canUseNoteTags(context.user.id, noteData.tagIds, context.workspace.id, noteData.projectId || null)) {
+        return NextResponse.json({ error: "Invalid note tags" }, { status: 400 });
+      }
 
       // Validate project if projectId is provided
       if (noteData.projectId) {
@@ -266,6 +271,7 @@ export const POST = withAppAuth(
             },
           },
           tags: {
+            where: noteTagAccessWhere(context.user.id),
             select: {
               id: true,
               name: true,
