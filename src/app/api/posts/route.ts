@@ -1,3 +1,4 @@
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -34,10 +35,7 @@ export async function POST(req: Request) {
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        OR: [
-          { ownerId: user.id },
-          { members: { some: { userId: user.id } } }
-        ]
+        ...postWorkspaceAccessWhere(user.id)
       }
     });
 
@@ -107,7 +105,7 @@ export async function GET(req: Request) {
     const limit = Number(searchParams.get("limit") || "20");
 
     // Build the query
-    const query: any = {};
+    const query: any = { workspace: postWorkspaceAccessWhere(currentUser.id) };
 
     // Filter by type if provided
     if (type && ["UPDATE", "BLOCKER", "IDEA", "QUESTION", "RESOLVED"].includes(type)) {
@@ -119,30 +117,7 @@ export async function GET(req: Request) {
       query.authorId = authorId;
     }
 
-    // Filter by workspace
-    if (workspaceId) {
-      query.workspaceId = workspaceId;
-    } else {
-      // Get workspaces the user has access to
-      const accessibleWorkspaces = await prisma.workspace.findMany({
-        where: {
-          OR: [
-            { ownerId: currentUser.id },
-            { members: { some: { userId: currentUser.id } } }
-          ]
-        },
-        select: { id: true }
-      });
-
-      if (accessibleWorkspaces.length === 0) {
-        return NextResponse.json([]);
-      }
-
-      // Include workspaceId IN filter
-      query.workspaceId = {
-        in: accessibleWorkspaces.map(w => w.id)
-      };
-    }
+    if (workspaceId) query.workspaceId = workspaceId;
 
     // Filter by tag if provided
     const tagFilter = tag

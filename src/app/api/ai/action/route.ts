@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import type { AIContext, AIAction } from '@/lib/ai';
+import { z } from 'zod';
+import { IssueType } from '@prisma/client';
+import { checkUserPermission, Permission } from '@/lib/permissions';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { updateIssue } from '@/lib/issue-mutation';
 
 export async function POST(req: Request) {
   try {
@@ -10,24 +14,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
-    const { action, context } = body as {
-      action: AIAction;
-      context: AIContext;
-    };
-
-    if (!action || !context?.workspace?.id) {
+    const parsed = z.object({
+      action: z.object({ type: z.string(), params: z.record(z.unknown()) }),
+      context: z.object({ workspace: z.object({ id: z.string().min(1) }) }),
+    }).safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
       return NextResponse.json(
         { error: "Action and context are required" },
         { status: 400 }
       );
     }
 
+    const { action, context } = parsed.data;
+
     // Verify workspace access
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: context.workspace.id,
-        members: { some: { userId: currentUser.id } }
+        OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ]
       },
       select: { id: true, slug: true }
     });
@@ -128,13 +135,23 @@ export async function POST(req: Request) {
       }
 
       case 'create_issue': {
-        const params = action.params as Record<string, any>;
-
-        if (!params.title) {
-          return NextResponse.json({
-            success: false,
-            error: 'Title is required to create an issue',
-          }, { status: 400 });
+        const parsedParams = z.object({
+          title: z.string().trim().min(1).max(200),
+          description: z.string().max(100000).optional(),
+          type: z.nativeEnum(IssueType).optional(),
+          priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+          projectId: z.string().min(1).optional(),
+          assigneeId: z.string().min(1).optional(),
+        }).strict().safeParse(action.params);
+        if (!parsedParams.success) {
+          return NextResponse.json({ error: 'Invalid issue creation' }, { status: 400 });
+        }
+        if (!(await checkUserPermission(currentUser.id, workspace.id, Permission.CREATE_TASK)).hasPermission) {
+          return NextResponse.json({ error: 'No permission to create issues' }, { status: 403 });
+        }
+        const params = parsedParams.data;
+        if (params.assigneeId && !await userHasWorkspaceAccess(params.assigneeId, workspace.id)) {
+          return NextResponse.json({ error: 'Invalid issue participant' }, { status: 400 });
         }
 
         // Get or validate project
@@ -155,8 +172,8 @@ export async function POST(req: Request) {
         }
 
         // Get project details for issue key generation
-        const project = await prisma.project.findUnique({
-          where: { id: projectId },
+        const project = await prisma.project.findFirst({
+          where: { id: projectId, workspaceId: workspace.id },
           select: { id: true, issuePrefix: true, _count: { select: { issues: true } } },
         });
 
@@ -202,52 +219,21 @@ export async function POST(req: Request) {
       }
 
       case 'update_issue': {
-        const params = action.params as Record<string, any>;
-        const issueId = params.issueId || params.id;
-
-        if (!issueId) {
-          return NextResponse.json({
-            success: false,
-            error: 'Issue ID is required',
-          }, { status: 400 });
+        const { issueId, ...fields } = action.params;
+        if (typeof issueId !== 'string' || !issueId) {
+          return NextResponse.json({ error: 'Issue ID is required' }, { status: 400 });
         }
-
-        // Verify issue exists and user has access
-        const existingIssue = await prisma.issue.findFirst({
-          where: {
-            id: issueId,
-            workspaceId: workspace.id,
-          },
-        });
-
-        if (!existingIssue) {
-          return NextResponse.json({
-            success: false,
-            error: 'Issue not found',
-          }, { status: 404 });
+        if (Object.keys(fields).some(field => ![
+          'title', 'description', 'status', 'priority', 'type', 'assigneeId', 'dueDate',
+        ].includes(field))) {
+          return NextResponse.json({ error: 'Unsupported issue update field' }, { status: 400 });
         }
-
-        // Build update data
-        const updateData: any = {};
-        if (params.title) updateData.title = params.title;
-        if (params.description !== undefined) updateData.description = params.description;
-        if (params.status) updateData.status = params.status;
-        if (params.priority) updateData.priority = params.priority;
-        if (params.type) updateData.type = params.type;
-        if (params.assigneeId !== undefined) updateData.assigneeId = params.assigneeId;
-        if (params.dueDate) updateData.dueDate = new Date(params.dueDate);
-
-        const issue = await prisma.issue.update({
-          where: { id: issueId },
-          data: updateData,
-          select: {
-            id: true,
-            title: true,
-            issueKey: true,
-            status: true,
-            priority: true,
-          },
-        });
+        const result = await updateIssue(currentUser.id, issueId, fields, workspace.id);
+        if ('error' in result) {
+          return NextResponse.json({ error: result.error }, { status: result.status });
+        }
+        const { id, title, issueKey, status, priority } = result.issue;
+        const issue = { id, title, issueKey, status, priority };
 
         return NextResponse.json({
           success: true,

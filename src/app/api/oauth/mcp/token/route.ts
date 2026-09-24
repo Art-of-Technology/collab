@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { randomBytes, createHash } from 'crypto';
 import { encryptToken, decryptToken } from '@/lib/apps/crypto';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 /**
  * OAuth Token Endpoint for MCP/System Apps
@@ -93,7 +92,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('MCP OAuth token error:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       {
         error: 'server_error',
@@ -273,7 +272,6 @@ async function handleAuthorizationCodeGrant(
     console.log(`MCP Token: Created for ${oauthClient.app.name} in ${workspace.name} by user ${authCode.userId}`);
   }
 
-  await prisma.$disconnect();
 
   return NextResponse.json({
     access_token: accessToken,
@@ -362,7 +360,6 @@ async function handleRefreshTokenGrant(
     }
   });
 
-  await prisma.$disconnect();
 
   return NextResponse.json({
     access_token: newAccessToken,

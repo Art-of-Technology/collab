@@ -9,11 +9,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 // Schema for user profile updates
 const UpdateUserProfileSchema = z.object({
@@ -125,8 +124,6 @@ export const GET = withAppAuth(
         { error: 'server_error', error_description: 'Internal server error' },
         { status: 500 }
       );
-    } finally {
-      await prisma.$disconnect();
     }
   },
   { requiredScopes: ['user:read', 'profile:read'], scopeMode: 'any' }
@@ -188,8 +185,6 @@ export const PATCH = withAppAuth(
         { error: 'server_error', error_description: 'Internal server error' },
         { status: 500 }
       );
-    } finally {
-      await prisma.$disconnect();
     }
   },
   { requiredScopes: ['user:write', 'profile:write'], scopeMode: 'any' }

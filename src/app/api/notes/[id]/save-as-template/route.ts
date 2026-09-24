@@ -1,3 +1,5 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { canAccessNote } from '@/lib/secrets/access';
 /**
  * API Route for Saving a Note as a Template
  *
@@ -36,6 +38,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const { id: noteId } = await context.params;
+    const access = await canAccessNote(session.user.id, noteId);
+    if (!access.canAccess) {
+      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
+    }
+
     const body = await request.json();
 
     // Validate input
@@ -60,6 +67,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         scope: true,
         workspaceId: true,
         authorId: true,
+        isEncrypted: true,
+        isRestricted: true,
       },
     });
 
@@ -67,25 +76,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Note not found' }, { status: 404 });
     }
 
-    // Verify user has access
-    if (note.authorId !== session.user.id) {
-      // Check workspace membership if it's a workspace note
-      if (note.workspaceId) {
-        const membership = await prisma.workspaceMember.findUnique({
-          where: {
-            userId_workspaceId: {
-              userId: session.user.id,
-              workspaceId: note.workspaceId,
-            },
-          },
-        });
-
-        if (!membership) {
-          return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-        }
-      } else {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-      }
+    // Templates are workspace-visible and cannot preserve secret access controls.
+    if (note.isEncrypted || note.isRestricted) {
+      return NextResponse.json({ error: 'Protected notes cannot be saved as templates' }, { status: 400 });
     }
 
     if (!note.workspaceId) {
@@ -93,6 +86,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
         { error: 'Cannot create templates from notes without a workspace' },
         { status: 400 }
       );
+    }
+
+    if (!await userHasWorkspaceAccess(session.user.id, note.workspaceId)) {
+      return NextResponse.json({ error: 'Workspace access required' }, { status: 403 });
     }
 
     // Check for duplicate name in workspace

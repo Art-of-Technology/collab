@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { PrismaClient } from "@prisma/client";
 
 interface CommitData {
   repositoryId: string;
@@ -54,7 +53,7 @@ interface PRCheckData {
 }
 
 export class GitHubWebhookService {
-  private prisma: PrismaClient;
+  private prisma: typeof prisma;
 
   constructor() {
     this.prisma = prisma;

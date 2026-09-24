@@ -47,6 +47,7 @@ export const authOptions: AuthOptions = {
           where: {
             email: credentials.email,
           },
+          omit: { hashedPassword: false },
         });
 
         if (!user || !user.hashedPassword) {

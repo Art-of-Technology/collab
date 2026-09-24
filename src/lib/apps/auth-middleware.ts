@@ -1,3 +1,4 @@
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
 /**
  * OAuth Authentication Middleware for Third-Party App API Access
  * 
@@ -6,11 +7,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { decryptToken } from '@/lib/apps/crypto';
 import { hasScope, hasAllScopes, hasAnyScope, normalizeScopes } from '@/lib/oauth-scopes';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export interface AppAuthContext {
   installation: {
@@ -170,6 +170,14 @@ export async function authenticateAppRequest(
           }
         };
       }
+    }
+
+    const workspace = await prisma.workspace.findFirst({
+      where: { id: installation.workspaceId, ...postWorkspaceAccessWhere(installation.installedBy.id) },
+      select: { id: true },
+    });
+    if (!workspace) {
+      return { success: false, error: { code: 'workspace_access_denied', message: 'Workspace access denied', statusCode: 403 } };
     }
 
     // Build auth context
@@ -458,21 +466,12 @@ export function withAppAuth(
         return handler(request, authResult.context!, routeParams);
       }
 
-      // Verify user has access to the target workspace
-      const membership = await prisma.workspaceMember.findFirst({
-        where: {
-          userId: authResult.context!.user.id,
-          workspaceId: targetWorkspace.id,
-          status: true // status is a boolean field
-        }
+      const accessibleWorkspace = await prisma.workspace.findFirst({
+        where: { id: targetWorkspace.id, ...postWorkspaceAccessWhere(authResult.context!.user.id) },
+        select: { id: true },
       });
-
-      if (!membership) {
-        return createAuthErrorResponse({
-          code: 'workspace_access_denied',
-          message: `User does not have access to workspace '${workspaceOverride}'`,
-          statusCode: 403
-        });
+      if (!accessibleWorkspace) {
+        return createAuthErrorResponse({ code: 'workspace_access_denied', message: 'Workspace access denied', statusCode: 403 });
       }
 
       // Update context with the new workspace

@@ -1,3 +1,5 @@
+import { postAccessWhere } from "@/lib/post-access";
+import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authConfig } from "@/lib/auth";
@@ -15,6 +17,8 @@ export async function POST(
 
     const { postId } = await params;
     const userId = session.user.id;
+    const post = await prisma.post.findFirst({ where: postAccessWhere(postId, userId), select: { id: true } });
+    if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
 
     // Add the user as a follower
     await NotificationService.addPostFollower(postId, userId);
@@ -41,6 +45,8 @@ export async function DELETE(
 
     const { postId } = await params;
     const userId = session.user.id;
+    const post = await prisma.post.findFirst({ where: postAccessWhere(postId, userId), select: { id: true } });
+    if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
 
     // Remove the user as a follower
     await NotificationService.removePostFollower(postId, userId);
@@ -67,6 +73,8 @@ export async function GET(
 
     const { postId } = await params;
     const userId = session.user.id;
+    const post = await prisma.post.findFirst({ where: postAccessWhere(postId, userId), select: { id: true } });
+    if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
 
     // Check if user is following the post
     const isFollowing = await NotificationService.isUserFollowingPost(postId, userId);

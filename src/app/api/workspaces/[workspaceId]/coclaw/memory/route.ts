@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
+import { Prisma } from '@prisma/client';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 
 type RouteContext = { params: Promise<{ workspaceId: string }> };
@@ -29,15 +32,7 @@ export async function GET(
     const { workspaceId } = await params;
 
     // Verify workspace membership
-    const workspace = await prisma.workspace.findFirst({
-      where: {
-        id: workspaceId,
-        members: { some: { userId: session.user.id } },
-      },
-      select: { id: true },
-    });
-
-    if (!workspace) {
+    if (!await userHasWorkspaceAccess(session.user.id, workspaceId)) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
@@ -47,8 +42,10 @@ export async function GET(
     const category = searchParams.get('category') || 'all';
 
     // Build where clause: only meaningful Coclaw memories, not raw messages
-    const where: Record<string, unknown> = {
+    const filters: Prisma.NoteWhereInput[] = [noteAccessWhere(session.user.id)];
+    const where: Prisma.NoteWhereInput = {
       workspaceId,
+      AND: filters,
       OR: [
         { isAiContext: true },
         { type: 'ARCHITECTURE' },
@@ -57,14 +54,12 @@ export async function GET(
 
     // Apply search filter
     if (search) {
-      where.AND = [
-        {
-          OR: [
-            { title: { contains: search, mode: 'insensitive' } },
-            { content: { contains: search, mode: 'insensitive' } },
-          ],
-        },
-      ];
+      filters.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { content: { contains: search, mode: 'insensitive' } },
+        ],
+      });
     }
 
     // Apply category filter

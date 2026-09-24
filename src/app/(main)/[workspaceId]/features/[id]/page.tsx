@@ -51,16 +51,15 @@ export default async function FeatureRequestPage({ params }: FeatureRequestPageP
   let featureRequest;
   try {
     featureRequest = await getFeatureRequestById(id, workspaceId);
-
-    if (!featureRequest) {
-      notFound();
-    }
-
-
   } catch (error) {
     console.error("Error loading feature request:", error);
     return <div>Something went wrong</div>;
   }
+
+  if (!featureRequest) {
+    notFound();
+  }
+
   return (
       <div className="container max-w-4xl py-4 sm:py-8 px-0 sm:px-0">
         <div className="mb-6 text-left">

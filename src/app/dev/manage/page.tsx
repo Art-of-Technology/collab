@@ -1,6 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { PrismaClient } from '@prisma/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,7 @@ import Link from 'next/link';
 import { authOptions } from '@/lib/auth-options';
 import { AppReviewActions } from './AppReviewActions';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 async function getAppsForReview() {
   const apps = await prisma.app.findMany({
@@ -47,7 +46,6 @@ async function getAppsForReview() {
     ]
   });
 
-  await prisma.$disconnect();
   return apps;
 }
 

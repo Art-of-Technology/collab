@@ -27,7 +27,7 @@ export const authOptions: AuthOptions = {
         try {
           console.log('🔄 Processing Google profile image for new user:', user.id);
           const cloudinaryUrl = await processUserProfileImage(user.image, user.id);
-          
+
           if (cloudinaryUrl && cloudinaryUrl !== user.image) {
             // Update the user's image URL to the Cloudinary URL
             await prisma.user.update({
@@ -52,7 +52,7 @@ export const authOptions: AuthOptions = {
         try {
           console.log('🔄 Processing Google profile image for account linking:', user.id);
           const cloudinaryUrl = await processUserProfileImage(profile.picture as string, user.id);
-          
+
           if (cloudinaryUrl && cloudinaryUrl !== profile.picture) {
             // Update the user's image URL to the Cloudinary URL
             await prisma.user.update({
@@ -111,27 +111,27 @@ export const authOptions: AuthOptions = {
       if (token.sub && session.user) {
         session.user.id = token.sub;
       }
-      
+
       if (token.role && session.user) {
         session.user.role = token.role as string;
       }
-      
+
       return session;
     },
     async jwt({ token }) {
       if (!token.sub) return token;
-      
+
       const existingUser = await prisma.user.findUnique({
         where: {
           id: token.sub,
         },
       });
-      
+
       if (!existingUser) return token;
-      
+
       // Convert UserRole enum to string for NextAuth compatibility
       token.role = existingUser.role.toString();
-      
+
       return token;
     },
     async redirect({ url, baseUrl }) {
@@ -139,7 +139,7 @@ export const authOptions: AuthOptions = {
       if (url.includes('/api/auth/signin') || url.includes('/api/auth/callback')) {
         return baseUrl;
       }
-      
+
       try {
         const target = new URL(url, baseUrl);
         if (target.origin === new URL(baseUrl).origin) return target.href;

@@ -1,3 +1,4 @@
+import { deletePostWithComments } from "@/lib/delete-post-comment";
 /**
  * Third-Party App API: Individual Post Endpoints
  * GET /api/apps/auth/posts/[postId] - Get specific post details
@@ -10,11 +11,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 // Schema for updating posts
 const UpdatePostSchema = z.object({
@@ -44,7 +44,6 @@ export const GET = withAppAuth(
             select: {
               id: true,
               name: true,
-              email: true,
               image: true
             }
           },
@@ -52,7 +51,6 @@ export const GET = withAppAuth(
             select: {
               id: true,
               name: true,
-              email: true,
               image: true
             }
           },
@@ -60,7 +58,6 @@ export const GET = withAppAuth(
             select: {
               id: true,
               name: true,
-              email: true,
               image: true
             }
           },
@@ -72,8 +69,7 @@ export const GET = withAppAuth(
                 select: {
                   id: true,
                   name: true,
-                  email: true,
-                  image: true
+                    image: true
                 }
               },
               _count: {
@@ -144,8 +140,6 @@ export const GET = withAppAuth(
         { error: 'server_error', error_description: 'Internal server error' },
         { status: 500 }
       );
-    } finally {
-      await prisma.$disconnect();
     }
   },
   { requiredScopes: ['posts:read'] }
@@ -188,7 +182,7 @@ export const PATCH = withAppAuth(
       });
 
       const isAuthor = existingPost.authorId === context.user.id;
-      const isAdmin = membership?.role === 'ADMIN';
+      const isAdmin = membership?.status === true && membership.role === 'ADMIN';
 
       // Only author or admin can update posts
       if (!isAuthor && !isAdmin) {
@@ -245,7 +239,6 @@ export const PATCH = withAppAuth(
             select: {
               id: true,
               name: true,
-              email: true,
               image: true
             }
           },
@@ -253,7 +246,6 @@ export const PATCH = withAppAuth(
             select: {
               id: true,
               name: true,
-              email: true,
               image: true
             }
           },
@@ -261,7 +253,6 @@ export const PATCH = withAppAuth(
             select: {
               id: true,
               name: true,
-              email: true,
               image: true
             }
           },
@@ -316,8 +307,6 @@ export const PATCH = withAppAuth(
         { error: 'server_error', error_description: 'Internal server error' },
         { status: 500 }
       );
-    } finally {
-      await prisma.$disconnect();
     }
   },
   { requiredScopes: ['posts:write'] }
@@ -358,7 +347,7 @@ export const DELETE = withAppAuth(
       });
 
       const isAuthor = existingPost.authorId === context.user.id;
-      const isAdmin = membership?.role === 'ADMIN';
+      const isAdmin = membership?.status === true && membership.role === 'ADMIN';
 
       // Only author or admin can delete posts
       if (!isAuthor && !isAdmin) {
@@ -369,9 +358,7 @@ export const DELETE = withAppAuth(
       }
 
       // Delete the post (cascade will handle related records)
-      await prisma.post.delete({
-        where: { id: postId }
-      });
+      await deletePostWithComments(postId, context.user.id);
 
       return NextResponse.json({ success: true, message: 'Post deleted successfully' });
 
@@ -381,8 +368,6 @@ export const DELETE = withAppAuth(
         { error: 'server_error', error_description: 'Internal server error' },
         { status: 500 }
       );
-    } finally {
-      await prisma.$disconnect();
     }
   },
   { requiredScopes: ['posts:write'] }

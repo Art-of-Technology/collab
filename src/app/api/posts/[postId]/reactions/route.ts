@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { postAccessWhere } from "@/lib/post-access";
+import { userSelectFields } from "@/lib/user-utils";
 import { Reaction } from "@prisma/client";
 
 export async function POST(
@@ -23,8 +25,8 @@ export async function POST(
     }
 
     // Check if post exists
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    const post = await prisma.post.findFirst({
+      where: postAccessWhere(postId, user.id),
     });
 
     if (!post) {
@@ -88,12 +90,19 @@ export async function GET(
 
     const postId = (await params)?.postId;
 
+    const access = postAccessWhere(postId, currentUser.id);
+    const post = await prisma.post.findFirst({ where: access, select: { id: true } });
+    if (!post) {
+      return new NextResponse("Post not found", { status: 404 });
+    }
+
     const reactions = await prisma.reaction.findMany({
       where: {
         postId,
+        post: access,
       },
       include: {
-        author: true,
+        author: { select: userSelectFields },
       },
     });
 

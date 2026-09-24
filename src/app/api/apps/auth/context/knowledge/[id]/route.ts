@@ -6,6 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
@@ -30,10 +32,17 @@ export const GET = withAppAuth(
   // with structure { params: Promise<{ id: string }> } due to async params in App Router
   async (request: NextRequest, context: AppAuthContext, routeParams: { params: Promise<{ id: string }> }) => {
     try {
+      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
+        return NextResponse.json(
+          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
+          { status: 403 }
+        );
+      }
       const { id } = await routeParams.params;
 
       const article = await prisma.note.findFirst({
         where: {
+          AND: [noteAccessWhere(context.user.id)],
           id,
           workspaceId: context.workspace.id,
           type: { in: KNOWLEDGE_TYPES },

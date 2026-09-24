@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authConfig } from '@/lib/auth';
+import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(
@@ -437,6 +438,7 @@ export async function GET(
     // Get notes for the workspace (workspace or project scope)
     const notes = await prisma.note.findMany({
       where: {
+        AND: [noteAccessWhere(hasAccess.userId)],
         OR: [
           { workspaceId: project.workspaceId, scope: 'WORKSPACE' },
           { projectId: project.id, scope: 'PROJECT' },

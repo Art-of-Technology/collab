@@ -1,3 +1,5 @@
+import { Prisma } from '@prisma/client';
+import { checkUserPermissions, canActOnOwnContent, Permission } from '@/lib/permissions';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -7,7 +9,7 @@ import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
 import { emitIssueUpdated, emitIssueDeleted } from "@/lib/event-bus";
 import { findIssueByIdOrKey, STANDARD_ISSUE_INCLUDE, userHasWorkspaceAccess } from "@/lib/issue-finder";
-import { normalizeDescriptionHTML } from "@/utils/html-normalizer";
+import { updateIssue } from "@/lib/issue-mutation";
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -77,156 +79,12 @@ export async function PUT(
     }
 
     const { issueId } = await params;
-    const body = await req.json();
-    const url = new URL(req.url);
-    const workspaceId = url.searchParams.get('workspaceId');
-
-    // Find the issue first, scoped to user's accessible workspaces
-    const existingIssue = await findIssueByIdOrKey(issueId, {
-      workspaceId: workspaceId || undefined,
-      userId: currentUser.id
-    });
-
-    if (!existingIssue) {
-      return NextResponse.json({ 
-        error: "Issue not found", 
-        message: `Issue ${issueId} not found` 
-      }, { status: 404 });
+    const result = await updateIssue(currentUser.id, issueId,
+      await req.json().catch(() => null), new URL(req.url).searchParams.get('workspaceId') || undefined);
+    if ('error' in result) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
     }
-    // Check workspace access
-    const hasAccess = await userHasWorkspaceAccess(currentUser.id, existingIssue.workspaceId);
-
-    if (!hasAccess) {
-      return NextResponse.json(
-        { error: "You don't have permission to update this issue" },
-        { status: 403 }
-      );
-    }
-
-    // Handle status updates to work with new ProjectStatus system
-    let updateData = { ...body, updatedAt: new Date() };
-
-    // Normalize description if provided
-    if (updateData.description !== undefined && typeof updateData.description === 'string') {
-      updateData.description = normalizeDescriptionHTML(updateData.description);
-    }
-
-    // Normalize type casing if provided
-    if (typeof updateData.type === 'string') {
-      updateData.type = updateData.type.toUpperCase();
-    }
-
-    // Update lifecycle tracking
-    updateData.lastProgressAt = new Date();
-    
-    // Handle labels relation updates
-    let relationalUpdates: any = {};
-    if (Array.isArray(body.labels)) {
-      // Handle both arrays of IDs and arrays of label objects
-      const labelIds = body.labels.map((label: any) => 
-        typeof label === 'string' ? label : label.id
-      ).filter(Boolean);
-      
-      relationalUpdates.labels = {
-        set: labelIds.map((id: string) => ({ id }))
-      };
-      delete (updateData as any).labels;
-    }
-    
-    // If status or statusValue is being updated, find the corresponding ProjectStatus
-    if (body.status || body.statusValue) {
-      const statusValue = body.status || body.statusValue;
-      
-      // Find the ProjectStatus record for this status in this project
-      // Try multiple ways to find the status: by name, displayName, or similar variations
-      const projectStatus = await prisma.projectStatus.findFirst({
-        where: {
-          projectId: existingIssue.projectId,
-          OR: [
-            { name: statusValue },
-            { displayName: statusValue },
-            // Handle case variations and underscore/space differences
-            { name: statusValue.toLowerCase().replace(/\s+/g, '_') },
-            { displayName: statusValue.toLowerCase().replace(/\s+/g, '_') },
-            { name: statusValue.toLowerCase().replace(/_/g, ' ') },
-            { displayName: statusValue.toLowerCase().replace(/_/g, ' ') }
-          ],
-          isActive: true
-        }
-      });
-      
-      if (projectStatus) {
-        // Update both statusId and statusValue for the new system
-        updateData.statusId = projectStatus.id;
-        updateData.statusValue = projectStatus.name; // Use the canonical name
-        updateData.status = projectStatus.name; // Keep legacy field for compatibility
-        
-        // Lifecycle tracking: track first time moved to in-progress
-        const isMovingToInProgress = projectStatus.name.toLowerCase().includes('in_progress') || 
-                                      projectStatus.name.toLowerCase().includes('in progress');
-        const wasNotInProgress = !existingIssue.statusValue?.toLowerCase().includes('in_progress');
-        
-        if (isMovingToInProgress && wasNotInProgress && !existingIssue.firstStartedAt) {
-          updateData.firstStartedAt = new Date();
-        }
-      } else {
-        // No ProjectStatus found, just update the legacy status field
-        updateData.status = statusValue;
-        updateData.statusValue = statusValue;
-        console.warn(`No ProjectStatus found for status "${statusValue}" in project ${existingIssue.projectId}`);
-      }
-    }
-
-    // Capture old issue for activity comparison
-    const oldIssue = existingIssue;
-
-    // Handle assignee changes - create/update IssueAssignee record
-    const assigneeChanged = body.assigneeId !== undefined && body.assigneeId !== oldIssue.assigneeId;
-    
-    // Update the issue and handle assignee changes in a transaction
-    const updatedIssue = await prisma.$transaction(async (tx) => {
-      // Update the issue
-      const issue = await tx.issue.update({
-        where: { id: existingIssue.id },
-        data: {
-          ...updateData,
-          ...(Object.keys(relationalUpdates).length > 0 ? relationalUpdates : {}),
-        },
-          include: STANDARD_ISSUE_INCLUDE
-      });
-
-      // Handle assignee changes - create/update IssueAssignee records
-      if (assigneeChanged) {
-        // Create new assignee record if assigned to someone
-        if (issue.assigneeId) {
-          await tx.issueAssignee.upsert({
-            where: {
-              issueId_userId: {
-                issueId: existingIssue.id,
-                userId: issue.assigneeId
-              }
-            },
-            create: {
-              issueId: existingIssue.id,
-              userId: issue.assigneeId,
-              role: "ASSIGNEE",
-              status: "APPROVED", // Assignees are automatically approved
-              assignedAt: new Date(),
-              approvedAt: new Date(),
-              approvedBy: currentUser.id
-            },
-            update: {
-              role: "ASSIGNEE", // If they were a helper, promote them to assignee
-              status: "APPROVED",
-              approvedAt: new Date(),
-              approvedBy: currentUser.id
-            }
-          });
-        }
-      }
-
-      return issue;
-    });
+    const { issue: updatedIssue, oldIssue, assigneeChanged, updateData } = result;
 
     // Track activities for changed fields (Issue-centric)
     let changes: any[] = [];
@@ -433,6 +291,9 @@ export async function PUT(
     return NextResponse.json({ issue: updatedIssue });
 
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2034', 'P2002'].includes(error.code)) {
+      return NextResponse.json({ error: 'Issue update conflict; reload and retry' }, { status: 409 });
+    }
     console.error("Error updating issue:", error);
     return NextResponse.json(
       { 
@@ -483,6 +344,15 @@ export async function DELETE(
         { error: "You don't have permission to delete this issue" },
         { status: 403 }
       );
+    }
+
+    const permissions = await checkUserPermissions(currentUser.id, existingIssue.workspaceId, [
+      Permission.DELETE_ANY_TASK, Permission.DELETE_SELF_TASK
+    ]);
+    if (!canActOnOwnContent(existingIssue.reporterId, currentUser.id,
+      permissions[Permission.DELETE_ANY_TASK].hasPermission,
+      permissions[Permission.DELETE_SELF_TASK].hasPermission)) {
+      return NextResponse.json({ error: 'No permission to delete this issue' }, { status: 403 });
     }
 
     // Prepare notifications before deletion

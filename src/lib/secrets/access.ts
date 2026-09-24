@@ -1,3 +1,4 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 /**
  * Secrets Access Control Helpers
  *
@@ -6,7 +7,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { NoteScope, NoteSharePermission, NoteActivityAction } from '@prisma/client';
+import { NoteScope, NoteSharePermission, NoteActivityAction, Prisma } from '@prisma/client';
 
 interface NoteWithAccess {
   id: string;
@@ -39,7 +40,7 @@ export interface AccessCheckResult {
  *
  * @param userId - ID of the user trying to access
  * @param note - Note with access-related fields
- * @param workspaceMembership - User's workspace membership (for admin check)
+ * @param workspaceMembership - Verified active membership or workspace ownership; null if inaccessible
  * @returns Access check result with permissions
  */
 export async function checkNoteAccess(
@@ -49,6 +50,17 @@ export async function checkNoteAccess(
 ): Promise<AccessCheckResult> {
   const isOwner = note.authorId === userId;
   const isExpired = note.expiresAt ? new Date() > note.expiresAt : false;
+
+  // Tenant notes require current membership, including for their former author.
+  const needsMembership = note.scope === NoteScope.PROJECT ||
+    note.scope === NoteScope.WORKSPACE ||
+    ((note.isEncrypted || note.isRestricted) && !!(note.workspaceId || note.projectId));
+  if (!userId || (needsMembership && !workspaceMembership)) {
+    return {
+      canAccess: false, canEdit: false, canShare: false, canDelete: false,
+      isOwner, isExpired, reason: 'Workspace access required'
+    };
+  }
 
   // Check if expired
   if (isExpired && !isOwner) {
@@ -63,7 +75,7 @@ export async function checkNoteAccess(
     };
   }
 
-  // Owner always has full access
+  // Authorship grants full access only after the tenant check above.
   if (isOwner) {
     return {
       canAccess: true,
@@ -71,19 +83,6 @@ export async function checkNoteAccess(
       canShare: true,
       canDelete: true,
       isOwner: true,
-      isExpired
-    };
-  }
-
-  // Workspace admin has full access
-  const isAdmin = workspaceMembership?.role === 'ADMIN' || workspaceMembership?.role === 'OWNER';
-  if (isAdmin) {
-    return {
-      canAccess: true,
-      canEdit: true,
-      canShare: true,
-      canDelete: true,
-      isOwner: false,
       isExpired
     };
   }
@@ -111,6 +110,19 @@ export async function checkNoteAccess(
       canEdit: hasEditPermission,
       canShare: false,
       canDelete: false,
+      isOwner: false,
+      isExpired
+    };
+  }
+
+  // Workspace admin has full access
+  const isAdmin = workspaceMembership?.role === 'ADMIN' || workspaceMembership?.role === 'OWNER';
+  if (isAdmin) {
+    return {
+      canAccess: true,
+      canEdit: true,
+      canShare: true,
+      canDelete: true,
       isOwner: false,
       isExpired
     };
@@ -153,7 +165,7 @@ export async function checkNoteAccess(
       };
 
     case NoteScope.PUBLIC:
-      // Public notes: accessible to everyone
+      // Public notes: accessible to authenticated users after the tenant check above.
       return {
         canAccess: true,
         canEdit: hasEditPermission,
@@ -198,6 +210,41 @@ export async function checkNoteAccess(
   }
 }
 
+/** Apply the same read boundary to collections before content or counts are fetched. */
+export function noteAccessWhere(userId: string): Prisma.NoteWhereInput {
+  if (!userId) return { id: { in: [] } };
+  const membership: Prisma.WorkspaceWhereInput = {
+    OR: [{ ownerId: userId }, { members: { some: { userId, status: true } } }]
+  };
+  const admin: Prisma.WorkspaceWhereInput = {
+    OR: [{ ownerId: userId }, { members: { some: { userId, status: true, role: { in: ['ADMIN', 'OWNER'] } } } }]
+  };
+  // A direct workspace takes precedence over a project's workspace, as in canAccessNote.
+  const inWorkspace = (where: Prisma.WorkspaceWhereInput): Prisma.NoteWhereInput => ({
+    OR: [{ workspace: where }, { workspaceId: null, project: { workspace: where } }]
+  });
+  return {
+    AND: [
+      { OR: [
+        inWorkspace(membership),
+        { scope: { notIn: [NoteScope.PROJECT, NoteScope.WORKSPACE] }, OR: [
+          { isEncrypted: false, isRestricted: false },
+          { workspaceId: null, projectId: null }
+        ] }
+      ] },
+      { OR: [{ authorId: userId }, { expiresAt: null }, { expiresAt: { gte: new Date() } }] },
+      { OR: [
+        { authorId: userId },
+        { sharedWith: { some: { userId } } },
+        { isRestricted: false, OR: [
+          inWorkspace(admin),
+          { scope: { in: [NoteScope.PROJECT, NoteScope.WORKSPACE, NoteScope.PUBLIC] } }
+        ] }
+      ] }
+    ]
+  };
+}
+
 /**
  * Quick check if a user can access a note by ID
  * @param userId - ID of the user trying to access
@@ -210,7 +257,16 @@ export async function canAccessNote(
 ): Promise<AccessCheckResult> {
   const note = await prisma.note.findUnique({
     where: { id: noteId },
-    include: {
+    select: {
+      id: true,
+      authorId: true,
+      scope: true,
+      isRestricted: true,
+      isEncrypted: true,
+      expiresAt: true,
+      workspaceId: true,
+      projectId: true,
+      project: { select: { workspaceId: true } },
       sharedWith: {
         select: {
           userId: true,
@@ -232,18 +288,22 @@ export async function canAccessNote(
     };
   }
 
-  // Get user's workspace membership for admin check
+  const workspaceId = note.workspaceId ?? note.project?.workspaceId;
   let workspaceMembership = null;
-  if (note.workspaceId) {
-    workspaceMembership = await prisma.workspaceMember.findUnique({
+  if (workspaceId) {
+    const workspace = await prisma.workspace.findFirst({
       where: {
-        userId_workspaceId: {
-          userId,
-          workspaceId: note.workspaceId
-        }
+        id: workspaceId,
+        OR: [{ ownerId: userId }, { members: { some: { userId, status: true } } }]
       },
-      select: { role: true }
+      select: {
+        ownerId: true,
+        members: { where: { userId, status: true }, select: { role: true } }
+      }
     });
+    workspaceMembership = workspace?.ownerId === userId
+      ? { role: 'OWNER' }
+      : workspace?.members[0] ?? null;
   }
 
   return checkNoteAccess(userId, note, workspaceMembership);
@@ -390,4 +450,15 @@ export async function getNoteAuditLog(
     total,
     hasMore: offset + logs.length < total
   };
+}
+
+
+/** Validate the destination before creating a note or changing its project. */
+export async function canWriteNoteDestination(userId: string, workspaceId: string | null, projectId: string | null): Promise<boolean> {
+  if (!userId) return false;
+  if (workspaceId && !await userHasWorkspaceAccess(userId, workspaceId)) return false;
+  if (!projectId) return true;
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } });
+  if (!project || (workspaceId && project.workspaceId !== workspaceId)) return false;
+  return workspaceId ? true : userHasWorkspaceAccess(userId, project.workspaceId);
 }

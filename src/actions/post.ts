@@ -1,5 +1,8 @@
 'use server';
 
+import { deletePostWithComments } from "@/lib/delete-post-comment";
+import { postAccessWhere, postWorkspaceAccessWhere } from "@/lib/post-access";
+import { userSelectFields } from "@/lib/user-utils";
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -44,13 +47,24 @@ export async function getPosts({
 }) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.email || !session.user.id) {
     throw new Error('Unauthorized');
   }
   
-  // Build the query
-  const query: any = {};
-  
+  const accessibleWorkspaces = await prisma.workspace.findMany({
+    where: postWorkspaceAccessWhere(session.user.id, workspaceId),
+    select: { id: true },
+  });
+  if (!accessibleWorkspaces.length) {
+    return { posts: [], hasMore: false, nextCursor: null };
+  }
+  const resolvedWorkspaceId = workspaceId ? accessibleWorkspaces[0].id : undefined;
+  const access = {
+    workspace: postWorkspaceAccessWhere(session.user.id),
+    workspaceId: resolvedWorkspaceId ?? { in: accessibleWorkspaces.map(workspace => workspace.id) },
+  };
+  const query: any = { ...access };
+
   // Filter by type if provided
   if (type && ["UPDATE", "BLOCKER", "IDEA", "QUESTION", "RESOLVED"].includes(type)) {
     query.type = type;
@@ -61,140 +75,6 @@ export async function getPosts({
     query.authorId = authorId;
   }
 
-  // Filter by workspace - resolve slug to ID if needed
-  let resolvedWorkspaceId: string | undefined = undefined;
-  if (workspaceId) {
-    const workspace = await prisma.workspace.findFirst({
-      where: {
-        OR: [
-          { id: workspaceId },
-          { slug: workspaceId }
-        ]
-      },
-      select: { id: true }
-    });
-    
-    if (workspace) {
-      resolvedWorkspaceId = workspace.id;
-      query.workspaceId = workspace.id;
-    } else {
-      const emptyResult: any = {
-        posts: [],
-        hasMore: false,
-        nextCursor: null
-      };
-      
-      // If includeProfileData is requested, still fetch user and stats
-      if (includeProfileData && authorId) {
-        const user = await prisma.user.findUnique({
-          where: { id: authorId }
-        });
-
-        if (user) {
-          const whereCondition = { authorId: user.id };
-
-          const [postCount, commentCount, reactionsReceived] = await Promise.all([
-            prisma.post.count({ where: whereCondition }),
-            prisma.comment.count({ where: { authorId: user.id } }),
-            prisma.reaction.count({ where: { post: whereCondition } }),
-          ]);
-
-          emptyResult.user = { ...user };
-          emptyResult.stats = { postCount, commentCount, reactionsReceived };
-        }
-      }
-      
-      return emptyResult;
-    }
-  } else {
-    // Get workspaces the user has access to
-    const accessibleWorkspaces = await prisma.workspace.findMany({
-      where: {
-        OR: [
-          { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } }
-        ]
-      },
-      select: { id: true }
-    });
-    
-    if (accessibleWorkspaces.length === 0) {
-      // Return empty result in correct format
-      const emptyResult: any = {
-        posts: [],
-        hasMore: false,
-        nextCursor: null
-      };
-      
-      // If includeProfileData is requested, still fetch user and stats
-      if (includeProfileData && authorId) {
-        const user = await prisma.user.findUnique({
-          where: { id: authorId }
-        });
-
-        if (user) {
-          const member = workspaceId
-            ? await prisma.workspaceMember.findUnique({
-                where: {
-                  userId_workspaceId: { userId: user.id, workspaceId },
-                },
-                select: {
-                  id: true,
-                  role: true,
-                  displayName: true,
-                  team: true,
-                  currentFocus: true,
-                  expertise: true,
-                  slackId: true,
-                },
-              })
-            : null;
-
-          const whereCondition = {
-            authorId: user.id,
-          };
-
-          const [postCount, commentCount, reactionsReceived] = await Promise.all([
-            prisma.post.count({ where: whereCondition }),
-            prisma.comment.count({
-              where: {
-                authorId: user.id,
-              },
-            }),
-            prisma.reaction.count({
-              where: {
-                post: whereCondition,
-              },
-            }),
-          ]);
-
-          emptyResult.user = {
-            ...user,
-            name: member?.displayName ?? user.name,
-            team: member?.team ?? user.team,
-            currentFocus: member?.currentFocus ?? user.currentFocus,
-            expertise: member?.expertise ?? user.expertise,
-            role: member?.role ?? user.role,
-            workspaceMemberId: member?.id ?? null,
-          };
-
-          emptyResult.stats = {
-            postCount,
-            commentCount,
-            reactionsReceived
-          };
-        }
-      }
-      
-      return emptyResult;
-    }
-    
-    // Include workspaceId IN filter
-    query.workspaceId = {
-      in: accessibleWorkspaces.map(w => w.id)
-    };
-  }
-  
   // Filter by tag if provided
   const tagFilter = tag 
     ? {
@@ -312,25 +192,14 @@ export async function getPosts({
           })
         : null;
 
-      const whereCondition = resolvedWorkspaceId
-        ? {
-            authorId: user.id,
-            workspaceId: resolvedWorkspaceId,
-          }
-        : {
-            authorId: user.id,
-          };
+      const whereCondition = { ...access, authorId: user.id };
 
       const [postCount, commentCount, reactionsReceived] = await Promise.all([
         prisma.post.count({ where: whereCondition }),
         prisma.comment.count({
           where: {
             authorId: user.id,
-            ...(resolvedWorkspaceId && {
-              post: {
-                workspaceId: resolvedWorkspaceId,
-              },
-            }),
+            post: access,
           },
         }),
         prisma.reaction.count({
@@ -381,12 +250,10 @@ export async function getPostById(postId: string) {
     throw new Error('User not found');
   }
   
-  const post = await prisma.post.findUnique({
-    where: {
-      id: postId,
-    },
+  const post = await prisma.post.findFirst({
+    where: postAccessWhere(postId, user.id),
     include: {
-      author: true,
+      author: { select: userSelectFields },
       tags: true,
       workspace: {
         select: {
@@ -394,7 +261,8 @@ export async function getPostById(postId: string) {
           name: true,
           members: {
             where: {
-              userId: user.id
+              userId: user.id,
+              status: true
             },
             select: {
               id: true
@@ -405,7 +273,7 @@ export async function getPostById(postId: string) {
       },
       comments: {
         include: {
-          author: true,
+          author: { select: userSelectFields },
           reactions: {
             include: {
               author: {
@@ -440,15 +308,6 @@ export async function getPostById(postId: string) {
     throw new Error('Post not found');
   }
   
-  // Check if user has access to the workspace this post belongs to
-  const isWorkspaceOwner = post.workspace?.ownerId === user.id;
-  const isMember = post.workspace?.members && post.workspace.members.length > 0;
-  const hasAccess = isWorkspaceOwner || isMember;
-  
-  if (!hasAccess) {
-    throw new Error('You do not have access to this post');
-  }
-
   return post;
 }
 
@@ -502,10 +361,7 @@ export async function createPost(data: {
   const workspace = await prisma.workspace.findFirst({
     where: {
       id: workspaceId,
-      OR: [
-        { ownerId: user.id },
-        { members: { some: { userId: user.id } } }
-      ]
+      ...postWorkspaceAccessWhere(user.id)
     }
   });
 
@@ -666,15 +522,6 @@ export async function updatePost(postId: string, data: {
     throw new Error('Invalid priority');
   }
   
-  // Verify the post exists
-  const existingPost = await prisma.post.findUnique({
-    where: { id: postId },
-  });
-
-  if (!existingPost) {
-    throw new Error('Post not found');
-  }
-  
   // Verify the user is the author of the post
   const user = await prisma.user.findUnique({
     where: {
@@ -686,6 +533,15 @@ export async function updatePost(postId: string, data: {
     throw new Error('User not found');
   }
   
+  // Verify the post exists
+  const existingPost = await prisma.post.findFirst({
+    where: postAccessWhere(postId, user.id),
+  });
+
+  if (!existingPost) {
+    throw new Error('Post not found');
+  }
+
   if (existingPost.authorId !== user.id) {
     throw new Error('Unauthorized to edit this post');
   }
@@ -817,15 +673,6 @@ export async function deletePost(postId: string) {
     throw new Error('Unauthorized');
   }
   
-  // Verify the post exists
-  const existingPost = await prisma.post.findUnique({
-    where: { id: postId },
-  });
-
-  if (!existingPost) {
-    throw new Error('Post not found');
-  }
-  
   // Verify the user is the author of the post
   const user = await prisma.user.findUnique({
     where: {
@@ -837,12 +684,21 @@ export async function deletePost(postId: string) {
     throw new Error('User not found');
   }
   
+  // Verify the post exists
+  const existingPost = await prisma.post.findFirst({
+    where: postAccessWhere(postId, user.id),
+  });
+
+  if (!existingPost) {
+    throw new Error('Post not found');
+  }
+
   if (existingPost.authorId !== user.id) {
     throw new Error('Unauthorized to delete this post');
   }
   
   // Record deletion action and delete the post
-  await prisma.$transaction(async (tx) => {
+  await deletePostWithComments(postId, user.id, async (tx) => {
     // Record the deletion action before deleting using normal Prisma client
     await tx.postAction.create({
       data: {
@@ -863,10 +719,6 @@ export async function deletePost(postId: string) {
       },
     });
 
-    // Delete the post - Prisma cascade will handle related records
-    await tx.post.delete({
-      where: { id: postId },
-    });
   });
   
   return true;
@@ -878,7 +730,7 @@ export async function deletePost(postId: string) {
 export async function getUserPosts(userId: string, workspaceId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.email || !session.user.id) {
     throw new Error('Unauthorized');
   }
   
@@ -886,10 +738,7 @@ export async function getUserPosts(userId: string, workspaceId: string) {
   const isWorkspaceMember = await prisma.workspace.findFirst({
     where: {
       id: workspaceId,
-      OR: [
-        { ownerId: session.user.id },
-        { members: { some: { userId: session.user.id } } }
-      ]
+      ...postWorkspaceAccessWhere(session.user.id)
     }
   });
   
@@ -901,18 +750,19 @@ export async function getUserPosts(userId: string, workspaceId: string) {
   const userPosts = await prisma.post.findMany({
     where: {
       authorId: userId,
-      workspaceId: workspaceId
+      workspaceId: workspaceId,
+      workspace: postWorkspaceAccessWhere(session.user.id)
     },
     orderBy: [
       { isPinned: "desc" }, // Pinned posts first
       { createdAt: "desc" }, // Then by creation date
     ],
     include: {
-      author: true,
+      author: { select: userSelectFields },
       tags: true,
       comments: {
         include: {
-          author: true,
+          author: { select: userSelectFields },
         },
         orderBy: {
           createdAt: "asc",
@@ -948,20 +798,9 @@ export async function resolveBlockerPost(postId: string) {
   }
   
   // Get the post with workspace information
-  const post = await prisma.post.findUnique({
-    where: { id: postId },
-    include: {
-      workspace: {
-        select: {
-          id: true,
-          ownerId: true,
-          members: {
-            where: { userId: user.id },
-            select: { role: true }
-          }
-        }
-      }
-    }
+  const post = await prisma.post.findFirst({
+    where: postAccessWhere(postId, user.id),
+    select: { id: true, workspaceId: true, authorId: true, type: true },
   });
 
   if (!post) {
@@ -1006,12 +845,12 @@ export async function resolveBlockerPost(postId: string) {
         resolvedById: user.id,
       },
       include: {
-        author: true,
+        author: { select: userSelectFields },
         workspace: true,
         tags: true,
         comments: {
           include: {
-            author: true,
+            author: { select: userSelectFields },
           },
           orderBy: {
             createdAt: "asc",
@@ -1077,48 +916,17 @@ export async function getPostActions(postId: string) {
     throw new Error('User not found');
   }
   
-  // Verify user has access to the post
-  const post = await prisma.post.findUnique({
-    where: { id: postId },
-    include: {
-      workspace: {
-        select: {
-          id: true,
-          ownerId: true,
-          members: {
-            where: { userId: user.id },
-            select: { id: true }
-          }
-        }
-      }
-    }
-  });
-
+  const access = postAccessWhere(postId, user.id);
+  const post = await prisma.post.findFirst({ where: access, select: { id: true } });
   if (!post) {
     throw new Error('Post not found');
   }
-  
-  // Check if user has access to the workspace
-  if (!post.workspaceId) {
-    // If no workspace, only author can view
-    if (post.authorId !== user.id) {
-      throw new Error('You do not have access to this post');
-    }
-  } else {
-    // Check if user is a member of the workspace
-    const isWorkspaceMember = post.workspace?.members && post.workspace.members.length > 0;
-    const isWorkspaceOwner = post.workspace?.ownerId === user.id;
-    const isAuthor = post.authorId === user.id;
-    
-    if (!isAuthor && !isWorkspaceOwner && !isWorkspaceMember) {
-      throw new Error('You do not have access to this post');
-    }
-  }
-  
+
   // Get action history using normal Prisma client
   const actions = await prisma.postAction.findMany({
     where: {
       postId: postId,
+      post: access,
     },
     include: {
       user: {
