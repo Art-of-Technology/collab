@@ -142,6 +142,7 @@ function fixture() {
   dependencies['@/lib/issue-references'] = load('src/lib/issue-references.ts', dependencies);
   dependencies['@/lib/session'] = load('src/lib/session.ts', dependencies);
   dependencies['@/lib/github/repository-access'] = load('src/lib/github/repository-access.ts', dependencies);
+  dependencies['@/lib/github/version-recovery'] = load('src/lib/github/version-recovery.ts', dependencies);
   dependencies['@/lib/post-access'] = load('src/lib/post-access.ts', dependencies);
   dependencies['@/lib/feature-access'] = load('src/lib/feature-access.ts', dependencies);
   dependencies['@/lib/notification-access'] = load('src/lib/notification-access.ts', dependencies);
@@ -2064,12 +2065,13 @@ for (const endpoint of ['workspaces/[workspaceId]/planning/activity', 'timeline/
       assert.equal(body.includes('Historic private status'), false);
       assert.equal(body.includes('activity-0'), false);
       assert.equal(body.includes('activity-1'), false);
-      assert.equal(body.includes('current-public-status'), true);
+      assert.equal(body.includes('current-public-status'), !missing);
       const result = JSON.parse(body);
-      if (result.stats) assert.equal(result.stats.todayCount, 1);
-      if (endpoint === 'apps/auth/workspace/activity') assert.equal(result.pagination.total, 1);
+      if (result.stats) assert.equal(result.stats.todayCount, missing ? 0 : 1);
+      if (endpoint === 'apps/auth/workspace/activity') assert.equal(result.pagination.total, missing ? 0 : 1);
     }
     assert.equal(accessedStatuses.includes('historic-private-status'), false);
+    activities.forEach(row => { row.itemId = current.id; });
     joined.ownerId = 'alice';
     assert.equal(JSON.stringify(await (await call()).json()).includes('historic-private-status'), true);
     assert.deepEqual(f.writes, []);
@@ -2322,7 +2324,8 @@ for (const association of ['project', 'status']) {
 
 test('historical app project activity excludes denied issue associations', async () => {
   const f = appIssueSubrouteFixture('status');
-  const activity = { id: 'activity', itemType: 'ISSUE', itemId: f.issue.id, action: 'UPDATED', newValue: 'private-content', user: f.state.user };
+  const activity = { id: 'activity', itemType: 'ISSUE', itemId: f.issue.id, action: 'UPDATED', newValue: 'private-content', user: f.state.user,
+    workspaceId: f.issue.workspaceId, projectId: f.issue.projectId, oldStatusId: null, newStatusId: null, fieldName: null };
   f.db.issueActivity.findMany = async ({ where }) => matches(activity, where) ? [activity] : [];
   const invoke = async () => {
     const response = await f.route('apps/auth/projects/[projectId]/activity').GET(f.request(),
@@ -2415,8 +2418,8 @@ for (const association of ['project', 'status']) {
     const response = await f.route('issues/[issueId]').DELETE(f.request('DELETE', own.id),
       { params: Promise.resolve({ issueId: issue.id }) });
     assert.equal(response.status, 200);
-    assert.deepEqual(f.stored.map(row => row.userId), ['eve']);
-    assert.deepEqual(f.deliveries.map(([id]) => id), ['eve']);
+    assert.deepEqual(f.stored, []);
+    assert.deepEqual(f.deliveries, []);
   });
 }
 
@@ -2479,7 +2482,7 @@ for (const endpoint of ['workspaces/[workspaceId]/planning/activity', 'timeline/
   });
 }
 
-test('activity missing issue requires retained authorized project scope', async () => {
+test('activity missing issue fails closed despite retained project scope', async () => {
   const f = activitySnapshotFixture();
   for (const projectId of [f.rows[0].projectId, f.rows[2].projectId, undefined]) {
     await f.producer.trackFieldChanges({ itemType: 'ISSUE', itemId: 'deleted-issue', userId: 'alice', workspaceId: f.own.id,
@@ -2490,9 +2493,9 @@ test('activity missing issue requires retained authorized project scope', async 
   const response = await f.call('apps/auth/workspace/activity');
   assert.equal(response.status, 200);
   const result = await response.json();
-  assert.deepEqual(result.activities.map(row => row.id), ['snapshot-0', 'snapshot-3']);
-  assert.equal(result.pagination.total, 2);
-  assert.deepEqual(f.snapshotsRead, ['snapshot-0', 'snapshot-3']);
+  assert.deepEqual(result.activities.map(row => row.id), ['snapshot-3']);
+  assert.equal(result.pagination.total, 1);
+  assert.deepEqual(f.snapshotsRead, ['snapshot-3']);
   assert.equal(f.activities.length, 4);
 });
 
@@ -2606,7 +2609,7 @@ for (const endpoint of ['apps/auth/workspace/activity', 'workspaces/[workspaceId
   test(`activity concurrent first snapshot never bypasses checked IDs in ${endpoint}`, async () => {
     const f = activitySnapshotFixture(), own = f.rows[0];
     const field = endpoint === 'timeline/unified' ? 'priority' : 'title';
-    await f.producer.trackFieldChanges({ itemType: 'ISSUE', itemId: 'deleted-authorized', userId: 'alice',
+    await f.producer.trackFieldChanges({ itemType: 'ISSUE', itemId: own.id, userId: 'alice',
       workspaceId: f.own.id, projectId: own.projectId,
       changes: [{ field, oldValue: 'low', newValue: 'high' }] });
     const read = f.db.issueActivity.findMany;
@@ -3112,4 +3115,67 @@ test('time tracking project constraint never broadens for revoked empty or missi
   const restored = JSON.stringify(await (await invoke(f.rows[2].projectId)).json());
   assert.equal(restored.includes('protected-revoked'), true);
   assert.equal(restored.includes('protected-own'), false);
+});
+
+for (const ordering of ['delete-first', 'revoke-first']) {
+  test(`deleted worklog activity ${ordering} withholds whole payload and count`, async () => {
+    const f = activitySnapshotFixture(), issue = f.rows[0];
+    issue.statusId = 'historic'; issue.projectStatus = { project: f.rows[1].project };
+    issue.timeSpentMinutes = 0;
+    f.db.workLog = { create: async ({ data }) => ({ ...data, id: 'worklog', user: f.state.user, createdAt: new Date() }) };
+    f.db.$transaction = async callback => callback(f.db);
+    const response = await f.route('issues/[issueId]/work-logs').POST(f.request('POST', undefined,
+      { timeSpent: 15, description: 'retained-private-description' }), { params: Promise.resolve({ issueId: issue.id }) });
+    assert.equal(response.status, 201);
+    const read = async () => {
+      const response = await f.call('apps/auth/workspace/activity');
+      assert.equal(response.status, 200); return JSON.stringify(await response.json());
+    };
+    assert.equal((await read()).includes('retained-private-description'), true);
+    if (ordering === 'revoke-first') f.joined.members[0].status = false;
+    f.rows.splice(0, 1);
+    f.joined.members[0].status = false;
+    assert.equal((await read()).includes('retained-private-description'), false);
+    const app = await (await f.call('apps/auth/workspace/activity')).json();
+    assert.deepEqual(app.activities, []); assert.equal(app.pagination.total, 0);
+    assert.equal(f.activities.length, 1);
+    assert.equal(f.activities[0].details.includes('retained-private-description'), true);
+  });
+  test(`deleted notifications ${ordering} preserve rows without exposing payloads`, async () => {
+    const f = scopedNotificationFixture(), issue = f.issues[0];
+    issue.statusId = 'historic'; issue.projectStatus = { project: f.issues[1].project };
+    for (const type of ['ISSUE_DELETED', 'PROJECT_ISSUE_DELETED']) {
+      assert.equal(await f.NotificationService.notifyUsers(['alice'], type, 'retained-key actor deletion', 'bob', { issueId: issue.id }), 1);
+    }
+    if (ordering === 'revoke-first') f.workspaces[1].members[0].status = false;
+    f.issues.splice(0, 1);
+    f.workspaces[1].members[0].status = false;
+    assert.deepEqual(await (await f.route('notifications').GET(f.request())).json(), []);
+    const pushes = f.deliveries.length, writes = f.calls.writes;
+    await f.NotificationService.notifyUsers(['alice'], 'ISSUE_DELETED', 'new-orphan', 'bob', { issueId: issue.id, workspaceId: f.workspaces[0].id });
+    assert.equal(f.deliveries.length, pushes); assert.equal(f.calls.writes, writes);
+    assert.equal(f.stored.length, 2);
+    assert.equal(await f.NotificationService.notifyUsers(['alice'], 'PERSONAL', 'personal-control', 'bob', { personal: true }), 1);
+    assert.deepEqual((await (await f.route('notifications').GET(f.request())).json()).map(row => row.content), ['personal-control']);
+  });
+}
+
+test('changelog regeneration dispatches current inputs and preserves original output', async () => {
+  const f = versionReadFixture(), source = f.versions[1];
+  source.issueAccessInvalidated = true;
+  source.repository = { projectId: f.own.projectId, project: f.own.project };
+  source.major = 1; source.minor = 0; source.patch = 0; source.releaseType = 'PATCH';
+  f.db.$queryRaw = async () => [];
+  f.db.$transaction = async callback => callback(f.db);
+  f.db.version.create = async ({ data }) => { f.writes.push(data); return { id: 'replacement', ...data }; };
+  const old = source.aiChangelog;
+  const response = await f.invoke('generate-changelog', { versionId: source.id, regenerate: true });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.versionId, 'replacement'); assert.equal(body.sourceVersionId, source.id);
+  assert.equal(source.aiChangelog, old); assert.equal(source.issueAccessInvalidated, true);
+  assert.equal(f.inputs.length, 1); assert.equal(f.writes.length, 1);
+  assert.equal(JSON.stringify(f.inputs).includes('saved changelog'), false);
+  assert.equal(JSON.stringify(f.inputs).includes('saved summary'), false);
+  assert.equal(JSON.stringify(f.inputs).includes('protected-own'), true);
 });

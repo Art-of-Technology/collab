@@ -48,14 +48,27 @@ test('saved version provenance survives actual PostgreSQL cascade unlink and sco
       aiSummary: 'retained private summary', aiChangelog: 'retained private changelog' } });
     await version('legacy');
     apply('ALTER TABLE "Version" DROP COLUMN "issueAccessInvalidated";');
-    apply(readFileSync('prisma/migrations/20260924130000_version_access_invalidation/migration.sql', 'utf8'));
-    const dependencies = { 'server-only': {}, '@/lib/prisma': { prisma: db }, '@/lib/session': {} };
+    apply(readFileSync(resolve(process.env.SECURITY_TEST_ROOT || '.', 'prisma/migrations/20260924130000_version_access_invalidation/migration.sql'), 'utf8'));
+    const dependencies = { 'server-only': {}, '@/lib/prisma': { prisma: db }, '@/lib/session': { getCurrentUser: async () => ({ id: 'alice' }) }, '@prisma/client': require('@prisma/client'), 'node:crypto': require('node:crypto') };
     dependencies['@/lib/issue-finder'] = load('src/lib/issue-finder.ts', dependencies);
-    const { versionAccessWhere, releaseAccessWhere } = load('src/lib/github/repository-access.ts', dependencies);
+    dependencies['@/lib/github/repository-access'] = load('src/lib/github/repository-access.ts', dependencies);
+    const { versionAccessWhere, releaseAccessWhere } = dependencies['@/lib/github/repository-access'];
     const visible = id => db.version.findMany({ where: { id, ...versionAccessWhere('alice') } });
     assert.equal((await db.version.findUnique({ where: { id: 'legacy' } })).aiChangelog, 'retained private changelog');
     await version('empty-new');
     assert.equal((await visible('empty-new')).length, 1);
+    await db.projectStatus.createMany({ data: ['todo', 'done'].map(id => ({ id, projectId: 'pa', name: id, displayName: id })) });
+    await db.issue.create({ data: { id: 'ordinary', workspaceId: 'a', projectId: 'pa', statusId: 'todo', title: 'Current authorized title' } });
+    await version('ordinary-version');
+    await db.versionIssue.create({ data: { versionId: 'ordinary-version', issueId: 'ordinary' } });
+    await version('ordinary-child', 'ordinary-version');
+    await db.release.create({ data: { id: 'ordinary-release', repositoryId: 'repo', versionId: 'ordinary-version', tagName: 'ordinary', name: 'Ordinary' } });
+    await db.versionFile.create({ data: { repositoryId: 'repo', versionId: 'ordinary-version', environment: 'ordinary', content: { features: ['ordinary'] } } });
+    await db.issue.update({ where: { id: 'ordinary' }, data: { statusId: 'done' } });
+    assert.equal((await visible('ordinary-version')).length, 1, 'same-scope status change retains history');
+    assert.equal((await visible('ordinary-child')).length, 1);
+    assert.equal(await db.release.count({ where: { id: 'ordinary-release', ...releaseAccessWhere('alice') } }), 1);
+    assert.equal(await db.versionFile.count({ where: { environment: 'ordinary', version: versionAccessWhere('alice') } }), 1);
     for (const operation of ['delete-issue', 'unlink', 'reassign-link', 'delete-status', 'delete-project',
       'delete-workspace', 'move-issue', 'move-project', 'move-status']) {
       const workspaceId = `b-${operation}`, projectId = `p-${operation}`, statusId = `s-${operation}`, issueId = `i-${operation}`;
@@ -94,6 +107,69 @@ test('saved version provenance survives actual PostgreSQL cascade unlink and sco
       await db.version.update({ where: { id: operation }, data: { issueAccessInvalidated: false } });
       assert.equal((await visible(operation)).length, 0, 'invalidation cannot be cleared');
     }
+    const { regenerateVersion } = load('src/lib/github/version-recovery.ts', dependencies);
+    for (const state of ['fresh', 'legacy', 'invalidated']) {
+      const id = state === 'legacy' ? 'legacy' : `recover-${state}`;
+      if (state !== 'legacy') await version(id);
+      await db.versionIssue.create({ data: { versionId: id, issueId: 'ordinary' } });
+      if (state === 'invalidated') await db.version.update({ where: { id }, data: { issueAccessInvalidated: true } });
+      const original = await db.version.findUnique({ where: { id } });
+      let calls = 0;
+      const result = await regenerateVersion('repo', id, 'alice', async issues => {
+        calls++; assert.equal(issues[0].title, 'Current authorized title');
+        assert.equal(JSON.stringify(issues).includes('retained private'), false);
+        return { changelog: 'Fresh changelog', summary: 'Fresh summary' };
+      });
+      assert.equal(calls, 1); assert.equal((await visible(result.id)).length, 1);
+      assert.deepEqual(await db.version.findUnique({ where: { id } }), original);
+      assert.equal(result.aiChangelog, 'Fresh changelog');
+    }
+    for (const change of ['title', 'link', 'scope', 'membership']) {
+      const id = `race-${change}`;
+      await version(id); await db.versionIssue.create({ data: { versionId: id, issueId: 'ordinary' } });
+      const before = await db.version.count();
+      await assert.rejects(regenerateVersion('repo', id, 'alice', async () => {
+        if (change === 'title') await db.issue.update({ where: { id: 'ordinary' }, data: { title: 'Changed concurrently' } });
+        if (change === 'link') await db.versionIssue.deleteMany({ where: { versionId: id } });
+        if (change === 'scope') await db.issue.update({ where: { id: 'ordinary' }, data: { statusId: 'todo' } });
+        if (change === 'membership') await db.workspace.update({ where: { id: 'a' }, data: { ownerId: 'bob' } });
+        return { changelog: 'Discarded generation', summary: 'Discarded summary' };
+      }));
+      assert.equal(await db.version.count(), before);
+      assert.equal((await db.version.findUnique({ where: { id } })).aiChangelog, 'retained private changelog');
+      await db.workspace.update({ where: { id: 'a' }, data: { ownerId: 'alice' } });
+    }
+    let inputDeniedCalls = 0;
+    const beforeInputDenied = await db.version.count();
+    await assert.rejects(regenerateVersion('repo', 'move-status', 'alice', async () => {
+      inputDeniedCalls++; return { changelog: 'Denied', summary: 'Denied' };
+    }));
+    assert.equal(inputDeniedCalls, 0); assert.equal(await db.version.count(), beforeInputDenied);
+    const transact = db.$transaction.bind(db);
+    db.$transaction = (callback, options) => transact(tx => callback(new Proxy(tx, { get(target, key) {
+      if (key !== 'version') return target[key];
+      return new Proxy(target.version, { get(model, method) {
+        if (method !== 'create') return model[method];
+        return async args => {
+          await assert.rejects(transact(async other => {
+            await other.$executeRawUnsafe("SET LOCAL lock_timeout = '50ms'");
+            await other.issue.update({ where: { id: 'ordinary' }, data: { title: 'Must wait until commit' } });
+          }));
+          return model.create(args);
+        };
+      } });
+    } })), options);
+    try {
+      const result = await regenerateVersion('repo', 'legacy', 'alice', async () => ({ changelog: 'Locked output', summary: 'Locked summary' }));
+      assert.equal((await visible(result.id)).length, 1);
+      assert.notEqual((await db.issue.findUnique({ where: { id: 'ordinary' } })).title, 'Must wait until commit');
+    } finally { db.$transaction = transact; }
+    await db.workspace.update({ where: { id: 'a' }, data: { ownerId: 'bob' } });
+    let deniedCalls = 0;
+    const beforeDenied = await db.version.count();
+    await assert.rejects(regenerateVersion('repo', 'legacy', 'alice', async () => { deniedCalls++; return { changelog: 'Denied', summary: 'Denied' }; }));
+    assert.equal(deniedCalls, 0); assert.equal(await db.version.count(), beforeDenied);
+    await db.workspace.update({ where: { id: 'a' }, data: { ownerId: 'alice' } });
     assert.equal((await visible('legacy')).length, 0);
   } finally {
     if (db) await db.$disconnect();

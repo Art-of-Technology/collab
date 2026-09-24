@@ -1,3 +1,4 @@
+import { regenerateVersion } from '@/lib/github/version-recovery';
 import { requireRepositoryAccess, versionAccessWhere, releaseAccessWhere } from '@/lib/github/repository-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +13,7 @@ export async function POST(
     const { repositoryId } = await params;
     const userId = await requireRepositoryAccess(repositoryId);
 
-    let body: { releaseId?: string; versionId?: string; options?: Record<string, unknown> } = {};
+    let body: { releaseId?: string; versionId?: string; regenerate?: boolean; options?: Record<string, unknown> } = {};
     try {
       body = await request.json();
     } catch {
@@ -20,6 +21,25 @@ export async function POST(
     }
 
     const { releaseId, versionId, options } = body;
+    if (body.regenerate === true) {
+      if (typeof versionId !== 'string' || !versionId || releaseId) {
+        return NextResponse.json({ error: 'Regeneration requires a versionId' }, { status: 400 });
+      }
+      const replacement = await regenerateVersion(repositoryId, versionId, userId, async issues => {
+        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const result = await client.chat.completions.create({
+          model: 'gpt-4',
+          messages: [{ role: 'system', content: 'Write a concise changelog using only the supplied current issues.' },
+            { role: 'user', content: JSON.stringify(issues) }],
+          max_tokens: 2500,
+        });
+        const changelog = result.choices[0]?.message?.content || '';
+        return { changelog, summary: changelog.split('\n').filter(Boolean).slice(0, 2).join(' ') };
+      });
+      return NextResponse.json({ versionId: replacement.id, sourceVersionId: versionId,
+        changelog: replacement.aiChangelog, summary: replacement.aiSummary });
+    }
+
 
     const {
       includeCommits = true,
@@ -312,7 +332,10 @@ ${format === 'plain' ? '- Use plain text with clear structure and bullet points'
       releaseName: changelogData.releaseName,
     });
   } catch (error) {
-    if (error instanceof Error && ['Unauthorized', 'Repository not found'].includes(error.message)) {
+    if (error instanceof Error && error.message === 'Recovery inputs changed') {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    if (error instanceof Error && ['Unauthorized', 'Repository not found', 'Version not found'].includes(error.message)) {
       return NextResponse.json({ error: error.message }, { status: error.message === 'Unauthorized' ? 401 : 404 });
     }
     console.error('[GENERATE_CHANGELOG_POST]', error);

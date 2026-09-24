@@ -241,7 +241,7 @@ export class NotificationService {
     } = options;
 
     try {
-      const refs = { ...options, deletedIssue: type === 'ISSUE_DELETED' || type === 'PROJECT_ISSUE_DELETED' };
+      const refs = options;
       const scope = await resolveNotificationScope(refs);
       if (!scope) return 0;
       const baseData = {
@@ -370,7 +370,7 @@ export class NotificationService {
     workspaceId?: string
   ): Promise<void> {
     try {
-      if (!await canReceiveNotification(userId, { issueId, postId, workspaceId, deletedIssue: notificationType === 'ISSUE_DELETED' || notificationType === 'PROJECT_ISSUE_DELETED' })) return;
+      if (!await canReceiveNotification(userId, { issueId, postId, workspaceId })) return;
 
       // Build the URL based on notification type
       let url = "/";

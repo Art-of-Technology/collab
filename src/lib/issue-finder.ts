@@ -43,23 +43,18 @@ export async function activityReadAccessWhere(userId: string, where: Prisma.Issu
     distinct: ['itemId', 'workspaceId', 'projectId'],
   });
   const issueIds = [...new Set(references.map(row => row.itemId))];
-  const [existing, accessible, workspaces, projects] = await Promise.all([
-    prisma.issue.findMany({ where: { id: { in: issueIds } }, select: { id: true } }),
+  const [accessible, workspaces, projects] = await Promise.all([
     prisma.issue.findMany({ where: { id: { in: issueIds }, ...issueReadAccessWhere(userId) }, select: { id: true } }),
     prisma.workspace.findMany({ where: { id: { in: references.map(row => row.workspaceId) }, ...issueAccessWhere(userId).workspace }, select: { id: true } }),
     prisma.project.findMany({ where: { id: { in: references.flatMap(row => row.projectId ? [row.projectId] : []) }, ...issueAccessWhere(userId) }, select: { id: true } }),
   ]);
   const projectIds = projects.map(project => project.id);
-  const existingIds = new Set(existing.map(issue => issue.id));
   return {
     AND: [
       scoped,
       { workspaceId: { in: workspaces.map(workspace => workspace.id) } },
       { OR: [{ projectId: null }, { projectId: { in: projectIds } }] },
-      { OR: [
-        { itemId: { in: accessible.map(issue => issue.id) } },
-        { itemId: { in: issueIds.filter(id => !existingIds.has(id)) }, projectId: { in: projectIds } },
-      ] },
+      { itemId: { in: accessible.map(issue => issue.id) } },
     ],
   };
 }

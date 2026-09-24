@@ -11,7 +11,6 @@ export type NotificationReferences = {
   issueId?: string;
   workspaceId?: string;
   personal?: boolean;
-  deletedIssue?: boolean;
 };
 
 export async function notificationAccessWhere(userId: string): Promise<Prisma.NotificationWhereInput> {
@@ -21,7 +20,6 @@ export async function notificationAccessWhere(userId: string): Promise<Prisma.No
     distinct: ['issueId'],
   });
   const ids = references.flatMap(row => row.issueId ? [row.issueId] : []);
-  const existing = ids.length ? await prisma.issue.findMany({ where: { id: { in: ids } }, select: { id: true } }) : [];
   const accessible = ids.length ? await prisma.issue.findMany({
     where: { id: { in: ids }, ...issueReadAccessWhere(userId) }, select: { id: true },
   }) : [];
@@ -37,7 +35,6 @@ export async function notificationAccessWhere(userId: string): Promise<Prisma.No
       { OR: [
         { issueId: null },
         { issueId: { in: accessible.map(issue => issue.id) } },
-        { type: { in: ['ISSUE_DELETED', 'PROJECT_ISSUE_DELETED'] }, issueId: { in: ids.filter(id => !existing.some(issue => issue.id === id)) } },
       ] },
       { OR: [
         { workspace },
@@ -66,8 +63,8 @@ export async function resolveNotificationScope(refs: NotificationReferences) {
   }
   if (refs.issueId) {
     const issue = await prisma.issue.findUnique({ where: { id: refs.issueId }, select: { workspaceId: true } });
-    if (!issue && !(refs.deletedIssue && refs.workspaceId)) return null;
-    if (issue) workspaces.push(issue.workspaceId);
+    if (!issue) return null;
+    workspaces.push(issue.workspaceId);
   }
   if (refs.featureRequestId) {
     const feature = await prisma.featureRequest.findUnique({ where: { id: refs.featureRequestId }, select: { workspaceId: true, project: { select: { workspaceId: true } } } });
@@ -100,8 +97,7 @@ export async function resolveNotificationScope(refs: NotificationReferences) {
 export async function canReceiveNotification(userId: string, refs: NotificationReferences): Promise<boolean> {
   if (!await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })) return false;
   if (refs.issueId) {
-    const issue = await prisma.issue.findUnique({ where: { id: refs.issueId }, select: { id: true } });
-    if (issue && !await prisma.issue.findFirst({
+    if (!await prisma.issue.findFirst({
       where: { id: refs.issueId, ...issueReadAccessWhere(userId) }, select: { id: true },
     })) return false;
   }
