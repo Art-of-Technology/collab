@@ -1,5 +1,6 @@
+import { PUBLIC_REPOSITORY_SELECT } from '@/lib/github/public-repository';
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { EncryptionService } from "@/lib/encryption";
@@ -11,7 +12,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -24,12 +25,13 @@ export async function GET(
           workspace: {
             OR: [
               { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } },
+              { members: { some: { userId: session.user.id, status: true } } },
             ],
           },
         },
       },
-      include: {
+      select: {
+        ...PUBLIC_REPOSITORY_SELECT,
         project: {
           include: { workspace: true },
         },
@@ -61,10 +63,7 @@ export async function GET(
       return NextResponse.json({ error: "Repository not found" }, { status: 404 });
     }
 
-    // Exclude sensitive fields from response
-    const { accessToken, webhookSecret, ...safeRepository } = repository;
-
-    return NextResponse.json({ repository: safeRepository });
+    return NextResponse.json({ repository });
   } catch (error) {
     console.error('[GITHUB_REPOSITORY_GET]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -78,7 +77,7 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -94,7 +93,7 @@ export async function DELETE(
           workspace: {
             OR: [
               { ownerId: session.user.id }, // Workspace owners
-              { members: { some: { userId: session.user.id } } }, // Workspace members
+              { members: { some: { userId: session.user.id, status: true } } }, // Workspace members
             ],
           },
         },

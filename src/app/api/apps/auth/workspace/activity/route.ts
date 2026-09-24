@@ -1,3 +1,4 @@
+import { activityReadAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Workspace Activity
  * GET /api/apps/auth/workspace/activity - Get workspace-wide activity feed
@@ -57,7 +58,7 @@ export const GET = withAppAuth(
 
       const [activities, total] = await Promise.all([
         prisma.issueActivity.findMany({
-          where,
+          where: await activityReadAccessWhere(context.user.id, where),
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
@@ -72,13 +73,13 @@ export const GET = withAppAuth(
             },
           },
         }),
-        prisma.issueActivity.count({ where }),
+        prisma.issueActivity.count({ where: await activityReadAccessWhere(context.user.id, where)}),
       ]);
 
       // Get issue details for context
       const activityIssueIds = [...new Set(activities.map(a => a.itemId))];
       const issues = await prisma.issue.findMany({
-        where: { id: { in: activityIssueIds } },
+        where: { AND: [issueReadAccessWhere(context.user.id), { id: { in: activityIssueIds } }] },
         select: {
           id: true,
           issueKey: true,

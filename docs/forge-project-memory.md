@@ -87,6 +87,8 @@ A deliberately delayed save verified all form inputs and actions are natively
 disabled while pending, then the saved draft is read back. This prevents edits
 typed during an in-flight save from being silently discarded by its response.
 
+Gateway identity integration and its remaining native acceptance requirements
+are documented in the [request identity contract](maestro-request-identity.md).
 Outstanding: independent pipeline review, live writer/binding validation,
-gateway identity integration, full agent context consumption and staging
-acceptance. No production configuration, token or repository was changed.
+full agent context consumption and staging acceptance. No production
+configuration, token or repository was changed.

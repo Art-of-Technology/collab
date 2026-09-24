@@ -14,7 +14,7 @@ export default function SessionProvider({ children, ...overrides }: Props) {
     <NextAuthSessionProvider
       refetchOnWindowFocus
       refetchWhenOffline={false}
-      refetchInterval={5 * 60}
+      refetchInterval={60}
       {...overrides}
     >
       {children}

@@ -36,6 +36,22 @@ export async function POST(
 
     const { workspaceId } = validation.data;
 
+    // Check workspace membership and admin role
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        id: workspaceId,
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true, role: 'ADMIN' } } },
+        ],
+      },
+      select: { id: true, name: true, slug: true },
+    });
+
+    if (!workspace) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     // Find the app
     const app = await prisma.app.findUnique({
       where: { slug },
@@ -64,28 +80,6 @@ export async function POST(
     const installation = app.installations[0];
     if (!installation) {
       return NextResponse.json({ error: 'App not installed in this workspace' }, { status: 404 });
-    }
-
-    // Check workspace membership and admin role
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId
-        }
-      },
-      include: {
-        workspace: {
-          select: {
-            name: true,
-            slug: true
-          }
-        }
-      }
-    });
-
-    if (!membership || membership.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     // Perform uninstallation in a transaction
@@ -147,8 +141,8 @@ export async function POST(
         {
           userId: session.user.id,
           workspaceId,
-          workspaceName: membership.workspace.name,
-          workspaceSlug: membership.workspace.slug,
+          workspaceName: workspace.name,
+          workspaceSlug: workspace.slug,
           source: 'api'
         },
         { async: true }

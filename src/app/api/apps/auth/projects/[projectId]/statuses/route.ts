@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Project Statuses Endpoint
  * GET /api/apps/auth/projects/:projectId/statuses - Get workflow statuses
@@ -42,10 +43,10 @@ export const GET = withAppAuth(
       const statusesWithCounts = await Promise.all(
         statuses.map(async (status) => {
           const count = await prisma.issue.count({
-            where: {
+            where: { AND: [issueReadAccessWhere(context.user.id), {
               projectId,
               statusId: status.id,
-            },
+            }] },
           });
 
           return {

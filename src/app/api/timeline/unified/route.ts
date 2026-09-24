@@ -1,3 +1,4 @@
+import { activityReadAccessWhere, issueAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 /**
  * Unified Timeline API
  * GET /api/timeline/unified - Get workspace-wide unified activity feed
@@ -5,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -47,12 +48,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify workspace access
-    const membership = await prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId,
-        userId: session.user.id,
-      },
-    });
+    const membership = await userHasWorkspaceAccess(session.user.id, workspaceId);
 
     if (!membership) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
@@ -74,7 +70,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch issue activities
     const activities = await prisma.issueActivity.findMany({
-      where: activityWhere,
+      where: await activityReadAccessWhere(session.user.id, activityWhere),
       take: limit,
       orderBy: { createdAt: "desc" },
       include: {
@@ -87,6 +83,7 @@ export async function GET(request: NextRequest) {
           },
         },
         oldStatus: {
+          where: { project: issueAccessWhere(session.user.id) },
           select: {
             id: true,
             name: true,
@@ -96,6 +93,7 @@ export async function GET(request: NextRequest) {
           },
         },
         newStatus: {
+          where: { project: issueAccessWhere(session.user.id) },
           select: {
             id: true,
             name: true,
@@ -110,7 +108,7 @@ export async function GET(request: NextRequest) {
     // Get issue details for context
     const issueIds = [...new Set(activities.map((a) => a.itemId))];
     const issues = await prisma.issue.findMany({
-      where: { id: { in: issueIds } },
+      where: { AND: [issueReadAccessWhere(session.user.id), { id: { in: issueIds } }] },
       include: {
         projectStatus: true,
         project: true,
@@ -262,20 +260,20 @@ export async function GET(request: NextRequest) {
 
     const [todayActivityCount, weekActivityCount] = await Promise.all([
       prisma.issueActivity.count({
-        where: {
+        where: await activityReadAccessWhere(session.user.id, {
           workspaceId,
           action: { in: MEANINGFUL_ACTIONS },
           createdAt: { gte: todayStart },
-        },
+        }),
       }),
       prisma.issueActivity.count({
-        where: {
+        where: await activityReadAccessWhere(session.user.id, {
           workspaceId,
           action: { in: MEANINGFUL_ACTIONS },
           createdAt: {
             gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
           },
-        },
+        }),
       }),
     ]);
 

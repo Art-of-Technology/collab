@@ -1,6 +1,6 @@
 'use server';
 
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
@@ -12,7 +12,7 @@ import { getWorkspaceId } from '@/lib/workspace-helpers';
 export async function getWorkspaceLabels() {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -64,7 +64,7 @@ export async function createLabel(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -98,7 +98,7 @@ export async function createLabel(data: {
         id: workspaceId,
         OR: [
           { ownerId: user.id },
-          { members: { some: { userId: user.id } } }
+          { members: { some: { userId: user.id, status: true } } }
         ]
       }
     });
@@ -144,7 +144,7 @@ export async function updateLabel(labelId: string, data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -181,7 +181,7 @@ export async function updateLabel(labelId: string, data: {
         id: label.workspaceId,
         OR: [
           { ownerId: user.id },
-          { members: { some: { userId: user.id } } }
+          { members: { some: { userId: user.id, status: true } } }
         ]
       }
     });
@@ -227,7 +227,7 @@ export async function updateLabel(labelId: string, data: {
 export async function deleteLabel(labelId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -264,7 +264,7 @@ export async function deleteLabel(labelId: string) {
         id: label.workspaceId,
         OR: [
           { ownerId: user.id },
-          { members: { some: { userId: user.id } } }
+          { members: { some: { userId: user.id, status: true } } }
         ]
       }
     });

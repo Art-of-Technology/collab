@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
             {
               OR: [
                 { ownerId: currentUser.id },
-                { members: { some: { userId: currentUser.id } } }
+                { members: { some: { userId: currentUser.id, status: true } } }
               ]
             }
           ]

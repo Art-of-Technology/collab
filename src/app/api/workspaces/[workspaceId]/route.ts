@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 
@@ -134,6 +134,7 @@ export async function PATCH(
         members: {
           where: {
             userId: session.user.id,
+            status: true,
             role: { in: ['owner', 'admin'] }
           }
         }

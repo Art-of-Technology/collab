@@ -1,3 +1,4 @@
+import { requireRepositoryAccess, versionAccessWhere } from '@/lib/github/repository-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -8,6 +9,7 @@ export async function GET(
 ) {
   try {
     const { repositoryId } = await params;
+    const userId = await requireRepositoryAccess(repositoryId);
     const { searchParams } = new URL(request.url);
     
     const environment = searchParams.get('environment');
@@ -17,6 +19,7 @@ export async function GET(
     // Build filter conditions
     const where: any = {
       repositoryId,
+      ...versionAccessWhere(userId),
     };
 
     if (environment && environment !== 'all') {
@@ -68,6 +71,7 @@ export async function GET(
           orderBy: { createdAt: 'desc' },
         },
         parentVersion: {
+          where: versionAccessWhere(userId),
           select: {
             id: true,
             version: true,
@@ -75,6 +79,7 @@ export async function GET(
           },
         },
         childVersions: {
+          where: versionAccessWhere(userId),
           select: {
             id: true,
             version: true,
@@ -99,6 +104,9 @@ export async function GET(
 
     return NextResponse.json({ versions: formattedVersions });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Repository not found'].includes(error.message)) {
+      return NextResponse.json({ error: error.message }, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error('[VERSIONS_GET]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { notFound } from "next/navigation";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
@@ -46,7 +46,7 @@ export default async function ProjectFeatureRequestPage({ params }: FeatureReque
   const { workspaceId: workspaceSlugOrId, projectSlug, id } = await params;
   const session = await getServerSession(authConfig);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     redirect('/login');
   }
 
@@ -60,13 +60,10 @@ export default async function ProjectFeatureRequestPage({ params }: FeatureReque
   const workspace = await prisma.workspace.findFirst({
     where: {
       id: workspaceId,
-      members: {
-        some: {
-          user: {
-            email: session.user.email
-          }
-        }
-      }
+      AND: { OR: [
+        { ownerId: session.user.id },
+        { members: { some: { userId: session.user.id, status: true } } }
+      ] }
     }
   });
 

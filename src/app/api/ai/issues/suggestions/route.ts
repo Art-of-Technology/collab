@@ -1,6 +1,6 @@
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { activityReadAccessWhere, issueReadAccessWhere, issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -36,9 +36,9 @@ export async function GET(req: Request) {
 
     // Get the current issue with all related data
     const issue = await prisma.issue.findFirst({
-      where: { id: issueId, workspaceId },
+      where: { AND: [issueReadAccessWhere(session.user.id), { id: issueId, workspaceId }] },
       include: {
-        labels: true,
+        labels: { where: issueAccessWhere(session.user.id) },
         projectStatus: true,
         assignee: true,
         project: {
@@ -165,7 +165,7 @@ export async function GET(req: Request) {
 
     // 6. Check for stale issue
     const lastActivity = (await prisma.issueActivity.findFirst({
-      where: { itemId: issue.id, itemType: 'ISSUE', workspaceId },
+      where: await activityReadAccessWhere(session.user.id, { itemId: issue.id, itemType: 'ISSUE', workspaceId }),
       orderBy: { createdAt: 'desc' }, select: { createdAt: true },
     }))?.createdAt;
     if (lastActivity) {
@@ -190,12 +190,15 @@ export async function GET(req: Request) {
         project: { workspaceId },
         id: { not: issueId },
         title: { contains: issue.title.split(' ')[0], mode: 'insensitive' },
+        AND: [issueReadAccessWhere(session.user.id)],
       },
     });
 
     if (similarIssuesCount > 0) {
       const existingLinks = await prisma.issueRelation.count({
         where: {
+          sourceIssue: issueReadAccessWhere(session.user.id),
+          targetIssue: issueReadAccessWhere(session.user.id),
           OR: [
             { sourceIssueId: issueId },
             { targetIssueId: issueId },

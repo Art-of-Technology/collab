@@ -1,3 +1,4 @@
+import { requireRepositoryAccess, releaseAccessWhere } from '@/lib/github/repository-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -32,6 +33,7 @@ export async function GET(
 ) {
   try {
     const { repositoryId } = await params;
+    const userId = await requireRepositoryAccess(repositoryId);
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '20');
     const type = searchParams.get('type');
@@ -157,7 +159,7 @@ export async function GET(
     // Get releases
     if (!type || type === 'release') {
       const releases = await prisma.release.findMany({
-        where: { repositoryId },
+        where: { ...releaseAccessWhere(userId), repositoryId },
         orderBy: { publishedAt: 'desc' },
         take: Math.floor(limit / 4),
         select: {
@@ -227,6 +229,9 @@ export async function GET(
 
     return NextResponse.json({ activities: activities.slice(0, limit) });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Repository not found'].includes(error.message)) {
+      return NextResponse.json({ error: error.message }, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error('[ACTIVITY_GET]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

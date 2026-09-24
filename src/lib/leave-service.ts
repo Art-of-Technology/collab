@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth-options";
 import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
 import { differenceInDays } from "date-fns";
@@ -87,7 +87,7 @@ async function updateLeaveBalance(data: LeaveBalanceUpdate): Promise<void> {
 export async function processLeaveRequestAction(data: LeaveRequestActionData) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || data.actionById !== session.user.id) {
     throw new Error("Unauthorized");
   }
 
@@ -95,7 +95,13 @@ export async function processLeaveRequestAction(data: LeaveRequestActionData) {
   return await prisma.$transaction(async (tx) => {
     // Get the leave request with all related data
     const leaveRequest = await tx.leaveRequest.findUnique({
-      where: { id: data.requestId },
+      where: {
+        id: data.requestId,
+        policy: { workspace: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ] } }
+      },
       include: {
         user: {
           select: { id: true, name: true, email: true },

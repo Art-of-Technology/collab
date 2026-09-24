@@ -1,8 +1,11 @@
 'use server';
 
+import { getCurrentUser } from '@/lib/session';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { requirePostAccess } from '@/lib/post-access';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { extractMentionUserIds } from '@/utils/mentions';
 import { NotificationService, NotificationType } from '@/lib/notification-service';
 
@@ -44,7 +47,7 @@ export async function getPosts({
 }) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -69,7 +72,11 @@ export async function getPosts({
         OR: [
           { id: workspaceId },
           { slug: workspaceId }
-        ]
+        ],
+        AND: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ] }
       },
       select: { id: true }
     });
@@ -84,26 +91,6 @@ export async function getPosts({
         nextCursor: null
       };
       
-      // If includeProfileData is requested, still fetch user and stats
-      if (includeProfileData && authorId) {
-        const user = await prisma.user.findUnique({
-          where: { id: authorId }
-        });
-
-        if (user) {
-          const whereCondition = { authorId: user.id };
-
-          const [postCount, commentCount, reactionsReceived] = await Promise.all([
-            prisma.post.count({ where: whereCondition }),
-            prisma.comment.count({ where: { authorId: user.id } }),
-            prisma.reaction.count({ where: { post: whereCondition } }),
-          ]);
-
-          emptyResult.user = { ...user };
-          emptyResult.stats = { postCount, commentCount, reactionsReceived };
-        }
-      }
-      
       return emptyResult;
     }
   } else {
@@ -112,7 +99,7 @@ export async function getPosts({
       where: {
         OR: [
           { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } }
+          { members: { some: { userId: session.user.id, status: true } } }
         ]
       },
       select: { id: true }
@@ -125,66 +112,6 @@ export async function getPosts({
         hasMore: false,
         nextCursor: null
       };
-      
-      // If includeProfileData is requested, still fetch user and stats
-      if (includeProfileData && authorId) {
-        const user = await prisma.user.findUnique({
-          where: { id: authorId }
-        });
-
-        if (user) {
-          const member = workspaceId
-            ? await prisma.workspaceMember.findUnique({
-                where: {
-                  userId_workspaceId: { userId: user.id, workspaceId },
-                },
-                select: {
-                  id: true,
-                  role: true,
-                  displayName: true,
-                  team: true,
-                  currentFocus: true,
-                  expertise: true,
-                  slackId: true,
-                },
-              })
-            : null;
-
-          const whereCondition = {
-            authorId: user.id,
-          };
-
-          const [postCount, commentCount, reactionsReceived] = await Promise.all([
-            prisma.post.count({ where: whereCondition }),
-            prisma.comment.count({
-              where: {
-                authorId: user.id,
-              },
-            }),
-            prisma.reaction.count({
-              where: {
-                post: whereCondition,
-              },
-            }),
-          ]);
-
-          emptyResult.user = {
-            ...user,
-            name: member?.displayName ?? user.name,
-            team: member?.team ?? user.team,
-            currentFocus: member?.currentFocus ?? user.currentFocus,
-            expertise: member?.expertise ?? user.expertise,
-            role: member?.role ?? user.role,
-            workspaceMemberId: member?.id ?? null,
-          };
-
-          emptyResult.stats = {
-            postCount,
-            commentCount,
-            reactionsReceived
-          };
-        }
-      }
       
       return emptyResult;
     }
@@ -312,25 +239,17 @@ export async function getPosts({
           })
         : null;
 
-      const whereCondition = resolvedWorkspaceId
-        ? {
-            authorId: user.id,
-            workspaceId: resolvedWorkspaceId,
-          }
-        : {
-            authorId: user.id,
-          };
+      const whereCondition = {
+        authorId: user.id,
+        workspaceId: query.workspaceId,
+      };
 
       const [postCount, commentCount, reactionsReceived] = await Promise.all([
         prisma.post.count({ where: whereCondition }),
         prisma.comment.count({
           where: {
             authorId: user.id,
-            ...(resolvedWorkspaceId && {
-              post: {
-                workspaceId: resolvedWorkspaceId,
-              },
-            }),
+            post: { workspaceId: query.workspaceId },
           },
         }),
         prisma.reaction.count({
@@ -367,9 +286,11 @@ export async function getPosts({
 export async function getPostById(postId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
+
+  await requirePostAccess(postId);
   
   const user = await prisma.user.findUnique({
     where: {
@@ -464,9 +385,9 @@ export async function createPost(data: {
   priority: PostPriority;
   workspaceId: string;
 }) {
-  const session = await getServerSession(authOptions);
+  const user = await getCurrentUser();
   
-  if (!session?.user?.email) {
+  if (!user) {
     throw new Error('Unauthorized');
   }
   
@@ -489,26 +410,7 @@ export async function createPost(data: {
     throw new Error('Workspace is required');
   }
   
-  // Verify user has access to the workspace
-  const user = await prisma.user.findUnique({
-    where: {
-      email: session.user.email
-    }
-  });
-  
-  if (!user) {
-    throw new Error('User not found');
-  }
-  
-  const workspace = await prisma.workspace.findFirst({
-    where: {
-      id: workspaceId,
-      OR: [
-        { ownerId: user.id },
-        { members: { some: { userId: user.id } } }
-      ]
-    }
-  });
+  const workspace = await userHasWorkspaceAccess(user.id, workspaceId);
 
   if (!workspace) {
     throw new Error('Workspace not found or access denied');
@@ -648,9 +550,11 @@ export async function updatePost(postId: string, data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
+
+  await requirePostAccess(postId);
   
   const { message, type, tags, priority } = data;
   
@@ -814,9 +718,11 @@ export async function updatePost(postId: string, data: {
 export async function deletePost(postId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
+
+  await requirePostAccess(postId);
   
   // Verify the post exists
   const existingPost = await prisma.post.findUnique({
@@ -879,7 +785,7 @@ export async function deletePost(postId: string) {
 export async function getUserPosts(userId: string, workspaceId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -889,7 +795,7 @@ export async function getUserPosts(userId: string, workspaceId: string) {
       id: workspaceId,
       OR: [
         { ownerId: session.user.id },
-        { members: { some: { userId: session.user.id } } }
+        { members: { some: { userId: session.user.id, status: true } } }
       ]
     }
   });
@@ -933,9 +839,11 @@ export async function getUserPosts(userId: string, workspaceId: string) {
 export async function resolveBlockerPost(postId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
+
+  await requirePostAccess(postId);
   
   // Get the current user
   const user = await prisma.user.findUnique({
@@ -957,7 +865,7 @@ export async function resolveBlockerPost(postId: string) {
           id: true,
           ownerId: true,
           members: {
-            where: { userId: user.id },
+            where: { userId: user.id, status: true },
             select: { role: true }
           }
         }
@@ -1063,9 +971,11 @@ export async function resolveBlockerPost(postId: string) {
 export async function getPostActions(postId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
+
+  await requirePostAccess(postId);
   
   // Get the current user
   const user = await prisma.user.findUnique({
@@ -1087,7 +997,7 @@ export async function getPostActions(postId: string) {
           id: true,
           ownerId: true,
           members: {
-            where: { userId: user.id },
+            where: { userId: user.id, status: true },
             select: { id: true }
           }
         }

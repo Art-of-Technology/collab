@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 
 /**
  * API route handler for fetching link previews
@@ -93,13 +94,8 @@ export async function POST(req: NextRequest) {
                 { slug: workspaceIdentifier },
                 { id: workspaceIdentifier }
               ],
-              // User must be a member of the workspace to access issue metadata
-              members: {
-                some: {
-                  userId: session.user.id,
-                },
-              },
             },
+            AND: [issueReadAccessWhere(session.user.id)],
           },
           select: {
             id: true,

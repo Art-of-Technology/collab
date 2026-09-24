@@ -1,7 +1,8 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { Button } from '@/components/ui/button';
@@ -34,14 +35,7 @@ async function AIKeysPageContent({ workspaceId }: { workspaceId: string }) {
   }
 
   // Verify membership
-  const member = await prisma.workspaceMember.findUnique({
-    where: {
-      userId_workspaceId: {
-        userId: session.user.id,
-        workspaceId: workspace.id,
-      },
-    },
-  });
+  const member = await userHasWorkspaceAccess(session.user.id, workspace.id);
 
   if (!member) {
     notFound();

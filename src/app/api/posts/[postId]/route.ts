@@ -1,3 +1,5 @@
+import { userSelectFields } from '@/lib/user-utils';
+import { requirePostAccess } from '@/lib/post-access';
 import { getPostById } from "@/actions/post";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -39,6 +41,7 @@ export async function PATCH(
 
     const _params = await params;
     const { postId } = _params;
+    await requirePostAccess(postId);
     const body = await req.json();
     const { message, type, tags, priority } = body;
 
@@ -132,13 +135,16 @@ export async function PATCH(
         }
       },
       include: {
-        author: true,
+        author: { select: { ...userSelectFields, role: true, team: true } },
         tags: true,
       },
     });
 
     return NextResponse.json(updatedPost);
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Post not found'].includes(error.message)) {
+      return new NextResponse(error.message, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error("[POST_PATCH]", error);
     return new NextResponse("Internal error", { status: 500 });
   }
@@ -157,6 +163,7 @@ export async function DELETE(
 
     const _params = await params;
     const { postId } = _params;
+    await requirePostAccess(postId);
 
     // Verify the post exists
     const existingPost = await prisma.post.findUnique({
@@ -179,6 +186,9 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Post not found'].includes(error.message)) {
+      return new NextResponse(error.message, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error("[POST_DELETE]", error);
     return new NextResponse("Internal error", { status: 500 });
   }

@@ -1,3 +1,4 @@
+import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 import { redirect, notFound } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
 import { getUserProfile } from "@/actions/user";
@@ -19,10 +20,13 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
     redirect("/login");
   }
 
+  const resolvedWorkspaceId = await resolveWorkspaceSlug(workspaceId);
+  if (!resolvedWorkspaceId) notFound();
+
   let profileData;
   try {
     // Get profile data using server action (workspace-scoped)
-    profileData = await getUserProfile(userId, workspaceId);
+    profileData = await getUserProfile(userId, resolvedWorkspaceId);
 
     // Render the client component with initial data
 

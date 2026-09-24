@@ -1,4 +1,4 @@
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { redirect } from 'next/navigation';
 import { getUserWorkspaces } from '@/actions/workspace';
@@ -20,7 +20,7 @@ export default async function WorkspacesPage() {
     // Fetch initial data using server actions
     workspacesData = await getUserWorkspaces();
     pendingInvitations = session.user.email
-      ? await getPendingInvitations(session.user.email)
+      ? await getPendingInvitations()
       : [];
 
 

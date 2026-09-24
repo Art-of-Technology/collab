@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -85,7 +86,10 @@ export async function POST(req: Request) {
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: { some: { userId: currentUser.id } }
+        OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ]
       }
     });
 
@@ -106,6 +110,7 @@ export async function POST(req: Request) {
           where: { id: projectId, workspaceId },
           include: {
             issues: {
+              where: issueReadAccessWhere(currentUser.id),
               select: {
                 id: true,
                 title: true,
@@ -117,7 +122,7 @@ export async function POST(req: Request) {
               },
               take: 50,
             },
-            _count: { select: { issues: true } },
+            _count: { select: { issues: { where: issueReadAccessWhere(currentUser.id) } } },
           }
         });
 
@@ -168,6 +173,7 @@ export async function POST(req: Request) {
         const issues = await prisma.issue.findMany({
           where: {
             workspaceId,
+            AND: [issueReadAccessWhere(currentUser.id)],
             projectId: view.projectIds.length > 0 ? { in: view.projectIds } : undefined,
           },
           select: {
@@ -215,7 +221,7 @@ export async function POST(req: Request) {
       }
 
       case 'issues': {
-        if (!issueIds || issueIds.length === 0) {
+        if (!Array.isArray(issueIds) || !issueIds.length || issueIds.some(id => typeof id !== 'string' || !id)) {
           return NextResponse.json({ error: "Issue IDs required" }, { status: 400 });
         }
 
@@ -223,6 +229,7 @@ export async function POST(req: Request) {
           where: {
             id: { in: issueIds },
             workspaceId,
+            AND: [issueReadAccessWhere(currentUser.id)],
           },
           select: {
             id: true,
@@ -237,6 +244,9 @@ export async function POST(req: Request) {
           },
         });
 
+        if (issues.length !== new Set(issueIds).size) {
+          return NextResponse.json({ error: "Issue not found or access denied" }, { status: 404 });
+        }
         data = JSON.stringify({
           issueCount: issues.length,
           issues: issues.map(i => ({
@@ -264,11 +274,11 @@ export async function POST(req: Request) {
         const [issueStats, recentActivity] = await Promise.all([
           prisma.issue.groupBy({
             by: ['status'],
-            where: { workspaceId },
+            where: { workspaceId, AND: [issueReadAccessWhere(currentUser.id)] },
             _count: true,
           }),
           prisma.issue.findMany({
-            where: { workspaceId },
+            where: { workspaceId, AND: [issueReadAccessWhere(currentUser.id)] },
             orderBy: { updatedAt: 'desc' },
             take: 20,
             select: {

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import Image from 'next/image';
 import { authOptions } from '@/lib/auth-options';
 import { AppHost } from '@/components/apps/AppHost';
@@ -12,7 +12,7 @@ async function getAppData(slug: string, workspaceSlug: string, userId: string) {
     // Resolve workspace slug to workspace ID
     const workspace = await prisma.workspace.findUnique({
       where: { slug: workspaceSlug },
-      select: { id: true, slug: true, name: true }
+      select: { id: true, slug: true, name: true, ownerId: true }
     });
     
     if (!workspace) {
@@ -23,11 +23,12 @@ async function getAppData(slug: string, workspaceSlug: string, userId: string) {
     const memberRecord = await prisma.workspaceMember.findFirst({
       where: {
         userId,
-        workspaceId: workspace.id
+        workspaceId: workspace.id,
+        status: true
       }
     });
 
-    if (!memberRecord) {
+    if (!memberRecord && workspace.ownerId !== userId) {
       return null;
     }
 
@@ -75,7 +76,7 @@ async function getAppData(slug: string, workspaceSlug: string, userId: string) {
       app,
       installation,
       workspace,
-      userRole: memberRecord.role,
+      userRole: workspace.ownerId === userId ? 'OWNER' : memberRecord!.role,
       isInstalled: isSystemApp || installation?.status === 'ACTIVE',
       isSystemApp
     };

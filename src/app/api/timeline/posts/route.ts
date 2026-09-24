@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth/next";
-import { authConfig } from "@/lib/auth";
+import { getCurrentUser } from '@/lib/session';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService } from "@/lib/notification-service";
 import { sanitizeHtmlToPlainText } from "@/lib/html-sanitizer";
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authConfig);
-  if (!session?.user?.id) {
+  const user = await getCurrentUser();
+  if (!user) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
@@ -20,12 +20,19 @@ export async function POST(req: Request) {
       return new NextResponse("Content is required", { status: 400 });
     }
 
+    if (typeof workspaceId !== 'string' || !workspaceId) {
+      return new NextResponse('Workspace is required', { status: 400 });
+    }
+    if (!await userHasWorkspaceAccess(user.id, workspaceId)) {
+      return new NextResponse('Workspace not found or access denied', { status: 403 });
+    }
+
     // Create the post
     const post = await prisma.post.create({
       data: {
         message: content.trim(),
-        authorId: session.user.id,
-        workspaceId: workspaceId || null,
+        authorId: user.id,
+        workspaceId,
         type: "UPDATE" // Default type
       },
       include: {
@@ -54,10 +61,10 @@ export async function POST(req: Request) {
     if (mentionedUserIds.length > 0) {
       try {
         await NotificationService.notifyUsers(
-          mentionedUserIds.filter((id) => id !== session.user.id),
+          mentionedUserIds.filter((id) => id !== user.id),
           'post_mention',
           `mentioned you in a post: "${sanitizedContent.length > 100 ? sanitizedContent.substring(0, 97) + '...' : sanitizedContent}"`,
-          session.user.id,
+          user.id,
           { postId: post.id }
         );
 

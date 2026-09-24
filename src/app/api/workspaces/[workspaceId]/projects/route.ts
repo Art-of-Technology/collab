@@ -1,5 +1,6 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
@@ -103,7 +104,7 @@ export async function GET(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -138,7 +139,7 @@ export async function GET(
       include: {
         _count: {
           select: {
-            issues: true
+            issues: { where: issueReadAccessWhere(session.user.id) }
           }
         },
         repository: {
@@ -200,7 +201,7 @@ export async function POST(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -217,13 +218,10 @@ export async function POST(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        AND: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ] }
       }
     });
 
@@ -233,7 +231,7 @@ export async function POST(
 
     // Get user
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
+      where: { id: session.user.id }
     });
 
     if (!user) {
@@ -311,7 +309,7 @@ export async function POST(
         include: {
           _count: {
             select: {
-              issues: true
+              issues: { where: issueReadAccessWhere(session.user.id) }
             }
           }
         }

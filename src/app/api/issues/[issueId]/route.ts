@@ -1,3 +1,5 @@
+import { canReceiveNotification } from '@/lib/notification-access';
+import { validateIssueReferences } from '@/lib/issue-references';
 import { z } from 'zod';
 import { IssueType, Prisma } from '@prisma/client';
 import { checkUserPermissions, canActOnOwnContent, Permission } from '@/lib/permissions';
@@ -9,14 +11,14 @@ import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
 import { emitIssueUpdated, emitIssueDeleted } from "@/lib/event-bus";
-import { findIssueByIdOrKey, STANDARD_ISSUE_INCLUDE, userHasWorkspaceAccess } from "@/lib/issue-finder";
+import { findIssueByIdOrKey, getStandardIssueInclude, userHasWorkspaceAccess } from "@/lib/issue-finder";
 import { normalizeDescriptionHTML } from "@/utils/html-normalizer";
 
 const UpdateIssueSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   description: z.string().max(100000).nullable().optional(),
   type: z.string().transform(value => value.toUpperCase()).pipe(z.nativeEnum(IssueType)).optional(),
-  priority: z.string().transform(value => value.toLowerCase()).pipe(z.enum(['low', 'medium', 'high', 'urgent'])).optional(),
+  priority: z.string().transform(value => value.toUpperCase()).pipe(z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT'])).optional(),
   status: z.string().min(1).max(100).optional(),
   statusValue: z.string().min(1).max(100).optional(),
   statusId: z.string().min(1).nullable().optional(),
@@ -60,7 +62,7 @@ export async function GET(
     const issue = await findIssueByIdOrKey(issueId, {
       workspaceId: workspaceId || undefined,
       userId: currentUser.id,
-      include: STANDARD_ISSUE_INCLUDE
+      include: getStandardIssueInclude(currentUser.id)
     });
 
     if (!issue) {
@@ -161,24 +163,14 @@ export async function PUT(
       })) {
         return { error: 'Invalid destination project', status: 400 };
       }
-      for (const userId of [body.assigneeId, body.reporterId]) {
-        if (userId && !await userHasWorkspaceAccess(userId, existingIssue.workspaceId)) {
-          return { error: 'Invalid issue participant', status: 400 };
-        }
-      }
-      const parentId = body.parentId !== undefined ? body.parentId : existingIssue.parentId;
-      if ((body.parentId !== undefined || moving) && parentId &&
-          (parentId === existingIssue.id || !await tx.issue.findFirst({
-            where: { id: parentId, workspaceId: existingIssue.workspaceId, projectId },
-            select: { id: true }
-          }))) {
-        return { error: 'Invalid parent issue', status: 400 };
-      }
-      if (labelIds?.length && await tx.taskLabel.count({
-        where: { id: { in: [...new Set(labelIds)] }, workspaceId: existingIssue.workspaceId }
-      }) !== new Set(labelIds).size) {
-        return { error: 'Invalid issue labels', status: 400 };
-      }
+      const referenceError = await validateIssueReferences(tx, existingIssue.workspaceId, projectId, currentUser.id, {
+        id: existingIssue.id,
+        assigneeId: body.assigneeId,
+        reporterId: body.reporterId,
+        parentId: body.parentId !== undefined ? body.parentId : moving ? existingIssue.parentId : undefined,
+        labels: labelIds,
+      });
+      if (referenceError) return { error: referenceError, status: 400 };
       if (moving && await tx.issue.findFirst({
         where: {
           id: existingIssue.id,
@@ -255,7 +247,7 @@ export async function PUT(
           ...updateData,
           ...(labelIds ? { labels: { set: labelIds.map(id => ({ id })) } } : {})
         },
-        include: STANDARD_ISSUE_INCLUDE
+        include: getStandardIssueInclude(currentUser.id)
       });
       if (assigneeChanged && issue.assigneeId) {
         await tx.issueAssignee.upsert({
@@ -563,7 +555,9 @@ export async function DELETE(
         select: { userId: true }
       });
       projectFollowers.forEach((pf: { userId: string }) => recipientIds.add(pf.userId));
-      deletionRecipients = Array.from(recipientIds).filter(id => id !== currentUser.id);
+      for (const id of recipientIds) {
+        if (id !== currentUser.id && await canReceiveNotification(id, { issueId: existingIssue.id })) deletionRecipients.push(id);
+      }
     } catch (prepErr) {
       console.warn('[ISSUES_DELETE_NOTIFY_PREP]', prepErr);
     }
@@ -609,7 +603,7 @@ export async function DELETE(
             NotificationType.PROJECT_ISSUE_DELETED,
             content,
             currentUser.id,
-            { issueId: (existingIssue as any).id as string }
+            { issueId: existingIssue.id, workspaceId: existingIssue.workspaceId }
           );
         }
         if (standardRecipients.length > 0) {
@@ -618,7 +612,7 @@ export async function DELETE(
             NotificationType.ISSUE_DELETED,
             content,
             currentUser.id,
-            { issueId: (existingIssue as any).id as string }
+            { issueId: existingIssue.id, workspaceId: existingIssue.workspaceId }
           );
         }
       }

@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { ChevronLeft } from "lucide-react";
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -31,7 +31,7 @@ export default async function ProjectFeaturesPage({ params }: ProjectFeaturesPag
   const { workspaceId: workspaceSlugOrId, projectSlug } = await params;
   const session = await getServerSession(authConfig);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     redirect('/login');
   }
 
@@ -45,13 +45,10 @@ export default async function ProjectFeaturesPage({ params }: ProjectFeaturesPag
   const workspace = await prisma.workspace.findFirst({
     where: {
       id: workspaceId,
-      members: {
-        some: {
-          user: {
-            email: session.user.email
-          }
-        }
-      }
+      AND: { OR: [
+        { ownerId: session.user.id },
+        { members: { some: { userId: session.user.id, status: true } } }
+      ] }
     }
   });
 

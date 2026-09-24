@@ -112,7 +112,11 @@ Collab is designed to streamline internal communication and work tracking by off
    DATABASE_URL="postgresql://username:password@localhost:5432/collab_db"
    ```
 
-   #### Authentication (NextAuth.js)
+   #### Authentication (default NextAuth.js mode)
+
+   For gateway mode, see the [request identity contract](docs/maestro-request-identity.md)
+   for configuration, account provisioning, logout and deployment prerequisites.
+
    ```bash
    NEXTAUTH_URL="http://localhost:3000"  # Your app's URL
    NEXTAUTH_SECRET="your-super-secret-jwt-secret-here"  # Generate with: openssl rand -base64 32
@@ -214,6 +218,8 @@ Collab is designed to streamline internal communication and work tracking by off
    npx prisma generate
    npx prisma migrate dev --name init
    ```
+   Bootstrap and restore requirements for saved versions are documented in the
+   [saved version authorization guide](docs/security/version-access-invalidation.md).
 5. (Optional) Initialize a default workspace:
    ```bash
    npm run prisma:init-workspace
@@ -226,7 +232,8 @@ Collab is designed to streamline internal communication and work tracking by off
 ## Usage
 
 - Open your browser and navigate to [http://localhost:3000](http://localhost:3000).
-- Sign up or log in using Google or email.
+- In the default authentication mode, sign up or log in using Google or email.
+  Gateway sign-in and sign-out follow the [request identity contract](docs/maestro-request-identity.md).
 - Create or join a workspace to start sharing updates.
 - Use the timeline to post status updates, tasks, and feature requests.
 - Organize work using boards, milestones, and stories.

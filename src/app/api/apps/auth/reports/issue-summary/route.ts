@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Issue Summary Report
  * GET /api/apps/auth/reports/issue-summary - Get aggregated issue statistics
@@ -60,53 +61,53 @@ export const GET = withAppAuth(
         completedInPeriod,
       ] = await Promise.all([
         // Total issues
-        prisma.issue.count({ where: baseFilter }),
+        prisma.issue.count({ where: { AND: [issueReadAccessWhere(context.user.id), baseFilter] } }),
         // Completed issues
         prisma.issue.count({
-          where: { ...baseFilter, statusId: { in: finalStatusIds } },
+          where: { AND: [issueReadAccessWhere(context.user.id), { ...baseFilter, statusId: { in: finalStatusIds } }] },
         }),
         // Overdue issues
         prisma.issue.count({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             ...baseFilter,
             dueDate: { lt: now },
             statusId: { notIn: finalStatusIds },
-          },
+          }] },
         }),
         // Total story points
         prisma.issue.aggregate({
-          where: baseFilter,
+          where: { AND: [issueReadAccessWhere(context.user.id), baseFilter] },
           _sum: { storyPoints: true },
         }),
         // By type
         prisma.issue.groupBy({
           by: ['type'],
-          where: baseFilter,
+          where: { AND: [issueReadAccessWhere(context.user.id), baseFilter] },
           _count: true,
         }),
         // By priority
         prisma.issue.groupBy({
           by: ['priority'],
-          where: baseFilter,
+          where: { AND: [issueReadAccessWhere(context.user.id), baseFilter] },
           _count: true,
         }),
         // By status
         prisma.issue.groupBy({
           by: ['statusId'],
-          where: baseFilter,
+          where: { AND: [issueReadAccessWhere(context.user.id), baseFilter] },
           _count: true,
         }),
         // Created in period
         prisma.issue.count({
-          where: { ...baseFilter, createdAt: { gte: periodStart } },
+          where: { AND: [issueReadAccessWhere(context.user.id), { ...baseFilter, createdAt: { gte: periodStart } }] },
         }),
         // Completed in period
         prisma.issue.count({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             ...baseFilter,
             statusId: { in: finalStatusIds },
             updatedAt: { gte: periodStart },
-          },
+          }] },
         }),
       ]);
 
@@ -183,17 +184,17 @@ export const GET = withAppAuth(
       if (comparePeriod) {
         const [prevCreated, prevCompleted] = await Promise.all([
           prisma.issue.count({
-            where: {
+            where: { AND: [issueReadAccessWhere(context.user.id), {
               ...baseFilter,
               createdAt: { gte: previousPeriodStart, lt: previousPeriodEnd },
-            },
+            }] },
           }),
           prisma.issue.count({
-            where: {
+            where: { AND: [issueReadAccessWhere(context.user.id), {
               ...baseFilter,
               statusId: { in: finalStatusIds },
               updatedAt: { gte: previousPeriodStart, lt: previousPeriodEnd },
-            },
+            }] },
           }),
         ]);
 

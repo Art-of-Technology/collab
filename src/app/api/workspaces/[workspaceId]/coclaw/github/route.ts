@@ -29,7 +29,10 @@ export async function GET(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: { some: { userId: session.user.id } },
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } },
+        ],
       },
       select: { id: true },
     });
@@ -70,7 +73,10 @@ export async function POST(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: { some: { userId: session.user.id } },
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } },
+        ],
       },
       select: { id: true },
     });
@@ -137,7 +143,10 @@ export async function DELETE(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: { some: { userId: session.user.id } },
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } },
+        ],
       },
       select: { id: true },
     });

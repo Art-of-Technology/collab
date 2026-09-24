@@ -2,11 +2,11 @@
 
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { extractMentionUserIds } from '@/utils/mentions';
 import { NotificationService, NotificationType } from '@/lib/notification-service';
 import { sanitizeHtmlToPlainText } from '@/lib/html-sanitizer';
-import { requirePostAccess } from '@/lib/post-access';
+import { requirePostAccess, requireCommentAccess } from '@/lib/post-access';
 
 /**
  * Get comments for a post
@@ -125,11 +125,12 @@ export async function createComment(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
   const { postId, message, html, parentId } = data;
+  await requirePostAccess(postId);
   
   // Validate input
   if (!message || !message.trim()) {
@@ -143,7 +144,7 @@ export async function createComment(data: {
   // Get the current user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     }
   });
   
@@ -166,7 +167,8 @@ export async function createComment(data: {
   if (parentId) {
     const parentComment = await prisma.comment.findUnique({
       where: {
-        id: parentId
+        id: parentId,
+        postId
       }
     });
     
@@ -265,9 +267,11 @@ export async function updateComment(commentId: string, data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
+
+  await requireCommentAccess(commentId);
   
   const { message, html } = data;
   
@@ -279,7 +283,7 @@ export async function updateComment(commentId: string, data: {
   // Get the current user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     }
   });
   
@@ -342,14 +346,16 @@ export async function updateComment(commentId: string, data: {
 export async function deleteComment(commentId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
+
+  await requireCommentAccess(commentId);
   
   // Get the current user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     }
   });
   

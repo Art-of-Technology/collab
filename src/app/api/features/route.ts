@@ -1,3 +1,4 @@
+import { featureAccessWhere } from '@/lib/feature-access';
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth";
@@ -24,6 +25,11 @@ const getFeatureRequestsParamsSchema = z.object({
 // GET handler for fetching feature requests
 export async function GET(req: NextRequest) {
   try {
+    const session = await getAuthSession();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const url = new URL(req.url);
     const status = url.searchParams.get("status");
     const orderBy = url.searchParams.get("orderBy");
@@ -59,7 +65,7 @@ export async function GET(req: NextRequest) {
     } = validated.data;
     
     // Build the filter
-    const where: any = {};
+    const where: any = featureAccessWhere(session.user.id);
     
     if (validatedStatus && validatedStatus !== "all") {
       where.status = validatedStatus;
@@ -191,7 +197,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getAuthSession();
 
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -209,6 +215,17 @@ export async function POST(req: NextRequest) {
 
     const { title, description, html, projectId, workspaceId } = validated.data;
 
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, workspace: { OR: [
+        { ownerId: session.user.id },
+        { members: { some: { userId: session.user.id, status: true } } },
+      ] } },
+      select: { workspaceId: true },
+    });
+    if (!project || (workspaceId && workspaceId !== project.workspaceId)) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
     // Build the data object - projectId is required
     const data: any = {
       title,
@@ -218,10 +235,7 @@ export async function POST(req: NextRequest) {
       projectId, // Required field
     };
 
-    // Add workspaceId if provided
-    if (workspaceId) {
-      data.workspaceId = workspaceId;
-    }
+    data.workspaceId = project.workspaceId;
 
     const featureRequest = await prisma.featureRequest.create({
       data,

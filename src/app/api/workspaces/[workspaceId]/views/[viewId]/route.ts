@@ -1,5 +1,6 @@
+import { validateViewProjects } from '@/lib/view-helpers';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
@@ -29,7 +30,7 @@ export async function PUT(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -78,13 +79,10 @@ export async function PUT(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        AND: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ] }
       }
     });
 
@@ -125,6 +123,10 @@ export async function PUT(
       projectIds,
     } = body;
 
+
+    if (projectIds !== undefined && !await validateViewProjects(projectIds, session.user.id)) {
+      return NextResponse.json({ error: 'Invalid or inaccessible projects' }, { status: 400 });
+    }
 
     // Validate ownerId if provided
     if (body.ownerId !== undefined) {
@@ -200,7 +202,7 @@ export async function DELETE(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -233,13 +235,10 @@ export async function DELETE(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        AND: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ] }
       }
     });
 

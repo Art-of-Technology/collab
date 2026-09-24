@@ -1,3 +1,5 @@
+import { findIssueByIdOrKey, issueReadAccessWhere } from '@/lib/issue-finder';
+import { validateIssueReferences } from '@/lib/issue-references';
 /**
  * Third-Party App API: Single Issue Endpoints
  * GET /api/apps/auth/issues/:issueIdOrKey - Get issue details
@@ -29,18 +31,6 @@ const UpdateIssueSchema = z.object({
   timeEstimateMinutes: z.number().int().positive().nullable().optional(),
 });
 
-async function findIssue(issueIdOrKey: string, workspaceId: string) {
-  return prisma.issue.findFirst({
-    where: {
-      workspaceId,
-      OR: [
-        { id: issueIdOrKey },
-        { issueKey: issueIdOrKey },
-      ],
-    },
-  });
-}
-
 /**
  * GET /api/apps/auth/issues/:issueIdOrKey
  * Get detailed issue information
@@ -51,13 +41,13 @@ export const GET = withAppAuth(
       const { issueIdOrKey } = await params;
 
       const issue = await prisma.issue.findFirst({
-        where: {
+        where: { AND: [issueReadAccessWhere(context.user.id), {
           workspaceId: context.workspace.id,
           OR: [
             { id: issueIdOrKey },
             { issueKey: issueIdOrKey },
           ],
-        },
+        }] },
         include: {
           project: {
             select: {
@@ -85,6 +75,7 @@ export const GET = withAppAuth(
             },
           },
           parent: {
+            where: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) },
             select: {
               id: true,
               issueKey: true,
@@ -93,6 +84,7 @@ export const GET = withAppAuth(
             },
           },
           children: {
+            where: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) },
             select: {
               id: true,
               issueKey: true,
@@ -110,6 +102,7 @@ export const GET = withAppAuth(
             },
           },
           labels: {
+            where: { workspaceId: context.workspace.id },
             select: {
               id: true,
               name: true,
@@ -128,9 +121,9 @@ export const GET = withAppAuth(
           _count: {
             select: {
               comments: true,
-              children: true,
-              sourceRelations: true,
-              targetRelations: true,
+              children: { where: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) } },
+              sourceRelations: { where: { targetIssue: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) } } },
+              targetRelations: { where: { sourceIssue: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) } } },
             },
           },
         },
@@ -208,7 +201,7 @@ export const PATCH = withAppAuth(
       const updateData = UpdateIssueSchema.parse(body);
 
       // Find the issue
-      const existingIssue = await findIssue(issueIdOrKey, context.workspace.id);
+      const existingIssue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
       if (!existingIssue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },
@@ -235,24 +228,11 @@ export const PATCH = withAppAuth(
         update.startDate = updateData.startDate ? new Date(updateData.startDate) : null;
       }
 
-      // Handle assignee change
-      if (updateData.assigneeId !== undefined) {
-        if (updateData.assigneeId) {
-          const member = await prisma.workspaceMember.findFirst({
-            where: {
-              userId: updateData.assigneeId,
-              workspaceId: context.workspace.id,
-            },
-          });
-          if (!member) {
-            return NextResponse.json(
-              { error: 'assignee_not_found', error_description: 'Assignee not found in workspace' },
-              { status: 404 }
-            );
-          }
-        }
-        update.assigneeId = updateData.assigneeId;
-      }
+      const referenceError = await validateIssueReferences(prisma, context.workspace.id, existingIssue.projectId, context.user.id, {
+        ...updateData, id: existingIssue.id,
+      });
+      if (referenceError) return NextResponse.json({ error: 'invalid_reference', error_description: referenceError }, { status: 400 });
+      if (updateData.assigneeId !== undefined) update.assigneeId = updateData.assigneeId;
 
       // Handle status change
       if (updateData.status !== undefined) {
@@ -352,6 +332,7 @@ export const PATCH = withAppAuth(
             },
           },
           labels: {
+            where: { workspaceId: context.workspace.id },
             select: {
               id: true,
               name: true,
@@ -431,7 +412,7 @@ export const DELETE = withAppAuth(
     try {
       const { issueIdOrKey } = await params;
 
-      const existingIssue = await findIssue(issueIdOrKey, context.workspace.id);
+      const existingIssue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
       if (!existingIssue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },

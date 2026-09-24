@@ -1,3 +1,4 @@
+import { notificationAccessWhere } from '@/lib/notification-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
     // Fetch notifications for the current user
     const notifications = await prisma.notification.findMany({
       where: {
-        userId: currentUser.id,
+        ...await notificationAccessWhere(currentUser.id),
       },
       include: {
         sender: {

@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Time Tracking Report
  * GET /api/apps/auth/reports/time-tracking - Get comprehensive time tracking report
@@ -128,13 +129,7 @@ export const GET = withAppAuth(
 
       // Apply filters
       if (projectId) {
-        const issue = await prisma.issue.findFirst({
-          where: { projectId, workspaceId: context.workspace.id },
-          select: { projectId: true },
-        });
-        if (issue) {
-          whereClause.issue = { projectId };
-        }
+        whereClause.issue = { projectId };
       } else if (projectIds && projectIds.length > 0) {
         whereClause.issue = { projectId: { in: projectIds } };
       }
@@ -147,7 +142,7 @@ export const GET = withAppAuth(
 
       // Get all work logs for the period
       const workLogs = await prisma.workLog.findMany({
-        where: whereClause,
+        where: { AND: [whereClause, { issue: issueReadAccessWhere(context.user.id) }] },
         include: {
           user: {
             select: {

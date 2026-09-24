@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import {
   getUnreadCoclawCount,
   getRecentCoclawNotifications,
@@ -27,10 +27,7 @@ export async function GET(
     const { workspaceId } = await params;
 
     // Verify workspace membership
-    const isMember = await prisma.workspaceMember.findUnique({
-      where: { userId_workspaceId: { userId: session.user.id, workspaceId } },
-      select: { userId: true },
-    });
+    const isMember = await userHasWorkspaceAccess(session.user.id, workspaceId);
     if (!isMember) {
       return NextResponse.json({ error: 'Not a member' }, { status: 403 });
     }
@@ -39,8 +36,8 @@ export async function GET(
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10), 50);
 
     const [unreadCount, activity] = await Promise.all([
-      getUnreadCoclawCount(session.user.id),
-      getRecentCoclawNotifications(session.user.id, limit),
+      getUnreadCoclawCount(session.user.id, workspaceId),
+      getRecentCoclawNotifications(session.user.id, workspaceId, limit),
     ]);
 
     return NextResponse.json({ unreadCount, activity });
@@ -67,15 +64,12 @@ export async function POST(
 
     const { workspaceId } = await params;
 
-    const isMember = await prisma.workspaceMember.findUnique({
-      where: { userId_workspaceId: { userId: session.user.id, workspaceId } },
-      select: { userId: true },
-    });
+    const isMember = await userHasWorkspaceAccess(session.user.id, workspaceId);
     if (!isMember) {
       return NextResponse.json({ error: 'Not a member' }, { status: 403 });
     }
 
-    const marked = await markAllCoclawNotificationsRead(session.user.id);
+    const marked = await markAllCoclawNotificationsRead(session.user.id, workspaceId);
 
     return NextResponse.json({ marked });
   } catch (error) {

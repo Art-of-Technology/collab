@@ -1,5 +1,7 @@
+import { versionAccessWhere } from '@/lib/github/repository-access';
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 
@@ -10,7 +12,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -18,17 +20,17 @@ export async function GET(
 
     // Verify user has access to the issue
     const issue = await prisma.issue.findFirst({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         id: issueId,
         project: {
           workspace: {
             OR: [
               { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } },
+              { members: { some: { userId: session.user.id, status: true } } },
             ],
           },
         },
-      },
+      }] },
       include: {
         project: {
           include: {
@@ -103,6 +105,7 @@ export async function GET(
       // Find versions that include this issue
       prisma.version.findMany({
         where: {
+          AND: [versionAccessWhere(session.user.id)],
           repositoryId: repository.id,
           issues: {
             some: {

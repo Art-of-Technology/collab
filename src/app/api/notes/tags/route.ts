@@ -1,5 +1,7 @@
+import { noteTagAccessWhere } from '@/lib/secrets/access';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 
@@ -15,8 +17,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get("workspace");
 
+    if (workspaceId && !await userHasWorkspaceAccess(session.user.id, workspaceId)) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 403 });
+    }
+
     const tags = await prisma.noteTag.findMany({
       where: {
+        AND: [noteTagAccessWhere(session.user.id)],
         OR: [
           { authorId: session.user.id },
           ...(workspaceId ? [{ workspaceId }] : []),
@@ -57,6 +64,10 @@ export async function POST(request: NextRequest) {
         { error: "Tag name is required" },
         { status: 400 }
       );
+    }
+
+    if (workspaceId && !await userHasWorkspaceAccess(session.user.id, workspaceId)) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 403 });
     }
 
     // Check if tag with same name already exists for this user/workspace

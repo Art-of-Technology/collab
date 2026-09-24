@@ -1,3 +1,5 @@
+import { syncAccessibleReleases } from '@/lib/github/sync-releases';
+import { requireRepositoryAccess } from '@/lib/github/repository-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { EncryptionService } from "@/lib/encryption";
@@ -9,6 +11,7 @@ export async function POST(
 ) {
   try {
     const { repositoryId } = await params;
+    const userId = await requireRepositoryAccess(repositoryId);
 
     // Get repository with access token
     const repository = await prisma.repository.findUnique({
@@ -52,77 +55,16 @@ export async function POST(
     }
 
     const releases = await response.json();
-    const syncedReleases = [];
-
-    for (const release of releases) {
-      // Parse version from tag
-      const versionString = release.tag_name.replace(/^v/, '');
-      const versionParts = versionString.match(/^(\d+)\.(\d+)\.(\d+)/);
-
-      // Find or create version
-      let version = await prisma.version.findFirst({
-        where: {
-          repositoryId,
-          version: versionString,
-        },
-      });
-
-      if (!version && versionParts) {
-        version = await prisma.version.create({
-          data: {
-            repositoryId,
-            version: versionString,
-            major: parseInt(versionParts[1]),
-            minor: parseInt(versionParts[2]),
-            patch: parseInt(versionParts[3]),
-            releaseType: 'MINOR',
-            status: release.draft ? 'PENDING' : 'RELEASED',
-            environment: release.prerelease ? 'staging' : 'production',
-            releasedAt: release.published_at ? new Date(release.published_at) : null,
-          },
-        });
-      }
-
-      if (version) {
-        // Upsert release
-        const syncedRelease = await prisma.release.upsert({
-          where: {
-            repositoryId_tagName: {
-              repositoryId,
-              tagName: release.tag_name,
-            },
-          },
-          update: {
-            name: release.name || release.tag_name,
-            description: release.body,
-            isDraft: release.draft,
-            isPrerelease: release.prerelease,
-            publishedAt: release.published_at ? new Date(release.published_at) : null,
-            githubUrl: release.html_url,
-          },
-          create: {
-            repositoryId,
-            versionId: version.id,
-            githubReleaseId: release.id.toString(),
-            tagName: release.tag_name,
-            name: release.name || release.tag_name,
-            description: release.body,
-            isDraft: release.draft,
-            isPrerelease: release.prerelease,
-            publishedAt: release.published_at ? new Date(release.published_at) : null,
-            githubUrl: release.html_url,
-          },
-        });
-
-        syncedReleases.push(syncedRelease);
-      }
-    }
+    const syncedReleases = await syncAccessibleReleases(repositoryId, userId, releases);
 
     return NextResponse.json({
       message: `Synced ${syncedReleases.length} releases`,
       releases: syncedReleases,
     });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Repository not found'].includes(error.message)) {
+      return NextResponse.json({ error: error.message }, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error('[SYNC_RELEASES_POST]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

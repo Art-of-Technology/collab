@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Project Statistics Endpoint
  * GET /api/apps/auth/projects/:projectId/stats - Get project statistics
@@ -58,53 +59,53 @@ export const GET = withAppAuth(
         issuesCreatedInPeriod,
         issuesCompletedInPeriod,
       ] = await Promise.all([
-        prisma.issue.count({ where: { projectId } }),
+        prisma.issue.count({ where: { AND: [issueReadAccessWhere(context.user.id), { projectId }] } }),
         prisma.issue.count({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             projectId,
             statusId: { in: finalStatusIds },
-          },
+          }] },
         }),
         prisma.issue.count({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             projectId,
             dueDate: { lt: new Date() },
             statusId: { notIn: finalStatusIds },
-          },
+          }] },
         }),
         prisma.issue.count({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             projectId,
             assigneeId: null,
-          },
+          }] },
         }),
         prisma.issue.groupBy({
           by: ['type'],
-          where: { projectId },
+          where: { AND: [issueReadAccessWhere(context.user.id), { projectId }] },
           _count: true,
         }),
         prisma.issue.groupBy({
           by: ['priority'],
-          where: { projectId },
+          where: { AND: [issueReadAccessWhere(context.user.id), { projectId }] },
           _count: true,
         }),
         prisma.issue.groupBy({
           by: ['statusId'],
-          where: { projectId },
+          where: { AND: [issueReadAccessWhere(context.user.id), { projectId }] },
           _count: true,
         }),
         prisma.issue.count({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             projectId,
             createdAt: { gte: periodStart },
-          },
+          }] },
         }),
         prisma.issue.count({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             projectId,
             statusId: { in: finalStatusIds },
             updatedAt: { gte: periodStart },
-          },
+          }] },
         }),
       ]);
 

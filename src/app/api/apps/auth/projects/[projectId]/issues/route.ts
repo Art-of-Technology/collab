@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Project Issues Endpoint
  * GET /api/apps/auth/projects/:projectId/issues - Get issues for a project
@@ -89,7 +90,7 @@ export const GET = withAppAuth(
 
       const [issues, total] = await Promise.all([
         prisma.issue.findMany({
-          where,
+          where: { AND: [issueReadAccessWhere(context.user.id), where] },
           skip,
           take: limit,
           orderBy,
@@ -111,6 +112,7 @@ export const GET = withAppAuth(
               },
             },
             labels: {
+              where: { workspaceId: context.workspace.id },
               select: {
                 id: true,
                 name: true,
@@ -128,12 +130,12 @@ export const GET = withAppAuth(
             _count: {
               select: {
                 comments: true,
-                children: true,
+                children: { where: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) } },
               },
             },
           },
         }),
-        prisma.issue.count({ where }),
+        prisma.issue.count({ where: { AND: [where, issueReadAccessWhere(context.user.id)] } }),
       ]);
 
       return NextResponse.json({

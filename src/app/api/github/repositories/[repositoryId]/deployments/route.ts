@@ -1,3 +1,4 @@
+import { requireRepositoryAccess } from '@/lib/github/repository-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -8,6 +9,7 @@ export async function GET(
 ) {
   try {
     const { repositoryId } = await params;
+    await requireRepositoryAccess(repositoryId);
 
     // Get all deployments grouped by environment
     const deployments = await prisma.deployment.findMany({
@@ -87,6 +89,9 @@ export async function GET(
 
     return NextResponse.json({ environments });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Repository not found'].includes(error.message)) {
+      return NextResponse.json({ error: error.message }, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error('[DEPLOYMENTS_GET]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

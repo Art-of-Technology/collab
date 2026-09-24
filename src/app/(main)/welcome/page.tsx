@@ -27,7 +27,7 @@ export default async function WelcomePage() {
   // Get pending invitations for the user using server action
   let pendingInvitations: any[] = [];
   if (session.user.email) {
-    pendingInvitations = await getPendingInvitations(session.user.email)
+    pendingInvitations = await getPendingInvitations()
       .catch(() => []);
   }
 

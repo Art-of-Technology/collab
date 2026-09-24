@@ -54,7 +54,7 @@ interface Repository {
   branchEnvironmentMap?: Record<string, string>;
   issueTypeMapping?: Record<string, string>;
   webhookId?: string | null;
-  webhookSecret?: string;
+  hasWebhookSecret?: boolean;
   syncedAt?: string | null;
   branches: Branch[];
   _count: {
@@ -450,7 +450,7 @@ export function GitHubSettingsClient({
             <WebhookStatus
               repositoryId={repoData.id}
               repositoryUrl={`https://github.com/${repoData.fullName}`}
-              webhookSecret={repoData.webhookSecret}
+              hasWebhookSecret={repoData.hasWebhookSecret}
               isConnected={true}
             />
           )}

@@ -2,7 +2,7 @@
 
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
 import {
   approveLeaveRequestWithBalance,
@@ -18,7 +18,7 @@ import { emitLeaveCreated } from "@/lib/event-bus";
 export async function getLeavePolicies(workspaceId: string) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error("Unauthorized");
   }
 
@@ -38,7 +38,7 @@ export async function getLeavePolicies(workspaceId: string) {
     where: { id: workspaceId },
     include: {
       members: {
-        where: { userId: user.id },
+        where: { userId: user.id, status: true },
       },
     },
   });
@@ -86,7 +86,7 @@ export async function createLeaveRequest(data: {
 }) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error("Unauthorized");
   }
 
@@ -120,7 +120,7 @@ export async function createLeaveRequest(data: {
     where: { id: policy.workspaceId },
     include: {
       members: {
-        where: { userId: user.id },
+        where: { userId: user.id, status: true },
       },
     },
   });
@@ -200,7 +200,7 @@ export async function createLeaveRequest(data: {
 export async function getUserLeaveRequests(workspaceId: string) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error("Unauthorized");
   }
 
@@ -220,7 +220,7 @@ export async function getUserLeaveRequests(workspaceId: string) {
     where: { id: workspaceId },
     include: {
       members: {
-        where: { userId: user.id },
+        where: { userId: user.id, status: true },
       },
     },
   });
@@ -266,7 +266,7 @@ export async function getUserLeaveRequests(workspaceId: string) {
 export async function getWorkspaceLeaveRequests(workspaceSlugOrId: string) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error("Unauthorized");
   }
 
@@ -347,7 +347,7 @@ export async function getWorkspaceLeaveRequests(workspaceSlugOrId: string) {
 export async function approveLeaveRequest(requestId: string, notes?: string) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error("Unauthorized");
   }
 
@@ -434,7 +434,7 @@ export async function approveLeaveRequest(requestId: string, notes?: string) {
 export async function rejectLeaveRequest(requestId: string, notes?: string) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error("Unauthorized");
   }
 
@@ -484,7 +484,7 @@ export async function getPaginatedWorkspaceLeaveRequests(
 ) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error("Unauthorized");
   }
 
@@ -598,7 +598,7 @@ export async function getWorkspaceLeaveRequestsSummary(
 ) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error("Unauthorized");
   }
 
@@ -692,7 +692,7 @@ export async function getPaginatedLeavePolicies(
 ) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error("Unauthorized");
   }
 
@@ -721,7 +721,7 @@ export async function getPaginatedLeavePolicies(
     where: { id: workspaceId },
     include: {
       members: {
-        where: { userId: user.id },
+        where: { userId: user.id, status: true },
       },
     },
   });

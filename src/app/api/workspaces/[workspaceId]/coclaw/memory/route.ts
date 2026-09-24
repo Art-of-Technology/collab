@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { Prisma } from '@prisma/client';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
-import { noteAccessWhere } from '@/lib/secrets/access';
+import { noteTagAccessWhere, noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 
 type RouteContext = { params: Promise<{ workspaceId: string }> };
@@ -82,6 +82,7 @@ export async function GET(
         createdAt: true,
         updatedAt: true,
         tags: {
+          where: noteTagAccessWhere(session.user.id),
           select: {
             id: true,
             name: true,

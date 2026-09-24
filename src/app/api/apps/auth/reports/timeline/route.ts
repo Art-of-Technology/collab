@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Timeline Report
  * GET /api/apps/auth/reports/timeline - Get issues organized by due date
@@ -111,56 +112,56 @@ export const GET = withAppAuth(
       ] = await Promise.all([
         // Overdue
         prisma.issue.findMany({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             ...baseFilter,
             dueDate: { lt: today },
             statusId: { notIn: finalStatusIds },
-          },
+          }] },
           select: issueSelect,
           orderBy: { dueDate: 'asc' },
         }),
         // Due today
         prisma.issue.findMany({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             ...baseFilter,
             dueDate: { gte: today, lt: tomorrow },
-          },
+          }] },
           select: issueSelect,
           orderBy: { priority: 'desc' },
         }),
         // This week (excluding today)
         prisma.issue.findMany({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             ...baseFilter,
             dueDate: { gte: tomorrow, lt: endOfWeek },
-          },
+          }] },
           select: issueSelect,
           orderBy: { dueDate: 'asc' },
         }),
         // This month (excluding this week)
         prisma.issue.findMany({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             ...baseFilter,
             dueDate: { gte: endOfWeek, lt: endOfMonth },
-          },
+          }] },
           select: issueSelect,
           orderBy: { dueDate: 'asc' },
         }),
         // Later (within daysAhead, excluding this month)
         prisma.issue.findMany({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             ...baseFilter,
             dueDate: { gte: endOfMonth, lte: futureDate },
-          },
+          }] },
           select: issueSelect,
           orderBy: { dueDate: 'asc' },
         }),
         // No due date
         prisma.issue.findMany({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             ...baseFilter,
             dueDate: null,
-          },
+          }] },
           select: issueSelect,
           orderBy: { priority: 'desc' },
           take: 50,

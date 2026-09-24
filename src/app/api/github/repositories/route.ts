@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
@@ -9,7 +9,7 @@ import { EncryptionService } from "@/lib/encryption";
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
         workspace: {
           OR: [
             { ownerId: session.user.id },
-            { members: { some: { userId: session.user.id } } },
+            { members: { some: { userId: session.user.id, status: true } } },
           ],
         },
       },
@@ -84,7 +84,6 @@ export async function POST(request: NextRequest) {
         fullName: repository.fullName,
         isActive: repository.isActive,
         syncedAt: repository.syncedAt,
-        webhookSecret: repository.webhookSecret, // Return for webhook setup
       },
     });
   } catch (error) {

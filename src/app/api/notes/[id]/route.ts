@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { NoteScope, NoteSharePermission } from "@prisma/client";
@@ -12,7 +12,7 @@ import {
   isSecretsEnabled,
   SecretVariable
 } from "@/lib/secrets/crypto";
-import { canWriteNoteDestination, logNoteAccess, canAccessNote } from "@/lib/secrets/access";
+import { canUseNoteTags, noteTagAccessWhere, canWriteNoteDestination, logNoteAccess, canAccessNote } from "@/lib/secrets/access";
 import { createVersion, hasSignificantChange, detectChangeType } from "@/lib/versioning";
 import { emitContextUpdated, emitContextDeleted } from "@/lib/event-bus";
 
@@ -51,7 +51,7 @@ export async function GET(
         ]
       },
       include: {
-        tags: true,
+        tags: { where: noteTagAccessWhere(session.user.id) },
         author: {
           select: {
             id: true,
@@ -243,6 +243,10 @@ export async function PATCH(
       );
     }
 
+    if (!await canUseNoteTags(session.user.id, tagIds, existingNote.workspaceId, isOwner && projectId !== undefined ? projectId : existingNote.projectId)) {
+      return NextResponse.json({ error: "Invalid note tags" }, { status: 400 });
+    }
+
     const finalScope = scope ?? (isPublic !== undefined && isOwner
       ? (isPublic ? NoteScope.WORKSPACE : NoteScope.PERSONAL) : existingNote.scope);
     const finalProjectId = isOwner && projectId !== undefined ? projectId : existingNote.projectId;
@@ -372,7 +376,7 @@ export async function PATCH(
         })
       },
       include: {
-        tags: true,
+        tags: { where: noteTagAccessWhere(session.user.id) },
         author: {
           select: {
             id: true,

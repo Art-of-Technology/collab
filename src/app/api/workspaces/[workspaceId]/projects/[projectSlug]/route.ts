@@ -1,5 +1,7 @@
+import { canDeleteProjectStatuses, issueReadAccessWhere } from '@/lib/issue-finder';
+import { PUBLIC_REPOSITORY_SELECT } from '@/lib/github/public-repository';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
@@ -12,7 +14,7 @@ export async function GET(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -28,13 +30,10 @@ export async function GET(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        AND: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ] }
       }
     });
 
@@ -49,7 +48,7 @@ export async function GET(
         slug: projectSlug
       },
       include: {
-        repository: true, // Include GitHub repository
+        repository: { select: PUBLIC_REPOSITORY_SELECT }, // Include GitHub repository
         statuses: {
           orderBy: {
             order: 'asc'
@@ -57,7 +56,7 @@ export async function GET(
         },
         _count: {
           select: {
-            issues: true
+            issues: { where: issueReadAccessWhere(session.user.id) }
           }
         }
       }
@@ -108,7 +107,7 @@ export async function PATCH(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -125,13 +124,10 @@ export async function PATCH(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        AND: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ] }
       }
     });
 
@@ -177,6 +173,12 @@ export async function PATCH(
       }
     }
 
+    const replacedStatuses = statuses && Array.isArray(statuses)
+      ? await prisma.projectStatus.findMany({ where: { projectId: currentProject.id }, select: { id: true } }) : [];
+    if (!await canDeleteProjectStatuses(session.user.id, replacedStatuses.map(status => status.id))) {
+      return NextResponse.json({ error: 'Status references inaccessible issues' }, { status: 403 });
+    }
+
     // Update project in a transaction
     const updatedProject = await prisma.$transaction(async (tx) => {
       // Update project basic info
@@ -194,7 +196,7 @@ export async function PATCH(
       if (statuses && Array.isArray(statuses)) {
         // Delete existing statuses
         await tx.projectStatus.deleteMany({
-          where: { projectId: currentProject.id }
+          where: { id: { in: replacedStatuses.map(status => status.id) } }
         });
 
         // Create new statuses
@@ -235,7 +237,7 @@ export async function PATCH(
             orderBy: { order: 'asc' }
           },
           _count: {
-            select: { issues: true }
+            select: { issues: { where: issueReadAccessWhere(session.user.id) } }
           }
         }
       });

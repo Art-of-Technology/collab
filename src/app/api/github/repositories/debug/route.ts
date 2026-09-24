@@ -1,5 +1,6 @@
+import { PUBLIC_REPOSITORY_SELECT } from '@/lib/github/public-repository';
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -10,7 +11,7 @@ import { prisma } from "@/lib/prisma";
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -28,12 +29,12 @@ export async function GET(request: NextRequest) {
         workspace: {
           OR: [
             { ownerId: session.user.id },
-            { members: { some: { userId: session.user.id } } },
+            { members: { some: { userId: session.user.id, status: true } } },
           ],
         },
       },
       include: {
-        repository: true,
+        repository: { select: PUBLIC_REPOSITORY_SELECT },
         workspace: {
           select: {
             id: true,
@@ -55,12 +56,13 @@ export async function GET(request: NextRequest) {
           workspace: {
             OR: [
               { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } },
+              { members: { some: { userId: session.user.id, status: true } } },
             ],
           },
         },
       },
-      include: {
+      select: {
+        ...PUBLIC_REPOSITORY_SELECT,
         project: {
           select: {
             id: true,

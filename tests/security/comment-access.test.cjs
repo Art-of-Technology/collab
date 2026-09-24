@@ -45,7 +45,7 @@ test('comment reads require a current user and active membership or ownership be
     { id: `${id}-reply`, postId: id, parentId: `${id}-comment`, message: `${id} private reply`, author, reactions: [] },
   ]);
   const db = {
-    user: { findUnique: async ({ where }) => where.email === 'alice@example.test'
+    user: { findUnique: async ({ where }) => where.id === 'alice'
       ? { id: 'alice', createdAt: new Date(), updatedAt: new Date() } : null },
     post: { findUnique: async ({ where, select }) => {
       postReads++;
@@ -63,7 +63,7 @@ test('comment reads require a current user and active membership or ownership be
   };
   const dependencies = {
     'server-only': {}, '@/lib/prisma': { prisma: db }, '@/lib/auth-options': { authOptions: {} },
-    'next-auth': { getServerSession: async () => session },
+    '@/lib/request-session': { getServerSession: async () => session },
     '@/lib/shared-issue-key-utils': load('src/lib/shared-issue-key-utils.ts'),
     '@/utils/mentions': {}, '@/lib/notification-service': {}, '@/lib/html-sanitizer': {},
     'next/server': { NextResponse: Response },
@@ -76,14 +76,14 @@ test('comment reads require a current user and active membership or ownership be
   const get = id => GET(new Request('https://example.test/api/posts/' + id + '/comments'), {
     params: Promise.resolve({ postId: id }),
   });
-  for (const current of [null, { user: { email: 'deleted@example.test' } }]) {
+  for (const current of [null, { user: { id: 'deleted', email: 'deleted@example.test' } }]) {
     session = current;
     assert.equal((await get('joined')).status, 401);
     await assert.rejects(getComments('joined'), /Unauthorized/);
     assert.equal(postReads, 0);
     assert.equal(commentReads, 0);
   }
-  session = { user: { email: 'alice@example.test' } };
+  session = { user: { id: 'alice', email: 'alice@example.test' } };
   for (const id of ['revoked', 'foreign', 'missing', '', undefined]) {
     const response = await get(id);
     assert.equal(response.status, 404);

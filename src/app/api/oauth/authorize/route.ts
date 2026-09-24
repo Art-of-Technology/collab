@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { redirect } from 'next/navigation';
 import { generateAuthorizationCode } from '@/lib/apps/crypto';
@@ -160,12 +160,12 @@ export async function GET(request: NextRequest) {
         where: { id: workspaceId },
         include: {
           members: {
-            where: { userId: session.user.id }
+            where: { userId: session.user.id, status: true }
           }
         }
       });
 
-      if (!workspace || workspace.members.length === 0) {
+      if (!workspace || (workspace.ownerId !== session.user.id && workspace.members.length === 0)) {
         return NextResponse.json(
           {
             error: 'access_denied',
@@ -177,7 +177,7 @@ export async function GET(request: NextRequest) {
     } else {
       // If no workspace specified (for non-system apps), use user's first workspace
       const userWorkspace = await prisma.workspaceMember.findFirst({
-        where: { userId: session.user.id },
+        where: { userId: session.user.id, status: true },
         include: { workspace: true }
       });
 

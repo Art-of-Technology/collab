@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
@@ -20,19 +21,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Get the issue with its project and workspace to verify access
     const issue = await prisma.issue.findUnique({
-      where: { id: issueId },
+      where: { id: issueId, ...issueReadAccessWhere(user.id) },
       include: {
-        project: {
-          include: {
-            workspace: {
-              include: {
-                members: {
-                  where: { userId: user.id },
-                },
-              },
-            },
-          },
-        },
         pullRequests: {
           include: {
             aiReviews: {
@@ -52,7 +42,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       },
     });
 
-    if (!issue || issue.project.workspace.members.length === 0) {
+    if (!issue) {
       return NextResponse.json({ error: 'Issue not found or access denied' }, { status: 404 });
     }
 

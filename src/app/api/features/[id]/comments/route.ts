@@ -1,3 +1,4 @@
+import { featureAccessWhere } from '@/lib/feature-access';
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth";
@@ -13,6 +14,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getAuthSession();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const _params = await params;
     const { id } = _params;
     const url = new URL(req.url);
@@ -21,8 +27,8 @@ export async function GET(
     const skip = (page - 1) * limit;
 
     // Check if feature request exists
-    const featureRequest = await prisma.featureRequest.findUnique({
-      where: { id },
+    const featureRequest = await prisma.featureRequest.findFirst({
+      where: { id, ...featureAccessWhere(session.user.id) },
     });
 
     if (!featureRequest) {
@@ -79,7 +85,7 @@ export async function POST(
   try {
     const session = await getAuthSession();
 
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -98,8 +104,8 @@ export async function POST(
     const { content } = validated.data;
 
     // Check if feature request exists
-    const featureRequest = await prisma.featureRequest.findUnique({
-      where: { id },
+    const featureRequest = await prisma.featureRequest.findFirst({
+      where: { id, ...featureAccessWhere(session.user.id) },
     });
 
     if (!featureRequest) {

@@ -20,7 +20,7 @@ import {
   ChevronDown,
   Bot,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { signOutCurrentSession } from '@/lib/sign-out';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -87,9 +87,13 @@ export default function SimplifiedSidebar({
   }, [views]);
 
   const handleSignOut = async () => {
-    await signOut({ redirect: false });
-    toast({ title: "Signed out", description: "You have been signed out" });
-    router.push("/");
+    try {
+      if (!await signOutCurrentSession()) return;
+      toast({ title: "Signed out", description: "You have been signed out" });
+      router.push("/");
+    } catch {
+      toast({ title: "Unable to sign out", description: "Please try again.", variant: "destructive" });
+    }
   };
 
   const agentColor = currentAgent?.color || '#2563eb';

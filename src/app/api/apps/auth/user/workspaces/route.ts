@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: User Workspaces Endpoint
  * GET /api/apps/auth/user/workspaces - Get all workspaces the user has access to
@@ -39,7 +40,7 @@ export const GET = withAppAuth(
                 select: {
                   members: true,
                   projects: true,
-                  issues: true
+                  issues: { where: issueReadAccessWhere(context.user.id) }
                 }
               }
             }

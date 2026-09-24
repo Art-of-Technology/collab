@@ -1,3 +1,4 @@
+import { requirePostAccess } from '@/lib/post-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -22,14 +23,7 @@ export async function POST(
       return new NextResponse("Invalid reaction type", { status: 400 });
     }
 
-    // Check if post exists
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
-    });
-
-    if (!post) {
-      return new NextResponse("Post not found", { status: 404 });
-    }
+    await requirePostAccess(postId);
 
     // Check if the user already has this reaction
     const existingReaction = await prisma.reaction.findFirst({
@@ -67,6 +61,9 @@ export async function POST(
     });
 
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Post not found', 'Comment not found'].includes(error.message)) {
+      return new NextResponse(error.message, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error("Reaction error:", error);
     return new NextResponse("Internal error", { status: 500 });
   }
@@ -87,6 +84,7 @@ export async function GET(
     }
 
     const postId = (await params)?.postId;
+    await requirePostAccess(postId);
 
     const reactions = await prisma.reaction.findMany({
       where: {
@@ -105,6 +103,9 @@ export async function GET(
       hasReacted,
     });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Post not found', 'Comment not found'].includes(error.message)) {
+      return new NextResponse(error.message, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error("[REACTIONS_GET]", error);
     return NextResponse.json(
       { error: "Internal error" },

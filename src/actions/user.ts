@@ -2,7 +2,8 @@
 
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
+import { userSelectFields } from '@/lib/user-utils';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 
 /**
@@ -11,13 +12,13 @@ import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 export async function getCurrentUser() {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     return null;
   }
   
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     },
     select: {
       id: true,
@@ -252,26 +253,39 @@ export async function updateUserAvatar(data: {
 export async function getUserProfile(userId: string, workspaceId?: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
   // Get the current user
   const currentUser = await prisma.user.findUnique({
     where: {
-      email: session.user.email
-    }
+      id: session.user.id
+    },
+    select: { ...userSelectFields, email: true, role: true, team: true, currentFocus: true, expertise: true, slackId: true }
   });
   
   if (!currentUser) {
     throw new Error('User not found');
   }
   
+  if (workspaceId && !await userHasWorkspaceAccess(currentUser.id, workspaceId)) {
+    throw new Error('Workspace not found');
+  }
+  const postScope = {
+    ...(workspaceId && { workspaceId }),
+    workspace: { OR: [
+      { ownerId: currentUser.id },
+      { members: { some: { userId: currentUser.id, status: true } } },
+    ] },
+  };
+
   // Get the target user
   const user = await prisma.user.findUnique({
     where: {
       id: userId
-    }
+    },
+    select: { ...userSelectFields, email: true, role: true, team: true, currentFocus: true, expertise: true, slackId: true }
   });
   
   if (!user) {
@@ -304,17 +318,18 @@ export async function getUserProfile(userId: string, workspaceId?: string) {
   // Get user's posts
   const userPosts = await prisma.post.findMany({
     where: {
-      authorId: user.id
+      authorId: user.id,
+      ...postScope
     },
     orderBy: {
       createdAt: "desc"
     },
     include: {
-      author: true,
+      author: { select: userSelectFields },
       tags: true,
       comments: {
         include: {
-          author: true,
+          author: { select: userSelectFields },
         },
         orderBy: {
           createdAt: "asc",
@@ -328,13 +343,15 @@ export async function getUserProfile(userId: string, workspaceId?: string) {
   const postCount =  userPosts.length;
   const commentCount = await prisma.comment.count({
     where: {
-      authorId: user.id
+      authorId: user.id,
+      post: postScope
     }
   });
   const reactionsReceived = await prisma.reaction.count({
     where: {
       post: {
-        authorId: user.id
+        authorId: user.id,
+        ...postScope
       }
     }
   });
@@ -380,4 +397,4 @@ export async function getUserProfile(userId: string, workspaceId?: string) {
     currentUser,
     existingConversation
   };
-} 
+}

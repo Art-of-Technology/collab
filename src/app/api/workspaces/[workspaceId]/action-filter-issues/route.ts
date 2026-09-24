@@ -1,5 +1,6 @@
+import { activityReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { ActionFilter } from '@/components/views/selectors/ActionFiltersSelector';
@@ -11,7 +12,7 @@ export async function POST(
   try {
     const session = await getServerSession(authConfig);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,13 +23,10 @@ export async function POST(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        AND: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ] }
       }
     });
 
@@ -121,7 +119,7 @@ export async function POST(
 
     for (const query of activityQueries) {
       const activities = await prisma.issueActivity.findMany({
-        where: query as any,
+        where: await activityReadAccessWhere(session.user.id, query as any),
         select: { itemId: true, newValue: true },
         distinct: ['itemId']
       });

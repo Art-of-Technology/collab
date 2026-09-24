@@ -1,7 +1,6 @@
-"use server";
-
+import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { classifyStatus } from "@/utils/teamSyncAnalyzer";
@@ -143,9 +142,7 @@ export async function GET(req: Request) {
     const userId = session.user.id;
 
     // Verify workspace access
-    const membership = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId },
-    });
+    const membership = await userHasWorkspaceAccess(userId, workspaceId);
 
     if (!membership) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
@@ -190,12 +187,12 @@ export async function GET(req: Request) {
     ] = await Promise.all([
       // ── My Queue: Overdue issues ──
       prisma.issue.findMany({
-        where: {
+        where: { AND: [issueReadAccessWhere(session.user.id), {
           workspaceId,
           dueDate: { lt: today },
           projectStatus: { isFinal: false },
           assigneeId: userId,
-        },
+        }] },
         include: {
           project: { select: { id: true, name: true, color: true } },
           projectStatus: { select: { name: true, displayName: true, color: true } },
@@ -206,12 +203,12 @@ export async function GET(req: Request) {
 
       // ── My Queue: Due today ──
       prisma.issue.findMany({
-        where: {
+        where: { AND: [issueReadAccessWhere(session.user.id), {
           workspaceId,
           dueDate: { gte: today, lt: tomorrow },
           projectStatus: { isFinal: false },
           assigneeId: userId,
-        },
+        }] },
         include: {
           project: { select: { id: true, name: true, color: true } },
           projectStatus: { select: { name: true, displayName: true, color: true } },
@@ -221,12 +218,12 @@ export async function GET(req: Request) {
 
       // ── My Queue: Stale issues (in progress but no update in 3+ days) ──
       prisma.issue.findMany({
-        where: {
+        where: { AND: [issueReadAccessWhere(session.user.id), {
           workspaceId,
           assigneeId: userId,
           projectStatus: { isFinal: false, name: { contains: "progress", mode: "insensitive" } },
           updatedAt: { lt: threeDaysAgo },
-        },
+        }] },
         include: {
           project: { select: { id: true, name: true, color: true } },
           projectStatus: { select: { name: true, displayName: true, color: true } },
@@ -237,13 +234,13 @@ export async function GET(req: Request) {
 
       // ── My Queue: High priority not started ──
       prisma.issue.findMany({
-        where: {
+        where: { AND: [issueReadAccessWhere(session.user.id), {
           workspaceId,
           assigneeId: userId,
           priority: { in: ["urgent", "high"] },
           projectStatus: { isFinal: false },
           dueDate: null, // Don't duplicate overdue/due-today
-        },
+        }] },
         include: {
           project: { select: { id: true, name: true, color: true } },
           projectStatus: { select: { name: true, displayName: true, color: true } },
@@ -254,11 +251,11 @@ export async function GET(req: Request) {
 
       // ── Work In Progress: User's active issues ──
       prisma.issue.findMany({
-        where: {
+        where: { AND: [issueReadAccessWhere(session.user.id), {
           workspaceId,
           assigneeId: userId,
           projectStatus: { isFinal: false },
-        },
+        }] },
         include: {
           project: { select: { id: true, name: true, slug: true, color: true } },
           projectStatus: { select: { name: true, displayName: true, color: true } },
@@ -268,17 +265,17 @@ export async function GET(req: Request) {
 
       // ── Blockers: Issues with blocking relations ──
       prisma.issue.findMany({
-        where: {
+        where: { AND: [issueReadAccessWhere(session.user.id), {
           workspaceId,
           projectStatus: { isFinal: false },
-          targetRelations: { some: { relationType: "BLOCKED_BY" } },
-        },
+          targetRelations: { some: { relationType: "BLOCKED_BY", sourceIssue: issueReadAccessWhere(session.user.id) } },
+        }] },
         include: {
           assignee: { select: { id: true, name: true, image: true } },
           project: { select: { name: true } },
           projectStatus: { select: { name: true, displayName: true, color: true } },
           targetRelations: {
-            where: { relationType: "BLOCKED_BY" },
+            where: { relationType: "BLOCKED_BY", sourceIssue: issueReadAccessWhere(session.user.id) },
             include: { sourceIssue: { select: { createdAt: true } } },
             take: 1,
           },
@@ -303,7 +300,7 @@ export async function GET(req: Request) {
       // ── Waiting: Comments mentioning current user that they haven't replied to ──
       prisma.issueComment.findMany({
         where: {
-          issue: { workspaceId },
+          issue: { workspaceId, AND: issueReadAccessWhere(session.user.id) },
           content: { contains: `@${session.user.name || ""}`, mode: "insensitive" },
           authorId: { not: userId },
           createdAt: { gte: sevenDaysAgo },
@@ -327,6 +324,7 @@ export async function GET(req: Request) {
               image: true,
               assignedIssues: {
                 where: {
+                  AND: issueReadAccessWhere(session.user.id),
                   workspaceId,
                   projectStatus: { isFinal: false },
                 },
@@ -392,13 +390,14 @@ export async function GET(req: Request) {
       prisma.project.findMany({
         where: { workspaceId, isArchived: false },
         include: {
-          _count: { select: { issues: true } },
+          _count: { select: { issues: { where: issueReadAccessWhere(session.user.id) } } },
           issues: {
+            where: issueReadAccessWhere(session.user.id),
             select: {
               id: true,
               dueDate: true,
               projectStatus: { select: { isFinal: true } },
-              targetRelations: { where: { relationType: "BLOCKED_BY" }, select: { id: true } },
+              targetRelations: { where: { relationType: "BLOCKED_BY", sourceIssue: issueReadAccessWhere(session.user.id) }, select: { id: true } },
             },
           },
         },
@@ -420,14 +419,14 @@ export async function GET(req: Request) {
 
       // ── Recent Interactions: Issues user interacted with recently ──
       prisma.issue.findMany({
-        where: {
+        where: { AND: [issueReadAccessWhere(session.user.id), {
           workspaceId,
           OR: [
             { reporterId: userId }, // Created by user
             { assigneeId: userId }, // Assigned to user
           ],
           updatedAt: { gte: sevenDaysAgo },
-        },
+        }] },
         include: {
           project: { select: { slug: true, color: true } },
           projectStatus: { select: { name: true, displayName: true } },
@@ -440,7 +439,7 @@ export async function GET(req: Request) {
       prisma.issueComment.findMany({
         where: {
           authorId: userId,
-          issue: { workspaceId },
+          issue: { workspaceId, AND: issueReadAccessWhere(session.user.id) },
           createdAt: { gte: sevenDaysAgo },
         },
         include: {

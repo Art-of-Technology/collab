@@ -1,5 +1,6 @@
+import { canDeleteProjectStatuses, issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
@@ -11,7 +12,7 @@ export async function DELETE(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -29,13 +30,10 @@ export async function DELETE(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        AND: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ] }
       }
     });
 
@@ -90,6 +88,10 @@ export async function DELETE(
       }
     }
 
+    if (!await canDeleteProjectStatuses(session.user.id, [statusId])) {
+      return NextResponse.json({ error: 'Status references inaccessible issues' }, { status: 403 });
+    }
+
     // Perform the deletion in a transaction
     const result = await prisma.$transaction(async (tx) => {
       // First, move all issues to the target status if specified
@@ -119,7 +121,8 @@ export async function DELETE(
         movedIssuesCount: targetStatusId ? await tx.issue.count({
           where: {
             projectId: project.id,
-            statusId: targetStatusId
+            statusId: targetStatusId,
+            AND: issueReadAccessWhere(session.user.id)
           }
         }) : 0
       };

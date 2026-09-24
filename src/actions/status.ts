@@ -7,13 +7,13 @@ export async function getProjectStatuses(projectIds: string[]) {
   try {
     // Authentication check
     const session = await getAuthSession()
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw new Error('Unauthorized - Please sign in to access project statuses')
     }
 
     // Get the current user
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
+      where: { id: session.user.id }
     })
 
     if (!user) {
@@ -27,7 +27,7 @@ export async function getProjectStatuses(projectIds: string[]) {
         workspace: {
           OR: [
             { ownerId: user.id },
-            { members: { some: { userId: user.id } } }
+            { members: { some: { userId: user.id, status: true } } }
           ]
         }
       },

@@ -16,6 +16,7 @@ export async function POST(
 
     const _params = await params;
     const postId = await _params.postId;
+    await requirePostAccess(postId);
     const body = await req.json();
     const { message, html, parentId } = body;
 
@@ -56,6 +57,9 @@ export async function POST(
 
     return NextResponse.json(comment);
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Post not found', 'Comment not found'].includes(error.message)) {
+      return new NextResponse(error.message, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error("Error creating comment:", error);
     return new NextResponse("Internal error", { status: 500 });
   }
