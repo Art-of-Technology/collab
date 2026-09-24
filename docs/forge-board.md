@@ -67,6 +67,22 @@ card. No Forge requests were issued by the browser. These earlier fixture result
 do not establish hydrated UI or revocation acceptance for the current
 authorization change.
 
+R10 isolated production-build qualification on source
+`33878527e0202c33a8d742db069c364ea37598ef` subsequently passed 30 HTTP and
+9 UI checks, including hydrated Board/Notes Refresh, revocation, foreign-tenant
+denial and mobile layouts. Native PostgreSQL provenance passed 1 check with
+0 skips under the original 60-second timeout. This used synthetic JWT identities
+and disconnected Forge; native TLS trust was verified and owned resources were
+cleaned up. It establishes this isolated source's qualification, separately
+from the earlier fixture evidence, not final integrated production acceptance.
+
+Realtime event delivery after revocation (only admission was checked), live
+provider-backed changelog regeneration, real Forge data/publication, real OAuth,
+Ready execution and final integrated production acceptance remain unverified.
+The nine existing lint warnings (L1–L6: effect/callback dependencies and image
+optimization) remain explicitly deferred behavioral followups; no runtime code
+or lint rules were changed. Generated API reference drift remains follow-up #473.
+
 Forge-backed Notes publication is documented in the
 [project memory guide](forge-project-memory.md).
 Live connection, full comments, issue mutations with readback/conflict handling,

@@ -89,6 +89,21 @@ A deliberately delayed save verified all form inputs and actions are natively
 disabled while pending, then the saved draft is read back. This prevents edits
 typed during an in-flight save from being silently discarded by its response.
 
+R10 isolated production-build qualification on source
+`33878527e0202c33a8d742db069c364ea37598ef` subsequently passed 30 HTTP and
+9 UI checks, including hydrated Board/Notes Refresh, revocation, foreign-tenant
+denial and mobile layouts. Native PostgreSQL provenance passed 1 check with
+0 skips under the original 60-second timeout. Synthetic JWT identities and
+disconnected Forge bounded this evidence; native TLS trust was verified and
+owned resources were cleaned up. These current-source results are distinct
+from the earlier fixture checks and do not prove real Forge Notes publication.
+
+Realtime event delivery after revocation, live provider-backed changelog
+regeneration, real Forge publication, real OAuth, Ready execution and final
+integrated production acceptance remain unverified. The nine existing lint
+warnings (L1–L6) remain deferred behavioral followups without runtime or rule
+changes; generated API reference drift remains follow-up #473.
+
 Outstanding: independent pipeline review, live writer/binding validation,
 gateway identity integration, full agent context consumption and staging
 acceptance. No production configuration, token or repository was changed.
