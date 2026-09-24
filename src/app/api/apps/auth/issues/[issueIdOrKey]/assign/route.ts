@@ -1,4 +1,5 @@
 import { findIssueByIdOrKey } from '@/lib/issue-finder';
+import { validateIssueReferences } from '@/lib/issue-references';
 /**
  * Third-Party App API: Issue Assignment Endpoint
  * POST /api/apps/auth/issues/:issueIdOrKey/assign - Assign/unassign issue
@@ -87,24 +88,15 @@ export const POST = withAppAuth(
         );
       }
 
-      const member = await prisma.workspaceMember.findFirst({
-        where: {
-          userId: data.assigneeId,
-          workspaceId: context.workspace.id,
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
-        },
+      const referenceError = await validateIssueReferences(prisma, context.workspace.id, issue.projectId, context.user.id, data);
+      if (referenceError) return NextResponse.json({ error: 'invalid_reference', error_description: referenceError }, { status: 400 });
+
+      const assignee = await prisma.user.findUnique({
+        where: { id: data.assigneeId },
+        select: { id: true, name: true, email: true, image: true },
       });
 
-      if (!member) {
+      if (!assignee) {
         return NextResponse.json(
           { error: 'assignee_not_found', error_description: 'User not found in workspace' },
           { status: 404 }
@@ -176,7 +168,7 @@ export const POST = withAppAuth(
         assignment: {
           userId: data.assigneeId,
           role: data.role || 'ASSIGNEE',
-          user: member.user,
+          user: assignee,
         },
       });
     } catch (error) {

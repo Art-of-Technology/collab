@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { featureAccessWhere } from '@/lib/feature-access';
 import { prisma } from '@/lib/prisma';
 import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { noteAccessWhere } from '@/lib/secrets/access';
 
 export type NotificationReferences = {
   postId?: string;
@@ -48,7 +49,7 @@ export async function notificationAccessWhere(userId: string): Promise<Prisma.No
       { OR: [{ leaveRequestId: null }, { leaveRequest: { policy: { workspace } } }] },
       { OR: [{ commentId: null }, { comment: { AND: [
         { OR: [{ postId: null }, { post: tenant }] },
-        { OR: [{ noteId: null }, { note: tenant }] },
+        { OR: [{ noteId: null }, { note: noteAccessWhere(userId) }] },
       ] } }] },
     ],
   };
@@ -74,11 +75,15 @@ export async function resolveNotificationScope(refs: NotificationReferences) {
   }
   if (refs.commentId) {
     const comment = await prisma.comment.findUnique({ where: { id: refs.commentId }, select: {
-      post: { select: { workspaceId: true } }, note: { select: { workspaceId: true } },
+      post: { select: { workspaceId: true } },
+      note: { select: { workspaceId: true, project: { select: { workspaceId: true } } } },
     } });
     if (!comment) return null;
     if (comment.post) workspaces.push(comment.post.workspaceId);
-    if (comment.note) workspaces.push(comment.note.workspaceId);
+    if (comment.note) {
+      workspaces.push(comment.note.workspaceId);
+      if (comment.note.project) workspaces.push(comment.note.project.workspaceId);
+    }
   }
   if (refs.leaveRequestId) {
     const leave = await prisma.leaveRequest.findUnique({ where: { id: refs.leaveRequestId }, select: {
@@ -96,6 +101,10 @@ export async function resolveNotificationScope(refs: NotificationReferences) {
 
 export async function canReceiveNotification(userId: string, refs: NotificationReferences): Promise<boolean> {
   if (!await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })) return false;
+  if (refs.commentId && !await prisma.comment.findFirst({
+    where: { id: refs.commentId, OR: [{ noteId: null }, { note: noteAccessWhere(userId) }] },
+    select: { id: true },
+  })) return false;
   if (refs.issueId) {
     if (!await prisma.issue.findFirst({
       where: { id: refs.issueId, ...issueReadAccessWhere(userId) }, select: { id: true },

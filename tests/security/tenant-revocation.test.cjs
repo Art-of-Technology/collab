@@ -37,6 +37,7 @@ function matches(row, where = {}) {
     if (value === null || typeof value !== 'object') return actual === value;
     if ('every' in value) return actual?.every(item => matches(item, value.every)) ?? false;
     if ('some' in value) return actual?.some(item => matches(item, value.some)) ?? false;
+    if ('gte' in value) return actual != null && actual >= value.gte;
     if ('notIn' in value) return !value.notIn.includes(actual);
     if ('startsWith' in value) return typeof actual === 'string' && actual.startsWith(value.startsWith);
     if ('in' in value) return value.in.includes(actual);
@@ -848,6 +849,7 @@ function notificationFixture() {
   const comments = posts.map(post => ({ id: `comment-${post.id}`, postId: post.id, post, noteId: null, note: null, message: post.message }));
   f.db.post.findUnique = async ({ where }) => posts.find(post => matches(post, where)) ?? null;
   f.db.comment = { findUnique: async ({ where }) => comments.find(row => matches(row, where)) ?? null };
+  f.db.comment.findFirst = f.db.comment.findUnique;
   f.db.postFollower = { findMany: async () => [{ userId: 'alice' }] };
   f.db.notificationPreferences = { findFirst: async () => null };
   f.db.notification = {
@@ -3274,4 +3276,139 @@ for (const endpoint of ['sync-releases', 'sync']) {
       await invoke(); assert.equal(created.length, 1);
     });
   }
+}
+
+function noteNotificationFixture(destination = 'workspace') {
+  const f = scopedNotificationFixture(), workspace = f.workspaces[1];
+  const personal = destination === 'personal';
+  const note = { id: 'private-note', authorId: 'bob', scope: personal ? 'PERSONAL' : destination === 'project' ? 'PROJECT' : 'WORKSPACE',
+    isRestricted: true, isEncrypted: false, expiresAt: null,
+    workspaceId: destination === 'workspace' ? workspace.id : null,
+    workspace: destination === 'workspace' ? workspace : null,
+    projectId: destination === 'project' ? 'note-project' : null,
+    project: destination === 'project' ? { id: 'note-project', workspaceId: workspace.id, workspace } : null,
+    sharedWith: [{ userId: 'alice', permission: 'READ' }] };
+  const comment = { id: 'private-comment', noteId: note.id, note, postId: null, post: null, message: 'private-comment-body' };
+  f.comments.push(comment);
+  const users = [f.state.user, ...['bob', 'outsider'].map(id => ({ ...f.state.user, id }))];
+  f.db.user.findUnique = async ({ where }) => users.find(row => matches(row, where)) ?? null;
+  f.db.note = { findUnique: async ({ where }) => matches(note, where) ? note : null };
+  f.db.notification.findMany = async ({ where, include }) => f.stored.map(row => ({ ...row,
+    comment: row.commentId === comment.id ? comment : null,
+  })).filter(row => matches(row, where)).map(row => include
+    ? { ...row, comment: row.comment && { id: row.comment.id, message: row.comment.message } }
+    : { issueId: row.issueId });
+  const notify = () => f.NotificationService.notifyUsers(['alice'], 'comment_mention', 'private-preview', 'bob', { commentId: comment.id });
+  const read = async () => {
+    const response = await f.route('notifications').GET(f.request());
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const mention = () => f.route('mentions').POST(f.request('POST', undefined, {
+    userIds: ['bob'], sourceType: 'comment', sourceId: comment.id, content: 'private-preview',
+  }));
+  return { ...f, note, comment, workspace, notify, read, mention };
+}
+
+for (const destination of ['workspace', 'project', 'personal']) {
+  for (const denial of ['share revoked', 'expired', ...(destination === 'personal' ? ['unshared personal'] : ['membership revoked', 'unshared owner'])]) {
+    test(`note notification ${destination} ${denial} blocks creation reads and mentions without altering history`, async () => {
+      const f = noteNotificationFixture(destination);
+      assert.equal(await f.notify(), 1);
+      assert.equal(f.stored[0].workspaceId, destination === 'personal' ? null : f.workspace.id);
+      assert.equal((await f.read())[0].comment.message, 'private-comment-body');
+      if (denial === 'share revoked') f.note.sharedWith = [];
+      if (denial === 'expired') f.note.expiresAt = new Date(0);
+      if (denial === 'membership revoked') f.workspace.members[0].status = false;
+      if (denial === 'unshared personal') { f.note.isRestricted = false; f.note.sharedWith = []; }
+      if (denial === 'unshared owner') { f.workspace.ownerId = 'alice'; f.workspace.members = []; f.note.sharedWith = []; }
+      const stored = structuredClone(f.stored), writes = f.calls.writes;
+      assert.equal((await f.dependencies['@/lib/secrets/access'].canAccessNote('alice', f.note.id)).canAccess, false);
+      assert.deepEqual(await f.read(), []);
+      assert.equal(await f.notify(), 0);
+      assert.equal((await f.mention()).status, 404);
+      assert.deepEqual(f.stored, stored);
+      assert.equal(f.calls.writes, writes);
+      assert.deepEqual(f.deliveries, []);
+    });
+  }
+}
+
+for (const destination of ['workspace', 'project', 'personal']) {
+  test(`note notification ${destination} retains author and explicit share rights and filters mention recipients`, async () => {
+    const f = noteNotificationFixture(destination);
+    assert.equal((await f.mention()).status, 200);
+    assert.equal(f.stored.length, 1);
+    f.note.scope = 'PERSONAL'; f.note.authorId = 'alice'; f.note.sharedWith = [];
+    assert.equal(await f.notify(), 1);
+    assert.equal((await f.read())[0].comment.message, 'private-comment-body');
+    f.note.expiresAt = new Date(0);
+    assert.equal(await f.notify(), 1);
+    assert.equal((await f.read())[0].comment.message, 'private-comment-body');
+    f.note.expiresAt = null;
+    f.note.authorId = 'bob'; f.note.sharedWith = [{ userId: 'alice', permission: 'EDIT' }];
+    f.state.user = { id: 'bob' };
+    const response = await f.route('mentions').POST(f.request('POST', undefined, {
+      userIds: ['alice', 'outsider'], sourceType: 'comment', sourceId: f.comment.id, content: 'another-preview',
+    }));
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).notificationsCreated, 1);
+    assert.equal(f.stored.some(row => row.userId === 'outsider'), false);
+  });
+}
+
+test('note notification project destination rejects mixed workspace references before writes', async () => {
+  const f = noteNotificationFixture('project');
+  assert.equal(await f.NotificationService.notifyUsers(['alice'], 'comment_mention', 'private-preview', 'bob', {
+    commentId: f.comment.id, workspaceId: f.workspaces[0].id,
+  }), 0);
+  assert.equal(f.calls.writes, 0);
+  assert.deepEqual(f.deliveries, []);
+});
+
+for (const participant of ['owner', 'active', 'inactive', 'foreign', 'missing']) {
+  test(`app assignment ${participant} uses current participant access and public user fields`, async () => {
+    const f = relatedIssueFixture(), workspace = f.workspaces[0], issue = f.rows[0];
+    const assignee = { id: 'c0000000000000000000000009', name: 'Assignee', email: 'assignee@example.test', image: null,
+      password: 'private-password', accounts: [{ access_token: 'private-token' }] };
+    if (participant === 'owner') {
+      workspace.ownerId = assignee.id;
+      workspace.members.push({ userId: 'alice', status: true });
+    }
+    if (participant === 'active' || participant === 'inactive') {
+      workspace.members.push({ userId: assignee.id, status: participant === 'active', user: assignee });
+    }
+    if (participant === 'foreign') f.workspaces[3].members.push({ userId: assignee.id, status: true, user: assignee });
+    f.db.workspaceMember.findFirst = async args => f.project(f.workspaces.flatMap(row => row.members.map(
+      member => ({ ...member, workspaceId: row.id }))).find(row => matches(row, args.where)), args);
+    const lookup = f.db.user.findUnique;
+    f.db.user.findUnique = async args => args.where.id === assignee.id
+      ? participant === 'missing' ? null : f.project(assignee, args) : lookup(args);
+    f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => (req, params) => handler(req,
+      { workspace, user: f.state.user }, params) };
+    f.db.issueAssignee.upsert = async args => { f.writes.push(args); return args.create; };
+    f.db.issue.update = async ({ data, ...spec }) => {
+      f.writes.push(data);
+      Object.assign(issue, data, { assignee });
+      return f.project(issue, spec);
+    };
+    const response = await f.route('apps/auth/issues/[issueIdOrKey]/assign').POST(f.request('POST', undefined, {
+      assigneeId: assignee.id,
+    }), { params: Promise.resolve({ issueIdOrKey: issue.id }) });
+    const body = await response.json();
+    if (participant === 'owner' || participant === 'active') {
+      assert.equal(response.status, 200, JSON.stringify(body));
+      const publicUser = { id: assignee.id, name: assignee.name, email: assignee.email, image: assignee.image };
+      assert.deepEqual(body.assignee, publicUser);
+      assert.deepEqual(body.assignment.user, publicUser);
+      assert.equal(f.writes.length, 3);
+      assert.equal(f.writes[1].create.status, 'APPROVED');
+      assert.equal(f.writes[1].create.approvedBy, 'alice');
+    } else {
+      assert.equal(response.status, 400, JSON.stringify(body));
+      assert.deepEqual(f.writes, []);
+      assert.equal(issue.assigneeId, null);
+      assert.deepEqual(body, { error: 'invalid_reference', error_description: 'Invalid issue participant' });
+    }
+  });
 }
