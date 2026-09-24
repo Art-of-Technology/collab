@@ -78,8 +78,8 @@ export async function PATCH(
     }
 
     // Verify the post exists
-    const existingPost = await prisma.post.findUnique({
-      where: { id: postId },
+    const existingPost = await prisma.post.findFirst({
+      where: postAccessWhere(postId, user.id),
     });
 
     if (!existingPost) {
@@ -176,8 +176,8 @@ export async function DELETE(
     const { postId } = _params;
 
     // Verify the post exists
-    const existingPost = await prisma.post.findUnique({
-      where: { id: postId },
+    const existingPost = await prisma.post.findFirst({
+      where: postAccessWhere(postId, user.id),
     });
 
     if (!existingPost) {

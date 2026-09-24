@@ -360,10 +360,7 @@ export async function createPost(data: {
   const workspace = await prisma.workspace.findFirst({
     where: {
       id: workspaceId,
-      OR: [
-        { ownerId: user.id },
-        { members: { some: { userId: user.id } } }
-      ]
+      ...postWorkspaceAccessWhere(user.id)
     }
   });
 
@@ -524,15 +521,6 @@ export async function updatePost(postId: string, data: {
     throw new Error('Invalid priority');
   }
   
-  // Verify the post exists
-  const existingPost = await prisma.post.findUnique({
-    where: { id: postId },
-  });
-
-  if (!existingPost) {
-    throw new Error('Post not found');
-  }
-  
   // Verify the user is the author of the post
   const user = await prisma.user.findUnique({
     where: {
@@ -542,6 +530,15 @@ export async function updatePost(postId: string, data: {
   
   if (!user) {
     throw new Error('User not found');
+  }
+  
+  // Verify the post exists
+  const existingPost = await prisma.post.findFirst({
+    where: postAccessWhere(postId, user.id),
+  });
+
+  if (!existingPost) {
+    throw new Error('Post not found');
   }
   
   if (existingPost.authorId !== user.id) {
@@ -675,15 +672,6 @@ export async function deletePost(postId: string) {
     throw new Error('Unauthorized');
   }
   
-  // Verify the post exists
-  const existingPost = await prisma.post.findUnique({
-    where: { id: postId },
-  });
-
-  if (!existingPost) {
-    throw new Error('Post not found');
-  }
-  
   // Verify the user is the author of the post
   const user = await prisma.user.findUnique({
     where: {
@@ -693,6 +681,15 @@ export async function deletePost(postId: string) {
   
   if (!user) {
     throw new Error('User not found');
+  }
+  
+  // Verify the post exists
+  const existingPost = await prisma.post.findFirst({
+    where: postAccessWhere(postId, user.id),
+  });
+
+  if (!existingPost) {
+    throw new Error('Post not found');
   }
   
   if (existingPost.authorId !== user.id) {
@@ -804,20 +801,9 @@ export async function resolveBlockerPost(postId: string) {
   }
   
   // Get the post with workspace information
-  const post = await prisma.post.findUnique({
-    where: { id: postId },
-    include: {
-      workspace: {
-        select: {
-          id: true,
-          ownerId: true,
-          members: {
-            where: { userId: user.id },
-            select: { role: true }
-          }
-        }
-      }
-    }
+  const post = await prisma.post.findFirst({
+    where: postAccessWhere(postId, user.id),
+    select: { id: true, workspaceId: true, authorId: true, type: true },
   });
 
   if (!post) {
@@ -862,12 +848,12 @@ export async function resolveBlockerPost(postId: string) {
         resolvedById: user.id,
       },
       include: {
-        author: true,
+        author: { select: userSelectFields },
         workspace: true,
         tags: true,
         comments: {
           include: {
-            author: true,
+            author: { select: userSelectFields },
           },
           orderBy: {
             createdAt: "asc",

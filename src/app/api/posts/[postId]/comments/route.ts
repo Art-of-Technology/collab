@@ -16,6 +16,8 @@ export async function POST(
 
     const _params = await params;
     const postId = await _params.postId;
+    const post = await prisma.post.findFirst({ where: postAccessWhere(postId, user.id), select: { id: true } });
+    if (!post) return new NextResponse("Post not found", { status: 404 });
     const body = await req.json();
     const { message, html, parentId } = body;
 

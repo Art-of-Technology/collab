@@ -1,6 +1,6 @@
 'use server';
 
-import { postAccessWhere } from '@/lib/post-access';
+import { postAccessWhere, commentAccessWhere } from '@/lib/post-access';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -160,11 +160,7 @@ export async function createComment(data: {
   }
   
   // Verify the post exists
-  const post = await prisma.post.findUnique({
-    where: {
-      id: postId
-    }
-  });
+  const post = await prisma.post.findFirst({ where: postAccessWhere(postId, user.id), select: { id: true } });
   
   if (!post) {
     throw new Error('Post not found');
@@ -172,11 +168,7 @@ export async function createComment(data: {
   
   // If parentId is provided, verify it exists
   if (parentId) {
-    const parentComment = await prisma.comment.findUnique({
-      where: {
-        id: parentId
-      }
-    });
+    const parentComment = await prisma.comment.findFirst({ where: commentAccessWhere(parentId, user.id, postId), select: { id: true } });
     
     if (!parentComment) {
       throw new Error('Parent comment not found');
@@ -296,11 +288,7 @@ export async function updateComment(commentId: string, data: {
   }
   
   // Verify the comment exists and belongs to the user
-  const comment = await prisma.comment.findUnique({
-    where: {
-      id: commentId
-    }
-  });
+  const comment = await prisma.comment.findFirst({ where: commentAccessWhere(commentId, user.id) });
   
   if (!comment) {
     throw new Error('Comment not found');
@@ -366,13 +354,9 @@ export async function deleteComment(commentId: string) {
   }
   
   // Verify the comment exists and belongs to the user
-  const comment = await prisma.comment.findUnique({
-    where: {
-      id: commentId
-    }
-  });
+  const comment = await prisma.comment.findFirst({ where: commentAccessWhere(commentId, user.id) });
   
-  if (!comment) {
+  if (!comment?.postId) {
     throw new Error('Comment not found');
   }
   
@@ -381,7 +365,7 @@ export async function deleteComment(commentId: string) {
   }
   
   // Delete the comment and its replies recursively
-  await deleteCommentRecursive(commentId);
+  await deleteCommentRecursive(commentId, comment.postId, user.id);
   
   return true;
 }
@@ -389,11 +373,13 @@ export async function deleteComment(commentId: string) {
 /**
  * Recursive helper to delete a comment and all its replies
  */
-async function deleteCommentRecursive(commentId: string) {
+async function deleteCommentRecursive(commentId: string, postId: string, userId: string) {
   // First, get all replies to this comment
   const replies = await prisma.comment.findMany({
     where: {
-      parentId: commentId
+      parentId: commentId,
+      postId,
+      post: postAccessWhere(postId, userId)
     },
     select: {
       id: true
@@ -402,7 +388,7 @@ async function deleteCommentRecursive(commentId: string) {
   
   // Recursively delete each reply
   for (const reply of replies) {
-    await deleteCommentRecursive(reply.id);
+    await deleteCommentRecursive(reply.id, postId, userId);
   }
   
   // Delete this comment

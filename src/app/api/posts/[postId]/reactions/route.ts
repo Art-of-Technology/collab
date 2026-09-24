@@ -25,8 +25,8 @@ export async function POST(
     }
 
     // Check if post exists
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    const post = await prisma.post.findFirst({
+      where: postAccessWhere(postId, user.id),
     });
 
     if (!post) {
