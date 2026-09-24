@@ -40,16 +40,18 @@ export async function POST(
     const { workspaceId, eventType, testData } = validation.data;
 
     // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
+    const workspace = await prisma.workspace.findFirst({
       where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId
-        }
-      }
+        id: workspaceId,
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true, role: 'ADMIN' } } },
+        ],
+      },
+      select: { id: true, name: true, slug: true },
     });
 
-    if (!membership) {
+    if (!workspace) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 

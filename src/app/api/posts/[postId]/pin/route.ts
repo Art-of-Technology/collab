@@ -1,3 +1,4 @@
+import { requirePostAccess } from '@/lib/post-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
@@ -16,6 +17,7 @@ export async function PUT(
 
     const _params = await params;
     const { postId } = _params;
+    await requirePostAccess(postId);
     const body = await request.json();
     const { isPinned } = body;
 
@@ -109,6 +111,9 @@ export async function PUT(
     });
 
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Post not found', 'Comment not found'].includes(error.message)) {
+      return new NextResponse(error.message, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error('Error pinning/unpinning post:', error);
     return NextResponse.json(
       { error: 'Failed to update post pin status' },

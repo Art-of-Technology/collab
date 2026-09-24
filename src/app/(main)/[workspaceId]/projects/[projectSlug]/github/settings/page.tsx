@@ -16,7 +16,7 @@ export default async function GitHubSettingsPage({ params }: GitHubSettingsPageP
   const { workspaceId: workspaceSlugOrId, projectSlug } = await params;
   const session = await getServerSession(authConfig);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     redirect('/login');
   }
 
@@ -30,13 +30,10 @@ export default async function GitHubSettingsPage({ params }: GitHubSettingsPageP
   const workspace = await prisma.workspace.findFirst({
     where: {
       id: workspaceId,
-      members: {
-        some: {
-          user: {
-            email: session.user.email
-          }
-        }
-      }
+      AND: { OR: [
+        { ownerId: session.user.id },
+        { members: { some: { userId: session.user.id, status: true } } }
+      ] }
     }
   });
 
@@ -99,7 +96,7 @@ export default async function GitHubSettingsPage({ params }: GitHubSettingsPageP
     branchEnvironmentMap: project.repository.branchEnvironmentMap as Record<string, string> || {},
     issueTypeMapping: project.repository.issueTypeMapping as Record<string, string> || {},
     webhookId: project.repository.webhookId,
-    webhookSecret: project.repository.webhookSecret,
+    hasWebhookSecret: Boolean(project.repository.webhookSecret),
     syncedAt: project.repository.syncedAt?.toISOString() || null,
     branches: project.repository.branches.map(b => ({
       id: b.id,

@@ -1,3 +1,4 @@
+import { requireRepositoryAccess, versionAccessWhere, releaseAccessWhere } from '@/lib/github/repository-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -8,6 +9,7 @@ export async function GET(
 ) {
   try {
     const { repositoryId } = await params;
+    const userId = await requireRepositoryAccess(repositoryId);
 
     // Get repository with counts
     const repository = await prisma.repository.findUnique({
@@ -17,8 +19,8 @@ export async function GET(
           select: {
             commits: true,
             pullRequests: true,
-            versions: true,
-            releases: true,
+            versions: { where: versionAccessWhere(userId) },
+            releases: { where: releaseAccessWhere(userId) },
             branches: true,
           },
         },
@@ -55,7 +57,7 @@ export async function GET(
 
     // Get latest release
     const latestRelease = await prisma.release.findFirst({
-      where: { repositoryId },
+      where: { ...releaseAccessWhere(userId), repositoryId },
       orderBy: { publishedAt: 'desc' },
       select: {
         tagName: true,
@@ -66,7 +68,7 @@ export async function GET(
 
     // Get total releases count
     const totalReleases = await prisma.release.count({
-      where: { repositoryId },
+      where: { ...releaseAccessWhere(userId), repositoryId },
     });
 
     // Get branch counts (total and recently updated as "active")
@@ -109,6 +111,9 @@ export async function GET(
       },
     });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Repository not found'].includes(error.message)) {
+      return NextResponse.json({ error: error.message }, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error('[DASHBOARD_GET]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

@@ -1,3 +1,4 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
@@ -32,7 +33,10 @@ export async function GET(req: Request) {
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: { some: { userId: currentUser.id } },
+        OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ],
       },
       select: { id: true },
     });
@@ -179,6 +183,10 @@ export async function POST(req: Request) {
 
     if (!workspaceId) {
       return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 });
+    }
+
+    if (!await userHasWorkspaceAccess(currentUser.id, workspaceId)) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
     // Find agent

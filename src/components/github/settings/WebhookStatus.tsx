@@ -31,7 +31,7 @@ interface WebhookStatusProps {
   repositoryId: string;
   repositoryUrl?: string;
   webhookUrl?: string;
-  webhookSecret?: string;
+  hasWebhookSecret?: boolean;
   isConnected: boolean;
 }
 
@@ -47,7 +47,7 @@ export function WebhookStatus({
   repositoryId,
   repositoryUrl,
   webhookUrl,
-  webhookSecret,
+  hasWebhookSecret,
   isConnected,
 }: WebhookStatusProps) {
   const [recentEvents, setRecentEvents] = useState<WebhookEvent[]>([]);
@@ -221,7 +221,7 @@ export function WebhookStatus({
             <div className="px-3 py-2.5 rounded-md bg-collab-900 border border-collab-700">
               <p className="text-[10px] text-collab-500 uppercase tracking-wide mb-1">Secret</p>
               <code className="text-xs text-collab-50 font-mono">
-                {webhookSecret ? '••••••••••••••••' : 'Not configured'}
+                {hasWebhookSecret ? '••••••••••••••••' : 'Not configured'}
               </code>
             </div>
           </div>

@@ -1,3 +1,4 @@
+import { featureAccessWhere } from '@/lib/feature-access';
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth";
@@ -15,7 +16,7 @@ export async function POST(
   try {
     const session = await getAuthSession();
 
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -34,8 +35,8 @@ export async function POST(
     const { value } = validated.data;
 
     // Check if feature request exists
-    const featureRequest = await prisma.featureRequest.findUnique({
-      where: { id },
+    const featureRequest = await prisma.featureRequest.findFirst({
+      where: { id, ...featureAccessWhere(session.user.id) },
     });
 
     if (!featureRequest) {

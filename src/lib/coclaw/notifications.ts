@@ -1,3 +1,4 @@
+import { canReceiveNotification, notificationAccessWhere } from '@/lib/notification-access';
 import { prisma } from '@/lib/prisma';
 
 // ---------------------------------------------------------------------------
@@ -26,6 +27,7 @@ export const COCLAW_NOTIFICATION_PREFIX = 'COCLAW_';
 
 export interface CreateCoclawNotificationOptions {
   userId: string;
+  workspaceId: string;
   type: CoclawNotificationType;
   content: string;
 }
@@ -43,17 +45,20 @@ export async function createCoclawNotification(
   opts: CreateCoclawNotificationOptions,
 ): Promise<void> {
   try {
+    if (!await canReceiveNotification(opts.userId, { workspaceId: opts.workspaceId })) return;
     await prisma.notification.create({
       data: {
         userId: opts.userId,
-        senderId: opts.userId, // Coclaw acts on user's behalf
+        senderId: opts.userId,
+        workspaceId: opts.workspaceId,
+        isPersonal: false,
         type: opts.type,
         content: opts.content,
         read: false,
       },
     });
-  } catch (err) {
-    console.error('[coclaw-notification] Failed to create:', err);
+  } catch (error) {
+    console.error('[coclaw-notification] Failed to create:', error);
   }
 }
 
@@ -64,20 +69,7 @@ export async function createCoclawNotification(
 export async function createCoclawNotifications(
   items: CreateCoclawNotificationOptions[],
 ): Promise<void> {
-  if (items.length === 0) return;
-  try {
-    await prisma.notification.createMany({
-      data: items.map((item) => ({
-        userId: item.userId,
-        senderId: item.userId,
-        type: item.type,
-        content: item.content,
-        read: false,
-      })),
-    });
-  } catch (err) {
-    console.error('[coclaw-notification] Failed to create batch:', err);
-  }
+  await Promise.all(items.map(createCoclawNotification));
 }
 
 // ---------------------------------------------------------------------------
@@ -85,11 +77,12 @@ export async function createCoclawNotifications(
 // ---------------------------------------------------------------------------
 
 /** Count unread Coclaw notifications for a user */
-export async function getUnreadCoclawCount(userId: string): Promise<number> {
+export async function getUnreadCoclawCount(userId: string, workspaceId: string): Promise<number> {
   try {
     return await prisma.notification.count({
       where: {
-        userId,
+        ...await notificationAccessWhere(userId),
+        workspaceId,
         read: false,
         type: { startsWith: COCLAW_NOTIFICATION_PREFIX },
       },
@@ -102,12 +95,14 @@ export async function getUnreadCoclawCount(userId: string): Promise<number> {
 /** Fetch recent Coclaw notifications for a user */
 export async function getRecentCoclawNotifications(
   userId: string,
+  workspaceId: string,
   limit = 20,
 ) {
   try {
     return await prisma.notification.findMany({
       where: {
-        userId,
+        ...await notificationAccessWhere(userId),
+        workspaceId,
         type: { startsWith: COCLAW_NOTIFICATION_PREFIX },
       },
       orderBy: { createdAt: 'desc' },
@@ -128,11 +123,13 @@ export async function getRecentCoclawNotifications(
 /** Mark all unread Coclaw notifications as read for a user */
 export async function markAllCoclawNotificationsRead(
   userId: string,
+  workspaceId: string,
 ): Promise<number> {
   try {
     const result = await prisma.notification.updateMany({
       where: {
-        userId,
+        ...await notificationAccessWhere(userId),
+        workspaceId,
         read: false,
         type: { startsWith: COCLAW_NOTIFICATION_PREFIX },
       },

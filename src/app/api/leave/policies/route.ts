@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
       where: { id: workspaceId },
       include: {
         members: {
-          where: { userId: user.id },
+          where: { userId: user.id, status: true },
         },
       },
     });
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

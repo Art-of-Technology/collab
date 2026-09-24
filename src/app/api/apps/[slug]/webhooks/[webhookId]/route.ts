@@ -36,16 +36,18 @@ export async function GET(
     }
 
     // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
+    const workspace = await prisma.workspace.findFirst({
       where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId
-        }
-      }
+        id: workspaceId,
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true, role: 'ADMIN' } } },
+        ],
+      },
+      select: { id: true, name: true, slug: true },
     });
 
-    if (!membership || membership.role !== 'ADMIN') {
+    if (!workspace) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
@@ -153,8 +155,15 @@ export async function PATCH(
     }
 
     // Find webhook with workspace verification
-    const webhook = await prisma.appWebhook.findUnique({
-      where: { id: webhookId },
+    const webhook = await prisma.appWebhook.findFirst({
+      where: {
+        id: webhookId,
+        app: { slug },
+        installation: { workspace: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true, role: 'ADMIN' } } },
+        ] } },
+      },
       include: {
         app: true,
         installation: {
@@ -172,20 +181,6 @@ export async function PATCH(
     // Verify app slug matches
     if (webhook.app.slug !== slug) {
       return NextResponse.json({ error: 'Webhook not found' }, { status: 404 });
-    }
-
-    // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId: webhook.installation.workspaceId
-        }
-      }
-    });
-
-    if (!membership || membership.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     // Check for URL conflicts if URL is being changed
@@ -265,16 +260,18 @@ export async function DELETE(
     }
 
     // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
+    const workspace = await prisma.workspace.findFirst({
       where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId
-        }
-      }
+        id: workspaceId,
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true, role: 'ADMIN' } } },
+        ],
+      },
+      select: { id: true, name: true, slug: true },
     });
 
-    if (!membership || membership.role !== 'ADMIN') {
+    if (!workspace) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 

@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
@@ -7,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
             {
               OR: [
                 { ownerId: session.user.id },
-                { members: { some: { userId: session.user.id } } }
+                { members: { some: { userId: session.user.id, status: true } } }
               ]
             }
           ]
@@ -54,12 +55,14 @@ export async function GET(request: NextRequest) {
         where: {
           OR: [
             { ownerId: session.user.id },
-            { members: { some: { userId: session.user.id } } },
+            { members: { some: { userId: session.user.id, status: true } } },
           ],
         },
         select: { id: true },
       });
       
+      if (accessibleWorkspaces.length === 0) return NextResponse.json([]);
+
       whereClause.workspaceId = {
         in: accessibleWorkspaces.map(w => w.id)
       };
@@ -109,13 +112,13 @@ export async function GET(request: NextRequest) {
 
       // 1. Exact issueKey matches (highest priority)
       const exactIssueKeyMatches = await prisma.issue.findMany({
-        where: {
+        where: { AND: [issueReadAccessWhere(session.user.id), {
           ...whereClause,
           issueKey: {
             equals: query,
             mode: 'insensitive'
           }
-        },
+        }] },
         include: includeClause,
         orderBy: { createdAt: 'desc' },
         take: 10
@@ -125,7 +128,7 @@ export async function GET(request: NextRequest) {
       let partialIssueKeyMatches: any[] = [];
       if (exactIssueKeyMatches.length < 10) {
         partialIssueKeyMatches = await prisma.issue.findMany({
-          where: {
+          where: { AND: [issueReadAccessWhere(session.user.id), {
             ...whereClause,
             issueKey: {
               contains: query,
@@ -134,7 +137,7 @@ export async function GET(request: NextRequest) {
             ...(exactIssueKeyMatches.length > 0 && {
               NOT: { id: { in: exactIssueKeyMatches.map(issue => issue.id) } }
             })
-          },
+          }] },
           include: includeClause,
           orderBy: { createdAt: 'desc' },
           take: 10 - exactIssueKeyMatches.length
@@ -147,7 +150,7 @@ export async function GET(request: NextRequest) {
       if (currentCount < 10) {
         const existingIds = [...exactIssueKeyMatches, ...partialIssueKeyMatches].map(issue => issue.id);
         titleMatches = await prisma.issue.findMany({
-          where: {
+          where: { AND: [issueReadAccessWhere(session.user.id), {
             ...whereClause,
             title: {
               contains: query,
@@ -156,7 +159,7 @@ export async function GET(request: NextRequest) {
             ...(existingIds.length > 0 && {
               NOT: { id: { in: existingIds } }
             })
-          },
+          }] },
           include: includeClause,
           orderBy: { createdAt: 'desc' },
           take: 10 - currentCount
@@ -169,7 +172,7 @@ export async function GET(request: NextRequest) {
       if (finalCount < 10) {
         const existingIds = [...exactIssueKeyMatches, ...partialIssueKeyMatches, ...titleMatches].map(issue => issue.id);
         descriptionMatches = await prisma.issue.findMany({
-          where: {
+          where: { AND: [issueReadAccessWhere(session.user.id), {
             ...whereClause,
             description: {
               contains: query,
@@ -178,7 +181,7 @@ export async function GET(request: NextRequest) {
             ...(existingIds.length > 0 && {
               NOT: { id: { in: existingIds } }
             })
-          },
+          }] },
           include: includeClause,
           orderBy: { createdAt: 'desc' },
           take: 10 - finalCount
@@ -195,7 +198,7 @@ export async function GET(request: NextRequest) {
     } else {
       // If no query, just get recent issues
       allIssues = await prisma.issue.findMany({
-        where: whereClause,
+        where: { AND: [issueReadAccessWhere(session.user.id), whereClause] },
         include: {
           project: {
             select: {

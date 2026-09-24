@@ -1,3 +1,4 @@
+import { activityReadAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -228,11 +229,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: { userId: session.user.id, workspaceId },
-      },
-    });
+    const membership = await userHasWorkspaceAccess(session.user.id, workspaceId);
     if (!membership) {
       return NextResponse.json({ error: 'Not a member' }, { status: 403 });
     }
@@ -275,7 +272,7 @@ export async function GET(
     // Get ALL issues ever assigned to these members (for historical reconstruction)
     // Filter out issues from archived projects
     const allIssues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         workspaceId,
         assigneeId: { in: memberUserIds },
         ...(projectIds?.length ? { projectId: { in: projectIds } } : {}),
@@ -284,7 +281,7 @@ export async function GET(
           { project: { isArchived: null } },
           { project: { isArchived: false } },
         ],
-      },
+      }] },
       select: {
         id: true,
         issueKey: true,
@@ -298,7 +295,7 @@ export async function GET(
         project: { select: { id: true, name: true, isArchived: true } },
         projectStatus: { select: { id: true, name: true, displayName: true, isFinal: true } },
         targetRelations: {
-          where: { relationType: 'BLOCKED_BY' },
+          where: { relationType: 'BLOCKED_BY', sourceIssue: issueReadAccessWhere(session.user.id) },
           select: { sourceIssue: { select: { issueKey: true } } },
         },
       },
@@ -329,11 +326,11 @@ export async function GET(
 
     // Get ALL status changes for these issues (need full history)
     const allStatusChanges = await prisma.issueActivity.findMany({
-      where: {
+      where: await activityReadAccessWhere(session.user.id, {
         workspaceId,
         action: 'STATUS_CHANGED',
         itemId: { in: allIssues.map(i => i.id) },
-      },
+      }),
       select: {
         id: true,
         itemId: true,

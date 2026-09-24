@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: User Search
  * GET /api/apps/auth/search/users - Search workspace members
@@ -76,24 +77,24 @@ export const GET = withAppAuth(
         members.map(async (member: any) => {
           const [activeIssues, totalAssigned, completedIssues] = await Promise.all([
             prisma.issue.count({
-              where: {
+              where: { AND: [issueReadAccessWhere(context.user.id), {
                 workspaceId: context.workspace.id,
                 assigneeId: member.userId,
                 statusId: { notIn: finalStatusIds },
-              },
+              }] },
             }),
             prisma.issue.count({
-              where: {
+              where: { AND: [issueReadAccessWhere(context.user.id), {
                 workspaceId: context.workspace.id,
                 assigneeId: member.userId,
-              },
+              }] },
             }),
             prisma.issue.count({
-              where: {
+              where: { AND: [issueReadAccessWhere(context.user.id), {
                 workspaceId: context.workspace.id,
                 assigneeId: member.userId,
                 statusId: { in: finalStatusIds },
-              },
+              }] },
             }),
           ]);
 

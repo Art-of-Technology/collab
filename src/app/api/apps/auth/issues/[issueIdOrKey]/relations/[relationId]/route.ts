@@ -1,3 +1,4 @@
+import { findIssueByIdOrKey, issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Issue Relation Delete Endpoint
  * DELETE /api/apps/auth/issues/:issueIdOrKey/relations/:relationId - Delete relation
@@ -21,15 +22,7 @@ export const DELETE = withAppAuth(
       const { issueIdOrKey, relationId } = await params;
 
       // Find the issue
-      const issue = await prisma.issue.findFirst({
-        where: {
-          workspaceId: context.workspace.id,
-          OR: [
-            { id: issueIdOrKey },
-            { issueKey: issueIdOrKey },
-          ],
-        },
-      });
+      const issue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
 
       if (!issue) {
         return NextResponse.json(
@@ -39,21 +32,18 @@ export const DELETE = withAppAuth(
       }
 
       // Find the relation
-      const relation = await prisma.issueRelation.findUnique({
-        where: { id: relationId },
+      const relation = await prisma.issueRelation.findFirst({
+        where: {
+          id: relationId,
+          OR: [{ sourceIssueId: issue.id }, { targetIssueId: issue.id }],
+          sourceIssue: issueReadAccessWhere(context.user.id),
+          targetIssue: issueReadAccessWhere(context.user.id),
+        },
       });
 
       if (!relation) {
         return NextResponse.json(
           { error: 'relation_not_found', error_description: 'Relation not found' },
-          { status: 404 }
-        );
-      }
-
-      // Verify the relation belongs to this issue
-      if (relation.sourceIssueId !== issue.id && relation.targetIssueId !== issue.id) {
-        return NextResponse.json(
-          { error: 'relation_not_found', error_description: 'Relation not found for this issue' },
           { status: 404 }
         );
       }

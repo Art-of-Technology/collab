@@ -1,4 +1,14 @@
 import { prisma } from '@/lib/prisma';
+import { issueAccessWhere } from '@/lib/issue-finder';
+
+export async function validateViewProjects(projectIds: unknown, userId: string): Promise<boolean> {
+  if (!Array.isArray(projectIds) || projectIds.some(id => typeof id !== 'string' || !id)) return false;
+  const ids = [...new Set<string>(projectIds)];
+  if (ids.length === 0) return true;
+  return await prisma.project.count({
+    where: { id: { in: ids }, ...issueAccessWhere(userId) }
+  }) === ids.length;
+}
 
 /**
  * Find the default view for a project

@@ -9,7 +9,6 @@ export interface Repository {
   name: string;
   fullName: string;
   defaultBranch: string;
-  webhookSecret: string;
   webhookId?: string | null;
   isActive: boolean;
   syncedAt: Date | null;

@@ -21,6 +21,10 @@ export const POST = withRateLimit(async function(
     const view = await prisma.view.findFirst({
       where: {
         id: viewId,
+        workspace: { OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ] },
         OR: [
           // User owns the view
           { ownerId: currentUser.id },
@@ -32,7 +36,7 @@ export const POST = withRateLimit(async function(
             workspace: {
               OR: [
                 { ownerId: currentUser.id },
-                { members: { some: { userId: currentUser.id } } }
+                { members: { some: { userId: currentUser.id, status: true } } }
               ]
             }
           }
@@ -90,6 +94,10 @@ export const DELETE = withRateLimit(async function(
     const view = await prisma.view.findFirst({
       where: {
         id: viewId,
+        workspace: { OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ] },
         OR: [
           // User owns the view
           { ownerId: currentUser.id },
@@ -101,7 +109,7 @@ export const DELETE = withRateLimit(async function(
             workspace: {
               OR: [
                 { ownerId: currentUser.id },
-                { members: { some: { userId: currentUser.id } } }
+                { members: { some: { userId: currentUser.id, status: true } } }
               ]
             }
           }
@@ -145,6 +153,10 @@ export const GET = withRateLimit(async function(
     const view = await prisma.view.findFirst({
       where: {
         id: viewId,
+        workspace: { OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ] },
         OR: [
           // User owns the view
           { ownerId: currentUser.id },
@@ -156,7 +168,7 @@ export const GET = withRateLimit(async function(
             workspace: {
               OR: [
                 { ownerId: currentUser.id },
-                { members: { some: { userId: currentUser.id } } }
+                { members: { some: { userId: currentUser.id, status: true } } }
               ]
             }
           }

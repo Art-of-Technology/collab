@@ -6,14 +6,15 @@ import { getAuthSession } from '@/lib/auth';
 /**
  * Get pending workspace invitations for a user
  */
-export async function getPendingInvitations(email: string) {
-  if (!email) {
-    throw new Error('Email is required');
+export async function getPendingInvitations() {
+  const session = await getAuthSession();
+  if (!session?.user?.id || !session.user.email) {
+    throw new Error('Unauthorized');
   }
 
   const pendingInvitations = await prisma.workspaceInvitation.findMany({
     where: {
-      email,
+      email: session.user.email,
       status: "pending",
       expiresAt: {
         gte: new Date()

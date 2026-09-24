@@ -6,8 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
-import { noteAccessWhere, canAccessNote, canWriteNoteDestination } from '@/lib/secrets/access';
+import { canUseNoteTags, noteTagAccessWhere, noteAccessWhere, canAccessNote, canWriteNoteDestination } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
@@ -24,12 +23,6 @@ export const GET = withAppAuth(
   // with structure { params: Promise<{ id: string }> } due to async params in App Router
   async (request: NextRequest, context: AppAuthContext, routeParams: { params: Promise<{ id: string }> }) => {
     try {
-      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
-        return NextResponse.json(
-          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
-          { status: 403 }
-        );
-      }
       const { id } = await routeParams.params;
 
       // Find the context document
@@ -69,6 +62,7 @@ export const GET = withAppAuth(
             },
           },
           tags: {
+            where: noteTagAccessWhere(context.user.id),
             select: {
               id: true,
               name: true,
@@ -147,12 +141,6 @@ export const GET = withAppAuth(
 export const PUT = withAppAuth(
   async (request: NextRequest, context: AppAuthContext, routeParams: { params: Promise<{ id: string }> }) => {
     try {
-      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
-        return NextResponse.json(
-          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
-          { status: 403 }
-        );
-      }
       const { id } = await routeParams.params;
       const access = await canAccessNote(context.user.id, id);
       if (!access.canEdit) {
@@ -234,6 +222,10 @@ export const PUT = withAppAuth(
         );
       }
 
+      if (!await canUseNoteTags(context.user.id, updateData.tagIds, context.workspace.id, finalProjectId)) {
+        return NextResponse.json({ error: "Invalid note tags" }, { status: 400 });
+      }
+
       // Build update object
       const updatePayload: any = {};
       if (updateData.title !== undefined) updatePayload.title = updateData.title;
@@ -283,6 +275,7 @@ export const PUT = withAppAuth(
             },
           },
           tags: {
+            where: noteTagAccessWhere(context.user.id),
             select: {
               id: true,
               name: true,

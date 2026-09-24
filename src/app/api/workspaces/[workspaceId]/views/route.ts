@@ -1,3 +1,4 @@
+import { validateViewProjects } from '@/lib/view-helpers';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authConfig } from '@/lib/auth';
@@ -11,7 +12,7 @@ export async function GET(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -122,7 +123,7 @@ export async function POST(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -133,13 +134,10 @@ export async function POST(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        AND: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ] }
       }
     });
 
@@ -194,6 +192,10 @@ export async function POST(
         { error: 'Invalid visibility' }, 
         { status: 400 }
       );
+    }
+
+    if (!await validateViewProjects(projectIds, session.user.id)) {
+      return NextResponse.json({ error: 'Invalid or inaccessible projects' }, { status: 400 });
     }
 
     // Generate unique slug for the view

@@ -46,7 +46,7 @@ export default async function ProjectFeatureRequestPage({ params }: FeatureReque
   const { workspaceId: workspaceSlugOrId, projectSlug, id } = await params;
   const session = await getServerSession(authConfig);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     redirect('/login');
   }
 
@@ -60,13 +60,10 @@ export default async function ProjectFeatureRequestPage({ params }: FeatureReque
   const workspace = await prisma.workspace.findFirst({
     where: {
       id: workspaceId,
-      members: {
-        some: {
-          user: {
-            email: session.user.email
-          }
-        }
-      }
+      AND: { OR: [
+        { ownerId: session.user.id },
+        { members: { some: { userId: session.user.id, status: true } } }
+      ] }
     }
   });
 

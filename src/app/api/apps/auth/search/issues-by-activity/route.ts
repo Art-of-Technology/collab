@@ -1,3 +1,4 @@
+import { activityReadAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Activity-Based Issue Search
  * GET /api/apps/auth/search/issues-by-activity - Find issues by their activity history
@@ -110,7 +111,7 @@ export const GET = withAppAuth(
 
       // Find matching activities
       const matchingActivities = await prisma.issueActivity.findMany({
-        where: activityWhere,
+        where: await activityReadAccessWhere(context.user.id, activityWhere),
         select: {
           itemId: true,
           action: true,
@@ -162,9 +163,9 @@ export const GET = withAppAuth(
 
       // Count and fetch issues
       const [total, issues] = await Promise.all([
-        prisma.issue.count({ where: issueWhere }),
+        prisma.issue.count({ where: { AND: [issueWhere, issueReadAccessWhere(context.user.id)] } }),
         prisma.issue.findMany({
-          where: issueWhere,
+          where: { AND: [issueReadAccessWhere(context.user.id), issueWhere] },
           skip: (page - 1) * limit,
           take: limit,
           orderBy: { updatedAt: 'desc' },
@@ -196,6 +197,7 @@ export const GET = withAppAuth(
               },
             },
             labels: {
+              where: { workspaceId: context.workspace.id },
               select: {
                 id: true,
                 name: true,

@@ -12,7 +12,7 @@ import { generateWorkspaceSlug } from '@/lib/utils';
 export async function getUserWorkspaces() {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -63,7 +63,8 @@ export async function getUserWorkspaces() {
     where: {
       members: {
         some: {
-          userId: user.id
+          userId: user.id,
+          status: true
         }
       },
       NOT: {
@@ -107,7 +108,7 @@ export async function getUserWorkspaces() {
 export async function getWorkspaceById(workspaceId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -128,7 +129,11 @@ export async function getWorkspaceById(workspaceId: string) {
     // Try to find by slug first, then by ID for backward compatibility
   let workspace = await prisma.workspace.findUnique({
     where: {
-      slug: workspaceId
+      slug: workspaceId,
+      AND: { OR: [
+        { ownerId: user.id },
+        { members: { some: { userId: user.id, status: true } } }
+      ] }
     },
     include: {
       owner: {
@@ -157,7 +162,11 @@ export async function getWorkspaceById(workspaceId: string) {
   if (!workspace) {
     workspace = await prisma.workspace.findUnique({
       where: {
-        id: workspaceId
+        id: workspaceId,
+        AND: { OR: [
+          { ownerId: user.id },
+          { members: { some: { userId: user.id, status: true } } }
+        ] }
       },
       include: {
         owner: {
@@ -189,7 +198,7 @@ export async function getWorkspaceById(workspaceId: string) {
   
   // Check if the user has access to this workspace
   const isOwner = workspace.ownerId === user.id;
-  const isMember = workspace.members.some((member) => member.userId === user.id);
+  const isMember = workspace.members.some((member) => member.userId === user.id && member.status === true);
   
   if (!isOwner && !isMember) {
     throw new Error('You do not have access to this workspace');
@@ -213,7 +222,7 @@ export async function createWorkspace(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -305,7 +314,7 @@ export async function updateWorkspace(workspaceId: string, data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -397,7 +406,7 @@ export async function updateWorkspace(workspaceId: string, data: {
 export async function deleteWorkspace(workspaceId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -447,7 +456,7 @@ export async function addWorkspaceMember(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -545,7 +554,7 @@ export async function removeWorkspaceMember(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -607,7 +616,7 @@ export async function removeWorkspaceMember(data: {
 export async function checkWorkspaceLimit() {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -652,7 +661,7 @@ export async function getUserWorkspacesById(userId: string, limit?: number) {
     where: {
       OR: [
         { ownerId: userId },
-        { members: { some: { userId } } }
+        { members: { some: { userId, status: true } } }
       ]
     },
     take: limit || undefined,
@@ -671,38 +680,6 @@ export async function getUserWorkspacesById(userId: string, limit?: number) {
 }
 
 /**
- * Get pending workspace invitations for user
- */
-export async function getPendingInvitations(email: string) {
-  if (!email) {
-    throw new Error('Email is required');
-  }
-  
-  const pendingInvitations = await prisma.workspaceInvitation.findMany({
-    where: {
-      email: email,
-      status: "pending",
-      expiresAt: {
-        gte: new Date()
-      }
-    },
-    include: {
-      workspace: true,
-      invitedBy: {
-        select: {
-          name: true,
-          email: true,
-          image: true
-        }
-      }
-    },
-    orderBy: { createdAt: "desc" }
-  });
-  
-  return pendingInvitations;
-}
-
-/**
  * Get a workspace by ID with full details for the workspace detail page
  */
 export async function getDetailedWorkspaceById(workspaceId: string) {
@@ -715,7 +692,11 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
   // Try to find by slug first, then by ID for backward compatibility
   let workspace = await prisma.workspace.findUnique({
     where: {
-      slug: workspaceId
+      slug: workspaceId,
+      AND: { OR: [
+        { ownerId: session.user.id },
+        { members: { some: { userId: session.user.id, status: true } } }
+      ] }
     },
     include: {
       owner: {
@@ -783,7 +764,11 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
   if (!workspace) {
     workspace = await prisma.workspace.findUnique({
       where: {
-        id: workspaceId
+        id: workspaceId,
+        AND: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ] }
       },
       include: {
         owner: {
@@ -854,7 +839,7 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
   
   // Check if the user has access to this workspace
   const isOwner = workspace.ownerId === session.user.id;
-  const isMember = workspace.members.some((member: { user: { id: string } }) => member.user.id === session.user.id);
+  const isMember = workspace.members.some((member) => member.user.id === session.user.id && member.status === true);
   const isAdmin = session.user.role === 'admin';
   
   if (!isOwner && !isMember && !isAdmin) {
@@ -950,7 +935,7 @@ export async function updateWorkspaceMemberStatus(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   

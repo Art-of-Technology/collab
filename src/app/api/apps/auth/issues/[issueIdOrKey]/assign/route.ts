@@ -1,3 +1,4 @@
+import { findIssueByIdOrKey } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Issue Assignment Endpoint
  * POST /api/apps/auth/issues/:issueIdOrKey/assign - Assign/unassign issue
@@ -26,24 +27,7 @@ export const POST = withAppAuth(
       const data = AssignIssueSchema.parse(body);
 
       // Find the issue
-      const issue = await prisma.issue.findFirst({
-        where: {
-          workspaceId: context.workspace.id,
-          OR: [
-            { id: issueIdOrKey },
-            { issueKey: issueIdOrKey },
-          ],
-        },
-        include: {
-          assignee: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      });
+      const issue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
 
       if (!issue) {
         return NextResponse.json(

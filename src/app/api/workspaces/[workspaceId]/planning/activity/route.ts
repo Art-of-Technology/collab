@@ -1,3 +1,4 @@
+import { activityReadAccessWhere, issueAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -17,14 +18,7 @@ export async function GET(
     }
 
     // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId,
-        },
-      },
-    });
+    const membership = await userHasWorkspaceAccess(session.user.id, workspaceId);
 
     if (!membership) {
       return NextResponse.json({ error: 'Not a member of this workspace' }, { status: 403 });
@@ -50,7 +44,7 @@ export async function GET(
 
     // Fetch activities
     const activities = await prisma.issueActivity.findMany({
-      where: {
+      where: await activityReadAccessWhere(session.user.id, {
         workspaceId,
         createdAt: {
           gte: startDate,
@@ -59,7 +53,7 @@ export async function GET(
         ...(projectIds?.length ? { projectId: { in: projectIds } } : {}),
         ...(userIds?.length ? { userId: { in: userIds } } : {}),
         ...(cursor ? { id: { lt: cursor } } : {}),
-      },
+      }),
       include: {
         user: {
           select: {
@@ -69,6 +63,7 @@ export async function GET(
           },
         },
         oldStatus: {
+          where: { project: issueAccessWhere(session.user.id) },
           select: {
             id: true,
             name: true,
@@ -78,6 +73,7 @@ export async function GET(
           },
         },
         newStatus: {
+          where: { project: issueAccessWhere(session.user.id) },
           select: {
             id: true,
             name: true,
@@ -100,9 +96,9 @@ export async function GET(
     // Fetch related issues
     const issueIds = [...new Set(resultsToReturn.map((a) => a.itemId))];
     const issues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         id: { in: issueIds },
-      },
+      }] },
       select: {
         id: true,
         title: true,

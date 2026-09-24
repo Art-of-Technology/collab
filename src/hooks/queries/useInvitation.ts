@@ -10,7 +10,7 @@ import { workspaceKeys } from './useWorkspace';
 export function usePendingInvitations(email: string | undefined | null) {
   return useQuery({
     queryKey: ['workspaces', 'invitations', 'pending', email],
-    queryFn: () => getPendingInvitations(email as string),
+    queryFn: () => getPendingInvitations(),
     enabled: !!email,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });

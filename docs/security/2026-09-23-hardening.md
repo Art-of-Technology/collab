@@ -4,8 +4,11 @@ Status: local implementation; not deployed or release-approved.
 
 ## Issue access and mutations
 
-- Issue ID and key resolution always requires workspace ownership or active
-  membership. A caller-supplied workspace only narrows that authorized set.
+- Issue ID and key resolution requires ownership or active membership in the
+  issue workspace, project workspace and optional status-project workspace.
+  A caller-supplied workspace only narrows that authorized set. Bulk relations
+  apply this boundary to the source and every ID/key target before mutation;
+  an inaccessible target rejects the whole batch.
 - Issue updates reject empty, unknown or invalid fields using `UpdateIssueSchema`
   in `src/app/api/issues/[issueId]/route.ts`. General edits require
   `EDIT_ANY_TASK` or reporter-based `EDIT_SELF_TASK`; `CHANGE_TASK_STATUS` only
@@ -17,6 +20,9 @@ Status: local implementation; not deployed or release-approved.
   repository relations. Invalid moves fail atomically without clearing relations;
   cross-workspace moves are rejected. Conflicts return 409 for reload and retry.
 - Shared workspace permission queries ignore inactive memberships.
+
+Saved version/release visibility and authorized regeneration are owned by the
+[saved version authorization guide](version-access-invalidation.md).
 
 ## Notes access
 

@@ -19,6 +19,10 @@ export async function GET(
       where: {
         id,
         userId: currentUser.id,
+        workspace: { OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ] },
       },
       include: {
         agent: {
@@ -93,6 +97,10 @@ export async function DELETE(
       where: {
         id,
         userId: currentUser.id,
+        workspace: { OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ] },
       },
     });
 

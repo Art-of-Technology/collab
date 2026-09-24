@@ -21,7 +21,6 @@ interface Repository {
   fullName: string;
   isActive: boolean;
   syncedAt: Date | null;
-  webhookSecret: string;
   webhookId?: string | null;
   defaultBranch: string;
   developmentBranch?: string;
@@ -109,13 +108,6 @@ export function GitHubRepositorySettings({ projectId, repository, onUpdate }: Gi
     const webhookUrl = `${window.location.origin}/api/github/webhooks/events`;
     navigator.clipboard.writeText(webhookUrl);
     toast.success('Webhook URL copied to clipboard');
-  };
-
-  const copyWebhookSecret = () => {
-    if (repository?.webhookSecret) {
-      navigator.clipboard.writeText(repository.webhookSecret);
-      toast.success('Webhook secret copied to clipboard');
-    }
   };
 
   // If no repository connected, show OAuth connection
@@ -281,9 +273,9 @@ export function GitHubRepositorySettings({ projectId, repository, onUpdate }: Gi
                 <AlertCircle className="h-4 w-4 text-yellow-500" />
                 <AlertDescription>
                   <div className="space-y-2">
-                    <p className="font-medium text-yellow-700">Manual webhook setup required</p>
+                    <p className="font-medium text-yellow-700">Reconnect GitHub to configure webhooks</p>
                     <p className="text-sm">
-                      Automatic webhook creation failed. Please configure the webhook manually to enable real-time GitHub events.
+                      Reconnect the repository through GitHub to configure the webhook automatically.
                     </p>
                   </div>
                 </AlertDescription>
@@ -302,39 +294,6 @@ export function GitHubRepositorySettings({ projectId, repository, onUpdate }: Gi
                   </Button>
                 </div>
               </div>
-
-              <div>
-                <Label>Webhook Secret</Label>
-                <div className="flex gap-2">
-                  <Input
-                    readOnly
-                    type="password"
-                    value={repository.webhookSecret}
-                    className="font-mono text-sm"
-                  />
-                  <Button variant="outline" size="sm" onClick={copyWebhookSecret}>
-                    Copy
-                  </Button>
-                </div>
-              </div>
-
-              <Alert>
-                <CheckCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <div className="space-y-2">
-                    <p>To complete the setup, add this webhook to your GitHub repository:</p>
-                    <ol className="list-decimal list-inside space-y-1 text-sm">
-                      <li>Go to your repository Settings → Webhooks</li>
-                      <li>Click "Add webhook"</li>
-                      <li>Paste the webhook URL above</li>
-                      <li>Set Content type to "application/json"</li>  
-                      <li>Paste the webhook secret above</li>
-                      <li>Select "Send me everything" or choose specific events</li>
-                      <li>Click "Add webhook"</li>
-                    </ol>
-                  </div>
-                </AlertDescription>
-              </Alert>
 
               <Button variant="outline" asChild>
                 <a 

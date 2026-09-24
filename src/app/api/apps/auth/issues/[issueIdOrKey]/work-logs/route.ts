@@ -1,3 +1,4 @@
+import { findIssueByIdOrKey } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Issue Work Logs Endpoints
  * GET /api/apps/auth/issues/:issueIdOrKey/work-logs - List work logs
@@ -15,18 +16,6 @@ const CreateWorkLogSchema = z.object({
   loggedAt: z.string().datetime().optional().describe('When the work was done (ISO 8601)'),
 });
 
-async function findIssue(issueIdOrKey: string, workspaceId: string) {
-  return prisma.issue.findFirst({
-    where: {
-      workspaceId,
-      OR: [
-        { id: issueIdOrKey },
-        { issueKey: issueIdOrKey },
-      ],
-    },
-  });
-}
-
 /**
  * GET /api/apps/auth/issues/:issueIdOrKey/work-logs
  * Get work logs for an issue with time tracking summary
@@ -40,7 +29,7 @@ export const GET = withAppAuth(
       const offset = parseInt(searchParams.get('offset') || '0');
       const userId = searchParams.get('userId');
 
-      const issue = await findIssue(issueIdOrKey, context.workspace.id);
+      const issue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
       if (!issue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },
@@ -130,7 +119,7 @@ export const POST = withAppAuth(
       const body = await request.json();
       const data = CreateWorkLogSchema.parse(body);
 
-      const issue = await findIssue(issueIdOrKey, context.workspace.id);
+      const issue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
       if (!issue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },

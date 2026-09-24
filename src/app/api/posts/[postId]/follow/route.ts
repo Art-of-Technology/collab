@@ -1,3 +1,4 @@
+import { requirePostAccess } from '@/lib/post-access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authConfig } from "@/lib/auth";
@@ -14,6 +15,7 @@ export async function POST(
     }
 
     const { postId } = await params;
+    await requirePostAccess(postId);
     const userId = session.user.id;
 
     // Add the user as a follower
@@ -21,6 +23,9 @@ export async function POST(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Post not found', 'Comment not found'].includes(error.message)) {
+      return new NextResponse(error.message, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error("Error following post:", error);
     return NextResponse.json(
       { error: "Failed to follow post" },
@@ -40,6 +45,7 @@ export async function DELETE(
     }
 
     const { postId } = await params;
+    await requirePostAccess(postId);
     const userId = session.user.id;
 
     // Remove the user as a follower
@@ -47,6 +53,9 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Post not found', 'Comment not found'].includes(error.message)) {
+      return new NextResponse(error.message, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error("Error unfollowing post:", error);
     return NextResponse.json(
       { error: "Failed to unfollow post" },
@@ -66,6 +75,7 @@ export async function GET(
     }
 
     const { postId } = await params;
+    await requirePostAccess(postId);
     const userId = session.user.id;
 
     // Check if user is following the post
@@ -73,6 +83,9 @@ export async function GET(
 
     return NextResponse.json({ isFollowing });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Post not found', 'Comment not found'].includes(error.message)) {
+      return new NextResponse(error.message, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error("Error checking post follow status:", error);
     return NextResponse.json(
       { error: "Failed to check follow status" },

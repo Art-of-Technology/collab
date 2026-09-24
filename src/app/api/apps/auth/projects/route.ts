@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Projects Endpoints
  * GET /api/apps/auth/projects - List projects
@@ -57,7 +58,7 @@ export const GET = withAppAuth(
         include: {
           _count: {
             select: {
-              issues: true,
+              issues: { where: issueReadAccessWhere(context.user.id) },
               statuses: true,
             },
           },

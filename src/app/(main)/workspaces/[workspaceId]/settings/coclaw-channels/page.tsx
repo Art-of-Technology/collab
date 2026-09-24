@@ -1,3 +1,4 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
@@ -34,14 +35,7 @@ async function CoclawChannelsPageContent({ workspaceId }: { workspaceId: string 
   }
 
   // Verify membership
-  const member = await prisma.workspaceMember.findUnique({
-    where: {
-      userId_workspaceId: {
-        userId: session.user.id,
-        workspaceId: workspace.id,
-      },
-    },
-  });
+  const member = await userHasWorkspaceAccess(session.user.id, workspace.id);
 
   if (!member) {
     notFound();

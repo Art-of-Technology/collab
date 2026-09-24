@@ -1,3 +1,4 @@
+import { activityReadAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -89,14 +90,7 @@ export async function GET(
     }
 
     // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId,
-        },
-      },
-    });
+    const membership = await userHasWorkspaceAccess(session.user.id, workspaceId);
 
     if (!membership) {
       return NextResponse.json({ error: 'Not a member of this workspace' }, { status: 403 });
@@ -119,7 +113,7 @@ export async function GET(
 
     // Fetch activities in the date range
     const activities = await prisma.issueActivity.findMany({
-      where: {
+      where: await activityReadAccessWhere(session.user.id, {
         workspaceId,
         createdAt: {
           gte: startDate,
@@ -127,7 +121,7 @@ export async function GET(
         },
         ...(projectIds?.length ? { projectId: { in: projectIds } } : {}),
         ...(userIds?.length ? { userId: { in: userIds } } : {}),
-      },
+      }),
       include: {
         user: {
           select: {
@@ -147,9 +141,9 @@ export async function GET(
     // Fetch related issues for the activities
     const issueIds = [...new Set(activities.map((a) => a.itemId))];
     const issues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         id: { in: issueIds },
-      },
+      }] },
       select: {
         id: true,
         title: true,
@@ -204,7 +198,7 @@ export async function GET(
 
     // Fetch ALL assigned issues for each user (current state - not completed)
     const allAssignedIssues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         workspaceId,
         assigneeId: { in: uniqueUserIds },
         ...(projectIds?.length ? { projectId: { in: projectIds } } : {}),
@@ -212,7 +206,7 @@ export async function GET(
         projectStatus: {
           isFinal: false,
         },
-      },
+      }] },
       select: {
         id: true,
         title: true,
@@ -240,6 +234,7 @@ export async function GET(
         targetRelations: {
           where: {
             relationType: 'BLOCKED_BY',
+            sourceIssue: issueReadAccessWhere(session.user.id),
           },
           select: {
             id: true,
@@ -264,7 +259,7 @@ export async function GET(
 
     // Find when each issue was first moved to in_progress
     const firstInProgressActivities = await prisma.issueActivity.findMany({
-      where: {
+      where: await activityReadAccessWhere(session.user.id, {
         itemId: { in: activeIssueIds.length > 0 ? activeIssueIds : ['none'] },
         action: 'STATUS_CHANGED',
         fieldName: 'status',
@@ -273,7 +268,7 @@ export async function GET(
           { newValue: { contains: 'doing', mode: 'insensitive' } },
           { newValue: { contains: 'development', mode: 'insensitive' } },
         ],
-      },
+      }),
       orderBy: {
         createdAt: 'asc',
       },

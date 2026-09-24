@@ -1,3 +1,5 @@
+import { issueReadAccessWhere, issueAccessWhere } from '@/lib/issue-finder';
+import { validateIssueReferences } from '@/lib/issue-references';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
@@ -17,12 +19,13 @@ const RELATED_ISSUE_SELECT = {
 } as const;
 
 // Reuse a compact include set similar to the detail route
-const LIST_INCLUDE = {
+const listInclude = (userId: string) => ({
   project: { select: { id: true, name: true, slug: true, issuePrefix: true, description: true, color: true } },
   assignee: { select: { id: true, name: true, email: true, image: true } },
   reporter: { select: { id: true, name: true, email: true, image: true } },
-  labels: { select: { id: true, name: true, color: true } },
-  parent: { 
+  labels: { where: issueAccessWhere(userId), select: { id: true, name: true, color: true } },
+  parent: {
+    where: issueReadAccessWhere(userId),
     select: { 
       id: true, 
       title: true, 
@@ -39,7 +42,8 @@ const LIST_INCLUDE = {
       }
     } 
   },
-  children: { 
+  children: {
+    where: issueReadAccessWhere(userId),
     select: { 
       id: true, 
       title: true, 
@@ -57,8 +61,9 @@ const LIST_INCLUDE = {
     } 
   },
   projectStatus: { select: { id: true, name: true, displayName: true, color: true, order: true, isDefault: true } },
-  _count: { select: { children: true, comments: true } },
+  _count: { select: { children: { where: issueReadAccessWhere(userId) }, comments: true } },
   sourceRelations: {
+    where: { targetIssue: issueReadAccessWhere(userId) },
     select: {
       id: true,
       relationType: true,
@@ -66,19 +71,20 @@ const LIST_INCLUDE = {
     }
   },
   targetRelations: {
+    where: { sourceIssue: issueReadAccessWhere(userId) },
     select: {
       id: true,
       relationType: true,
       sourceIssue: { select: RELATED_ISSUE_SELECT }
     }
   }
-} as const;
+} as const);
 
 // GET /api/issues - Get issues by workspace/project
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -99,7 +105,7 @@ export async function GET(request: NextRequest) {
         id: workspaceId,
         OR: [
           { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } },
+          { members: { some: { userId: session.user.id, status: true } } },
         ],
       },
     });
@@ -117,8 +123,8 @@ export async function GET(request: NextRequest) {
     };
 
     const issues = await prisma.issue.findMany({
-      where: whereClause,
-      include: LIST_INCLUDE,
+      where: { AND: [issueReadAccessWhere(session.user.id), whereClause] },
+      include: listInclude(session.user.id),
       orderBy: { updatedAt: 'desc' }
     });
 
@@ -147,7 +153,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -188,7 +194,7 @@ export async function POST(request: NextRequest) {
           {
             OR: [
               { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } },
+              { members: { some: { userId: session.user.id, status: true } } },
             ]
           }
         ]
@@ -204,6 +210,11 @@ export async function POST(request: NextRequest) {
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
+
+    const referenceError = await validateIssueReferences(prisma, workspace.id, projectId, session.user.id, {
+      labels, parentId, assigneeId, reporterId,
+    });
+    if (referenceError) return NextResponse.json({ error: referenceError }, { status: 400 });
 
     // Use a transaction to ensure atomic counter increment and issue creation
     const created = await prisma.$transaction(async (tx) => {

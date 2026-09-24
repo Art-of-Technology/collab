@@ -1,3 +1,4 @@
+import { canReceiveNotification, resolveNotificationScope } from '@/lib/notification-access';
 import { prisma } from "@/lib/prisma";
 import {
   sendPushNotification,
@@ -14,7 +15,6 @@ export interface IssueFollowerNotificationOptions {
   type: NotificationType;
   content: string;
   excludeUserIds?: string[];
-  skipIssueIdReference?: boolean; // Skip setting issueId for deletion notifications
 }
 
 export interface PostFollowerNotificationOptions {
@@ -32,7 +32,6 @@ export interface ProjectFollowerNotificationOptions {
   type: NotificationType;
   content: string;
   excludeUserIds?: string[];
-  skipIssueIdReference?: boolean; // Skip setting issueId for deletion notifications
 }
 
 export interface LeaveRequestNotificationData {
@@ -220,8 +219,9 @@ export class NotificationService {
       storyId?: string;
       milestoneId?: string;
       leaveRequestId?: string;
-      // Non-persistent helper fields
       issueId?: string;
+      workspaceId?: string;
+      personal?: boolean;
     } = {}
   ): Promise<number> {
     if (!userIds || userIds.length === 0) return 0;
@@ -241,8 +241,12 @@ export class NotificationService {
     } = options;
 
     try {
-      // Build base notification rows with allowed relation fields only
+      const refs = options;
+      const scope = await resolveNotificationScope(refs);
+      if (!scope) return 0;
       const baseData = {
+        ...scope,
+        ...(issueId ? { issueId } : {}),
         type: typeof type === 'string' ? type : String(type),
         content,
         senderId,
@@ -258,7 +262,10 @@ export class NotificationService {
         ...(leaveRequestId ? { leaveRequestId } : {}),
       } as any;
 
-      let recipientIds = [...new Set(userIds)];
+      let recipientIds: string[] = [];
+      for (const userId of new Set(userIds)) {
+        if (await canReceiveNotification(userId, refs)) recipientIds.push(userId);
+      }
 
       if (filterPreferences) {
         const filtered: string[] = [];
@@ -302,7 +309,8 @@ export class NotificationService {
             (type as unknown) as NotificationType,
             content,
             issueId,
-            postId
+            postId,
+            scope.workspaceId ?? undefined
           )
         );
         await Promise.allSettled(pushPromises);
@@ -338,66 +346,11 @@ export class NotificationService {
     excludeUserIds: string[] = [],
     additionalData: Record<string, any> = {}
   ): Promise<void> {
-    try {
-      const followers = await followerQuery;
-
-      if (followers.length === 0) {
-        return; // No followers to notify
-      }
-
-      // Filter followers based on their notification preferences
-      const validNotifications = [];
-      // Precompute bounce info for all followerIds in one go
-      const followerIds = followers.map((f) => f.userId);
-      const bouncedSet = await NotificationService.getBouncedUserIdsForContent(
-        followerIds,
-        content
-      );
-      for (const follower of followers) {
-        const preferences = await this.getUserPreferences(follower.userId);
-        if (this.shouldNotifyUser(preferences, notificationType)) {
-          if (bouncedSet.has(follower.userId)) continue;
-          validNotifications.push({
-            type: notificationType.toString(),
-            content,
-            userId: follower.userId,
-            senderId,
-            read: false,
-            ...additionalData,
-          });
-        }
-      }
-
-      if (validNotifications.length > 0) {
-        await prisma.notification.createMany({
-          data: validNotifications,
-        });
-
-        // Send push notifications to users
-        const pushPromises = validNotifications.map((notification) =>
-          this.sendPushNotificationForUser(
-            notification.userId,
-            notificationType,
-            notification.content,
-            additionalData.issueId,
-            additionalData.postId
-          )
-        );
-        await Promise.allSettled(pushPromises);
-      }
-
-      logger.info("Follower notifications created", {
-        count: validNotifications.length,
-        type: notificationType,
-        ...additionalData,
-      });
-    } catch (error) {
-      logger.error("Failed to create follower notifications", error, {
-        type: notificationType,
-        ...additionalData,
-      });
-      throw error;
-    }
+    const followers = await followerQuery;
+    await this.notifyUsers(
+      followers.map(follower => follower.userId).filter(id => !excludeUserIds.includes(id)),
+      notificationType, content, senderId, { ...additionalData, filterPreferences: true }
+    );
   }
 
   /**
@@ -413,9 +366,12 @@ export class NotificationService {
     notificationType: NotificationType,
     content: string,
     issueId?: string,
-    postId?: string
+    postId?: string,
+    workspaceId?: string
   ): Promise<void> {
     try {
+      if (!await canReceiveNotification(userId, { issueId, postId, workspaceId })) return;
+
       // Build the URL based on notification type
       let url = "/";
       if (issueId) {
@@ -582,7 +538,6 @@ export class NotificationService {
       type,
       content,
       excludeUserIds = [],
-      skipIssueIdReference = false,
     } = options;
 
     const followerQuery = prisma.issueFollower.findMany({
@@ -597,7 +552,7 @@ export class NotificationService {
       },
     });
 
-    const additionalData = skipIssueIdReference ? {} : { issueId };
+    const additionalData = { issueId };
 
     await this.createFollowerNotifications(
       followerQuery,
@@ -1136,6 +1091,7 @@ export class NotificationService {
     actionType: string,
     actionById?: string
   ): Promise<void> {
+    if (!await canReceiveNotification(leaveRequest.userId, { leaveRequestId: leaveRequest.id })) return;
     const preferences = await NotificationService.getUserPreferences(
       leaveRequest.userId
     );
@@ -1166,7 +1122,8 @@ export class NotificationService {
     });
 
     // Send push notification if enabled
-    if (preferences.pushNotificationsEnabled && preferences.pushSubscription) {
+    if (preferences.pushNotificationsEnabled && preferences.pushSubscription &&
+        await canReceiveNotification(leaveRequest.userId, { leaveRequestId: leaveRequest.id })) {
       try {
         await sendPushNotification(preferences.pushSubscription, {
           title: "Leave Request Update",
@@ -1203,7 +1160,10 @@ export class NotificationService {
     );
 
     // Exclude the person who performed the action
-    const recipientIds = managerIds.filter((id) => id !== leaveRequest.userId);
+    const recipientIds: string[] = [];
+    for (const id of managerIds) {
+      if (id !== leaveRequest.userId && await canReceiveNotification(id, { leaveRequestId: leaveRequest.id })) recipientIds.push(id);
+    }
 
     if (recipientIds.length === 0) return;
 
@@ -1236,6 +1196,7 @@ export class NotificationService {
 
     // Send push notifications
     for (const managerId of dedupedRecipientIds) {
+      if (!await canReceiveNotification(managerId, { leaveRequestId: leaveRequest.id })) continue;
       const preferences = await NotificationService.getUserPreferences(
         managerId
       );
@@ -1281,7 +1242,10 @@ export class NotificationService {
     notificationType: NotificationType,
     actionType: string
   ): Promise<void> {
-    const hrIds = await this.findHRInWorkspace(leaveRequest.policy.workspaceId);
+    const hrIds: string[] = [];
+    for (const id of await this.findHRInWorkspace(leaveRequest.policy.workspaceId)) {
+      if (await canReceiveNotification(id, { leaveRequestId: leaveRequest.id })) hrIds.push(id);
+    }
 
     if (hrIds.length === 0) return;
 
@@ -1311,6 +1275,7 @@ export class NotificationService {
 
     // Send push notifications
     for (const hrId of dedupedHrIds) {
+      if (!await canReceiveNotification(hrId, { leaveRequestId: leaveRequest.id })) continue;
       const preferences = await NotificationService.getUserPreferences(hrId);
 
       if (
