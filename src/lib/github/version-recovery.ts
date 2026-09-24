@@ -38,7 +38,7 @@ export async function regenerateVersion(
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM "Version" WHERE id = ${versionId} FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM "Repository" WHERE id = ${repositoryId} FOR SHARE`;
-    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR SHARE`;
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM "Account" WHERE "userId" = ${userId} FOR SHARE`;
     await tx.$queryRaw`SELECT id FROM "WorkspaceMember" WHERE "userId" = ${userId} FOR SHARE`;
     const issues = source.issues.map(({ issue }) => issue);
@@ -55,8 +55,8 @@ export async function regenerateVersion(
     }
     return tx.version.create({
       data: {
-        repositoryId, version: `recovered-${randomUUID()}`, major: source.major, minor: source.minor, patch: source.patch,
-        releaseType: source.releaseType, environment: source.environment, status: 'PENDING',
+        repositoryId, version: `${source.major}.${source.minor}.${source.patch}-recovery.${randomUUID()}`, major: source.major, minor: source.minor, patch: source.patch,
+        releaseType: source.releaseType, environment: 'recovery', status: 'PENDING',
         aiChangelog: generated.changelog, aiSummary: generated.summary,
         issues: { create: issues.map(issue => ({ issueId: issue.id })) },
       },

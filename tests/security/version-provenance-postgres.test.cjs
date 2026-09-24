@@ -108,6 +108,30 @@ test('saved version provenance survives actual PostgreSQL cascade unlink and sco
       assert.equal((await visible(operation)).length, 0, 'invalidation cannot be cleared');
     }
     const { regenerateVersion } = load('src/lib/github/version-recovery.ts', dependencies);
+    dependencies.semver = { default: require('semver') };
+    const { VersionManager } = load('src/lib/github/version-manager.ts', dependencies);
+    const manager = new VersionManager();
+    for (const environment of ['production', 'development']) {
+      for (const state of ['fresh', 'legacy']) {
+        const id = `canonical-${environment}-${state}`;
+        await db.project.create({ data: { id, slug: id, name: id, workspaceId: 'a', issuePrefix: id } });
+        await db.repository.create({ data: { id, projectId: id, githubRepoId: id, owner: 'fixture', name: id, fullName: `fixture/${id}`, webhookSecret: 'unused' } });
+        await db.version.create({ data: { id, repositoryId: id, version: '2.3.4', major: 2, minor: 3, patch: 4,
+          environment, releaseType: 'PATCH', status: 'RELEASED', issueAccessInvalidated: state === 'legacy',
+          issues: { create: { issueId: 'ordinary' } } } });
+        const calculation = () => manager.calculateNextVersion(id, [{ id: 'ordinary', type: 'BUG', issueKey: 'A-1' }],
+          environment, 'main', { versioningStrategy: 'MULTI_BRANCH', issueTypeMapping: { BUG: 'PATCH' }, branchEnvironmentMap: {} });
+        const before = await calculation();
+        const recovered = await regenerateVersion(id, id, 'alice', async () => ({ changelog: 'Reviewed replacement', summary: 'Fresh' }));
+        assert.equal(await manager.getCurrentVersion(id, environment), '2.3.4');
+        assert.deepEqual(await calculation(), before);
+        assert.equal(before.version, '2.3.5');
+        const saved = await db.version.findUnique({ where: { id: recovered.id } });
+        assert.ok(require('semver').valid(saved.version));
+        assert.equal(saved.environment, 'recovery');
+        if (environment === 'development') assert.equal((await manager.findLatestDevelopmentVersion(id)).id, id);
+      }
+    }
     for (const state of ['fresh', 'legacy', 'invalidated']) {
       const id = state === 'legacy' ? 'legacy' : `recover-${state}`;
       if (state !== 'legacy') await version(id);
@@ -145,6 +169,8 @@ test('saved version provenance survives actual PostgreSQL cascade unlink and sco
       inputDeniedCalls++; return { changelog: 'Denied', summary: 'Denied' };
     }));
     assert.equal(inputDeniedCalls, 0); assert.equal(await db.version.count(), beforeInputDenied);
+    await db.account.create({ data: { id: 'mapping', userId: 'alice', type: 'oauth', provider: 'maestro', providerAccountId: 'one' } });
+    const currentMember = await db.workspaceMember.create({ data: { workspaceId: 'a', userId: 'alice', status: true } });
     const transact = db.$transaction.bind(db);
     db.$transaction = (callback, options) => transact(tx => callback(new Proxy(tx, { get(target, key) {
       if (key !== 'version') return target[key];
@@ -155,6 +181,16 @@ test('saved version provenance survives actual PostgreSQL cascade unlink and sco
             await other.$executeRawUnsafe("SET LOCAL lock_timeout = '50ms'");
             await other.issue.update({ where: { id: 'ordinary' }, data: { title: 'Must wait until commit' } });
           }));
+          for (const mutation of [
+            other => other.account.update({ where: { id: 'mapping' }, data: { providerAccountId: 'changed' } }),
+            other => other.workspaceMember.update({ where: { id: currentMember.id }, data: { status: false } }),
+            other => other.account.create({ data: { userId: 'alice', type: 'oauth', provider: 'maestro', providerAccountId: 'second' } }),
+          ]) {
+            await assert.rejects(transact(async other => {
+              await other.$executeRawUnsafe("SET LOCAL lock_timeout = '50ms'");
+              await mutation(other);
+            }), 'identity and membership must remain stable through final save');
+          }
           return model.create(args);
         };
       } });
@@ -163,7 +199,11 @@ test('saved version provenance survives actual PostgreSQL cascade unlink and sco
       const result = await regenerateVersion('repo', 'legacy', 'alice', async () => ({ changelog: 'Locked output', summary: 'Locked summary' }));
       assert.equal((await visible(result.id)).length, 1);
       assert.notEqual((await db.issue.findUnique({ where: { id: 'ordinary' } })).title, 'Must wait until commit');
+      assert.equal(await db.account.count({ where: { userId: 'alice', provider: 'maestro' } }), 1);
+      assert.equal((await db.account.findUnique({ where: { id: 'mapping' } })).providerAccountId, 'one');
+      assert.equal((await db.workspaceMember.findUnique({ where: { id: currentMember.id } })).status, true);
     } finally { db.$transaction = transact; }
+    await db.workspaceMember.delete({ where: { id: currentMember.id } });
     await db.workspace.update({ where: { id: 'a' }, data: { ownerId: 'bob' } });
     let deniedCalls = 0;
     const beforeDenied = await db.version.count();

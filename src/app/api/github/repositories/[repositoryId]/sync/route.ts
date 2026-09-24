@@ -1,3 +1,4 @@
+import { syncAccessibleReleases } from '@/lib/github/sync-releases';
 import type { PRState } from '@prisma/client';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
@@ -299,62 +300,7 @@ export async function POST(
         const releases = await releasesResponse.json();
         console.log(`[SYNC] Found ${releases.length} releases`);
 
-        for (const release of releases) {
-          const versionString = release.tag_name.replace(/^v/, '');
-          const versionParts = versionString.match(/^(\d+)\.(\d+)\.(\d+)/);
-
-          let version = await prisma.version.findFirst({
-            where: { repositoryId, version: versionString },
-          });
-
-          if (!version && versionParts) {
-            version = await prisma.version.create({
-              data: {
-                repositoryId,
-                version: versionString,
-                major: parseInt(versionParts[1]),
-                minor: parseInt(versionParts[2]),
-                patch: parseInt(versionParts[3]),
-                releaseType: 'MINOR',
-                status: release.draft ? 'PENDING' : 'RELEASED',
-                environment: release.prerelease ? 'staging' : 'production',
-                releasedAt: release.published_at ? new Date(release.published_at) : null,
-              },
-            });
-          }
-
-          if (version) {
-            await prisma.release.upsert({
-              where: {
-                repositoryId_tagName: {
-                  repositoryId,
-                  tagName: release.tag_name,
-                },
-              },
-              update: {
-                name: release.name || release.tag_name,
-                description: release.body,
-                isDraft: release.draft,
-                isPrerelease: release.prerelease,
-                publishedAt: release.published_at ? new Date(release.published_at) : null,
-                githubUrl: release.html_url,
-              },
-              create: {
-                repositoryId,
-                versionId: version.id,
-                githubReleaseId: release.id.toString(),
-                tagName: release.tag_name,
-                name: release.name || release.tag_name,
-                description: release.body,
-                isDraft: release.draft,
-                isPrerelease: release.prerelease,
-                publishedAt: release.published_at ? new Date(release.published_at) : null,
-                githubUrl: release.html_url,
-              },
-            });
-            syncResults.releases++;
-          }
-        }
+        syncResults.releases = (await syncAccessibleReleases(repositoryId, session.user.id, releases)).length;
       } else {
         const errorText = await releasesResponse.text();
         console.error(`[SYNC] Releases fetch failed: ${releasesResponse.status}`, errorText);

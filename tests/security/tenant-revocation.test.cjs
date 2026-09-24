@@ -142,6 +142,8 @@ function fixture() {
   dependencies['@/lib/issue-references'] = load('src/lib/issue-references.ts', dependencies);
   dependencies['@/lib/session'] = load('src/lib/session.ts', dependencies);
   dependencies['@/lib/github/repository-access'] = load('src/lib/github/repository-access.ts', dependencies);
+  dependencies.semver = { default: require('semver') };
+  dependencies['@/lib/github/sync-releases'] = load('src/lib/github/sync-releases.ts', dependencies);
   dependencies['@/lib/github/version-recovery'] = load('src/lib/github/version-recovery.ts', dependencies);
   dependencies['@/lib/post-access'] = load('src/lib/post-access.ts', dependencies);
   dependencies['@/lib/feature-access'] = load('src/lib/feature-access.ts', dependencies);
@@ -3179,3 +3181,91 @@ test('changelog regeneration dispatches current inputs and preserves original ou
   assert.equal(JSON.stringify(f.inputs).includes('saved summary'), false);
   assert.equal(JSON.stringify(f.inputs).includes('protected-own'), true);
 });
+
+for (const deniedScope of ['project', 'status']) {
+  test(`bulk relations deny mixed ID and key targets with revoked ${deniedScope} before any mutation`, async () => {
+    const f = relatedIssueFixture(), source = f.rows[0], target = f.rows[1];
+    target.issueKey = 'A1B-T1';
+    const applyDenied = () => {
+      if (deniedScope === 'project') target.project = f.rows[2].project;
+      else { target.statusId = 'historical'; target.projectStatus = { project: f.rows[2].project }; }
+    };
+    applyDenied();
+    let transactions = 0;
+    f.db.issueRelation.upsert = async ({ create }) => { f.writes.push(create); return create; };
+    f.db.$transaction = async writes => { transactions++; return Promise.all(writes); };
+    const invoke = refs => f.route('workspaces/[workspaceId]/issues/[issueKey]/relations/bulk').POST(
+      f.request('POST', undefined, { relations: refs.map(targetIssueId => ({ targetIssueId, relationType: 'BLOCKS' })) }),
+      { params: Promise.resolve({ workspaceId: source.workspaceId, issueKey: source.issueKey }) });
+    for (const ref of [target.id, target.issueKey]) {
+      assert.equal((await invoke([source.id, ref])).status, 404);
+      assert.deepEqual(f.writes, []); assert.equal(transactions, 0);
+    }
+    f.workspaces[2].members[0].status = true;
+    let response = await invoke([target.id, target.issueKey]);
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).relations.map(row => row.targetIssueId), [target.id, target.id]);
+    f.writes.length = 0; transactions = 0;
+    f.workspaces[2].members[0].status = false;
+    source.projectStatus = { project: f.rows[2].project }; source.statusId = 'denied-source';
+    assert.equal((await invoke([source.id])).status, 404);
+    assert.deepEqual(f.writes, []); assert.equal(transactions, 0);
+  });
+}
+
+for (const endpoint of ['sync-releases', 'sync']) {
+  for (const state of ['revoked', 'invalidated', 'deleted', 'release-link']) {
+    test(`release sync ${endpoint} withholds ${state} versions and counts without duplicate creation`, async () => {
+      const f = versionReadFixture();
+      const repository = { id: 'repo', project: f.reportProject, accessToken: 'encrypted', fullName: 'fixture/repo' };
+      f.db.repository.findFirst = async args => matches(repository, args.where) ? f.project(repository, args) : null;
+      f.db.repository.findUnique = f.db.repository.findFirst;
+      f.db.repository.update = async () => repository;
+      if (['invalidated', 'deleted'].includes(state)) f.versions[0].issueAccessInvalidated = true;
+      if (state === 'release-link') {
+        f.releases[0].version = { ...f.versions[0] };
+        f.versions[0].issues = f.versions[1].issues;
+      }
+      if (state === 'deleted') f.versions[0].issues = [];
+      const providerRows = f.releases.map((release, index) => ({ id: index + 1, tag_name: release.tagName,
+        name: release.name, body: release.description, draft: false, prerelease: false,
+        published_at: '2026-09-24T00:00:00Z', html_url: 'https://fixture.test/release' }));
+      const created = [], upserts = [];
+      f.db.version.create = async ({ data }) => {
+        created.push(data);
+        const row = { ...data, id: `new-${created.length}`, issueAccessInvalidated: false, issues: [] };
+        f.versions.push(row); return row;
+      };
+      f.db.release.upsert = async ({ where, create, update }) => {
+        upserts.push(where.repositoryId_tagName.tagName);
+        let row = f.releases.find(row => row.tagName === where.repositoryId_tagName.tagName);
+        if (row) Object.assign(row, update);
+        else { row = { ...create, id: `new-release-${upserts.length}`, version: f.versions.find(v => v.id === create.versionId) }; f.releases.push(row); }
+        return { ...row, version: undefined };
+      };
+      f.db.release.findMany = async args => f.releases.filter(row => matches(row, args.where))
+        .map(({ version, ...row }) => row);
+      f.dependencies.__globals = { fetch: async url => ({ ok: true, json: async () => url.includes('/releases?') ? providerRows : [] }) };
+      const invoke = () => f.route(`github/repositories/[repositoryId]/${endpoint}`).POST(f.request('POST'),
+        { params: Promise.resolve({ repositoryId: 'repo' }) });
+      let response = await invoke();
+      assert.equal(response.status, 200);
+      let body = await response.json();
+      assert.equal(JSON.stringify(body).includes('private-report'), false);
+      assert.deepEqual(created, []); assert.deepEqual(upserts, ['1.0.1']);
+      if (endpoint === 'sync-releases') { assert.equal(body.releases.length, 1); assert.equal(body.message, 'Synced 1 releases'); }
+      else assert.equal(body.results.releases, 1);
+      if (state === 'revoked') {
+        f.workspaces[2].members[0].status = true;
+        response = await invoke(); body = await response.json();
+        assert.equal(response.status, 200);
+        assert.equal(endpoint === 'sync-releases' ? body.releases.length : body.results.releases, 2);
+        assert.deepEqual(created, []);
+      }
+      providerRows.push({ ...providerRows[1], id: 10, tag_name: 'v2.0.0' });
+      response = await invoke(); assert.equal(response.status, 200);
+      assert.equal(created.length, 1); assert.equal(created[0].version, '2.0.0');
+      await invoke(); assert.equal(created.length, 1);
+    });
+  }
+}
