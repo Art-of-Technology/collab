@@ -1,3 +1,4 @@
+import { syncAccessibleReleases } from '@/lib/github/sync-releases';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authConfig } from "@/lib/auth";
@@ -13,7 +14,7 @@ import { EncryptionService } from "@/lib/encryption";
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
         workspace: {
           OR: [
             { ownerId: session.user.id },
-            { members: { some: { userId: session.user.id } } },
+            { members: { some: { userId: session.user.id, status: true } } },
           ],
         },
       },
@@ -74,13 +75,13 @@ export async function POST(request: NextRequest) {
     // Check if repository is already connected to another project
     const existingRepo = await prisma.repository.findFirst({
       where: { githubRepoId: repositoryId.toString() },
-      include: { project: true },
+      select: { id: true },
     });
 
     if (existingRepo) {
       return NextResponse.json(
         { 
-          error: `Repository is already connected to project "${existingRepo.project.name}"` 
+          error: "Repository is already connected to a project"
         },
         { status: 400 }
       );
@@ -282,62 +283,7 @@ export async function POST(request: NextRequest) {
 
       if (releasesResponse.ok) {
         const releases = await releasesResponse.json();
-        for (const release of releases) {
-          const versionString = release.tag_name.replace(/^v/, '');
-          const versionParts = versionString.match(/^(\d+)\.(\d+)\.(\d+)/);
-
-          let version = await prisma.version.findFirst({
-            where: { repositoryId: repository.id, version: versionString },
-          });
-
-          if (!version && versionParts) {
-            version = await prisma.version.create({
-              data: {
-                repositoryId: repository.id,
-                version: versionString,
-                major: parseInt(versionParts[1]),
-                minor: parseInt(versionParts[2]),
-                patch: parseInt(versionParts[3]),
-                releaseType: 'MINOR',
-                status: release.draft ? 'PENDING' : 'RELEASED',
-                environment: release.prerelease ? 'staging' : 'production',
-                releasedAt: release.published_at ? new Date(release.published_at) : null,
-              },
-            });
-          }
-
-          if (version) {
-            await prisma.release.upsert({
-              where: {
-                repositoryId_tagName: {
-                  repositoryId: repository.id,
-                  tagName: release.tag_name,
-                },
-              },
-              update: {
-                name: release.name || release.tag_name,
-                description: release.body,
-                isDraft: release.draft,
-                isPrerelease: release.prerelease,
-                publishedAt: release.published_at ? new Date(release.published_at) : null,
-                githubUrl: release.html_url,
-              },
-              create: {
-                repositoryId: repository.id,
-                versionId: version.id,
-                githubReleaseId: release.id.toString(),
-                tagName: release.tag_name,
-                name: release.name || release.tag_name,
-                description: release.body,
-                isDraft: release.draft,
-                isPrerelease: release.prerelease,
-                publishedAt: release.published_at ? new Date(release.published_at) : null,
-                githubUrl: release.html_url,
-              },
-            });
-            syncResults.releases++;
-          }
-        }
+        syncResults.releases = (await syncAccessibleReleases(repository.id, session.user.id, releases)).length;
       }
 
       console.log(`Auto-sync completed for ${repoDetails.full_name}:`, syncResults);

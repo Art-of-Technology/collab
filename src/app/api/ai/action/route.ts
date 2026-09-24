@@ -1,3 +1,5 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
+import { validateIssueReferences } from '@/lib/issue-references';
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -27,7 +29,10 @@ export async function POST(req: Request) {
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: context.workspace.id,
-        members: { some: { userId: currentUser.id } }
+        OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ]
       },
       select: { id: true, slug: true }
     });
@@ -101,7 +106,7 @@ export async function POST(req: Request) {
         }
 
         const issues = await prisma.issue.findMany({
-          where,
+          where: { AND: [issueReadAccessWhere(currentUser.id), where] },
           take: 20,
           orderBy: { updatedAt: 'desc' },
           select: {
@@ -156,7 +161,7 @@ export async function POST(req: Request) {
 
         // Get project details for issue key generation
         const project = await prisma.project.findUnique({
-          where: { id: projectId },
+          where: { id: projectId, workspaceId: workspace.id },
           select: { id: true, issuePrefix: true, _count: { select: { issues: true } } },
         });
 
@@ -166,6 +171,9 @@ export async function POST(req: Request) {
             error: 'Project not found',
           }, { status: 404 });
         }
+
+        const referenceError = await validateIssueReferences(prisma, workspace.id, projectId, currentUser.id, { assigneeId: params.assigneeId });
+        if (referenceError) return NextResponse.json({ success: false, error: referenceError }, { status: 400 });
 
         // Create the issue
         const issueNumber = project._count.issues + 1;

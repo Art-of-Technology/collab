@@ -1,3 +1,4 @@
+import { activityReadAccessWhere, issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -34,14 +35,7 @@ export async function GET(
     }
 
     // Check workspace membership
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: {
-          userId: session.user.id,
-          workspaceId: issue.workspaceId,
-        },
-      },
-    });
+    const membership = await userHasWorkspaceAccess(session.user.id, issue.workspaceId);
 
     if (!membership) {
       return NextResponse.json({ error: 'Not a member of this workspace' }, { status: 403 });
@@ -49,10 +43,10 @@ export async function GET(
 
     // Fetch activities for this issue
     const activities = await prisma.issueActivity.findMany({
-      where: {
+      where: await activityReadAccessWhere(session.user.id, {
         itemId: issueId,
         ...(action ? { action } : {}),
-      },
+      }),
       include: {
         user: {
           select: {
@@ -71,6 +65,7 @@ export async function GET(
           },
         },
         oldStatus: {
+          where: { project: issueAccessWhere(session.user.id) },
           select: {
             id: true,
             name: true,
@@ -80,6 +75,7 @@ export async function GET(
           },
         },
         newStatus: {
+          where: { project: issueAccessWhere(session.user.id) },
           select: {
             id: true,
             name: true,

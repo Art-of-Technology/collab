@@ -1,3 +1,4 @@
+import { canReceiveNotification } from '@/lib/notification-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -62,6 +63,10 @@ export async function POST(req: NextRequest) {
       relationOptions = { featureRequestId: sourceId };
     } else if (sourceType === "issue") {
       relationOptions = { issueId: sourceId };
+    }
+
+    if (!await canReceiveNotification(currentUser.id, relationOptions)) {
+      return NextResponse.json({ error: 'Source not found' }, { status: 404 });
     }
 
     const notificationCount = await NotificationService.notifyUsers(

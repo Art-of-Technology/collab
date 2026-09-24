@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authConfig } from '@/lib/auth';
@@ -11,7 +12,7 @@ export async function GET(
   try {
     const session = await getServerSession(authConfig);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -55,6 +56,7 @@ export async function GET(
         description: true,
         createdAt: true,
         issues: {
+          where: issueReadAccessWhere(session.user.id),
           select: {
             id: true,
             startDate: true,
@@ -77,7 +79,7 @@ export async function GET(
         },
         _count: {
           select: {
-            issues: true
+            issues: { where: issueReadAccessWhere(session.user.id) }
           }
         }
       },

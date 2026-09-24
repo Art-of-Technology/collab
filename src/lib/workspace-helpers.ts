@@ -193,7 +193,7 @@ export async function hasWorkspaceAccess(
       id: workspaceId,
       OR: [
         { ownerId: userId },
-        { members: { some: { userId } } }
+        { members: { some: { userId, status: true } } }
       ]
     }
   });

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { publishEvent } from '@/lib/redis';
 import { VIEW_POSITIONS_MAX_BULK_SIZE } from '@/constants/viewPositions';
-import { findIssueByIdOrKey } from '@/lib/issue-finder';
+import { findIssueByIdOrKey, issueReadAccessWhere } from '@/lib/issue-finder';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -28,6 +28,10 @@ export async function PUT(
     const view = await prisma.view.findFirst({
       where: {
         id: viewId,
+        workspace: { OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ] },
         OR: [
           { ownerId: currentUser.id },
           { visibility: 'SHARED' },
@@ -57,13 +61,19 @@ export async function PUT(
         }
       }
 
-      // Access check: ensure all issues belong to the same workspace and user has access
-      const uniqueIssueIds = Array.from(new Set(bulk.map((b: any) => b.issueId)));
+      if (cleanup != null && (!Array.isArray(cleanup.issueIds) ||
+        cleanup.issueIds.some((id: unknown) => typeof id !== 'string' || !id) ||
+        typeof cleanup.keepColumnId !== 'string' || !cleanup.keepColumnId)) {
+        return NextResponse.json({ error: 'Invalid cleanup: issueIds and keepColumnId are required.' }, { status: 400 });
+      }
+      const uniqueIssueIds = Array.from(new Set<string>([
+        ...bulk.map((b: any) => b.issueId), ...(cleanup?.issueIds ?? [])
+      ]));
       const accessibleIssues = await prisma.issue.findMany({
         where: {
           id: { in: uniqueIssueIds },
           workspaceId: view.workspaceId,
-          workspace: { members: { some: { userId: currentUser.id } } }
+          ...issueReadAccessWhere(currentUser.id)
         },
         select: { id: true }
       });
@@ -138,7 +148,8 @@ export async function PUT(
 
     // Verify issue exists and user has access (single update path)
     const issue = await findIssueByIdOrKey(issueId, {
-      userId: currentUser.id
+      userId: currentUser.id,
+      workspaceId: view.workspaceId
     });
 
     if (!issue) {
@@ -204,6 +215,10 @@ export async function GET(
     const view = await prisma.view.findFirst({
       where: {
         id: viewId,
+        workspace: { OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ] },
         OR: [
           { ownerId: currentUser.id },
           { visibility: 'SHARED' },
@@ -218,7 +233,7 @@ export async function GET(
 
     // Get all view-specific positions
     const positions = await prisma.viewIssuePosition.findMany({
-      where: { viewId },
+      where: { viewId, issue: issueReadAccessWhere(currentUser.id) },
       include: {
         issue: {
           select: {

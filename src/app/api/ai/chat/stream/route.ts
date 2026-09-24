@@ -52,13 +52,26 @@ export async function POST(req: Request) {
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: context.workspace.id,
-        members: { some: { userId: currentUser.id } },
+        OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ],
       },
       select: { id: true, name: true, slug: true },
     });
 
     if (!workspace) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 403 });
+    }
+
+    if (conversationId) {
+      const conversation = await prisma.aIConversation.findFirst({
+        where: { id: conversationId, userId: currentUser.id, workspaceId: workspace.id, isArchived: false },
+        select: { id: true },
+      });
+      if (!conversation) {
+        return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+      }
     }
 
     // Load agent definition — use requested agent or default
@@ -1081,6 +1094,7 @@ async function createCoclawProxyStream(
             : fullTextContent;
           createCoclawNotification({
             userId,
+            workspaceId,
             type: CoclawNotificationType.COCLAW_RESPONSE,
             content: `Coclaw: ${preview}`,
           }).catch(() => {});

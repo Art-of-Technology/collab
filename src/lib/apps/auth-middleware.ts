@@ -10,6 +10,7 @@ import { decryptToken } from '@/lib/apps/crypto';
 import { hasScope, hasAllScopes, hasAnyScope, normalizeScopes } from '@/lib/oauth-scopes';
 
 import { prisma } from '@/lib/prisma';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 
 export interface AppAuthContext {
   installation: {
@@ -301,6 +302,13 @@ async function findInstallationByAccessToken(token: string) {
 
         // Compare with provided token
         if (decryptedToken === token) {
+          const tokenUserId = appToken.userId || appToken.installation?.installedById;
+          if (!tokenUserId) continue;
+          const tokenUser = await prisma.user.findUnique({
+            where: { id: tokenUserId },
+            select: { id: true, email: true, name: true }
+          });
+          if (!tokenUser) continue;
           // Check if this is a system app token (no installation)
           if (!appToken.installation && appToken.app && appToken.workspace) {
             // System app token - verify it's actually a system app
@@ -314,17 +322,13 @@ async function findInstallationByAccessToken(token: string) {
               id: `system_${appToken.id}`, // Virtual installation ID
               appId: appToken.app.id,
               workspaceId: appToken.workspace.id,
-              installedById: appToken.userId || 'system',
+              installedById: tokenUser.id,
               status: 'ACTIVE',
               scopes: appToken.scopes,
               tokenExpiresAt: appToken.tokenExpiresAt,
               app: appToken.app,
               workspace: appToken.workspace,
-              installedBy: {
-                id: appToken.userId || 'system',
-                email: null,
-                name: 'System'
-              },
+              installedBy: tokenUser,
               isSystemAppToken: true
             };
           }
@@ -333,24 +337,9 @@ async function findInstallationByAccessToken(token: string) {
           if (appToken.installation) {
             const installation = appToken.installation;
 
-            // Fetch the user who generated this token (or fallback to installer for legacy tokens)
-            const tokenUserId = appToken.userId || installation.installedById;
-            const tokenUser = await prisma.user.findUnique({
-              where: { id: tokenUserId },
-              select: {
-                id: true,
-                email: true,
-                name: true
-              }
-            });
-
-            // If user not found, skip this token
-            if (!tokenUser) {
-              continue;
-            }
-
             return {
               ...installation,
+              installedById: tokenUser.id,
               // Use scopes from the token if available, fallback to installation scopes
               scopes: appToken.scopes.length > 0 ? appToken.scopes : installation.scopes,
               tokenExpiresAt: appToken.tokenExpiresAt,
@@ -452,28 +441,6 @@ export function withAppAuth(
         });
       }
 
-      // Skip if already in the target workspace
-      if (targetWorkspace.id === authResult.context!.workspace.id) {
-        return handler(request, authResult.context!, routeParams);
-      }
-
-      // Verify user has access to the target workspace
-      const membership = await prisma.workspaceMember.findFirst({
-        where: {
-          userId: authResult.context!.user.id,
-          workspaceId: targetWorkspace.id,
-          status: true // status is a boolean field
-        }
-      });
-
-      if (!membership) {
-        return createAuthErrorResponse({
-          code: 'workspace_access_denied',
-          message: `User does not have access to workspace '${workspaceOverride}'`,
-          statusCode: 403
-        });
-      }
-
       // Update context with the new workspace
       authResult.context!.workspace = {
         id: targetWorkspace.id,
@@ -481,6 +448,14 @@ export function withAppAuth(
         name: targetWorkspace.name
       };
       authResult.context!.installation.workspaceId = targetWorkspace.id;
+    }
+
+    if (!await userHasWorkspaceAccess(authResult.context!.user.id, authResult.context!.workspace.id)) {
+      return createAuthErrorResponse({
+        code: 'workspace_access_denied',
+        message: 'User does not have access to this workspace',
+        statusCode: 403
+      });
     }
 
     return handler(request, authResult.context!, routeParams);

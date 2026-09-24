@@ -1,3 +1,4 @@
+import { findIssueByIdOrKey } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Individual Work Log Endpoints
  * GET /api/apps/auth/issues/:issueIdOrKey/work-logs/:workLogId - Get work log
@@ -21,17 +22,10 @@ type RouteParams = { params: Promise<{ issueIdOrKey: string; workLogId: string }
 async function findIssueAndWorkLog(
   issueIdOrKey: string,
   workLogId: string,
-  workspaceId: string
+  workspaceId: string,
+  userId: string
 ) {
-  const issue = await prisma.issue.findFirst({
-    where: {
-      workspaceId,
-      OR: [
-        { id: issueIdOrKey },
-        { issueKey: issueIdOrKey },
-      ],
-    },
-  });
+  const issue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId, userId });
 
   if (!issue) {
     return { issue: null, workLog: null };
@@ -69,7 +63,8 @@ export const GET = withAppAuth(
       const { issue, workLog } = await findIssueAndWorkLog(
         issueIdOrKey,
         workLogId,
-        context.workspace.id
+        context.workspace.id,
+        context.user.id
       );
 
       if (!issue) {
@@ -124,7 +119,8 @@ export const PATCH = withAppAuth(
       const { issue, workLog } = await findIssueAndWorkLog(
         issueIdOrKey,
         workLogId,
-        context.workspace.id
+        context.workspace.id,
+        context.user.id
       );
 
       if (!issue) {
@@ -258,7 +254,8 @@ export const DELETE = withAppAuth(
       const { issue, workLog } = await findIssueAndWorkLog(
         issueIdOrKey,
         workLogId,
-        context.workspace.id
+        context.workspace.id,
+        context.user.id
       );
 
       if (!issue) {

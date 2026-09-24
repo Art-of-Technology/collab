@@ -1,9 +1,14 @@
+import { getCurrentUser } from '@/lib/session';
+import { issueAccessWhere } from '@/lib/issue-finder';
+import { versionAccessWhere } from '@/lib/github/repository-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/version.json - Public endpoint for version information
+// GET /api/version.json - Version information
 export async function GET(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('project');
     const environment = searchParams.get('environment') || 'production';
@@ -16,8 +21,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Find the project and its repository
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, ...issueAccessWhere(user.id) },
       include: {
         repository: true,
       },
@@ -40,7 +45,7 @@ export async function GET(request: NextRequest) {
         { 
           status: 200,
           headers: {
-            'Cache-Control': 'public, max-age=300', // Cache for 5 minutes
+            'Cache-Control': 'private, no-store',
           },
         }
       );
@@ -52,6 +57,7 @@ export async function GET(request: NextRequest) {
         repositoryId: project.repository.id,
         environment,
         isActive: true,
+        version: versionAccessWhere(user.id),
       },
       include: {
         version: true,
@@ -63,7 +69,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(versionFile.content, {
         status: 200,
         headers: {
-          'Cache-Control': 'public, max-age=300',
+          'Cache-Control': 'private, no-store',
         },
       });
     }
@@ -74,6 +80,7 @@ export async function GET(request: NextRequest) {
         repositoryId: project.repository.id,
         environment,
         status: 'RELEASED',
+        ...versionAccessWhere(user.id),
       },
       include: {
         issues: {
@@ -118,7 +125,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(versionData, {
         status: 200,
         headers: {
-          'Cache-Control': 'public, max-age=600', // Cache fallback longer
+          'Cache-Control': 'private, no-store',
         },
       });
     }
@@ -140,7 +147,7 @@ export async function GET(request: NextRequest) {
       { 
         status: 200,
         headers: {
-          'Cache-Control': 'public, max-age=60', // Cache errors briefly
+          'Cache-Control': 'private, no-store',
         },
       }
     );
@@ -165,7 +172,7 @@ export async function GET(request: NextRequest) {
       { 
         status: 200, // Don't break deployments
         headers: {
-          'Cache-Control': 'public, max-age=60',
+          'Cache-Control': 'private, no-store',
         },
       }
     );

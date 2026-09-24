@@ -76,16 +76,33 @@ checks that denied actions never resolve bindings and malformed source links
 return validation errors without side effects. Implementation validation
 reported passing checks, targeted lint and nonincremental TypeScript.
 
-A disposable PostgreSQL + local HTTPS fixture verified the real Notes page and
-server actions: create Draft, approve revision 1, edit Draft revision 2 while
+An earlier implementation's disposable PostgreSQL + local HTTPS fixture verified
+the real Notes page and server actions: create Draft, approve revision 1,
+edit Draft revision 2 while
 revision 1 stays Approved, reject stale approval after a concurrent source
 edit, refresh/review and approve revision 2 with revision 1 Superseded. The
 320px view has no horizontal page overflow. This is fixture evidence, not a
-live Forge or deployment claim.
+live Forge or deployment claim, and does not establish hydrated UI or revocation
+acceptance for the current authorization change.
 
 A deliberately delayed save verified all form inputs and actions are natively
 disabled while pending, then the saved draft is read back. This prevents edits
 typed during an in-flight save from being silently discarded by its response.
+
+R10 isolated production-build qualification on source
+`33878527e0202c33a8d742db069c364ea37598ef` subsequently passed 30 HTTP and
+9 UI checks, including hydrated Board/Notes Refresh, revocation, foreign-tenant
+denial and mobile layouts. Native PostgreSQL provenance passed 1 check with
+0 skips under the original 60-second timeout. Synthetic JWT identities and
+disconnected Forge bounded this evidence; native TLS trust was verified and
+owned resources were cleaned up. These current-source results are distinct
+from the earlier fixture checks and do not prove real Forge Notes publication.
+
+Realtime event delivery after revocation, live provider-backed changelog
+regeneration, real Forge publication, real OAuth, Ready execution and final
+integrated production acceptance remain unverified. The nine existing lint
+warnings (L1–L6) remain deferred behavioral followups without runtime or rule
+changes; generated API reference drift remains follow-up #473.
 
 Outstanding: independent pipeline review, live writer/binding validation,
 gateway identity integration, full agent context consumption and staging

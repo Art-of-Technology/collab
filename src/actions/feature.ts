@@ -1,5 +1,6 @@
 'use server';
 
+import { featureAccessWhere } from '@/lib/feature-access';
 import { getAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
@@ -22,12 +23,12 @@ export async function getFeatureRequests({
 }) {
   try {
     const session = await getAuthSession();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       throw new Error("Unauthorized");
     }
 
     // Build where clause for filtering
-    const where: any = {};
+    const where: any = featureAccessWhere(session.user.id);
     if (status && status !== 'all') {
       // Handle mixed case status values in legacy data
       where.status = {
@@ -217,12 +218,12 @@ export async function getFeatureRequests({
 export async function getFeatureRequestById(id: string, workspaceId?: string) {
   try {
     const session = await getAuthSession();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       throw new Error("Unauthorized");
     }
 
-    const featureRequest = await prisma.featureRequest.findUnique({
-      where: { id },
+    const featureRequest = await prisma.featureRequest.findFirst({
+      where: { id, ...featureAccessWhere(session.user.id) },
       include: {
         author: {
           select: {
@@ -340,7 +341,7 @@ export async function getFeatureRequestById(id: string, workspaceId?: string) {
 export async function createFeatureRequest(formData: FormData) {
   try {
     const session = await getAuthSession();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       throw new Error("Unauthorized");
     }
 
@@ -359,6 +360,17 @@ export async function createFeatureRequest(formData: FormData) {
       throw new Error("Project is required for feature requests");
     }
 
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, workspace: { OR: [
+        { ownerId: session.user.id },
+        { members: { some: { userId: session.user.id, status: true } } },
+      ] } },
+      select: { workspaceId: true },
+    });
+    if (!project || (workspaceId && workspaceId !== project.workspaceId)) {
+      throw new Error('Project not found');
+    }
+
     // Build the data object
     const data: any = {
       title,
@@ -373,10 +385,7 @@ export async function createFeatureRequest(formData: FormData) {
       }
     };
 
-    // Connect to workspace if provided
-    if (workspaceId) {
-      data.workspace = { connect: { id: workspaceId } };
-    }
+    data.workspace = { connect: { id: project.workspaceId } };
 
     const featureRequest = await prisma.featureRequest.create({
       data,
@@ -413,9 +422,15 @@ export async function voteOnFeature({
 }) {
   try {
     const session = await getAuthSession();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       throw new Error("Unauthorized");
     }
+
+    const feature = await prisma.featureRequest.findFirst({
+      where: { id: featureRequestId, ...featureAccessWhere(session.user.id) },
+      select: { id: true },
+    });
+    if (!feature) throw new Error('Feature request not found');
 
     // Check if the user has already voted on this feature
     const existingVote = await prisma.featureVote.findFirst({
@@ -474,13 +489,13 @@ export async function addFeatureComment({
 }) {
   try {
     const session = await getAuthSession();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       throw new Error("Unauthorized");
     }
 
     // Check if the feature request exists
-    const featureRequest = await prisma.featureRequest.findUnique({
-      where: { id: featureRequestId },
+    const featureRequest = await prisma.featureRequest.findFirst({
+      where: { id: featureRequestId, ...featureAccessWhere(session.user.id) },
     });
 
     if (!featureRequest) {
@@ -531,7 +546,7 @@ export async function updateFeatureStatus({
 }) {
   try {
     const session = await getAuthSession();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       throw new Error("Unauthorized");
     }
 
@@ -546,7 +561,7 @@ export async function updateFeatureStatus({
     }
 
     await prisma.featureRequest.update({
-      where: { id: featureRequestId },
+      where: { id: featureRequestId, ...featureAccessWhere(session.user.id) },
       data: { status },
     });
 

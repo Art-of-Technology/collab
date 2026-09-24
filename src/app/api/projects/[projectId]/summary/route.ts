@@ -1,7 +1,10 @@
+import { releaseAccessWhere } from '@/lib/github/repository-access';
+import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { featureAccessWhere } from '@/lib/feature-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authConfig } from '@/lib/auth';
-import { noteAccessWhere } from '@/lib/secrets/access';
+import { noteTagAccessWhere, noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(
@@ -37,13 +40,7 @@ export async function GET(
     }
 
     // Verify user has access to workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
-      where: {
-        user: { email: session.user.email },
-        workspaceId: project.workspaceId,
-        status: true
-      }
-    });
+    const hasAccess = await userHasWorkspaceAccess(session.user.id, project.workspaceId);
 
     if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
@@ -69,7 +66,7 @@ export async function GET(
     // Get issue counts by status
     const issueCounts = await prisma.issue.groupBy({
       by: ['statusId'],
-      where: { projectId },
+      where: { AND: [issueReadAccessWhere(session.user.id), { projectId }] },
       _count: { id: true }
     });
 
@@ -85,14 +82,14 @@ export async function GET(
 
     // Get overdue issues (dueDate < now AND not in final status)
     const overdueIssues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         projectId,
         dueDate: { lt: now },
         OR: [
           { statusId: { notIn: finalStatusIds } },
           { statusId: null }
         ]
-      },
+      }] },
       select: {
         id: true,
         title: true,
@@ -106,11 +103,12 @@ export async function GET(
           select: { id: true, name: true, displayName: true, color: true }
         },
         parent: {
+          where: issueReadAccessWhere(session.user.id),
           select: { id: true, title: true, issueKey: true }
         },
         // Check if blocked
         targetRelations: {
-          where: { relationType: 'BLOCKS' },
+          where: { relationType: 'BLOCKS', sourceIssue: issueReadAccessWhere(session.user.id) },
           select: {
             sourceIssue: {
               select: { id: true, title: true, issueKey: true }
@@ -124,7 +122,7 @@ export async function GET(
 
     // Get at-risk issues (due within 2 days, not started or minimal progress, not in final status)
     const atRiskIssues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         projectId,
         dueDate: {
           gte: now,
@@ -134,7 +132,7 @@ export async function GET(
           { statusId: { notIn: finalStatusIds } },
           { statusId: null }
         ]
-      },
+      }] },
       select: {
         id: true,
         title: true,
@@ -148,6 +146,7 @@ export async function GET(
           select: { id: true, name: true, displayName: true, color: true }
         },
         parent: {
+          where: issueReadAccessWhere(session.user.id),
           select: { id: true, title: true, issueKey: true }
         }
       },
@@ -157,7 +156,7 @@ export async function GET(
 
     // Get recently updated issues
     const recentIssues = await prisma.issue.findMany({
-      where: { projectId },
+      where: { AND: [issueReadAccessWhere(session.user.id), { projectId }] },
       select: {
         id: true,
         title: true,
@@ -177,11 +176,11 @@ export async function GET(
 
     // Get recently completed issues (completed in last 30 days)
     const recentlyCompletedIssues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         projectId,
         statusId: { in: finalStatusIds },
         updatedAt: { gte: thirtyDaysAgo }
-      },
+      }] },
       select: {
         id: true,
         title: true,
@@ -204,26 +203,26 @@ export async function GET(
 
     // Get issues with no dates
     const issuesWithoutDates = await prisma.issue.count({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         projectId,
         dueDate: null,
         OR: [
           { statusId: { notIn: finalStatusIds } },
           { statusId: null }
         ]
-      }
+      }] }
     });
 
     // Get unassigned issues count
     const unassignedIssues = await prisma.issue.count({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         projectId,
         assigneeId: null,
         OR: [
           { statusId: { notIn: finalStatusIds } },
           { statusId: null }
         ]
-      }
+      }] }
     });
 
     // Transform overdue issues
@@ -258,13 +257,13 @@ export async function GET(
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
     const timelineIssues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         projectId,
         dueDate: {
           gte: now,
           lte: thirtyDaysFromNow
         }
-      },
+      }] },
       select: {
         id: true,
         title: true,
@@ -278,6 +277,7 @@ export async function GET(
           select: { id: true, name: true, displayName: true, color: true, isFinal: true }
         },
         parent: {
+          where: issueReadAccessWhere(session.user.id),
           select: { id: true, title: true, issueKey: true }
         }
       },
@@ -327,7 +327,7 @@ export async function GET(
 
       // Get releases
       const releases = await prisma.release.findMany({
-        where: { repositoryId: repository.id },
+        where: { repositoryId: repository.id, ...releaseAccessWhere(session.user.id) },
         orderBy: { publishedAt: 'desc' },
         take: 3,
         select: {
@@ -386,7 +386,7 @@ export async function GET(
 
     // Get feature requests
     const featureRequests = await prisma.featureRequest.findMany({
-      where: { projectId },
+      where: { projectId, ...featureAccessWhere(session.user.id) },
       include: {
         author: {
           select: { id: true, name: true, image: true },
@@ -438,14 +438,14 @@ export async function GET(
     // Get notes for the workspace (workspace or project scope)
     const notes = await prisma.note.findMany({
       where: {
-        AND: [noteAccessWhere(hasAccess.userId)],
+        AND: [noteAccessWhere(session.user.id)],
         OR: [
           { workspaceId: project.workspaceId, scope: 'WORKSPACE' },
           { projectId: project.id, scope: 'PROJECT' },
         ],
       },
       include: {
-        tags: true,
+        tags: { where: noteTagAccessWhere(session.user.id) },
         author: {
           select: { id: true, name: true, image: true },
         },

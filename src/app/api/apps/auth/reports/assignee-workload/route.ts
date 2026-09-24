@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Assignee Workload Report
  * GET /api/apps/auth/reports/assignee-workload - Get team workload analysis
@@ -74,45 +75,45 @@ export const GET = withAppAuth(
           ] = await Promise.all([
             // Total assigned issues
             prisma.issue.count({
-              where: {
+              where: { AND: [issueReadAccessWhere(context.user.id), {
                 ...baseIssueFilter,
                 assigneeId: member.userId,
-              },
+              }] },
             }),
             // Overdue issues
             prisma.issue.count({
-              where: {
+              where: { AND: [issueReadAccessWhere(context.user.id), {
                 ...baseIssueFilter,
                 assigneeId: member.userId,
                 dueDate: { lt: new Date() },
                 statusId: { notIn: finalStatusIds },
-              },
+              }] },
             }),
             // Completed in period
             prisma.issue.count({
-              where: {
+              where: { AND: [issueReadAccessWhere(context.user.id), {
                 workspaceId: context.workspace.id,
                 ...(projectId && { projectId }),
                 assigneeId: member.userId,
                 statusId: { in: finalStatusIds },
                 updatedAt: { gte: periodStart },
-              },
+              }] },
             }),
             // Total story points
             prisma.issue.aggregate({
-              where: {
+              where: { AND: [issueReadAccessWhere(context.user.id), {
                 ...baseIssueFilter,
                 assigneeId: member.userId,
-              },
+              }] },
               _sum: { storyPoints: true },
             }),
             // By priority
             prisma.issue.groupBy({
               by: ['priority'],
-              where: {
+              where: { AND: [issueReadAccessWhere(context.user.id), {
                 ...baseIssueFilter,
                 assigneeId: member.userId,
-              },
+              }] },
               _count: true,
             }),
           ]);
@@ -157,10 +158,10 @@ export const GET = withAppAuth(
 
       // Get unassigned count
       const unassignedIssues = await prisma.issue.count({
-        where: {
+        where: { AND: [issueReadAccessWhere(context.user.id), {
           ...baseIssueFilter,
           assigneeId: null,
-        },
+        }] },
       });
 
       // Calculate team summary

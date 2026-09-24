@@ -1,5 +1,7 @@
 'use server';
 
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -16,7 +18,7 @@ export async function getPostStats({
 }) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     throw new Error('Unauthorized');
   }
   
@@ -25,6 +27,7 @@ export async function getPostStats({
   
   // Filter by workspace
   if (workspaceId) {
+    if (!await userHasWorkspaceAccess(session.user.id, workspaceId)) throw new Error('Access denied');
     query.workspaceId = workspaceId;
   } else {
     // Get workspaces the user has access to
@@ -32,7 +35,7 @@ export async function getPostStats({
       where: {
         OR: [
           { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } }
+          { members: { some: { userId: session.user.id, status: true } } }
         ]
       },
       select: { id: true }

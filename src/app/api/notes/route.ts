@@ -1,4 +1,4 @@
-import { canWriteNoteDestination, noteAccessWhere } from '@/lib/secrets/access';
+import { canUseNoteTags, noteTagAccessWhere, canWriteNoteDestination, noteAccessWhere } from '@/lib/secrets/access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
       const notes = await prisma.note.findMany({
         where: { AND: [where, noteAccessWhere(session.user.id)] },
         include: {
-          tags: true,
+          tags: { where: noteTagAccessWhere(session.user.id) },
           author: {
             select: {
               id: true,
@@ -187,7 +187,7 @@ export async function GET(request: NextRequest) {
     const notes = await prisma.note.findMany({
       where: { AND: [where, noteAccessWhere(session.user.id)] },
       include: {
-        tags: true,
+        tags: { where: noteTagAccessWhere(session.user.id) },
         author: {
           select: {
             id: true,
@@ -313,6 +313,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Workspace or project access required" }, { status: 403 });
     }
 
+    if (!await canUseNoteTags(session.user.id, tagIds, workspaceId || null, projectId || null)) {
+      return NextResponse.json({ error: "Invalid note tags" }, { status: 400 });
+    }
+
     // Determine scope (with legacy support)
     let finalScope = scope || NoteScope.PERSONAL;
     if (!scope && isPublic !== undefined) {
@@ -402,7 +406,7 @@ export async function POST(request: NextRequest) {
         })
       },
       include: {
-        tags: true,
+        tags: { where: noteTagAccessWhere(session.user.id) },
         author: {
           select: {
             id: true,

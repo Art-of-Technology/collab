@@ -55,6 +55,7 @@ export const POST = withAppAuth(
 
       await createCoclawNotification({
         userId: context.user.id,
+        workspaceId: context.workspace.id,
         type: notificationType,
         content: safeContent,
       });

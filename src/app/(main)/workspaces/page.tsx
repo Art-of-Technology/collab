@@ -20,7 +20,7 @@ export default async function WorkspacesPage() {
     // Fetch initial data using server actions
     workspacesData = await getUserWorkspaces();
     pendingInvitations = session.user.email
-      ? await getPendingInvitations(session.user.email)
+      ? await getPendingInvitations()
       : [];
 
 

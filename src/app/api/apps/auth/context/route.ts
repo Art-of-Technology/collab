@@ -9,8 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
-import { noteAccessWhere } from '@/lib/secrets/access';
+import { canUseNoteTags, noteTagAccessWhere, noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
@@ -40,12 +39,6 @@ const CreateNoteSchema = z.object({
 export const GET = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
     try {
-      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
-        return NextResponse.json(
-          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
-          { status: 403 }
-        );
-      }
       const { searchParams } = new URL(request.url);
       const projectId = searchParams.get('projectId');
       const type = searchParams.get('type') as NoteType | null;
@@ -142,6 +135,7 @@ export const GET = withAppAuth(
               },
             },
             tags: {
+              where: noteTagAccessWhere(context.user.id),
               select: {
                 id: true,
                 name: true,
@@ -193,14 +187,12 @@ export const GET = withAppAuth(
 export const POST = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
     try {
-      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
-        return NextResponse.json(
-          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
-          { status: 403 }
-        );
-      }
       const body = await request.json();
       const noteData = CreateNoteSchema.parse(body);
+
+      if (!await canUseNoteTags(context.user.id, noteData.tagIds, context.workspace.id, noteData.projectId || null)) {
+        return NextResponse.json({ error: "Invalid note tags" }, { status: 400 });
+      }
 
       // Validate project if projectId is provided
       if (noteData.projectId) {
@@ -279,6 +271,7 @@ export const POST = withAppAuth(
             },
           },
           tags: {
+            where: noteTagAccessWhere(context.user.id),
             select: {
               id: true,
               name: true,

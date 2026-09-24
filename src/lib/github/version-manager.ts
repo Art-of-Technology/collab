@@ -910,7 +910,7 @@ export class VersionManager {
     const latestVersion = await this.prisma.version.findFirst({
       where: {
         repositoryId,
-        environment,
+        environment: { equals: environment, not: 'recovery' },
         // Include all statuses except FAILED and CANCELLED to get the latest version
         status: { notIn: ['FAILED', 'CANCELLED'] },
       },

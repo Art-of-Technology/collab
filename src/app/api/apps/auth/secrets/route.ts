@@ -9,7 +9,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
@@ -49,12 +48,6 @@ function getSecretKeyNames(secretVariables: string | null): string[] {
 export const GET = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
     try {
-      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
-        return NextResponse.json(
-          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
-          { status: 403 }
-        );
-      }
       const { searchParams } = new URL(request.url);
       const projectId = searchParams.get('projectId');
 

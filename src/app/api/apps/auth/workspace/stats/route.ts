@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Workspace Statistics
  * GET /api/apps/auth/workspace/stats - Get comprehensive workspace statistics
@@ -46,26 +47,26 @@ export const GET = withAppAuth(
         createdInPeriod,
         completedInPeriod,
       ] = await Promise.all([
-        prisma.issue.count({ where: { workspaceId: context.workspace.id } }),
+        prisma.issue.count({ where: { AND: [issueReadAccessWhere(context.user.id), { workspaceId: context.workspace.id }] } }),
         prisma.issue.count({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             workspaceId: context.workspace.id,
             statusId: { in: finalStatusIds },
-          },
+          }] },
         }),
         prisma.issue.count({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             workspaceId: context.workspace.id,
             dueDate: { lt: now },
             statusId: { notIn: finalStatusIds },
-          },
+          }] },
         }),
         prisma.issue.count({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             workspaceId: context.workspace.id,
             assigneeId: null,
             statusId: { notIn: finalStatusIds },
-          },
+          }] },
         }),
         prisma.project.count({
           where: { workspaceId: context.workspace.id },
@@ -81,26 +82,26 @@ export const GET = withAppAuth(
         }),
         prisma.issue.groupBy({
           by: ['type'],
-          where: { workspaceId: context.workspace.id },
+          where: { AND: [issueReadAccessWhere(context.user.id), { workspaceId: context.workspace.id }] },
           _count: true,
         }),
         prisma.issue.groupBy({
           by: ['priority'],
-          where: { workspaceId: context.workspace.id },
+          where: { AND: [issueReadAccessWhere(context.user.id), { workspaceId: context.workspace.id }] },
           _count: true,
         }),
         prisma.issue.count({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             workspaceId: context.workspace.id,
             createdAt: { gte: periodStart },
-          },
+          }] },
         }),
         prisma.issue.count({
-          where: {
+          where: { AND: [issueReadAccessWhere(context.user.id), {
             workspaceId: context.workspace.id,
             statusId: { in: finalStatusIds },
             updatedAt: { gte: periodStart },
-          },
+          }] },
         }),
       ]);
 

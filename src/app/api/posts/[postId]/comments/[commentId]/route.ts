@@ -1,3 +1,4 @@
+import { requirePostAccess } from '@/lib/post-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -20,14 +21,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
 
-    // Verify the post exists
-    const post = await prisma.post.findUnique({
-      where: { id: postId }
-    });
-
-    if (!post) {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 });
-    }
+    await requirePostAccess(postId);
 
     // Check if comment exists and belongs to the current user
     const comment = await prisma.comment.findFirst({
@@ -87,6 +81,9 @@ export async function PATCH(
 
     return NextResponse.json(updatedComment);
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Post not found', 'Comment not found'].includes(error.message)) {
+      return new NextResponse(error.message, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error("Error updating comment:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
@@ -105,14 +102,7 @@ export async function DELETE(
 
     const { postId, commentId } = await params;
 
-    // Verify the post exists
-    const post = await prisma.post.findUnique({
-      where: { id: postId }
-    });
-
-    if (!post) {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 });
-    }
+    await requirePostAccess(postId);
 
     // Check if comment exists and belongs to the current user
     const comment = await prisma.comment.findFirst({
@@ -138,6 +128,9 @@ export async function DELETE(
 
     return NextResponse.json({ message: "Comment deleted successfully" });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Post not found', 'Comment not found'].includes(error.message)) {
+      return new NextResponse(error.message, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error("Error deleting comment:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }

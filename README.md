@@ -113,6 +113,7 @@ Collab is designed to streamline internal communication and work tracking by off
    ```
 
    #### Authentication (NextAuth.js)
+
    ```bash
    NEXTAUTH_URL="http://localhost:3000"  # Your app's URL
    NEXTAUTH_SECRET="your-super-secret-jwt-secret-here"  # Generate with: openssl rand -base64 32
@@ -214,6 +215,8 @@ Collab is designed to streamline internal communication and work tracking by off
    npx prisma generate
    npx prisma migrate dev --name init
    ```
+   Bootstrap and restore requirements for saved versions are documented in the
+   [saved version authorization guide](docs/security/version-access-invalidation.md).
 5. (Optional) Initialize a default workspace:
    ```bash
    npm run prisma:init-workspace

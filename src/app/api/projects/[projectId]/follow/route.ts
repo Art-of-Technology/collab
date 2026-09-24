@@ -21,7 +21,7 @@ export async function POST(
         workspace: {
           OR: [
             { ownerId: currentUser.id },
-            { members: { some: { userId: currentUser.id } } }
+            { members: { some: { userId: currentUser.id, status: true } } }
           ]
         }
       }
@@ -72,7 +72,7 @@ export async function DELETE(
         workspace: {
           OR: [
             { ownerId: currentUser.id },
-            { members: { some: { userId: currentUser.id } } }
+            { members: { some: { userId: currentUser.id, status: true } } }
           ]
         }
       }
@@ -117,7 +117,7 @@ export async function GET(
         workspace: {
           OR: [
             { ownerId: currentUser.id },
-            { members: { some: { userId: currentUser.id } } }
+            { members: { some: { userId: currentUser.id, status: true } } }
           ]
         }
       }
