@@ -63,7 +63,7 @@ test('comment reads require a current user and active membership or ownership be
   };
   const dependencies = {
     'server-only': {}, '@/lib/prisma': { prisma: db }, '@/lib/auth-options': { authOptions: {} },
-    'next-auth': { getServerSession: async () => session },
+    '@/lib/request-session': { getServerSession: async () => session },
     '@/lib/shared-issue-key-utils': load('src/lib/shared-issue-key-utils.ts'),
     '@/utils/mentions': {}, '@/lib/notification-service': {}, '@/lib/html-sanitizer': {},
     'next/server': { NextResponse: Response },
