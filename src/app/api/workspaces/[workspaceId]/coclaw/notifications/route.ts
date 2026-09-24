@@ -36,8 +36,8 @@ export async function GET(
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10), 50);
 
     const [unreadCount, activity] = await Promise.all([
-      getUnreadCoclawCount(session.user.id),
-      getRecentCoclawNotifications(session.user.id, limit),
+      getUnreadCoclawCount(session.user.id, workspaceId),
+      getRecentCoclawNotifications(session.user.id, workspaceId, limit),
     ]);
 
     return NextResponse.json({ unreadCount, activity });
@@ -69,7 +69,7 @@ export async function POST(
       return NextResponse.json({ error: 'Not a member' }, { status: 403 });
     }
 
-    const marked = await markAllCoclawNotificationsRead(session.user.id);
+    const marked = await markAllCoclawNotificationsRead(session.user.id, workspaceId);
 
     return NextResponse.json({ marked });
   } catch (error) {

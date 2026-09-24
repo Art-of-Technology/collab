@@ -36,6 +36,7 @@ function matches(row, where = {}) {
     if (value === null || typeof value !== 'object') return actual === value;
     if ('some' in value) return actual?.some(item => matches(item, value.some)) ?? false;
     if ('notIn' in value) return !value.notIn.includes(actual);
+    if ('startsWith' in value) return typeof actual === 'string' && actual.startsWith(value.startsWith);
     if ('in' in value) return value.in.includes(actual);
     if ('not' in value) return actual !== value.not;
     if ('equals' in value) return String(actual).toLowerCase() === value.equals.toLowerCase();
@@ -115,6 +116,7 @@ function fixture() {
     'server-only': {}, 'next/server': { NextResponse: Response },
     '@/lib/prisma': { prisma: db }, '@/lib/user-utils': load('src/lib/user-utils.ts'), '@/lib/auth-options': { authOptions: {} },
     '@/lib/github/public-repository': load('src/lib/github/public-repository.ts'),
+    '@/lib/feature-access': load('src/lib/feature-access.ts'),
     '@/lib/utils': { generateUniqueViewSlug: async (_name, workspaceId, check) => {
       await check('default-view', workspaceId); return 'default-view';
     } },
@@ -871,11 +873,11 @@ test('tenant notifications stop follower delivery and push after revocation with
   assert.equal(await service.notifyUsers(['alice'], 'POST_COMMENT_ADDED', 'secret', 'bob', { commentId: 'comment-post-joined' }), 0);
   noContent(f); assert.equal(f.stored.length, 0); assert.equal(f.deliveries.length, 0);
   for (const key of ['own', 'personal']) await notify(key);
-  assert.equal(await service.notifyUsers(['alice'], 'PERSONAL', 'personal', 'bob'), 1);
+  assert.equal(await service.notifyUsers(['alice'], 'PERSONAL', 'personal', 'bob', { personal: true }), 1);
   assert.equal(f.stored.length, 3); assert.equal(f.deliveries.length, 2);
   f.state.user = null;
   const before = f.calls.writes;
-  assert.equal(await service.notifyUsers(['alice'], 'PERSONAL', 'personal', 'bob'), 0);
+  assert.equal(await service.notifyUsers(['alice'], 'PERSONAL', 'personal', 'bob', { personal: true }), 0);
   assert.equal(f.calls.writes, before);
 });
 test('tenant notification reads and mutations hide revoked post and comment content', async () => {
@@ -885,7 +887,7 @@ test('tenant notification reads and mutations hide revoked post and comment cont
       postId: kind === 'post' ? post.id : null, post: kind === 'post' ? post : null,
       commentId: kind === 'comment' ? `comment-${post.id}` : null,
       comment: kind === 'comment' ? f.comments.find(row => row.postId === post.id) : null,
-      featureRequestId: null, leaveRequestId: null, content: post.message });
+      featureRequestId: null, leaveRequestId: null, workspaceId: null, issueId: null, isPersonal: false, content: post.message });
   }
   const { GET } = f.route('notifications');
   const read = async () => (await (await GET(f.request())).json());
@@ -965,4 +967,216 @@ test('tenant profile page resolves workspace slugs before guarded profile reads'
   await assert.rejects(call('revoked'), /redirect:\/revoked\/timeline/);
   assert.equal(f.calls.otherReads, before);
   await assert.rejects(call('missing'), /notFound/);
+});
+
+function featureFixture() {
+  const f = fixture();
+  const features = [null, ...f.workspaces].map(workspace => ({ id: `feature-${workspace?.slug || 'personal'}`,
+    title: `Title-${workspace?.slug || 'personal'}`, description: 'Feature content', authorId: 'alice',
+    workspaceId: workspace?.id ?? null, workspace, projectId: workspace ? `project-${workspace.slug}` : null,
+    project: workspace ? { id: `project-${workspace.slug}`, workspaceId: workspace.id, workspace } : null,
+    votes: [], _count: { votes: 0, comments: 0 }, createdAt: new Date(), updatedAt: new Date() }));
+  features.push({ ...features[3], id: 'feature-project-revoked', workspaceId: null, workspace: null });
+  f.db.featureRequest = {
+    findUnique: async ({ where }) => { f.calls.otherReads++; return features.find(row => matches(row, where)) ?? null; },
+    findFirst: async ({ where }) => { const row = features.find(row => matches(row, where)); if (row) f.calls.otherReads++; return row ?? null; },
+    findMany: async ({ where }) => { const rows = features.filter(row => matches(row, where)); f.calls.otherReads += rows.length; return rows; },
+    create: async ({ data }) => { f.calls.writes++; return { id: 'new', ...data }; },
+    update: async ({ where, data }) => { const row = features.find(row => matches(row, where));
+      if (!row) throw new Error('Not found'); f.calls.writes++; return { ...row, ...data }; },
+    delete: async ({ where }) => { const row = features.find(row => matches(row, where));
+      if (!row) throw new Error('Not found'); f.calls.writes++; return row; },
+  };
+  f.db.featureVote = { count: async () => { f.calls.otherReads++; return 0; },
+    findUnique: async () => null, findFirst: async () => null,
+    create: async ({ data }) => { f.calls.writes++; return data; } };
+  f.db.featureRequestComment = { count: async () => 0, findMany: async () => { f.calls.otherReads++; return []; },
+    create: async ({ data }) => { f.calls.writes++; return { ...data, createdAt: new Date(), updatedAt: new Date() }; } };
+  f.dependencies['next/cache'] = { revalidatePath() {} };
+  f.dependencies['@/lib/permissions'] = { checkUserPermission: async () => ({ hasPermission: true }) };
+  const actions = load('src/actions/feature.ts', f.dependencies);
+  return { ...f, features, actions };
+}
+for (const [path, method, body] of [['features/[id]', 'GET', {}], ['features/[id]', 'PATCH', { title: 'Changed' }],
+  ['features/[id]', 'DELETE', {}], ['features/[id]/comments', 'GET', {}],
+  ['features/[id]/comments', 'POST', { content: 'Hello' }], ['features/[id]/vote', 'POST', { value: 1 }]]) {
+  test(`feature boundary ${method} ${path} denies revoked authors and project-only features`, async () => {
+    const f = featureFixture(), handler = f.route(path)[method];
+    const call = id => handler(f.request(method, undefined, body), { params: Promise.resolve({ id }) });
+    for (const id of ['feature-revoked', 'feature-project-revoked', 'feature-foreign']) {
+      assert.equal((await call(id)).status, 404); noContent(f);
+    }
+    for (const key of ['own', 'joined', 'personal']) assert.ok([200, 201].includes((await call(`feature-${key}`)).status));
+    f.state.mapped = false;
+    assert.equal((await call('feature-own')).status, 401);
+  });
+}
+test('feature actions and metadata deny revoked content through an accessible workspace URL', async () => {
+  const f = featureFixture();
+  assert.equal(await f.actions.getFeatureRequestById('feature-revoked', f.workspaces[0].id), null);
+  assert.equal(await f.actions.getFeatureRequestById('feature-project-revoked'), null); noContent(f);
+  for (const invoke of [() => f.actions.voteOnFeature({ featureRequestId: 'feature-revoked', value: 1 }),
+    () => f.actions.addFeatureComment({ featureRequestId: 'feature-revoked', content: 'Hi' })]) {
+    await assert.rejects(invoke); noContent(f);
+  }
+  f.state.user.role = 'SYSTEM_ADMIN';
+  await assert.rejects(f.actions.updateFeatureStatus({ featureRequestId: 'feature-revoked', status: 'COMPLETED' })); noContent(f);
+  Object.assign(f.dependencies, { '@/actions/feature': f.actions, 'react/jsx-runtime': require('react/jsx-runtime'),
+    'next/navigation': {}, 'next/link': {}, 'lucide-react': {}, '@/components/ui/button': {},
+    '@/components/features/FeatureRequestDetail': {}, '@/components/features/FeatureRequestComments': {} });
+  for (const path of ['features/[id]', 'projects/[projectSlug]/features/[id]']) {
+    const { generateMetadata } = load(`src/app/(main)/[workspaceId]/${path}/page.tsx`, f.dependencies);
+    const metadata = await generateMetadata({ params: Promise.resolve({ workspaceId: f.workspaces[0].id, id: 'feature-revoked' }) });
+    assert.equal(metadata.title, 'Feature Request Not Found'); noContent(f);
+    const allowed = await generateMetadata({ params: Promise.resolve({ workspaceId: f.workspaces[0].id, id: 'feature-own' }) });
+    assert.equal(allowed.title, 'Title-own | Feature Request');
+    f.calls.otherReads = 0;
+  }
+  for (const key of ['own', 'joined', 'personal']) {
+    assert.equal((await f.actions.getFeatureRequestById(`feature-${key}`)).title, `Title-${key}`);
+    await f.actions.voteOnFeature({ featureRequestId: `feature-${key}`, value: 1 });
+    await f.actions.addFeatureComment({ featureRequestId: `feature-${key}`, content: 'Hi' });
+  }
+});
+test('feature listing and creation enforce project and tenant access', async () => {
+  const f = featureFixture();
+  const { GET, POST } = f.route('features');
+  const request = key => new Request(`https://collab.example.test/api/features?orderBy=latest&workspaceId=${f.workspaces.find(w => w.slug === key).id}`);
+  const deniedList = await GET(request('revoked'));
+  assert.equal(deniedList.status, 200); assert.deepEqual((await deniedList.json()).featureRequests, []); noContent(f);
+  const listed = await f.actions.getFeatureRequests({ workspaceId: f.workspaces[2].id });
+  assert.equal(listed.featureRequests?.length ?? listed.features?.length, 0); noContent(f);
+  const body = { title: 'New', description: 'Details', projectId: 'project-revoked', workspaceId: f.workspaces[0].id };
+  assert.equal((await POST(f.request('POST', undefined, body))).status, 404);
+  assert.equal(f.calls.writes, 0);
+  const form = new FormData(); Object.entries(body).forEach(([key, value]) => form.set(key, value));
+  await assert.rejects(f.actions.createFeatureRequest(form)); assert.equal(f.calls.writes, 0);
+  for (const key of ['own', 'joined']) {
+    const response = await POST(f.request('POST', undefined, { ...body, projectId: `project-${key}`, workspaceId: undefined }));
+    assert.equal(response.status, 201);
+    assert.equal((await response.json()).workspaceId, f.workspaces.find(w => w.slug === key).id);
+  }
+});
+
+test('status reorder rejects foreign IDs and mixed batches before mutation and retains owners', async () => {
+  const f = fixture();
+  const statuses = f.workspaces.map(w => ({ id: `status-${w.slug}`, projectId: `project-${w.slug}`, name: 'todo', order: 0 }));
+  f.db.project.findUnique = async ({ where }) => ({ id: where.id, workspaceId: f.workspaces.find(w => `project-${w.slug}` === where.id).id });
+  f.db.projectStatus.count = async ({ where }) => statuses.filter(row => matches(row, where)).length;
+  f.db.projectStatus.update = async ({ where, data }) => { const row = statuses.find(row => matches(row, where));
+    if (!row) throw new Error('Not found'); f.calls.writes++; Object.assign(row, data); return row; };
+  f.db.projectStatus.updateMany = async ({ where, data }) => { statuses.filter(row => matches(row, where)).forEach(row => { f.calls.writes++; Object.assign(row, data); }); };
+  const { PATCH } = f.route('projects/[projectId]/statuses/reorder');
+  const call = (projectId, updates) => PATCH(f.request('PATCH', undefined, { updates }), { params: Promise.resolve({ projectId }) });
+  for (const updates of [[{ id: 'status-revoked', order: 9 }], [{ id: 'status-joined', order: 1 }, { id: 'status-revoked', order: 9 }]]) {
+    assert.equal((await call('project-joined', updates)).status, 400); noContent(f);
+    assert.ok(statuses.every(row => row.order === 0));
+  }
+  for (const key of ['own', 'joined']) assert.equal((await call(`project-${key}`, [{ id: `status-${key}`, order: 2 }, { name: 'todo', order: 3 }])).status, 200);
+  assert.equal(statuses[2].order, 0);
+  assert.equal(statuses[0].order, 3); assert.equal(statuses[1].order, 3);
+});
+
+function scopedNotificationFixture() {
+  const f = notificationFixture();
+  const normalize = data => ({ id: `notification-${f.stored.length}`, postId: null, commentId: null,
+    featureRequestId: null, leaveRequestId: null, issueId: null, workspaceId: null, isPersonal: false, read: false,
+    ...data, workspace: f.workspaces.find(w => w.id === data.workspaceId) ?? null });
+  f.db.notification.createMany = async ({ data }) => {
+    for (const row of data) f.stored.push(normalize(row)); f.calls.writes++; return { count: data.length };
+  };
+  f.db.notification.create = async ({ data }) => { const row = normalize(data); f.stored.push(row); f.calls.writes++; return row; };
+  f.db.notification.count = async ({ where }) => f.stored.filter(row => matches(row, where)).length;
+  const issues = f.workspaces.map(workspace => ({ id: `issue-${workspace.slug}`, issueKey: 'DEMO-1', workspace,
+    workspaceId: workspace.id, projectId: `project-${workspace.slug}`, reporterId: 'alice' }));
+  f.db.issue.findFirst = async ({ where }) => issues.find(row => matches(row, where)) ?? null;
+  f.db.issue.findUnique = async ({ where }) => issues.find(row => matches(row, where)) ?? null;
+  f.db.issue.delete = async ({ where }) => { f.calls.writes++; issues.splice(issues.findIndex(row => matches(row, where)), 1); };
+  f.dependencies['@/lib/notification-service'] = { NotificationService: f.NotificationService, NotificationType: f.NotificationType };
+  const coclaw = load('src/lib/coclaw/notifications.ts', f.dependencies);
+  f.dependencies['@/lib/coclaw/notifications'] = coclaw;
+  return { ...f, issues, coclaw, normalize };
+}
+test('notification scope persists issues and hides revoked or orphaned previews while retaining personal notices', async () => {
+  const f = scopedNotificationFixture();
+  for (const key of ['own', 'joined']) {
+    assert.equal(await f.NotificationService.notifyUsers(['alice'], 'ISSUE_UPDATED', `issue-secret-${key}`, 'bob', { issueId: `issue-${key}` }), 1);
+  }
+  assert.equal(await f.NotificationService.notifyUsers(['alice'], 'PERSONAL', 'personal-notice', 'bob', { personal: true }), 1);
+  f.stored.push(f.normalize({ userId: 'alice', type: 'ISSUE_UPDATED', content: 'orphan-issue-secret' }));
+  f.stored.push(f.normalize({ userId: 'alice', type: 'COCLAW_RESPONSE', content: 'orphan-agent-secret' }));
+  const { GET } = f.route('notifications');
+  f.workspaces[1].members[0].status = false;
+  const result = await GET(f.request()); assert.equal(result.status, 200);
+  const contents = (await result.json()).map(row => row.content).sort();
+  assert.deepEqual(contents, ['issue-secret-own', 'personal-notice']);
+  assert.equal(f.stored[0].issueId, 'issue-own');
+  assert.equal(f.stored[0].workspaceId, f.workspaces[0].id);
+  const writes = f.calls.writes, pushes = f.calls.providerCalls;
+  assert.equal(await f.NotificationService.notifyUsers(['alice'], 'ISSUE_UPDATED', 'revoked-later', 'bob', { issueId: 'issue-joined' }), 0);
+  assert.equal(f.calls.writes, writes); assert.equal(f.calls.providerCalls, pushes);
+  assert.equal(await f.NotificationService.notifyUsers(['alice'], 'ISSUE_UPDATED', 'unknown-reference', 'bob'), 0);
+});
+test('Coclaw notifications persist server workspace scope and both read paths deny revoked previews', async () => {
+  const f = scopedNotificationFixture();
+  const create = key => ({ userId: 'alice', workspaceId: f.workspaces.find(w => w.slug === key).id,
+    type: f.coclaw.CoclawNotificationType.COCLAW_RESPONSE, content: `agent-secret-${key}` });
+  await f.coclaw.createCoclawNotifications([create('own'), create('joined')]);
+  assert.equal(f.stored.length, 2);
+  f.workspaces[1].members[0].status = false;
+  const writes = f.calls.writes;
+  await f.coclaw.createCoclawNotification(create('joined'));
+  assert.equal(f.calls.writes, writes);
+  f.stored.push(f.normalize({ userId: 'alice', type: 'COCLAW_RESPONSE', content: 'orphan-agent-secret' }));
+  const generic = await (await f.route('notifications').GET(f.request())).json();
+  assert.deepEqual(generic.map(row => row.content), ['agent-secret-own']);
+  const { GET, POST } = f.route('workspaces/[workspaceId]/coclaw/notifications');
+  const response = await GET(f.request(), f.context(f.workspaces[0].id)); assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.unreadCount, 1);
+  assert.deepEqual(body.activity.map(row => row.content), ['agent-secret-own']);
+  assert.equal((await GET(f.request(), f.context(f.workspaces[1].id))).status, 403);
+  assert.equal((await POST(f.request('POST'), f.context(f.workspaces[0].id))).status, 200);
+  assert.equal(f.stored.find(row => row.content === 'agent-secret-joined').read, false);
+  assert.equal(f.stored.find(row => row.content === 'agent-secret-own').read, true);
+});
+test('issue deletion retains server tenant scope for active recipients and suppresses revoked delivery', async () => {
+  const f = scopedNotificationFixture();
+  const workspace = f.workspaces[1];
+  workspace.members.push({ userId: 'dan', status: true }, { userId: 'carol', status: false });
+  const lookupUser = f.db.user.findUnique;
+  f.db.user.findUnique = async args => ['bob', 'dan', 'carol'].includes(args.where.id) ? { id: args.where.id } : lookupUser(args);
+  f.db.issueFollower = { findMany: async () => [{ userId: 'dan' }, { userId: 'carol' }] };
+  f.db.projectFollower = { findMany: async () => [{ userId: 'bob' }] };
+  Object.assign(f.dependencies, {
+    '@prisma/client': { IssueType: { TASK: 'TASK' }, Prisma: {} },
+    '@/utils/html-normalizer': {},
+    '@/lib/event-bus': { emitIssueDeleted: async () => {} },
+    '@/lib/permissions': { Permission: { DELETE_ANY_TASK: 'any', DELETE_SELF_TASK: 'self' },
+      canActOnOwnContent: () => true, checkUserPermissions: async () => ({ any: { hasPermission: true }, self: { hasPermission: true } }) },
+  });
+  const response = await f.route('issues/[issueId]').DELETE(f.request('DELETE', workspace.id),
+    { params: Promise.resolve({ issueId: 'issue-joined' }) });
+  assert.equal(response.status, 200, await response.text());
+  assert.equal(f.issues.some(issue => issue.id === 'issue-joined'), false);
+  assert.deepEqual(f.stored.map(row => row.userId).sort(), ['bob', 'dan']);
+  assert.deepEqual(f.deliveries.map(([userId]) => userId).sort(), ['bob', 'dan']);
+  assert.ok(f.stored.every(row => row.issueId === 'issue-joined' && row.workspaceId === workspace.id));
+  const where = f.dependencies['@/lib/notification-access'].notificationAccessWhere('dan');
+  assert.equal(f.stored.filter(row => matches(row, where)).length, 1);
+  workspace.members.find(member => member.userId === 'dan').status = false;
+  assert.equal(f.stored.filter(row => matches(row, where)).length, 0);
+});
+
+test('feature mentions deny revoked senders before notification writes', async () => {
+  const f = featureFixture();
+  f.dependencies['@/lib/notification-access'] = load('src/lib/notification-access.ts', f.dependencies);
+  f.dependencies['@/lib/html-sanitizer'] = { sanitizeHtmlToPlainText: value => value };
+  f.dependencies['@/lib/notification-service'] = { NotificationService: { notifyUsers: async () => { f.calls.writes++; return 1; } } };
+  const { POST } = f.route('mentions');
+  const call = key => POST(f.request('POST', undefined, { userIds: ['bob'], sourceType: 'feature', sourceId: `feature-${key}`, content: 'Mention' }));
+  assert.equal((await call('revoked')).status, 404);
+  assert.equal(f.calls.writes, 0);
+  assert.equal((await call('own')).status, 200);
+  assert.equal(f.calls.writes, 1);
 });

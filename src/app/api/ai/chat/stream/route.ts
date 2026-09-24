@@ -1094,6 +1094,7 @@ async function createCoclawProxyStream(
             : fullTextContent;
           createCoclawNotification({
             userId,
+            workspaceId,
             type: CoclawNotificationType.COCLAW_RESPONSE,
             content: `Coclaw: ${preview}`,
           }).catch(() => {});

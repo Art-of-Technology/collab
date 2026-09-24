@@ -385,6 +385,7 @@ model Workspace {
   dockEnabled         Boolean               @default(true)
   timeTrackingEnabled Boolean               @default(true)
   customRoles         CustomRole[]
+  notifications       Notification[]
   featureRequests     FeatureRequest[]
   leavePolicies       LeavePolicy[]
   notes               Note[]
@@ -830,6 +831,10 @@ model Notification {
   commentId        String?
   featureRequestId String?
   leaveRequestId   String?
+  workspaceId      String?
+  issueId          String?
+  isPersonal       Boolean         @default(false)
+  workspace        Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   comment          Comment?        @relation(fields: [commentId], references: [id], onDelete: Cascade)
   leaveRequest     LeaveRequest?   @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
   featureRequest   FeatureRequest? @relation(fields: [featureRequestId], references: [id], onDelete: Cascade)
@@ -837,6 +842,8 @@ model Notification {
   sender           User            @relation("NotificationSender", fields: [senderId], references: [id], onDelete: Cascade)
   user             User            @relation("NotificationReceiver", fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([workspaceId])
+  @@index([issueId])
   @@index([userId])
   @@index([postId])
   @@index([commentId])

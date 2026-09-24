@@ -1,3 +1,4 @@
+import { featureAccessWhere } from '@/lib/feature-access';
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthSession } from "@/lib/auth";
@@ -16,11 +17,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getAuthSession();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const _params = await params;
     const { id } = _params;
 
-    const featureRequest = await prisma.featureRequest.findUnique({
-      where: { id },
+    const featureRequest = await prisma.featureRequest.findFirst({
+      where: { id, ...featureAccessWhere(session.user.id) },
       include: {
         author: {
           select: {
@@ -78,7 +84,7 @@ export async function PATCH(
   try {
     const session = await getAuthSession();
 
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -94,8 +100,8 @@ export async function PATCH(
     const { title, description, html, status } = validated.data;
 
     // Check if the feature request exists
-    const featureRequest = await prisma.featureRequest.findUnique({
-      where: { id },
+    const featureRequest = await prisma.featureRequest.findFirst({
+      where: { id, ...featureAccessWhere(session.user.id) },
       select: { authorId: true },
     });
 
@@ -148,7 +154,7 @@ export async function PATCH(
 
     // Update the feature request
     const updatedFeatureRequest = await prisma.featureRequest.update({
-      where: { id },
+      where: { id, ...featureAccessWhere(session.user.id) },
       data: updateData,
       include: {
         author: {
@@ -179,7 +185,7 @@ export async function DELETE(
   try {
     const session = await getAuthSession();
 
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -187,8 +193,8 @@ export async function DELETE(
     const { id } = _params;
 
     // Check if the feature request exists
-    const featureRequest = await prisma.featureRequest.findUnique({
-      where: { id },
+    const featureRequest = await prisma.featureRequest.findFirst({
+      where: { id, ...featureAccessWhere(session.user.id) },
       select: { authorId: true },
     });
 
@@ -212,7 +218,7 @@ export async function DELETE(
 
     // Delete the feature request
     await prisma.featureRequest.delete({
-      where: { id },
+      where: { id, ...featureAccessWhere(session.user.id) },
     });
 
     return NextResponse.json({ success: true });

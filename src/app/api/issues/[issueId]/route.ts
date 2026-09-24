@@ -609,7 +609,7 @@ export async function DELETE(
             NotificationType.PROJECT_ISSUE_DELETED,
             content,
             currentUser.id,
-            { issueId: (existingIssue as any).id as string }
+            { issueId: existingIssue.id, workspaceId: existingIssue.workspaceId }
           );
         }
         if (standardRecipients.length > 0) {
@@ -618,7 +618,7 @@ export async function DELETE(
             NotificationType.ISSUE_DELETED,
             content,
             currentUser.id,
-            { issueId: (existingIssue as any).id as string }
+            { issueId: existingIssue.id, workspaceId: existingIssue.workspaceId }
           );
         }
       }

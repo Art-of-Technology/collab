@@ -1,3 +1,4 @@
+import { featureAccessWhere } from '@/lib/feature-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -386,7 +387,7 @@ export async function GET(
 
     // Get feature requests
     const featureRequests = await prisma.featureRequest.findMany({
-      where: { projectId },
+      where: { projectId, ...featureAccessWhere(session.user.id) },
       include: {
         author: {
           select: { id: true, name: true, image: true },
