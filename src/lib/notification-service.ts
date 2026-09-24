@@ -1,4 +1,5 @@
-import { postAccessWhere, commentAccessWhere } from "@/lib/post-access";
+import { notificationCommentAccessWhere } from "@/lib/notification-access";
+import { postAccessWhere } from "@/lib/post-access";
 import { prisma } from "@/lib/prisma";
 import {
   sendPushNotification,
@@ -265,7 +266,7 @@ export class NotificationService {
         const allowed: string[] = [];
         for (const userId of recipientIds) {
           const access = commentId
-            ? await prisma.comment.findFirst({ where: commentAccessWhere(commentId, userId, postId), select: { id: true } })
+            ? await prisma.comment.findFirst({ where: { id: commentId, ...notificationCommentAccessWhere(userId), ...(postId ? { postId } : {}) }, select: { id: true } })
             : await prisma.post.findFirst({ where: postAccessWhere(postId!, userId), select: { id: true } });
           if (access) allowed.push(userId);
         }

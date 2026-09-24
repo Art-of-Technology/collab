@@ -26,9 +26,11 @@ Status: local implementation; not deployed or release-approved.
   authorship or an explicit share; administrator role alone does not bypass it.
 
 Offline regression coverage lives in
-[`tests/security/access-boundaries.test.cjs`](../../tests/security/access-boundaries.test.cjs).
+[`tests/security/`](../../tests/security/).
 See [local check mechanics](../../CONTRIBUTING.md#local-checks). Prisma protocol
-checks intercept engine requests before any database connection.
+checks intercept engine requests before any database connection. Historical
+commands below name the former monolithic file; current runs use
+`node --test tests/security/*.test.cjs`.
 
 ## Preview, redirect and packaging boundaries
 
@@ -252,3 +254,21 @@ suppression or callback/collaboration behavior changes in this security slice:
   changing effects that could overwrite synchronized content.
 
 Other warnings occur in unchanged files; this result is not a zero-warning claim.
+
+
+## CI review-input repair
+
+The security regressions are split by subject into ordinary executable
+`tests/security/*.test.cjs` files, using the existing VM loader and fixtures in
+`helpers.cjs`. The package entrypoint discovers every file and runs them serially to preserve
+the original single-process resource bound. The feature
+page navigation regression is retained for PR477 integration, and the opt-in
+native PostgreSQL cascade regression still covers both comment deletion paths
+and all three post deletion paths.
+
+Notes-comment notifications now use the existing Notes collection policy for
+recipient delivery, notification reads and mark-read operations. A comment
+attached to both a post and a Note must satisfy both policies. Revoked tenant
+membership, expiration and restricted sharing rules remain enforced. App handlers use the actual token
+user for authorization and authorship even when the installer differs; a
+regression check exercises that distinction and subsequent revocation.

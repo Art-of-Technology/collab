@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:security",
-    "test:security": "node --test tests/security/*.test.cjs",
+    "test:security": "node --test --test-concurrency=1 tests/security/*.test.cjs",
     "prod": "cross-env NODE_ENV=production next start",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
