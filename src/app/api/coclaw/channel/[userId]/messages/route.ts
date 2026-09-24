@@ -12,48 +12,7 @@ import type { Prisma } from '@prisma/client';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { decryptToken } from '@/lib/apps/crypto';
-
-// Validate the bearer token from Coclaw by decrypting stored tokens and comparing.
-// Tokens are stored encrypted (AES-256-GCM) in the DB, so we must decrypt each
-// candidate and compare with the provided plaintext token.
-async function validateCoclawAuth(request: NextRequest, userId: string): Promise<boolean> {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return false;
-
-  const token = authHeader.slice(7);
-
-  // Fetch non-revoked, non-expired tokens for this user (or system tokens with userId=null)
-  const candidates = await prisma.appToken.findMany({
-    where: {
-      isRevoked: false,
-      OR: [
-        { userId },
-        { userId: null },
-      ],
-    },
-    select: { id: true, accessToken: true, tokenExpiresAt: true, userId: true },
-    orderBy: { createdAt: 'desc' },
-    take: 20, // limit to avoid scanning too many rows
-  });
-
-  for (const candidate of candidates) {
-    // Skip expired tokens
-    if (candidate.tokenExpiresAt && candidate.tokenExpiresAt < new Date()) continue;
-
-    try {
-      const decrypted = await decryptToken(Buffer.from(candidate.accessToken, 'base64'));
-      if (decrypted === token) {
-        return true;
-      }
-    } catch {
-      // Decryption failure (key rotation, corrupted data) — skip this token
-      continue;
-    }
-  }
-
-  return false;
-}
+import { authenticateAppRequest } from '@/lib/apps/auth-middleware';
 
 /**
  * GET /api/coclaw/channel/[userId]/messages
@@ -70,8 +29,8 @@ export async function GET(
 ) {
   const { userId } = await params;
 
-  const isAuthed = await validateCoclawAuth(request, userId);
-  if (!isAuthed) {
+  const auth = await authenticateAppRequest(request);
+  if (!auth.success || auth.context?.user.id !== userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -87,6 +46,10 @@ export async function GET(
       { error: 'workspaceId query parameter is required' },
       { status: 400 }
     );
+  }
+
+  if (workspaceId !== auth.context!.workspace.id) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 403 });
   }
 
   const where: Record<string, unknown> = {
@@ -141,8 +104,8 @@ export async function POST(
 ) {
   const { userId } = await params;
 
-  const isAuthed = await validateCoclawAuth(request, userId);
-  if (!isAuthed) {
+  const auth = await authenticateAppRequest(request);
+  if (!auth.success || auth.context?.user.id !== userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -172,6 +135,10 @@ export async function POST(
       { error: 'workspace_id is required' },
       { status: 400 }
     );
+  }
+
+  if (body.workspace_id !== auth.context!.workspace.id) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 403 });
   }
 
   const role = body.role === 'assistant' ? 'assistant' : 'user';
@@ -212,8 +179,8 @@ export async function PATCH(
 ) {
   const { userId } = await params;
 
-  const isAuthed = await validateCoclawAuth(request, userId);
-  if (!isAuthed) {
+  const auth = await authenticateAppRequest(request);
+  if (!auth.success || auth.context?.user.id !== userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -244,7 +211,8 @@ export async function PATCH(
     const updated = await prisma.coclawChannelMessage.updateMany({
       where: {
         id: body.message_id,
-        userId, // Ensure user owns this message
+        userId,
+        workspaceId: auth.context!.workspace.id,
       },
       data: {
         status: newStatus as 'DELIVERED' | 'FAILED',
