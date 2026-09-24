@@ -52,13 +52,21 @@ CREATE FUNCTION "invalidate_issue_version_access"() RETURNS trigger LANGUAGE plp
 BEGIN
   IF TG_OP = 'UPDATE' AND NEW."workspaceId" IS NOT DISTINCT FROM OLD."workspaceId"
     AND NEW."projectId" IS NOT DISTINCT FROM OLD."projectId"
-    AND (NEW."statusId" IS NOT DISTINCT FROM OLD."statusId" OR (
-      OLD."statusId" IS NOT NULL AND NEW."statusId" IS NOT NULL AND EXISTS (
-        SELECT 1 FROM "ProjectStatus" old_status JOIN "ProjectStatus" new_status
-          ON old_status."projectId" = new_status."projectId"
-        WHERE old_status.id = OLD."statusId" AND new_status.id = NEW."statusId"
-      )
-    )) THEN
+    AND EXISTS (
+      SELECT 1 FROM "Project" issue_project
+      LEFT JOIN "ProjectStatus" old_status ON old_status.id = OLD."statusId"
+      LEFT JOIN "Project" old_project ON old_project.id = old_status."projectId"
+      LEFT JOIN "ProjectStatus" new_status ON new_status.id = NEW."statusId"
+      LEFT JOIN "Project" new_project ON new_project.id = new_status."projectId"
+      WHERE issue_project.id = OLD."projectId"
+        AND (OLD."statusId" IS NULL OR old_project.id IS NOT NULL)
+        AND (NEW."statusId" IS NULL OR new_project.id IS NOT NULL)
+        AND (CASE WHEN old_project."workspaceId" NOT IN (OLD."workspaceId", issue_project."workspaceId")
+          THEN old_project."workspaceId" END)
+          IS NOT DISTINCT FROM
+          (CASE WHEN new_project."workspaceId" NOT IN (NEW."workspaceId", issue_project."workspaceId")
+          THEN new_project."workspaceId" END)
+    ) THEN
     RETURN NEW;
   END IF;
   UPDATE "Version" SET "issueAccessInvalidated" = true

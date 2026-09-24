@@ -69,6 +69,56 @@ test('saved version provenance survives actual PostgreSQL cascade unlink and sco
     assert.equal((await visible('ordinary-child')).length, 1);
     assert.equal(await db.release.count({ where: { id: 'ordinary-release', ...releaseAccessWhere('alice') } }), 1);
     assert.equal(await db.versionFile.count({ where: { environment: 'ordinary', version: versionAccessWhere('alice') } }), 1);
+    for (const workspaceId of ['scope-b', 'scope-c']) {
+      await db.workspace.create({ data: { id: workspaceId, slug: workspaceId, name: workspaceId, ownerId: 'bob' } });
+      await db.workspaceMember.create({ data: { workspaceId, userId: 'alice', status: true } });
+    }
+    for (const [id, workspaceId] of [['same-a', 'a'], ['scope-b1', 'scope-b'], ['scope-b2', 'scope-b'], ['scope-c1', 'scope-c']]) {
+      await db.project.create({ data: { id, workspaceId, slug: id, name: id, issuePrefix: id } });
+      await db.projectStatus.create({ data: { id, projectId: id, name: id, displayName: id } });
+    }
+    const transitions = [
+      ['first-status', 'pa', null, 'todo', true],
+      ['clear-own-status', 'pa', 'todo', null, true],
+      ['same-workspace-projects', 'pa', 'todo', 'same-a', true],
+      ['same-foreign-workspace', 'pa', 'scope-b1', 'scope-b2', true],
+      ['status-in-issue-workspace', 'scope-b1', null, 'todo', true],
+      ['clear-status-in-issue-workspace', 'scope-b1', 'todo', null, true],
+      ['clear-status-in-project-workspace', 'scope-b1', 'scope-b2', null, true],
+      ['remove-foreign-scope', 'pa', 'scope-b1', null, false],
+      ['replace-foreign-with-own', 'pa', 'scope-b1', 'todo', false],
+      ['move-foreign-scope', 'pa', 'scope-b1', 'scope-c1', false],
+      ['add-foreign-scope', 'pa', null, 'scope-b1', false],
+    ];
+    for (const [id, projectId, from, to, retained] of transitions) {
+      await db.issue.create({ data: { id, workspaceId: 'a', projectId, statusId: from, title: `Saved ${id}` } });
+      await version(id);
+      await db.versionIssue.create({ data: { versionId: id, issueId: id } });
+      await version(`child-${id}`, id);
+      await db.release.create({ data: { id, repositoryId: 'repo', versionId: id, tagName: id, name: `Saved ${id}`, description: 'Retained release' } });
+      await db.versionFile.create({ data: { repositoryId: 'repo', versionId: id, environment: id, content: { features: [id] } } });
+      const original = await db.version.findUnique({ where: { id } });
+      const release = await db.release.findUnique({ where: { id } });
+      const file = await db.versionFile.findFirst({ where: { environment: id } });
+      assert.equal((await visible(id)).length, 1, id);
+      await db.issue.update({ where: { id }, data: { statusId: to } });
+      assert.equal((await visible(id)).length, Number(retained), id);
+      assert.equal((await visible(`child-${id}`)).length, Number(retained), `child ${id}`);
+      const saved = await db.version.findUnique({ where: { id } });
+      assert.equal(saved.issueAccessInvalidated, !retained, id);
+      assert.equal(saved.aiChangelog, original.aiChangelog);
+      assert.equal(saved.aiSummary, original.aiSummary);
+      assert.deepEqual(await db.release.findUnique({ where: { id } }), release);
+      assert.deepEqual(await db.versionFile.findFirst({ where: { environment: id } }), file);
+      assert.deepEqual(await db.release.findMany({ where: { id, ...releaseAccessWhere('alice') } }), retained ? [release] : []);
+      assert.deepEqual(await db.versionFile.findMany({ where: { environment: id, version: versionAccessWhere('alice') } }), retained ? [file] : []);
+      if (from === 'scope-b1') {
+        await db.workspaceMember.updateMany({ where: { workspaceId: 'scope-b', userId: 'alice' }, data: { status: false } });
+        assert.deepEqual(await visible(id), [], `revocation after ${id}`);
+        assert.deepEqual(await db.release.findMany({ where: { id, ...releaseAccessWhere('alice') } }), []);
+        await db.workspaceMember.updateMany({ where: { workspaceId: 'scope-b', userId: 'alice' }, data: { status: true } });
+      }
+    }
     for (const operation of ['delete-issue', 'unlink', 'reassign-link', 'delete-status', 'delete-project',
       'delete-workspace', 'move-issue', 'move-project', 'move-status']) {
       const workspaceId = `b-${operation}`, projectId = `p-${operation}`, statusId = `s-${operation}`, issueId = `i-${operation}`;
