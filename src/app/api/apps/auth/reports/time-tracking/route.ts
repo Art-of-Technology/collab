@@ -130,7 +130,7 @@ export const GET = withAppAuth(
       // Apply filters
       if (projectId) {
         const issue = await prisma.issue.findFirst({
-          where: { projectId, workspaceId: context.workspace.id },
+          where: { AND: [issueReadAccessWhere(context.user.id), { projectId, workspaceId: context.workspace.id }] },
           select: { projectId: true },
         });
         if (issue) {

@@ -34,6 +34,7 @@ function matches(row, where = {}) {
     if (value === undefined) return true;
     const actual = row?.[key];
     if (value === null || typeof value !== 'object') return actual === value;
+    if ('every' in value) return actual?.every(item => matches(item, value.every)) ?? false;
     if ('some' in value) return actual?.some(item => matches(item, value.some)) ?? false;
     if ('notIn' in value) return !value.notIn.includes(actual);
     if ('startsWith' in value) return typeof actual === 'string' && actual.startsWith(value.startsWith);
@@ -140,6 +141,7 @@ function fixture() {
   dependencies['@/lib/view-helpers'] = load('src/lib/view-helpers.ts', dependencies);
   dependencies['@/lib/issue-references'] = load('src/lib/issue-references.ts', dependencies);
   dependencies['@/lib/session'] = load('src/lib/session.ts', dependencies);
+  dependencies['@/lib/github/repository-access'] = load('src/lib/github/repository-access.ts', dependencies);
   dependencies['@/lib/post-access'] = load('src/lib/post-access.ts', dependencies);
   dependencies['@/lib/feature-access'] = load('src/lib/feature-access.ts', dependencies);
   dependencies['@/lib/notification-access'] = load('src/lib/notification-access.ts', dependencies);
@@ -1485,7 +1487,7 @@ function relatedIssueFixture() {
   f.db.issue = {
     findFirst: async args => project(rows.find(row => matches(row, args.where)), args),
     findMany: async args => rows.filter(row => matches(row, args.where)).map(row => project(row, args)),
-    groupBy: async () => [], count: async () => 0,
+    groupBy: async () => [], count: async ({ where }) => rows.filter(row => matches(row, where)).length,
     create: async ({ data }) => { writes.push(data); return { ...data, id: 'created', labels: [], workspace: f.workspaces[0] }; },
     update: async ({ where, data, ...spec }) => { writes.push(data); return project({ ...rows.find(row => row.id === where.id), ...data }, spec); },
   };
@@ -2553,6 +2555,7 @@ for (const association of ['project', 'status']) {
     const f = relatedIssueFixture(), own = f.workspaces[0], joined = f.workspaces[1], issue = f.rows[0];
     if (association === 'project') { issue.project = f.rows[1].project; issue.projectId = issue.project.id; }
     else { issue.statusId = 'foreign-status'; issue.projectStatus = { project: f.rows[1].project }; }
+    f.db.projectStatus.findFirst = async ({ where }) => issue.projectStatus && matches({ ...issue.projectStatus, id: issue.statusId }, where) ? issue.projectStatus : null;
     let callback, payload, unsubscribe = 0;
     f.dependencies['@/lib/redis'] = {
       publishEvent: async (_channel, event) => { payload = event; },
@@ -2749,3 +2752,279 @@ for (const direction of ['source', 'target']) {
     assert.deepEqual(f.writes, []);
   });
 }
+
+function issueReportFixture() {
+  const f = relatedIssueFixture(), own = f.rows[0], project = own.project;
+  own.updatedAt = new Date(); own.storyPoints = 3; own.labels = []; own.children = [];
+  own.parent = null; own.assigneeId = 'alice'; own.assignee = { name: 'Alice' };
+  project.issues = [own]; project.statuses = [];
+  f.db.project.findFirst = async args => matches(project, args.where) ? f.project(project, args) : null;
+  f.db.project.findUnique = f.db.project.findFirst;
+  f.db.project.count = async () => 1;
+  f.db.workspaceMember.count = async () => 1;
+  f.db.workspaceMember.findMany = async () => [{ userId: 'alice', user: { ...f.state.user, expertise: [] }, role: 'MEMBER', expertise: [] }];
+  f.db.issue.groupBy = async ({ where, by, _count }) => {
+    const groups = new Map();
+    for (const row of f.rows.filter(row => matches(row, where))) {
+      const key = JSON.stringify(by.map(key => row[key]));
+      if (!groups.has(key)) groups.set(key, { ...Object.fromEntries(by.map(key => [key, row[key]])), _count: 0 });
+      groups.get(key)._count++;
+    }
+    return [...groups.values()].map(row => ({ ...row, _count: _count === true ? row._count : { id: row._count } }));
+  };
+  f.db.issue.aggregate = async ({ where }) => ({ _sum: { storyPoints: f.rows.filter(row => matches(row, where)).reduce((n, row) => n + row.storyPoints, 0) } });
+  f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => (req, params) => handler(req,
+    { workspace: f.workspaces[0], user: f.state.user }, params) };
+  const denied = { ...own, id: 'denied-historical', issueKey: 'PRIVATE-1', title: 'private-report-title',
+    description: 'private-report-description', assignee: { name: 'private-report-assignee' }, storyPoints: 100,
+    statusId: 'revoked-status', projectStatus: { id: 'revoked-status', project: f.rows[2].project } };
+  const addDenied = () => { f.rows.push(denied); project.issues.push(denied); };
+  return { ...f, own, reportProject: project, denied, addDenied };
+}
+
+for (const type of ['issues', 'project', 'view', 'general', 'team']) {
+  test(`summary ${type} denies historical issue input before provider processing`, async () => {
+    const f = issueReportFixture(), prompts = [];
+    f.dependencies.__env = { ANTHROPIC_API_KEY: 'fixture-only' };
+    f.dependencies['@anthropic-ai/sdk'] = { default: class { messages = { create: async payload => {
+      const data = payload.messages[0].content.split('Data to summarize:\n')[1]; prompts.push(data);
+      return { content: [{ type: 'text', text: data }] };
+    } }; } };
+    f.dependencies.openai = { default: class {} };
+    f.db.view.findFirst = async () => ({ name: 'View', projectIds: [f.own.projectId] });
+    const invoke = issueIds => f.route('ai/summarize').POST(f.request('POST', undefined,
+      { workspaceId: f.own.workspaceId, type, projectId: f.own.projectId, viewId: 'view', issueIds }));
+    const baseline = await invoke([f.own.id]);
+    assert.equal(baseline.status, 200);
+    const expected = (await baseline.json()).summary;
+    f.addDenied();
+    const response = await invoke([f.own.id, f.denied.id]);
+    assert.equal(response.status, type === 'issues' ? 404 : 200);
+    const body = await response.json();
+    assert.equal(JSON.stringify(body).includes('private-report'), false);
+    if (type === 'issues') assert.equal(prompts.length, 1);
+    else assert.equal(body.summary, expected);
+    assert.equal(prompts.join('').includes('private-report'), false);
+    f.workspaces[2].members[0].status = true;
+    assert.equal((await invoke([f.denied.id])).status, 200);
+    assert.equal(prompts.at(-1).includes('private-report-title'), true);
+    f.workspaces[2].members[0].status = false; f.workspaces[2].ownerId = 'alice';
+    assert.equal((await invoke([f.denied.id])).status, 200);
+    assert.equal(prompts.at(-1).includes('private-report-title'), true);
+  });
+}
+
+for (const endpoint of ['apps/auth/workspace/stats', 'apps/auth/projects/[projectId]/stats',
+  'apps/auth/projects/[projectId]', 'apps/auth/projects/[projectId]/statuses', 'apps/auth/reports/issue-summary',
+  'apps/auth/reports/assignee-workload', 'apps/auth/search/users', 'projects/[projectId]/summary']) {
+  test(`issue report ${endpoint} excludes denied historical rows from every projection and total`, async () => {
+    const f = issueReportFixture();
+    const status = { id: 'done', projectId: f.own.projectId, isActive: true, isFinal: true, name: 'Done' };
+    f.reportProject.statuses = [status];
+    f.db.projectStatus.findMany = async ({ where }) => matches(status, where) ? [status] : [];
+    f.own.statusId = status.id; f.own.projectStatus = { ...status, project: f.reportProject };
+    f.denied.statusId = status.id; f.denied.projectStatus = f.own.projectStatus;
+    f.denied.workspaceId = f.workspaces[2].id; f.denied.workspace = f.workspaces[2];
+    const invoke = () => f.route(endpoint).GET(new Request(`https://collab.example.test/?comparePeriod=true&includeCompleted=true`),
+      { params: Promise.resolve({ projectId: f.own.projectId }) });
+    const first = await invoke(); assert.equal(first.status, 200);
+    const expected = await first.json();
+    f.addDenied();
+    const denied = await invoke(); assert.equal(denied.status, 200);
+    assert.deepEqual(await denied.json(), expected);
+    f.denied.workspaceId = f.own.workspaceId; f.denied.workspace = f.own.workspace;
+    f.denied.statusId = 'foreign-status'; f.denied.projectStatus = { project: f.rows[2].project };
+    assert.deepEqual(await (await invoke()).json(), expected);
+    f.workspaces[2].ownerId = 'alice';
+    f.denied.statusId = status.id; f.denied.projectStatus = f.own.projectStatus;
+    assert.notDeepEqual(await (await invoke()).json(), expected);
+    assert.equal(f.rows.includes(f.denied), true);
+    assert.deepEqual(f.writes, []);
+  });
+}
+
+for (const direction of ['source', 'target']) {
+  test(`relation deletion authorizes historical ${direction} endpoint before mutation`, async () => {
+    const f = relatedIssueFixture(), own = f.rows[0], peer = f.rows[1], foreignProject = f.rows[2].project;
+    peer.workspaceId = own.workspaceId; peer.workspace = own.workspace; peer.project = own.project; peer.projectId = own.projectId;
+    peer.statusId = 'revoked-status'; peer.projectStatus = { project: foreignProject };
+    const relation = { id: 'relation', sourceIssueId: direction === 'source' ? peer.id : own.id,
+      targetIssueId: direction === 'target' ? peer.id : own.id,
+      sourceIssue: direction === 'source' ? peer : own, targetIssue: direction === 'target' ? peer : own };
+    f.db.issueRelation.findFirst = async ({ where }) => matches(relation, where) ? relation : null;
+    f.db.issueRelation.delete = async args => { f.writes.push(args); };
+    f.workspaces[0].members.push({ userId: 'alice', status: true });
+    const invoke = () => f.route('workspaces/[workspaceId]/issues/[issueKey]/relations/[relationId]').DELETE(f.request(),
+      { params: Promise.resolve({ workspaceId: own.workspaceId, issueKey: own.id, relationId: relation.id }) });
+    assert.equal((await invoke()).status, 404); assert.deepEqual(f.writes, []);
+    f.workspaces[2].members[0].status = true;
+    assert.equal((await invoke()).status, 200); assert.equal(f.writes.length, 1);
+    f.workspaces[0].members.length = 0; f.workspaces[2].members[0].status = false; f.workspaces[2].ownerId = 'alice';
+    assert.equal((await invoke()).status, 200); assert.equal(f.writes.length, 2);
+  });
+}
+
+for (const endpoint of ['issues', 'issues/[issueId]', 'apps/auth/issues', 'apps/auth/issues/[issueIdOrKey]']) {
+  test(`parent validation denies historical status through ${endpoint} without writes`, async () => {
+    const f = relatedIssueFixture(), own = f.rows[0], parent = f.rows[1], foreignProject = f.rows[2].project;
+    own.projectId = 'cproject000000000000000001'; own.project.id = own.projectId;
+    f.db.project.findFirst = async args => matches(own.project, args.where) ? own.project : null;
+    parent.id = 'cparent0000000000000000001'; parent.workspaceId = own.workspaceId; parent.workspace = own.workspace;
+    parent.project = own.project; parent.projectId = own.projectId;
+    parent.statusId = 'revoked-status'; parent.projectStatus = { project: foreignProject };
+    const permissions = load('src/lib/permissions.ts', { './prisma': { prisma: f.db } });
+    f.dependencies['@/lib/permissions'] = { ...permissions,
+      checkUserPermissions: async (_u, _w, keys) => Object.fromEntries(keys.map(key => [key, { hasPermission: true }])) };
+    f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => (req, params) => handler(req,
+      { workspace: f.workspaces[0], user: f.state.user }, params) };
+    f.db.$transaction = async callback => callback(f.db);
+    f.dependencies['@/lib/board-item-activity-service'] = { compareObjects: () => [], trackCreation: async () => {} };
+    const method = endpoint === 'issues/[issueId]' ? 'PUT' : endpoint.includes('[issueIdOrKey]') ? 'PATCH' : 'POST';
+    const response = await f.route(endpoint)[method](f.request(method, undefined,
+      { title: 'New child', ...(method === 'POST' ? { workspaceId: own.workspaceId } : {}), projectId: own.projectId, parentId: parent.id }),
+      { params: Promise.resolve({ issueId: own.id, issueIdOrKey: own.id }) });
+    assert.equal(response.status, 400);
+    assert.equal(JSON.stringify(await response.json()).includes('Invalid parent issue'), true);
+    assert.deepEqual(f.writes, []); assert.equal(f.calls.writes, 0);
+    const validate = f.dependencies['@/lib/issue-references'].validateIssueReferences;
+    assert.equal(await validate(f.db, own.workspaceId, own.projectId, 'alice', { parentId: parent.id }), 'Invalid parent issue');
+    f.workspaces[2].members[0].status = true;
+    assert.equal(await validate(f.db, own.workspaceId, own.projectId, 'alice', { parentId: parent.id }), null);
+    f.workspaces[2].members[0].status = false; f.workspaces[2].ownerId = 'alice';
+    assert.equal(await validate(f.db, own.workspaceId, own.projectId, 'alice', { parentId: parent.id }), null);
+    assert.equal(await validate(f.db, own.workspaceId, own.projectId, '', { parentId: parent.id }), 'Invalid issue actor');
+  });
+}
+
+function versionReadFixture() {
+  const f = issueReportFixture(), inputs = [];
+  f.addDenied();
+  const repository = { id: 'repo', name: 'repo', project: f.reportProject };
+  f.reportProject.repository = repository;
+  f.db.repository.findFirst = async args => matches(repository, args.where) ? f.project(repository, args) : null;
+  f.db.repository.findUnique = f.db.repository.findFirst;
+  const versions = [f.denied, f.own].map((issue, index) => ({ id: `version-${index}`, repositoryId: 'repo',
+    version: `1.0.${index}`, status: 'RELEASED', environment: 'production', createdAt: new Date(0),
+    aiSummary: `${issue.title} saved summary`, aiChangelog: `${issue.title} saved changelog`,
+    issues: [{ issueId: issue.id, issue, aiTitle: issue.title }], releases: [], deployments: [], parentVersion: null, childVersions: [] }));
+  const releases = versions.map((version, index) => ({ id: `release-${index}`, repositoryId: 'repo', versionId: version.id, version,
+    tagName: version.version, name: `${version.aiSummary} release`, description: version.aiChangelog, publishedAt: new Date(0) }));
+  for (let i = 0; i < versions.length; i++) versions[i].releases = [releases[i]];
+  const model = rows => ({
+    findMany: async args => rows.filter(row => matches(row, args.where)).map(row => f.project(row, args)),
+    findFirst: async args => f.project(rows.find(row => matches(row, args.where)), args),
+    findUnique: async args => f.project(rows.find(row => matches(row, args.where)), args),
+    update: async ({ data }) => { f.writes.push(data); return data; },
+    count: async ({ where }) => rows.filter(row => matches(row, where)).length,
+  });
+  f.db.version = model(versions); f.db.release = model(releases);
+  f.db.versionFile = model(versions.map(version => ({ repositoryId: 'repo', environment: 'production', isActive: true,
+    version, content: { features: [version.aiSummary] } })));
+  const versionFileRead = f.db.versionFile.findFirst;
+  f.db.versionFile.findFirst = args => versionFileRead({ where: args.where });
+  f.db.commit = model([]); f.db.pullRequest = model([]);
+  f.dependencies.openai = { default: class { chat = { completions: { create: async args => {
+    inputs.push(args); return { choices: [{ message: { content: 'Generated summary' } }] };
+  } } }; } };
+  const invoke = (endpoint, body = {}) => endpoint === 'version.json'
+    ? f.route(endpoint).GET(new Request(`https://collab.example.test/?project=${f.own.projectId}`))
+    : f.route(`github/repositories/[repositoryId]/${endpoint}`)[endpoint === 'generate-changelog' ? 'POST' : 'GET'](
+      f.request(endpoint === 'generate-changelog' ? 'POST' : 'GET', undefined, body),
+      { params: Promise.resolve({ repositoryId: 'repo' }) });
+  return { ...f, inputs, invoke, versions, releases };
+}
+
+for (const endpoint of ['versions', 'releases', 'version.json']) {
+  test(`version content ${endpoint} withholds saved text and linked denied issues`, async () => {
+    const f = versionReadFixture();
+    let response = await f.invoke(endpoint); assert.equal(response.status, 200);
+    const body = JSON.stringify(await response.json());
+    assert.equal(body.includes('private-report'), false);
+    assert.equal(body.includes('protected-own'), true);
+    if (endpoint === 'version.json') assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    f.workspaces[2].members[0].status = true;
+    assert.equal(JSON.stringify(await (await f.invoke(endpoint)).json()).includes('private-report'), true);
+    f.workspaces[2].members[0].status = false; f.workspaces[2].ownerId = 'alice';
+    assert.equal(JSON.stringify(await (await f.invoke(endpoint)).json()).includes('private-report'), true);
+    assert.deepEqual(f.inputs, []); assert.deepEqual(f.writes, []);
+    assert.equal(f.versions.length, 2);
+  });
+}
+
+for (const target of ['versionId', 'releaseId']) {
+  test(`changelog ${target} denies historical links before provider or saved content use`, async () => {
+    const f = versionReadFixture();
+    const body = { [target]: target === 'versionId' ? 'version-0' : 'release-0' };
+    const response = await f.invoke('generate-changelog', body);
+    assert.equal(response.status, 404); assert.deepEqual(f.inputs, []); assert.deepEqual(f.writes, []);
+    f.workspaces[2].members[0].status = true;
+    assert.equal((await f.invoke('generate-changelog', body)).status, 200);
+    assert.equal(JSON.stringify(f.inputs).includes('private-report-title'), true);
+    assert.equal(f.writes.length, 1);
+  });
+}
+
+test('realtime authorizes all four producer payloads and retained references before delivery', async () => {
+  const f = relatedIssueFixture(), own = f.rows[0], joined = f.workspaces[1], events = [];
+  let callback, unsubscribe = 0;
+  f.dependencies['@/lib/redis'] = { publishEvent: async (_channel, event) => events.push(event),
+    getRedisSubscriber: async () => ({ subscribe: async (_channel, cb) => { callback = cb; },
+      unsubscribe: async () => { unsubscribe++; }, quit: async () => {} }) };
+  const permissions = load('src/lib/permissions.ts', { './prisma': { prisma: f.db } });
+  f.dependencies['@/lib/permissions'] = { ...permissions,
+    checkUserPermissions: async (_u, _w, keys) => Object.fromEntries(keys.map(key => [key, { hasPermission: true }])) };
+  f.dependencies['@/lib/board-item-activity-service'] = { compareObjects: () => [], trackCreation: async () => {} };
+  f.dependencies['@/constants/viewPositions'] = { VIEW_POSITIONS_MAX_BULK_SIZE: 500 };
+  f.db.$transaction = async callback => callback(f.db);
+  f.db.issue.create = async ({ data }) => {
+    const row = { ...own, ...data, id: 'new-issue', labels: [], children: [], parent: null };
+    f.rows.push(row); return { ...data, id: row.id, labels: [], workspace: f.workspaces[0] };
+  };
+  const created = await f.route('issues').POST(f.request('POST', undefined,
+    { title: 'Created', workspaceId: own.workspaceId, projectId: own.projectId }));
+  assert.equal(created.status, 201);
+  const status = { id: 'joined-status', project: f.rows[1].project };
+  own.statusId = status.id; own.projectStatus = status;
+  f.db.projectStatus.findFirst = async args => matches(status, args.where) ? status : null;
+  assert.equal((await f.route('issues/[issueId]').PUT(f.request('PUT', undefined, { title: 'Updated' }),
+    { params: Promise.resolve({ issueId: own.id }) })).status, 200);
+  const view = { id: 'view', ownerId: 'alice', workspaceId: own.workspaceId, workspace: own.workspace };
+  f.db.view.findFirst = async args => matches(view, args.where) ? view : null;
+  f.db.viewIssuePosition = { upsert: async ({ create }) => create };
+  const positions = f.route('views/[viewId]/issue-positions');
+  for (const data of [{ issueId: own.id, columnId: 'done', position: 0 },
+    { bulk: [own.id, 'new-issue'].map(issueId => ({ issueId, columnId: 'done', position: 0 })) }]) {
+    assert.equal((await positions.PUT(f.request('PUT', undefined, data), f.context(own.workspaceId))).status, 200);
+  }
+  assert.deepEqual(events.map(event => event.type), ['issue.created', 'issue.updated', 'view.issue-position.updated', 'view.issue-position.updated']);
+  const response = await f.route('realtime/workspace/[workspaceId]/stream').GET(f.request(), f.context(own.workspaceId));
+  const reader = response.body.getReader(), next = async () => new TextDecoder().decode((await reader.read()).value);
+  const sentinel = { type: 'workspace.updated', marker: 'boundary' };
+  const deliver = async (event, allowed) => {
+    await callback(JSON.stringify(event)); await callback(JSON.stringify(sentinel));
+    if (allowed) assert.equal(await next(), `data: ${JSON.stringify(event)}\n\n`);
+    assert.equal(await next(), `data: ${JSON.stringify(sentinel)}\n\n`);
+  };
+  try {
+    await next(); await next();
+    for (const event of events) await deliver(event, true);
+    const createdIssue = f.rows.find(row => row.id === 'new-issue');
+    createdIssue.project = f.rows[1].project; createdIssue.projectId = createdIssue.project.id;
+    joined.members[0].status = false;
+    for (const event of events) await deliver(event, false);
+    own.statusId = null; own.projectStatus = null;
+    await deliver(events[1], false);
+    await deliver({ ...events[0], issueId: own.id, projectId: createdIssue.projectId }, false);
+    for (const event of [
+      { type: 'issue.updated' }, { type: 'view.issue-position.updated' },
+      { ...events[3], affectedIssues: [] }, { ...events[3], affectedIssues: [own.id, null] },
+      { ...events[3], affectedIssues: own.id }, { ...events[3], affectedIssues: ['missing'] },
+      { ...events[3], affectedIssues: [own.id], issueId: createdIssue.id },
+    ]) await deliver(event, false);
+    joined.ownerId = 'alice';
+    for (const event of events) await deliver(event, true);
+    f.workspaces[0].ownerId = 'bob';
+    await callback(JSON.stringify(events[3]));
+    assert.equal((await reader.read()).done, true); assert.equal(unsubscribe, 1);
+  } finally { await reader.cancel(); }
+});

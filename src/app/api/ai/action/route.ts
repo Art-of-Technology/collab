@@ -172,7 +172,7 @@ export async function POST(req: Request) {
           }, { status: 404 });
         }
 
-        const referenceError = await validateIssueReferences(prisma, workspace.id, projectId, { assigneeId: params.assigneeId });
+        const referenceError = await validateIssueReferences(prisma, workspace.id, projectId, currentUser.id, { assigneeId: params.assigneeId });
         if (referenceError) return NextResponse.json({ success: false, error: referenceError }, { status: 400 });
 
         // Create the issue

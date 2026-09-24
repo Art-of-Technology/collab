@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
@@ -151,11 +151,27 @@ export async function GET(
                 }
                 if (message && typeof message === 'string') {
                   const parsed = JSON.parse(message);
-                  if ((typeof parsed?.type === 'string' && parsed.type.startsWith('issue.')) || parsed?.issueId !== undefined) {
-                    if (typeof parsed.issueId !== 'string' || !await prisma.issue.findFirst({
-                      where: { id: parsed.issueId, workspaceId, ...issueReadAccessWhere(user.id) },
-                      select: { id: true },
-                    })) return;
+                  if ((typeof parsed?.type === 'string' && parsed.type.startsWith('issue.')) ||
+                    parsed?.type === 'view.issue-position.updated' || parsed?.issueId !== undefined || parsed?.affectedIssues !== undefined) {
+                    const ids: unknown[] = [];
+                    if (parsed.issueId !== undefined) ids.push(parsed.issueId);
+                    if (parsed.affectedIssues !== undefined) {
+                      if (!Array.isArray(parsed.affectedIssues) || !parsed.affectedIssues.length) return;
+                      ids.push(...parsed.affectedIssues);
+                    }
+                    if (!ids.length || ids.some(id => typeof id !== 'string' || !id)) return;
+                    if (parsed.workspaceId !== undefined && parsed.workspaceId !== workspaceId) return;
+                    const issueIds = [...new Set(ids as string[])];
+                    const accessible = await prisma.issue.count({
+                      where: { id: { in: issueIds }, workspaceId, ...issueReadAccessWhere(user.id) },
+                    });
+                    if (accessible !== issueIds.length) return;
+                    if (parsed.projectId != null && (typeof parsed.projectId !== 'string' || !await prisma.project.findFirst({
+                      where: { id: parsed.projectId, ...issueAccessWhere(user.id) }, select: { id: true },
+                    }))) return;
+                    if (parsed.statusId != null && (typeof parsed.statusId !== 'string' || !await prisma.projectStatus.findFirst({
+                      where: { id: parsed.statusId, project: issueAccessWhere(user.id) }, select: { id: true },
+                    }))) return;
                   }
                   sendEvent(parsed);
                 }

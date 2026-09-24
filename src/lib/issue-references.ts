@@ -1,19 +1,21 @@
 import type { prisma } from '@/lib/prisma';
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 
 export async function validateIssueReferences(
   db: Pick<typeof prisma, 'issue' | 'taskLabel'>,
   workspaceId: string,
   projectId: string,
+  actorId: string,
   refs: { id?: string; parentId?: string | null; labels?: string[]; assigneeId?: string | null; reporterId?: string | null }
 ): Promise<string | null> {
+  if (!actorId) return 'Invalid issue actor';
   for (const userId of [refs.assigneeId, refs.reporterId]) {
     if (userId != null && (typeof userId !== 'string' || !userId || !await userHasWorkspaceAccess(userId, workspaceId))) {
       return 'Invalid issue participant';
     }
   }
   if (refs.parentId != null && (typeof refs.parentId !== 'string' || !refs.parentId || refs.parentId === refs.id ||
-      !await db.issue.findFirst({ where: { id: refs.parentId, workspaceId, projectId }, select: { id: true } }))) {
+      !await db.issue.findFirst({ where: { id: refs.parentId, workspaceId, projectId, ...issueReadAccessWhere(actorId) }, select: { id: true } }))) {
     return 'Invalid parent issue';
   }
   if (refs.labels !== undefined) {

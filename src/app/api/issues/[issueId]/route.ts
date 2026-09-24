@@ -163,7 +163,7 @@ export async function PUT(
       })) {
         return { error: 'Invalid destination project', status: 400 };
       }
-      const referenceError = await validateIssueReferences(tx, existingIssue.workspaceId, projectId, {
+      const referenceError = await validateIssueReferences(tx, existingIssue.workspaceId, projectId, currentUser.id, {
         id: existingIssue.id,
         assigneeId: body.assigneeId,
         reporterId: body.reporterId,

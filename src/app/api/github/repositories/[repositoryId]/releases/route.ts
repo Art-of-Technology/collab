@@ -1,4 +1,4 @@
-import { requireRepositoryAccess } from '@/lib/github/repository-access';
+import { requireRepositoryAccess, releaseAccessWhere } from '@/lib/github/repository-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -9,12 +9,12 @@ export async function GET(
 ) {
   try {
     const { repositoryId } = await params;
-    await requireRepositoryAccess(repositoryId);
+    const userId = await requireRepositoryAccess(repositoryId);
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '20');
 
     const releases = await prisma.release.findMany({
-      where: { repositoryId },
+      where: { ...releaseAccessWhere(userId), repositoryId },
       orderBy: { publishedAt: 'desc' },
       take: limit,
       include: {

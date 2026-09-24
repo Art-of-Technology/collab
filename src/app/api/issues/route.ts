@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const referenceError = await validateIssueReferences(prisma, workspace.id, projectId, {
+    const referenceError = await validateIssueReferences(prisma, workspace.id, projectId, session.user.id, {
       labels, parentId, assigneeId, reporterId,
     });
     if (referenceError) return NextResponse.json({ error: referenceError }, { status: 400 });

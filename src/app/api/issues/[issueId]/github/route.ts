@@ -1,3 +1,4 @@
+import { versionAccessWhere } from '@/lib/github/repository-access';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
@@ -104,6 +105,7 @@ export async function GET(
       // Find versions that include this issue
       prisma.version.findMany({
         where: {
+          AND: [versionAccessWhere(session.user.id)],
           repositoryId: repository.id,
           issues: {
             some: {

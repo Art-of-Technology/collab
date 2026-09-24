@@ -1,8 +1,10 @@
 import 'server-only';
+import type { Prisma } from '@prisma/client';
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 
-export async function requireRepositoryAccess(repositoryId: string): Promise<void> {
+export async function requireRepositoryAccess(repositoryId: string): Promise<string> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Unauthorized');
   if (typeof repositoryId !== 'string' || !repositoryId) throw new Error('Repository not found');
@@ -17,4 +19,13 @@ export async function requireRepositoryAccess(repositoryId: string): Promise<voi
     select: { id: true },
   });
   if (!repository) throw new Error('Repository not found');
+  return user.id;
+}
+
+export function versionAccessWhere(userId: string) {
+  return { issues: { every: { issue: issueReadAccessWhere(userId) } } } satisfies Prisma.VersionWhereInput;
+}
+
+export function releaseAccessWhere(userId: string) {
+  return { version: versionAccessWhere(userId) } satisfies Prisma.ReleaseWhereInput;
 }

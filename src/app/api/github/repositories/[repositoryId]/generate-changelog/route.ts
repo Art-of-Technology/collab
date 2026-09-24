@@ -1,4 +1,4 @@
-import { requireRepositoryAccess } from '@/lib/github/repository-access';
+import { requireRepositoryAccess, versionAccessWhere, releaseAccessWhere } from '@/lib/github/repository-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import OpenAI from 'openai';
@@ -10,7 +10,7 @@ export async function POST(
 ) {
   try {
     const { repositoryId } = await params;
-    await requireRepositoryAccess(repositoryId);
+    const userId = await requireRepositoryAccess(repositoryId);
 
     let body: { releaseId?: string; versionId?: string; options?: Record<string, unknown> } = {};
     try {
@@ -44,8 +44,8 @@ export async function POST(
 
     // If releaseId is provided, get the release
     if (releaseId) {
-      release = await prisma.release.findUnique({
-        where: { id: releaseId, repositoryId },
+      release = await prisma.release.findFirst({
+        where: { ...releaseAccessWhere(userId), id: releaseId, repositoryId },
         include: {
           version: {
             include: {
@@ -66,9 +66,9 @@ export async function POST(
     }
 
     // If no release specified, get the latest release
-    if (!release) {
+    if (!release && !versionId) {
       release = await prisma.release.findFirst({
-        where: { repositoryId },
+        where: { ...releaseAccessWhere(userId), repositoryId },
         orderBy: { publishedAt: 'desc' },
         include: {
           version: {
@@ -91,7 +91,7 @@ export async function POST(
     // If still no version, get the latest version directly
     if (!version && !targetVersionId) {
       version = await prisma.version.findFirst({
-        where: { repositoryId },
+        where: { ...versionAccessWhere(userId), repositoryId },
         orderBy: { createdAt: 'desc' },
         include: {
           issues: {
@@ -103,8 +103,8 @@ export async function POST(
       });
       targetVersionId = version?.id;
     } else if (targetVersionId && !version) {
-      version = await prisma.version.findUnique({
-        where: { id: targetVersionId, repositoryId },
+      version = await prisma.version.findFirst({
+        where: { ...versionAccessWhere(userId), id: targetVersionId, repositoryId },
         include: {
           issues: {
             include: {

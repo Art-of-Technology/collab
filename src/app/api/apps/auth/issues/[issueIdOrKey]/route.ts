@@ -228,7 +228,7 @@ export const PATCH = withAppAuth(
         update.startDate = updateData.startDate ? new Date(updateData.startDate) : null;
       }
 
-      const referenceError = await validateIssueReferences(prisma, context.workspace.id, existingIssue.projectId, {
+      const referenceError = await validateIssueReferences(prisma, context.workspace.id, existingIssue.projectId, context.user.id, {
         ...updateData, id: existingIssue.id,
       });
       if (referenceError) return NextResponse.json({ error: 'invalid_reference', error_description: referenceError }, { status: 400 });

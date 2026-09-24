@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Labels Endpoints
  * GET /api/apps/auth/labels - List labels
@@ -38,7 +39,7 @@ export const GET = withAppAuth(
         include: {
           _count: {
             select: {
-              issues: true,
+              issues: { where: issueReadAccessWhere(context.user.id) },
             },
           },
         },

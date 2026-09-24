@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Workspace Endpoints
  * GET /api/apps/auth/workspace - Get current workspace information
@@ -49,7 +50,7 @@ export const GET = withAppAuth(
             select: {
               members: true,
               projects: true,
-              issues: true,
+              issues: { where: issueReadAccessWhere(context.user.id) },
             }
           },
           // Include current user's membership details

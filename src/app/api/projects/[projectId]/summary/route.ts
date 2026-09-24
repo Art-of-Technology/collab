@@ -1,3 +1,4 @@
+import { releaseAccessWhere } from '@/lib/github/repository-access';
 import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { featureAccessWhere } from '@/lib/feature-access';
 import { NextRequest, NextResponse } from 'next/server';
@@ -65,7 +66,7 @@ export async function GET(
     // Get issue counts by status
     const issueCounts = await prisma.issue.groupBy({
       by: ['statusId'],
-      where: { projectId },
+      where: { AND: [issueReadAccessWhere(session.user.id), { projectId }] },
       _count: { id: true }
     });
 
@@ -175,11 +176,11 @@ export async function GET(
 
     // Get recently completed issues (completed in last 30 days)
     const recentlyCompletedIssues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         projectId,
         statusId: { in: finalStatusIds },
         updatedAt: { gte: thirtyDaysAgo }
-      },
+      }] },
       select: {
         id: true,
         title: true,
@@ -202,26 +203,26 @@ export async function GET(
 
     // Get issues with no dates
     const issuesWithoutDates = await prisma.issue.count({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         projectId,
         dueDate: null,
         OR: [
           { statusId: { notIn: finalStatusIds } },
           { statusId: null }
         ]
-      }
+      }] }
     });
 
     // Get unassigned issues count
     const unassignedIssues = await prisma.issue.count({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         projectId,
         assigneeId: null,
         OR: [
           { statusId: { notIn: finalStatusIds } },
           { statusId: null }
         ]
-      }
+      }] }
     });
 
     // Transform overdue issues
@@ -326,7 +327,7 @@ export async function GET(
 
       // Get releases
       const releases = await prisma.release.findMany({
-        where: { repositoryId: repository.id },
+        where: { repositoryId: repository.id, ...releaseAccessWhere(session.user.id) },
         orderBy: { publishedAt: 'desc' },
         take: 3,
         select: {

@@ -209,7 +209,7 @@ export const POST = withAppAuth(
         );
       }
 
-      const referenceError = await validateIssueReferences(prisma, context.workspace.id, issueData.projectId, issueData);
+      const referenceError = await validateIssueReferences(prisma, context.workspace.id, issueData.projectId, context.user.id, issueData);
       if (referenceError) return NextResponse.json({ error: 'invalid_reference', error_description: referenceError }, { status: 400 });
 
       // Create the issue with proper issue key generation using transaction
