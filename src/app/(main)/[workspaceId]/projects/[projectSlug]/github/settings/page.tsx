@@ -96,7 +96,7 @@ export default async function GitHubSettingsPage({ params }: GitHubSettingsPageP
     branchEnvironmentMap: project.repository.branchEnvironmentMap as Record<string, string> || {},
     issueTypeMapping: project.repository.issueTypeMapping as Record<string, string> || {},
     webhookId: project.repository.webhookId,
-    webhookSecret: project.repository.webhookSecret,
+    hasWebhookSecret: Boolean(project.repository.webhookSecret),
     syncedAt: project.repository.syncedAt?.toISOString() || null,
     branches: project.repository.branches.map(b => ({
       id: b.id,

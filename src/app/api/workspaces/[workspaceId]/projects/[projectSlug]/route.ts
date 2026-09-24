@@ -1,3 +1,4 @@
+import { PUBLIC_REPOSITORY_SELECT } from '@/lib/github/public-repository';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -46,7 +47,7 @@ export async function GET(
         slug: projectSlug
       },
       include: {
-        repository: true, // Include GitHub repository
+        repository: { select: PUBLIC_REPOSITORY_SELECT }, // Include GitHub repository
         statuses: {
           orderBy: {
             order: 'asc'

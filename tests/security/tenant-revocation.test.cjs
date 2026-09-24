@@ -112,6 +112,7 @@ function fixture() {
   const dependencies = {
     'server-only': {}, 'next/server': { NextResponse: Response },
     '@/lib/prisma': { prisma: db }, '@/lib/auth-options': { authOptions: {} },
+    '@/lib/github/public-repository': load('src/lib/github/public-repository.ts'),
     '@/lib/utils': { generateUniqueViewSlug: async (_name, workspaceId, check) => {
       await check('default-view', workspaceId); return 'default-view';
     } },
@@ -254,4 +255,181 @@ test('repository sync denies revoked membership before credentials, provider cal
   const response = await f.route('github/repositories/[repositoryId]/sync').POST(f.request('POST'), f.context('revoked'));
   assert.equal(response.status, 404);
   noContent(f);
+});
+
+function postFixture() {
+  const f = fixture();
+  const posts = f.workspaces.map(workspace => ({ id: `post-${workspace.slug}`, workspaceId: workspace.id,
+    authorId: 'alice', isPinned: false }));
+  const comments = posts.map(post => ({ id: `comment-${post.id.slice(5)}`, postId: post.id, authorId: 'alice',
+    message: 'Private comment', parentId: null, reactions: [] }));
+  const reactions = [];
+  const project = (row, select) => row && (select
+    ? Object.fromEntries(Object.keys(select).map(key => [key, row[key]])) : row);
+  f.db.post.findUnique = async ({ where, select }) => {
+    if (!select) f.calls.otherReads++;
+    return project(posts.find(row => matches(row, where)), select) ?? null;
+  };
+  const findComment = async ({ where, select }) => {
+    if (!select) f.calls.otherReads++;
+    return project(comments.find(row => matches(row, where)), select) ?? null;
+  };
+  f.db.comment = {
+    findUnique: findComment, findFirst: findComment,
+    findMany: async ({ where }) => { f.calls.otherReads++; return comments.filter(row => matches(row, where)); },
+    create: async ({ data }) => { f.calls.writes++; return { ...data, id: 'new-comment' }; },
+    update: async ({ where, data }) => { f.calls.writes++; return { ...comments.find(row => matches(row, where)), ...data }; },
+    delete: async () => { f.calls.writes++; },
+  };
+  f.db.reaction = {
+    findFirst: async ({ where }) => { f.calls.otherReads++; return reactions.find(row => matches(row, where)) ?? null; },
+    findMany: async ({ where }) => { f.calls.otherReads++; return reactions.filter(row => matches(row, where)); },
+    create: async ({ data }) => { f.calls.writes++; return { ...data, id: 'new-reaction' }; },
+    delete: async () => { f.calls.writes++; },
+    deleteMany: async () => { f.calls.writes++; },
+  };
+  f.db.post.update = async ({ where, data }) => { f.calls.writes++; return { ...posts.find(row => matches(row, where)), ...data }; };
+  f.db.postAction = { create: async () => { f.calls.writes++; } };
+  f.dependencies['@/utils/mentions'] = { extractMentionUserIds: () => [] };
+  f.dependencies['@/lib/html-sanitizer'] = { sanitizeHtmlToPlainText: value => value };
+  f.dependencies['@/lib/notification-service'] = {
+    NotificationType: {},
+    NotificationService: new Proxy({}, { get: () => async () => { f.calls.providerCalls++; return false; } }),
+  };
+  f.dependencies['@/lib/permissions'] = { Permission: {}, checkUserPermission: async () => ({ hasPermission: false }) };
+  f.reset = () => Object.keys(f.calls).forEach(key => { f.calls[key] = 0; });
+  return { ...f, comments, reactions };
+}
+
+for (const [file, action, args] of [
+  ['comment', 'createComment', key => [{ postId: `post-${key}`, message: 'Hello' }]],
+  ['comment', 'updateComment', key => [`comment-${key}`, { message: 'Changed' }]],
+  ['comment', 'deleteComment', key => [`comment-${key}`]],
+  ['reaction', 'getPostReactions', key => [`post-${key}`]],
+  ['reaction', 'getCommentReactions', key => [`comment-${key}`]],
+  ['reaction', 'addReaction', key => [{ postId: `post-${key}`, type: 'LIKE' }]],
+  ['reaction', 'addReaction', key => [{ commentId: `comment-${key}`, type: 'LIKE' }]],
+  ['reaction', 'removeReaction', key => [{ postId: `post-${key}`, type: 'LIKE' }]],
+  ['reaction', 'removeReaction', key => [{ commentId: `comment-${key}`, type: 'LIKE' }]],
+]) {
+  test(`loaded post revocation blocks action ${action} ${JSON.stringify(args('joined'))}`, async () => {
+    const f = postFixture(), comments = load('src/actions/comment.ts', f.dependencies);
+    const actionFn = load(`src/actions/${file}.ts`, f.dependencies)[action];
+    if (action === 'removeReaction') {
+      for (const key of ['joined', 'own']) f.reactions.push({ id: `reaction-${key}`, authorId: 'alice', ...args(key)[0] });
+    }
+    await comments.getComments('post-joined');
+    f.workspaces[1].members[0].status = false;
+    f.reset();
+    await assert.rejects(actionFn(...args('joined')), /Post not found/);
+    noContent(f);
+    await actionFn(...args('own'));
+    f.workspaces[1].members[0].status = true;
+    await actionFn(...args('joined'));
+  });
+}
+
+for (const [path, method, body] of [
+  ['comments', 'POST', { message: 'Hello' }],
+  ['comments/[commentId]', 'PATCH', { message: 'Changed' }],
+  ['comments/[commentId]', 'DELETE', {}],
+  ['comments/[commentId]/like', 'POST', {}],
+  ['comments/[commentId]/like', 'GET', {}],
+  ['reactions', 'POST', { type: 'LIKE' }],
+  ['reactions', 'GET', {}],
+  ['follow', 'GET', {}], ['follow', 'POST', {}], ['follow', 'DELETE', {}],
+  ['pin', 'PUT', { isPinned: true }],
+]) {
+  test(`loaded post revocation blocks HTTP ${method} ${path}`, async () => {
+    const f = postFixture();
+    await load('src/actions/comment.ts', f.dependencies).getComments('post-joined');
+    f.workspaces[1].members[0].status = false;
+    f.reset();
+    const handler = f.route(`posts/[postId]/${path}`)[method];
+    const call = key => handler(f.request(method, undefined, body), {
+      params: Promise.resolve({ postId: `post-${key}`, commentId: `comment-${key}` }),
+    });
+    assert.equal((await call('joined')).status, 404);
+    noContent(f);
+    assert.equal((await call('own')).status, 200);
+    f.workspaces[1].members[0].status = true;
+    assert.equal((await call('joined')).status, 200);
+  });
+}
+
+test('post comments and reactions reject cross-post and ambiguous targets without writes', async () => {
+  const f = postFixture(), comments = load('src/actions/comment.ts', f.dependencies);
+  await assert.rejects(comments.createComment({ postId: 'post-own', parentId: 'comment-revoked', message: 'Hello' }), /Parent comment not found/);
+  for (const action of ['addReaction', 'removeReaction']) {
+    await assert.rejects(load('src/actions/reaction.ts', f.dependencies)[action]({
+      postId: 'post-own', commentId: 'comment-revoked', type: 'LIKE',
+    }), /Exactly one/);
+  }
+  const likes = f.route('posts/[postId]/comments/[commentId]/like');
+  assert.equal((await likes.GET(f.request(), { params: Promise.resolve({
+    postId: 'post-own', commentId: 'comment-revoked',
+  }) })).status, 404);
+  assert.equal(f.calls.writes, 0);
+  assert.equal(f.calls.providerCalls, 0);
+});
+
+test('project status action excludes revoked tenants while retaining owner and unrelated membership', async () => {
+  const f = fixture(), rows = f.workspaces.map(workspace => ({ id: `status-${workspace.slug}`, projectId: `project-${workspace.slug}` }));
+  f.db.projectStatus.findMany = async ({ where }) => {
+    f.calls.otherReads++;
+    return rows.filter(row => matches(row, where));
+  };
+  const { getProjectStatuses } = load('src/actions/status.ts', f.dependencies);
+  assert.equal((await getProjectStatuses(['project-joined'])).length, 1);
+  f.workspaces[1].members[0].status = false;
+  const before = f.calls.otherReads;
+  assert.equal((await getProjectStatuses(['project-joined'])).length, 0);
+  assert.equal(f.calls.otherReads, before);
+  const result = await getProjectStatuses(['project-own', 'project-revoked', 'project-foreign']);
+  assert.deepEqual(Array.from(result, row => row.id), ['status-own']);
+  f.workspaces[1].members[0].status = true;
+  assert.equal((await getProjectStatuses(['project-joined'])).length, 1);
+});
+
+function leaveFixture() {
+  const f = fixture();
+  const rows = f.workspaces.map(workspace => ({ id: `leave-${workspace.slug}`, userId: 'alice',
+    user: f.state.user, policyId: 'policy', status: 'PENDING', notes: 'Leave', duration: 'FULL_DAY',
+    startDate: new Date('2100-01-01'), endDate: new Date('2100-01-02'), updatedAt: new Date(),
+    policy: { id: 'policy', name: 'Policy', workspaceId: workspace.id, workspace, trackIn: 'DAYS' } }));
+  f.db.leaveRequest = {
+    findUnique: async ({ where }) => rows.find(row => matches(row, where)) ?? null,
+    update: async ({ where, data }) => { f.calls.writes++; return { ...rows.find(row => matches(row, where)), ...data }; },
+  };
+  f.db.$transaction = callback => callback(f.db);
+  f.dependencies['date-fns'] = { differenceInDays: () => 1 };
+  f.dependencies['@/lib/permissions'] = { Permission: {}, checkUserPermission: async () => ({ hasPermission: true }) };
+  f.dependencies['@/lib/notification-service'] = {
+    NotificationService: new Proxy({}, { get: () => async () => { f.calls.providerCalls++; } }),
+  };
+  f.dependencies['@/lib/event-bus'] = new Proxy({}, { get: () => async () => { f.calls.providerCalls++; } });
+  f.dependencies['@/lib/leave-service'] = load('src/lib/leave-service.ts', f.dependencies);
+  return f;
+}
+
+for (const method of ['PUT', 'DELETE']) {
+  test(`leave ${method} rejects revocation with zero writes or notifications`, async () => {
+    const f = leaveFixture(), handler = f.route('leave/requests/[requestId]')[method];
+    const call = key => handler(f.request(method, undefined, { notes: 'Updated notes' }), { params: Promise.resolve({ requestId: `leave-${key}` }) });
+    f.workspaces[1].members[0].status = false;
+    assert.equal((await call('joined')).status, 404);
+    noContent(f);
+    assert.equal((await call('own')).status, 200);
+    f.workspaces[1].members[0].status = true;
+    assert.equal((await call('joined')).status, 200);
+  });
+}
+
+test('leave service binds the actor and denies revoked membership before updates', async () => {
+  const f = leaveFixture(), { processLeaveRequestAction } = f.dependencies['@/lib/leave-service'];
+  await assert.rejects(processLeaveRequestAction({ requestId: 'leave-joined', action: 'REJECTED', actionById: 'bob' }), /Unauthorized/);
+  f.workspaces[1].members[0].status = false;
+  await assert.rejects(processLeaveRequestAction({ requestId: 'leave-joined', action: 'REJECTED', actionById: 'alice' }), /Leave request not found/);
+  noContent(f);
+  assert.equal((await processLeaveRequestAction({ requestId: 'leave-own', action: 'REJECTED', actionById: 'alice' })).status, 'REJECTED');
 });

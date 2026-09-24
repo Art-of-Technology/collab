@@ -1,5 +1,6 @@
 'use server';
 
+import { requirePostAccess, requireCommentAccess } from '@/lib/post-access';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from '@/lib/request-session';
@@ -10,14 +11,16 @@ import { getServerSession } from '@/lib/request-session';
 export async function getPostReactions(postId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
+
+  await requirePostAccess(postId);
   
   // Get user ID for checking if the current user has reacted
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     },
     select: {
       id: true
@@ -79,14 +82,16 @@ export async function getPostReactions(postId: string) {
 export async function getCommentReactions(commentId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
+
+  await requireCommentAccess(commentId);
   
   // Get user ID for checking if the current user has reacted
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     },
     select: {
       id: true
@@ -132,7 +137,7 @@ export async function addReaction(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
@@ -143,14 +148,17 @@ export async function addReaction(data: {
     throw new Error('Reaction type is required');
   }
   
-  if (!postId && !commentId) {
-    throw new Error('Either postId or commentId is required');
+  if (Boolean(postId) === Boolean(commentId)) {
+    throw new Error('Exactly one of postId or commentId is required');
   }
+
+  if (postId) await requirePostAccess(postId);
+  else await requireCommentAccess(commentId!);
   
   // Get the current user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     }
   });
   
@@ -225,7 +233,7 @@ export async function removeReaction(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
@@ -236,14 +244,17 @@ export async function removeReaction(data: {
     throw new Error('Reaction type is required');
   }
   
-  if (!postId && !commentId) {
-    throw new Error('Either postId or commentId is required');
+  if (Boolean(postId) === Boolean(commentId)) {
+    throw new Error('Exactly one of postId or commentId is required');
   }
+
+  if (postId) await requirePostAccess(postId);
+  else await requireCommentAccess(commentId!);
   
   // Get the current user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     }
   });
   

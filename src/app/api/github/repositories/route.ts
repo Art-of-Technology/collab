@@ -84,7 +84,6 @@ export async function POST(request: NextRequest) {
         fullName: repository.fullName,
         isActive: repository.isActive,
         syncedAt: repository.syncedAt,
-        webhookSecret: repository.webhookSecret, // Return for webhook setup
       },
     });
   } catch (error) {

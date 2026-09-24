@@ -1,3 +1,4 @@
+import { PUBLIC_REPOSITORY_SELECT } from '@/lib/github/public-repository';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
         },
       },
       include: {
-        repository: true,
+        repository: { select: PUBLIC_REPOSITORY_SELECT },
         workspace: {
           select: {
             id: true,
@@ -60,7 +61,8 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      include: {
+      select: {
+        ...PUBLIC_REPOSITORY_SELECT,
         project: {
           select: {
             id: true,

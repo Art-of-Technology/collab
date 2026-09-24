@@ -1,3 +1,4 @@
+import { PUBLIC_REPOSITORY_SELECT } from '@/lib/github/public-repository';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
@@ -29,7 +30,8 @@ export async function GET(
           },
         },
       },
-      include: {
+      select: {
+        ...PUBLIC_REPOSITORY_SELECT,
         project: {
           include: { workspace: true },
         },
@@ -61,10 +63,7 @@ export async function GET(
       return NextResponse.json({ error: "Repository not found" }, { status: 404 });
     }
 
-    // Exclude sensitive fields from response
-    const { accessToken, webhookSecret, ...safeRepository } = repository;
-
-    return NextResponse.json({ repository: safeRepository });
+    return NextResponse.json({ repository });
   } catch (error) {
     console.error('[GITHUB_REPOSITORY_GET]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

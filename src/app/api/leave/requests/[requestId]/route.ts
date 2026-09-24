@@ -70,7 +70,7 @@ export async function PATCH(
     // Get the current user
     const user = await prisma.user.findUnique({
       where: {
-        email: session.user.email,
+        id: session.user.id,
       },
     });
 
@@ -186,7 +186,7 @@ export async function PUT(
     // Get the current user
     const user = await prisma.user.findUnique({
       where: {
-        email: session.user.email,
+        id: session.user.id,
       },
     });
 
@@ -196,7 +196,13 @@ export async function PUT(
 
     // Get the existing leave request
     const existingRequest = await prisma.leaveRequest.findUnique({
-      where: { id: requestId },
+      where: {
+        id: requestId,
+        policy: { workspace: { OR: [
+          { ownerId: user.id },
+          { members: { some: { userId: user.id, status: true } } }
+        ] } }
+      },
       include: {
         policy: {
           include: {
@@ -409,7 +415,7 @@ export async function DELETE(
     // Get the current user
     const user = await prisma.user.findUnique({
       where: {
-        email: session.user.email,
+        id: session.user.id,
       },
     });
 
@@ -419,7 +425,13 @@ export async function DELETE(
 
     // Get the existing leave request
     const existingRequest = await prisma.leaveRequest.findUnique({
-      where: { id: requestId },
+      where: {
+        id: requestId,
+        policy: { workspace: { OR: [
+          { ownerId: user.id },
+          { members: { some: { userId: user.id, status: true } } }
+        ] } }
+      },
       include: {
         policy: {
           include: {
