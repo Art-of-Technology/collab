@@ -1,3 +1,4 @@
+import { postAccessWhere, commentAccessWhere } from "@/lib/post-access";
 import { prisma } from "@/lib/prisma";
 import {
   sendPushNotification,
@@ -260,6 +261,17 @@ export class NotificationService {
 
       let recipientIds = [...new Set(userIds)];
 
+      if (postId || commentId) {
+        const allowed: string[] = [];
+        for (const userId of recipientIds) {
+          const access = commentId
+            ? await prisma.comment.findFirst({ where: commentAccessWhere(commentId, userId, postId), select: { id: true } })
+            : await prisma.post.findFirst({ where: postAccessWhere(postId!, userId), select: { id: true } });
+          if (access) allowed.push(userId);
+        }
+        recipientIds = allowed;
+      }
+
       if (filterPreferences) {
         const filtered: string[] = [];
         for (const userId of recipientIds) {
@@ -416,6 +428,7 @@ export class NotificationService {
     postId?: string
   ): Promise<void> {
     try {
+      if (postId && !await prisma.post.findFirst({ where: postAccessWhere(postId, userId), select: { id: true } })) return;
       // Build the URL based on notification type
       let url = "/";
       if (issueId) {
@@ -727,7 +740,7 @@ export class NotificationService {
   ): Promise<void> {
     const { postId, senderId, type, content, excludeUserIds = [] } = options;
 
-    const followerQuery = prisma.postFollower.findMany({
+    const followers = await prisma.postFollower.findMany({
       where: {
         postId: postId,
         userId: {
@@ -739,13 +752,12 @@ export class NotificationService {
       },
     });
 
-    await this.createFollowerNotifications(
-      followerQuery,
+    await this.notifyUsers(
+      followers.map(follower => follower.userId),
       type,
       content,
       senderId,
-      excludeUserIds,
-      { postId }
+      { postId, filterPreferences: true }
     );
   }
 

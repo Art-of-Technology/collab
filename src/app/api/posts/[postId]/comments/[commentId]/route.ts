@@ -1,3 +1,4 @@
+import { deletePostComment } from "@/lib/delete-post-comment";
 import { postAccessWhere, commentAccessWhere } from "@/lib/post-access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -115,9 +116,6 @@ export async function DELETE(
     // Check if comment exists and belongs to the current user
     const comment = await prisma.comment.findFirst({
       where: commentAccessWhere(commentId, currentUser.id, postId),
-      include: {
-        children: true, // Include children to check if comment has replies
-      },
     });
 
     if (!comment) {
@@ -129,46 +127,12 @@ export async function DELETE(
     }
 
     // Recursively delete comment and all its replies
-    await deleteCommentRecursive(commentId, postId, currentUser.id);
+    await deletePostComment(commentId, postId, currentUser.id);
 
     return NextResponse.json({ message: "Comment deleted successfully" });
   } catch (error) {
     console.error("Error deleting comment:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
-}
-
-// Helper function to recursively delete a comment and its replies
-async function deleteCommentRecursive(commentId: string, postId: string, userId: string) {
-  // First, get all replies to this comment
-  const replies = await prisma.comment.findMany({
-    where: {
-      parentId: commentId,
-      postId,
-      post: postAccessWhere(postId, userId)
-    },
-    select: {
-      id: true
-    }
-  });
-
-  // Recursively delete each reply
-  for (const reply of replies) {
-    await deleteCommentRecursive(reply.id, postId, userId);
-  }
-
-  // Delete reactions first (if not cascade deleted)
-  await prisma.reaction.deleteMany({
-    where: {
-      commentId: commentId
-    }
-  });
-
-  // Finally, delete this comment
-  await prisma.comment.delete({
-    where: {
-      id: commentId
-    }
-  });
 }
 

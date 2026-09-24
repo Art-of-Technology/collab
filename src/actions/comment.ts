@@ -1,5 +1,6 @@
 'use server';
 
+import { deletePostComment } from '@/lib/delete-post-comment';
 import { postAccessWhere, commentAccessWhere } from '@/lib/post-access';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
@@ -365,36 +366,8 @@ export async function deleteComment(commentId: string) {
   }
   
   // Delete the comment and its replies recursively
-  await deleteCommentRecursive(commentId, comment.postId, user.id);
+  await deletePostComment(commentId, comment.postId, user.id);
   
   return true;
 }
 
-/**
- * Recursive helper to delete a comment and all its replies
- */
-async function deleteCommentRecursive(commentId: string, postId: string, userId: string) {
-  // First, get all replies to this comment
-  const replies = await prisma.comment.findMany({
-    where: {
-      parentId: commentId,
-      postId,
-      post: postAccessWhere(postId, userId)
-    },
-    select: {
-      id: true
-    }
-  });
-  
-  // Recursively delete each reply
-  for (const reply of replies) {
-    await deleteCommentRecursive(reply.id, postId, userId);
-  }
-  
-  // Delete this comment
-  await prisma.comment.delete({
-    where: {
-      id: commentId
-    }
-  });
-} 

@@ -3,6 +3,8 @@
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
+import { userSelectFields } from '@/lib/user-utils';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 
 /**
@@ -304,17 +306,18 @@ export async function getUserProfile(userId: string, workspaceId?: string) {
   // Get user's posts
   const userPosts = await prisma.post.findMany({
     where: {
-      authorId: user.id
+      authorId: user.id,
+      workspace: postWorkspaceAccessWhere(currentUser.id)
     },
     orderBy: {
       createdAt: "desc"
     },
     include: {
-      author: true,
+      author: { select: { ...userSelectFields, role: true } },
       tags: true,
       comments: {
         include: {
-          author: true,
+          author: { select: { ...userSelectFields, role: true } },
         },
         orderBy: {
           createdAt: "asc",
@@ -328,13 +331,15 @@ export async function getUserProfile(userId: string, workspaceId?: string) {
   const postCount =  userPosts.length;
   const commentCount = await prisma.comment.count({
     where: {
-      authorId: user.id
+      authorId: user.id,
+      post: { workspace: postWorkspaceAccessWhere(currentUser.id) }
     }
   });
   const reactionsReceived = await prisma.reaction.count({
     where: {
       post: {
-        authorId: user.id
+        authorId: user.id,
+        workspace: postWorkspaceAccessWhere(currentUser.id)
       }
     }
   });

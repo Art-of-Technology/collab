@@ -24,3 +24,14 @@ export function commentAccessWhere(commentId: string, userId: string, postId?: s
     post: postId !== undefined ? postAccessWhere(postId, userId) : { workspace: postWorkspaceAccessWhere(userId) },
   };
 }
+
+export function postNotificationAccessWhere(userId: string): Prisma.NotificationWhereInput {
+  const post = { workspace: postWorkspaceAccessWhere(userId) };
+  return {
+    userId,
+    AND: [
+      { OR: [{ postId: null }, { post }] },
+      { OR: [{ commentId: null }, { comment: { post } }] },
+    ],
+  };
+}
