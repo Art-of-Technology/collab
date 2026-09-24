@@ -1,3 +1,4 @@
+import { canReceiveNotification } from '@/lib/notification-access';
 import { validateIssueReferences } from '@/lib/issue-references';
 import { z } from 'zod';
 import { IssueType, Prisma } from '@prisma/client';
@@ -554,7 +555,9 @@ export async function DELETE(
         select: { userId: true }
       });
       projectFollowers.forEach((pf: { userId: string }) => recipientIds.add(pf.userId));
-      deletionRecipients = Array.from(recipientIds).filter(id => id !== currentUser.id);
+      for (const id of recipientIds) {
+        if (id !== currentUser.id && await canReceiveNotification(id, { issueId: existingIssue.id })) deletionRecipients.push(id);
+      }
     } catch (prepErr) {
       console.warn('[ISSUES_DELETE_NOTIFY_PREP]', prepErr);
     }

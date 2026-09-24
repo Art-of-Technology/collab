@@ -14,7 +14,7 @@ export async function POST() {
     // Update all unread notifications for the user
     const result = await prisma.notification.updateMany({
       where: {
-        ...notificationAccessWhere(currentUser.id),
+        ...await notificationAccessWhere(currentUser.id),
         read: false
       },
       data: {

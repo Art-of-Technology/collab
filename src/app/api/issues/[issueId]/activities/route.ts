@@ -1,4 +1,4 @@
-import { issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { activityStatusAccessWhere, issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -43,10 +43,10 @@ export async function GET(
 
     // Fetch activities for this issue
     const activities = await prisma.issueActivity.findMany({
-      where: {
+      where: { AND: [{
         itemId: issueId,
         ...(action ? { action } : {}),
-      },
+      }, activityStatusAccessWhere(session.user.id)] },
       include: {
         user: {
           select: {

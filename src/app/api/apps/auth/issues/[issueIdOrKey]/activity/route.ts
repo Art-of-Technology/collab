@@ -1,4 +1,4 @@
-import { findIssueByIdOrKey, issueAccessWhere } from '@/lib/issue-finder';
+import { activityStatusAccessWhere, findIssueByIdOrKey, issueAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Issue Activity Endpoint
  * GET /api/apps/auth/issues/:issueIdOrKey/activity - Get issue activity/history
@@ -41,7 +41,7 @@ export const GET = withAppAuth(
       }
 
       const activities = await prisma.issueActivity.findMany({
-        where,
+        where: { AND: [where, activityStatusAccessWhere(context.user.id)] },
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {

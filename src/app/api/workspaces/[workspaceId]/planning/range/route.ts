@@ -1,4 +1,4 @@
-import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { activityStatusAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -113,7 +113,7 @@ export async function GET(
 
     // Fetch activities in the date range
     const activities = await prisma.issueActivity.findMany({
-      where: {
+      where: { AND: [{
         workspaceId,
         createdAt: {
           gte: startDate,
@@ -121,7 +121,7 @@ export async function GET(
         },
         ...(projectIds?.length ? { projectId: { in: projectIds } } : {}),
         ...(userIds?.length ? { userId: { in: userIds } } : {}),
-      },
+      }, activityStatusAccessWhere(session.user.id)] },
       include: {
         user: {
           select: {
@@ -259,7 +259,7 @@ export async function GET(
 
     // Find when each issue was first moved to in_progress
     const firstInProgressActivities = await prisma.issueActivity.findMany({
-      where: {
+      where: { AND: [{
         itemId: { in: activeIssueIds.length > 0 ? activeIssueIds : ['none'] },
         action: 'STATUS_CHANGED',
         fieldName: 'status',
@@ -268,7 +268,7 @@ export async function GET(
           { newValue: { contains: 'doing', mode: 'insensitive' } },
           { newValue: { contains: 'development', mode: 'insensitive' } },
         ],
-      },
+      }, activityStatusAccessWhere(session.user.id)] },
       orderBy: {
         createdAt: 'asc',
       },

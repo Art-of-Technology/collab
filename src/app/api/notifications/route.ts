@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     // Fetch notifications for the current user
     const notifications = await prisma.notification.findMany({
       where: {
-        ...notificationAccessWhere(currentUser.id),
+        ...await notificationAccessWhere(currentUser.id),
       },
       include: {
         sender: {

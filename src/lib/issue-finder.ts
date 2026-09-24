@@ -1,6 +1,5 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from "@/lib/prisma";
-import { isIssueKey } from "@/lib/shared-issue-key-utils";
 
 export function issueAccessWhere(userId: string) {
   return { workspace: { OR: [
@@ -18,6 +17,15 @@ export function issueReadAccessWhere(userId: string) {
       { projectStatus: { project: issueAccessWhere(userId) } }
     ]
   } satisfies Prisma.IssueWhereInput;
+}
+
+export function activityStatusAccessWhere(userId: string) {
+  return {
+    AND: [
+      { OR: [{ oldStatusId: null }, { oldStatus: { project: issueAccessWhere(userId) } }] },
+      { OR: [{ newStatusId: null }, { newStatus: { project: issueAccessWhere(userId) } }] },
+    ],
+  } satisfies Prisma.IssueActivityWhereInput;
 }
 
 /**
@@ -51,7 +59,7 @@ export async function findIssueByIdOrKey<T = any>(
 
   return prisma.issue.findFirst({
     where: {
-      ...(isIssueKey(idOrKey) ? { issueKey: idOrKey } : { id: idOrKey }),
+      AND: [{ OR: [{ id: idOrKey }, { issueKey: idOrKey }] }],
       ...(workspaceId && { workspaceId }),
       ...issueReadAccessWhere(userId)
     },

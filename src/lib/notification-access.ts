@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { featureAccessWhere } from '@/lib/feature-access';
 import { prisma } from '@/lib/prisma';
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 
 export type NotificationReferences = {
   postId?: string;
@@ -11,9 +11,21 @@ export type NotificationReferences = {
   issueId?: string;
   workspaceId?: string;
   personal?: boolean;
+  deletedIssue?: boolean;
 };
 
-export function notificationAccessWhere(userId: string): Prisma.NotificationWhereInput {
+export async function notificationAccessWhere(userId: string): Promise<Prisma.NotificationWhereInput> {
+  const references = await prisma.notification.findMany({
+    where: { userId, issueId: { not: null } },
+    select: { issueId: true },
+    distinct: ['issueId'],
+  });
+  const ids = references.flatMap(row => row.issueId ? [row.issueId] : []);
+  const existing = ids.length ? await prisma.issue.findMany({ where: { id: { in: ids } }, select: { id: true } }) : [];
+  const accessible = ids.length ? await prisma.issue.findMany({
+    where: { id: { in: ids }, ...issueReadAccessWhere(userId) }, select: { id: true },
+  }) : [];
+
   const workspace = { OR: [
     { ownerId: userId },
     { members: { some: { userId, status: true } } },
@@ -22,6 +34,11 @@ export function notificationAccessWhere(userId: string): Prisma.NotificationWher
   return {
     userId,
     AND: [
+      { OR: [
+        { issueId: null },
+        { issueId: { in: accessible.map(issue => issue.id) } },
+        { type: { in: ['ISSUE_DELETED', 'PROJECT_ISSUE_DELETED'] }, issueId: { in: ids.filter(id => !existing.some(issue => issue.id === id)) } },
+      ] },
       { OR: [
         { workspace },
         { workspaceId: null, issueId: null, OR: [
@@ -49,7 +66,7 @@ export async function resolveNotificationScope(refs: NotificationReferences) {
   }
   if (refs.issueId) {
     const issue = await prisma.issue.findUnique({ where: { id: refs.issueId }, select: { workspaceId: true } });
-    if (!issue && !refs.workspaceId) return null;
+    if (!issue && !(refs.deletedIssue && refs.workspaceId)) return null;
     if (issue) workspaces.push(issue.workspaceId);
   }
   if (refs.featureRequestId) {
@@ -82,6 +99,12 @@ export async function resolveNotificationScope(refs: NotificationReferences) {
 
 export async function canReceiveNotification(userId: string, refs: NotificationReferences): Promise<boolean> {
   if (!await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })) return false;
+  if (refs.issueId) {
+    const issue = await prisma.issue.findUnique({ where: { id: refs.issueId }, select: { id: true } });
+    if (issue && !await prisma.issue.findFirst({
+      where: { id: refs.issueId, ...issueReadAccessWhere(userId) }, select: { id: true },
+    })) return false;
+  }
   const scope = await resolveNotificationScope(refs);
   return scope !== null && (scope.isPersonal || await userHasWorkspaceAccess(userId, scope.workspaceId!));
 }

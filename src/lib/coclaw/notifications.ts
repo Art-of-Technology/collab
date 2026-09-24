@@ -81,7 +81,7 @@ export async function getUnreadCoclawCount(userId: string, workspaceId: string):
   try {
     return await prisma.notification.count({
       where: {
-        ...notificationAccessWhere(userId),
+        ...await notificationAccessWhere(userId),
         workspaceId,
         read: false,
         type: { startsWith: COCLAW_NOTIFICATION_PREFIX },
@@ -101,7 +101,7 @@ export async function getRecentCoclawNotifications(
   try {
     return await prisma.notification.findMany({
       where: {
-        ...notificationAccessWhere(userId),
+        ...await notificationAccessWhere(userId),
         workspaceId,
         type: { startsWith: COCLAW_NOTIFICATION_PREFIX },
       },
@@ -128,7 +128,7 @@ export async function markAllCoclawNotificationsRead(
   try {
     const result = await prisma.notification.updateMany({
       where: {
-        ...notificationAccessWhere(userId),
+        ...await notificationAccessWhere(userId),
         workspaceId,
         read: false,
         type: { startsWith: COCLAW_NOTIFICATION_PREFIX },

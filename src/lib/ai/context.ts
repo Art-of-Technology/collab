@@ -121,28 +121,6 @@ async function getWorkloadContext(workspaceId: string, prisma: any) {
   }
 }
 
-async function getRecentChangesContext(workspaceId: string, prisma: any) {
-  try {
-    const recentActivities = await prisma.issueActivity.findMany({
-      where: { workspaceId },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-      select: {
-        action: true,
-        fieldName: true,
-        oldValue: true,
-        newValue: true,
-        itemId: true,
-        createdAt: true,
-      },
-    });
-
-    return recentActivities;
-  } catch {
-    return [];
-  }
-}
-
 async function getNavigationContext(workspaceId: string, prisma: any) {
   try {
     const [projects, views, recentIssues] = await Promise.all([

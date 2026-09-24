@@ -141,6 +141,8 @@ function fixture() {
   dependencies['@/lib/issue-references'] = load('src/lib/issue-references.ts', dependencies);
   dependencies['@/lib/session'] = load('src/lib/session.ts', dependencies);
   dependencies['@/lib/post-access'] = load('src/lib/post-access.ts', dependencies);
+  dependencies['@/lib/feature-access'] = load('src/lib/feature-access.ts', dependencies);
+  dependencies['@/lib/notification-access'] = load('src/lib/notification-access.ts', dependencies);
   const route = file => load(`src/app/api/${file}/route.ts`, dependencies);
   const request = (method = 'GET', workspace, body = {}) => new Request(
     `https://collab.example.test/api/test?workspace=${workspace || ''}&workspaceId=${workspace || ''}`, {
@@ -1093,6 +1095,7 @@ function scopedNotificationFixture() {
   f.db.notification.count = async ({ where }) => f.stored.filter(row => matches(row, where)).length;
   const issues = f.workspaces.map(workspace => ({ id: `issue-${workspace.slug}`, issueKey: 'DEMO-1', workspace,
     workspaceId: workspace.id, projectId: `project-${workspace.slug}`, project: { workspace }, statusId: null, reporterId: 'alice' }));
+  f.db.issue.findMany = async ({ where }) => issues.filter(row => matches(row, where));
   f.db.issue.findFirst = async ({ where }) => issues.find(row => matches(row, where)) ?? null;
   f.db.issue.findUnique = async ({ where }) => issues.find(row => matches(row, where)) ?? null;
   f.db.issue.delete = async ({ where }) => { f.calls.writes++; issues.splice(issues.findIndex(row => matches(row, where)), 1); };
@@ -1166,7 +1169,7 @@ test('issue deletion retains server tenant scope for active recipients and suppr
   assert.deepEqual(f.stored.map(row => row.userId).sort(), ['bob', 'dan']);
   assert.deepEqual(f.deliveries.map(([userId]) => userId).sort(), ['bob', 'dan']);
   assert.ok(f.stored.every(row => row.issueId === 'issue-joined' && row.workspaceId === workspace.id));
-  const where = f.dependencies['@/lib/notification-access'].notificationAccessWhere('dan');
+  const where = await f.dependencies['@/lib/notification-access'].notificationAccessWhere('dan');
   assert.equal(f.stored.filter(row => matches(row, where)).length, 1);
   workspace.members.find(member => member.userId === 'dan').status = false;
   assert.equal(f.stored.filter(row => matches(row, where)).length, 0);
@@ -2007,7 +2010,8 @@ for (const endpoint of ['notes', 'notes/[id]']) {
 }
 
 for (const endpoint of ['workspaces/[workspaceId]/planning/activity', 'timeline/unified',
-  'apps/auth/issues/[issueIdOrKey]/activity', 'issues/[issueId]/activities']) {
+  'apps/auth/issues/[issueIdOrKey]/activity', 'issues/[issueId]/activities',
+  'apps/auth/workspace/activity', 'apps/auth/projects/[projectId]/activity', 'apps/auth/search/issues-by-activity']) {
   test(`historical activity status access filters both relations in ${endpoint}`, async () => {
     const f = relatedIssueFixture(), own = f.workspaces[0], joined = f.workspaces[1];
     const current = f.rows[0], accessedStatuses = [];
@@ -2015,11 +2019,21 @@ for (const endpoint of ['workspaces/[workspaceId]/planning/activity', 'timeline/
       displayName: 'Historic private status', project: f.rows[1].project, color: 'red' };
     const publicStatus = { id: 'current-status', name: 'current-public-status', project: current.project, color: 'green' };
     current.statusId = publicStatus.id; current.projectStatus = publicStatus;
-    const activities = [
-      { id: 'old', oldStatus: privateStatus, newStatus: publicStatus },
-      { id: 'new', oldStatus: publicStatus, newStatus: privateStatus },
-    ].map(row => ({ ...row, itemId: current.id, itemType: 'ISSUE', workspaceId: own.id,
-      action: 'STATUS_CHANGED', createdAt: new Date('2026-09-01'), userId: 'alice', user: { id: 'alice' } }));
+    const activities = [];
+    f.db.issueActivity.create = async ({ data }) => {
+      const row = { ...data, id: `activity-${activities.length}`, createdAt: new Date(),
+        oldStatusId: data.oldStatusId ?? null, newStatusId: data.newStatusId ?? null,
+        oldStatus: [privateStatus, publicStatus].find(status => status.id === data.oldStatusId) ?? null,
+        newStatus: [privateStatus, publicStatus].find(status => status.id === data.newStatusId) ?? null,
+        user: { id: 'alice' } };
+      activities.push(row); return row;
+    };
+    const { trackStatusChange } = load('src/lib/board-item-activity-service.ts', f.dependencies);
+    for (const [oldStatus, newStatus] of [[privateStatus, publicStatus], [publicStatus, privateStatus], [null, publicStatus]]) {
+      await trackStatusChange({ itemId: current.id, itemType: 'ISSUE', workspaceId: own.id, projectId: current.projectId,
+        userId: 'alice', oldStatusId: oldStatus?.id ?? null, newStatusId: newStatus.id,
+        oldStatusName: oldStatus?.name, newStatusName: newStatus.name });
+    }
     f.dependencies['date-fns'] = require('date-fns');
     f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => (req, params) => handler(req,
       { workspace: own, user: f.state.user }, params) };
@@ -2033,18 +2047,24 @@ for (const endpoint of ['workspaces/[workspaceId]/planning/activity', 'timeline/
     });
     const { GET } = f.route(endpoint);
     const call = () => GET(new Request(`https://collab.example.test/?workspaceId=${own.id}&startDate=2026-09-01&endDate=2026-09-02`),
-      { params: Promise.resolve({ workspaceId: own.id, issueId: current.id, issueIdOrKey: current.id }) });
+      { params: Promise.resolve({ workspaceId: own.id, issueId: current.id, issueIdOrKey: current.id, projectId: current.projectId }) });
     let response = await call();
     assert.equal(response.status, 200);
     assert.equal(JSON.stringify(await response.json()).includes('historic-private-status'), true);
     joined.members[0].status = false; accessedStatuses.length = 0;
-    for (const missing of endpoint.includes('issues/') ? [false] : [false, true]) {
+    for (const missing of (endpoint.includes('planning/') || endpoint === 'timeline/unified' || endpoint.endsWith('workspace/activity')) ? [false, true] : [false]) {
       if (missing) activities.forEach(row => { row.itemId = 'deleted-issue'; });
       response = await call();
       assert.equal(response.status, 200);
       const body = JSON.stringify(await response.json());
       assert.equal(body.includes('historic-private-status'), false);
+      assert.equal(body.includes('Historic private status'), false);
+      assert.equal(body.includes('activity-0'), false);
+      assert.equal(body.includes('activity-1'), false);
       assert.equal(body.includes('current-public-status'), true);
+      const result = JSON.parse(body);
+      if (result.stats) assert.equal(result.stats.todayCount, 1);
+      if (endpoint === 'apps/auth/workspace/activity') assert.equal(result.pagination.total, 1);
     }
     assert.equal(accessedStatuses.includes('historic-private-status'), false);
     joined.ownerId = 'alice';
@@ -2188,10 +2208,10 @@ function appIssueSubrouteFixture(association) {
     create: async ({ data }) => write({ ...log, ...data }),
     update: async ({ data }) => write({ ...log, ...data }), delete: async args => write(args),
   };
-  f.db.issue.update = async ({ data }) => {
+  f.db.issue.update = async ({ data, ...spec }) => {
     write(data);
     if (data.timeSpentMinutes) issue.timeSpentMinutes += (data.timeSpentMinutes.increment || 0) - (data.timeSpentMinutes.decrement || 0);
-    return { ...issue };
+    return f.project({ ...issue, ...data, timeSpentMinutes: issue.timeSpentMinutes }, spec);
   };
   f.db.$transaction = async callback => { contentReads.push('transaction'); return callback(f.db); };
   f.db.issueActivity.findMany = async () => read('activity', []);
@@ -2312,3 +2332,87 @@ test('historical app project activity excludes denied issue associations', async
   f.joined.ownerId = 'alice';
   assert.equal((await invoke()).activities.length, 1);
 });
+
+for (const association of ['project', 'status']) {
+  test(`historical notification ${association} denies storage push and serialized reads after revocation`, async () => {
+    const f = scopedNotificationFixture(), own = f.workspaces[0], joined = f.workspaces[1];
+    const issue = f.issues[0];
+    if (association === 'project') issue.project = f.issues[1].project;
+    else { issue.statusId = 'foreign-status'; issue.projectStatus = { project: f.issues[1].project }; }
+    const send = content => f.NotificationService.notifyUsers(['alice'], 'ISSUE_UPDATED', content, 'bob', { issueId: issue.id });
+    assert.equal(await send('private-issue-key actor event'), 1);
+    assert.equal(f.deliveries.length, 1);
+    f.stored.push(f.normalize({ ...f.stored[0], id: 'historic-agent', type: 'COCLAW_RESPONSE' }));
+    assert.equal(await f.coclaw.getUnreadCoclawCount('alice', own.id), 1);
+    joined.members[0].status = false;
+    const beforeWrites = f.calls.writes, beforePushes = f.calls.providerCalls;
+    assert.equal(await send('private-revoked-event'), 0);
+    await f.NotificationService.sendPushNotificationForUser('alice', 'ISSUE_UPDATED', 'private-direct-push', issue.id, undefined, own.id);
+    assert.equal(f.calls.writes, beforeWrites);
+    assert.equal(f.calls.providerCalls, beforePushes);
+    const read = async () => {
+      const response = await f.route('notifications').GET(f.request());
+      assert.equal(response.status, 200); return response.json();
+    };
+    assert.deepEqual(await read(), []);
+    assert.equal(await f.coclaw.getUnreadCoclawCount('alice', own.id), 0);
+    assert.deepEqual(await f.coclaw.getRecentCoclawNotifications('alice', own.id), []);
+    assert.equal((await f.route('notifications/[id]').PATCH(f.request('PATCH', undefined, { read: true }),
+      { params: Promise.resolve({ id: f.stored[0].id }) })).status, 404);
+    await f.route('notifications/read-all').POST();
+    assert.equal(f.stored[0].read, false);
+    joined.ownerId = 'alice';
+    assert.equal((await read())[0].content, 'private-issue-key actor event');
+    assert.equal(await send('owner-restored'), 1);
+    f.issues.splice(0, 1);
+    assert.deepEqual(await read(), []);
+    assert.equal(await send('orphan-update'), 0);
+    assert.equal(await f.NotificationService.notifyUsers(['alice'], 'PERSONAL', 'personal-control', 'bob', { personal: true }), 1);
+    assert.deepEqual((await read()).map(row => row.content), ['personal-control']);
+  });
+}
+
+for (const [path, method, body, expected] of [
+  ['comments', 'GET', {}, 200], ['comments', 'POST', { content: 'new' }, 201],
+  ['work-logs', 'GET', {}, 200], ['work-logs', 'POST', { timeSpent: 30 }, 201],
+  ['assign', 'POST', { unassign: true }, 200], ['', 'PATCH', { title: 'updated' }, 200],
+]) {
+  test(`exact issue key A1B-T1 preserves ${method} ${path || 'mutation'} with full access`, async () => {
+    const f = appIssueSubrouteFixture('project');
+    const route = f.route('apps/auth/issues/[issueIdOrKey]' + (path ? '/' + path : ''));
+    const invoke = key => route[method](f.request(method, f.own.id, body), { params: Promise.resolve({ issueIdOrKey: key }) });
+    for (const key of ['OWN-1', 'A1B-T1']) {
+      f.issue.issueKey = key;
+      assert.equal((await invoke(key)).status, expected);
+      assert.equal((await invoke(f.issue.id)).status, expected);
+    }
+    f.joined.members[0].status = false; f.writes.length = 0; f.contentReads.length = 0;
+    assert.equal((await invoke('A1B-T1')).status, 404);
+    assert.deepEqual(f.writes, []); assert.deepEqual(f.contentReads, []);
+  });
+}
+
+for (const association of ['project', 'status']) {
+  test(`historical notification deletion ${association} checks full access before issue removal`, async () => {
+    const f = scopedNotificationFixture(), own = f.workspaces[0], joined = f.workspaces[1];
+    own.members.push({ userId: 'dan', status: true }, { userId: 'eve', status: true });
+    joined.members.push({ userId: 'dan', status: false }, { userId: 'eve', status: true });
+    const issue = f.issues[0];
+    if (association === 'project') issue.project = f.issues[1].project;
+    else { issue.statusId = 'historic'; issue.projectStatus = { project: f.issues[1].project }; }
+    const lookupUser = f.db.user.findUnique;
+    f.db.user.findUnique = async args => ['dan', 'eve'].includes(args.where.id) ? { id: args.where.id } : lookupUser(args);
+    f.db.issueFollower = { findMany: async () => [{ userId: 'dan' }, { userId: 'eve' }] };
+    f.db.projectFollower = { findMany: async () => [] };
+    Object.assign(f.dependencies, {
+      '@/utils/html-normalizer': {}, '@/lib/event-bus': { emitIssueDeleted: async () => {} },
+      '@/lib/permissions': { Permission: { DELETE_ANY_TASK: 'any', DELETE_SELF_TASK: 'self' },
+        canActOnOwnContent: () => true, checkUserPermissions: async () => ({ any: { hasPermission: true }, self: { hasPermission: true } }) },
+    });
+    const response = await f.route('issues/[issueId]').DELETE(f.request('DELETE', own.id),
+      { params: Promise.resolve({ issueId: issue.id }) });
+    assert.equal(response.status, 200);
+    assert.deepEqual(f.stored.map(row => row.userId), ['eve']);
+    assert.deepEqual(f.deliveries.map(([id]) => id), ['eve']);
+  });
+}

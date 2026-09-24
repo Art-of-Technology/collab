@@ -21,8 +21,8 @@ export async function PATCH(
     // Verify the notification belongs to the current user
     const notification = await prisma.notification.findUnique({
       where: {
-        id,
-        ...notificationAccessWhere(currentUser.id)
+        ...await notificationAccessWhere(currentUser.id),
+        id
       }
     });
     
@@ -35,7 +35,7 @@ export async function PATCH(
     
     // Update the notification
     const updatedNotification = await prisma.notification.update({
-      where: { id, ...notificationAccessWhere(currentUser.id) },
+      where: { ...await notificationAccessWhere(currentUser.id), id },
       data: { read }
     });
     
