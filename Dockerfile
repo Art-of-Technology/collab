@@ -45,7 +45,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build the application
-# We expect .env to be present or environment variables to be passed
+# .env files are excluded; public build configuration comes from the ARGs above.
 RUN npx prisma generate
 RUN npm run build
 

@@ -140,7 +140,7 @@ export interface PermissionCheckResult {
 }
 
 /**
- * Check if a user has a specific permission in a workspace
+ * Check a workspace permission for an active member, owner, or system admin.
  */
 export async function checkUserPermission(
   userId: string,
@@ -177,7 +177,6 @@ export async function checkUserPermission(
       return { hasPermission: true, userRole: "OWNER" as any };
     }
 
-    // Check if user is a member of the workspace (single row due to where: { workspaceId })
     const membership = user.workspaceMemberships[0];
     if (!membership) {
       return {
@@ -272,7 +271,6 @@ export async function getUserPermissions(
       return Object.values(Permission);
     }
 
-    // Check if user is a member of the workspace (single row due to where: { workspaceId })
     const membership = user.workspaceMemberships[0];
     if (!membership) {
       return [];

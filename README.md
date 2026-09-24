@@ -96,14 +96,14 @@ Collab is designed to streamline internal communication and work tracking by off
    ```
 2. Install dependencies:
    ```bash
-   npm install
+   npm ci --legacy-peer-deps
    ```
 3. Set up environment variables:
    ```bash
-   cp .env .env.local
+   cp .env.example .env
    ```
    
-   Edit `.env.local` and configure the following environment variables:
+   Edit `.env` and configure the following environment variables:
 
    ### Required Variables
 
