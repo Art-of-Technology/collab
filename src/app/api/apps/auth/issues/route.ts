@@ -339,7 +339,7 @@ export const POST = withAppAuth(
               }
             },
             parent: {
-              where: { workspaceId: context.workspace.id },
+              where: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) },
               select: {
                 id: true,
                 title: true,

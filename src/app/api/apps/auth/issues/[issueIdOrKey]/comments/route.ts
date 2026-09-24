@@ -1,3 +1,4 @@
+import { findIssueByIdOrKey } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Issue Comments Endpoints
  * GET /api/apps/auth/issues/:issueIdOrKey/comments - List comments
@@ -14,18 +15,6 @@ const CreateCommentSchema = z.object({
   parentId: z.string().cuid().optional(),
 });
 
-async function findIssue(issueIdOrKey: string, workspaceId: string) {
-  return prisma.issue.findFirst({
-    where: {
-      workspaceId,
-      OR: [
-        { id: issueIdOrKey },
-        { issueKey: issueIdOrKey },
-      ],
-    },
-  });
-}
-
 /**
  * GET /api/apps/auth/issues/:issueIdOrKey/comments
  * Get comments for an issue
@@ -37,7 +26,7 @@ export const GET = withAppAuth(
       const { searchParams } = new URL(request.url);
       const flat = searchParams.get('flat') === 'true';
 
-      const issue = await findIssue(issueIdOrKey, context.workspace.id);
+      const issue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
       if (!issue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },
@@ -152,7 +141,7 @@ export const POST = withAppAuth(
       const body = await request.json();
       const data = CreateCommentSchema.parse(body);
 
-      const issue = await findIssue(issueIdOrKey, context.workspace.id);
+      const issue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
       if (!issue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },

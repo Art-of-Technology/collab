@@ -2157,3 +2157,158 @@ test('Notes tag validator preserves personal, owner, active member and project-o
   assert.equal(await canUseNoteTags('alice', ['private'], null), false);
   assert.deepEqual(f.writes, []);
 });
+
+function appIssueSubrouteFixture(association) {
+  const f = relatedIssueFixture(), own = f.workspaces[0], joined = f.workspaces[1];
+  const issue = f.rows[0], foreignProject = f.rows[1].project;
+  if (association === 'project') {
+    issue.project = foreignProject; issue.projectId = foreignProject.id;
+  } else {
+    issue.projectStatus = { id: 'historic-status', name: 'private-status', project: foreignProject };
+    issue.statusId = issue.projectStatus.id;
+  }
+  f.rows.push({ ...issue, id: 'issue-local', issueKey: 'LOCAL-1', parent: null, children: [],
+    projectId: 'local', project: { id: 'local', workspaceId: own.id, workspace: own }, statusId: null, projectStatus: null });
+  issue.timeSpentMinutes = 20;
+  f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => (req, params) => handler(req,
+    { workspace: own, user: f.state.user }, params) };
+  const contentReads = [];
+  const comment = { id: 'comment', issueId: issue.id, content: 'private-comment', parentId: null,
+    author: f.state.user, reactions: [], replies: [], createdAt: new Date(0) };
+  const log = { id: 'worklog', issueId: issue.id, timeSpent: 20, description: 'private-worklog', user: f.state.user };
+  const read = (kind, value) => { contentReads.push(kind); return value; };
+  const write = data => { f.writes.push(data); return data; };
+  f.db.issueComment = {
+    findMany: async () => read('comments', [comment]), count: async () => 1,
+    create: async ({ data }) => write({ ...comment, ...data }),
+  };
+  f.db.workLog = {
+    findMany: async () => read('worklogs', [log]), findFirst: async () => read('worklog', log),
+    count: async () => 1, aggregate: async () => ({ _sum: { timeSpent: 20 } }),
+    create: async ({ data }) => write({ ...log, ...data }),
+    update: async ({ data }) => write({ ...log, ...data }), delete: async args => write(args),
+  };
+  f.db.issue.update = async ({ data }) => {
+    write(data);
+    if (data.timeSpentMinutes) issue.timeSpentMinutes += (data.timeSpentMinutes.increment || 0) - (data.timeSpentMinutes.decrement || 0);
+    return { ...issue };
+  };
+  f.db.$transaction = async callback => { contentReads.push('transaction'); return callback(f.db); };
+  f.db.issueActivity.findMany = async () => read('activity', []);
+  const relation = { id: 'relation', sourceIssueId: issue.id, targetIssueId: f.rows[1].id,
+    sourceIssue: issue, targetIssue: f.rows[1], relationType: 'BLOCKS' };
+  f.db.issueRelation.findUnique = async () => read('relation', relation);
+  f.db.issueRelation.findFirst = async ({ where }) => {
+    contentReads.push('relation');
+    return where.id && matches(relation, where) ? relation : null;
+  };
+  f.db.issueRelation.delete = async args => write(args);
+  return { ...f, own, joined, issue, contentReads };
+}
+
+for (const association of ['project', 'status']) {
+  for (const [path, method, body, success] of [
+    ['comments', 'GET', {}, 200], ['comments', 'POST', { content: 'new' }, 201],
+    ['work-logs', 'GET', {}, 200], ['work-logs', 'POST', { timeSpent: 30 }, 201],
+    ['work-logs/[workLogId]', 'GET', {}, 200], ['work-logs/[workLogId]', 'PATCH', { timeSpent: 30 }, 200],
+    ['work-logs/[workLogId]', 'DELETE', {}, 200], ['assign', 'POST', { unassign: true }, 200],
+    ['activity', 'GET', {}, 200], ['relations', 'GET', {}, 200],
+    ['relations', 'POST', { targetIssueId: 'issue-local', relationType: 'BLOCKS' }, 201],
+    ['relations/[relationId]', 'DELETE', {}, 200],
+  ]) {
+    test(`historical app subroute ${association} ${method} ${path} denies before content and writes`, async () => {
+      const f = appIssueSubrouteFixture(association);
+      const route = f.route('apps/auth/issues/[issueIdOrKey]/' + path);
+      const invoke = key => route[method](f.request(method, f.own.id, body),
+        { params: Promise.resolve({ issueIdOrKey: key, workLogId: 'worklog', relationId: 'relation' }) });
+      assert.equal((await invoke(f.issue.id)).status, success);
+      f.joined.members[0].status = false;
+      f.writes.length = 0; f.calls.writes = 0; f.contentReads.length = 0;
+      const timeBefore = f.issue.timeSpentMinutes;
+      for (const key of [f.issue.id, f.issue.issueKey]) {
+        const response = await invoke(key);
+        assert.equal(response.status, 404);
+        const result = JSON.stringify(await response.json());
+        assert.equal(result.includes('private-'), false);
+        assert.deepEqual(f.writes, []);
+        assert.deepEqual(f.contentReads, []);
+        assert.equal(f.calls.writes, 0);
+        assert.equal(f.issue.timeSpentMinutes, timeBefore);
+      }
+      f.joined.ownerId = 'alice';
+      assert.equal((await invoke(f.issue.issueKey)).status, success);
+    });
+  }
+  for (const endpoint of ['detail', 'search', 'project']) {
+    test(`historical app hierarchy ${association} ${endpoint} filters metadata and counts before retrieval`, async () => {
+      const f = relatedIssueFixture(), own = f.workspaces[0], joined = f.workspaces[1];
+      const child = f.rows[1], foreignProject = child.project;
+      child.workspaceId = own.id; child.workspace = own;
+      if (association === 'status') {
+        child.project = f.rows[0].project; child.projectId = child.project.id;
+        child.statusId = 'historical-status'; child.projectStatus = { id: child.statusId, project: foreignProject };
+      }
+      f.rows[0].parent = child; f.rows[0].parentId = child.id;
+      f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => (req, params) => handler(req,
+        { workspace: own, user: f.state.user }, params) };
+      const invoke = async () => {
+        const path = endpoint === 'detail' ? 'issues/[issueIdOrKey]' : endpoint === 'search' ? 'search/issues' : 'projects/[projectId]/issues';
+        const response = await f.route('apps/auth/' + path).GET(f.request(),
+          { params: Promise.resolve({ issueIdOrKey: f.rows[0].id, projectId: f.rows[0].projectId }) });
+        assert.equal(response.status, 200);
+        const body = await response.json();
+        return endpoint === 'detail' ? body : (body.results || body.issues).find(row => row.id === f.rows[0].id);
+      };
+      let body = await invoke();
+      assert.equal(body.stats.childCount, 1);
+      if (endpoint !== 'project') assert.equal(body.parent.title, child.title);
+      joined.members[0].status = false; f.reads.length = 0;
+      body = await invoke();
+      assert.equal(body.stats.childCount, 0);
+      if (endpoint !== 'project') assert.equal(body.parent, null);
+      assert.equal(JSON.stringify(body).includes(child.title), false);
+      assert.equal(f.reads.includes(child.title), false);
+      if (endpoint === 'detail') assert.equal(body.stats.relationCount, 0);
+      joined.ownerId = 'alice';
+      assert.equal((await invoke()).stats.childCount, 1);
+      assert.deepEqual(f.writes, []);
+      assert.equal(f.rows[0].parentId, child.id);
+    });
+  }
+}
+
+for (const association of ['project', 'status']) {
+  test(`historical app relation target ${association} denies creation and deletion before writes`, async () => {
+    const f = appIssueSubrouteFixture(association), source = f.rows[1], target = f.rows[0];
+    source.workspace = f.own; source.workspaceId = f.own.id;
+    source.project = f.rows[2].project = { id: 'local', workspace: f.own, workspaceId: f.own.id };
+    source.projectId = 'local';
+    const params = { params: Promise.resolve({ issueIdOrKey: source.id, relationId: 'relation' }) };
+    const create = () => f.route('apps/auth/issues/[issueIdOrKey]/relations').POST(
+      f.request('POST', f.own.id, { targetIssueId: target.id, relationType: 'BLOCKS' }), params);
+    const remove = () => f.route('apps/auth/issues/[issueIdOrKey]/relations/[relationId]').DELETE(f.request('DELETE'), params);
+    assert.equal((await create()).status, 201);
+    f.joined.members[0].status = false; f.writes.length = 0;
+    assert.equal((await create()).status, 404);
+    assert.equal((await remove()).status, 404);
+    assert.deepEqual(f.writes, []);
+    f.joined.ownerId = 'alice';
+    assert.equal((await remove()).status, 200);
+  });
+}
+
+test('historical app project activity excludes denied issue associations', async () => {
+  const f = appIssueSubrouteFixture('status');
+  const activity = { id: 'activity', itemType: 'ISSUE', itemId: f.issue.id, action: 'UPDATED', newValue: 'private-content', user: f.state.user };
+  f.db.issueActivity.findMany = async ({ where }) => matches(activity, where) ? [activity] : [];
+  const invoke = async () => {
+    const response = await f.route('apps/auth/projects/[projectId]/activity').GET(f.request(),
+      { params: Promise.resolve({ projectId: f.issue.projectId }) });
+    assert.equal(response.status, 200); return response.json();
+  };
+  assert.equal((await invoke()).activities.length, 1);
+  f.joined.members[0].status = false;
+  assert.equal((await invoke()).activities.length, 0);
+  f.joined.ownerId = 'alice';
+  assert.equal((await invoke()).activities.length, 1);
+});

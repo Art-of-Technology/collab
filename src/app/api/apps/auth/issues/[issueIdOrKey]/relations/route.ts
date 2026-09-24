@@ -1,4 +1,4 @@
-import { issueReadAccessWhere } from '@/lib/issue-finder';
+import { findIssueByIdOrKey, issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Issue Relations Endpoints
  * GET /api/apps/auth/issues/:issueIdOrKey/relations - Get issue relations
@@ -15,18 +15,6 @@ const CreateRelationSchema = z.object({
   relationType: z.enum(['PARENT', 'CHILD', 'BLOCKS', 'BLOCKED_BY', 'RELATES_TO', 'DUPLICATES', 'DUPLICATED_BY']),
 });
 
-async function findIssue(issueIdOrKey: string, workspaceId: string) {
-  return prisma.issue.findFirst({
-    where: {
-      workspaceId,
-      OR: [
-        { id: issueIdOrKey },
-        { issueKey: issueIdOrKey },
-      ],
-    },
-  });
-}
-
 /**
  * GET /api/apps/auth/issues/:issueIdOrKey/relations
  * Get all relationships for an issue
@@ -36,7 +24,7 @@ export const GET = withAppAuth(
     try {
       const { issueIdOrKey } = await params;
 
-      const issue = await findIssue(issueIdOrKey, context.workspace.id);
+      const issue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
       if (!issue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },
@@ -201,7 +189,7 @@ export const POST = withAppAuth(
       const data = CreateRelationSchema.parse(body);
 
       // Find source issue
-      const sourceIssue = await findIssue(issueIdOrKey, context.workspace.id);
+      const sourceIssue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
       if (!sourceIssue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Source issue not found' },
@@ -210,7 +198,7 @@ export const POST = withAppAuth(
       }
 
       // Find target issue
-      const targetIssue = await findIssue(data.targetIssueId, context.workspace.id);
+      const targetIssue = await findIssueByIdOrKey(data.targetIssueId, { workspaceId: context.workspace.id, userId: context.user.id });
       if (!targetIssue) {
         return NextResponse.json(
           { error: 'target_not_found', error_description: 'Target issue not found' },

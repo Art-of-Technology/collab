@@ -1,4 +1,4 @@
-import { issueAccessWhere } from '@/lib/issue-finder';
+import { findIssueByIdOrKey, issueAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Issue Activity Endpoint
  * GET /api/apps/auth/issues/:issueIdOrKey/activity - Get issue activity/history
@@ -21,15 +21,7 @@ export const GET = withAppAuth(
       const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
 
       // Find the issue
-      const issue = await prisma.issue.findFirst({
-        where: {
-          workspaceId: context.workspace.id,
-          OR: [
-            { id: issueIdOrKey },
-            { issueKey: issueIdOrKey },
-          ],
-        },
-      });
+      const issue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
 
       if (!issue) {
         return NextResponse.json(

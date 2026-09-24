@@ -230,7 +230,7 @@ export const GET = withAppAuth(
               },
             },
             parent: {
-            where: { workspaceId: context.workspace.id },
+            where: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) },
               select: {
                 id: true,
                 issueKey: true,
@@ -240,7 +240,7 @@ export const GET = withAppAuth(
             },
             _count: {
               select: {
-                children: { where: { workspaceId: context.workspace.id } },
+                children: { where: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) } },
                 comments: true,
               },
             },

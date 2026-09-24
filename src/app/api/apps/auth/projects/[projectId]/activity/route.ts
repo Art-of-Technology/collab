@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Project Activity Endpoint
  * GET /api/apps/auth/projects/:projectId/activity - Get project activity
@@ -35,7 +36,7 @@ export const GET = withAppAuth(
 
       // Get issue IDs in this project
       const issues = await prisma.issue.findMany({
-        where: { projectId },
+        where: { projectId, ...issueReadAccessWhere(context.user.id) },
         select: { id: true, issueKey: true },
       });
       const issueIds = issues.map(i => i.id);

@@ -1,4 +1,4 @@
-import { issueReadAccessWhere } from '@/lib/issue-finder';
+import { findIssueByIdOrKey, issueReadAccessWhere } from '@/lib/issue-finder';
 import { validateIssueReferences } from '@/lib/issue-references';
 /**
  * Third-Party App API: Single Issue Endpoints
@@ -30,19 +30,6 @@ const UpdateIssueSchema = z.object({
   labels: z.array(z.string()).optional(),
   timeEstimateMinutes: z.number().int().positive().nullable().optional(),
 });
-
-async function findIssue(issueIdOrKey: string, workspaceId: string, userId: string) {
-  return prisma.issue.findFirst({
-    where: {
-      AND: [issueReadAccessWhere(userId)],
-      workspaceId,
-      OR: [
-        { id: issueIdOrKey },
-        { issueKey: issueIdOrKey },
-      ],
-    },
-  });
-}
 
 /**
  * GET /api/apps/auth/issues/:issueIdOrKey
@@ -88,7 +75,7 @@ export const GET = withAppAuth(
             },
           },
           parent: {
-            where: { workspaceId: context.workspace.id },
+            where: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) },
             select: {
               id: true,
               issueKey: true,
@@ -97,7 +84,7 @@ export const GET = withAppAuth(
             },
           },
           children: {
-            where: { workspaceId: context.workspace.id },
+            where: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) },
             select: {
               id: true,
               issueKey: true,
@@ -134,9 +121,9 @@ export const GET = withAppAuth(
           _count: {
             select: {
               comments: true,
-              children: { where: { workspaceId: context.workspace.id } },
-              sourceRelations: { where: { targetIssue: { workspaceId: context.workspace.id } } },
-              targetRelations: { where: { sourceIssue: { workspaceId: context.workspace.id } } },
+              children: { where: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) } },
+              sourceRelations: { where: { targetIssue: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) } } },
+              targetRelations: { where: { sourceIssue: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) } } },
             },
           },
         },
@@ -214,7 +201,7 @@ export const PATCH = withAppAuth(
       const updateData = UpdateIssueSchema.parse(body);
 
       // Find the issue
-      const existingIssue = await findIssue(issueIdOrKey, context.workspace.id, context.user.id);
+      const existingIssue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
       if (!existingIssue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },
@@ -425,7 +412,7 @@ export const DELETE = withAppAuth(
     try {
       const { issueIdOrKey } = await params;
 
-      const existingIssue = await findIssue(issueIdOrKey, context.workspace.id, context.user.id);
+      const existingIssue = await findIssueByIdOrKey(issueIdOrKey, { workspaceId: context.workspace.id, userId: context.user.id });
       if (!existingIssue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },

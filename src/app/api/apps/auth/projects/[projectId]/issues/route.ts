@@ -130,7 +130,7 @@ export const GET = withAppAuth(
             _count: {
               select: {
                 comments: true,
-                children: { where: { workspaceId: context.workspace.id } },
+                children: { where: { workspaceId: context.workspace.id, ...issueReadAccessWhere(context.user.id) } },
               },
             },
           },
