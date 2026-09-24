@@ -80,6 +80,7 @@ function matches(row, where) {
   return Object.entries(where).every(([key, value]) => {
     if (key === 'AND') return value.every(clause => matches(row, clause));
     if (key === 'OR') return value.some(clause => matches(row, clause));
+    if (key === 'NOT') return !matches(row, value);
     const actual = row?.[key];
     if (value === undefined) return true;
     if (value === null || typeof value !== 'object') return actual === value;
@@ -90,6 +91,7 @@ function matches(row, where) {
     if ('not' in value) return actual !== value.not;
     if ('contains' in value) return typeof actual === 'string' && actual.toLowerCase().includes(value.contains.toLowerCase());
     if ('gte' in value) return actual != null && actual >= value.gte;
+    if ('lt' in value) return actual != null && actual < value.lt;
     return actual != null && matches(actual, value);
   });
 }
@@ -2107,8 +2109,10 @@ test('shared issue mutation blocks AI and PUT bypasses with real access and fiel
       ['revoked', () => { workspace.members[0].status = false; grants = ['EDIT_ANY_TASK']; }, { title: 'Denied' }, endpoint === 'AI' ? 403 : 404],
       ['foreign user', () => { workspace.members = []; grants = ['EDIT_ANY_TASK']; }, { title: 'Denied' }, endpoint === 'AI' ? 403 : 404],
       ['foreign issue', () => { state.workspaceId = 'foreign'; grants = ['EDIT_ANY_TASK']; }, { title: 'Denied' }, 404],
-      ['status mixed with title', () => { grants = ['CHANGE_TASK_STATUS']; }, { statusId: 'progress', title: 'Denied' }, 403],
-      ['assignment mixed with status', () => { grants = ['ASSIGN_TASK']; }, { assigneeId: 'alice', statusId: 'progress' }, 403],
+      ['status mixed with title', () => { grants = ['CHANGE_TASK_STATUS']; }, { statusId: 'progress', title: 'Denied' }, endpoint === 'AI' ? 400 : 403],
+      ['status name mixed with title', () => { grants = ['CHANGE_TASK_STATUS']; }, { status: 'In Progress', title: 'Denied' }, 403],
+      ['assignment mixed with status', () => { grants = ['ASSIGN_TASK']; }, { assigneeId: 'alice', statusId: 'progress' }, endpoint === 'AI' ? 400 : 403],
+      ['assignment mixed with status name', () => { grants = ['ASSIGN_TASK']; }, { assigneeId: 'alice', status: 'In Progress' }, 403],
       ['empty title', () => { grants = ['EDIT_ANY_TASK']; }, { title: ' ' }, 400],
       ['bad date', () => { grants = ['EDIT_ANY_TASK']; }, { dueDate: 'tomorrow' }, 400],
       ['mass assignment', () => { grants = ['EDIT_ANY_TASK']; }, { workspaceId: 'foreign' }, 400],
@@ -2142,6 +2146,22 @@ test('shared issue mutation blocks AI and PUT bypasses with real access and fiel
       if (fields.assigneeId) assert.equal(state.assigneeId, 'alice');
     });
   }
+  await t.test('AI preserves its original update field set with zero writes for unsupported fields', async () => {
+    for (const fields of [{ projectId: 'project' }, { reporterId: 'alice' }, { parentId: null },
+      { labels: [] }, { progress: 50 }, { position: 3 }, { statusId: 'todo' }, { statusValue: 'todo' }, { unexpected: true }]) {
+      reset(); grants = ['EDIT_ANY_TASK']; const before = structuredClone(state);
+      const response = await aiRequest({ issueId: 'issue', title: 'Must not change', ...fields });
+      assert.equal(response.status, 400, JSON.stringify(fields));
+      assert.equal(writes, 0); assert.equal(effects, 0); assert.deepEqual(state, before);
+    }
+    reset(); grants = ['EDIT_ANY_TASK'];
+    const fields = { title: 'Supported', description: 'Content', status: 'In Progress', priority: 'high',
+      type: 'BUG', assigneeId: 'alice', dueDate: '2026-10-01T00:00:00Z' };
+    const response = await aiRequest({ issueId: 'issue', ...fields });
+    assert.equal(response.status, 200, await response.text());
+    assert.equal(writes, 2);
+    for (const [field, value] of Object.entries(fields)) assert.equal(state[field], field === 'status' ? 'in_progress' : value);
+  });
   await t.test('AI rejects malformed envelopes and issue identifier aliases', async () => {
     reset(); grants = ['EDIT_ANY_TASK'];
     for (const body of [null, {}, { action: { type: 'update_issue', params: null }, context: { workspace: { id: 'joined' } } }]) {
@@ -2252,5 +2272,149 @@ test('shared post access protects comments, replies and action history before co
   await t.test('storage exceptions remain server errors instead of legacy action error mappings', async () => {
     fail = true;
     assert.equal((await request(postGet, 'joined')).status, 500);
+  });
+});
+
+test('comment server action enforces shared post access before both content queries', async (t) => {
+  const author = { id: 'bob', name: 'Bob', image: 'avatar', role: 'DEVELOPER', useCustomAvatar: true,
+    email: 'private@example.test', hashedPassword: 'synthetic', githubAccessToken: 'synthetic' };
+  const posts = [...workspaces, null].map(workspace => ({ id: workspace?.id ?? 'unscoped', workspace }));
+  const rows = posts.flatMap(post => [
+    { id: `${post.id}-comment`, postId: post.id, post, parentId: null, message: 'Comment', html: '<p>Comment</p>', author },
+    { id: `${post.id}-reply`, postId: post.id, post, parentId: `${post.id}-comment`, message: 'Reply', html: '<p>Reply</p>', author },
+  ]);
+  let session = null, user = { id: 'alice' }, reads = 0, lookups = 0;
+  const projectAuthor = spec => Object.fromEntries(Object.entries(author).filter(([field]) => spec.select[field]));
+  const db = {
+    user: { findUnique: async () => user },
+    post: { findFirst: async ({ where }) => { lookups++; return posts.find(row => matches(row, where)) ?? null; } },
+    comment: { findMany: async ({ where, include }) => {
+      reads++;
+      return rows.filter(row => matches(row, where)).map(({ post, ...row }) => ({ ...row,
+        author: projectAuthor(include.author), reactions: [{ author: projectAuthor(include.reactions.include.author) }] }));
+    } },
+  };
+  const { getComments } = load('src/actions/comment.ts', {
+    '@/lib/auth-options': { authOptions: {} }, 'next-auth': { getServerSession: async () => session },
+    '@/lib/prisma': { prisma: db }, '@/utils/mentions': {}, '@/lib/notification-service': {}, '@/lib/html-sanitizer': {},
+  }, { Error });
+  await t.test('anonymous', async () => {
+    await assert.rejects(getComments('joined'), /Unauthorized/);
+    assert.equal(reads, 0); assert.equal(lookups, 0);
+  });
+  session = { user: { id: 'alice', email: 'alice@example.test' } };
+  await t.test('deleted user', async () => {
+    user = null;
+    await assert.rejects(getComments('joined'), /User not found/);
+    assert.equal(reads, 0); assert.equal(lookups, 0);
+    user = { id: 'alice' };
+  });
+  for (const id of ['revoked', 'foreign', 'unscoped', 'missing', '']) await t.test(id || 'empty ID', async () => {
+    reads = 0;
+    await assert.rejects(getComments(id), /Post not found/);
+    assert.equal(reads, 0);
+  });
+  for (const id of ['own', 'joined']) await t.test(id, async () => {
+    reads = 0;
+    const result = await getComments(id);
+    assert.equal(reads, 2);
+    assert.equal(result.topLevelComments.length, 1);
+    const comment = result.topLevelComments[0];
+    const reply = result.repliesByParentId[comment.id][0];
+    assert.equal(comment.message, 'Comment'); assert.equal(reply.message, 'Reply');
+    assert.equal(comment.html, '<p>Comment</p>'); assert.equal(reply.html, '<p>Reply</p>');
+    for (const row of [comment, reply]) {
+      assert.deepEqual(Object.keys(row.author).sort(), ['id', 'image', 'name', 'role', 'useCustomAvatar'].sort());
+      assert.equal(row.author.name, author.name);
+      assert.deepEqual(Object.keys(row.reactions[0].author).sort(), ['id', 'image', 'name']);
+    }
+  });
+});
+
+test('post collections and counts share active workspace scope for IDs, slugs and implicit feeds', async (t) => {
+  const spaces = workspaces.map(workspace => ({ ...workspace, slug: `slug-${workspace.id}` }));
+  const posts = [...spaces, null].map(workspace => ({ id: `p-${workspace?.id ?? 'unscoped'}`, workspace,
+    workspaceId: workspace?.id ?? null, authorId: 'bob', message: 'Private', type: workspace?.id === 'joined' ? 'IDEA' : 'UPDATE',
+    priority: workspace?.id === 'own' ? 'high' : 'normal', followers: [{ userId: 'alice' }] }));
+  posts.push({ ...posts.find(row => row.workspaceId === 'joined'), id: 'p-other', authorId: 'carol', type: 'UPDATE', priority: 'critical' });
+  const comments = posts.map(post => ({ id: `c-${post.id}`, authorId: 'bob', post }));
+  comments.push({ id: 'other-author-comment', authorId: 'carol', post: posts[1] });
+  const reactions = posts.map(post => ({ id: `r-${post.id}`, post }));
+  let session = null, reads = 0, counts = 0, profileReads = 0;
+  const db = {
+    workspace: {
+      findFirst: async ({ where }) => spaces.find(row => matches(row, where)) ?? null,
+      findMany: async ({ where }) => spaces.filter(row => matches(row, where)),
+    },
+    user: { findUnique: async () => { profileReads++; return { id: 'bob', name: 'Bob' }; } },
+    workspaceMember: { findUnique: async () => null },
+    post: {
+      findMany: async ({ where, take }) => {
+        reads++;
+        const result = posts.filter(row => matches(row, where)).sort((a, b) => b.id.localeCompare(a.id));
+        return take === undefined ? result : result.slice(0, take);
+      },
+      count: async ({ where }) => { counts++; return posts.filter(row => matches(row, where)).length; },
+    },
+    comment: { count: async ({ where }) => { counts++; return comments.filter(row => matches(row, where)).length; } },
+    reaction: { count: async ({ where }) => { counts++; return reactions.filter(row => matches(row, where)).length; } },
+  };
+  const dependencies = {
+    '@/lib/prisma': { prisma: db }, 'next-auth': { getServerSession: async () => session }, '@/lib/auth-options': { authOptions: {} },
+    '@/lib/user-utils': load('src/lib/user-utils.ts'), '@/utils/mentions': {}, '@/lib/notification-service': {},
+  };
+  const { getPosts, getUserPosts } = load('src/actions/post.ts', dependencies, { Error });
+  const { getPostStats } = load('src/actions/postStats.ts', dependencies, { Error });
+  const profile = { authorId: 'bob', includeProfileData: true };
+  await t.test('anonymous', async () => {
+    await assert.rejects(getPosts({ ...profile, workspaceId: 'joined' }), /Unauthorized/);
+    await assert.rejects(getUserPosts('bob', 'joined'), /Unauthorized/);
+    await assert.rejects(getPostStats({ workspaceId: 'joined' }), /Unauthorized/);
+    assert.equal(reads + counts + profileReads, 0);
+  });
+  session = { user: { id: 'alice', email: 'alice@example.test' } };
+  for (const workspaceId of ['foreign', 'slug-foreign', 'revoked', 'slug-revoked', 'missing']) await t.test(workspaceId, async () => {
+    reads = 0; counts = 0; profileReads = 0;
+    const result = await getPosts({ ...profile, workspaceId });
+    assert.deepEqual(JSON.parse(JSON.stringify(result)), { posts: [], hasMore: false, nextCursor: null });
+    await assert.rejects(getUserPosts('bob', workspaceId), /access denied/);
+    assert.equal(reads + counts + profileReads, 0);
+    const stats = await getPostStats({ workspaceId });
+    assert.ok(Object.values(stats).every(value => value === 0));
+  });
+  for (const workspaceId of ['own', 'slug-own', 'joined', 'slug-joined', undefined]) await t.test(workspaceId ?? 'implicit', async () => {
+    const joined = workspaceId?.includes('joined');
+    const result = await getPosts({ ...profile, workspaceId });
+    const expectedIds = workspaceId ? [joined ? 'p-joined' : 'p-own'] : ['p-own', 'p-joined'];
+    assert.deepEqual(Array.from(result.posts, post => post.id), expectedIds);
+    assert.ok(result.posts.every(post => post.isFollowing));
+    assert.equal(result.stats.postCount, expectedIds.length);
+    assert.equal(result.stats.commentCount, workspaceId ? (joined ? 2 : 1) : 3);
+    assert.equal(result.stats.reactionsReceived, expectedIds.length);
+    assert.equal(result.user.name, 'Bob');
+    const stats = await getPostStats({ workspaceId });
+    assert.equal(stats.total, workspaceId ? (joined ? 2 : 1) : 3);
+    assert.equal(stats.updates, workspaceId ? 1 : 2);
+    assert.equal(stats.ideas, workspaceId ? (joined ? 1 : 0) : 1);
+    assert.equal(stats.priority, workspaceId ? 1 : 2);
+    if (workspaceId && !workspaceId.startsWith('slug-')) {
+      assert.deepEqual(Array.from(await getUserPosts('bob', workspaceId), post => post.id), expectedIds);
+    }
+  });
+  await t.test('pagination keeps aggregate counts scoped and independent of page size', async () => {
+    const first = await getPosts({ ...profile, limit: 1 });
+    assert.equal(first.hasMore, true); assert.equal(first.nextCursor, 'p-own');
+    assert.equal(first.stats.postCount, 2); assert.equal(first.stats.commentCount, 3);
+    const second = await getPosts({ ...profile, limit: 1, cursor: first.nextCursor });
+    assert.deepEqual(Array.from(second.posts, post => post.id), ['p-joined']);
+    assert.equal(second.hasMore, false); assert.equal(second.stats.postCount, 2);
+  });
+  await t.test('no accessible workspace does not trigger unscoped profile reads or counts', async () => {
+    session = { user: { id: 'outsider', email: 'outsider@example.test' } };
+    reads = 0; counts = 0; profileReads = 0;
+    const result = await getPosts(profile);
+    assert.equal(result.posts.length, 0); assert.equal(result.user, undefined); assert.equal(result.stats, undefined);
+    assert.equal(reads + counts + profileReads, 0);
+    assert.equal((await getPostStats({})).total, 0);
   });
 });

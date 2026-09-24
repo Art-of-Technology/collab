@@ -1,5 +1,6 @@
 'use server';
 
+import { postAccessWhere } from '@/lib/post-access';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -11,10 +12,19 @@ import { sanitizeHtmlToPlainText } from '@/lib/html-sanitizer';
  * Get comments for a post
  */
 export async function getComments(postId: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) throw new Error('Unauthorized');
+  const user = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
+  if (!user) throw new Error('User not found');
+  const access = postAccessWhere(postId, user.id);
+  const post = await prisma.post.findFirst({ where: access, select: { id: true } });
+  if (!post) throw new Error('Post not found');
+
   // First, get all top-level comments (those without a parent)
   const topLevelComments = await prisma.comment.findMany({
     where: {
       postId,
+      post: access,
       parentId: null, // Only get comments without a parent
     },
     orderBy: {
@@ -56,6 +66,7 @@ export async function getComments(postId: string) {
   const replies = await prisma.comment.findMany({
     where: {
       postId,
+      post: access,
       NOT: {
         parentId: null, // Only get comments with a parent
       },

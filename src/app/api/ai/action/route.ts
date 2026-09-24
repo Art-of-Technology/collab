@@ -223,6 +223,11 @@ export async function POST(req: Request) {
         if (typeof issueId !== 'string' || !issueId) {
           return NextResponse.json({ error: 'Issue ID is required' }, { status: 400 });
         }
+        if (Object.keys(fields).some(field => ![
+          'title', 'description', 'status', 'priority', 'type', 'assigneeId', 'dueDate',
+        ].includes(field))) {
+          return NextResponse.json({ error: 'Unsupported issue update field' }, { status: 400 });
+        }
         const result = await updateIssue(currentUser.id, issueId, fields, workspace.id);
         if ('error' in result) {
           return NextResponse.json({ error: result.error }, { status: result.status });
