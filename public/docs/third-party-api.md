@@ -19,14 +19,19 @@ Authorization: Bearer <your_access_token>
 
 Access tokens are obtained through the OAuth 2.0 authorization flow. See the [OAuth documentation](#oauth) for details.
 
+Every app-authenticated request also requires the token user to own or actively
+belong to the effective workspace, whether using the token's original workspace
+or a workspace override. A valid token or scope does not preserve access after
+membership revocation; denied workspace access returns HTTP 403
+(`workspace_access_denied`).
+
 ### Notes context and secrets
 
-User-bound app/MCP context, knowledge, system-prompts, AI-context and secrets
-endpoints require active workspace membership or ownership in addition to token
-validation. Token scopes narrow the user's Notes rights; they never grant access
-to otherwise inaccessible notes. Reads and counts apply the same Notes access
-policy before returning content. Restricted notes require authorship or an
-explicit share, even for workspace administrators; expiry also limits access.
+For user-bound app/MCP context, knowledge, system-prompts, AI-context and secrets
+endpoints, token scopes narrow the user's Notes rights; they never grant access
+to otherwise inaccessible notes. Reads and counts apply the
+[Notes access contract](https://github.com/Art-of-Technology/collab/blob/main/docs/security/2026-09-23-hardening.md#notes-access)
+before returning content.
 
 Context updates require edit access. Shared readers cannot edit, and shared
 editors cannot change owner-only settings (`type`, `scope`, `projectId`,

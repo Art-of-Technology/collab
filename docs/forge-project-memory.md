@@ -76,12 +76,14 @@ checks that denied actions never resolve bindings and malformed source links
 return validation errors without side effects. Implementation validation
 reported passing checks, targeted lint and nonincremental TypeScript.
 
-A disposable PostgreSQL + local HTTPS fixture verified the real Notes page and
-server actions: create Draft, approve revision 1, edit Draft revision 2 while
+An earlier implementation's disposable PostgreSQL + local HTTPS fixture verified
+the real Notes page and server actions: create Draft, approve revision 1,
+edit Draft revision 2 while
 revision 1 stays Approved, reject stale approval after a concurrent source
 edit, refresh/review and approve revision 2 with revision 1 Superseded. The
 320px view has no horizontal page overflow. This is fixture evidence, not a
-live Forge or deployment claim.
+live Forge or deployment claim, and does not establish hydrated UI or revocation
+acceptance for the current authorization change.
 
 A deliberately delayed save verified all form inputs and actions are natively
 disabled while pending, then the saved draft is read back. This prevents edits

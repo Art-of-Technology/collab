@@ -19,7 +19,8 @@ Authorization: Bearer <your_access_token>
 
 Access tokens are obtained through the OAuth 2.0 authorization flow. See the [OAuth documentation](oauth-endpoints.md) for details.
 
-The served reference owns the [Notes context and secrets authorization contract](../public/docs/third-party-api.md#notes-context-and-secrets).
+The served reference owns the [current workspace authorization contract](../public/docs/third-party-api.md#authentication)
+and [Notes context and secrets authorization contract](../public/docs/third-party-api.md#notes-context-and-secrets).
 
 ## Scopes
 

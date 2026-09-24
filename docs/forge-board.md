@@ -55,14 +55,17 @@ Run `node --test tests/security/forge-*.test.cjs` for executable checks
 covering projection, tenant denial, configuration and bounded upstream reads.
 Targeted ESLint and nonincremental TypeScript also passed for this slice.
 
-Local browser verification used disposable PostgreSQL, synthetic identities and
-a local HTTPS Forge fixture, not live project data. It checked five status
+Earlier implementation browser verification used disposable PostgreSQL,
+synthetic identities and a local HTTPS Forge fixture, not live project data.
+It checked five status
 columns, search, status and attention filters, issue details, refresh failure
 with retained data, empty results, and revoked-member 404 with zero upstream
 requests. At 320px the page has no horizontal overflow; controls wrap and
 bottom padding lets the last card scroll above the existing chat overlay.
 Enter opens details, Close receives focus, and Escape restores the originating
-card. No Forge requests were issued by the browser.
+card. No Forge requests were issued by the browser. These earlier fixture results
+do not establish hydrated UI or revocation acceptance for the current
+authorization change.
 
 Forge-backed Notes publication is documented in the
 [project memory guide](forge-project-memory.md).

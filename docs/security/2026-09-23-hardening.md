@@ -20,6 +20,13 @@ Status: local implementation; not deployed or release-approved.
   repository relations. Invalid moves fail atomically without clearing relations;
   cross-workspace moves are rejected. Conflicts return 409 for reload and retry.
 - Shared workspace permission queries ignore inactive memberships.
+- Assignee and reporter references require current workspace ownership or active
+  membership. This also applies to the app assignment endpoint: an owner needs
+  no membership row, inactive or foreign assignees are rejected before writes,
+  and the returned assignee contains only `id`, `name`, `email` and `image`.
+- Retained parents, children, labels and activity references are filtered against
+  current access. Activity also checks its historical workspace, project and
+  status references; inaccessible history is hidden without rewriting it.
 
 Saved version/release visibility and authorized regeneration are owned by the
 [saved version authorization guide](version-access-invalidation.md).
@@ -27,14 +34,33 @@ Saved version/release visibility and authorized regeneration are owned by the
 ## Notes access
 
 - Notes detail, edit, delete, history, comparison and restoration enforce the
-  shared access check before content is read or decrypted. Tenant notes require
-  active workspace access, including former authors. Restricted notes require
-  authorship or an explicit share; administrator role alone does not bypass it.
+  shared access check before content is read or decrypted. PROJECT and WORKSPACE
+  notes require current workspace ownership or active membership, including for
+  former authors. Encrypted or restricted notes with a workspace or project also
+  require that access. Any project reference requires access to its workspace;
+  project-only notes derive their workspace from the project.
+- Unrestricted, unencrypted PERSONAL notes without a project preserve author and
+  explicit-share access even if a retained workspace ID is no longer accessible.
+  Restricted notes require authorship or an explicit share; administrator role
+  alone does not bypass it. Expiry denies non-authors; authors still have to pass
+  the tenant checks. Collections and counts use the same read policy.
+- Note-comment notification creation, mentions and notification reads use this
+  policy too. Revoked shares or other access loss hide retained notifications
+  without deleting them. Additional post, issue, feature or leave references
+  retain their own access checks; a note share does not authorize those resources.
 
 Offline regression coverage lives in
 [`tests/security/access-boundaries.test.cjs`](../../tests/security/access-boundaries.test.cjs).
 See [local check mechanics](../../CONTRIBUTING.md#local-checks). Prisma protocol
 checks intercept engine requests before any database connection.
+
+## Workspace realtime access
+
+The workspace event stream requires a current session and workspace ownership or
+active membership. Each Redis message rechecks the session and workspace access;
+access loss closes the stream. Issue events also require current access to every
+referenced issue and any supplied project/status. Missing, deleted or inaccessible
+references suppress delivery, including retained events after access revocation.
 
 ## Preview, redirect and packaging boundaries
 
