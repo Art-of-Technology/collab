@@ -24,8 +24,8 @@ file SHA the reviewer loaded and atomically supersedes the previous approved
 revision. The current file retains the last superseded revision; older history
 belongs to Git. The context selector always includes approved Rules and only
 explicitly selected other approved notes. Drafts and superseded content are
-excluded. This context boundary is implemented; agent execution integration is
-still a separate pending slice.
+excluded. This slice stores and selects approved context; it does not deliver
+that context to running agents. Executor integration is a separate pending slice.
 
 The writer uses Forge's create/update contents API with base64 content and
 existing blob SHA, followed by source readback. A changed SHA is a conflict.

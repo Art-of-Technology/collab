@@ -83,7 +83,7 @@ export function ProjectMemoryEditor({ initial, workspace, project }: {
             {!editing && note.state === 'Draft' && ready.canApprove && <Button disabled={pending} onClick={() => change({ action: 'approve', expectedSha: ready.snapshot.sha, noteId: note.id, revision: note.revision })}>Approve revision {note.revision}</Button>}
           </div>
         </article>)}
-        <p className="text-xs text-muted-foreground">Older revisions remain in the source repository history. Approved Rules always enter project agent context; other approved notes require relevance selection.</p>
+        <p className="text-xs text-muted-foreground">Older revisions remain in the source repository history. Future executor integration will use approved Rules and selected relevant approved notes. Delivery to running agents is not connected yet.</p>
       </>}
     </div>
   </div>;
