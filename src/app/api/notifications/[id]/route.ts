@@ -35,7 +35,7 @@ export async function PATCH(
     
     // Update the notification
     const updatedNotification = await prisma.notification.update({
-      where: { id, ...postNotificationAccessWhere(currentUser.id) },
+      where: { ...postNotificationAccessWhere(currentUser.id), id },
       data: { read }
     });
     

@@ -190,7 +190,7 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
       }
       return { issue };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    if ('error' in result) return result;
+    if ('error' in result) return { error: result.error, status: result.status };
     return { issue: result.issue, oldIssue, assigneeChanged, updateData };
 
   } catch (error) {
