@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -117,6 +116,9 @@ export default async function ProjectNotesPage({ params }: ProjectNotesPageProps
       />
 
       <Suspense fallback={<NotesListSkeleton />}>
+        <Link className="inline-block my-4 text-sm underline" href={`/${workspaceSlugOrId}/projects/${projectSlug}/notes/memory`}>
+          Approved project memory
+        </Link>
         <ProjectNotesList
           projectId={project.id}
           workspaceSlug={workspace.slug}

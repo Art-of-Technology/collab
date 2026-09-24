@@ -64,4 +64,3 @@ for (const projectScoped of [false, true]) {
     assert.equal(logged[0][1], fetchError);
   });
 }
-
