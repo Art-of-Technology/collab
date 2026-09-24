@@ -157,14 +157,20 @@ export async function GET(req: Request) {
         ? link.targetIssue
         : link.sourceIssue;
 
-      // Don't add duplicates
-      if (relatedIssues.some(r => r.id === linkedIssue.id)) continue;
-
       let relation: RelatedIssue['relation'] = 'related';
       if (link.relationType === 'BLOCKS' || link.relationType === 'BLOCKED_BY') {
         relation = (link.relationType === 'BLOCKS') === (link.sourceIssueId === issueId)
           ? 'blocks'
           : 'dependent';
+      }
+
+      const existing = relatedIssues.find(r => r.id === linkedIssue.id);
+      if (existing) {
+        if (relation !== 'related' || existing.relation === 'similar') {
+          existing.relation = relation;
+        }
+        existing.similarity = 1.0;
+        continue;
       }
 
       relatedIssues.push({

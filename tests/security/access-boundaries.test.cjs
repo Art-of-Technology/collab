@@ -445,31 +445,52 @@ test('push delivery uses global subscriptions for direct, bulk and leave callers
   assert.deepEqual(rows.filter(row => row.workspaceId), workspaceRows);
 });
 
-test('related issues classify both blocking types in both directions and retain access controls', async () => {
+test('related issues override heuristics in both directions and retain access controls', async () => {
   let session = { user: { id: 'alice' } };
-  const records = ['a', 'b', 'foreign'].map(id => ({ id, issueKey: id, title: id,
-    workspaceId: id === 'foreign' ? 'foreign' : 'joined', labels: [], projectStatus: { name: 'Open', color: '#fff' } }));
+  const records = ['a', 'b', 'foreign', 'ordinary'].map(id => ({ id, issueKey: id, title: id,
+    workspaceId: id === 'foreign' ? 'foreign' : 'joined', project: { workspaceId: id === 'foreign' ? 'foreign' : 'joined' }, labels: [], projectStatus: { name: 'Open', color: '#fff' } }));
   let links = [];
   const { GET } = load('src/app/api/ai/issues/related/route.ts', {
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
     'next-auth': { getServerSession: async () => session }, '@/lib/auth': { authConfig: {} },
     '@/lib/issue-finder': { userHasWorkspaceAccess },
     '@/lib/prisma': { prisma: {
-      issue: { findFirst: async ({ where }) => records.find(row => matches(row, where)), findMany: async () => [] },
+      issue: { findFirst: async ({ where }) => records.find(row => matches(row, where)),
+        findMany: async ({ where, take }) => records.filter(row => matches(row, where)).slice(0, take) },
       issueRelation: { findMany: async ({ where }) => links.filter(row => matches(row, where)) },
     } },
   }, { URL });
   const request = (id, workspace = 'joined') => GET(new Request(`https://example.test/?issueId=${id}&workspaceId=${workspace}`));
-  for (const [relationType, expected] of [['BLOCKS', ['blocks', 'dependent']], ['BLOCKED_BY', ['dependent', 'blocks']], ['RELATES_TO', ['related', 'related']]]) {
-    links = [{ relationType, sourceIssueId: 'a', targetIssueId: 'b', sourceIssue: records[0], targetIssue: records[1] },
-      { relationType, sourceIssueId: 'a', targetIssueId: 'foreign', sourceIssue: records[0], targetIssue: records[2] }];
-    for (const [index, id] of ['a', 'b'].entries()) {
-      const response = await request(id);
-      assert.equal(response.status, 200);
-      assert.equal(response.body.relatedIssues.length, 1);
-      assert.equal(response.body.relatedIssues[0].id, id === 'a' ? 'b' : 'a');
-      assert.equal(response.body.relatedIssues[0].relation, expected[index], `${relationType}/${id}`);
-      assert.equal(response.body.relatedIssues[0].similarity, 1);
+  for (const overlap of ['none', 'title', 'label', 'both']) {
+    for (const row of records) {
+      row.title = ['title', 'both'].includes(overlap)
+        ? (row.id === 'ordinary' ? 'Database cleanup' : 'Database migration') : row.id.slice(0, 1);
+      row.labels = ['label', 'both'].includes(overlap)
+        ? (row.id === 'ordinary' ? [{ id: 'x' }] : [{ id: 'x' }, { id: 'y' }]) : [];
+    }
+    for (const [relationType, expected] of [['BLOCKS', ['blocks', 'dependent']], ['BLOCKED_BY', ['dependent', 'blocks']], ['RELATES_TO', ['related', 'related']]]) {
+      links = [{ relationType, sourceIssueId: 'a', targetIssueId: 'b', sourceIssue: records[0], targetIssue: records[1] },
+        { relationType, sourceIssueId: 'a', targetIssueId: 'foreign', sourceIssue: records[0], targetIssue: records[2] }];
+      const explicitLinks = links;
+      for (const extraPosition of ['none', 'before', 'after']) {
+        const extra = { ...explicitLinks[0], relationType: 'RELATES_TO' };
+        links = extraPosition === 'none' ? explicitLinks
+          : extraPosition === 'before' ? [extra, ...explicitLinks] : [...explicitLinks, extra];
+        for (const [index, id] of ['a', 'b'].entries()) {
+          const response = await request(id);
+          assert.equal(response.status, 200);
+          assert.equal(response.body.relatedIssues.length, overlap === 'none' ? 1 : 2);
+          assert.equal(new Set(response.body.relatedIssues.map(row => row.id)).size, response.body.relatedIssues.length);
+          if (overlap !== 'none') {
+            assert.equal(response.body.relatedIssues[1].id, 'ordinary');
+            assert.equal(response.body.relatedIssues[1].relation, overlap === 'label' ? 'related' : 'similar');
+            assert.ok(response.body.relatedIssues[1].similarity < 1);
+          }
+          assert.equal(response.body.relatedIssues[0].id, id === 'a' ? 'b' : 'a');
+          assert.equal(response.body.relatedIssues[0].relation, expected[index], `${relationType}/${id}`);
+          assert.equal(response.body.relatedIssues[0].similarity, 1);
+        }
+      }
     }
   }
   assert.equal((await request('foreign')).status, 404);
@@ -554,6 +575,101 @@ test('slash menu commands preserve paragraphs, formatting and inline atoms', asy
     for (const [name, descriptor] of original) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
       else delete globalThis[name];
+    }
+  }
+});
+
+test('chat admission enforces conversation owner and workspace before either stream', async () => {
+  for (const slug of ['cleo', 'coclaw']) {
+    const activity = [];
+    const writes = [];
+    const rows = [
+      { id: 'own', userId: 'alice', workspaceId: 'joined' },
+      { id: 'foreign-owner', userId: 'bob', workspaceId: 'joined' },
+      { id: 'foreign-workspace', userId: 'alice', workspaceId: 'other' },
+    ];
+    let lookupFails = false;
+    const agent = { slug, name: slug, color: '#fff', systemPrompt: 'Test' };
+    const chooseAgent = async () => { activity.push('agent'); return agent; };
+    const { POST } = load('src/app/api/ai/chat/stream/route.ts', {
+      'next/server': { NextResponse: Response },
+      '@/lib/session': { getCurrentUser: async () => ({ id: 'alice', name: 'Alice' }) },
+      '@/lib/prisma': { prisma: {
+        workspace: { findFirst: async ({ where }) => where.id === 'joined' ? { id: 'joined', name: 'Joined', slug: 'joined' } : null },
+        aIConversation: {
+          findFirst: async ({ where }) => {
+            if (lookupFails) throw new Error('Database unavailable');
+            return rows.find(row => matches(row, where)) ?? null;
+          },
+          create: async ({ data }) => { writes.push({ kind: 'conversation', ...data }); return { id: 'new' }; },
+        },
+        aIAgent: { findUnique: async () => ({ id: slug }) },
+        aIMessage: { create: async ({ data }) => { writes.push({ kind: 'message', ...data }); } },
+        coclawChannelConfig: { findMany: async () => [] },
+      } },
+      '@/lib/ai/agents/registry': { getAgent: chooseAgent, getDefaultAgent: chooseAgent },
+      '@/lib/ai/mcp-token': { getMcpToken: async () => { activity.push('token'); return 'test'; } },
+      '@/lib/ai/mcp-client': { createMcpSession: async () => {
+        activity.push('mcp'); return { convertToolsToClaudeFormat: () => [], close: async () => {} };
+      } },
+      '@/lib/coclaw/instance-manager': { coclawManager: { getOrCreateInstance: async () => {
+        activity.push('gateway'); return { port: 1234 };
+      } } },
+      '@/lib/coclaw/key-resolver': { resolveApiKey: async () => {
+        activity.push('key'); return { provider: 'test', key: 'test', source: 'test' };
+      } },
+      '@/lib/secrets/crypto': {},
+      '@/lib/coclaw/notifications': { CoclawNotificationType: { COCLAW_RESPONSE: 'response' },
+        createCoclawNotification: async () => { activity.push('notification'); } },
+    }, {
+      process: { env: {} }, Response, ReadableStream, TextEncoder, TextDecoder, AbortController, setTimeout, clearTimeout,
+      console: { error() {}, warn() {} },
+      fetch: async (url) => {
+        activity.push(url.endsWith('/api/events') ? 'events' : 'provider');
+        if (url.endsWith('/api/events')) return new Response('');
+        const events = slug === 'coclaw'
+          ? [{ choices: [{ delta: { content: 'Reply' }, finish_reason: 'stop' }] }]
+          : [{ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Reply' } },
+            { type: 'message_delta', delta: { stop_reason: 'end_turn' } }];
+        return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
+      },
+    });
+    const request = conversationId => POST(new Request('https://example.test/api/ai/chat/stream', {
+      method: 'POST', body: JSON.stringify({ message: 'Hello', context: { workspace: { id: 'joined' } }, agentSlug: slug, conversationId }),
+    }));
+    for (const [conversationId, status] of [
+      ['foreign-owner', 404], ['foreign-workspace', 404], ['missing', 404],
+      [{ not: '' }, 400], [['own'], 400], [true, 400], [42, 400], ['', 400],
+    ]) {
+      const response = await request(conversationId);
+      await response.text();
+      assert.deepEqual(activity, [], `${slug}: denied input must not dispatch`);
+      assert.deepEqual(writes, [], `${slug}: denied input must not persist`);
+      assert.equal(response.status, status, `${slug}: ${JSON.stringify(conversationId)}`);
+    }
+    lookupFails = true;
+    assert.equal((await request('own')).status, 500);
+    assert.deepEqual(activity, []);
+    assert.deepEqual(writes, []);
+    lookupFails = false;
+    for (const conversationId of ['own', null, undefined]) {
+      activity.length = 0;
+      writes.length = 0;
+      const response = await request(conversationId);
+      const events = (await response.text()).trim().split('\n\n').map(event => JSON.parse(event.slice(6)));
+      assert.equal(response.status, 200);
+      assert.ok(activity.includes('provider'));
+      assert.equal(activity.includes('gateway'), slug === 'coclaw');
+      assert.equal(events.find(event => event.type === 'done')?.fullContent, 'Reply');
+      assert.equal(events.find(event => event.type === 'conversation')?.conversationId, conversationId || 'new');
+      assert.equal(writes.filter(row => row.kind === 'conversation').length, conversationId ? 0 : 1);
+      if (!conversationId) {
+        assert.equal(writes[0].userId, 'alice');
+        assert.equal(writes[0].workspaceId, 'joined');
+      }
+      const messages = writes.filter(row => row.kind === 'message');
+      assert.deepEqual(messages.map(row => [row.conversationId, row.role, row.content]),
+        [[conversationId || 'new', 'user', 'Hello'], [conversationId || 'new', 'assistant', 'Reply']]);
     }
   }
 });

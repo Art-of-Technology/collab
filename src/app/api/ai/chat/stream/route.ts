@@ -61,6 +61,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 403 });
     }
 
+    if (conversationId != null) {
+      if (typeof conversationId !== 'string' || !conversationId) {
+        return NextResponse.json({ error: 'Invalid conversation ID' }, { status: 400 });
+      }
+
+      const conversation = await prisma.aIConversation.findFirst({
+        where: { id: conversationId, userId: currentUser.id, workspaceId: workspace.id },
+        select: { id: true },
+      });
+
+      if (!conversation) {
+        return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+      }
+    }
+
     // Load agent definition — use requested agent or default
     const agent = agentSlug
       ? (await getAgent(agentSlug, prisma)) ?? (await getDefaultAgent(prisma))
