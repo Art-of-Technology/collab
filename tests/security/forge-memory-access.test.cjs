@@ -7,6 +7,7 @@ const ts = require('typescript');
 
 test('memory actions enforce current tenant rights and exact reviewed SHA before approval or writes', async () => {
   let actor = 'owner', role = 'OWNER', allowed = true, reads = 0, writes = 0, bindings = 0;
+  const deniedPermissions = new Set();
   const filename = path.resolve(__dirname, '../../src/lib/forge/memory-service.ts');
   function compile(file, mocks = {}) {
     const loaded = new Module(file, module);
@@ -29,7 +30,7 @@ test('memory actions enforce current tenant rights and exact reviewed SHA before
     '@/lib/auth': { getAuthSession: async () => actor ? { user: { id: actor } } : null },
     '@/lib/slug-resolvers': { resolveWorkspaceSlug: async () => 'workspace' },
     '@/lib/permissions': { Permission: { VIEW_NOTES: 'view', CREATE_NOTE: 'create', EDIT_SELF_NOTE: 'self', EDIT_ANY_NOTE: 'any' },
-      getUserWorkspaceRole: async () => role, checkUserPermission: async (_id, _workspace, permission) => ({ hasPermission: allowed && (role === 'OWNER' || permission !== 'any') }) },
+      getUserWorkspaceRole: async () => role, checkUserPermission: async (_id, _workspace, permission) => ({ hasPermission: allowed && !deniedPermissions.has(permission) && (role === 'OWNER' || permission !== 'any') }) },
     '@/lib/prisma': { prisma: { project: { findFirst: async ({ where }) => { assert.equal(where.workspaceId, 'workspace'); return { id: 'project', name: 'Project' }; } } } },
     './reader': { readForgeBindings: async () => { bindings++; return [binding]; } },
     './memory-store': { readProjectMemory: async () => { reads++; return current; }, writeProjectMemory: async (_binding, sha, next) => {
@@ -47,9 +48,32 @@ test('memory actions enforce current tenant rights and exact reviewed SHA before
   assert.equal((await service.loadProjectMemory('workspace', 'project')).kind, 'not-connected');
   assert.equal(reads, 0); binding = { ...binding, projectId: 'project' };
   const approve = { action: 'approve', noteId: 'rules', revision: 1, expectedSha: 'a'.repeat(40) };
+  const save = { action: 'save', noteId: null, expectedSha: current.sha,
+    draft: { title: 'Rules', type: 'Rules', body: 'New draft', sources: [] } };
+  bindings = 0;
   role = 'MEMBER'; actor = 'other';
   assert.equal((await service.changeProjectMemory('workspace', 'project', approve)).kind, 'denied');
-  assert.equal(reads, 0);
+  deniedPermissions.add('create'); deniedPermissions.add('self');
+  for (const noteId of [null, 'rules']) {
+    assert.equal((await service.changeProjectMemory('workspace', 'project', { ...save, noteId })).kind, 'denied');
+  }
+  assert.equal(bindings, 0); assert.equal(reads, 0); assert.equal(writes, 0);
+  role = 'OWNER'; actor = 'owner'; deniedPermissions.clear();
+  for (const source of ['slack.com/archives/C123/p456', 'https://', '', 'https://[invalid',
+    'http://slack.com/archives/C123/p456', 'https://slack.com.attacker.test/x', 'https://user:password@slack.com/x']) {
+    const draft = { ...save.draft, sources: [source] };
+    assert.equal(model.memoryDraftSchema.safeParse(draft).success, false);
+    assert.deepEqual(await service.changeProjectMemory('workspace', 'project', { ...save, draft }), { kind: 'invalid' });
+  }
+  assert.equal(bindings, 0); assert.equal(reads, 0); assert.equal(writes, 0);
+  assert.equal(current.document, document);
+  role = 'MEMBER'; actor = 'other'; deniedPermissions.add('create'); deniedPermissions.add('self');
+  const view = await service.loadProjectMemory('workspace', 'project');
+  assert.equal(view.kind, 'ready');
+  assert.equal(view.canCreate, false); assert.equal(view.canEditOwn, false);
+  assert.equal(view.canEditAny, false); assert.equal(view.canApprove, false);
+  assert.equal(bindings, 1); assert.equal(reads, 1); assert.equal(writes, 0);
+  deniedPermissions.clear();
   role = 'OWNER'; actor = 'owner';
   assert.equal((await service.changeProjectMemory('workspace', 'project', { ...approve, actorId: 'forged' })).kind, 'invalid');
   current.sha = 'c'.repeat(40); // Another editor changed the draft without changing its revision number.

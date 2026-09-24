@@ -35,8 +35,7 @@ async function authorize(workspaceSlug: string, projectSlug: string) {
   if (!project) return null;
   const can = async (permission: Permission) => (await checkUserPermission(session.user.id, workspaceId, permission)).hasPermission;
   const [canCreate, canEditOwn, canEditAny] = await Promise.all([can(Permission.CREATE_NOTE), can(Permission.EDIT_SELF_NOTE), can(Permission.EDIT_ANY_NOTE)]);
-  const binding = (await readForgeBindings()).find(item => item.workspaceId === workspaceId && item.projectId === project.id);
-  return { project, binding, actorId: session.user.id, canCreate, canEditOwn, canEditAny, canApprove: role === 'OWNER' || role === 'ADMIN' };
+  return { project, workspaceId, actorId: session.user.id, canCreate, canEditOwn, canEditAny, canApprove: role === 'OWNER' || role === 'ADMIN' };
 }
 
 export async function loadProjectMemory(workspaceSlug: string, projectSlug: string): Promise<MemoryView> {
@@ -45,8 +44,9 @@ export async function loadProjectMemory(workspaceSlug: string, projectSlug: stri
     const access = await authorize(workspaceSlug, projectSlug);
     if (!access) return { kind: 'denied' };
     projectName = access.project.name;
-    if (!access.binding?.memory) return { kind: 'not-connected', projectName };
-    const snapshot = await readProjectMemory(access.binding);
+    const binding = (await readForgeBindings()).find(item => item.workspaceId === access.workspaceId && item.projectId === access.project.id);
+    if (!binding?.memory) return { kind: 'not-connected', projectName };
+    const snapshot = await readProjectMemory(binding);
     return { kind: 'ready', projectName, snapshot, actorId: access.actorId, canCreate: access.canCreate,
       canEditOwn: access.canEditOwn, canEditAny: access.canEditAny, canApprove: access.canApprove };
   } catch { return { kind: 'unavailable', projectName }; }
@@ -58,11 +58,12 @@ export async function changeProjectMemory(workspaceSlug: string, projectSlug: st
   try {
     const access = await authorize(workspaceSlug, projectSlug);
     if (!access) return { kind: 'denied' };
-    if (!access.binding?.memory) return { kind: 'unavailable' };
     const command = parsed.data;
     if (command.action === 'approve' && !access.canApprove) return { kind: 'denied' };
     if (command.action === 'save' && (command.noteId === null ? !access.canCreate : !access.canEditOwn && !access.canEditAny)) return { kind: 'denied' };
-    const current = await readProjectMemory(access.binding);
+    const binding = (await readForgeBindings()).find(item => item.workspaceId === access.workspaceId && item.projectId === access.project.id);
+    if (!binding?.memory) return { kind: 'unavailable' };
+    const current = await readProjectMemory(binding);
     if (current.sha !== command.expectedSha) return { kind: 'conflict' };
     const existing = current.document.revisions.find(item => item.id === command.noteId);
     if (command.noteId !== null && !existing) return { kind: 'invalid' };
@@ -72,7 +73,7 @@ export async function changeProjectMemory(workspaceSlug: string, projectSlug: st
     const document = command.action === 'save'
       ? saveMemoryDraft(current.document, command.noteId ?? randomUUID(), command.draft, actor, now)
       : approveMemoryDraft(current.document, command.noteId, command.revision, actor, now);
-    const result = await writeProjectMemory(access.binding, command.expectedSha, document);
+    const result = await writeProjectMemory(binding, command.expectedSha, document);
     if (result.kind !== 'saved') return result;
     return { kind: 'saved', view: await loadProjectMemory(workspaceSlug, projectSlug) };
   } catch { return { kind: 'unavailable' }; }
