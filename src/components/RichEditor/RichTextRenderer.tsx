@@ -40,7 +40,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
       const fallbackUrl = `/${currentWorkspace?.slug || currentWorkspace?.id}/issues/${issueKey}`;
       window.open(fallbackUrl, '_blank');
     }
-  }, [currentWorkspace?.slug, currentWorkspace?.id]);
+  }, [currentWorkspace]);
 
   const openImageInNewTab = useCallback((imageSrc: string) => {
     // Check if it's a base64 data URL
@@ -160,14 +160,14 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         .issue-mention * {
           pointer-events: none;
         }
-        
+
         /* Ensure mention badges are clickable */
         .mention,
         .issue-mention {
           pointer-events: auto;
           user-select: none;
         }
-        
+
         /* Mention badge hover effects */
         .mention,
         .issue-mention {
@@ -175,12 +175,12 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
           transition: all 0.2s ease;
           overflow: hidden;
         }
-        
+
         .mention:hover,
         .issue-mention:hover {
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
-        
+
         /* External link icon animations */
         .mention-external-icon,
         .issue-mention-external-icon {
@@ -191,14 +191,14 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
           margin-left: 0;
           display: inline-block;
         }
-        
+
         .mention:hover .mention-external-icon,
         .issue-mention:hover .issue-mention-external-icon {
           width: 10px;
           opacity: 1;
           margin-left: 4px;
         }
-        
+
         /* Video wrapper styles */
         .video-resizable-container {
           position: relative;
@@ -207,7 +207,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
           margin: 1rem 0;
           line-height: 0;
         }
-        
+
         .video-resizable-container .resizable-video,
         .video-resizable-container video {
           display: block;
@@ -218,28 +218,28 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
           transition: box-shadow 0.2s ease;
           margin:0;
         }
-        
+
         .video-resizable-container:hover .resizable-video,
         .video-resizable-container:hover video {
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
-        
+
         /* Make images clickable */
         .prose img {
           cursor: pointer;
           transition: opacity 0.2s ease;
         }
-        
+
         .prose img:hover {
           opacity: 0.9;
         }
-        
+
         /* Code block highlighting styles */
         .prose :first-child,
         .tiptap :first-child {
           margin-top: 0;
         }
-        
+
         .prose pre,
         .tiptap pre {
           background: #000000;
@@ -249,7 +249,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
           margin: 1.5rem 0;
           padding: 0.75rem 1rem;
         }
-        
+
         .prose pre code,
         .tiptap pre code {
           background: none;
@@ -257,7 +257,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
           font-size: 0.8rem;
           padding: 0;
         }
-        
+
         /* Code syntax highlighting */
         .prose pre .hljs-comment,
         .prose pre .hljs-quote,
@@ -265,7 +265,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         .tiptap pre .hljs-quote {
           color: #616161;
         }
-        
+
         .prose pre .hljs-variable,
         .prose pre .hljs-template-variable,
         .prose pre .hljs-attribute,
@@ -286,7 +286,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         .tiptap pre .hljs-selector-class {
           color: #f98181;
         }
-        
+
         .prose pre .hljs-number,
         .prose pre .hljs-meta,
         .prose pre .hljs-built_in,
@@ -303,7 +303,7 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         .tiptap pre .hljs-params {
           color: #fbbc88;
         }
-        
+
         .prose pre .hljs-string,
         .prose pre .hljs-symbol,
         .prose pre .hljs-bullet,
@@ -312,26 +312,26 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
         .tiptap pre .hljs-bullet {
           color: #b9f18d;
         }
-        
+
         .prose pre .hljs-title,
         .prose pre .hljs-section,
         .tiptap pre .hljs-title,
         .tiptap pre .hljs-section {
           color: #faf594;
         }
-        
+
         .prose pre .hljs-keyword,
         .prose pre .hljs-selector-tag,
         .tiptap pre .hljs-keyword,
         .tiptap pre .hljs-selector-tag {
           color: #70cff8;
         }
-        
+
         .prose pre .hljs-emphasis,
         .tiptap pre .hljs-emphasis {
           font-style: italic;
         }
-        
+
         .prose pre .hljs-strong,
         .tiptap pre .hljs-strong {
           font-weight: 700;

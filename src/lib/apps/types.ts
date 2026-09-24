@@ -105,7 +105,7 @@ export interface AppRegistration {
   name: string;
   slug: string;
   iconUrl?: string;
-  manifestUrl: string;
+  manifestUrl: string | null;
   publisherId: string;
   status: 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'SUSPENDED';
   latestVersion?: string;

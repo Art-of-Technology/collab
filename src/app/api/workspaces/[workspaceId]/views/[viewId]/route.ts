@@ -24,7 +24,7 @@ const updateViewSchema = z.strictObject({
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { workspaceId: string; viewId: string } }
+  { params }: { params: Promise<{ workspaceId: string; viewId: string }> }
 ) {
   try {
     const session = await getServerSession(authConfig);
@@ -195,7 +195,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { workspaceId: string; viewId: string } }
+  { params }: { params: Promise<{ workspaceId: string; viewId: string }> }
 ) {
   try {
     const session = await getServerSession(authConfig);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { Permission, WorkspaceRole, checkUserPermission } from '@/lib/permissions';
 import { ensureRolePermissionsForWorkspaceRole } from '@/lib/role-permission-defaults';
@@ -8,7 +8,7 @@ import { ensureRolePermissionsForWorkspaceRole } from '@/lib/role-permission-def
 // PUT /api/workspaces/[workspaceId]/members/[memberId]/role - Update member role
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { workspaceId: string; memberId: string } }
+  { params }: { params: Promise<{ workspaceId: string; memberId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);

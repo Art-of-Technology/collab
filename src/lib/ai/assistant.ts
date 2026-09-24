@@ -241,12 +241,7 @@ export class AgentAssistant {
             // Execute the tool with error handling
             let result: string;
             try {
-              result = await executeTool(toolName, toolInput, {
-                workspaceId: context.workspace.id,
-                workspaceSlug: this.workspaceSlug || context.workspace.slug,
-                userId: this.userId || context.user.id,
-                prisma: this.prisma,
-              });
+              result = await executeTool();
             } catch (error) {
               console.error(`Error executing tool ${toolName}:`, error);
               result = JSON.stringify({

@@ -61,6 +61,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 403 });
     }
 
+    if (conversationId != null) {
+      if (typeof conversationId !== 'string' || !conversationId) {
+        return NextResponse.json({ error: 'Invalid conversation ID' }, { status: 400 });
+      }
+
+      const conversation = await prisma.aIConversation.findFirst({
+        where: { id: conversationId, userId: currentUser.id, workspaceId: workspace.id },
+        select: { id: true },
+      });
+
+      if (!conversation) {
+        return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+      }
+    }
+
     // Load agent definition — use requested agent or default
     const agent = agentSlug
       ? (await getAgent(agentSlug, prisma)) ?? (await getDefaultAgent(prisma))
@@ -624,7 +639,7 @@ function createAnthropicStreamWithMcp(
         // Send conversation ID
         sendEvent(controller, {
           type: 'conversation',
-          conversationId: convoId,
+          conversationId: conversationId,
         });
 
         // Send completion event
@@ -634,7 +649,7 @@ function createAnthropicStreamWithMcp(
         });
 
         // Persist assistant message
-        if (convoId && fullTextContent) {
+        if (conversationId && fullTextContent) {
           try {
             const agentRecord = await prisma.aIAgent
               .findUnique({ where: { slug: agent.slug }, select: { id: true } })
@@ -642,7 +657,7 @@ function createAnthropicStreamWithMcp(
 
             await prisma.aIMessage.create({
               data: {
-                conversationId: convoId,
+                conversationId: conversationId,
                 agentId: agentRecord?.id || null,
                 role: 'assistant',
                 content: fullTextContent,
@@ -697,6 +712,7 @@ async function createCoclawProxyStream(
 
   return new ReadableStream({
     async start(controller) {
+      const eventsAbort = new AbortController();
       try {
         // Send agent info
         sendEvent(controller, {
@@ -805,7 +821,7 @@ async function createCoclawProxyStream(
         // tool_call, agent_start, etc.) to /api/events as SSE. We listen
         // on this stream in parallel with the chat request and forward
         // tool events to the frontend for live tool call rendering.
-        const eventsAbort = new AbortController();
+
         let toolUseCounter = 0;
         const activeToolIds = new Map<string, string>(); // tool name → toolUseId
 

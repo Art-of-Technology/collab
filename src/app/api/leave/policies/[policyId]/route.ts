@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { checkUserPermission, Permission } from "@/lib/permissions";
 import { z } from "zod";
@@ -44,7 +44,7 @@ const updateLeavePolicySchema = z.object({
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { policyId: string } }
+  { params }: { params: Promise<{ policyId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -62,12 +62,12 @@ export async function GET(
     }
 
     const policy = await prisma.leavePolicy.findUnique({
-      where: { id: params.policyId },
+      where: { id: (await params).policyId },
       include: {
         workspace: {
           include: {
             members: {
-              where: { userId: user.id },
+              where: { userId: user.id, status: true },
             },
           },
         },
@@ -98,6 +98,17 @@ export async function GET(
       );
     }
 
+    const canManageLeave = await checkUserPermission(
+      user.id,
+      policy.workspaceId,
+      Permission.MANAGE_LEAVE
+    );
+
+    if (!canManageLeave.hasPermission) {
+      const { id, name, group, isPaid, trackIn } = policy;
+      return NextResponse.json({ id, name, group, isPaid, trackIn });
+    }
+
     // Remove workspace from response
     const { workspace, ...policyData } = policy;
 
@@ -116,7 +127,7 @@ export async function GET(
  */
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { policyId: string } }
+  { params }: { params: Promise<{ policyId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -148,7 +159,7 @@ export async function PUT(
 
     // Check if policy exists and get its workspace
     const existingPolicy = await prisma.leavePolicy.findUnique({
-      where: { id: params.policyId },
+      where: { id: (await params).policyId },
       select: { workspaceId: true },
     });
 
@@ -199,7 +210,7 @@ export async function PUT(
 
     // Update the policy
     const updatedPolicy = await prisma.leavePolicy.update({
-      where: { id: params.policyId },
+      where: { id: (await params).policyId },
       data: validated.data,
       include: {
         _count: {
@@ -229,7 +240,7 @@ export async function PUT(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { policyId: string } }
+  { params }: { params: Promise<{ policyId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -248,7 +259,7 @@ export async function DELETE(
 
     // Check if policy exists and get its workspace and usage
     const existingPolicy = await prisma.leavePolicy.findUnique({
-      where: { id: params.policyId },
+      where: { id: (await params).policyId },
       include: {
         _count: {
           select: {
@@ -308,7 +319,7 @@ export async function DELETE(
 
     // Delete the policy
     await prisma.leavePolicy.delete({
-      where: { id: params.policyId },
+      where: { id: (await params).policyId },
     });
 
     return NextResponse.json({ message: "Policy deleted successfully" });

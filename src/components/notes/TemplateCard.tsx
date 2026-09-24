@@ -1,4 +1,6 @@
 "use client";
+import { createElement } from "react";
+
 
 import { NoteType, NoteScope } from "@prisma/client";
 import { NOTE_TYPE_CONFIGS, NOTE_SCOPE_CONFIGS } from "@/lib/note-types";
@@ -61,12 +63,7 @@ export function TemplateCard({
           isSelected ? "bg-blue-500/10" : "bg-collab-800 group-hover:bg-collab-700"
         )}
       >
-        <Icon
-          className={cn(
-            "h-4.5 w-4.5 transition-colors",
-            isSelected ? "text-blue-500" : typeConfig.color
-          )}
-        />
+        {createElement(Icon, { className: cn("h-4.5 w-4.5 transition-colors", isSelected ? "text-blue-500" : typeConfig.color) })}
       </div>
 
       {/* Content */}

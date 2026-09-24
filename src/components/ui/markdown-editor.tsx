@@ -54,7 +54,7 @@ import { type Task, TaskMentionSuggestion } from "@/components/ui/task-mention-s
 import { type Epic, EpicMentionSuggestion } from "@/components/ui/epic-mention-suggestion";
 import { type Story, StoryMentionSuggestion } from "@/components/ui/story-mention-suggestion";
 import { type Milestone, MilestoneMentionSuggestion } from "@/components/ui/milestone-mention-suggestion";
-import { CommandMenu, type CommandOption } from "@/components/ui/command-menu";
+import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { mergeAttributes } from '@tiptap/core'
 import { Node as TiptapNode } from '@tiptap/core'
@@ -1878,20 +1878,20 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   }, [editor]);
 
   // Handle command selection
-  const handleCommandSelect = useCallback((command: CommandOption) => {
+  const handleCommandSelect = useCallback((command: { id: string }) => {
     if (!editor) return;
 
-    const currentPosition = editor.view.state.selection.from;
+    const { $from } = editor.state.selection;
 
     // Find and remove the slash trigger
-    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    const content = $from.parent.textBetween(0, $from.parentOffset, ' ', ' ');
     const lastSlashIndex = content.lastIndexOf('/');
 
     if (lastSlashIndex !== -1) {
       // Delete the slash and any text after it
       editor.chain().focus().deleteRange({
-        from: lastSlashIndex,
-        to: currentPosition
+        from: $from.start() + lastSlashIndex,
+        to: $from.pos
       }).run();
     }
 
@@ -2218,6 +2218,22 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     return () => {
       editor.view.dom.removeEventListener('keydown', handleKeyDown);
     };
+  }, [editor, showCommandMenu]);
+
+  // Escape closes only the command menu; the window capture phase runs before Radix's document listener that dismisses a parent dialog
+  useEffect(() => {
+    if (!showCommandMenu) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setShowCommandMenu(false);
+      editor?.commands.focus();
+    };
+
+    window.addEventListener('keydown', handleEscape, true);
+    return () => window.removeEventListener('keydown', handleEscape, true);
   }, [editor, showCommandMenu]);
 
   // Close mention suggestions when clicking outside
@@ -2943,10 +2959,16 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
             }}
             className="transition-all duration-200 animate-in slide-in-from-left-1"
           >
-            <CommandMenu
-              onSelect={handleCommandSelect}
-              onEscape={() => setShowCommandMenu(false)}
-            />
+            <Command>
+              <CommandInput autoFocus placeholder="Insert mention…" aria-label="Insert mention" />
+              <CommandList>
+                {["user", "task", "epic", "story", "milestone"].map(type => (
+                  <CommandItem key={type} onSelect={() => handleCommandSelect({ id: `mention-${type}` })}>
+                    Mention {type}
+                  </CommandItem>
+                ))}
+              </CommandList>
+            </Command>
           </div>
         )}
       </div>

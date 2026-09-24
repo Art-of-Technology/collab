@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 /**
  * Coclaw Channel Messages API
  *
@@ -150,7 +151,7 @@ export async function POST(
     role: string;
     conversation_id?: string;
     workspace_id?: string;
-    metadata?: Record<string, unknown>;
+    metadata?: Prisma.InputJsonObject;
   };
 
   try {

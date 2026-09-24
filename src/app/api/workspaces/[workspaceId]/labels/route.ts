@@ -6,7 +6,7 @@ import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 // GET /api/workspaces/[workspaceId]/labels - List labels for a workspace
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     const user = await getCurrentUser();

@@ -660,7 +660,7 @@ export default function ViewRenderer({
       issues: filteredIssues,
       workspace,
       currentUser,
-      activeFilters,
+      activeFilters: Object.fromEntries(Object.entries(activeFilters).filter(([key, value]) => key !== "actions" && value !== undefined)),
       projectId: projectIds?.[0] || view.projects?.[0]?.id || '',
       workspaceId: workspace.id,
       currentUserId: currentUser.id,

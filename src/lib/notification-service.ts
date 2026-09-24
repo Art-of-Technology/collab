@@ -454,53 +454,6 @@ export class NotificationService {
     }
   }
 
-  // === ISSUE FOLLOWER METHODS ===
-
-  /**
-   * Add a user as a follower of an issue
-   * @param issueId - Issue ID to follow
-   * @param userId - User ID to add as follower
-   */
-  static async addIssueFollower(issueId: string, userId: string): Promise<void> {
-    try {
-      await prisma.issueFollower.upsert({
-        where: {
-          issueId_userId: {
-            issueId,
-            userId,
-          },
-        },
-        update: {},
-        create: {
-          issueId,
-          userId,
-        },
-      });
-    } catch (error) {
-      logger.error("Failed to add issue follower", error, { issueId, userId });
-      throw error;
-    }
-  }
-
-  /**
-   * Remove a user as a follower of an issue
-   * @param issueId - Issue ID to unfollow
-   * @param userId - User ID to remove as follower
-   */
-  static async removeIssueFollower(issueId: string, userId: string): Promise<void> {
-    try {
-      await prisma.issueFollower.deleteMany({
-        where: {
-          issueId,
-          userId,
-        },
-      });
-    } catch (error) {
-      logger.error("Failed to remove issue follower", error, { issueId, userId });
-      throw error;
-    }
-  }
-
   // Removed unused: getIssueFollowers, isUserFollowingIssue, autoFollowIssue
 
   /**
@@ -510,8 +463,8 @@ export class NotificationService {
    */
   static async getUserPreferences(userId: string): Promise<any> {
     try {
-      const preferences = await prisma.notificationPreferences.findUnique({
-        where: { userId },
+      const preferences = await prisma.notificationPreferences.findFirst({
+        where: { userId, workspaceId: null },
       });
 
       // Return default preferences if none exist
@@ -884,122 +837,6 @@ export class NotificationService {
     }
   }
 
-  // === TASK MENTION HANDLING ===
-
-  /**
-   * Create mention notifications for task comments
-   */
-  static async createTaskCommentMentionNotifications(
-    issueId: string,
-    taskCommentId: string,
-    mentionedUserIds: string[],
-    senderId: string,
-    content: string
-  ): Promise<void> {
-    if (mentionedUserIds.length === 0) return;
-
-    try {
-      const safeContent = sanitizeHtmlToPlainText(content);
-      const notifications = mentionedUserIds
-        .filter((userId) => userId !== senderId)
-        .map((userId) => ({
-          type: NotificationType.ISSUE_MENTION.toString(),
-          content: `mentioned you in a task comment: "${
-            safeContent.length > 100 ? safeContent.substring(0, 97) + "..." : safeContent
-          }"`,
-          userId,
-          senderId,
-          taskId,
-          taskCommentId,
-          read: false,
-        }));
-
-      // Return early if there are no notifications to process
-      if (notifications.length === 0) return;
-
-      // Bounce filter per user/content (batch)
-      const bouncedSet = await NotificationService.getBouncedUserIdsForContent(
-        notifications.map((n) => n.userId),
-        // content is uniform per n due to safeContent-based string building
-        notifications[0].content
-      );
-      const dedupedNotifications = notifications.filter(
-        (n) => !bouncedSet.has(n.userId)
-      );
-
-      if (dedupedNotifications.length > 0) {
-        await prisma.notification.createMany({ data: dedupedNotifications });
-        logger.info("Task comment mention notifications created", {
-          count: dedupedNotifications.length,
-          taskId,
-          taskCommentId,
-        });
-
-        const pushPromises = dedupedNotifications.map((n) =>
-          this.sendPushNotificationForUser(
-            n.userId,
-            NotificationType.ISSUE_MENTION,
-            n.content
-          )
-        );
-        await Promise.allSettled(pushPromises);
-      }
-
-      await this.autoFollowTask(taskId, mentionedUserIds);
-    } catch (error) {
-      logger.error("Failed to create task comment mention notifications", error, {
-        taskId,
-        taskCommentId,
-        mentionedUserCount: mentionedUserIds.length,
-      });
-      throw error;
-    }
-  }
-
-  // === BOARD FOLLOWER METHODS ===
-
-  /**
-   * Notify all followers of a board
-   * @param options - Board follower notification options
-   */
-  static async notifyBoardFollowers(
-    options: BoardFollowerNotificationOptions
-  ): Promise<void> {
-    const {
-      boardId,
-      taskId,
-      senderId,
-      type,
-      content,
-      excludeUserIds = [],
-      skipTaskIdReference = false,
-    } = options;
-
-    const followerQuery = prisma.boardFollower.findMany({
-      where: {
-        boardId: boardId,
-        userId: {
-          notIn: [senderId, ...excludeUserIds],
-        },
-      },
-      select: {
-        userId: true,
-      },
-    });
-
-    const additionalData = skipTaskIdReference ? {} : { taskId };
-
-    await this.createFollowerNotifications(
-      followerQuery,
-      type,
-      content,
-      senderId,
-      excludeUserIds,
-      additionalData
-    );
-  }
-  // Removed unused board follower helpers: add/remove/get/isFollowing/autoFollow
-
   // ====== LEAVE REQUEST NOTIFICATION METHODS ======
 
   /**
@@ -1331,7 +1168,7 @@ export class NotificationService {
     // Send push notification if enabled
     if (preferences.pushNotificationsEnabled && preferences.pushSubscription) {
       try {
-        await sendPushNotification(preferences.pushSubscription, {
+        await sendPushNotification(leaveRequest.userId, {
           title: "Leave Request Update",
           body: content,
           icon: "/icon-192x192.png",
@@ -1409,7 +1246,7 @@ export class NotificationService {
         preferences.pushSubscription
       ) {
         try {
-          await sendPushNotification(preferences.pushSubscription, {
+          await sendPushNotification(managerId, {
             title: "Leave Request Alert",
             body: content,
             icon: "/icon-192x192.png",
@@ -1482,7 +1319,7 @@ export class NotificationService {
         preferences.pushSubscription
       ) {
         try {
-          await sendPushNotification(preferences.pushSubscription, {
+          await sendPushNotification(hrId, {
             title: "Leave Request - HR Alert",
             body: content,
             icon: "/icon-192x192.png",

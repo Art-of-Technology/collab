@@ -1,3 +1,4 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authConfig } from "@/lib/auth";
@@ -30,20 +31,15 @@ export async function GET(req: Request) {
     }
 
     // Verify workspace access
-    const membership = await prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId,
-        userId: session.user.id,
-      },
-    });
+    const membership = await userHasWorkspaceAccess(session.user.id, workspaceId);
 
     if (!membership) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
     // Get the current issue
-    const currentIssue = await prisma.issue.findUnique({
-      where: { id: issueId },
+    const currentIssue = await prisma.issue.findFirst({
+      where: { id: issueId, workspaceId },
       include: {
         labels: true,
         project: true,
@@ -73,7 +69,7 @@ export async function GET(req: Request) {
           })),
         },
         include: {
-          status: { select: { name: true, color: true } },
+          projectStatus: { select: { name: true, color: true } },
         },
         take: 5,
       });
@@ -89,10 +85,10 @@ export async function GET(req: Request) {
         if (similarity > 0.2) {
           relatedIssues.push({
             id: issue.id,
-            issueKey: issue.issueKey,
+            issueKey: issue.issueKey ?? issue.id,
             title: issue.title,
-            status: issue.status?.name,
-            statusColor: issue.status?.color || undefined,
+            status: issue.projectStatus?.name,
+            statusColor: issue.projectStatus?.color || undefined,
             priority: issue.priority || undefined,
             similarity,
             relation: 'similar',
@@ -112,7 +108,7 @@ export async function GET(req: Request) {
         },
         include: {
           labels: true,
-          status: { select: { name: true, color: true } },
+          projectStatus: { select: { name: true, color: true } },
         },
         take: 5,
       });
@@ -126,10 +122,10 @@ export async function GET(req: Request) {
 
         relatedIssues.push({
           id: issue.id,
-          issueKey: issue.issueKey,
+          issueKey: issue.issueKey ?? issue.id,
           title: issue.title,
-          status: issue.status?.name,
-          statusColor: issue.status?.color || undefined,
+          status: issue.projectStatus?.name,
+          statusColor: issue.projectStatus?.color || undefined,
           priority: issue.priority || undefined,
           similarity,
           relation: 'related',
@@ -138,7 +134,7 @@ export async function GET(req: Request) {
     }
 
     // 3. Find explicit issue links
-    const linkedIssues = await prisma.issueLink.findMany({
+    const linkedIssues = await prisma.issueRelation.findMany({
       where: {
         OR: [
           { sourceIssueId: issueId },
@@ -147,35 +143,42 @@ export async function GET(req: Request) {
       },
       include: {
         sourceIssue: {
-          include: { status: { select: { name: true, color: true } } },
+          include: { projectStatus: { select: { name: true, color: true } } },
         },
         targetIssue: {
-          include: { status: { select: { name: true, color: true } } },
+          include: { projectStatus: { select: { name: true, color: true } } },
         },
       },
     });
 
     for (const link of linkedIssues) {
+      if (link.sourceIssue.workspaceId !== workspaceId || link.targetIssue.workspaceId !== workspaceId) continue;
       const linkedIssue = link.sourceIssueId === issueId
         ? link.targetIssue
         : link.sourceIssue;
 
-      // Don't add duplicates
-      if (relatedIssues.some(r => r.id === linkedIssue.id)) continue;
-
       let relation: RelatedIssue['relation'] = 'related';
-      if (link.type === 'blocks' && link.sourceIssueId === issueId) {
-        relation = 'blocks';
-      } else if (link.type === 'blocks' && link.targetIssueId === issueId) {
-        relation = 'dependent';
+      if (link.relationType === 'BLOCKS' || link.relationType === 'BLOCKED_BY') {
+        relation = (link.relationType === 'BLOCKS') === (link.sourceIssueId === issueId)
+          ? 'blocks'
+          : 'dependent';
+      }
+
+      const existing = relatedIssues.find(r => r.id === linkedIssue.id);
+      if (existing) {
+        if (relation !== 'related' || existing.relation === 'similar') {
+          existing.relation = relation;
+        }
+        existing.similarity = 1.0;
+        continue;
       }
 
       relatedIssues.push({
         id: linkedIssue.id,
-        issueKey: linkedIssue.issueKey,
+        issueKey: linkedIssue.issueKey ?? linkedIssue.id,
         title: linkedIssue.title,
-        status: linkedIssue.status?.name,
-        statusColor: linkedIssue.status?.color || undefined,
+        status: linkedIssue.projectStatus?.name,
+        statusColor: linkedIssue.projectStatus?.color || undefined,
         priority: linkedIssue.priority || undefined,
         similarity: 1.0,
         relation,

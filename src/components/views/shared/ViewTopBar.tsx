@@ -401,9 +401,7 @@ export default function ViewTopBar({
 
   // ─── Reset filter search when dropdown closes ─────────────
 
-  useEffect(() => {
-    if (!filterOpen) setFilterSearch('');
-  }, [filterOpen]);
+
 
   useEffect(() => {
     if (filterOpen) {
@@ -496,7 +494,7 @@ export default function ViewTopBar({
     switch (catKey) {
       case 'status':
         return uniqueStatuses.map(status => {
-          const Icon = STATUS_ICON_MAP[status.iconName] || Circle;
+          const Icon = STATUS_ICON_MAP[status.iconName ?? ""] || Circle;
           const selected = isStatusSelected(status.name);
           return (
             <DropdownMenuItem
@@ -654,7 +652,7 @@ export default function ViewTopBar({
         {!isPlanning && (
           <div className="flex items-center gap-0.5">
             {/* ────── Filter Dropdown ────── */}
-            <DropdownMenu open={filterOpen} onOpenChange={setFilterOpen}>
+            <DropdownMenu open={filterOpen} onOpenChange={(open) => { setFilterOpen(open); if (!open) setFilterSearch(''); }}>
               <DropdownMenuTrigger asChild>
                 <button
                   className={cn(
@@ -684,7 +682,6 @@ export default function ViewTopBar({
                 sideOffset={4}
               >
                 {/* Sticky search */}
-                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
                 <div
                   className="px-2.5 pt-2.5 pb-1.5"
                   onKeyDown={e => e.stopPropagation()}
@@ -768,7 +765,7 @@ export default function ViewTopBar({
                     <div className="px-2.5 py-2">
                       <button
                         type="button"
-                        onClick={() => { onClearAllFilters(); setFilterOpen(false); }}
+                        onClick={() => { onClearAllFilters(); setFilterOpen(false); setFilterSearch(''); }}
                         className="w-full text-[12px] text-collab-500 hover:text-collab-300 transition-colors text-center py-1 rounded hover:bg-white/[0.06]"
                       >
                         Clear all filters

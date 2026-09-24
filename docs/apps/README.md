@@ -259,10 +259,7 @@ For `mfe_remote` app types, the `mfe` configuration object is required:
 
 ## Environment & Local Setup
 - Define `APP_TOKENS_KEY` as a 32-character string in `.env` to enable token encryption/decryption.
-- Standard local workflow:
-  1. Install dependencies: `npm install`.
-  2. Run migrations: `npm run db:migrate`.
-  3. Start dev server: `npm run dev` and visit `/dev/apps`.
+- Follow the [installation guide](../../README.md#installation), then visit `/dev/apps`.
 - Sandbox manifest hosts can be HTTP (localhost) in development; production requires HTTPS.
 
 ## Useful UI Routes

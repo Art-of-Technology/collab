@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import webpush from 'web-push';
 import { prisma } from '@/lib/prisma';
 import { EncryptionService } from '@/lib/encryption';
@@ -163,7 +164,7 @@ export async function sendPushNotification(
 
     // Get user's notification preferences
     const preferences = await prisma.notificationPreferences.findFirst({
-      where: { userId },
+      where: { userId, workspaceId: null },
       select: {
         pushNotificationsEnabled: true,
         pushSubscription: true,
@@ -209,10 +210,10 @@ export async function sendPushNotification(
       // Handle subscription expired or invalid
       if (error.message.includes('410') || error.message.includes('invalid')) {
         // Remove invalid subscription
-        await prisma.notificationPreferences.update({
-          where: { userId },
+        await prisma.notificationPreferences.updateMany({
+          where: { userId, workspaceId: null },
           data: {
-            pushSubscription: null,
+            pushSubscription: Prisma.DbNull,
             pushNotificationsEnabled: false,
           },
         });

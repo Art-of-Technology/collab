@@ -134,6 +134,7 @@ export async function POST(
       provider: keyResolution.provider,
       port: 0, // Will be allocated by the manager
       memoryBackend: 'collab',
+      channels: [],
       qdrantCollection: process.env.QDRANT_COLLECTION || 'collab_context',
       embeddingProvider: `custom:${embeddingApiUrl}`,
       embeddingModel: process.env.EMBEDDING_MODEL || 'all-MiniLM-L6-v2',

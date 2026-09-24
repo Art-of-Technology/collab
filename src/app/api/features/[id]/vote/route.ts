@@ -10,7 +10,7 @@ const voteSchema = z.object({
 // POST /api/features/:id/vote - Vote on a feature request
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getAuthSession();

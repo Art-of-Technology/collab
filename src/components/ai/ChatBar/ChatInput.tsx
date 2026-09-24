@@ -110,7 +110,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval>>();
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   // Agent dropdown state
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
@@ -143,6 +143,8 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     }
   }, [value]);
 
+  if (!isRecording && recordingTime !== 0) setRecordingTime(0);
+
   // Recording timer
   useEffect(() => {
     if (isRecording) {
@@ -153,7 +155,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
       }
-      setRecordingTime(0);
     }
     return () => {
       if (recordingTimerRef.current) {
@@ -351,9 +352,9 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
                     key={i}
                     className="w-0.5 rounded-full bg-white/40 animate-pulse"
                     style={{
-                      height: `${Math.max(15, Math.random() * 100)}%`,
+                      height: `${15 + ((i * 37) % 85)}%`,
                       animationDelay: `${i * 0.05}s`,
-                      animationDuration: `${0.5 + Math.random() * 0.5}s`,
+                      animationDuration: `${0.5 + (i % 5) * 0.1}s`,
                     }}
                   />
                 ))}

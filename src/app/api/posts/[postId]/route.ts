@@ -1,23 +1,35 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { userSelectFields } from "@/lib/user-utils";
 
 // Get a single post
 export async function GET(
   req: Request,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
-    const post = await prisma.post.findUnique({
+    const user = await getCurrentUser();
+    if (!user?.id) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const post = await prisma.post.findFirst({
       where: {
-        id: params.postId,
+        id: (await params).postId,
+        workspace: {
+          OR: [
+            { ownerId: user.id },
+            { members: { some: { userId: user.id, status: true } } },
+          ],
+        },
       },
       include: {
-        author: true,
+        author: { select: userSelectFields },
         tags: true,
         comments: {
           include: {
-            author: true,
+            author: { select: userSelectFields },
           },
           orderBy: {
             createdAt: "asc",
@@ -41,7 +53,7 @@ export async function GET(
 // Update a post
 export async function PATCH(
   req: Request,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -159,7 +171,7 @@ export async function PATCH(
 // Delete a post
 export async function DELETE(
   req: Request,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
     const user = await getCurrentUser();

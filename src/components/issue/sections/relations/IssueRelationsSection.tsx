@@ -46,7 +46,7 @@ export function IssueRelationsSection({
   const subIssueProgress = useMemo(() => {
     if (!relations?.children) return null;
     return calculateSubIssueProgress(relations.children);
-  }, [relations?.children]);
+  }, [relations]);
 
   // Calculate total relations count (excluding children/sub-issues)
   const relationsCount = useMemo(() => {
@@ -86,7 +86,7 @@ export function IssueRelationsSection({
     // Relations query will be invalidated automatically by the mutation
     // No need to manually refetch or call onRefresh
     setActiveInlineCreator(null);
-  }, [issue?.issueKey, workspaceId, addMultipleRelationsMutation]);
+  }, [issue, workspaceId, addMultipleRelationsMutation]);
 
   const handleRemoveRelation = useCallback(async (relationId: string, relationType: IssueRelationType) => {
     if (!issue?.issueKey) return;
@@ -99,7 +99,7 @@ export function IssueRelationsSection({
 
     // Relations query will be invalidated automatically by the mutation
     // No need to manually refetch or call onRefresh
-  }, [issue?.issueKey, workspaceId, removeRelationMutation]);
+  }, [issue, workspaceId, removeRelationMutation]);
 
   const toggleGroupExpansion = useCallback((relationType: IssueRelationType) => {
     setExpandedGroups(prev => {

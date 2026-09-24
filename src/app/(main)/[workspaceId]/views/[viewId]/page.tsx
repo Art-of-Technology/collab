@@ -5,10 +5,10 @@ import { prisma } from '@/lib/prisma';
 import ViewRenderer from '@/components/views/ViewRenderer';
 
 interface ViewPageProps {
-  params: {
+  params: Promise<{
     workspaceId: string;
     viewId: string; // Now interpreted as viewSlug
-  };
+  }>;
 }
 
 export default async function ViewPage({ params }: ViewPageProps) {

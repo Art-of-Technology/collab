@@ -41,7 +41,7 @@ export default function UnifiedTimeline({
   const allItems = useMemo(() => {
     if (!data?.pages) return [];
     return data.pages.flatMap((page) => page.timeline);
-  }, [data?.pages]);
+  }, [data]);
 
   // Filter items based on search query
   const filteredItems = useMemo(() => {

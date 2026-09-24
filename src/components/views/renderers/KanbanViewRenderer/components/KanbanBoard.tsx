@@ -142,7 +142,7 @@ function KanbanBoard({
     isScrollListenerAttachedRef.current = false;
   }, [handleContainerScroll]);
 
-  const runAutoScroll = useCallback((timestamp?: number) => {
+  const runAutoScroll = useCallback(function runAutoScroll(timestamp?: number) {
     const container = scrollContainerRef.current;
     if (!container) {
       autoScrollState.current.rafId = 0;
@@ -302,7 +302,7 @@ function KanbanBoard({
     processPointerState(false);
   }, [processPointerState]);
 
-  const dragMonitorLoop = useCallback(() => {
+  const dragMonitorLoop = useCallback(function dragMonitorLoop() {
     if (!processPointerState(true)) {
       dragMonitorRafRef.current = 0;
       return;
@@ -499,9 +499,9 @@ function KanbanBoard({
           )}
         </Droppable>
       </DragDropContext>
-      
+
       {/* Minimap for horizontal scroll navigation */}
-      <KanbanMinimap 
+      <KanbanMinimap
         scrollContainerRef={scrollContainerRef}
         columns={columns}
       />

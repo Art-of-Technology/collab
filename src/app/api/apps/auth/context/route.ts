@@ -81,7 +81,7 @@ export const GET = withAppAuth(
       }
 
       // Exclude secret context types (use secrets endpoint instead)
-      const secretTypes = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
+      const secretTypes: NoteType[] = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
 
       // Handle type filter: if specific type requested, validate and use it
       // Otherwise, exclude secret types from results
@@ -213,7 +213,7 @@ export const POST = withAppAuth(
       }
 
       // Prevent creating secret context documents via this endpoint
-      const secretTypes = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
+      const secretTypes: NoteType[] = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
       if (secretTypes.includes(noteData.type)) {
         return NextResponse.json(
           { error: 'forbidden', error_description: 'Cannot create secret context documents via this endpoint' },

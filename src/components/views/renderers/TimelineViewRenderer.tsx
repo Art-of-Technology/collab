@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/ui/user-avatar';
-import { 
+import {
   Calendar,
   Clock,
   Plus,
@@ -16,6 +16,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ViewFilters from '../shared/ViewFilters';
 import { IssueDetailModal } from '@/components/issue/IssueDetailModal';
 
 interface Issue {
@@ -50,15 +51,16 @@ interface TimelineViewRendererProps {
   onIssueUpdate?: (issueId: string, updates: any) => void;
 }
 
-export default function TimelineViewRenderer({ 
-  view, 
-  issues, 
-  workspace, 
+export default function TimelineViewRenderer({
+  view,
+  issues,
+  workspace,
   currentUser,
   activeFilters,
   setActiveFilters,
   onIssueUpdate
 }: TimelineViewRendererProps) {
+  const [renderTime] = useState(() => Date.now());
   // State management
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [showSubIssues, setShowSubIssues] = useState(true);
@@ -78,7 +80,7 @@ export default function TimelineViewRenderer({
   // Filter issues based on selected filters
   const filteredIssues = useMemo(() => {
     let filtered = [...issues];
-    
+
     // Apply assignee filters
     if (selectedFilters.assignees.length > 0) {
       filtered = filtered.filter(issue => {
@@ -86,7 +88,7 @@ export default function TimelineViewRenderer({
         return selectedFilters.assignees.includes(assigneeId);
       });
     }
-    
+
     // Apply label filters
     if (selectedFilters.labels.length > 0) {
       filtered = filtered.filter((issue: any) => {
@@ -96,7 +98,7 @@ export default function TimelineViewRenderer({
         return issue.labels.some((label: any) => selectedFilters.labels.includes(label.id));
       });
     }
-    
+
     // Apply priority filters
     if (selectedFilters.priority.length > 0) {
       filtered = filtered.filter(issue => {
@@ -104,7 +106,7 @@ export default function TimelineViewRenderer({
         return selectedFilters.priority.includes(priority);
       });
     }
-    
+
     // Apply project filters
     if (selectedFilters.projects.length > 0) {
       filtered = filtered.filter(issue => {
@@ -112,7 +114,7 @@ export default function TimelineViewRenderer({
         return selectedFilters.projects.includes(projectId);
       });
     }
-    
+
     return filtered;
   }, [issues, selectedFilters]);
 
@@ -124,18 +126,18 @@ export default function TimelineViewRenderer({
   // Group filtered issues by project or assignee based on view grouping
   const groupedIssues = useMemo(() => {
     const groupField = view.grouping?.field || 'none';
-    
+
     if (groupField === 'none') {
       return [{ name: 'All Issues', issues: filteredIssues, color: '#6b7280' }];
     }
-    
+
     const groups = new Map();
-    
+
     filteredIssues.forEach(issue => {
       let groupKey: string;
       let groupName: string;
       let groupColor: string;
-      
+
       switch (groupField) {
         case 'project':
           groupKey = issue.project?.id || 'no-project';
@@ -152,7 +154,7 @@ export default function TimelineViewRenderer({
           groupName = 'All Issues';
           groupColor = '#6b7280';
       }
-      
+
       if (!groups.has(groupKey)) {
         groups.set(groupKey, {
           name: groupName,
@@ -160,10 +162,10 @@ export default function TimelineViewRenderer({
           issues: []
         });
       }
-      
+
       groups.get(groupKey).issues.push(issue);
     });
-    
+
     return Array.from(groups.values());
   }, [filteredIssues, view.grouping]);
 
@@ -179,11 +181,11 @@ export default function TimelineViewRenderer({
 
   const getTimelineDuration = (issue: any) => {
     const startDate = issue.startDate ? new Date(issue.startDate) : new Date();
-    const endDate = issue.dueDate ? new Date(issue.dueDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Default 1 week
-    
+    const endDate = issue.dueDate ? new Date(issue.dueDate) : new Date(renderTime + 7 * 24 * 60 * 60 * 1000); // Default 1 week
+
     const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     return {
       startDate,
       endDate,
@@ -193,8 +195,8 @@ export default function TimelineViewRenderer({
   };
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
     });
@@ -211,7 +213,7 @@ export default function TimelineViewRenderer({
               <span className="text-sm font-medium text-collab-50">Timeline</span>
               <span className="text-xs text-collab-500">{filteredIssues.length} issues</span>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
@@ -249,7 +251,7 @@ export default function TimelineViewRenderer({
                 {/* Group Header */}
                 {groupedIssues.length > 1 && (
                   <div className="flex items-center gap-2 mb-4">
-                    <div 
+                    <div
                       className="w-2 h-2 rounded-full"
                       style={{ backgroundColor: group.color }}
                     />
@@ -264,7 +266,7 @@ export default function TimelineViewRenderer({
                  <div className="space-y-3">
                    {group.issues.map((issue: Issue) => {
                     const timeline = getTimelineDuration(issue);
-                    
+
                     return (
                       <div
                         key={issue.id}
@@ -275,7 +277,7 @@ export default function TimelineViewRenderer({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1.5">
                             <span className="text-xs font-mono text-collab-400">{issue.issueKey}</span>
-                            <Badge 
+                            <Badge
                               className={cn(
                                 "h-4 px-1.5 text-[10px] font-medium leading-none border-0 rounded-sm capitalize",
                                 issue.type === 'EPIC' && "bg-purple-500/10 text-purple-400",
@@ -286,16 +288,16 @@ export default function TimelineViewRenderer({
                             >
                               {issue.type?.toLowerCase()}
                             </Badge>
-                            <div 
+                            <div
                               className={cn("w-2 h-2 rounded-full", getPriorityColor(issue.priority))}
                               title={`${issue.priority} priority`}
                             />
                           </div>
-                          
+
                           <h4 className="text-[13px] text-collab-50 font-medium mb-1 line-clamp-1 group-hover:text-blue-400 transition-colors">
                             {issue.title}
                           </h4>
-                          
+
                           <div className="flex items-center gap-3 text-[10px] text-collab-500">
                             <span>{formatDate(timeline.startDate)}</span>
                             <span>→</span>
@@ -306,7 +308,7 @@ export default function TimelineViewRenderer({
 
                         {/* Timeline Bar */}
                         <div className="flex-shrink-0 relative">
-                          <div 
+                          <div
                             className="h-5 bg-blue-500/15 border border-blue-500/30 rounded-md flex items-center justify-between px-2"
                             style={{ width: `${timeline.width}px` }}
                           >
@@ -314,7 +316,7 @@ export default function TimelineViewRenderer({
                               {issue.progress ? `${issue.progress}%` : ''}
                             </div>
                             {issue.progress && (
-                              <div 
+                              <div
                                 className="absolute left-0 top-0 h-full bg-blue-500/40 rounded-md"
                                 style={{ width: `${issue.progress}%` }}
                               />
@@ -379,4 +381,4 @@ export default function TimelineViewRenderer({
       )}
     </div>
   );
-} 
+}

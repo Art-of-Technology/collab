@@ -164,7 +164,7 @@ interface TimelineItemProps {
 function TimelineItem({ activity, isFirst, isLast, onOpenModal }: TimelineItemProps) {
   const config = ACTIVITY_CONFIG[activity.movementType] || ACTIVITY_CONFIG.created;
   const Icon = config.icon;
-  const time = new Date(activity.movedAt);
+  const time = new Date(activity.movedAt ?? activity.timestamp);
   const exactTime = format(time, 'h:mm a');
   const priorityStyle = activity.priority ? PRIORITY_COLORS[activity.priority.toUpperCase()] : null;
 
@@ -338,7 +338,7 @@ export function PlanningActivityFeed({
     let lastLabel: string | null = null;
 
     filtered.forEach((activity, idx) => {
-      const date = new Date(activity.movedAt);
+      const date = new Date(activity.movedAt ?? activity.timestamp);
       let label: string;
 
       if (isToday(date)) {
