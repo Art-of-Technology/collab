@@ -1248,3 +1248,71 @@ test('Coclaw same-content events remain distinct across accessible workspaces an
   assert.equal(f.calls.writes, before);
   assert.equal(f.calls.providerCalls, 0);
 });
+
+function repositoryChooserFixture() {
+  const f = fixture();
+  f.state.user.githubAccessToken = 'fixture-encrypted-token';
+  f.state.user.githubUsername = 'alice-github';
+  const repositories = f.workspaces.map((workspace, index) => ({ id: index + 1, name: `repo-${workspace.slug}`,
+    full_name: `company/repo-${workspace.slug}`, description: workspace.slug }));
+  const connected = f.workspaces.map((workspace, index) => ({ id: `connection-${index}`, githubRepoId: String(index + 1),
+    project: { id: `private-project-${workspace.slug}`, name: `Private project ${workspace.slug}`, workspace } }));
+  f.db.repository.findMany = async ({ where, select }) => connected.filter(row => matches(row, where)).map(row => ({
+    githubRepoId: row.githubRepoId,
+    project: Object.fromEntries(Object.keys(select.project.select).map(key => [key, row.project[key]])),
+  }));
+  f.db.repository.findFirst = async ({ where, select }) => {
+    const row = connected.find(row => matches(row, where));
+    return row && select ? Object.fromEntries(Object.keys(select).map(key => [key, row[key]])) : row ?? null;
+  };
+  f.dependencies['crypto'] = { default: require('node:crypto') };
+  f.dependencies['@/lib/github/oauth-config'] = {
+    getUserRepositories: async () => { f.calls.providerCalls++; return { repositories, hasMore: true }; },
+    getRepositoryDetails: async () => { f.calls.providerCalls++; throw new Error('Unexpected provider request'); },
+    createRepositoryWebhook: async () => { f.calls.providerCalls++; throw new Error('Unexpected webhook creation'); },
+  };
+  return { ...f, repositories, connected };
+}
+test('repository chooser retains external repos but hides revoked tenant project metadata', async () => {
+  const f = repositoryChooserFixture(), { GET } = f.route('github/oauth/repositories');
+  const request = () => new Request(`https://collab.example.test/api/github/oauth/repositories?workspaceId=${f.workspaces[0].id}`);
+  const read = async () => {
+    const response = await GET(request()); assert.equal(response.status, 200); return response.json();
+  };
+  const initial = await read();
+  assert.equal(initial.repositories.length, 4); assert.equal(initial.hasMore, true);
+  for (const key of ['own', 'joined']) {
+    const repo = initial.repositories.find(row => row.name === `repo-${key}`);
+    assert.equal(repo.isConnected, true);
+    assert.equal(repo.connectedProject.id, `private-project-${key}`);
+  }
+  for (const key of ['revoked', 'foreign']) {
+    const repo = initial.repositories.find(row => row.name === `repo-${key}`);
+    assert.equal(repo.isConnected, false);
+    assert.equal(repo.connectedProject, undefined);
+    assert.equal(JSON.stringify(initial).includes(`private-project-${key}`), false);
+    assert.equal(JSON.stringify(initial).includes(`Private project ${key}`), false);
+  }
+  f.workspaces[1].members[0].status = false;
+  const after = await read();
+  assert.equal(after.repositories.length, 4);
+  assert.equal(after.repositories.find(row => row.name === 'repo-joined').connectedProject, undefined);
+  assert.equal(after.repositories.find(row => row.name === 'repo-own').isConnected, true);
+  assert.equal(JSON.stringify(after).includes('fixture-encrypted-token'), false);
+  f.state.mapped = false;
+  const calls = f.calls.providerCalls;
+  assert.equal((await GET(request())).status, 401);
+  assert.equal(f.calls.providerCalls, calls);
+  assert.equal(f.calls.writes, 0);
+});
+test('repository connection conflict reveals no inaccessible project metadata or provider calls', async () => {
+  const f = repositoryChooserFixture(), { POST } = f.route('github/oauth/connect');
+  const response = await POST(f.request('POST', undefined, {
+    projectId: 'project-own', repositoryId: 3, owner: 'company', name: 'repo-revoked',
+  }));
+  assert.equal(response.status, 400);
+  const body = await response.json();
+  assert.equal(body.error, 'Repository is already connected to a project');
+  assert.equal(JSON.stringify(body).includes('Private project revoked'), false);
+  assert.equal(f.calls.providerCalls, 0); assert.equal(f.calls.writes, 0);
+});

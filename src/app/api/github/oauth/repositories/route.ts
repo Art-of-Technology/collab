@@ -12,7 +12,7 @@ import { EncryptionService } from "@/lib/encryption";
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -58,6 +58,13 @@ export async function GET(request: NextRequest) {
 
     // Check which repositories are already connected to projects
     const connectedRepos = await prisma.repository.findMany({
+      where: {
+        githubRepoId: { in: filteredRepos.map(repo => repo.id.toString()) },
+        project: { workspace: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } },
+        ] } },
+      },
       select: { githubRepoId: true, project: { select: { id: true, name: true } } },
     });
 

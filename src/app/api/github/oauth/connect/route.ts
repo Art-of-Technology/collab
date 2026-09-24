@@ -74,13 +74,13 @@ export async function POST(request: NextRequest) {
     // Check if repository is already connected to another project
     const existingRepo = await prisma.repository.findFirst({
       where: { githubRepoId: repositoryId.toString() },
-      include: { project: true },
+      select: { id: true },
     });
 
     if (existingRepo) {
       return NextResponse.json(
         { 
-          error: `Repository is already connected to project "${existingRepo.project.name}"` 
+          error: "Repository is already connected to a project" 
         },
         { status: 400 }
       );
