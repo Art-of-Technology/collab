@@ -1,3 +1,4 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -22,6 +23,9 @@ export async function GET(
     }
 
     const { workspaceId, instanceId } = await params;
+    if (!await userHasWorkspaceAccess(session.user.id, workspaceId)) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
 
     const instance = await prisma.coclawInstance.findFirst({
       where: {
@@ -78,6 +82,9 @@ export async function DELETE(
     }
 
     const { workspaceId, instanceId } = await params;
+    if (!await userHasWorkspaceAccess(session.user.id, workspaceId)) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
 
     // Verify ownership
     const instance = await prisma.coclawInstance.findFirst({

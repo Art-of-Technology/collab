@@ -1,3 +1,4 @@
+import { notificationAccessWhere } from '@/lib/notification-access';
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -13,7 +14,7 @@ export async function POST() {
     // Update all unread notifications for the user
     const result = await prisma.notification.updateMany({
       where: {
-        userId: currentUser.id,
+        ...notificationAccessWhere(currentUser.id),
         read: false
       },
       data: {

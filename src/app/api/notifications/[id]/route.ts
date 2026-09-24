@@ -1,3 +1,4 @@
+import { notificationAccessWhere } from '@/lib/notification-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -21,7 +22,7 @@ export async function PATCH(
     const notification = await prisma.notification.findUnique({
       where: {
         id,
-        userId: currentUser.id
+        ...notificationAccessWhere(currentUser.id)
       }
     });
     
@@ -34,7 +35,7 @@ export async function PATCH(
     
     // Update the notification
     const updatedNotification = await prisma.notification.update({
-      where: { id },
+      where: { id, ...notificationAccessWhere(currentUser.id) },
       data: { read }
     });
     

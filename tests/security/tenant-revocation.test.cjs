@@ -10,11 +10,11 @@ function load(file, dependencies = {}) {
   const exports = {};
   const source = readFileSync(resolve(process.env.SECURITY_TEST_ROOT || resolve(__dirname, '../..'), file), 'utf8');
   runInNewContext(ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText, {
     exports, URL, Headers, Buffer, TextDecoder, TextEncoder, ReadableStream, Response, Error,
     setTimeout, clearTimeout, setInterval, clearInterval, ...dependencies.__globals,
-    console: { error() {}, log() {} },
+    console: { error() {}, log() {}, warn() {} },
     process: { env: { COLLAB_AUTH_MODE: 'gateway', COLLAB_GATEWAY_ISSUER: issuer, ...dependencies.__env } },
     require(name) {
       if (name in dependencies) return dependencies[name];
@@ -35,6 +35,7 @@ function matches(row, where = {}) {
     const actual = row?.[key];
     if (value === null || typeof value !== 'object') return actual === value;
     if ('some' in value) return actual?.some(item => matches(item, value.some)) ?? false;
+    if ('notIn' in value) return !value.notIn.includes(actual);
     if ('in' in value) return value.in.includes(actual);
     if ('not' in value) return actual !== value.not;
     if ('equals' in value) return String(actual).toLowerCase() === value.equals.toLowerCase();
@@ -706,4 +707,262 @@ test('post mutation responses exclude user credentials', async () => {
     assert.equal(body.author.id, 'alice');
     for (const secret of ['synthetic-user-token', 'synthetic-password-hash']) assert.equal(JSON.stringify(body).includes(secret), false);
   }
+});
+
+test('tenant tags deny revoked access and filter authored tags while retaining personal tags', async () => {
+  const f = fixture();
+  const tags = [null, ...f.workspaces].map(workspace => ({ id: workspace?.slug || 'personal',
+    workspaceId: workspace?.id ?? null, workspace, authorId: 'alice', name: workspace?.slug || 'personal', _count: { notes: 2 } }));
+  f.db.noteTag = {
+    findMany: async ({ where }) => { f.calls.otherReads++; return tags.filter(row => matches(row, where)); },
+    findFirst: async () => { f.calls.otherReads++; return null; },
+    create: async ({ data }) => { f.calls.writes++; return data; },
+  };
+  const { GET, POST } = f.route('notes/tags');
+  const create = workspaceId => POST(f.request('POST', undefined, { name: 'New', workspaceId }));
+  assert.equal((await GET(f.request('GET', f.workspaces[2].id))).status, 403);
+  assert.equal((await create(f.workspaces[2].id)).status, 403); noContent(f);
+  assert.deepEqual((await (await GET(f.request())).json()).map(row => row.id).sort(), ['joined', 'own', 'personal']);
+  for (const workspaceId of [null, f.workspaces[0].id, f.workspaces[1].id]) assert.equal((await create(workspaceId)).status, 201);
+  f.workspaces[1].members[0].status = false;
+  assert.deepEqual((await (await GET(f.request())).json()).map(row => row.id).sort(), ['own', 'personal']);
+});
+
+for (const endpoint of ['issues/[issueId]/activities', 'workspaces/[workspaceId]/planning/activity',
+  'workspaces/[workspaceId]/planning/range', 'workspaces/[workspaceId]/planning/team-activity']) {
+  test(`tenant activity ${endpoint} denies revocation before reads and retains active owners`, async () => {
+    const f = fixture();
+    f.dependencies['date-fns'] = require('date-fns');
+    f.dependencies['@/utils/teamSyncAnalyzer'] = load('src/utils/teamSyncAnalyzer.ts', { 'date-fns': require('date-fns') });
+    f.db.workspaceMember.findUnique = async ({ where }) => f.workspaces.flatMap(workspace => workspace.members.map(
+      member => ({ ...member, workspaceId: workspace.id }))).find(row => matches(row, where.userId_workspaceId)) ?? null;
+    f.db.issue.findUnique = async ({ where }) => ({ id: where.id, workspaceId: where.id });
+    f.db.issue.findMany = async () => { f.calls.issueReads++; return []; };
+    f.db.issueActivity = { findMany: async () => { f.calls.otherReads++; return []; } };
+    f.db.user.findMany = async () => [];
+    f.db.workspaceMember.findMany = async () => [];
+    f.db.projectStatus.findMany = async () => [];
+    const { GET } = f.route(endpoint);
+    const call = workspaceId => GET(new Request('https://collab.example.test/api?startDate=2026-09-01&endDate=2026-09-02&date=2026-09-01'),
+      { params: Promise.resolve({ workspaceId, issueId: workspaceId }) });
+    assert.equal((await call(f.workspaces[2].id)).status, 403); noContent(f);
+    for (const workspace of f.workspaces.slice(0, 2)) assert.equal((await call(workspace.id)).status, 200);
+    f.workspaces[1].members[0].status = false;
+    const before = { ...f.calls };
+    assert.equal((await call(f.workspaces[1].id)).status, 403);
+    assert.deepEqual(f.calls, before);
+  });
+}
+
+function coclawFixture() {
+  const f = fixture();
+  const provider = async () => { f.calls.providerCalls++; return { status: 'running' }; };
+  const secret = async () => { f.calls.decrypts++; return { key: 'fixture-only', source: 'user', provider: 'anthropic' }; };
+  Object.assign(f.dependencies, {
+    '@/lib/coclaw/instance-manager': { coclawManager: { getOrCreateInstance: provider,
+      getInstanceInfo: () => null, stopInstance: provider, healthCheck: provider } },
+    '@/lib/coclaw/key-resolver': new Proxy({}, { get: () => secret }),
+    '@/lib/coclaw/spawn-helpers': { buildSpawnConfig: secret },
+    '@/lib/ai/mcp-token': { getMcpToken: secret },
+    '@/lib/secrets/crypto': new Proxy({}, { get: () => secret }),
+    '@/lib/coclaw/anthropic-oauth': new Proxy({}, { get: () => provider }),
+    '@/lib/coclaw/notifications': new Proxy({}, { get: () => provider }),
+    '@/lib/coclaw/types': { SUPPORTED_CHANNELS: [], PROVIDER_ENV_MAP: { anthropic: 'ANTHROPIC_API_KEY' }, PROVIDER_KEY_PREFIXES: {} },
+  });
+  f.db.coclawInstance = { findUnique: async () => { f.calls.otherReads++; return null; } };
+  return f;
+}
+for (const [endpoint, methods] of [
+  ['instances', ['GET', 'POST']], ['instances/[instanceId]', ['GET', 'DELETE']],
+  ['channels', ['GET', 'POST']], ['channels/[channelType]', ['GET', 'DELETE']],
+  ['keys', ['GET', 'POST']], ['keys/[provider]', ['DELETE']], ['github', ['GET', 'POST', 'DELETE']],
+  ['usage', ['GET']], ['conversations', ['GET']], ['status', ['GET']], ['cleanup', ['GET', 'POST']],
+  ['auth/anthropic/start', ['POST']], ['auth/anthropic/exchange', ['POST']], ['notifications', ['GET', 'POST']],
+]) {
+  for (const method of methods) test(`tenant Coclaw ${endpoint} ${method} denies revoked access before secrets and providers`, async () => {
+    const f = coclawFixture(), workspaceId = f.workspaces[2].id;
+    const handler = f.route(`workspaces/[workspaceId]/coclaw/${endpoint}`)[method];
+    const result = await handler(f.request(method, workspaceId, { provider: 'anthropic', channelType: 'telegram', code: 'fixture' }),
+      { params: Promise.resolve({ workspaceId, instanceId: 'instance', provider: 'anthropic', channelType: 'telegram' }) });
+    assert.ok([403, 404].includes(result.status), `Expected denial, got ${result.status}: ${await result.text()}`);
+    noContent(f);
+  });
+}
+test('tenant Coclaw provisioning retains owner and active member access', async () => {
+  const f = coclawFixture(), { GET, POST } = f.route('workspaces/[workspaceId]/coclaw/instances');
+  for (const workspace of f.workspaces.slice(0, 2)) {
+    assert.equal((await GET(f.request(), f.context(workspace.id))).status, 200);
+    assert.equal((await POST(f.request('POST'), f.context(workspace.id))).status, 200);
+  }
+  assert.equal(f.calls.providerCalls, 2);
+  assert.equal(f.calls.decrypts, 4);
+});
+
+for (const [endpoint, method] of [['uninstall', 'POST'], ['webhooks', 'GET'], ['webhooks', 'POST'],
+  ['webhooks/[webhookId]', 'GET'], ['webhooks/[webhookId]', 'PATCH'], ['webhooks/[webhookId]', 'DELETE'], ['webhooks/test', 'POST']]) {
+  test(`tenant app ${endpoint} ${method} denies revoked admin before reads and providers`, async () => {
+    const f = fixture(), workspaceId = f.workspaces[2].id;
+    f.workspaces[2].members[0].role = 'ADMIN';
+    f.dependencies['@/lib/webhooks'] = { validateEventTypes: () => true, isValidWebhookUrl: () => true };
+    f.dependencies['@/lib/apps/crypto'] = { encrypt: () => { f.calls.decrypts++; return 'encrypted'; } };
+    f.dependencies['@/lib/webhook-delivery'] = { processWebhookEvent: async () => { f.calls.providerCalls++; } };
+    f.db.app = { findUnique: async () => { f.calls.otherReads++; return { id: 'app', installations: [] }; } };
+    const webhooks = [{ id: 'webhook', app: { slug: 'app' }, installation: { workspace: f.workspaces[2] } }];
+    f.db.appWebhook = { findFirst: async ({ where }) => webhooks.find(row => matches(row, where)) ?? null };
+    const result = await f.route(`apps/[slug]/${endpoint}`)[method](f.request(method, workspaceId, {
+      workspaceId, url: 'https://fixture.example.test', eventTypes: ['issue.updated'], eventType: 'issue.updated', isActive: true,
+    }), { params: Promise.resolve({ slug: 'app', webhookId: 'webhook' }) });
+    assert.equal(result.status, method === 'PATCH' ? 404 : 403, await result.text()); noContent(f);
+  });
+}
+test('tenant app uninstall retains owner and active admin access', async () => {
+  const f = fixture(); f.workspaces[1].members[0].role = 'ADMIN';
+  f.db.app = { findUnique: async () => ({ id: 'app', name: 'App', slug: 'app', installations: [{ id: 'installation', webhooks: [] }] }) };
+  f.db.appWebhook = { deleteMany: async () => { f.calls.writes++; } };
+  f.db.appInstallation = { update: async () => { f.calls.writes++; } };
+  f.dependencies['@/lib/event-bus'] = { emitAppUninstalled: async () => { f.calls.providerCalls++; } };
+  const { POST } = f.route('apps/[slug]/uninstall');
+  for (const workspace of f.workspaces.slice(0, 2)) {
+    assert.equal((await POST(f.request('POST', undefined, { workspaceId: workspace.id }),
+      { params: Promise.resolve({ slug: 'app' }) })).status, 200);
+  }
+  assert.equal(f.calls.writes, 6); assert.equal(f.calls.providerCalls, 2);
+});
+
+function notificationFixture() {
+  const f = fixture(), deliveries = [], stored = [];
+  const posts = [null, ...f.workspaces].map(workspace => ({ id: `post-${workspace?.slug || 'personal'}`,
+    workspaceId: workspace?.id ?? null, workspace, message: `content-${workspace?.slug || 'personal'}` }));
+  const comments = posts.map(post => ({ id: `comment-${post.id}`, postId: post.id, post, noteId: null, note: null, message: post.message }));
+  f.db.post.findUnique = async ({ where }) => posts.find(post => matches(post, where)) ?? null;
+  f.db.comment = { findUnique: async ({ where }) => comments.find(row => matches(row, where)) ?? null };
+  f.db.postFollower = { findMany: async () => [{ userId: 'alice' }] };
+  f.db.notificationPreferences = { findFirst: async () => null };
+  f.db.notification = {
+    groupBy: async () => [],
+    createMany: async ({ data }) => { stored.push(...data); f.calls.writes++; return { count: data.length }; },
+    findMany: async ({ where }) => stored.filter(row => matches(row, where)),
+    findUnique: async ({ where }) => stored.find(row => matches(row, where)) ?? null,
+    update: async ({ where, data }) => { f.calls.writes++; const row = stored.find(row => matches(row, where)); Object.assign(row, data); return row; },
+    updateMany: async ({ where, data }) => { const rows = stored.filter(row => matches(row, where));
+      rows.forEach(row => Object.assign(row, data)); f.calls.writes += rows.length; return { count: rows.length }; },
+  };
+  Object.assign(f.dependencies, {
+    'date-fns': require('date-fns'),
+    '@/lib/logger': { logger: { info() {}, warn() {}, error(...args) { throw new Error(JSON.stringify(args)); } } },
+    '@/lib/html-sanitizer': { sanitizeHtmlToPlainText: value => value },
+    '@/lib/push-notifications': { sendPushNotification: async (...args) => { f.calls.providerCalls++; deliveries.push(args); } },
+  });
+  f.dependencies['@/lib/notification-access'] = load('src/lib/notification-access.ts', f.dependencies);
+  const service = load('src/lib/notification-service.ts', f.dependencies);
+  return { ...f, ...service, posts, comments, stored, deliveries };
+}
+test('tenant notifications stop follower delivery and push after revocation without affecting owners or personal notifications', async () => {
+  const f = notificationFixture(), service = f.NotificationService;
+  const notify = key => service.notifyPostFollowers({ postId: `post-${key}`, senderId: 'bob',
+    type: f.NotificationType.POST_COMMENT_ADDED, content: `new-comment-${key}` });
+  await notify('joined'); assert.equal(f.stored.length, 1); assert.equal(f.deliveries.length, 1);
+  f.workspaces[1].members[0].status = false;
+  f.stored.length = 0; f.deliveries.length = 0;
+  for (const key of Object.keys(f.calls)) f.calls[key] = 0;
+  await notify('joined');
+  await service.sendPushNotificationForUser('alice', f.NotificationType.POST_COMMENT_ADDED, 'secret', undefined, 'post-joined');
+  assert.equal(await service.notifyUsers(['alice'], 'POST_COMMENT_ADDED', 'secret', 'bob', { postId: 'post-joined' }), 0);
+  assert.equal(await service.notifyUsers(['alice'], 'POST_COMMENT_ADDED', 'secret', 'bob', { commentId: 'comment-post-joined' }), 0);
+  noContent(f); assert.equal(f.stored.length, 0); assert.equal(f.deliveries.length, 0);
+  for (const key of ['own', 'personal']) await notify(key);
+  assert.equal(await service.notifyUsers(['alice'], 'PERSONAL', 'personal', 'bob'), 1);
+  assert.equal(f.stored.length, 3); assert.equal(f.deliveries.length, 2);
+  f.state.user = null;
+  const before = f.calls.writes;
+  assert.equal(await service.notifyUsers(['alice'], 'PERSONAL', 'personal', 'bob'), 0);
+  assert.equal(f.calls.writes, before);
+});
+test('tenant notification reads and mutations hide revoked post and comment content', async () => {
+  const f = notificationFixture();
+  for (const post of f.posts) {
+    for (const kind of ['post', 'comment']) f.stored.push({ id: `${kind}-${post.id}`, userId: 'alice', read: false,
+      postId: kind === 'post' ? post.id : null, post: kind === 'post' ? post : null,
+      commentId: kind === 'comment' ? `comment-${post.id}` : null,
+      comment: kind === 'comment' ? f.comments.find(row => row.postId === post.id) : null,
+      featureRequestId: null, leaveRequestId: null, content: post.message });
+  }
+  const { GET } = f.route('notifications');
+  const read = async () => (await (await GET(f.request())).json());
+  const initial = await read();
+  assert.equal(initial.length, 6);
+  assert.equal(JSON.stringify(initial).includes('content-revoked'), false);
+  f.workspaces[1].members[0].status = false;
+  const current = await read();
+  assert.equal(current.length, 4);
+  assert.equal(JSON.stringify(current).includes('content-joined'), false);
+  const { PATCH } = f.route('notifications/[id]');
+  const patch = id => PATCH(f.request('PATCH', undefined, { read: true }), { params: Promise.resolve({ id }) });
+  assert.equal((await patch('post-post-joined')).status, 404);
+  assert.equal((await patch('comment-post-joined')).status, 404); noContent(f);
+  assert.equal((await patch('post-post-own')).status, 200);
+  assert.equal((await f.route('notifications/read-all').POST()).status, 200);
+  assert.ok(f.stored.filter(row => row.content === 'content-joined').every(row => !row.read));
+  assert.ok(f.stored.filter(row => row.content === 'content-personal').every(row => row.read));
+});
+
+for (const revoke of ['membership', 'mapping', 'user']) test(`tenant open stream closes on ${revoke} revocation before forwarding events`, async () => {
+  const f = fixture(); let callback, unsubscribed = 0, quit = 0;
+  f.dependencies['@/lib/redis'] = { getRedisSubscriber: async () => ({
+    subscribe: async (_channel, cb) => { callback = cb; },
+    unsubscribe: async () => { unsubscribed++; }, quit: async () => { quit++; },
+  }) };
+  const response = await f.route('realtime/workspace/[workspaceId]/stream').GET(f.request(), f.context(f.workspaces[1].id));
+  assert.equal(response.status, 200);
+  const reader = response.body.getReader();
+  try {
+    assert.match(new TextDecoder().decode((await reader.read()).value), /connected/);
+    assert.match(new TextDecoder().decode((await reader.read()).value), /realtime.ready/);
+    await callback(JSON.stringify({ type: 'issue.created', key: 'allowed' }));
+    assert.match(new TextDecoder().decode((await reader.read()).value), /allowed/);
+    if (revoke === 'membership') f.workspaces[1].members[0].status = false;
+    if (revoke === 'mapping') f.state.mapped = false;
+    if (revoke === 'user') f.state.user = null;
+    await callback(JSON.stringify({ type: 'issue.created', key: 'secret-after-revocation' }));
+    const next = await reader.read();
+    assert.equal(next.done, true);
+    assert.equal(unsubscribed, 1); assert.equal(quit, 1);
+  } finally { await reader.cancel(); }
+});
+test('tenant owner stream survives an unrelated revoked membership', async () => {
+  const f = fixture(); let callback;
+  f.dependencies['@/lib/redis'] = { getRedisSubscriber: async () => ({
+    subscribe: async (_channel, cb) => { callback = cb; }, unsubscribe: async () => {}, quit: async () => {},
+  }) };
+  const response = await f.route('realtime/workspace/[workspaceId]/stream').GET(f.request(), f.context(f.workspaces[0].id));
+  const reader = response.body.getReader();
+  try {
+    await reader.read(); await reader.read();
+    f.workspaces[1].members[0].status = false;
+    await callback(JSON.stringify({ key: 'owner-event' }));
+    assert.match(new TextDecoder().decode((await reader.read()).value), /owner-event/);
+  } finally { await reader.cancel(); }
+});
+
+test('tenant profile page resolves workspace slugs before guarded profile reads', async () => {
+  const f = fixture(), findUser = f.db.user.findUnique;
+  f.db.user.findUnique = async args => args.where.id === 'bob' ? { id: 'bob', name: 'Bob' } : findUser(args);
+  f.db.workspaceMember.findUnique = async () => null;
+  f.db.comment = { count: async () => 0 }; f.db.reaction = { count: async () => 0 };
+  f.db.conversation = { findFirst: async () => null };
+  f.dependencies['@/actions/user'] = load('src/actions/user.ts', f.dependencies);
+  f.dependencies['react/jsx-runtime'] = { jsx: (_component, props) => props };
+  f.dependencies['@/components/profile/UserProfileClient'] = { default: () => null };
+  f.dependencies['next/navigation'] = { redirect: path => { throw new Error(`redirect:${path}`); },
+    notFound: () => { throw new Error('notFound'); } };
+  const page = load('src/app/(main)/[workspaceId]/profile/[userId]/page.tsx', f.dependencies).default;
+  const call = workspaceId => page({ params: Promise.resolve({ workspaceId, userId: 'bob' }) });
+  for (const workspace of f.workspaces.slice(0, 2)) {
+    assert.equal((await call(workspace.slug)).initialData.user.id, 'bob');
+    assert.equal((await call(workspace.id)).initialData.user.id, 'bob');
+  }
+  const before = f.calls.otherReads;
+  await assert.rejects(call('revoked'), /redirect:\/revoked\/timeline/);
+  assert.equal(f.calls.otherReads, before);
+  await assert.rejects(call('missing'), /notFound/);
 });

@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
@@ -34,6 +36,11 @@ export async function GET(
     if (!hasAccess) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    const recheckAccess = AsyncLocalStorage.bind(async () => {
+      const currentUser = await getCurrentUser();
+      return currentUser?.id === user.id && await userHasWorkspaceAccess(user.id, workspaceId);
+    });
 
     const channel = `workspace:${workspaceId}:events`;
     const encoder = new TextEncoder();
@@ -76,63 +83,6 @@ export async function GET(
           }
         }, 25000);
 
-        // Set up Redis subscriber asynchronously to avoid blocking initial response
-        const setupRedisSubscriber = async () => {
-          if (isClosed) return;
-
-          try {
-            // Add timeout for Redis connection (5 seconds max)
-            const redisTimeout = setTimeout(() => {
-              if (!isClosed) {
-                console.warn('Redis subscriber setup timed out after 5 seconds');
-                sendEvent({ type: 'realtime.degraded', reason: 'redis_timeout' });
-              }
-            }, 5000);
-
-            subscriber = await getRedisSubscriber();
-            clearTimeout(redisTimeout);
-
-            if (isClosed) return; // Check again after async operation
-
-            if (!subscriber) {
-              console.warn('Redis subscriber not available, running in degraded mode');
-              sendEvent({ type: 'realtime.degraded', reason: 'redis_unavailable' });
-              return;
-            }
-
-            // Subscribe to Redis channel
-            await subscriber.subscribe(channel, (message: string) => {
-              // Always check if closed before processing
-              if (isClosed) return;
-
-              try {
-                if (message && typeof message === 'string') {
-                  const parsed = JSON.parse(message);
-                  sendEvent(parsed);
-                }
-              } catch (parseError) {
-                if (message && !isClosed) {
-                  sendEvent({ type: 'message', message: String(message) });
-                }
-              }
-            });
-
-            if (isClosed) return; // Check again after subscribe
-
-            isRedisConnected = true;
-            sendEvent({ type: 'realtime.ready', channel });
-            console.log(`SSE Redis subscriber connected for workspace ${workspaceId}`);
-          } catch (error) {
-            if (!isClosed) {
-              console.error('Error setting up Redis subscriber:', error);
-              sendEvent({ type: 'realtime.error', error: 'Failed to connect to Redis' });
-            }
-          }
-        };
-
-        // Start Redis setup asynchronously (don't await)
-        setupRedisSubscriber();
-
         const cleanup = async () => {
           // Mark as closed immediately to stop all async operations
           isClosed = true;
@@ -160,6 +110,71 @@ export async function GET(
             // Already closed
           }
         };
+
+        // Set up Redis subscriber asynchronously to avoid blocking initial response
+        const setupRedisSubscriber = async () => {
+          if (isClosed) return;
+
+          try {
+            // Add timeout for Redis connection (5 seconds max)
+            const redisTimeout = setTimeout(() => {
+              if (!isClosed) {
+                console.warn('Redis subscriber setup timed out after 5 seconds');
+                sendEvent({ type: 'realtime.degraded', reason: 'redis_timeout' });
+              }
+            }, 5000);
+
+            subscriber = await getRedisSubscriber();
+            clearTimeout(redisTimeout);
+
+            if (isClosed) {
+              await subscriber?.quit();
+              subscriber = null;
+              return;
+            }
+
+            if (!subscriber) {
+              console.warn('Redis subscriber not available, running in degraded mode');
+              sendEvent({ type: 'realtime.degraded', reason: 'redis_unavailable' });
+              return;
+            }
+
+            // Subscribe to Redis channel
+            await subscriber.subscribe(channel, async (message: string) => {
+              // Always check if closed before processing
+              if (isClosed) return;
+
+              try {
+                if (!await recheckAccess()) {
+                  await cleanup();
+                  return;
+                }
+                if (message && typeof message === 'string') {
+                  const parsed = JSON.parse(message);
+                  sendEvent(parsed);
+                }
+              } catch (parseError) {
+                await cleanup();
+              }
+            });
+
+            isRedisConnected = true;
+            if (isClosed) {
+              await cleanup();
+              return;
+            }
+            sendEvent({ type: 'realtime.ready', channel });
+            console.log(`SSE Redis subscriber connected for workspace ${workspaceId}`);
+          } catch (error) {
+            if (!isClosed) {
+              console.error('Error setting up Redis subscriber:', error);
+              sendEvent({ type: 'realtime.error', error: 'Failed to connect to Redis' });
+            }
+          }
+        };
+
+        // Start Redis setup asynchronously (don't await)
+        setupRedisSubscriber();
 
         // Handle client disconnect
         const signal = request.signal as AbortSignal | undefined;

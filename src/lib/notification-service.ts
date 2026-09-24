@@ -1,3 +1,4 @@
+import { canReceiveNotification } from '@/lib/notification-access';
 import { prisma } from "@/lib/prisma";
 import {
   sendPushNotification,
@@ -258,7 +259,10 @@ export class NotificationService {
         ...(leaveRequestId ? { leaveRequestId } : {}),
       } as any;
 
-      let recipientIds = [...new Set(userIds)];
+      let recipientIds: string[] = [];
+      for (const userId of new Set(userIds)) {
+        if (await canReceiveNotification(userId, options)) recipientIds.push(userId);
+      }
 
       if (filterPreferences) {
         const filtered: string[] = [];
@@ -339,7 +343,10 @@ export class NotificationService {
     additionalData: Record<string, any> = {}
   ): Promise<void> {
     try {
-      const followers = await followerQuery;
+      const followers = [];
+      for (const follower of await followerQuery) {
+        if (await canReceiveNotification(follower.userId, additionalData)) followers.push(follower);
+      }
 
       if (followers.length === 0) {
         return; // No followers to notify
@@ -416,6 +423,8 @@ export class NotificationService {
     postId?: string
   ): Promise<void> {
     try {
+      if (!await canReceiveNotification(userId, { issueId, postId })) return;
+
       // Build the URL based on notification type
       let url = "/";
       if (issueId) {
@@ -1136,6 +1145,7 @@ export class NotificationService {
     actionType: string,
     actionById?: string
   ): Promise<void> {
+    if (!await canReceiveNotification(leaveRequest.userId, { leaveRequestId: leaveRequest.id })) return;
     const preferences = await NotificationService.getUserPreferences(
       leaveRequest.userId
     );
@@ -1166,7 +1176,8 @@ export class NotificationService {
     });
 
     // Send push notification if enabled
-    if (preferences.pushNotificationsEnabled && preferences.pushSubscription) {
+    if (preferences.pushNotificationsEnabled && preferences.pushSubscription &&
+        await canReceiveNotification(leaveRequest.userId, { leaveRequestId: leaveRequest.id })) {
       try {
         await sendPushNotification(preferences.pushSubscription, {
           title: "Leave Request Update",
@@ -1203,7 +1214,10 @@ export class NotificationService {
     );
 
     // Exclude the person who performed the action
-    const recipientIds = managerIds.filter((id) => id !== leaveRequest.userId);
+    const recipientIds: string[] = [];
+    for (const id of managerIds) {
+      if (id !== leaveRequest.userId && await canReceiveNotification(id, { leaveRequestId: leaveRequest.id })) recipientIds.push(id);
+    }
 
     if (recipientIds.length === 0) return;
 
@@ -1236,6 +1250,7 @@ export class NotificationService {
 
     // Send push notifications
     for (const managerId of dedupedRecipientIds) {
+      if (!await canReceiveNotification(managerId, { leaveRequestId: leaveRequest.id })) continue;
       const preferences = await NotificationService.getUserPreferences(
         managerId
       );
@@ -1281,7 +1296,10 @@ export class NotificationService {
     notificationType: NotificationType,
     actionType: string
   ): Promise<void> {
-    const hrIds = await this.findHRInWorkspace(leaveRequest.policy.workspaceId);
+    const hrIds: string[] = [];
+    for (const id of await this.findHRInWorkspace(leaveRequest.policy.workspaceId)) {
+      if (await canReceiveNotification(id, { leaveRequestId: leaveRequest.id })) hrIds.push(id);
+    }
 
     if (hrIds.length === 0) return;
 
@@ -1311,6 +1329,7 @@ export class NotificationService {
 
     // Send push notifications
     for (const hrId of dedupedHrIds) {
+      if (!await canReceiveNotification(hrId, { leaveRequestId: leaveRequest.id })) continue;
       const preferences = await NotificationService.getUserPreferences(hrId);
 
       if (

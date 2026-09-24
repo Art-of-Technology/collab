@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import {
   getUnreadCoclawCount,
   getRecentCoclawNotifications,
@@ -27,10 +27,7 @@ export async function GET(
     const { workspaceId } = await params;
 
     // Verify workspace membership
-    const isMember = await prisma.workspaceMember.findUnique({
-      where: { userId_workspaceId: { userId: session.user.id, workspaceId } },
-      select: { userId: true },
-    });
+    const isMember = await userHasWorkspaceAccess(session.user.id, workspaceId);
     if (!isMember) {
       return NextResponse.json({ error: 'Not a member' }, { status: 403 });
     }
@@ -67,10 +64,7 @@ export async function POST(
 
     const { workspaceId } = await params;
 
-    const isMember = await prisma.workspaceMember.findUnique({
-      where: { userId_workspaceId: { userId: session.user.id, workspaceId } },
-      select: { userId: true },
-    });
+    const isMember = await userHasWorkspaceAccess(session.user.id, workspaceId);
     if (!isMember) {
       return NextResponse.json({ error: 'Not a member' }, { status: 403 });
     }

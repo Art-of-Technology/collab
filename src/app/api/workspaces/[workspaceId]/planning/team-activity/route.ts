@@ -1,3 +1,4 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -228,11 +229,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const membership = await prisma.workspaceMember.findUnique({
-      where: {
-        userId_workspaceId: { userId: session.user.id, workspaceId },
-      },
-    });
+    const membership = await userHasWorkspaceAccess(session.user.id, workspaceId);
     if (!membership) {
       return NextResponse.json({ error: 'Not a member' }, { status: 403 });
     }

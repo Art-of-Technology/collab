@@ -543,6 +543,7 @@ test('retained issue follow methods and global notification preferences still wo
   const { NotificationService } = load('src/lib/notification-service.ts', {
     '@/lib/prisma': { prisma: db }, '@/lib/push-notifications': {}, '@/lib/permissions': {},
     'date-fns': {}, '@/lib/logger': { logger: {} }, '@/lib/html-sanitizer': {},
+    '@/lib/notification-access': {},
   });
   await NotificationService.addIssueFollower('issue', 'alice');
   await NotificationService.removeIssueFollower('issue', 'alice');
