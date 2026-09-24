@@ -50,6 +50,7 @@ export async function activityReadAccessWhere(userId: string, where: Prisma.Issu
     prisma.project.findMany({ where: { id: { in: references.flatMap(row => row.projectId ? [row.projectId] : []) }, ...issueAccessWhere(userId) }, select: { id: true } }),
   ]);
   const projectIds = projects.map(project => project.id);
+  const existingIds = new Set(existing.map(issue => issue.id));
   return {
     AND: [
       scoped,
@@ -57,7 +58,7 @@ export async function activityReadAccessWhere(userId: string, where: Prisma.Issu
       { OR: [{ projectId: null }, { projectId: { in: projectIds } }] },
       { OR: [
         { itemId: { in: accessible.map(issue => issue.id) } },
-        { itemId: { notIn: existing.map(issue => issue.id) }, projectId: { in: projectIds } },
+        { itemId: { in: issueIds.filter(id => !existingIds.has(id)) }, projectId: { in: projectIds } },
       ] },
     ],
   };

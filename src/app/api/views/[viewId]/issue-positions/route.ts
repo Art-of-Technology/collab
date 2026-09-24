@@ -61,13 +61,19 @@ export async function PUT(
         }
       }
 
-      // Access check: ensure all issues belong to the same workspace and user has access
-      const uniqueIssueIds = Array.from(new Set(bulk.map((b: any) => b.issueId)));
+      if (cleanup != null && (!Array.isArray(cleanup.issueIds) ||
+        cleanup.issueIds.some((id: unknown) => typeof id !== 'string' || !id) ||
+        typeof cleanup.keepColumnId !== 'string' || !cleanup.keepColumnId)) {
+        return NextResponse.json({ error: 'Invalid cleanup: issueIds and keepColumnId are required.' }, { status: 400 });
+      }
+      const uniqueIssueIds = Array.from(new Set<string>([
+        ...bulk.map((b: any) => b.issueId), ...(cleanup?.issueIds ?? [])
+      ]));
       const accessibleIssues = await prisma.issue.findMany({
         where: {
           id: { in: uniqueIssueIds },
           workspaceId: view.workspaceId,
-          workspace: { OR: [ { ownerId: currentUser.id }, { members: { some: { userId: currentUser.id, status: true } } } ] }
+          ...issueReadAccessWhere(currentUser.id)
         },
         select: { id: true }
       });

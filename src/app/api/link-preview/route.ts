@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 
 /**
  * API route handler for fetching link previews
@@ -93,11 +94,8 @@ export async function POST(req: NextRequest) {
                 { slug: workspaceIdentifier },
                 { id: workspaceIdentifier }
               ],
-              AND: { OR: [
-                { ownerId: session.user.id },
-                { members: { some: { userId: session.user.id, status: true } } }
-              ] },
             },
+            AND: [issueReadAccessWhere(session.user.id)],
           },
           select: {
             id: true,

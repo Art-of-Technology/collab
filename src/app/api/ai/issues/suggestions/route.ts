@@ -190,12 +190,15 @@ export async function GET(req: Request) {
         project: { workspaceId },
         id: { not: issueId },
         title: { contains: issue.title.split(' ')[0], mode: 'insensitive' },
+        AND: [issueReadAccessWhere(session.user.id)],
       },
     });
 
     if (similarIssuesCount > 0) {
       const existingLinks = await prisma.issueRelation.count({
         where: {
+          sourceIssue: issueReadAccessWhere(session.user.id),
+          targetIssue: issueReadAccessWhere(session.user.id),
           OR: [
             { sourceIssueId: issueId },
             { targetIssueId: issueId },

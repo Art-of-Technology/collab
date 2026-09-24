@@ -2596,3 +2596,156 @@ for (const association of ['project', 'status']) {
     } finally { await reader.cancel(); }
   });
 }
+
+for (const endpoint of ['apps/auth/workspace/activity', 'workspaces/[workspaceId]/planning/activity', 'timeline/unified']) {
+  test(`activity concurrent first snapshot never bypasses checked IDs in ${endpoint}`, async () => {
+    const f = activitySnapshotFixture(), own = f.rows[0];
+    const field = endpoint === 'timeline/unified' ? 'priority' : 'title';
+    await f.producer.trackFieldChanges({ itemType: 'ISSUE', itemId: 'deleted-authorized', userId: 'alice',
+      workspaceId: f.own.id, projectId: own.projectId,
+      changes: [{ field, oldValue: 'low', newValue: 'high' }] });
+    const read = f.db.issueActivity.findMany;
+    let insertions = 0;
+    f.db.issueActivity.findMany = async args => {
+      const result = await read(args);
+      if (args.select?.itemId && args.select?.workspaceId) {
+        const issue = { ...own, id: `concurrent-${insertions++}`, title: 'private-concurrent-issue',
+          statusId: 'revoked-status', projectStatus: { project: f.rows[2].project } };
+        f.rows.push(issue);
+        await f.producer.trackFieldChanges({ itemType: 'ISSUE', itemId: issue.id, userId: 'alice',
+          workspaceId: f.own.id, projectId: own.projectId,
+          changes: [{ field, oldValue: field === 'title' ? 'private-concurrent-old' : 'low',
+            newValue: field === 'title' ? 'private-concurrent-new' : 'high' }] });
+        f.activities.at(-1).details = JSON.stringify({ title: 'private-concurrent-details' });
+      }
+      return result;
+    };
+    const response = await f.call(endpoint), body = await response.json();
+    assert.equal(response.status, 200);
+    assert.ok(insertions > 0);
+    assert.equal(JSON.stringify(body).includes('private-concurrent'), false);
+    assert.equal(JSON.stringify(body).includes('snapshot-0'), true);
+    assert.deepEqual(f.snapshotsRead, ['snapshot-0']);
+    if (body.pagination) assert.equal(body.pagination.total, 1);
+    if (body.stats) assert.equal(body.stats.todayCount, 1);
+    assert.equal(f.activities.length, insertions + 1);
+    f.db.issueActivity.findMany = read;
+    f.workspaces[2].ownerId = 'alice';
+    assert.equal(JSON.stringify(await (await f.call(endpoint)).json()).includes('snapshot-1'), true);
+  });
+}
+
+for (const association of ['project', 'status']) {
+  for (const operation of ['bulk', 'cleanup']) {
+    test(`position ${operation} denies mixed historical ${association} references before transaction`, async () => {
+      const f = relatedIssueFixture(), own = f.rows[0], target = f.rows[1], joined = f.workspaces[1];
+      const foreignProject = target.project;
+      target.workspaceId = own.workspaceId; target.workspace = own.workspace;
+      if (association === 'status') {
+        target.project = own.project; target.projectId = own.projectId;
+        target.statusId = 'joined-status'; target.projectStatus = { project: foreignProject };
+      }
+      const view = { id: 'view', ownerId: 'alice', workspaceId: own.workspaceId, workspace: own.workspace };
+      f.db.view.findFirst = async ({ where }) => matches(view, where) ? view : null;
+      f.dependencies['@/constants/viewPositions'] = { VIEW_POSITIONS_MAX_BULK_SIZE: 500 };
+      const positions = [own, target].map(issue => ({ viewId: view.id, issueId: issue.id, columnId: 'old', position: 9 }));
+      f.db.viewIssuePosition = {
+        deleteMany: async ({ where }) => {
+          for (let i = positions.length - 1; i >= 0; i--) if (matches(positions[i], where)) positions.splice(i, 1);
+        },
+        upsert: async ({ create }) => { positions.push(create); return create; },
+      };
+      const { PUT } = f.route('views/[viewId]/issue-positions');
+      const update = ids => PUT(f.request('PUT', undefined, {
+        bulk: (operation === 'bulk' ? [own.id, ...ids] : [own.id]).map(issueId => ({ issueId, columnId: 'new', position: 0 })),
+        cleanup: { issueIds: operation === 'cleanup' ? [own.id, ...ids, ...ids] : [own.id], keepColumnId: 'new' },
+      }), f.context(own.workspaceId));
+      joined.members[0].status = false;
+      const before = JSON.stringify(positions);
+      const denied = await update([target.id]);
+      assert.equal(denied.status, 404);
+      assert.equal(JSON.stringify(positions), before);
+      assert.equal(f.calls.writes, 0);
+      assert.deepEqual(f.writes, []);
+      joined.members[0].status = true;
+      const allowed = await update([target.id]);
+      assert.equal(allowed.status, 200);
+      assert.equal((await allowed.json()).affectedCount, operation === 'bulk' ? 2 : 1);
+      assert.ok(positions.some(row => row.issueId === own.id && row.columnId === 'new'));
+      if (operation === 'cleanup') assert.equal(positions.some(row => row.issueId === target.id), false);
+      joined.members[0].status = false; joined.ownerId = 'alice';
+      assert.equal((await update([target.id])).status, 200);
+      const mutations = f.calls.writes, snapshot = JSON.stringify(positions);
+      assert.equal((await update([f.rows[3].id])).status, 404);
+      assert.equal(f.calls.writes, mutations);
+      assert.equal(JSON.stringify(positions), snapshot);
+    });
+  }
+
+  test(`issue preview applies full historical ${association} access and exact URL scope`, async () => {
+    const f = relatedIssueFixture(), own = f.rows[0], joined = f.workspaces[1];
+    if (association === 'project') { own.project = f.rows[1].project; own.projectId = own.project.id; }
+    else { own.statusId = 'joined-status'; own.projectStatus = { project: f.rows[1].project }; }
+    own.assignee = { name: 'private-assignee' };
+    const { POST } = f.route('link-preview');
+    const preview = async scope => {
+      const response = await POST(f.request('POST', own.workspaceId, {
+        url: `https://collab.example.test/${scope}/issues/${own.issueKey}`, workspaceId: own.workspaceId,
+      }));
+      assert.equal(response.status, 200); return response.json();
+    };
+    for (const scope of [own.workspaceId, own.workspace.slug]) {
+      assert.equal((await preview(scope)).title, `${own.issueKey}: ${own.title}`);
+      joined.members[0].status = false; f.reads.length = 0;
+      const body = await preview(scope);
+      assert.equal(body.metadata.notFound, true);
+      for (const secret of [own.title, 'private-assignee', 'open']) assert.equal(JSON.stringify(body).includes(secret), false);
+      assert.deepEqual(f.reads, []);
+      joined.ownerId = 'alice';
+      assert.equal((await preview(scope)).title, `${own.issueKey}: ${own.title}`);
+      joined.ownerId = 'bob'; joined.members[0].status = true;
+    }
+    assert.equal((await preview(joined.slug)).metadata.notFound, true);
+    assert.equal((await preview('unknown-workspace')).metadata.notFound, true);
+    assert.deepEqual(f.writes, []);
+  });
+}
+
+for (const direction of ['source', 'target']) {
+  test(`suggestion counts exclude denied issues and ${direction} relation endpoints`, async () => {
+    const f = activitySnapshotFixture(), own = f.rows[0], allowed = f.rows[1], denied = f.rows[2];
+    const foreignProject = denied.project;
+    for (const issue of [own, allowed, denied]) {
+      issue.title = 'Matching issue'; issue.project = own.project; issue.projectId = own.projectId;
+      issue.workspace = own.workspace; issue.workspaceId = own.workspaceId;
+    }
+    denied.statusId = 'revoked-status'; denied.projectStatus = { project: foreignProject };
+    f.db.issue.count = async ({ where }) => f.rows.filter(row => matches(row, where)).length;
+    f.db.issueActivity.findFirst = async () => null;
+    const relations = [];
+    f.db.issueRelation.count = async ({ where }) => relations.filter(row => matches(row, where)).length;
+    const read = async () => {
+      const response = await f.route('ai/issues/suggestions').GET(new Request(
+        `https://collab.example.test/?workspaceId=${own.workspaceId}&issueId=${own.id}`));
+      assert.equal(response.status, 200); return response.json();
+    };
+    const baseline = await read();
+    assert.equal(baseline.suggestions.find(row => row.id === 'suggest-link').description,
+      'Found 1 potentially related issues. Linking them can help track dependencies.');
+    relations.push({ sourceIssueId: direction === 'source' ? denied.id : own.id,
+      targetIssueId: direction === 'target' ? denied.id : own.id,
+      sourceIssue: direction === 'source' ? denied : own, targetIssue: direction === 'target' ? denied : own });
+    assert.deepEqual(await read(), baseline);
+    f.workspaces[2].members[0].status = true;
+    assert.equal((await read()).suggestions.some(row => row.id === 'suggest-link'), false);
+    relations.length = 0;
+    assert.equal((await read()).suggestions.find(row => row.id === 'suggest-link').description,
+      'Found 2 potentially related issues. Linking them can help track dependencies.');
+    f.workspaces[2].members[0].status = false; f.workspaces[2].ownerId = 'alice';
+    assert.equal((await read()).suggestions.find(row => row.id === 'suggest-link').description,
+      'Found 2 potentially related issues. Linking them can help track dependencies.');
+    f.workspaces[2].ownerId = 'bob'; allowed.title = 'Unrelated';
+    assert.equal((await read()).suggestions.some(row => row.id === 'suggest-link'), false);
+    assert.deepEqual(f.writes, []);
+  });
+}
