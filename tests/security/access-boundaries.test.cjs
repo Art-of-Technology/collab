@@ -16,6 +16,9 @@ function load(file, dependencies = {}, globals = {}) {
     exports,
     ...globals,
     require(name) {
+      if (!(name in dependencies) && ['@/lib/issue-mutation', '@/lib/post-access'].includes(name)) {
+        return load(`src/${name.slice(2)}.ts`, dependencies, globals);
+      }
       if (!(name in dependencies)) throw new Error(`Unexpected dependency: ${name}`);
       return dependencies[name];
     },
@@ -1148,6 +1151,7 @@ test('disclosure: post GET and action reads deny foreign or revoked members', as
     '@/lib/auth-options': { authOptions: {} }, '@/lib/prisma': { prisma: db },
     'next-auth': { getServerSession: async () => session },
     '@/utils/mentions': {}, '@/lib/notification-service': {},
+    '@/lib/user-utils': load('src/lib/user-utils.ts'),
   }, { Error });
   const { GET } = load('src/app/api/posts/[postId]/route.ts', {
     'next/server': { NextResponse: Response }, '@/actions/post': actions,
@@ -2034,4 +2038,219 @@ test('leave policy permissions enforce active membership across reads and mutati
     }
   }
 
+});
+
+test('shared issue mutation blocks AI and PUT bypasses with real access and field permissions', async (t) => {
+  const workspace = { id: 'joined', slug: 'joined', ownerId: 'bob', members: [{ userId: 'alice', status: true, role: 'MEMBER' }] };
+  let user, state, grants, writes, effects, conflict;
+  const db = {
+    workspace: { findFirst: async ({ where }) => matches(workspace, where) ? workspace : null },
+    user: { findUnique: async ({ where, include }) => ({ id: where.id, name: where.id, role: 'DEVELOPER',
+      workspaceMemberships: include ? workspace.members.filter(member => member.userId === where.id &&
+        matches({ ...member, workspaceId: workspace.id }, include.workspaceMemberships.where)) : [],
+      ownedWorkspaces: workspace.ownerId === where.id ? [{ id: workspace.id }] : [] }) },
+    rolePermission: { findUnique: async ({ where }) => grants.includes(where.workspaceId_role_permission.permission) ? {} : null },
+    issue: {
+      findFirst: async ({ where }) => matches({ ...state, workspace }, where) ? { ...state } : null,
+      update: async ({ data }) => { writes++; Object.assign(state, data); return { ...state }; },
+      create: async ({ data }) => { writes++; return { ...data, id: 'created' }; },
+    },
+    project: { findFirst: async ({ where }) => {
+      const project = { id: 'project', workspaceId: 'joined', issuePrefix: 'P', _count: { issues: 1 } };
+      return matches(project, where) ? project : null;
+    } },
+    projectStatus: { findMany: async ({ where }) => [
+      { id: 'todo', projectId: 'project', name: 'todo', displayName: 'To Do', isActive: true },
+      { id: 'progress', projectId: 'project', name: 'in_progress', displayName: 'In Progress', isActive: true },
+    ].filter(row => matches(row, where)) },
+    taskLabel: { count: async () => 0 },
+    issueAssignee: { upsert: async () => { writes++; } },
+    issueFollower: { findMany: async () => [] }, projectFollower: { findMany: async () => [] },
+    $transaction: async (fn, options) => {
+      assert.equal(options.isolationLevel, 'Serializable');
+      if (conflict) throw new (require('@prisma/client').Prisma.PrismaClientKnownRequestError)('conflict', { code: 'P2034', clientVersion: 'test' });
+      return fn(db);
+    },
+  };
+  const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma: db },
+    '@/lib/shared-issue-key-utils': load('src/lib/shared-issue-key-utils.ts') });
+  const permissions = load('src/lib/permissions.ts', { './prisma': { prisma: db } }, { console });
+  const dependencies = {
+    zod: require('zod'), '@prisma/client': require('@prisma/client'),
+    'next/server': { NextResponse: Response }, '@/lib/session': { getCurrentUser: async () => user },
+    '@/lib/prisma': { prisma: db }, '@/lib/permissions': permissions, '@/lib/issue-finder': finder,
+    '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
+    '@/lib/board-item-activity-service': { compareObjects: () => [], trackAssignment: async () => {}, trackStatusChange: async () => {}, createActivity: async () => {} },
+    '@/lib/redis': { publishEvent: async () => { effects++; } }, '@/utils/mentions': { extractMentionUserIds: () => [] },
+    '@/lib/notification-service': {}, '@/lib/event-bus': { emitIssueUpdated: async () => { effects++; } },
+  };
+  const put = load('src/app/api/issues/[issueId]/route.ts', dependencies, { URL, console }).PUT;
+  const ai = load('src/app/api/ai/action/route.ts', dependencies, { console }).POST;
+  function reset() {
+    user = { id: 'alice' }; grants = ['EDIT_SELF_TASK']; writes = 0; effects = 0; conflict = false;
+    workspace.ownerId = 'bob'; workspace.members = [{ userId: 'alice', status: true, role: 'MEMBER' }];
+    state = { id: 'issue', issueKey: 'P-1', title: 'Before', reporterId: 'bob', assigneeId: null,
+      workspaceId: 'joined', projectId: 'project', statusId: 'todo', status: 'todo', statusValue: 'todo',
+      parentId: null, updatedAt: new Date('2026-09-24T00:00:00Z') };
+  }
+  const aiRequest = (params, type = 'update_issue', workspaceId = 'joined') => ai(new Request('https://example.test/api/ai/action', {
+    method: 'POST', body: JSON.stringify({ action: { type, params }, context: { workspace: { id: workspaceId } } }),
+  }));
+  for (const endpoint of ['PUT', 'AI']) {
+    const request = fields => endpoint === 'AI' ? aiRequest({ issueId: 'issue', ...fields }) : put(new Request('https://example.test/api/issues/issue?workspaceId=joined', {
+      method: 'PUT', body: JSON.stringify(fields),
+    }), { params: Promise.resolve({ issueId: 'issue' }) });
+    const denied = [
+      ['other reporter', () => {}, { title: 'Denied' }, 403],
+      ['read only reporter', () => { state.reporterId = 'alice'; grants = []; }, { title: 'Denied' }, 403],
+      ['anonymous', () => { user = null; }, { title: 'Denied' }, 401],
+      ['revoked', () => { workspace.members[0].status = false; grants = ['EDIT_ANY_TASK']; }, { title: 'Denied' }, endpoint === 'AI' ? 403 : 404],
+      ['foreign user', () => { workspace.members = []; grants = ['EDIT_ANY_TASK']; }, { title: 'Denied' }, endpoint === 'AI' ? 403 : 404],
+      ['foreign issue', () => { state.workspaceId = 'foreign'; grants = ['EDIT_ANY_TASK']; }, { title: 'Denied' }, 404],
+      ['status mixed with title', () => { grants = ['CHANGE_TASK_STATUS']; }, { statusId: 'progress', title: 'Denied' }, 403],
+      ['assignment mixed with status', () => { grants = ['ASSIGN_TASK']; }, { assigneeId: 'alice', statusId: 'progress' }, 403],
+      ['empty title', () => { grants = ['EDIT_ANY_TASK']; }, { title: ' ' }, 400],
+      ['bad date', () => { grants = ['EDIT_ANY_TASK']; }, { dueDate: 'tomorrow' }, 400],
+      ['mass assignment', () => { grants = ['EDIT_ANY_TASK']; }, { workspaceId: 'foreign' }, 400],
+      ['foreign assignee', () => { grants = ['ASSIGN_TASK']; }, { assigneeId: 'outsider' }, 400],
+      ['revoked assignee', () => { workspace.members.push({ userId: 'revoked', status: false }); grants = ['ASSIGN_TASK']; }, { assigneeId: 'revoked' }, 400],
+      ['foreign reporter', () => { grants = ['EDIT_ANY_TASK']; }, { reporterId: 'outsider' }, 400],
+      ['foreign project', () => { grants = ['EDIT_ANY_TASK']; }, { projectId: 'foreign' }, 400],
+      ['foreign status', () => { grants = ['CHANGE_TASK_STATUS']; }, { statusId: 'foreign' }, 400],
+      ['foreign parent', () => { grants = ['EDIT_ANY_TASK']; }, { parentId: 'foreign' }, 400],
+      ['foreign labels', () => { grants = ['EDIT_ANY_TASK']; }, { labels: ['foreign'] }, 400],
+      ['conflict', () => { grants = ['EDIT_ANY_TASK']; conflict = true; }, { title: 'Denied' }, 409],
+    ];
+    for (const [name, setup, fields, expected] of denied) await t.test(`${endpoint}: ${name}`, async () => {
+      reset(); setup(); const before = structuredClone(state);
+      const response = await request(fields);
+      assert.equal(response.status, expected, await response.text());
+      assert.equal(writes, 0); assert.equal(effects, 0); assert.deepEqual(state, before);
+    });
+    for (const [name, setup, fields, expectedWrites] of [
+      ['owner without membership', () => { workspace.ownerId = 'alice'; workspace.members = []; grants = []; }, { title: 'After' }, 1],
+      ['reporter', () => { state.reporterId = 'alice'; }, { title: 'After' }, 1],
+      ['editor', () => { grants = ['EDIT_ANY_TASK']; }, { title: 'After' }, 1],
+      ['status only', () => { grants = ['CHANGE_TASK_STATUS']; }, { status: 'In Progress' }, 1],
+      ['assignment only', () => { grants = ['ASSIGN_TASK']; }, { assigneeId: 'alice' }, 2],
+    ]) await t.test(`${endpoint}: ${name}`, async () => {
+      reset(); setup(); const response = await request(fields);
+      assert.equal(response.status, 200, await response.text()); assert.equal(writes, expectedWrites);
+      assert.equal(state.workspaceId, 'joined');
+      if (fields.title) assert.equal(state.title, 'After');
+      if (fields.status) { assert.equal(state.statusId, 'progress'); assert.equal(state.statusValue, 'in_progress'); }
+      if (fields.assigneeId) assert.equal(state.assigneeId, 'alice');
+    });
+  }
+  await t.test('AI rejects malformed envelopes and issue identifier aliases', async () => {
+    reset(); grants = ['EDIT_ANY_TASK'];
+    for (const body of [null, {}, { action: { type: 'update_issue', params: null }, context: { workspace: { id: 'joined' } } }]) {
+      assert.equal((await ai(new Request('https://example.test', { method: 'POST', body: JSON.stringify(body) }))).status, 400);
+    }
+    assert.equal((await aiRequest({ id: 'issue', title: 'Denied' })).status, 400);
+    assert.equal((await aiRequest({ issueId: 'issue', title: 'Denied' }, 'update_issue', 'foreign')).status, 403);
+    assert.equal(writes, 0);
+  });
+  await t.test('AI creation also denies read only users and foreign references', async () => {
+    reset();
+    assert.equal((await aiRequest({ title: 'New', projectId: 'project' }, 'create_issue')).status, 403);
+    grants = ['CREATE_TASK'];
+    for (const [params, expected] of [[{ title: ' ' }, 400], [{ title: 'New', projectId: 'foreign' }, 404],
+      [{ title: 'New', projectId: 'project', assigneeId: 'outsider' }, 400]]) {
+      assert.equal((await aiRequest(params, 'create_issue')).status, expected);
+    }
+    assert.equal(writes, 0);
+    assert.equal((await aiRequest({ title: 'New', projectId: 'project' }, 'create_issue')).status, 200);
+    assert.equal(writes, 1);
+  });
+});
+
+test('shared post access protects comments, replies and action history before content reads', async (t) => {
+  const author = { id: 'author', name: 'Author', image: 'avatar', email: 'private@example.test', hashedPassword: 'synthetic', githubAccessToken: 'synthetic' };
+  const posts = [...workspaces, null].map(workspace => ({ id: workspace?.id ?? 'unscoped', workspace,
+    workspaceId: workspace?.id ?? null, authorId: 'alice' }));
+  let user = null, contentReads = 0, metadataReads = 0, fail = false;
+  const projectAuthor = selection => Object.fromEntries(Object.entries(author).filter(([field]) => selection?.select[field]));
+  const db = {
+    user: { findUnique: async () => user },
+    post: { findFirst: async ({ where, include }) => {
+      metadataReads++; if (fail) throw new Error('Post not found');
+      const post = posts.find(row => matches(row, where));
+      if (!post) return null;
+      if (!include) return { id: post.id };
+      contentReads++;
+      return { ...post, message: 'Private', author: projectAuthor(include.author), comments: [], tags: [], reactions: [] };
+    } },
+    comment: { findMany: async ({ where, include }) => {
+      contentReads++;
+      const post = posts.find(row => row.id === where.postId);
+      if (where.post && !matches(post, where.post)) return [];
+      const replies = Boolean(where.NOT);
+      return [{ id: replies ? 'reply' : 'comment', postId: post.id, parentId: replies ? 'comment' : null,
+        message: replies ? 'Reply message' : 'Comment message', html: '<p>Private HTML</p>',
+        author: projectAuthor(include.author), reactions: [{ id: 'reaction', author: projectAuthor(include.reactions.include.author) }] }];
+    } },
+    reaction: { findMany: async ({ where, include }) => {
+      contentReads++;
+      const post = posts.find(row => row.id === where.postId);
+      if (where.post && !matches(post, where.post)) return [];
+      return [{ id: 'reaction', authorId: 'alice', author: projectAuthor(include.author) }];
+    } },
+    postAction: { findMany: async ({ where, include }) => {
+      contentReads++;
+      const post = posts.find(row => row.id === where.postId);
+      if (where.post && !matches(post, where.post)) return [];
+      return [{ id: 'action', user: projectAuthor(include.user), newValue: 'Private history' }];
+    } },
+  };
+  const dependencies = {
+    'next/server': { NextResponse: Response }, '@/lib/session': { getCurrentUser: async () => user },
+    '@/lib/prisma': { prisma: db }, '@/lib/user-utils': load('src/lib/user-utils.ts'),
+    '@/lib/auth-options': { authOptions: {} }, 'next-auth': { getServerSession: async () => user && { user: { email: 'alice@example.test' } } },
+    '@/utils/mentions': {}, '@/lib/notification-service': {},
+  };
+  const globals = { console: { error() {} }, Error };
+  const reactions = load('src/app/api/posts/[postId]/reactions/route.ts', dependencies, globals).GET;
+  const comments = load('src/app/api/posts/[postId]/comments/route.ts', dependencies, globals).GET;
+  const postGet = load('src/app/api/posts/[postId]/route.ts', dependencies, globals).GET;
+  const actions = load('src/actions/post.ts', dependencies, globals);
+  const request = (handler, id) => handler(new Request('https://example.test'), { params: Promise.resolve({ postId: id }) });
+  await t.test('anonymous reads do not query posts or comments', async () => {
+    for (const handler of [comments, postGet, reactions]) assert.equal((await request(handler, 'joined')).status, 401);
+    await assert.rejects(actions.getPostById('joined'), /Unauthorized/);
+    await assert.rejects(actions.getPostActions('joined'), /Unauthorized/);
+    assert.equal(metadataReads, 0); assert.equal(contentReads, 0);
+  });
+  user = { id: 'alice' };
+  for (const id of ['foreign', 'revoked', 'unscoped', 'missing']) await t.test(id, async () => {
+    contentReads = 0;
+    for (const handler of [comments, postGet, reactions]) {
+      const response = await request(handler, id);
+      assert.equal(response.status, 404); assert.equal(await response.text(), 'Post not found');
+    }
+    await assert.rejects(actions.getPostById(id), /Post not found/);
+    await assert.rejects(actions.getPostActions(id), /Post not found/);
+    assert.equal(contentReads, 0);
+  });
+  for (const id of ['own', 'joined']) await t.test(id, async () => {
+    const response = await request(comments, id);
+    assert.equal(response.status, 200);
+    const { comments: [comment] } = await response.json();
+    assert.equal(comment.message, 'Comment message'); assert.equal(comment.html, '<p>Private HTML</p>');
+    assert.equal(comment.replies[0].message, 'Reply message'); assert.equal(comment.replies[0].parentId, comment.id);
+    for (const row of [comment, comment.replies[0], comment.reactions[0], comment.replies[0].reactions[0]]) {
+      assert.deepEqual(row.author, { id: author.id, name: author.name, image: author.image });
+    }
+    const reactionResponse = await request(reactions, id);
+    assert.equal(reactionResponse.status, 200);
+    const reactionBody = await reactionResponse.json();
+    assert.equal(reactionBody.hasReacted, true);
+    assert.deepEqual(reactionBody.reactions[0].author, { id: author.id, name: author.name, image: author.image });
+    assert.equal((await actions.getPostById(id)).message, 'Private');
+    assert.equal((await actions.getPostActions(id))[0].newValue, 'Private history');
+  });
+  await t.test('storage exceptions remain server errors instead of legacy action error mappings', async () => {
+    fail = true;
+    assert.equal((await request(postGet, 'joined')).status, 500);
+  });
 });

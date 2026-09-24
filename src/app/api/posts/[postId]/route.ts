@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { postAccessWhere } from "@/lib/post-access";
 import { userSelectFields } from "@/lib/user-utils";
 
 // Get a single post
@@ -15,15 +16,7 @@ export async function GET(
     }
 
     const post = await prisma.post.findFirst({
-      where: {
-        id: (await params).postId,
-        workspace: {
-          OR: [
-            { ownerId: user.id },
-            { members: { some: { userId: user.id, status: true } } },
-          ],
-        },
-      },
+      where: postAccessWhere((await params).postId, user.id),
       include: {
         author: { select: userSelectFields },
         tags: true,
@@ -45,14 +38,6 @@ export async function GET(
 
     return NextResponse.json(post);
   } catch (error) {
-    if (error instanceof Error) {
-      if (['Unauthorized', 'User not found'].includes(error.message)) {
-        return new NextResponse("Unauthorized", { status: 401 });
-      }
-      if (['Post not found', 'You do not have access to this post'].includes(error.message)) {
-        return new NextResponse("Post not found", { status: 404 });
-      }
-    }
     console.error("[POST_GET]", error);
     return new NextResponse("Internal error", { status: 500 });
   }

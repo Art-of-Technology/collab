@@ -1,5 +1,7 @@
 'use server';
 
+import { postAccessWhere } from "@/lib/post-access";
+import { userSelectFields } from "@/lib/user-utils";
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -381,12 +383,10 @@ export async function getPostById(postId: string) {
     throw new Error('User not found');
   }
   
-  const post = await prisma.post.findUnique({
-    where: {
-      id: postId,
-    },
+  const post = await prisma.post.findFirst({
+    where: postAccessWhere(postId, user.id),
     include: {
-      author: true,
+      author: { select: userSelectFields },
       tags: true,
       workspace: {
         select: {
@@ -406,7 +406,7 @@ export async function getPostById(postId: string) {
       },
       comments: {
         include: {
-          author: true,
+          author: { select: userSelectFields },
           reactions: {
             include: {
               author: {
@@ -441,15 +441,6 @@ export async function getPostById(postId: string) {
     throw new Error('Post not found');
   }
   
-  // Check if user has access to the workspace this post belongs to
-  const isWorkspaceOwner = post.workspace?.ownerId === user.id;
-  const isMember = post.workspace?.members && post.workspace.members.length > 0;
-  const hasAccess = isWorkspaceOwner || isMember;
-  
-  if (!hasAccess) {
-    throw new Error('You do not have access to this post');
-  }
-
   return post;
 }
 
@@ -1078,48 +1069,17 @@ export async function getPostActions(postId: string) {
     throw new Error('User not found');
   }
   
-  // Verify user has access to the post
-  const post = await prisma.post.findUnique({
-    where: { id: postId },
-    include: {
-      workspace: {
-        select: {
-          id: true,
-          ownerId: true,
-          members: {
-            where: { userId: user.id },
-            select: { id: true }
-          }
-        }
-      }
-    }
-  });
-
+  const access = postAccessWhere(postId, user.id);
+  const post = await prisma.post.findFirst({ where: access, select: { id: true } });
   if (!post) {
     throw new Error('Post not found');
   }
-  
-  // Check if user has access to the workspace
-  if (!post.workspaceId) {
-    // If no workspace, only author can view
-    if (post.authorId !== user.id) {
-      throw new Error('You do not have access to this post');
-    }
-  } else {
-    // Check if user is a member of the workspace
-    const isWorkspaceMember = post.workspace?.members && post.workspace.members.length > 0;
-    const isWorkspaceOwner = post.workspace?.ownerId === user.id;
-    const isAuthor = post.authorId === user.id;
-    
-    if (!isAuthor && !isWorkspaceOwner && !isWorkspaceMember) {
-      throw new Error('You do not have access to this post');
-    }
-  }
-  
+
   // Get action history using normal Prisma client
   const actions = await prisma.postAction.findMany({
     where: {
       postId: postId,
+      post: access,
     },
     include: {
       user: {

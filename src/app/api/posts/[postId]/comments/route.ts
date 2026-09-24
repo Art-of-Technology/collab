@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { postAccessWhere } from "@/lib/post-access";
 import { getCurrentUser } from "@/lib/session";
 
 export async function POST(
@@ -65,13 +66,22 @@ export async function GET(
   { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
-    const _params = await params;
-    const postId = await _params.postId;
+    const user = await getCurrentUser();
+    if (!user?.id) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+    const { postId } = await params;
+    const access = postAccessWhere(postId, user.id);
+    const post = await prisma.post.findFirst({ where: access, select: { id: true } });
+    if (!post) {
+      return new NextResponse("Post not found", { status: 404 });
+    }
 
     // First, get all top-level comments (those without a parent)
     const topLevelComments = await prisma.comment.findMany({
       where: {
         postId,
+        post: access,
         parentId: null, // Only get comments without a parent
       },
       orderBy: {
@@ -103,6 +113,7 @@ export async function GET(
     const replies = await prisma.comment.findMany({
       where: {
         postId,
+        post: access,
         NOT: {
           parentId: null, // Only get comments with a parent
         },
