@@ -19,11 +19,19 @@ Authorization: Bearer <your_access_token>
 
 Access tokens are obtained through the OAuth 2.0 authorization flow. See the [OAuth documentation](#oauth) for details.
 
+Every authenticated app request also requires the token's user to own or be an
+active member of its workspace, including system-app tokens. Users with neither
+right receive HTTP 403 (`workspace_access_denied`) even when the token is still
+valid; workspace owners do not need a separate membership row. Existing token
+expiry, app/installation, scope and operation-specific checks still apply.
+System-app workspace overrides require the same current access to the target
+workspace as well as the token's original workspace.
+
 ### Notes context and secrets
 
 User-bound app/MCP context, knowledge, system-prompts, AI-context and secrets
-endpoints require active workspace membership or ownership in addition to token
-validation. Token scopes narrow the user's Notes rights; they never grant access
+endpoints apply the [authentication requirements](#authentication).
+Token scopes narrow the user's Notes rights; they never grant access
 to otherwise inaccessible notes. Reads and counts apply the same Notes access
 policy before returning content. Restricted notes require authorship or an
 explicit share, even for workspace administrators; expiry also limits access.
@@ -330,6 +338,13 @@ DELETE /api/apps/auth/tasks/{taskId}
 **Required scopes:** `tasks:write`
 
 ### Posts
+
+The [authentication requirements](#authentication) apply before post queries or
+writes. Post and nested user projections omit email addresses. Updates and
+deletion require authorship or active `ADMIN` membership; pin changes require
+active `ADMIN` membership. Workspace ownership grants access but does not bypass
+these operation-specific checks. For deletion integrity, see the
+[shared post access contract](../../docs/security/2026-09-23-hardening.md#post-and-coclaw-disclosure-follow-up).
 
 #### List Posts
 ```http

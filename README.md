@@ -249,13 +249,8 @@ For issue edits and project moves, see the
 
 Collab exposes a RESTful API under the `/api` namespace. Example endpoints:
 
-- GET `/api/posts` – Retrieve all posts.
-- POST `/api/posts` – Create a new post.
-  ```bash
-  curl -X POST http://localhost:3000/api/posts \
-    -H "Content-Type: application/json" \
-    -d '{"title":"Project Update","content":"Completed user authentication."}'
-  ```
+- `/api/posts` – Read and create posts using a signed-in session; see the
+  [post access contract](docs/security/2026-09-23-hardening.md#post-and-coclaw-disclosure-follow-up).
 - GET `/api/tasks/boards/{boardId}/tasks` – List tasks in a board.
 - GET `/api/users/me` – Fetch current user profile.
 

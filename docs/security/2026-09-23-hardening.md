@@ -7,7 +7,7 @@ Status: local implementation; not deployed or release-approved.
 - Issue ID and key resolution always requires workspace ownership or active
   membership. A caller-supplied workspace only narrows that authorized set.
 - Issue updates reject empty, unknown or invalid fields using `UpdateIssueSchema`
-  in `src/app/api/issues/[issueId]/route.ts`. General edits require
+  in `src/lib/issue-mutation.ts`, shared by REST and AI updates. General edits require
   `EDIT_ANY_TASK` or reporter-based `EDIT_SELF_TASK`; `CHANGE_TASK_STATUS` only
   authorizes status fields and `ASSIGN_TASK` only authorizes assignment. Every
   field in a mixed payload must be authorized. Deletion uses the corresponding
@@ -169,10 +169,32 @@ range excludes the locked Next major; no dependency versions were changed.
 
 ## Post and Coclaw disclosure follow-up
 
-Post GET now reuses `getPostById`; the shared action excludes inactive workspace
-members, preserving owner access and authorized post/comment responses. Coclaw
-memory requires active workspace access and applies the shared Notes predicate
-to both its content query and total count, including filtered searches.
+Post REST handlers and server actions share the predicates in
+`src/lib/post-access.ts`. Reads, counts, comments, reactions, follows and mutations
+require current workspace ownership or active membership; authorship alone does
+not retain access after membership is revoked. Workspace filters only narrow
+access. Posts without a workspace are excluded. Profile post lists and post,
+comment and reaction totals are scoped to the viewer's access, not the author's.
+The unified timeline and AI dashboard check workspace access before content
+queries; timeline creation checks the exact destination before writes or
+notifications. Existing operation-specific author and permission checks remain.
+
+Post/comment notification delivery rechecks each recipient's current access.
+Stored notifications referencing inaccessible posts or comments are excluded
+from reads and mark-read operations, including read-all; follower records do not
+grant access. Post detail and reaction responses use safe user projections.
+
+Comment and post deletion use `src/lib/delete-post-comment.ts` to lock and inspect
+descendants within the deletion transaction. A legacy parent link into another
+post rejects the deletion before writes, preventing database cascades from
+deleting that post's comments or reactions. Each caller retains its own deletion
+permission check.
+
+For app-token access and post response restrictions, see the served
+[authentication](../../public/docs/third-party-api.md#authentication) and
+[posts](../../public/docs/third-party-api.md#posts) reference.
+Coclaw memory requires active workspace access and applies the shared Notes
+predicate to both its content query and total count, including filtered searches.
 
 Two focused handler regressions passed with
 `node --test --test-name-pattern='disclosure:' tests/security/access-boundaries.test.cjs`.
@@ -181,12 +203,25 @@ adapters, covering anonymous, foreign and revoked denial; member/owner access;
 and private, restricted, shared and expired Notes across filters and pagination.
 No live database or broader validation gates were run in this review round.
 
+## AI conversations and streaming
+
+Conversation list, creation, detail and archival require current workspace
+ownership or active membership; detail and archival also require conversation
+ownership. Both chat stream branches (Anthropic/MCP and Coclaw) enforce workspace
+access before credential resolution, provider calls or conversation/message
+writes. When supplied, `conversationId` must identify the caller's conversation
+in that workspace. Omitting it does not bypass workspace access.
+
+Coclaw channel message reads and writes use app authentication and bind the URL
+user and message workspace to the authenticated token context.
+
 ## User-bound app Notes and leave-policy follow-up
 
 The served API reference owns the
 [app Notes authorization contract](../../public/docs/third-party-api.md#notes-context-and-secrets).
 Leave-policy reads use the shared active-workspace helper while preserving owner
-access.
+access. Ordinary members receive basic policy details; management fields require
+`MANAGE_LEAVE`.
 
 Four focused regressions passed with
 `node --test --test-name-pattern='app-notes:' tests/security/access-boundaries.test.cjs`.

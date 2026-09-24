@@ -11,15 +11,8 @@ https://your-collab-instance.com/api/apps/auth/
 
 ## Authentication
 
-All endpoints require OAuth 2.0 Bearer token authentication:
-
-```http
-Authorization: Bearer <your_access_token>
-```
-
-Access tokens are obtained through the OAuth 2.0 authorization flow. See the [OAuth documentation](oauth-endpoints.md) for details.
-
-The served reference owns the [Notes context and secrets authorization contract](../public/docs/third-party-api.md#notes-context-and-secrets).
+See the served reference for [authentication and workspace access](../public/docs/third-party-api.md#authentication)
+and the [Notes context and secrets authorization contract](../public/docs/third-party-api.md#notes-context-and-secrets).
 
 ## Scopes
 
@@ -317,56 +310,7 @@ DELETE /api/apps/auth/tasks/{taskId}
 
 ### Posts
 
-#### List Posts
-```http
-GET /api/apps/auth/posts
-```
-**Required scopes:** `posts:read`
-
-**Query parameters:**
-- `page`, `limit` - Pagination
-- `projectId` - Filter by project
-- `type` - Filter by type (ANNOUNCEMENT, DISCUSSION, QUESTION, UPDATE)
-- `authorId` - Filter by author
-- `isPinned` - Filter pinned posts (true/false)
-- `search` - Search in title or content
-
-#### Create Post
-```http
-POST /api/apps/auth/posts
-```
-**Required scopes:** `posts:write`
-
-**Request body:**
-```json
-{
-  "title": "Weekly Team Update",
-  "content": "Here's what we accomplished this week...",
-  "type": "UPDATE",
-  "projectId": "project_123",
-  "tags": ["weekly", "update"],
-  "isPinned": false,
-  "allowComments": true
-}
-```
-
-#### Get Post
-```http
-GET /api/apps/auth/posts/{postId}
-```
-**Required scopes:** `posts:read`
-
-#### Update Post
-```http
-PATCH /api/apps/auth/posts/{postId}
-```
-**Required scopes:** `posts:write`
-
-#### Delete Post
-```http
-DELETE /api/apps/auth/posts/{postId}
-```
-**Required scopes:** `posts:write`
+See the served [Posts reference](../public/docs/third-party-api.md#posts).
 
 ### Comments
 

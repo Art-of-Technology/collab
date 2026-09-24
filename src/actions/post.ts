@@ -541,7 +541,7 @@ export async function updatePost(postId: string, data: {
   if (!existingPost) {
     throw new Error('Post not found');
   }
-  
+
   if (existingPost.authorId !== user.id) {
     throw new Error('Unauthorized to edit this post');
   }
@@ -692,7 +692,7 @@ export async function deletePost(postId: string) {
   if (!existingPost) {
     throw new Error('Post not found');
   }
-  
+
   if (existingPost.authorId !== user.id) {
     throw new Error('Unauthorized to delete this post');
   }

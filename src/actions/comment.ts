@@ -370,4 +370,3 @@ export async function deleteComment(commentId: string) {
   
   return true;
 }
-
