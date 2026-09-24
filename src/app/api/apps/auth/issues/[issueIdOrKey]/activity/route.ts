@@ -1,3 +1,4 @@
+import { issueAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Issue Activity Endpoint
  * GET /api/apps/auth/issues/:issueIdOrKey/activity - Get issue activity/history
@@ -61,6 +62,7 @@ export const GET = withAppAuth(
             },
           },
           oldStatus: {
+            where: { project: issueAccessWhere(context.user.id) },
             select: {
               id: true,
               name: true,
@@ -70,6 +72,7 @@ export const GET = withAppAuth(
             },
           },
           newStatus: {
+            where: { project: issueAccessWhere(context.user.id) },
             select: {
               id: true,
               name: true,

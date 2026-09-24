@@ -1,4 +1,4 @@
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -65,6 +65,7 @@ export async function GET(
           },
         },
         oldStatus: {
+          where: { project: issueAccessWhere(session.user.id) },
           select: {
             id: true,
             name: true,
@@ -74,6 +75,7 @@ export async function GET(
           },
         },
         newStatus: {
+          where: { project: issueAccessWhere(session.user.id) },
           select: {
             id: true,
             name: true,

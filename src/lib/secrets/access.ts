@@ -1,4 +1,4 @@
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 /**
  * Secrets Access Control Helpers
  *
@@ -219,12 +219,12 @@ export function noteAccessWhere(userId: string): Prisma.NoteWhereInput {
   const admin: Prisma.WorkspaceWhereInput = {
     OR: [{ ownerId: userId }, { members: { some: { userId, status: true, role: { in: ['ADMIN', 'OWNER'] } } } }]
   };
-  // A direct workspace takes precedence over a project's workspace, as in canAccessNote.
   const inWorkspace = (where: Prisma.WorkspaceWhereInput): Prisma.NoteWhereInput => ({
     OR: [{ workspace: where }, { workspaceId: null, project: { workspace: where } }]
   });
   return {
     AND: [
+      { OR: [{ projectId: null }, { project: issueAccessWhere(userId) }] },
       { OR: [
         inWorkspace(membership),
         { scope: { notIn: [NoteScope.PROJECT, NoteScope.WORKSPACE] }, OR: [
@@ -256,7 +256,7 @@ export async function canAccessNote(
   noteId: string
 ): Promise<AccessCheckResult> {
   const note = await prisma.note.findUnique({
-    where: { id: noteId },
+    where: { id: noteId, OR: [{ projectId: null }, { project: issueAccessWhere(userId) }] },
     select: {
       id: true,
       authorId: true,

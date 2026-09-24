@@ -1923,3 +1923,131 @@ test('historical view positions filter related issues before metadata retrieval 
   assert.equal(positions.length, 4);
   assert.deepEqual(f.writes, []);
 });
+
+for (const association of ['project', 'status']) {
+  test(`app issue mutation denies historical ${association} revocation before writes`, async () => {
+    const f = relatedIssueFixture(), own = f.workspaces[0], joined = f.workspaces[1];
+    const issue = f.rows[0], foreignProject = f.rows[1].project;
+    if (association === 'project') {
+      issue.project = foreignProject; issue.projectId = foreignProject.id;
+    } else {
+      issue.projectStatus = { id: 'historic-status', name: 'private-status', project: foreignProject };
+      issue.statusId = issue.projectStatus.id;
+    }
+    f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => (req, params) => handler(req,
+      { workspace: own, user: f.state.user }, params) };
+    f.db.issue.delete = async args => { f.writes.push(args); };
+    const route = f.route('apps/auth/issues/[issueIdOrKey]');
+    const call = method => route[method](f.request(method, own.id, { title: 'edited' }),
+      { params: Promise.resolve({ issueIdOrKey: issue.id }) });
+    assert.equal((await call('PATCH')).status, 200);
+    joined.members[0].status = false;
+    f.writes.length = 0; f.calls.writes = 0;
+    for (const method of ['PATCH', 'DELETE']) {
+      const response = await call(method);
+      assert.equal(response.status, 404);
+      assert.equal(JSON.stringify(await response.json()).includes('private-status'), false);
+      assert.deepEqual(f.writes, []);
+      assert.equal(f.calls.writes, 0);
+    }
+    joined.ownerId = 'alice';
+    const response = await call('PATCH');
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).title, 'edited');
+    assert.equal(f.writes.length, 1);
+  });
+}
+
+for (const endpoint of ['notes', 'notes/[id]']) {
+  test(`historical Notes project access gates ${endpoint} while retaining personal notes`, async () => {
+    const f = relatedIssueFixture(), own = f.workspaces[0], joined = f.workspaces[1];
+    const note = { id: 'note', title: 'historical-note', authorId: 'alice', author: { id: 'alice' },
+      scope: 'WORKSPACE', type: 'GENERAL', workspaceId: own.id, workspace: own,
+      projectId: f.rows[1].projectId, project: { ...f.rows[1].project, name: 'note-project-secret' },
+      isEncrypted: false, isRestricted: false, expiresAt: null, sharedWith: [], tags: [], comments: [] };
+    const personal = { ...note, id: 'personal', title: 'personal-note', scope: 'PERSONAL',
+      workspaceId: null, workspace: null, projectId: null, project: null };
+    const notes = [note, personal];
+    const metadataReads = [];
+    const read = args => {
+      const row = notes.find(row => matches(row, args.where));
+      if (row && args.include?.project) metadataReads.push(row.project?.name);
+      return f.project(row, args);
+    };
+    f.db.note = {
+      findUnique: async args => read(args), findFirst: async args => read(args),
+      findMany: async args => notes.filter(row => matches(row, args.where)).map(row => read({ ...args, where: { id: row.id } })),
+    };
+    f.dependencies['@/lib/secrets/access'] = load('src/lib/secrets/access.ts', f.dependencies);
+    f.dependencies['@/lib/secrets/crypto'] = { isSecretNoteType: () => false };
+    f.dependencies['@/lib/versioning'] = {};
+    const { GET } = f.route(endpoint);
+    const call = id => GET(f.request(), { params: Promise.resolve({ id: id || note.id }) });
+    assert.equal((await call()).status, 200);
+    joined.members[0].status = false; metadataReads.length = 0;
+    for (const scope of ['WORKSPACE', 'PROJECT', 'PUBLIC', 'PERSONAL', 'SHARED']) {
+      note.scope = scope;
+      const response = await call();
+      assert.equal(response.status, endpoint === 'notes' ? 200 : 404);
+      const body = JSON.stringify(await response.json());
+      assert.equal(body.includes('note-project-secret'), false);
+      assert.equal(body.includes('historical-note'), false);
+    }
+    assert.equal(metadataReads.includes('note-project-secret'), false);
+    assert.equal(JSON.stringify(await (await call('personal')).json()).includes('personal-note'), true);
+    note.scope = 'WORKSPACE'; joined.ownerId = 'alice';
+    const response = await call();
+    assert.equal(response.status, 200);
+    assert.equal(JSON.stringify(await response.json()).includes('note-project-secret'), true);
+    assert.deepEqual(f.writes, []);
+    assert.equal(notes.length, 2);
+  });
+}
+
+for (const endpoint of ['workspaces/[workspaceId]/planning/activity', 'timeline/unified',
+  'apps/auth/issues/[issueIdOrKey]/activity', 'issues/[issueId]/activities']) {
+  test(`historical activity status access filters both relations in ${endpoint}`, async () => {
+    const f = relatedIssueFixture(), own = f.workspaces[0], joined = f.workspaces[1];
+    const current = f.rows[0], accessedStatuses = [];
+    const privateStatus = { id: 'historic-status', name: 'historic-private-status',
+      displayName: 'Historic private status', project: f.rows[1].project, color: 'red' };
+    const publicStatus = { id: 'current-status', name: 'current-public-status', project: current.project, color: 'green' };
+    current.statusId = publicStatus.id; current.projectStatus = publicStatus;
+    const activities = [
+      { id: 'old', oldStatus: privateStatus, newStatus: publicStatus },
+      { id: 'new', oldStatus: publicStatus, newStatus: privateStatus },
+    ].map(row => ({ ...row, itemId: current.id, itemType: 'ISSUE', workspaceId: own.id,
+      action: 'STATUS_CHANGED', createdAt: new Date('2026-09-01'), userId: 'alice', user: { id: 'alice' } }));
+    f.dependencies['date-fns'] = require('date-fns');
+    f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => (req, params) => handler(req,
+      { workspace: own, user: f.state.user }, params) };
+    f.db.issue.findUnique = f.db.issue.findFirst;
+    f.db.user.findMany = async () => [];
+    f.db.issueActivity.count = async ({ where }) => activities.filter(row => matches(row, where)).length;
+    f.db.issueActivity.findMany = async args => activities.filter(row => matches(row, args.where)).map(row => {
+      const result = f.project(row, args);
+      for (const name of ['oldStatus', 'newStatus']) if (result[name]) accessedStatuses.push(result[name].name);
+      return result;
+    });
+    const { GET } = f.route(endpoint);
+    const call = () => GET(new Request(`https://collab.example.test/?workspaceId=${own.id}&startDate=2026-09-01&endDate=2026-09-02`),
+      { params: Promise.resolve({ workspaceId: own.id, issueId: current.id, issueIdOrKey: current.id }) });
+    let response = await call();
+    assert.equal(response.status, 200);
+    assert.equal(JSON.stringify(await response.json()).includes('historic-private-status'), true);
+    joined.members[0].status = false; accessedStatuses.length = 0;
+    for (const missing of endpoint.includes('issues/') ? [false] : [false, true]) {
+      if (missing) activities.forEach(row => { row.itemId = 'deleted-issue'; });
+      response = await call();
+      assert.equal(response.status, 200);
+      const body = JSON.stringify(await response.json());
+      assert.equal(body.includes('historic-private-status'), false);
+      assert.equal(body.includes('current-public-status'), true);
+    }
+    assert.equal(accessedStatuses.includes('historic-private-status'), false);
+    joined.ownerId = 'alice';
+    assert.equal(JSON.stringify(await (await call()).json()).includes('historic-private-status'), true);
+    assert.deepEqual(f.writes, []);
+    assert.equal(activities[0].oldStatus, privateStatus);
+  });
+}

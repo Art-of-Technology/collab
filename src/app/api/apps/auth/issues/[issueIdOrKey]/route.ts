@@ -31,9 +31,10 @@ const UpdateIssueSchema = z.object({
   timeEstimateMinutes: z.number().int().positive().nullable().optional(),
 });
 
-async function findIssue(issueIdOrKey: string, workspaceId: string) {
+async function findIssue(issueIdOrKey: string, workspaceId: string, userId: string) {
   return prisma.issue.findFirst({
     where: {
+      AND: [issueReadAccessWhere(userId)],
       workspaceId,
       OR: [
         { id: issueIdOrKey },
@@ -213,7 +214,7 @@ export const PATCH = withAppAuth(
       const updateData = UpdateIssueSchema.parse(body);
 
       // Find the issue
-      const existingIssue = await findIssue(issueIdOrKey, context.workspace.id);
+      const existingIssue = await findIssue(issueIdOrKey, context.workspace.id, context.user.id);
       if (!existingIssue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },
@@ -424,7 +425,7 @@ export const DELETE = withAppAuth(
     try {
       const { issueIdOrKey } = await params;
 
-      const existingIssue = await findIssue(issueIdOrKey, context.workspace.id);
+      const existingIssue = await findIssue(issueIdOrKey, context.workspace.id, context.user.id);
       if (!existingIssue) {
         return NextResponse.json(
           { error: 'not_found', error_description: 'Issue not found' },

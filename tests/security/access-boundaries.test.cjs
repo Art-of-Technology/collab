@@ -151,7 +151,7 @@ const enums = {
   NoteActivityAction: {},
 };
 const { checkNoteAccess } = load('src/lib/secrets/access.ts', {
-  '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
+  '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
 });
 const note = {
   id: 'note', authorId: 'bob', scope: 'WORKSPACE', workspaceId: 'joined', projectId: null,
@@ -182,7 +182,7 @@ test('denied note requests stop before database content, history or decryption',
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/prisma': { prisma: denied }, '@prisma/client': enums,
     '@/lib/secrets/access': { canAccessNote: async () => ({ canAccess: false, canEdit: false, canDelete: false }) },
-    'zod': require('zod'), '@/lib/issue-finder': { userHasWorkspaceAccess },
+    'zod': require('zod'), '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
     '@/lib/secrets/crypto': denied, '@/lib/versioning': denied, '@/lib/event-bus': denied,
   };
   for (const [file, methods] of [
@@ -497,7 +497,7 @@ test('note authorization resolves project workspace and requires active membersh
         };
       } },
     };
-    const { canAccessNote } = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: db }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess } });
+    const { canAccessNote } = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: db }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere } });
     assert.equal((await canAccessNote('alice', 'note')).canAccess, ['own', 'joined'].includes(workspace.id));
   }
 });
@@ -602,7 +602,7 @@ test('profile edits cannot create membership in an inaccessible workspace', asyn
     '@/lib/user-utils': load('src/lib/user-utils.ts'),
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/request-session': { getServerSession: async () => ({ user: { email: 'alice@example.test' } }) },
-    '@/lib/issue-finder': { userHasWorkspaceAccess },
+    '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
     '@/lib/prisma': { prisma: {
       user: { findUnique: async () => ({ id: 'alice' }) },
       workspaceMember: { upsert: async () => { writes++; return {}; } },
@@ -623,7 +623,7 @@ test('protected notes cannot publish their content as workspace templates', asyn
       '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
       '@/lib/auth-options': { authOptions: {} },
       '@/lib/secrets/access': { canAccessNote: async () => ({ canAccess: true }) },
-      '@/lib/issue-finder': { userHasWorkspaceAccess },
+      '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
       '@/lib/prisma': { prisma: { note: { findUnique: async () => ({ ...note, isEncrypted: false, isRestricted: false, ...flags }) } } },
       '@prisma/client': enums, 'zod': require('zod'),
     });
@@ -637,7 +637,7 @@ test('protected notes cannot publish their content as workspace templates', asyn
 
 test('collection predicates match the single-note read policy across scope and membership', async () => {
   const { noteAccessWhere } = load('src/lib/secrets/access.ts', {
-    '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
+    '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
   });
   for (const scope of Object.values(enums.NoteScope))
   for (const role of [null, 'MEMBER', 'ADMIN', 'OWNER'])
@@ -658,7 +658,7 @@ test('collection predicates match the single-note read policy across scope and m
       sharedWith: shared ? [{ userId: 'alice', permission: 'EDIT' }] : [],
       expiresAt: expired ? new Date(0) : null,
     };
-    const expected = (await checkNoteAccess('alice', row, role ? { role } : null)).canAccess;
+    const expected = (await checkNoteAccess('alice', row, role ? { role } : null)).canAccess && (!projectFallback || !!role);
     assert.equal(matches(row, noteAccessWhere('alice')), expected, JSON.stringify({ scope, role, isRestricted, isEncrypted, authorId, shared, expired, projectFallback }));
   }
   assert.equal(matches(note, noteAccessWhere('')), false);
@@ -702,7 +702,7 @@ test('template use requires workspace access and scopes custom template reads', 
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
     '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
     '@/lib/auth-options': { authOptions: {} },
-    '@/lib/issue-finder': { userHasWorkspaceAccess },
+    '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
     '@/lib/prisma': { prisma: {
       user: { findUnique: async () => ({ name: 'Alice' }) },
       workspace: { findUnique: async () => ({ name: 'Workspace' }) },
@@ -726,7 +726,7 @@ test('template use requires workspace access and scopes custom template reads', 
 
 test('note destinations reject foreign/revoked workspaces and mismatched projects', async () => {
   const { canWriteNoteDestination } = load('src/lib/secrets/access.ts', {
-    '@/lib/issue-finder': { userHasWorkspaceAccess }, '@prisma/client': enums,
+    '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere }, '@prisma/client': enums,
     '@/lib/prisma': { prisma: { project: { findUnique: async ({ where }) =>
       workspaces.some(w => w.id === where.id) ? { workspaceId: where.id } : null } } },
   });
@@ -882,7 +882,7 @@ test('review: alternate Notes handlers filter content and metadata with the real
     createdAt: new Date(), updatedAt: new Date(), tags: [], comments: [], author: { name: 'Author' },
     workspace, projectId: 'project', project: { workspace }, ...row }));
   const access = load('src/lib/secrets/access.ts', {
-    '@/lib/prisma': { prisma: {} }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
+    '@/lib/prisma': { prisma: {} }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
   });
   const db = {
     workspace: { findFirst: async ({ where }) => matchesWorkspace(workspace, where) ? workspace : null },
@@ -1160,7 +1160,7 @@ test('disclosure: post GET reuses authenticated reads and denies foreign or revo
   dependencies['@/lib/issue-finder'] = { userHasWorkspaceAccess };
   dependencies['@/lib/session'] = load('src/lib/session.ts', dependencies);
   dependencies['@/lib/post-access'] = load('src/lib/post-access.ts', {
-    ...dependencies, 'server-only': {}, '@/lib/issue-finder': { userHasWorkspaceAccess },
+    ...dependencies, 'server-only': {}, '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
   }, { Error });
   const actions = load('src/actions/post.ts', dependencies, { Error });
   const { GET } = load('src/app/api/posts/[postId]/route.ts', {
@@ -1213,11 +1213,11 @@ test('disclosure: Coclaw memory enforces active access and Notes result/count pa
     aiContextPriority: 1, title: 'Memory ' + row.id, content: 'needle ' + row.id + ' '.repeat(510) + 'end',
     tags: [], createdAt: new Date('2026-09-23T00:00:00Z'), updatedAt: new Date('2026-09-23T00:00:00Z'), ...row }));
   const access = load('src/lib/secrets/access.ts', {
-    '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
+    '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
   });
   const { GET } = load('src/app/api/workspaces/[workspaceId]/coclaw/memory/route.ts', {
     'next/server': { NextResponse: Response }, '@/lib/auth': { getAuthSession: async () => session },
-    '@/lib/issue-finder': { userHasWorkspaceAccess }, '@/lib/secrets/access': access,
+    '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere }, '@/lib/secrets/access': access,
     '@/lib/prisma': { prisma: { ...prisma, note: {
       findMany: async ({ where, take }) => { reads++; return rows.filter(row => matches(row, where)).slice(0, take); },
       count: async ({ where }) => { counts++; return rows.filter(row => matches(row, where)).length; },
@@ -1288,7 +1288,7 @@ function appNotesHarness() {
       findUnique: async ({ where }) => where.id === project.id ? project : null,
     },
     note: {
-      findUnique: async ({ where }) => rows.find(row => row.id === where.id) ?? null,
+      findUnique: async ({ where }) => rows.find(row => matches(row, where)) ?? null,
       findFirst: async ({ where }) => {
         const row = rows.find(row => matches(row, where));
         if (row) state.reads++;
@@ -1300,7 +1300,11 @@ function appNotesHarness() {
         state.reads += page.length; return page;
       },
       count: async ({ where }) => { state.counts++; return rows.filter(row => matches(row, where)).length; },
-      update: async ({ where, data }) => { state.writes++; const row = rows.find(row => row.id === where.id); Object.assign(row, data); return row; },
+      update: async ({ where, data }) => {
+        state.writes++; const row = rows.find(row => row.id === where.id); Object.assign(row, data);
+        if ('projectId' in data) row.project = data.projectId === project.id ? project : null;
+        return row;
+      },
       create: async ({ data }) => { state.writes++; return add('created', data); },
     },
     noteActivityLog: { create: async () => { state.audits++; } },
@@ -1464,7 +1468,7 @@ test('app-notes: leave policy reads require active membership while preserving o
   let session = null;
   const { GET } = load('src/app/api/leave/policies/[policyId]/route.ts', {
     'next/server': { NextResponse: Response }, '@/lib/request-session': { getServerSession: async () => session },
-    '@/lib/auth-options': { authOptions: {} }, '@/lib/issue-finder': { userHasWorkspaceAccess },
+    '@/lib/auth-options': { authOptions: {} }, '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
     '@/lib/permissions': {}, zod: require('zod'),
     '@/lib/prisma': { prisma: {
       user: { findUnique: async () => ({ id: 'alice' }) },
@@ -1486,4 +1490,25 @@ test('app-notes: leave policy reads require active membership while preserving o
     const response = await get(id); assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { id, workspaceId: id, name: 'Annual leave', _count: { leaveRequests: 2 } });
   }
+});
+
+test('app-notes: historical project revocation denies content and mutation with middleware retained', async () => {
+  const h = appNotesHarness();
+  const workspace = { id: 'other', ownerId: 'bob', members: [{ userId: 'alice', status: true }] };
+  h.add('historical-context', { authorId: 'alice', type: 'DOCUMENTATION', projectId: 'foreign-project',
+    project: { id: 'foreign-project', name: 'historical-project-secret', workspaceId: workspace.id, workspace } });
+  assert.equal((await h.call('context/[id]', 'GET', 'historical-context')).status, 200);
+  workspace.members[0].status = false; h.state.reads = 0;
+  assert.equal((await h.call('context/[id]', 'GET', 'historical-context')).status, 404);
+  assert.equal((await h.call('context/[id]', 'PUT', 'historical-context', { content: 'forbidden' })).status, 404);
+  const list = await h.call('context');
+  assert.equal(list.status, 200);
+  assert.equal(JSON.stringify(await list.json()).includes('historical-context'), false);
+  assert.equal(h.state.reads, 0);
+  assert.equal(h.state.writes, 0);
+  workspace.ownerId = 'alice';
+  assert.equal((await h.call('context/[id]', 'PUT', 'historical-context', { content: 'authorized' })).status, 200);
+  assert.equal(h.state.writes, 1);
+  h.workspace.members[0].status = false;
+  assert.equal((await h.call('context/[id]', 'GET', 'historical-context')).status, 403);
 });

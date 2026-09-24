@@ -1,4 +1,4 @@
-import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 /**
  * Unified Timeline API
  * GET /api/timeline/unified - Get workspace-wide unified activity feed
@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
           },
         },
         oldStatus: {
+          where: { project: issueAccessWhere(session.user.id) },
           select: {
             id: true,
             name: true,
@@ -92,6 +93,7 @@ export async function GET(request: NextRequest) {
           },
         },
         newStatus: {
+          where: { project: issueAccessWhere(session.user.id) },
           select: {
             id: true,
             name: true,
