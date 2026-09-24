@@ -1152,12 +1152,16 @@ test('Coclaw notifications persist server workspace scope and both read paths de
   assert.equal(f.stored.find(row => row.content === 'agent-secret-joined').read, false);
   assert.equal(f.stored.find(row => row.content === 'agent-secret-own').read, true);
 });
-test('issue deletion retains server tenant scope for active recipients and suppresses revoked delivery', async () => {
+test('issue deletion preserves stored notifications but suppresses reads and delivery without full scope', async () => {
   const f = scopedNotificationFixture();
   const workspace = f.workspaces[1];
   workspace.members.push({ userId: 'dan', status: true }, { userId: 'carol', status: false });
   const lookupUser = f.db.user.findUnique;
   f.db.user.findUnique = async args => ['bob', 'dan', 'carol'].includes(args.where.id) ? { id: args.where.id } : lookupUser(args);
+  assert.equal(await f.NotificationService.notifyUsers(['dan'], 'ISSUE_UPDATED', 'retained history', 'alice',
+    { issueId: 'issue-joined' }), 1);
+  const stored = structuredClone(f.stored);
+  const deliveries = JSON.stringify(f.deliveries);
   f.db.issueFollower = { findMany: async () => [{ userId: 'dan' }, { userId: 'carol' }] };
   f.db.projectFollower = { findMany: async () => [{ userId: 'bob' }] };
   Object.assign(f.dependencies, {
@@ -1171,11 +1175,10 @@ test('issue deletion retains server tenant scope for active recipients and suppr
     { params: Promise.resolve({ issueId: 'issue-joined' }) });
   assert.equal(response.status, 200, await response.text());
   assert.equal(f.issues.some(issue => issue.id === 'issue-joined'), false);
-  assert.deepEqual(f.stored.map(row => row.userId).sort(), ['bob', 'dan']);
-  assert.deepEqual(f.deliveries.map(([userId]) => userId).sort(), ['bob', 'dan']);
-  assert.ok(f.stored.every(row => row.issueId === 'issue-joined' && row.workspaceId === workspace.id));
+  assert.deepEqual(f.stored, stored);
+  assert.equal(JSON.stringify(f.deliveries), deliveries);
   const where = await f.dependencies['@/lib/notification-access'].notificationAccessWhere('dan');
-  assert.equal(f.stored.filter(row => matches(row, where)).length, 1);
+  assert.deepEqual(f.stored.filter(row => matches(row, where)), []);
   workspace.members.find(member => member.userId === 'dan').status = false;
   assert.equal(f.stored.filter(row => matches(row, where)).length, 0);
 });
