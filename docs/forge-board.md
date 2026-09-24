@@ -64,6 +64,7 @@ bottom padding lets the last card scroll above the existing chat overlay.
 Enter opens details, Close receives focus, and Escape restores the originating
 card. No Forge requests were issued by the browser.
 
-Live connection, full comments, mutations with readback/conflict handling,
-Forge-backed Notes publication, agent execution, staging acceptance and
-replacement cutover remain outstanding.
+Forge-backed Notes publication is documented in the
+[project memory guide](forge-project-memory.md).
+Live connection, full comments, issue mutations with readback/conflict handling,
+agent execution, staging acceptance and replacement cutover remain outstanding.

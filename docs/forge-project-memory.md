@@ -9,9 +9,15 @@ Each bound project uses the fixed root file `project-memory.md` on an explicitly
 configured branch. The file contains strict project metadata and bounded
 revision sections for Rules, Strategy, Decisions and Handoffs. No user-supplied
 path, branch, identity or approval fields enter the writer request. The server
-checks active tenant membership and Notes permissions on every read/mutation;
-only workspace owners/admins approve. Editing another owner's draft also needs
-the existing edit-any-Note permission. New content starts as Draft.
+checks active tenant membership and the applicable Notes action permission
+before resolving bindings or opening credentials on every read/mutation;
+only workspace owners/admins approve. After reading the source, editing another
+owner's draft also requires the existing edit-any-Note permission. New content
+starts as Draft.
+
+Source links must be credential-free HTTPS URLs on `slack.com` or its
+subdomains. Invalid input is rejected before binding reads or writes and shown
+as a validation error, not an uncertain save.
 
 Draft edits keep the previous approved content. Approval requires the exact
 file SHA the reviewer loaded and atomically supersedes the previous approved
@@ -30,7 +36,7 @@ text and asks the user to refresh and compare. These fields follow the
 
 ## Connection and limits
 
-Extend the server-owned binding documented in `forge-board.md` with:
+Extend the server-owned [project binding](forge-board.md) with:
 
 ```json
 "memory": {
@@ -49,8 +55,9 @@ writer custody/enforcement boundary. Do not widen the issue-only principal.
 The file must be a regular file, never a symlink or submodule. Reads verify its
 path, size, canonical base64, Git blob hash, UTF-8, project and metadata schema.
 There is no generic file API, branch creation, rename, force option, execution
-or migration. Limits: 512,000 bytes per project, 300 live revisions, at most
-three live revisions per note, 32,000 characters per body and 20 source links.
+or migration. File size, revision history, text and source-link limits are
+defined by the [memory schema and serializer](../src/lib/forge/memory.ts), with
+upstream file validation in the [memory store](../src/lib/forge/memory-store.ts).
 Whole-file CAS serializes edits across the project; separate files are the
 upgrade path if edit contention becomes material. Bounds fail visibly.
 
@@ -64,7 +71,10 @@ This is not a claim that arbitrary free-text secrets can be detected reliably.
 for lifecycle/provenance, malformed/cross-project documents, tenant rights,
 stale approval at an unchanged draft revision number, fixed-path CAS,
 concurrent conflicts, symlinks, integrity checks and lost-response readback.
-All pass; targeted lint and nonincremental TypeScript pass.
+The [access regression](../tests/security/forge-memory-access.test.cjs) also
+checks that denied actions never resolve bindings and malformed source links
+return validation errors without side effects. Implementation validation
+reported passing checks, targeted lint and nonincremental TypeScript.
 
 A disposable PostgreSQL + local HTTPS fixture verified the real Notes page and
 server actions: create Draft, approve revision 1, edit Draft revision 2 while

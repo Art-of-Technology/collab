@@ -233,6 +233,9 @@ Collab is designed to streamline internal communication and work tracking by off
 - Open **Project board** from a project dashboard; see the
   [Forge board guide](docs/forge-board.md) for views, connection requirements
   and the limits of this read-only slice.
+- Open **Approved project memory** from Project Notes; see the
+  [project memory guide](docs/forge-project-memory.md) for drafting, approval
+  and connection requirements.
 
 ### Integration availability
 
