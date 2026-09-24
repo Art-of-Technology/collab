@@ -17,7 +17,7 @@ const UpdateIssueSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   description: z.string().max(100000).nullable().optional(),
   type: z.string().transform(value => value.toUpperCase()).pipe(z.nativeEnum(IssueType)).optional(),
-  priority: z.string().transform(value => value.toLowerCase()).pipe(z.enum(['low', 'medium', 'high', 'urgent'])).optional(),
+  priority: z.string().transform(value => value.toUpperCase()).pipe(z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT'])).optional(),
   status: z.string().min(1).max(100).optional(),
   statusValue: z.string().min(1).max(100).optional(),
   statusId: z.string().min(1).nullable().optional(),

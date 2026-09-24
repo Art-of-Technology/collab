@@ -1784,3 +1784,65 @@ for (const endpoint of ['related', 'suggestions']) {
     assert.equal(JSON.stringify(await response.json()).includes('label-secret-revoked'), false);
   });
 }
+
+test('priority updates preserve saved High view results and counts with validation and rights checks', async () => {
+  const f = savedViewFixture(), workspace = f.workspaces[0];
+  const issue = { id: 'issue-own', workspaceId: workspace.id, workspace, projectId: 'project-own',
+    priority: 'HIGH', reporterId: 'alice', title: 'High priority issue', updatedAt: new Date() };
+  f.view.projectIds = ['project-own'];
+  f.view.filters = { priority: ['HIGH'] };
+  let canEdit = true;
+  const permissions = load('src/lib/permissions.ts', { './prisma': { prisma: f.db } });
+  f.dependencies['@/lib/permissions'] = { ...permissions,
+    checkUserPermissions: async (_user, _workspace, requested) => Object.fromEntries(
+      requested.map(permission => [permission, { hasPermission: canEdit }])),
+  };
+  f.dependencies['@prisma/client'] = require('@prisma/client');
+  f.dependencies['@/utils/html-normalizer'] = { normalizeDescriptionHTML: value => value };
+  f.dependencies['@/lib/board-item-activity-service'] = { compareObjects: () => [] };
+  f.dependencies['@/lib/redis'] = { publishEvent: async () => {} };
+  f.dependencies['@/lib/event-bus'] = { emitIssueUpdated: async () => {} };
+  f.db.issue.findFirst = async ({ where }) => matches(issue, where) ? { ...issue } : null;
+  f.db.issue.findMany = async ({ where }) => matches(issue, where) ? [{ ...issue }] : [];
+  f.db.issue.update = async ({ data }) => {
+    f.writes.push(data); Object.assign(issue, data); return { ...issue };
+  };
+  const { PUT } = f.route('issues/[issueId]');
+  const update = priority => PUT(f.request('PUT', workspace.id, { priority }), {
+    params: Promise.resolve({ issueId: issue.id }),
+  });
+  const page = load('src/app/(main)/[workspaceId]/views/[viewId]/page.tsx', f.dependencies);
+  const highView = () => page.default({ params: Promise.resolve({ workspaceId: workspace.id, viewId: 'view' }) });
+  let result = await highView();
+  assert.equal(result.view.issueCount, 1);
+  assert.equal(result.issues[0].id, issue.id);
+  for (const invalid of ['root', '', ' HIGH ', null, 1]) {
+    assert.equal((await update(invalid)).status, 400);
+    assert.equal(f.writes.length, 0);
+  }
+  canEdit = false;
+  assert.equal((await update('HIGH')).status, 403);
+  assert.equal(f.writes.length, 0);
+  canEdit = true;
+  for (const input of ['HIGH', 'high', 'High']) {
+    const response = await update(input);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).issue.priority, 'HIGH');
+    result = await highView();
+    assert.equal(result.view.issueCount, 1);
+    assert.equal(result.issues[0].id, issue.id);
+    assert.equal(result.issues[0].priority, 'HIGH');
+  }
+  for (const input of ['low', 'MEDIUM', 'Urgent']) {
+    assert.equal((await update(input)).status, 200);
+    assert.equal(issue.priority, input.toUpperCase());
+    assert.equal((await highView()).view.issueCount, 0);
+  }
+  const writes = f.writes.length;
+  workspace.ownerId = 'bob';
+  assert.equal((await update('HIGH')).status, 404);
+  assert.equal(f.writes.length, writes);
+  f.state.mapped = false;
+  assert.equal((await update('HIGH')).status, 401);
+  assert.equal(f.writes.length, writes);
+});
