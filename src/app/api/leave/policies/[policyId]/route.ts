@@ -67,7 +67,7 @@ export async function GET(
         workspace: {
           include: {
             members: {
-              where: { userId: user.id },
+              where: { userId: user.id, status: true },
             },
           },
         },
@@ -96,6 +96,17 @@ export async function GET(
         { error: "Access denied to workspace" },
         { status: 403 }
       );
+    }
+
+    const canManageLeave = await checkUserPermission(
+      user.id,
+      policy.workspaceId,
+      Permission.MANAGE_LEAVE
+    );
+
+    if (!canManageLeave.hasPermission) {
+      const { id, name, group, isPaid, trackIn } = policy;
+      return NextResponse.json({ id, name, group, isPaid, trackIn });
     }
 
     // Remove workspace from response

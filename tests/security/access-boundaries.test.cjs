@@ -746,3 +746,92 @@ test('post GET restricts private content to owners and active members', async (t
     });
   }
 });
+
+test('leave policy list and detail share member projections and management permissions', async (t) => {
+  const basic = { id: 'policy', name: 'Annual leave', group: 'Time off', isPaid: true, trackIn: 'DAYS' };
+  const policy = { ...basic, workspaceId: 'workspace', isHidden: false,
+    exportMode: 'EXPORT_WITH_CODE', exportCode: 'PAYROLL', accrualType: 'FIXED', deductsLeave: true,
+    maxBalance: 30, rolloverType: 'PARTIAL_BALANCE', rolloverAmount: 5, rolloverDate: '2027-01-01T00:00:00Z',
+    allowOutsideLeaveYearRequest: false, useAverageWorkingHours: false,
+    createdAt: '2026-09-24T00:00:00Z', updatedAt: '2026-09-24T00:00:00Z' };
+  const workspace = { id: 'workspace', ownerId: 'owner' };
+  const memberships = [
+    { userId: 'ordinary', workspaceId: 'workspace', role: 'MEMBER', status: true },
+    { userId: 'manager', workspaceId: 'workspace', role: 'HR', status: true },
+    { userId: 'revoked', workspaceId: 'workspace', role: 'HR', status: false },
+    { userId: 'foreign', workspaceId: 'other', role: 'HR', status: true },
+  ];
+  const users = ['owner', 'ordinary', 'manager', 'revoked', 'foreign'].map(id => ({ id, email: `${id}@example.test`, role: 'DEVELOPER' }));
+  const requests = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'].map(status => ({ status }));
+  let currentUser = null;
+  let reads = 0;
+  function readWorkspace({ where, include }) {
+    if (!matches(workspace, where)) return null;
+    return { ...workspace, members: memberships.filter(member =>
+      member.workspaceId === workspace.id && matches(member, include.members.where)) };
+  }
+  function readPolicy({ select, include }) {
+    const result = select
+      ? Object.fromEntries(Object.entries(policy).filter(([key]) => select[key] === true)) : { ...policy };
+    if (include?.workspace) {
+      result.workspace = readWorkspace({ where: { id: policy.workspaceId }, include: include.workspace.include });
+    }
+    const count = select?._count ?? include?._count;
+    if (count) result._count = { leaveRequests: requests.filter(row => matches(row, count.select.leaveRequests.where)).length };
+    return result;
+  }
+  const db = {
+    user: { findUnique: async ({ where, include }) => {
+      reads++;
+      const user = users.find(row => matches(row, where));
+      if (!user) return null;
+      if (!include) return user;
+      return { ...user,
+        workspaceMemberships: memberships.filter(row => row.userId === user.id && matches(row, include.workspaceMemberships.where)),
+        ownedWorkspaces: workspace.ownerId === user.id && matches(workspace, include.ownedWorkspaces.where) ? [workspace] : [],
+      };
+    } },
+    workspace: { findUnique: async args => readWorkspace(args) },
+    rolePermission: { findUnique: async ({ where: { workspaceId_role_permission: where } }) =>
+      matches({ workspaceId: 'workspace', role: 'HR', permission: 'MANAGE_LEAVE' }, where) ? { id: 'permission' } : null },
+    leavePolicy: {
+      findUnique: async args => matches(policy, args.where) ? readPolicy(args) : null,
+      findMany: async args => matches(policy, args.where) ? [readPolicy(args)] : [],
+    },
+  };
+  const permissions = load('src/lib/permissions.ts', { './prisma': { prisma: db } });
+  const dependencies = {
+    'next/server': { NextResponse: Response }, 'next-auth': { getServerSession: async () =>
+      currentUser ? { user: { email: `${currentUser}@example.test` } } : null },
+    '@/lib/auth-options': { authOptions: {} }, '@/lib/prisma': { prisma: db }, '@/lib/permissions': permissions, zod: require('zod'),
+  };
+  const list = load('src/app/api/leave/policies/route.ts', dependencies, { URL });
+  const detail = load('src/app/api/leave/policies/[policyId]/route.ts', dependencies);
+  for (const [name, get] of [
+    ['list', () => list.GET(new Request('https://example.test/api/leave/policies?workspaceId=workspace'))],
+    ['detail', () => detail.GET(new Request('https://example.test/api/leave/policies/policy'), { params: Promise.resolve({ policyId: 'policy' }) })],
+  ]) {
+    for (const [userId, status] of [[null, 401], ['foreign', 403], ['revoked', 403], ['ordinary', 200], ['manager', 200], ['owner', 200]]) {
+      await t.test(`${name}/${userId ?? 'anonymous'}`, async () => {
+        currentUser = userId;
+        reads = 0;
+        const response = await get();
+        assert.equal(response.status, status);
+        const body = await response.json();
+        if (status !== 200) {
+          assert.deepEqual(Object.keys(body), ['error']);
+          if (!userId) assert.equal(reads, 0);
+          return;
+        }
+        const result = name === 'list' ? body[0] : body;
+        if (name === 'list') assert.equal(body.length, 1);
+        if (userId === 'ordinary') {
+          assert.deepEqual(result, basic);
+        } else {
+          const { workspaceId, ...management } = policy;
+          assert.deepEqual(result, { ...management, ...(name === 'detail' ? { workspaceId } : {}), _count: { leaveRequests: 2 } });
+        }
+      });
+    }
+  }
+});
