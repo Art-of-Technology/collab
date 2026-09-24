@@ -21,7 +21,7 @@ interface DynamicViewPageProps {
 export default async function DynamicViewPage({ params, searchParams }: DynamicViewPageProps) {
   const session = await getServerSession(authConfig);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     notFound();
   }
 
@@ -45,13 +45,10 @@ export default async function DynamicViewPage({ params, searchParams }: DynamicV
         { id: workspaceId },
         { slug: workspaceId }
       ],
-      members: {
-        some: {
-          user: {
-            email: session.user.email
-          }
-        }
-      }
+      AND: { OR: [
+        { ownerId: session.user.id },
+        { members: { some: { userId: session.user.id, status: true } } }
+      ] }
     },
     include: {
       members: {

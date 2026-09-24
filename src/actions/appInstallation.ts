@@ -1,5 +1,7 @@
 'use server';
 
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { getServerSession } from '@/lib/request-session';
@@ -198,12 +200,7 @@ export async function getWorkspaceInstallations(workspaceId: string) {
     }
 
     // Check if user has access to workspace
-    const member = await prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId,
-        userId: session.user.id
-      }
-    });
+    const member = await userHasWorkspaceAccess(session.user.id, workspaceId);
 
     if (!member) {
       throw new Error('Access denied to workspace');

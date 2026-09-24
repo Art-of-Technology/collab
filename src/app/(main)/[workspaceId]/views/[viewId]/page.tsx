@@ -14,7 +14,7 @@ interface ViewPageProps {
 export default async function ViewPage({ params }: ViewPageProps) {
   const session = await getServerSession(authConfig);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id || !session.user.email) {
     notFound();
   }
 
@@ -37,13 +37,10 @@ export default async function ViewPage({ params }: ViewPageProps) {
         { id: workspaceId },
         { slug: workspaceId }
       ],
-      members: {
-        some: {
-          user: {
-            email: session.user.email
-          }
-        }
-      }
+      AND: { OR: [
+        { ownerId: session.user.id },
+        { members: { some: { userId: session.user.id, status: true } } }
+      ] }
     },
     include: {
       members: {

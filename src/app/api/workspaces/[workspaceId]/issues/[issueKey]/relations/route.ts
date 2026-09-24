@@ -12,7 +12,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -28,7 +28,7 @@ export async function GET(
           {
             OR: [
               { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } }
+              { members: { some: { userId: session.user.id, status: true } } }
             ]
           }
         ]
@@ -259,7 +259,7 @@ export async function POST(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -283,7 +283,7 @@ export async function POST(
           {
             OR: [
               { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } }
+              { members: { some: { userId: session.user.id, status: true } } }
             ]
           }
         ]
@@ -320,7 +320,7 @@ export async function POST(
             name: true,
             ownerId: true,
             members: {
-              where: { userId: session.user.id },
+              where: { userId: session.user.id, status: true },
               select: { id: true }
             }
           }

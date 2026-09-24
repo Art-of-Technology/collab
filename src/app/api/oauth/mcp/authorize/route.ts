@@ -140,7 +140,7 @@ export async function GET(request: NextRequest) {
       where: { id: workspaceId },
       include: {
         members: {
-          where: { userId: session.user.id }
+          where: { userId: session.user.id, status: true }
         }
       }
     });
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (workspace.members.length === 0) {
+    if (workspace.ownerId !== session.user.id && workspace.members.length === 0) {
       return NextResponse.json(
         {
           error: 'access_denied',

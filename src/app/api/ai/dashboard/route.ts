@@ -1,5 +1,7 @@
 "use server";
 
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+
 import { NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth";
@@ -143,9 +145,7 @@ export async function GET(req: Request) {
     const userId = session.user.id;
 
     // Verify workspace access
-    const membership = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId },
-    });
+    const membership = await userHasWorkspaceAccess(userId, workspaceId);
 
     if (!membership) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });

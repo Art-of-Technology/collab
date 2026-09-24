@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
             {
               OR: [
                 { ownerId: session.user.id },
-                { members: { some: { userId: session.user.id } } }
+                { members: { some: { userId: session.user.id, status: true } } }
               ]
             }
           ]
@@ -54,12 +54,14 @@ export async function GET(request: NextRequest) {
         where: {
           OR: [
             { ownerId: session.user.id },
-            { members: { some: { userId: session.user.id } } },
+            { members: { some: { userId: session.user.id, status: true } } },
           ],
         },
         select: { id: true },
       });
       
+      if (accessibleWorkspaces.length === 0) return NextResponse.json([]);
+
       whereClause.workspaceId = {
         in: accessibleWorkspaces.map(w => w.id)
       };

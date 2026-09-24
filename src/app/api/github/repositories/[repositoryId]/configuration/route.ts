@@ -10,7 +10,7 @@ export async function PATCH(
 ) {
   try {
     const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -25,7 +25,7 @@ export async function PATCH(
           workspace: {
             OR: [
               { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } },
+              { members: { some: { userId: session.user.id, status: true } } },
             ],
           },
         },

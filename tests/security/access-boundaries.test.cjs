@@ -1121,11 +1121,14 @@ test('disclosure: post GET reuses authenticated reads and denies foreign or revo
   let reads = 0;
   const author = { id: 'bob', name: 'Bob', email: 'bob@example.test' };
   const db = {
-    user: { findUnique: async () => session?.user.email === 'alice@example.test' ? { id: 'alice' } : null },
-    post: { findUnique: async ({ where, include }) => {
-      reads++;
+    user: { findUnique: async ({ where }) => matches({ id: 'alice', email: 'alice@example.test' }, where)
+      ? { id: 'alice', createdAt: new Date(), updatedAt: new Date() } : null },
+    workspace: { findFirst: async ({ where }) => workspaces.find(row => matches(row, where)) ?? null },
+    post: { findUnique: async ({ where, include, select }) => {
+      if (!select) reads++;
       const workspace = workspaces.find(row => row.id === where.id);
       if (!workspace) return null;
+      if (select) return { workspaceId: workspace.id };
       const memberWhere = include?.workspace?.select.members.where;
       return {
         id: where.id, message: 'Private post content', author, tags: [{ name: 'Important' }],
@@ -1134,11 +1137,16 @@ test('disclosure: post GET reuses authenticated reads and denies foreign or revo
       };
     } },
   };
-  const actions = load('src/actions/post.ts', {
+  const dependencies = {
     '@/lib/auth-options': { authOptions: {} }, '@/lib/prisma': { prisma: db },
     '@/lib/request-session': { getServerSession: async () => session },
     '@/utils/mentions': {}, '@/lib/notification-service': {},
+  };
+  dependencies['@/lib/session'] = load('src/lib/session.ts', dependencies);
+  dependencies['@/lib/post-access'] = load('src/lib/post-access.ts', {
+    ...dependencies, 'server-only': {}, '@/lib/issue-finder': { userHasWorkspaceAccess },
   }, { Error });
+  const actions = load('src/actions/post.ts', dependencies, { Error });
   const { GET } = load('src/app/api/posts/[postId]/route.ts', {
     'next/server': { NextResponse: Response }, '@/actions/post': actions,
     '@/lib/prisma': { prisma: db }, '@/lib/session': {},
@@ -1146,10 +1154,10 @@ test('disclosure: post GET reuses authenticated reads and denies foreign or revo
   const get = id => GET(new Request('https://example.test/api/posts/' + id), { params: Promise.resolve({ postId: id }) });
   assert.equal((await get('joined')).status, 401);
   assert.equal(reads, 0);
-  session = { user: { email: 'deleted@example.test' } };
+  session = { user: { id: 'deleted', email: 'deleted@example.test' } };
   assert.equal((await get('joined')).status, 401);
   assert.equal(reads, 0);
-  session = { user: { email: 'alice@example.test' } };
+  session = { user: { id: 'alice', email: 'alice@example.test' } };
   for (const id of ['foreign', 'revoked', 'missing']) {
     const response = await get(id);
     assert.equal(response.status, 404, id);

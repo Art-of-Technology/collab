@@ -1,3 +1,4 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 /**
  * Unified Timeline API
  * GET /api/timeline/unified - Get workspace-wide unified activity feed
@@ -47,12 +48,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify workspace access
-    const membership = await prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId,
-        userId: session.user.id,
-      },
-    });
+    const membership = await userHasWorkspaceAccess(session.user.id, workspaceId);
 
     if (!membership) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });

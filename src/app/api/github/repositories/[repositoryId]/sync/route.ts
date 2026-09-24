@@ -13,23 +13,18 @@ export async function POST(
   try {
     const { repositoryId } = await params;
     const session = await getServerSession(authConfig);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     // Get repository with project info
-    const repository = await prisma.repository.findUnique({
-      where: { id: repositoryId },
-      include: {
-        project: {
-          include: {
-            workspace: {
-              include: {
-                members: {
-                  where: session?.user?.id ? { userId: session.user.id } : undefined,
-                  take: 1,
-                }
-              }
-            }
-          }
-        }
+    const repository = await prisma.repository.findFirst({
+      where: {
+        id: repositoryId,
+        project: { workspace: { OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ] } }
       }
     });
 

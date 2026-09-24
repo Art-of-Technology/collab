@@ -134,6 +134,7 @@ export async function PATCH(
         members: {
           where: {
             userId: session.user.id,
+            status: true,
             role: { in: ['owner', 'admin'] }
           }
         }
