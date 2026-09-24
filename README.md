@@ -229,6 +229,11 @@ Collab is designed to streamline internal communication and work tracking by off
 - Use the timeline to post status updates, tasks, and feature requests.
 - Organize work using boards, milestones, and stories.
 
+After the usual sign-in and access checks, opening a missing feature request from
+a workspace or project shows the 404 page. If a project feature link points to a
+feature assigned to another project, you are redirected to the requested project's
+feature list. A failure to load the feature data shows “Something went wrong”.
+
 ## API
 
 Collab exposes a RESTful API under the `/api` namespace. Example endpoints:
