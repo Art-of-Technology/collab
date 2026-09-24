@@ -10,7 +10,7 @@ import { AppManifestV1 } from '@/lib/apps/types';
 import { AppStatusBadge } from '@/components/apps/AppStatusBadge';
 import Image from 'next/image';
 import Link from 'next/link';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { AppReviewActions } from './AppReviewActions';
 
 const prisma = new PrismaClient();

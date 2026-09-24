@@ -5,7 +5,7 @@ import { findIssueByIdOrKey } from "@/lib/issue-finder";
 
 export async function POST(
   req: Request,
-  { params }: { params: { issueId: string; commentId: string } }
+  { params }: { params: Promise<{ issueId: string; commentId: string }> }
 ) {
   try {
     const user = await getCurrentUser();

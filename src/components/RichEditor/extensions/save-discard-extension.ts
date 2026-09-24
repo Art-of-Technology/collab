@@ -1,5 +1,15 @@
 import { Extension } from '@tiptap/core';
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    saveDiscard: {
+      save: () => ReturnType;
+      discard: () => ReturnType;
+      updateOriginalContent: (content: string) => ReturnType;
+    };
+  }
+}
+
 export interface SaveDiscardOptions {
   onContentChange?: (content: string, hasChanges: boolean) => void;
   onSave?: () => void;

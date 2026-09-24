@@ -14,7 +14,7 @@ import { NoteType, NoteScope } from '@prisma/client';
 import { stripHtmlToPlainText as stripHtml } from '@/lib/html-sanitizer';
 
 // Note types that are considered AI context/prompts
-const PROMPT_TYPES = [
+const PROMPT_TYPES: NoteType[] = [
   NoteType.SYSTEM_PROMPT,
   NoteType.CODING_STYLE,
   NoteType.TECH_STACK,

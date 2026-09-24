@@ -100,9 +100,7 @@ export default function SidebarProvider({ children }: { children: React.ReactNod
   const toggleMobile = () => setMobileOpen((v) => !v);
 
   /** When switching up to desktop, ensure the mobile drawer is closed (no hidden overlay traps). */
-  useEffect(() => {
-    if (isMdUp) setMobileOpen(false);
-  }, [isMdUp]);
+  if (isMdUp && isMobileOpen) setMobileOpen(false);
 
   /** Back-compat values for existing consumers (so you don’t have to refactor everything at once). */
   const isCollapsed = useMemo(() => {

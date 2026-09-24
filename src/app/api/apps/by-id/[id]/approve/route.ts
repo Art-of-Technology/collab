@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth-options';
 import { PrismaClient } from '@prisma/client';
 import { generateClientCredentials, encryptToken } from '@/lib/apps/crypto';
 import { validateJWKS } from '@/lib/apps/jwks';
@@ -78,7 +78,7 @@ export async function POST(
         
         // Generate credentials based on auth method
         const credentials = await generateClientCredentials();
-        let clientSecret: Buffer | null = null;
+        let clientSecret: Awaited<ReturnType<typeof encryptToken>> | null = null;
         
         // Only generate and store client secret for client_secret_basic
         if (clientType === 'confidential' && authMethod === 'client_secret_basic') {

@@ -91,10 +91,10 @@ export function AppHost({ app, installation, workspace, user }: AppHostProps) {
     if (iframeElement) {
       // Force reload the iframe
       const currentSrc = iframeElement.src;
-      iframeElement.src = '';
+      iframeElement.setAttribute('src', '');
       setTimeout(() => {
         if (iframeElement) {
-          iframeElement.src = currentSrc;
+          iframeElement.setAttribute('src', currentSrc);
         }
         setIsRetrying(false);
       }, 100);
@@ -131,8 +131,8 @@ export function AppHost({ app, installation, workspace, user }: AppHostProps) {
             Failed to Load App
           </h2>
           <p className="text-gray-600 mb-4">{error}</p>
-          <Button 
-            onClick={handleRetry} 
+          <Button
+            onClick={handleRetry}
             disabled={isRetrying}
             className="gap-2"
           >

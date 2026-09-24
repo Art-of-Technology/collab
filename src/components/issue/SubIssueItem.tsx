@@ -195,7 +195,7 @@ export function SubIssueItem({
       {/* Priority Selector */}
       <div className="flex items-center mr-2 flex-shrink-0">
         <IssuePrioritySelector
-          value={subIssue.priority}
+          value={subIssue.priority ?? "MEDIUM"}
           onChange={(priority) => onUpdate({ priority })}
         />
       </div>
@@ -212,7 +212,7 @@ export function SubIssueItem({
       {/* Type Selector */}
       <div className="flex items-center mr-2 flex-shrink-0">
         <IssueTypeSelector
-          value={subIssue.type}
+          value={subIssue.type ?? "TASK"}
           onChange={(type) => onUpdate({ type })}
         />
       </div>

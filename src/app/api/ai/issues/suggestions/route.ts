@@ -1,3 +1,4 @@
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authConfig } from "@/lib/auth";
@@ -27,33 +28,23 @@ export async function GET(req: Request) {
     }
 
     // Verify workspace access
-    const membership = await prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId,
-        userId: session.user.id,
-      },
-    });
+    const membership = await userHasWorkspaceAccess(session.user.id, workspaceId);
 
     if (!membership) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
     // Get the current issue with all related data
-    const issue = await prisma.issue.findUnique({
-      where: { id: issueId },
+    const issue = await prisma.issue.findFirst({
+      where: { id: issueId, workspaceId },
       include: {
         labels: true,
+        projectStatus: true,
         assignee: true,
         project: {
           include: {
-            members: {
-              include: { user: true },
-            },
+            workspace: { select: { members: { where: { status: true }, select: { userId: true } } } },
           },
-        },
-        activities: {
-          take: 10,
-          orderBy: { createdAt: 'desc' },
         },
         comments: {
           take: 5,
@@ -105,7 +96,7 @@ export async function GET(req: Request) {
     // 2. Check for missing assignee
     if (!issue.assigneeId) {
       // Check if creator is a project member and could be assigned
-      const projectMembers = issue.project?.members || [];
+      const projectMembers = issue.project?.workspace.members || [];
       const suggestAssignee = projectMembers.length > 0;
 
       suggestions.push({
@@ -113,7 +104,7 @@ export async function GET(req: Request) {
         type: 'assignee',
         title: 'Assign this issue',
         description: suggestAssignee
-          ? `This issue is unassigned. Consider assigning it to one of the ${projectMembers.length} project members.`
+          ? `This issue is unassigned. Consider assigning it to one of the ${projectMembers.length} workspace members.`
           : 'Unassigned issues may get overlooked. Consider assigning it to ensure accountability.',
         confidence: 0.85,
       });
@@ -138,7 +129,7 @@ export async function GET(req: Request) {
     // 4. Check for missing labels
     if (!issue.labels || issue.labels.length === 0) {
       // Check workspace labels to suggest
-      const workspaceLabels = await prisma.label.findMany({
+      const workspaceLabels = await prisma.taskLabel.findMany({
         where: { workspaceId },
         take: 5,
       });
@@ -173,13 +164,16 @@ export async function GET(req: Request) {
     }
 
     // 6. Check for stale issue
-    const lastActivity = issue.activities?.[0]?.createdAt;
+    const lastActivity = (await prisma.issueActivity.findFirst({
+      where: { itemId: issue.id, itemType: 'ISSUE', workspaceId },
+      orderBy: { createdAt: 'desc' }, select: { createdAt: true },
+    }))?.createdAt;
     if (lastActivity) {
       const daysSinceActivity = Math.floor(
         (Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24)
       );
 
-      if (daysSinceActivity > 14 && issue.status?.category !== 'completed') {
+      if (daysSinceActivity > 14 && !issue.projectStatus?.isFinal) {
         suggestions.push({
           id: 'suggest-review',
           type: 'priority',
@@ -200,7 +194,7 @@ export async function GET(req: Request) {
     });
 
     if (similarIssuesCount > 0) {
-      const existingLinks = await prisma.issueLink.count({
+      const existingLinks = await prisma.issueRelation.count({
         where: {
           OR: [
             { sourceIssueId: issueId },

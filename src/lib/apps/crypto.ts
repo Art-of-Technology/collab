@@ -1,7 +1,6 @@
-import { createCipheriv, createDecipheriv, randomBytes, scrypt } from 'crypto';
+import { createCipheriv, createDecipheriv, randomBytes, randomUUID, scrypt } from 'crypto';
 import bcrypt from 'bcrypt';
 import { promisify } from 'util';
-import { v4 as uuidv4 } from 'uuid';
 
 const algorithm = 'aes-256-gcm';
 const scryptAsync = promisify(scrypt);
@@ -12,7 +11,7 @@ export function generateAuthorizationCode() {
 
 export async function generateClientCredentials() {
   return {
-    clientId: uuidv4(),
+    clientId: randomUUID(),
     clientSecret: randomBytes(32).toString('hex'),
     apiKey: randomBytes(24).toString('hex'),
   };
@@ -37,7 +36,7 @@ function getEncryptionKey(): string {
 /**
  * Encrypt a token using AES-256-GCM
  */
-export async function encryptToken(token: string): Promise<Buffer> {
+export async function encryptToken(token: string): Promise<Buffer<ArrayBuffer>> {
   try {
     const key = getEncryptionKey();
     
@@ -126,7 +125,7 @@ export async function rotateTokenEncryption(
   oldEncryptedData: Buffer,
   oldKey: string,
   newKey: string
-): Promise<Buffer> {
+): Promise<Buffer<ArrayBuffer>> {
   // Temporarily set old key
   const originalKey = process.env.APP_TOKENS_KEY;
   process.env.APP_TOKENS_KEY = oldKey;
@@ -179,7 +178,7 @@ export function maskToken(token: string): string {
 /**
  * Generic encrypt function (alias for encryptToken)
  */
-export async function encrypt(data: string): Promise<Buffer> {
+export async function encrypt(data: string): Promise<Buffer<ArrayBuffer>> {
   return encryptToken(data);
 }
 

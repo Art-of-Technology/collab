@@ -110,7 +110,6 @@ export function TimelineSection({
             >
               <TimelineItem
                 item={item}
-                indexInGroup={index}
                 typeStyles={typeStyles}
                 timelineStart={timelineStart}
                 dayWidth={dayWidth}

@@ -144,8 +144,7 @@ async function setupMcpOAuthClient() {
       await prisma.appScope.create({
         data: {
           appId: app.id,
-          name: scope,
-          description: getScopeDescription(scope),
+          scope,
         },
       });
     }

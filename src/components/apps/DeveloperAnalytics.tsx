@@ -3,19 +3,19 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { 
-  BarChart3, 
-  Activity, 
-  Webhook, 
-  CheckCircle, 
-  XCircle, 
+import {
+  BarChart3,
+  Activity,
+  Webhook,
+  CheckCircle,
+  XCircle,
   Clock,
   TrendingUp,
   Calendar,
@@ -73,10 +73,10 @@ interface AnalyticsStats {
   }>;
 }
 
-export default function DeveloperAnalytics({ 
-  appId, 
-  appSlug, 
-  installations 
+export default function DeveloperAnalytics({
+  appId,
+  appSlug,
+  installations
 }: DeveloperAnalyticsProps) {
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
   const [stats, setStats] = useState<AnalyticsStats | null>(null);
@@ -86,11 +86,11 @@ export default function DeveloperAnalytics({
     const calculateStats = () => {
       const activeInstalls = installations.filter(inst => inst.status === 'ACTIVE');
       const totalWebhooks = installations.reduce((sum, inst) => sum + inst.webhooks.length, 0);
-      const activeWebhooks = installations.reduce((sum, inst) => 
+      const activeWebhooks = installations.reduce((sum, inst) =>
         sum + inst.webhooks.filter(w => w.isActive).length, 0
       );
-      const totalDeliveries = installations.reduce((sum, inst) => 
-        sum + inst.webhooks.reduce((webhookSum, webhook) => 
+      const totalDeliveries = installations.reduce((sum, inst) =>
+        sum + inst.webhooks.reduce((webhookSum, webhook) =>
           webhookSum + webhook._count.deliveries, 0
         ), 0
       );
@@ -107,7 +107,7 @@ export default function DeveloperAnalytics({
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
         const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-        
+
         const count = installations.filter(inst => {
           const createdAt = new Date(inst.createdAt);
           return createdAt >= monthStart && createdAt <= monthEnd;
@@ -149,47 +149,7 @@ export default function DeveloperAnalytics({
     calculateStats();
   }, [installations, selectedPeriod]);
 
-  const StatCard = ({ 
-    title, 
-    value, 
-    description, 
-    icon: Icon, 
-    trend,
-    color = 'default' 
-  }: {
-    title: string;
-    value: string | number;
-    description: string;
-    icon: React.ElementType;
-    trend?: string;
-    color?: 'default' | 'success' | 'warning' | 'danger';
-  }) => {
-    const colorClasses = {
-      default: 'text-muted-foreground',
-      success: 'text-green-600',
-      warning: 'text-yellow-600',
-      danger: 'text-red-600'
-    };
 
-    return (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">{title}</CardTitle>
-          <Icon className={`h-4 w-4 ${colorClasses[color]}`} />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{value}</div>
-          <p className="text-xs text-muted-foreground">{description}</p>
-          {trend && (
-            <div className="flex items-center pt-1">
-              <TrendingUp className="h-3 w-3 text-green-600 mr-1" />
-              <span className="text-xs text-green-600">{trend}</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    );
-  };
 
   if (loading || !stats) {
     return (
@@ -318,10 +278,10 @@ export default function DeveloperAnalytics({
                 <div className="text-sm font-medium">{month.month}</div>
                 <div className="flex items-center gap-2">
                   <div className="w-32 bg-muted rounded-full h-2">
-                    <div 
+                    <div
                       className="bg-primary h-2 rounded-full transition-all"
-                      style={{ 
-                        width: `${Math.max(10, (month.count / Math.max(...stats.installationsByMonth.map(m => m.count))) * 100)}%` 
+                      style={{
+                        width: `${Math.max(10, (month.count / Math.max(...stats.installationsByMonth.map(m => m.count))) * 100)}%`
                       }}
                     />
                   </div>
@@ -364,7 +324,7 @@ export default function DeveloperAnalytics({
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="text-center">
                     <div className="text-sm font-medium">{workspace.deliveries}</div>
                     <div className="text-xs text-muted-foreground">deliveries</div>
@@ -403,7 +363,7 @@ export default function DeveloperAnalytics({
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-4">
                     <div className="text-center">
                       <div className="text-sm font-medium">{installation.webhooks.length}</div>
@@ -413,7 +373,7 @@ export default function DeveloperAnalytics({
                       <div className="text-sm font-medium">{totalDeliveries}</div>
                       <div className="text-xs text-muted-foreground">deliveries</div>
                     </div>
-                    <Badge 
+                    <Badge
                       variant={installation.status === 'ACTIVE' ? 'default' : 'secondary'}
                       className="text-xs"
                     >
@@ -429,3 +389,45 @@ export default function DeveloperAnalytics({
     </div>
   );
 }
+
+const StatCard = ({
+    title,
+    value,
+    description,
+    icon: Icon,
+    trend,
+    color = 'default'
+  }: {
+    title: string;
+    value: string | number;
+    description: string;
+    icon: React.ElementType;
+    trend?: string;
+    color?: 'default' | 'success' | 'warning' | 'danger';
+  }) => {
+    const colorClasses = {
+      default: 'text-muted-foreground',
+      success: 'text-green-600',
+      warning: 'text-yellow-600',
+      danger: 'text-red-600'
+    };
+
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <Icon className={`h-4 w-4 ${colorClasses[color]}`} />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{value}</div>
+          <p className="text-xs text-muted-foreground">{description}</p>
+          {trend && (
+            <div className="flex items-center pt-1">
+              <TrendingUp className="h-3 w-3 text-green-600 mr-1" />
+              <span className="text-xs text-green-600">{trend}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };

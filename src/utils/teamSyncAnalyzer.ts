@@ -13,8 +13,8 @@ export interface PlannedIssue {
   title: string;
   type: string;
   priority: string;
-  status: string;
-  statusDisplayName?: string;
+  status: string | null;
+  statusDisplayName?: string | null;
   assigneeId: string | null;
   dueDate?: Date | null;
   createdAt: Date;
@@ -39,9 +39,9 @@ export interface IssueActivity {
   title?: string;
   type?: string;
   priority?: string;
-  status?: string;
-  statusText?: string;
-  statusDisplayName?: string;
+  status?: string | null;
+  statusText?: string | null;
+  statusDisplayName?: string | null;
   daysInProgress?: number;
   projectName?: string;
   isCarryOver?: boolean;
@@ -64,7 +64,7 @@ export interface IssueActivity {
     issueKey: string | null;
     type: string;
     priority: string;
-    status: string;
+    status: string | null;
     statusSymbol?: string;
     assigneeId?: string | null;
   };
@@ -148,12 +148,12 @@ export interface TeamMemberRangeSync {
   currentBlocked: IssueActivity[];
   currentPlanned: IssueActivity[];
   // Legacy fields for backwards compatibility
-  insights?: {
+  insights: {
     warnings: string[];
     tasksInProgress?: number;
     tasksCompletedToday?: number;
   };
-  userName?: string;
+  userName: string;
   userImage?: string;
 }
 
@@ -238,7 +238,7 @@ export function getMovementType(fromStatus: string, toStatus: string): MovementT
   if (toCategory === 'blocked') return 'blocked';
   if (toCategory === 'in_review') return 'moved_to_review';
   if (toCategory === 'in_progress' && fromCategory !== 'in_progress') return 'started';
-  if (fromCategory === 'blocked' && toCategory !== 'blocked') return 'unblocked';
+  if (fromCategory === 'blocked') return 'unblocked';
 
   // Fallback to order-based detection
   const statusOrder: Record<string, number> = {
@@ -411,4 +411,27 @@ export function findMostProductiveMember(members: TeamMemberRangeSync[]): string
   }
 
   return mostProductiveMember;
+}
+
+
+/** Convert the activity API shape into the timeline's movement presentation. */
+export function activityToMovement(activity: IssueActivity): IssueMovement {
+  const fromStatus = activity.oldStatus?.displayName ?? activity.oldValue ?? '';
+  const toStatus = activity.newStatus?.displayName ?? activity.newValue ?? '';
+  return {
+    issueId: activity.issueId,
+    issueKey: activity.issueKey ?? activity.issue?.issueKey ?? null,
+    title: activity.title ?? activity.issue?.title ?? 'Issue',
+    type: activity.type ?? activity.issue?.type ?? 'TASK',
+    priority: activity.priority ?? activity.issue?.priority ?? 'medium',
+    fromStatus, toStatus,
+    movementType: activity.action === 'CREATED' ? 'created'
+      : activity.action === 'ASSIGNED' ? 'assigned'
+      : activity.action === 'STATUS_CHANGED' ? getMovementType(fromStatus, toStatus) : 'none',
+    timestamp: new Date(activity.createdAt),
+    userId: activity.userId,
+    userName: activity.user?.name ?? undefined,
+    userImage: activity.user?.image ?? undefined,
+    projectName: activity.projectName,
+  };
 }

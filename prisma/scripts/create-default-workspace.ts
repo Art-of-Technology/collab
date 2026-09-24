@@ -16,7 +16,7 @@ async function main() {
 
     // Find an admin user to be the owner of the default workspace
     let owner = await prisma.user.findFirst({
-      where: { role: 'admin' },
+      where: { role: 'SYSTEM_ADMIN' },
     });
 
     // If no admin user exists, use the first user available

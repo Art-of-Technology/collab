@@ -6,7 +6,7 @@ import { generateUniqueViewSlug } from '@/lib/utils';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     const session = await getServerSession(authConfig);
@@ -117,7 +117,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { workspaceId: string } }
+  { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
     const session = await getServerSession(authConfig);

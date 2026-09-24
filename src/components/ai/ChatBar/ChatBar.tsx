@@ -148,26 +148,25 @@ export default function ChatBar() {
       : [];
 
   // Show/hide overlay
-  useEffect(() => {
-    setShowOverlay(isSearchMode || isQuickActionsMode);
+  const overlayMode = isSearchMode ? 'search' : isQuickActionsMode ? 'actions' : 'closed';
+  const [previousOverlayMode, setPreviousOverlayMode] = useState(overlayMode);
+  if (overlayMode !== previousOverlayMode) {
+    setPreviousOverlayMode(overlayMode);
+    setShowOverlay(overlayMode !== 'closed');
     setSelectedIndex(-1);
-  }, [isSearchMode, isQuickActionsMode]);
+  }
 
   // Handle arrow key navigation
-  const handleArrowKey = useCallback(
-    (direction: "up" | "down") => {
+  const handleArrowKey = (direction: "up" | "down") => {
       if (overlayItems.length === 0) return;
       setSelectedIndex((prev) => {
         if (direction === "down") return Math.min(prev + 1, overlayItems.length - 1);
         return Math.max(prev - 1, -1);
       });
-    },
-    [overlayItems.length]
-  );
+    };
 
   // Handle Enter — navigate to selected result, or send to AI
-  const handleSend = useCallback(
-    (message: string, files?: File[]) => {
+  const handleSend = (message: string, files?: File[]) => {
       if (selectedIndex >= 0 && selectedIndex < overlayItems.length) {
         overlayItems[selectedIndex].action();
         setInputValue("");
@@ -181,9 +180,7 @@ export default function ChatBar() {
 
       // TODO: Handle files when image upload is implemented in AI context
       sendMessage(message);
-    },
-    [selectedIndex, overlayItems, sendMessage, focusInput]
-  );
+    };
 
   const handleEscape = useCallback(() => {
     if (showOverlay) {

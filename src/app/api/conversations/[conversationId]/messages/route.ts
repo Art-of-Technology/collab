@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 // Get all messages for a conversation
 export async function GET(
   request: Request,
-  { params }: { params: { conversationId: string } }
+  { params }: { params: Promise<{ conversationId: string }> }
 ) {
   try {
     const currentUser = await getCurrentUser();
@@ -74,7 +74,7 @@ export async function GET(
 // Send a message in a conversation
 export async function POST(
   request: Request,
-  { params }: { params: { conversationId: string } }
+  { params }: { params: Promise<{ conversationId: string }> }
 ) {
   try {
     const currentUser = await getCurrentUser();

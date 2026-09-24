@@ -211,14 +211,14 @@ export function withValidation<TBody = any, TQuery = any, TParams = any>(
     // Validate body if schema provided
     if (validations.body) {
       const bodyValidation = await validateRequestBody(validations.body)(req);
-      if (bodyValidation.error) return bodyValidation.error;
+      if ('error' in bodyValidation) return bodyValidation.error;
       validationResults.body = bodyValidation.data;
     }
 
     // Validate query if schema provided
     if (validations.query) {
       const queryValidation = validateQueryParams(validations.query)(req);
-      if (queryValidation.error) return queryValidation.error;
+      if ('error' in queryValidation) return queryValidation.error;
       validationResults.query = queryValidation.data;
     }
 
@@ -228,7 +228,7 @@ export function withValidation<TBody = any, TQuery = any, TParams = any>(
         ? await context.params
         : context.params;
       const paramsValidation = validateParams(validations.params)(resolvedParams);
-      if (paramsValidation.error) return paramsValidation.error;
+      if ('error' in paramsValidation) return paramsValidation.error;
       validationResults.params = paramsValidation.data;
     }
 

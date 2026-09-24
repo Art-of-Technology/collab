@@ -19,12 +19,6 @@ const nextConfig = {
     }
     return config;
   },
-  typescript: {
-    // !! WARN !!
-    // Temporarily ignoring type errors during build to resolve the params issue
-    // TODO: Fix the proper type issue in the page components
-    ignoreBuildErrors: true,
-  },
   experimental: {
     // Add bodyParser settings for handling larger file uploads
     serverActions: {

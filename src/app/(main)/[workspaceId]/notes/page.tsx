@@ -126,6 +126,9 @@ const noteTypeIcons: Record<NoteType, any> = {
   TROUBLESHOOT: Bug,
   MEETING: Calendar,
   DECISION: GitBranch,
+  ENV_VARS: Lock,
+  API_KEYS: Lock,
+  CREDENTIALS: Lock,
 };
 
 // Note scope icons mapping

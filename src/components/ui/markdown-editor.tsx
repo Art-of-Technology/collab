@@ -54,7 +54,7 @@ import { type Task, TaskMentionSuggestion } from "@/components/ui/task-mention-s
 import { type Epic, EpicMentionSuggestion } from "@/components/ui/epic-mention-suggestion";
 import { type Story, StoryMentionSuggestion } from "@/components/ui/story-mention-suggestion";
 import { type Milestone, MilestoneMentionSuggestion } from "@/components/ui/milestone-mention-suggestion";
-import { CommandMenu, type CommandOption } from "@/components/ui/command-menu";
+import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { mergeAttributes } from '@tiptap/core'
 import { Node as TiptapNode } from '@tiptap/core'
@@ -1878,7 +1878,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   }, [editor]);
 
   // Handle command selection
-  const handleCommandSelect = useCallback((command: CommandOption) => {
+  const handleCommandSelect = useCallback((command: { id: string }) => {
     if (!editor) return;
 
     const currentPosition = editor.view.state.selection.from;
@@ -2943,10 +2943,18 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
             }}
             className="transition-all duration-200 animate-in slide-in-from-left-1"
           >
-            <CommandMenu
-              onSelect={handleCommandSelect}
-              onEscape={() => setShowCommandMenu(false)}
-            />
+            <Command onKeyDown={(event) => {
+              if (event.key === "Escape") { setShowCommandMenu(false); editor?.commands.focus(); }
+            }}>
+              <CommandInput autoFocus placeholder="Insert mention…" aria-label="Insert mention" />
+              <CommandList>
+                {["user", "task", "epic", "story", "milestone"].map(type => (
+                  <CommandItem key={type} onSelect={() => handleCommandSelect({ id: `mention-${type}` })}>
+                    Mention {type}
+                  </CommandItem>
+                ))}
+              </CommandList>
+            </Command>
           </div>
         )}
       </div>

@@ -1,4 +1,6 @@
 "use client";
+import { createElement } from "react";
+
 
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { Check, Circle, Clock, CheckCircle2, XCircle, AlertCircle, ArrowUp, ArrowDown, ChevronRight } from "lucide-react";
@@ -82,7 +84,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 
   return (
     <InfoBadge>
-      <Icon className={cn("h-2.5 w-2.5", colorClass)} />
+      {createElement(Icon, { className: cn("h-2.5 w-2.5", colorClass) })}
       {displayName}
     </InfoBadge>
   );

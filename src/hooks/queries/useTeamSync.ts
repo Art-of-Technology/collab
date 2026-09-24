@@ -112,6 +112,12 @@ function getEmptyRangeData(startDate: Date, endDate: Date): TeamSyncRangeData {
       totalStarted: 0,
       totalMoved: 0,
       totalCreated: 0,
+      totalInProgress: 0,
+      totalInReview: 0,
+      totalPlanned: 0,
+      totalBlocked: 0,
+      totalCarryOver: 0,
+      teamCompletionRate: 0,
       avgPerMember: 0,
       dateRange: {
         startDate,

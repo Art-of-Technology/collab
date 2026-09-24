@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -32,14 +33,19 @@ export const POST = withCors(
       );
     }
 
-    // Update or create notification preferences with encrypted push subscription
+    const existing = await prisma.notificationPreferences.findFirst({
+      where: { userId: user.id, workspaceId: null }, select: { id: true },
+    });
+    const preferenceId = existing?.id ?? `global:${user.id}`;
+    // A stable ID makes concurrent first subscriptions update the same row.
     await prisma.notificationPreferences.upsert({
-      where: { userId: user.id },
+      where: { id: preferenceId },
       update: {
         pushSubscription: encryptedSubscription,
         pushNotificationsEnabled: true,
       },
       create: {
+        id: preferenceId,
         userId: user.id,
         pushSubscription: encryptedSubscription,
         pushNotificationsEnabled: true,
@@ -67,10 +73,10 @@ export const DELETE = withCors(
     }
 
     // Remove push subscription
-    await prisma.notificationPreferences.update({
-      where: { userId: user.id },
+    await prisma.notificationPreferences.updateMany({
+      where: { userId: user.id, workspaceId: null },
       data: {
-        pushSubscription: undefined,
+        pushSubscription: Prisma.DbNull,
         pushNotificationsEnabled: false,
       },
     });

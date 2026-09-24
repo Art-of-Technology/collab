@@ -87,9 +87,10 @@ const getContentPreview = (content: string, maxLength: number = 100) => {
 const getChangeTypeColor = (changeType: NoteVersionChangeType) => {
   switch (changeType) {
     case "CREATED": return "#22c55e";
-    case "UPDATED": return "#3b82f6";
-    case "RESTORED": return "#f59e0b";
-    case "PUBLISHED": return "#a855f7";
+    case "EDIT":
+    case "TITLE": return "#3b82f6";
+    case "RESTORE": return "#f59e0b";
+    case "MERGE": return "#a855f7";
     default: return "#6366f1";
   }
 };

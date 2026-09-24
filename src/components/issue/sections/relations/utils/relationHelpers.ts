@@ -18,6 +18,7 @@ export function organizeRelationsData(relations: any[]): IssueRelations {
     const relationType = relation.relationType as IssueRelationType;
     const item: RelationItem = {
       id: relation.relatedItem.id,
+      dbId: relation.relatedItem.dbId ?? relation.relatedItem.id,
       title: relation.relatedItem.title,
       issueKey: relation.relatedItem.issueKey,
       status: relation.relatedItem.status,
@@ -33,7 +34,9 @@ export function organizeRelationsData(relations: any[]): IssueRelations {
 
     if (relationType === 'parent') {
       organized.parent = item;
-    } else {
+    } else if (relationType === 'child') {
+      organized.children.push(item);
+    } else if (organized[relationType]) {
       organized[relationType].push(item);
     }
   });

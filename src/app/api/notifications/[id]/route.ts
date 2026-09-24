@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 // PATCH /api/notifications/:id - Mark a notification as read
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const _params = await params;
   try {

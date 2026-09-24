@@ -215,7 +215,7 @@ export default function ListViewRenderer({
     }, [setSelectedIssueId]);
 
     // List Header Component
-    const ListHeader = () => {
+    const renderListHeader = () => {
         return (
             <div
                 className="hidden md:grid items-center gap-4 px-4 py-2.5 border-b border-collab-700 bg-collab-800/60 text-[11px] font-medium text-collab-400 uppercase tracking-wider sticky top-0 z-30"
@@ -283,7 +283,7 @@ export default function ListViewRenderer({
                     </div>
                 ) : (
                     <div className="pb-20 md:pb-16">
-                        <ListHeader />
+                        {renderListHeader()}
                         {groupedIssues.map((group, index) => {
                             const groupKey = `${displaySettings.grouping}-${group.name}`;
                             const isCollapsed = collapsedGroups.has(groupKey);

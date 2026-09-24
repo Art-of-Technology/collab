@@ -4,9 +4,9 @@ import { prisma } from "@/lib/prisma";
 import StartConversationForm from "@/components/messages/StartConversationForm";
 
 interface NewMessagePageProps {
-  params: {
+  params: Promise<{
     userId: string;
-  };
+  }>;
 }
 
 export default async function NewMessageWithUserPage({ params }: NewMessagePageProps) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { forwardRef, useImperativeHandle, useCallback, useRef, useState, useEffect } from 'react';
+import React, { forwardRef, useId, useImperativeHandle, useCallback, useRef, useState, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -82,7 +82,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   const isInsertingMentionRef = useRef(false);
 
   // Generate unique ID for this editor instance to avoid CSS conflicts
-  const editorId = useRef(`rich-editor-${Math.random().toString(36).substr(2, 9)}`).current;
+  const editorId = `rich-editor-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
   // State for floating toolbar and mentions
   const [showFloatingMenu, setShowFloatingMenu] = useState(false);
@@ -431,7 +431,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
 
 
   // Mention trigger check with safeguards against infinite loops
-  const checkForMentionTrigger = useCallback(() => {
+  const checkForMentionTrigger = () => {
     // Early return with safety checks
     if (!editor || !editorRef.current) {
       return;
@@ -478,7 +478,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     } else {
       setMentionSuggestion(null);
     }
-  }, [editor]);
+  };
 
   const insertUserMention = useCallback((user: any) => {
     if (!editor || !mentionSuggestion || !user) return;
@@ -817,7 +817,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
       const fallbackUrl = `/${currentWorkspace?.slug || currentWorkspace?.id}/issues/${issueKey}`;
       window.open(fallbackUrl, '_blank');
     }
-  }, [currentWorkspace?.slug, currentWorkspace?.id]);
+  }, [currentWorkspace]);
 
   // Click outside handler and mention click handler
   useEffect(() => {
@@ -966,10 +966,11 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   }), [editor]);
 
   // Update isEmpty when value prop changes
-  useEffect(() => {
-    const isContentEmpty = !value || value === '' || value === '<p></p>' || value === '<p><br></p>';
-    setIsEmpty(isContentEmpty);
-  }, [value]);
+  const [previousValue, setPreviousValue] = useState(value);
+  if (previousValue !== value) {
+    setPreviousValue(value);
+    setIsEmpty(!value || value === '<p></p>' || value === '<p><br></p>');
+  }
 
   if (!editor) {
     return null;
@@ -1054,25 +1055,25 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           .${editorId} hr.ProseMirror-selectednode {
             border-color: #22c55e;
           }
-          
+
           .${editorId} .ProseMirror:focus {
             outline: none;
             box-shadow: none;
           }
-          
+
           .${editorId} .ProseMirror p {
             margin: 0;
             padding: 0;
           }
-          
+
           .${editorId} .ProseMirror p:first-child {
             margin-top: 0;
           }
-          
+
           .${editorId} .ProseMirror p:last-child {
             margin-bottom: 0;
           }
-          
+
           /* Placeholder for truly empty editor */
           .${editorId} .ProseMirror.is-editor-empty.should-show-placeholder:before {
             color: #6e7681 !important;
@@ -1084,7 +1085,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             line-height: 1.5;
             z-index: 1;
           }
-          
+
           /* Placeholder for editor with just empty paragraph - only show when should-show-placeholder class is present */
           .${editorId} .ProseMirror.should-show-placeholder p:first-child:last-child:empty:before {
             color: #6e7681 !important;
@@ -1096,7 +1097,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             line-height: 1.5;
             z-index: 1;
           }
-          
+
           /* Hide placeholder when paragraph contains mentions (fallback for browsers without JS control) */
           .${editorId} .ProseMirror p:first-child:last-child:has(.mention):before,
           .${editorId} .ProseMirror p:first-child:last-child:has(.issue-mention):before,
@@ -1104,7 +1105,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           .${editorId} .ProseMirror p:first-child:last-child:has([data-type="issue-mention"]):before {
             display: none !important;
           }
-          
+
           /* Static toolbar mode specific styles */
           ${toolbarMode === 'static' ? `
             .${editorId} .ProseMirror.is-editor-empty:before,
@@ -1112,7 +1113,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
               display: none !important;
             }
           ` : ''}
-          
+
           /* Override any prose styles for placeholder */
           .prose .${editorId} .ProseMirror.is-editor-empty:before,
           .prose .${editorId} .ProseMirror p:first-child:last-child:empty:before {
@@ -1120,20 +1121,20 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             margin: 0 !important;
             padding: 0 !important;
           }
-          
+
           /* Ensure inner elements don't steal click events */
           .mention *,
           .issue-mention * {
             pointer-events: none;
           }
-          
+
           /* Ensure mention badges are clickable */
           .mention,
           .issue-mention {
             pointer-events: auto;
             user-select: none;
           }
-          
+
           /* Mention badge hover effects */
           .mention,
           .issue-mention {
@@ -1141,12 +1142,12 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             transition: all 0.2s ease;
             overflow: hidden;
           }
-          
+
           .mention:hover,
           .issue-mention:hover {
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
           }
-          
+
           /* External link icon animations */
           .mention-external-icon,
           .issue-mention-external-icon {
@@ -1157,14 +1158,14 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             margin-left: 0;
             display: inline-block;
           }
-          
+
           .mention:hover .mention-external-icon,
           .issue-mention:hover .issue-mention-external-icon {
             width: 10px;
             opacity: 1;
             margin-left: 4px;
           }
-          
+
           /* Video wrapper styles */
           .video-resizable-container {
             position: relative;
@@ -1173,7 +1174,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             margin: 1rem 0;
             line-height: 0;
           }
-          
+
           .video-resizable-container .resizable-video {
             display: block;
             max-width: 100%;
@@ -1183,20 +1184,20 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             transition: box-shadow 0.2s ease;
             margin:0;
           }
-          
+
           .video-resizable-container:hover .resizable-video {
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
           }
-          
+
           /* Video resize handles */
           .video-resizable-container .resize-handle {
             transition: all 0.15s ease;
           }
-          
+
           .video-resizable-container:hover .resize-handle {
             opacity: 1;
           }
-          
+
           /* Horizontal rule styles with delete button */
           .${editorId} .ProseMirror hr {
             position: relative;
@@ -1205,7 +1206,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             border-top: 2px solid #333;
             cursor: default;
           }
-          
+
           .${editorId} .ProseMirror hr::before {
             content: '';
             position: absolute;
@@ -1216,7 +1217,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             background: transparent;
             z-index: 1;
           }
-          
+
           .${editorId} .ProseMirror hr::after {
             content: '';
             position: absolute;
@@ -1241,25 +1242,25 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             background-repeat: no-repeat;
             background-position: center;
           }
-          
+
           .${editorId} .ProseMirror hr:hover::after {
             opacity: 1;
             pointer-events: auto;
           }
-          
+
           .${editorId} .ProseMirror hr:hover::after:hover {
             background-color: #ef4444;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/%3E%3Cpath d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/%3E%3C/svg%3E");
             transform: translateY(-50%) scale(1.05);
           }
-          
+
           /* Code block highlighting styles */
           .${editorId} .ProseMirror :first-child,
           .prose :first-child,
           .tiptap :first-child {
             margin-top: 0;
           }
-          
+
           .${editorId} .ProseMirror pre,
           .prose pre,
           .tiptap pre {
@@ -1270,7 +1271,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             margin: 1.5rem 0;
             padding: 0.75rem 1rem;
           }
-          
+
           .${editorId} .ProseMirror pre code,
           .prose pre code,
           .tiptap pre code {
@@ -1279,7 +1280,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             font-size: 0.8rem;
             padding: 0;
           }
-          
+
           /* Code syntax highlighting */
           .${editorId} .ProseMirror pre .hljs-comment,
           .${editorId} .ProseMirror pre .hljs-quote,
@@ -1289,7 +1290,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           .tiptap pre .hljs-quote {
             color: #616161;
           }
-          
+
           .${editorId} .ProseMirror pre .hljs-variable,
           .${editorId} .ProseMirror pre .hljs-template-variable,
           .${editorId} .ProseMirror pre .hljs-attribute,
@@ -1319,7 +1320,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           .tiptap pre .hljs-selector-class {
             color: #f98181;
           }
-          
+
           .${editorId} .ProseMirror pre .hljs-number,
           .${editorId} .ProseMirror pre .hljs-meta,
           .${editorId} .ProseMirror pre .hljs-built_in,
@@ -1343,7 +1344,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           .tiptap pre .hljs-params {
             color: #fbbc88;
           }
-          
+
           .${editorId} .ProseMirror pre .hljs-string,
           .${editorId} .ProseMirror pre .hljs-symbol,
           .${editorId} .ProseMirror pre .hljs-bullet,
@@ -1355,7 +1356,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           .tiptap pre .hljs-bullet {
             color: #b9f18d;
           }
-          
+
           .${editorId} .ProseMirror pre .hljs-title,
           .${editorId} .ProseMirror pre .hljs-section,
           .prose pre .hljs-title,
@@ -1364,7 +1365,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           .tiptap pre .hljs-section {
             color: #faf594;
           }
-          
+
           .${editorId} .ProseMirror pre .hljs-keyword,
           .${editorId} .ProseMirror pre .hljs-selector-tag,
           .prose pre .hljs-keyword,
@@ -1373,13 +1374,13 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
           .tiptap pre .hljs-selector-tag {
             color: #70cff8;
           }
-          
+
           .${editorId} .ProseMirror pre .hljs-emphasis,
           .prose pre .hljs-emphasis,
           .tiptap pre .hljs-emphasis {
             font-style: italic;
           }
-          
+
           .${editorId} .ProseMirror pre .hljs-strong,
           .prose pre .hljs-strong,
           .tiptap pre .hljs-strong {

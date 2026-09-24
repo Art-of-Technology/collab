@@ -12,7 +12,7 @@ import { NoteType, NoteScope } from '@prisma/client';
 import { stripHtmlToPlainText as stripHtml } from '@/lib/html-sanitizer';
 
 // Note types that are considered knowledge base articles
-const KNOWLEDGE_TYPES = [
+const KNOWLEDGE_TYPES: NoteType[] = [
   NoteType.GUIDE,
   NoteType.README,
   NoteType.ARCHITECTURE,

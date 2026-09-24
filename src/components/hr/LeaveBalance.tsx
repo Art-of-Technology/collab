@@ -20,18 +20,9 @@ export function LeaveBalance({
   balances = [],
   isLoading = false,
 }: LeaveBalanceProps) {
-  const [selectedLeaveType, setSelectedLeaveType] = useState<string>("");
-
-  // Memoize the check for whether the selected leave type exists in balances
-  const isSelectedLeaveTypeValid = useMemo(() => {
-    return !!selectedLeaveType && balances.some(b => b.policyId === selectedLeaveType);
-  }, [balances, selectedLeaveType]);
-  // Update selectedLeaveType when balances change
-  useEffect(() => {
-    if (balances.length > 0 && (!selectedLeaveType || !isSelectedLeaveTypeValid)) {
-      setSelectedLeaveType(balances[0].policyId);
-    }
-  }, [balances, selectedLeaveType, isSelectedLeaveTypeValid]);
+  const [requestedLeaveType, setSelectedLeaveType] = useState<string>("");
+  const selectedLeaveType = balances.some(b => b.policyId === requestedLeaveType)
+    ? requestedLeaveType : balances[0]?.policyId ?? "";
 
   // Memoize the current balance calculation
   const currentBalance = useMemo(() => {
