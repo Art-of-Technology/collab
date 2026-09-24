@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { decryptToken } from '@/lib/apps/crypto';
 import { authenticateOAuthClient } from '@/lib/oauth-client-auth';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 // OAuth 2.0 Token Introspection Endpoint (RFC 7662)
 // Allows authorized clients to determine the state of an access token
@@ -71,8 +70,6 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
 

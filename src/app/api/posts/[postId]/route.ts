@@ -1,6 +1,8 @@
+import { deletePostWithComments } from "@/lib/delete-post-comment";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { postAccessWhere } from "@/lib/post-access";
 import { userSelectFields } from "@/lib/user-utils";
 
 // Get a single post
@@ -15,15 +17,7 @@ export async function GET(
     }
 
     const post = await prisma.post.findFirst({
-      where: {
-        id: (await params).postId,
-        workspace: {
-          OR: [
-            { ownerId: user.id },
-            { members: { some: { userId: user.id, status: true } } },
-          ],
-        },
-      },
+      where: postAccessWhere((await params).postId, user.id),
       include: {
         author: { select: userSelectFields },
         tags: true,
@@ -85,8 +79,8 @@ export async function PATCH(
     }
 
     // Verify the post exists
-    const existingPost = await prisma.post.findUnique({
-      where: { id: postId },
+    const existingPost = await prisma.post.findFirst({
+      where: postAccessWhere(postId, user.id),
     });
 
     if (!existingPost) {
@@ -183,8 +177,8 @@ export async function DELETE(
     const { postId } = _params;
 
     // Verify the post exists
-    const existingPost = await prisma.post.findUnique({
-      where: { id: postId },
+    const existingPost = await prisma.post.findFirst({
+      where: postAccessWhere(postId, user.id),
     });
 
     if (!existingPost) {
@@ -197,9 +191,7 @@ export async function DELETE(
     }
 
     // Delete the post - Prisma cascade will handle related records
-    await prisma.post.delete({
-      where: { id: postId },
-    });
+    await deletePostWithComments(postId, user.id);
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {

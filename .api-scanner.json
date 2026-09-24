@@ -1,0 +1,12 @@
+{
+  "path": "src/app/api",
+  "output": "public/api-documentation.json",
+  "format": "json",
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.next/**",
+    "**/src/app/api/slack/my-tasks/route.ts",
+    "**/src/app/api/slack/create-issue/route.ts"
+  ]
+}

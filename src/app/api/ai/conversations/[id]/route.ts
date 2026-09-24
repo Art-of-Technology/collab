@@ -1,3 +1,4 @@
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -19,6 +20,7 @@ export async function GET(
       where: {
         id,
         userId: currentUser.id,
+        workspace: postWorkspaceAccessWhere(currentUser.id),
       },
       include: {
         agent: {
@@ -93,6 +95,7 @@ export async function DELETE(
       where: {
         id,
         userId: currentUser.id,
+        workspace: postWorkspaceAccessWhere(currentUser.id),
       },
     });
 
@@ -102,7 +105,7 @@ export async function DELETE(
 
     // Archive instead of hard delete
     await prisma.aIConversation.update({
-      where: { id },
+      where: { id, userId: currentUser.id, workspace: postWorkspaceAccessWhere(currentUser.id) },
       data: { isArchived: true },
     });
 

@@ -2,10 +2,9 @@ import type { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 const UpdateManifestSchema = z.object({
   entrypoint_url: z.string().url().optional(),
@@ -70,7 +69,6 @@ export async function GET(
       return NextResponse.json({ error: 'Version not found' }, { status: 404 });
     }
 
-    await prisma.$disconnect();
 
     return NextResponse.json({
       version: {
@@ -83,7 +81,7 @@ export async function GET(
     });
   } catch (error) {
     console.error('Error getting app version:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -217,7 +215,6 @@ export async function PATCH(
       changes: Object.keys(updates),
     });
 
-    await prisma.$disconnect();
 
     return NextResponse.json({
       success: true,
@@ -230,7 +227,7 @@ export async function PATCH(
     });
   } catch (error) {
     console.error('Error updating app version:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

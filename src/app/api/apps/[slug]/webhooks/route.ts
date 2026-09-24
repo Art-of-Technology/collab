@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { getAuthSession } from '@/lib/auth';
 import { z } from 'zod';
 import { 
@@ -10,7 +9,7 @@ import {
 } from '@/lib/webhooks';
 import { encrypt } from '@/lib/apps/crypto';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 const CreateWebhookSchema = z.object({
   url: z.string().url('Invalid webhook URL'),

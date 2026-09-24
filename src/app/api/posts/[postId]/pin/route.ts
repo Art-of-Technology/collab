@@ -1,3 +1,4 @@
+import { postAccessWhere } from "@/lib/post-access";
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
@@ -20,8 +21,8 @@ export async function PUT(
     const { isPinned } = body;
 
     // Get the post to check workspace
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    const post = await prisma.post.findFirst({
+      where: postAccessWhere(postId, session.user.id),
       select: {
         id: true,
         workspaceId: true,
@@ -30,34 +31,15 @@ export async function PUT(
       }
     });
 
-    if (!post) {
+    if (!post?.workspaceId) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
-    // Check permissions
-    let canPin = false;
-    
-    if (!post.workspaceId) {
-      // If no workspace, only author can pin
-      canPin = post.authorId === session.user.id;
-    } else {
-      // Check if user has permission to pin posts
-      const hasPermission = await checkUserPermission(
-        session.user.id,
-        post.workspaceId,
-        Permission.PIN_POST
-      );
-
-      // Also allow post author and workspace owner to pin
-      const workspace = await prisma.workspace.findUnique({
-        where: { id: post.workspaceId },
-        select: { ownerId: true }
-      });
-
-      canPin = hasPermission.hasPermission || 
-               post.authorId === session.user.id ||
-               workspace?.ownerId === session.user.id;
-    }
+    const hasPermission = await checkUserPermission(session.user.id, post.workspaceId, Permission.PIN_POST);
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: post.workspaceId }, select: { ownerId: true }
+    });
+    const canPin = hasPermission.hasPermission || post.authorId === session.user.id || workspace?.ownerId === session.user.id;
 
     if (!canPin) {
       return NextResponse.json(

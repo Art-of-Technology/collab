@@ -323,3 +323,19 @@ export function isValidWebhookEvent(payload: any): payload is WebhookEvent {
 
   return true;
 }
+
+/** Only operators can authorize outbound destinations; stored URLs alone cannot. */
+export function isAllowedWebhookDeliveryUrl(value: string): boolean {
+  try {
+    const target = new URL(value);
+    if (target.protocol !== 'https:' || target.username || target.password || target.hash) return false;
+    const configured = process.env.COLLAB_WEBHOOK_ALLOWED_ORIGINS;
+    if (!configured?.trim()) return false;
+    const origins = configured.split(',').map(entry => new URL(entry.trim()));
+    if (origins.some(origin => origin.protocol !== 'https:' || origin.username || origin.password ||
+      origin.pathname !== '/' || origin.search || origin.hash)) return false;
+    return origins.some(origin => origin.origin === target.origin);
+  } catch {
+    return false;
+  }
+}

@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { redirect } from 'next/navigation';
 import { generateAuthorizationCode } from '@/lib/apps/crypto';
 import { normalizeScopes, filterGrantedScopes, scopesToString, validateScopes, isAllowedRedirectUri } from '@/lib/oauth-scopes';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 // OAuth 2.0 Authorization Endpoint
 // Handles authorization requests from third-party apps
@@ -321,8 +320,6 @@ export async function GET(request: NextRequest) {
       },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
@@ -379,7 +376,5 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

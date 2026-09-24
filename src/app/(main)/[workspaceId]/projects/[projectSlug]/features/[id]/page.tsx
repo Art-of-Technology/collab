@@ -104,21 +104,20 @@ export default async function ProjectFeatureRequestPage({ params }: FeatureReque
   let featureRequest;
   try {
     featureRequest = await getFeatureRequestById(id, workspaceId);
-
-    if (!featureRequest) {
-      notFound();
-    }
-
-    // Verify the feature request belongs to this project
-    if (featureRequest.projectId && featureRequest.projectId !== project.id) {
-      redirect(`/${workspaceSlugOrId}/projects/${projectSlug}/features`);
-    }
-
-
   } catch (error) {
     console.error("Error loading feature request:", error);
     return <div>Something went wrong</div>;
   }
+
+  if (!featureRequest) {
+    notFound();
+  }
+
+  // Verify the feature request belongs to this project
+  if (featureRequest.projectId && featureRequest.projectId !== project.id) {
+    redirect(`/${workspaceSlugOrId}/projects/${projectSlug}/features`);
+  }
+
   return (
       <div className="container max-w-4xl py-4 sm:py-8 px-0 sm:px-0">
         <div className="mb-6 text-left">
@@ -149,4 +148,3 @@ export default async function ProjectFeatureRequestPage({ params }: FeatureReque
       </div>
     );
 }
-

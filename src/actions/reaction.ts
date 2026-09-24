@@ -1,8 +1,20 @@
 'use server';
 
+import { postAccessWhere, commentAccessWhere } from '@/lib/post-access';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+
+async function requireReactionAccess(userId: string, postId?: string, commentId?: string) {
+  if (commentId) {
+    const where = commentAccessWhere(commentId, userId, postId);
+    if (!await prisma.comment.findFirst({ where, select: { id: true } })) throw new Error('Comment not found');
+    return { comment: where };
+  }
+  const where = postAccessWhere(postId ?? '', userId);
+  if (!await prisma.post.findFirst({ where, select: { id: true } })) throw new Error('Post not found');
+  return { post: where };
+}
 
 /**
  * Get reactions for a post
@@ -28,9 +40,12 @@ export async function getPostReactions(postId: string) {
     throw new Error('User not found');
   }
   
+  const access = await requireReactionAccess(user.id, postId);
+
   // Get reactions for the post
   const reactions = await prisma.reaction.findMany({
     where: {
+      ...access,
       postId,
     },
     include: {
@@ -97,9 +112,12 @@ export async function getCommentReactions(commentId: string) {
     throw new Error('User not found');
   }
   
+  const access = await requireReactionAccess(user.id, undefined, commentId);
+
   // Get reactions for the comment
   const reactions = await prisma.reaction.findMany({
     where: {
+      ...access,
       commentId,
     },
     include: {
@@ -158,9 +176,12 @@ export async function addReaction(data: {
     throw new Error('User not found');
   }
   
+  const access = await requireReactionAccess(user.id, postId, commentId);
+
   // Check if the user has already reacted with this type
   const existingReaction = await prisma.reaction.findFirst({
     where: {
+      ...access,
       authorId: user.id,
       postId,
       commentId,
@@ -251,9 +272,12 @@ export async function removeReaction(data: {
     throw new Error('User not found');
   }
   
+  const access = await requireReactionAccess(user.id, postId, commentId);
+
   // Find the user's reaction
   const reaction = await prisma.reaction.findFirst({
     where: {
+      ...access,
       authorId: user.id,
       postId,
       commentId,

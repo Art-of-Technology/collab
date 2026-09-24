@@ -1,11 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+// Credentials require an explicit select at the authentication/integration boundary.
+const options = {
+  omit: { user: { hashedPassword: true, githubAccessToken: true } }
+} as const;
+const globalForPrisma = global as unknown as { prisma: PrismaClient<typeof options> };
 
-export const prisma =
-  globalForPrisma.prisma ||
-  new PrismaClient({
-  //  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  });
+export const prisma = globalForPrisma.prisma || new PrismaClient(options);
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma; 
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;

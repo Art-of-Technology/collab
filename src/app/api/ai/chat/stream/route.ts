@@ -1,3 +1,4 @@
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: context.workspace.id,
-        members: { some: { userId: currentUser.id } },
+        ...postWorkspaceAccessWhere(currentUser.id),
       },
       select: { id: true, name: true, slug: true },
     });
