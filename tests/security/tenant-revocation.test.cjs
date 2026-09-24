@@ -2042,6 +2042,7 @@ for (const endpoint of ['workspaces/[workspaceId]/planning/activity', 'timeline/
     f.db.issue.findUnique = f.db.issue.findFirst;
     f.db.user.findMany = async () => [];
     f.db.issueActivity.count = async ({ where }) => activities.filter(row => matches(row, where)).length;
+  f.db.issueActivity.findFirst = async args => (await f.db.issueActivity.findMany(args))[0] ?? null;
     f.db.issueActivity.findMany = async args => activities.filter(row => matches(row, args.where)).map(row => {
       const result = f.project(row, args);
       for (const name of ['oldStatus', 'newStatus']) if (result[name]) accessedStatuses.push(result[name].name);
@@ -2438,6 +2439,7 @@ function activitySnapshotFixture() {
     return f.project(row, args);
   });
   f.db.issueActivity.count = async ({ where }) => activities.filter(row => matches(row, where)).length;
+  f.db.issueActivity.findFirst = async args => (await f.db.issueActivity.findMany(args))[0] ?? null;
   const producer = load('src/lib/board-item-activity-service.ts', f.dependencies);
   const call = endpoint => f.route(endpoint).GET(new Request(`https://collab.example.test/?workspaceId=${own.id}&startDate=2026-09-01&endDate=2027-01-01`),
     { params: Promise.resolve({ workspaceId: own.id, issueId: f.rows[0].id, issueIdOrKey: f.rows[0].id, projectId: f.rows[0].projectId }) });
@@ -2904,7 +2906,7 @@ function versionReadFixture() {
   f.db.repository.findFirst = async args => matches(repository, args.where) ? f.project(repository, args) : null;
   f.db.repository.findUnique = f.db.repository.findFirst;
   const versions = [f.denied, f.own].map((issue, index) => ({ id: `version-${index}`, repositoryId: 'repo',
-    version: `1.0.${index}`, status: 'RELEASED', environment: 'production', createdAt: new Date(0),
+    version: `1.0.${index}`, issueAccessInvalidated: false, status: 'RELEASED', environment: 'production', createdAt: new Date(0),
     aiSummary: `${issue.title} saved summary`, aiChangelog: `${issue.title} saved changelog`,
     issues: [{ issueId: issue.id, issue, aiTitle: issue.title }], releases: [], deployments: [], parentVersion: null, childVersions: [] }));
   const releases = versions.map((version, index) => ({ id: `release-${index}`, repositoryId: 'repo', versionId: version.id, version,
@@ -3027,4 +3029,87 @@ test('realtime authorizes all four producer payloads and retained references bef
     await callback(JSON.stringify(events[3]));
     assert.equal((await reader.read()).done, true); assert.equal(unsubscribe, 1);
   } finally { await reader.cancel(); }
+});
+
+for (const mode of ['replace', 'delete', 'bulk-statuses']) {
+  for (const reference of ['current', 'activity']) {
+    test(`status removal ${mode} denies inaccessible ${reference} references before all mutations`, async () => {
+      const f = activitySnapshotFixture(), own = f.rows[0], denied = f.rows[2];
+      own.project.slug = 'existing';
+      const status = { id: 'status', name: 'review', projectId: own.projectId, project: own.project, isDefault: false };
+      const target = { ...status, id: 'target', name: 'done' };
+      own.statusId = status.id; own.projectStatus = status;
+      denied.statusId = reference === 'current' ? status.id : null;
+      denied.projectStatus = reference === 'current' ? status : null;
+      if (reference === 'activity') {
+        await f.producer.trackStatusChange({ itemType: 'ISSUE', itemId: denied.id, workspaceId: denied.workspaceId,
+          projectId: denied.projectId, userId: 'alice', oldStatusId: status.id, oldStatusName: 'review' });
+        f.activities[0].oldStatus = status;
+      }
+      f.db.projectStatus.findFirst = async ({ where }) => [status, target].find(row => matches(row, where)) ?? null;
+      f.db.projectStatus.findMany = async ({ where }) => [status, target].filter(row => matches(row, where));
+      f.db.projectStatus.delete = async args => { f.writes.push(args); return status; };
+      f.db.projectStatus.deleteMany = async args => { f.writes.push(args); return { count: 2 }; };
+      f.db.issue.updateMany = async args => { f.writes.push(args); return { count: 1 }; };
+      const projectRead = f.db.project.findFirst;
+      f.db.project.findFirst = async args => (await projectRead(args)) && { ...own.project, slug: 'existing', statuses: [] };
+      f.db.project.findUnique = async () => ({ ...own.project, statuses: [], _count: { issues: 1 } });
+      const endpoint = 'workspaces/[workspaceId]/projects/[projectSlug]' + (mode === 'bulk-statuses' ? '' : '/statuses/[statusId]');
+      const method = mode === 'bulk-statuses' ? 'PATCH' : 'DELETE';
+      const invoke = () => f.route(endpoint)[method](f.request(method, own.workspaceId,
+        mode === 'bulk-statuses' ? { statuses: [] } : mode === 'replace' ? { targetStatusId: target.id } : {}),
+        f.context(own.workspaceId));
+      const response = await invoke();
+      assert.equal(response.status, 403); assert.deepEqual(f.writes, []); assert.equal(f.calls.writes, 0);
+      f.workspaces[2].members[0].status = true;
+      assert.equal((await invoke()).status, 200);
+      assert.ok(f.writes.length > 0);
+    });
+  }
+}
+
+for (const endpoint of ['workspaces/[workspaceId]/projects', 'workspaces/[workspaceId]/projects/[projectSlug]',
+  'projects/[projectId]/statuses', 'workspaces/[workspaceId]/projects/[projectSlug]/statuses/[statusId]/issues-count']) {
+  test(`browser project aggregate ${endpoint} excludes denied historical issue references`, async () => {
+    const f = issueReportFixture(), project = f.reportProject;
+    project.slug = 'existing'; project.repository = null;
+    const status = { id: 'status', name: 'review', isActive: true, projectId: project.id, project, issues: project.issues };
+    f.own.statusId = status.id; f.own.projectStatus = status;
+    f.denied.statusId = status.id; f.denied.projectStatus = status;
+    f.denied.workspaceId = f.workspaces[2].id; f.denied.workspace = f.workspaces[2];
+    f.db.project.findMany = async args => matches(project, args.where) ? [f.project(project, args)] : [];
+    f.db.projectStatus.findFirst = async args => matches(status, args.where) ? f.project(status, args) : null;
+    f.db.projectStatus.findMany = async args => matches(status, args.where) ? [f.project(status, args)] : [];
+    const invoke = () => f.route(endpoint).GET(f.request('GET', project.workspaceId),
+      { params: Promise.resolve({ workspaceId: project.workspaceId, projectSlug: project.slug, projectId: project.id, statusId: status.id }) });
+    const first = await invoke(); assert.equal(first.status, 200);
+    const expected = await first.json();
+    f.addDenied();
+    assert.deepEqual(await (await invoke()).json(), expected);
+    f.workspaces[2].members[0].status = true;
+    assert.notDeepEqual(await (await invoke()).json(), expected);
+    f.workspaces[2].members[0].status = false; f.workspaces[2].ownerId = 'alice';
+    assert.notDeepEqual(await (await invoke()).json(), expected);
+  });
+}
+
+test('time tracking project constraint never broadens for revoked empty or missing projects', async () => {
+  const f = issueReportFixture(), logs = [f.own, f.rows[2]].map((issue, index) => ({ id: `log-${index}`,
+    workspaceId: f.own.workspaceId, issueId: issue.id, issue, timeSpent: 10 + index, userId: 'alice', user: f.state.user, loggedAt: new Date() }));
+  f.db.workLog = { findMany: async args => logs.filter(row => matches(row, args.where)).map(row => f.project(row, args)) };
+  const invoke = projectId => f.route('apps/auth/reports/time-tracking').GET(new Request(
+    `https://collab.example.test/?projectId=${projectId}&includeDetails=true`));
+  for (const projectId of [f.rows[2].projectId, f.rows[1].projectId, 'missing']) {
+    const response = await invoke(projectId); assert.equal(response.status, 200);
+    const body = JSON.stringify(await response.json());
+    assert.equal(body.includes('protected-own'), false);
+    assert.equal(body.includes('log-0'), false);
+    assert.equal(body.includes('log-1'), false);
+  }
+  const allowed = JSON.stringify(await (await invoke(f.own.projectId)).json());
+  assert.equal(allowed.includes('protected-own'), true);
+  f.workspaces[2].members[0].status = true;
+  const restored = JSON.stringify(await (await invoke(f.rows[2].projectId)).json());
+  assert.equal(restored.includes('protected-revoked'), true);
+  assert.equal(restored.includes('protected-own'), false);
 });

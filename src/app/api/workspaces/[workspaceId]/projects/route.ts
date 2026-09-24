@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -138,7 +139,7 @@ export async function GET(
       include: {
         _count: {
           select: {
-            issues: true
+            issues: { where: issueReadAccessWhere(session.user.id) }
           }
         },
         repository: {
@@ -308,7 +309,7 @@ export async function POST(
         include: {
           _count: {
             select: {
-              issues: true
+              issues: { where: issueReadAccessWhere(session.user.id) }
             }
           }
         }

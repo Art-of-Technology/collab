@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -65,6 +66,7 @@ export async function GET(
     // Count issues using this status
     const issueCount = await prisma.issue.count({
       where: {
+        AND: [issueReadAccessWhere(session.user.id)],
         projectId: project.id,
         statusId: statusId
       }

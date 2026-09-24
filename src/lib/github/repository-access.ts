@@ -23,7 +23,7 @@ export async function requireRepositoryAccess(repositoryId: string): Promise<str
 }
 
 export function versionAccessWhere(userId: string) {
-  return { issues: { every: { issue: issueReadAccessWhere(userId) } } } satisfies Prisma.VersionWhereInput;
+  return { issueAccessInvalidated: false, issues: { every: { issue: issueReadAccessWhere(userId) } } } satisfies Prisma.VersionWhereInput;
 }
 
 export function releaseAccessWhere(userId: string) {

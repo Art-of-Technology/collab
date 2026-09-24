@@ -1493,6 +1493,8 @@ model Version {
   parentVersionId String? // Reference to the development version this production version inherits from
   isProduction    Boolean @default(false) // True if this is a production release
 
+  issueAccessInvalidated Boolean @default(false)
+
   // AI-generated content for better changelog
   aiSummary   String? // AI-generated version summary
   aiChangelog String? // AI-generated changelog content

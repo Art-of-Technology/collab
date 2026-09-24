@@ -1,3 +1,4 @@
+import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -10,15 +11,15 @@ export async function GET(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { projectId } = await params;
     
     // Get the project to verify access
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, ...issueAccessWhere(session.user.id) },
       select: { 
         workspaceId: true,
         name: true
@@ -27,19 +28,6 @@ export async function GET(
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-    }
-
-    // Verify user has access to workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
-      where: {
-        user: { email: session.user.email },
-        workspaceId: project.workspaceId,
-        status: true
-      }
-    });
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     // Fetch project statuses with template information
@@ -52,7 +40,7 @@ export async function GET(
         template: true,
         _count: {
           select: {
-            issues: true
+            issues: { where: issueReadAccessWhere(session.user.id) }
           }
         }
       },
@@ -98,7 +86,7 @@ export async function POST(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -108,26 +96,13 @@ export async function POST(
     const { name, displayName, description, color, iconName, order, isDefault, isFinal, templateId } = body;
 
     // Get the project to verify access
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, ...issueAccessWhere(session.user.id) },
       select: { workspaceId: true }
     });
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-    }
-
-    // Verify user has access to workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
-      where: {
-        user: { email: session.user.email },
-        workspaceId: project.workspaceId,
-        status: true
-      }
-    });
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     // If this is being set as default, unset other defaults
@@ -161,7 +136,7 @@ export async function POST(
         template: true,
         _count: {
           select: {
-            issues: true
+            issues: { where: issueReadAccessWhere(session.user.id) }
           }
         }
       }

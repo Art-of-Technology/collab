@@ -393,7 +393,7 @@ export async function GET(req: Request) {
       prisma.project.findMany({
         where: { workspaceId, isArchived: false },
         include: {
-          _count: { select: { issues: true } },
+          _count: { select: { issues: { where: issueReadAccessWhere(session.user.id) } } },
           issues: {
             where: issueReadAccessWhere(session.user.id),
             select: {

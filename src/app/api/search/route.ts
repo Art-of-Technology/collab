@@ -207,7 +207,7 @@ export async function GET(req: NextRequest) {
         slug: true,
         color: true,
         _count: {
-          select: { issues: true }
+          select: { issues: { where: issueReadAccessWhere(currentUser.id) } }
         }
       },
       take: Math.min(limit, 10),

@@ -64,6 +64,18 @@ export async function activityReadAccessWhere(userId: string, where: Prisma.Issu
   };
 }
 
+export async function canDeleteProjectStatuses(userId: string, statusIds: string[]): Promise<boolean> {
+  if (!statusIds.length) return true;
+  if (await prisma.issue.findFirst({
+    where: { statusId: { in: statusIds }, NOT: issueReadAccessWhere(userId) }, select: { id: true },
+  })) return false;
+  const references = { OR: [{ oldStatusId: { in: statusIds } }, { newStatusId: { in: statusIds } }] };
+  const accessible = await activityReadAccessWhere(userId, references);
+  return !await prisma.issueActivity.findFirst({
+    where: { AND: [references, { NOT: accessible }] }, select: { id: true },
+  });
+}
+
 /**
  * Options for finding issues
  */

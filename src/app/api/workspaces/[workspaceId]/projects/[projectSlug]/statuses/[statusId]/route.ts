@@ -1,3 +1,4 @@
+import { canDeleteProjectStatuses, issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -87,6 +88,10 @@ export async function DELETE(
       }
     }
 
+    if (!await canDeleteProjectStatuses(session.user.id, [statusId])) {
+      return NextResponse.json({ error: 'Status references inaccessible issues' }, { status: 403 });
+    }
+
     // Perform the deletion in a transaction
     const result = await prisma.$transaction(async (tx) => {
       // First, move all issues to the target status if specified
@@ -116,7 +121,8 @@ export async function DELETE(
         movedIssuesCount: targetStatusId ? await tx.issue.count({
           where: {
             projectId: project.id,
-            statusId: targetStatusId
+            statusId: targetStatusId,
+            AND: issueReadAccessWhere(session.user.id)
           }
         }) : 0
       };

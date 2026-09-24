@@ -1,0 +1,9 @@
+# Saved version authorization
+
+Migration `20260924130000_version_access_invalidation` adds one non-null Boolean column, `Version.issueAccessInvalidated`. No tables, indexes, foreign keys, or saved content are removed or rewritten. Existing versions receive `true`, because their complete historical issue authorization scope cannot be reconstructed from surviving links. New versions default to `false`.
+
+Six PostgreSQL functions and triggers retain and propagate this flag. They invalidate versions on VersionIssue unlink/reassignment; Issue deletion or workspace/project/status changes; Project deletion or workspace changes; and ProjectStatus deletion or project changes. Invalidation propagates to child versions, is inherited from an invalidated parent, and cannot be cleared by an ordinary update. The existing full issue predicate continues to govern current links.
+
+The shared version/release read predicate requires `issueAccessInvalidated = false`. Thus legacy or invalidated versions, releases, version-file JSON, and saved AI prose stay stored but are unavailable through these readers, including activity/dashboard projections and changelog generation. Re-linking an issue, regaining membership, or updating saved text does not reauthorize invalidated history. A separate reviewed regeneration process would be needed to make an audited replacement; this change supplies no automatic reset or backfill.
+
+Bootstrap and restore inventories must include this migration's column and all six trigger/function pairs. Prisma client generation or `db push` alone does not install these triggers. Restore the flag with saved version data and restore the triggers before permitting writes. The existing notification migration `20260924120000_notification_tenant_scope` remains unchanged. No live migration is part of this source repair.

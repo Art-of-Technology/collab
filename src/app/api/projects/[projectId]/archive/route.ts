@@ -1,3 +1,5 @@
+import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
+import { getCurrentUser } from '@/lib/session';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -6,6 +8,8 @@ export async function PATCH(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { projectId } = await params;
     const { isArchived } = await request.json();
 
@@ -13,6 +17,7 @@ export async function PATCH(
     const project = await prisma.project.update({
       where: {
         id: projectId,
+        ...issueAccessWhere(user.id),
       },
       data: {
         isArchived: isArchived,
@@ -21,7 +26,7 @@ export async function PATCH(
       include: {
         _count: {
           select: {
-            issues: true,
+            issues: { where: issueReadAccessWhere(user.id) },
           },
         },
       },
