@@ -33,7 +33,8 @@ function boolFromEnv(name: string, fallback = false) {
 export async function proxy(req: NextRequest) {
   const mode = authMode();
   if (mode === 'invalid') return new NextResponse('Authentication configuration unavailable', { status: 503 });
-  if (mode === 'gateway' && !(req.nextUrl.pathname === '/api/health' && req.method === 'GET')) {
+  if (mode === 'gateway' && !(req.method === 'GET' &&
+      (req.nextUrl.pathname === '/api/health' || req.nextUrl.pathname === '/api/auth/mode'))) {
     if (!readGatewayIdentity(req.headers, process.env.COLLAB_GATEWAY_ISSUER ?? ''))
       return new NextResponse('Authentication required', { status: 401 });
     if (!gatewayMutationAllowed(req.method, req.headers, process.env.COLLAB_PUBLIC_ORIGIN ?? ''))
