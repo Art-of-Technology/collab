@@ -1,7 +1,4 @@
 import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
-"use server";
-
-
 import { NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth";

@@ -1,4 +1,3 @@
-// src/middleware.ts
 import { NextResponse, type NextRequest } from "next/server";
 import { authMode, gatewayMutationAllowed, readGatewayIdentity } from '@/lib/gateway-identity';
 import { getGatewaySession } from '@/lib/request-session';
@@ -11,7 +10,7 @@ import { getGatewaySession } from '@/lib/request-session';
  * - Report-Only toggle and report-uri support
  */
 
-// Run this middleware on almost everything except static assets, next internals, and streaming endpoints
+// Streams remain protected; only the listed static asset paths bypass the proxy.
 export const config = {
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|assets/|fonts/|images/).*)",

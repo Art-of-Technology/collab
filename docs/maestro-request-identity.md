@@ -13,11 +13,12 @@ Required deployment configuration:
 - Explicit account mapping and the private deployment boundary described below.
 
 The gateway strips incoming identity headers and replaces them with verified
-claims on every authenticated request. Issuer, subject and email are canonical
-unpadded base64url UTF-8; `X-Collab-Email-Verified` must be literal `true` after
+claims on every authenticated request. `X-Collab-Issuer`, `X-Collab-Subject` and
+`X-Collab-Email` are canonical unpadded base64url UTF-8;
+`X-Collab-Email-Verified` must be literal `true` after
 the gateway's strict signed boolean check. The adapter rejects missing,
 combined duplicate, malformed and oversized values, pins issuer, and requires
-the exact company email domain. Header validation does not authenticate an
+the exact `weezboo.com` email domain. Header validation does not authenticate an
 arbitrary network peer: deployment confinement is mandatory.
 
 ## Account and request boundary
@@ -25,7 +26,9 @@ arbitrary network peer: deployment confinement is mandatory.
 Use the existing Account unique key with provider `maestro` and provider account
 ID equal to SHA-256 of `issuer + NUL + subject`. An operator must explicitly
 bind that key to an existing user after identity verification. There is no
-automatic account creation, email linking, tenant enrollment or schema change.
+automatic account creation, email linking or tenant enrollment. Identity mapping
+uses the existing schema; the separate authorization migrations are described
+in the [saved version authorization guide](security/version-access-invalidation.md).
 Missing mappings, multiple Maestro mappings on a user, or a changed email that
 does not match the mapped record fail closed for deliberate reconciliation.
 
@@ -42,8 +45,11 @@ is not a claim about IdP revocation propagation or native gateway session TTL.
 All unsafe HTTP methods require Origin exactly equal to the configured public
 origin, including server actions and custom API handlers. Missing/null/foreign
 origins and same-site sibling origins fail before handlers. CORS or SameSite
-alone is not used as CSRF protection. Health GET remains available for service
-readiness; unrelated realtime mutation paths are not exempted from the proxy.
+alone is not used as CSRF protection. `GET /api/health` remains available for
+service readiness. `GET /api/auth/mode` exposes only the authentication mode
+without requiring a mapping, so sign-out can still choose the correct contract
+after mapping revocation clears the client session. Unrelated realtime mutation
+paths are not exempted from the proxy.
 
 ## Deployment trust and logout
 
@@ -69,9 +75,10 @@ to be CSRF protected. Legacy mode continues using NextAuth sign-out.
 
 ## Evidence and remaining acceptance
 
-`node --test tests/security/gateway-identity.test.cjs` exercises five executable
-checks: header validation, origin enforcement, explicit mapping/no legacy
-fallback, browser session endpoint behavior, and mode-aware logout navigation.
+`node --test tests/security/gateway-identity.test.cjs` covers header validation,
+origin enforcement, explicit mapping/no legacy fallback, browser session
+endpoint behavior, logout after mapping revocation, and legacy logout completion
+and failure handling.
 
 A disposable PostgreSQL + HTTPS synthetic gateway fixture verified real Next
 HTTP and browser behavior: mapped session, workspace server action, Notes UI,
@@ -84,8 +91,10 @@ the initial missing-forwarding fixture stalled hydration and was corrected.
 
 The board also loaded its fixture issue through the gateway. After membership
 revocation, its real Refresh action removed all cards, showed access denial and
-made zero Forge requests. Five identity checks and all 55 security/Forge checks
-pass; targeted lint and nonincremental TypeScript pass before final packaging.
+made zero Forge requests. Earlier implementation checks reported passing
+identity/security/Forge tests, targeted lint and nonincremental TypeScript.
+Those checkpoints do not establish validation of the final packaged revision;
+the outer pipeline owns that evidence.
 
 This synthetic proxy does not perform OIDC. Native signed-token, stripping,
 session and local logout fixtures are separate Network Doctor evidence. A full

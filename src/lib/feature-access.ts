@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
 
-export function featureAccessWhere(userId: string): Prisma.FeatureRequestWhereInput {
+export function featureAccessWhere(userId: string) {
   const workspace = { OR: [
     { ownerId: userId },
     { members: { some: { userId, status: true } } },
@@ -8,5 +8,5 @@ export function featureAccessWhere(userId: string): Prisma.FeatureRequestWhereIn
   return { AND: [
     { OR: [{ workspaceId: null }, { workspace }] },
     { OR: [{ projectId: null }, { project: { workspace } }] },
-  ] };
+  ] } satisfies Prisma.FeatureRequestWhereInput;
 }
