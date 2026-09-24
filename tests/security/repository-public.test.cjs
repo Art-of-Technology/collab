@@ -14,6 +14,7 @@ function load(file, dependencies = {}) {
   }).outputText, {
     exports, URL, console: { error() {}, log() {} },
     require(name) {
+      if (name === 'next-auth/next') name = 'next-auth';
       if (name in dependencies) return dependencies[name];
       throw new Error(`Unexpected dependency: ${name}`);
     },

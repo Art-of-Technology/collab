@@ -16,6 +16,7 @@ function load(file, dependencies = {}, globals = {}) {
     exports,
     ...globals,
     require(name) {
+      if (name === 'next-auth/next') name = 'next-auth';
       if (!(name in dependencies)) throw new Error(`Unexpected dependency: ${name}`);
       return dependencies[name];
     },

@@ -17,6 +17,7 @@ function load(file, dependencies = {}) {
     console: { error() {}, log() {}, warn() {} },
     process: { env: { COLLAB_AUTH_MODE: 'gateway', COLLAB_GATEWAY_ISSUER: issuer, ...dependencies.__env } },
     require(name) {
+      if (name === 'next-auth/next') name = 'next-auth';
       if (name in dependencies) return dependencies[name];
       if (name.startsWith('node:') || name === 'zod') return require(name);
       throw new Error(`Unexpected dependency: ${name}`);
