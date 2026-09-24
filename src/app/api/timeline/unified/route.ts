@@ -1,4 +1,4 @@
-import { activityStatusAccessWhere, issueAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { activityReadAccessWhere, issueAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 /**
  * Unified Timeline API
  * GET /api/timeline/unified - Get workspace-wide unified activity feed
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch issue activities
     const activities = await prisma.issueActivity.findMany({
-      where: { AND: [activityWhere, activityStatusAccessWhere(session.user.id)] },
+      where: await activityReadAccessWhere(session.user.id, activityWhere),
       take: limit,
       orderBy: { createdAt: "desc" },
       include: {
@@ -260,20 +260,20 @@ export async function GET(request: NextRequest) {
 
     const [todayActivityCount, weekActivityCount] = await Promise.all([
       prisma.issueActivity.count({
-        where: { AND: [{
+        where: await activityReadAccessWhere(session.user.id, {
           workspaceId,
           action: { in: MEANINGFUL_ACTIONS },
           createdAt: { gte: todayStart },
-        }, activityStatusAccessWhere(session.user.id)] },
+        }),
       }),
       prisma.issueActivity.count({
-        where: { AND: [{
+        where: await activityReadAccessWhere(session.user.id, {
           workspaceId,
           action: { in: MEANINGFUL_ACTIONS },
           createdAt: {
             gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
           },
-        }, activityStatusAccessWhere(session.user.id)] },
+        }),
       }),
     ]);
 

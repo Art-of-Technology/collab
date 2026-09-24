@@ -1,4 +1,4 @@
-import { activityStatusAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
+import { activityReadAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Project Activity Endpoint
  * GET /api/apps/auth/projects/:projectId/activity - Get project activity
@@ -62,7 +62,7 @@ export const GET = withAppAuth(
       }
 
       const activities = await prisma.issueActivity.findMany({
-        where: { AND: [where, activityStatusAccessWhere(context.user.id)] },
+        where: await activityReadAccessWhere(context.user.id, where),
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {

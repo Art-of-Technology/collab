@@ -1,4 +1,4 @@
-import { activityStatusAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
+import { activityReadAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Activity-Based Issue Search
  * GET /api/apps/auth/search/issues-by-activity - Find issues by their activity history
@@ -111,7 +111,7 @@ export const GET = withAppAuth(
 
       // Find matching activities
       const matchingActivities = await prisma.issueActivity.findMany({
-        where: { AND: [activityWhere, activityStatusAccessWhere(context.user.id)] },
+        where: await activityReadAccessWhere(context.user.id, activityWhere),
         select: {
           itemId: true,
           action: true,

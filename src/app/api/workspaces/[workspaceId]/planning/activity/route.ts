@@ -1,4 +1,4 @@
-import { activityStatusAccessWhere, issueAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { activityReadAccessWhere, issueAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -44,7 +44,7 @@ export async function GET(
 
     // Fetch activities
     const activities = await prisma.issueActivity.findMany({
-      where: { AND: [{
+      where: await activityReadAccessWhere(session.user.id, {
         workspaceId,
         createdAt: {
           gte: startDate,
@@ -53,7 +53,7 @@ export async function GET(
         ...(projectIds?.length ? { projectId: { in: projectIds } } : {}),
         ...(userIds?.length ? { userId: { in: userIds } } : {}),
         ...(cursor ? { id: { lt: cursor } } : {}),
-      }, activityStatusAccessWhere(session.user.id)] },
+      }),
       include: {
         user: {
           select: {

@@ -1,4 +1,4 @@
-import { activityStatusAccessWhere, issueReadAccessWhere, issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { activityReadAccessWhere, issueReadAccessWhere, issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
@@ -165,7 +165,7 @@ export async function GET(req: Request) {
 
     // 6. Check for stale issue
     const lastActivity = (await prisma.issueActivity.findFirst({
-      where: { AND: [{ itemId: issue.id, itemType: 'ISSUE', workspaceId }, activityStatusAccessWhere(session.user.id)] },
+      where: await activityReadAccessWhere(session.user.id, { itemId: issue.id, itemType: 'ISSUE', workspaceId }),
       orderBy: { createdAt: 'desc' }, select: { createdAt: true },
     }))?.createdAt;
     if (lastActivity) {

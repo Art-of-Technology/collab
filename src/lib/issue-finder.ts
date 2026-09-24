@@ -20,12 +20,47 @@ export function issueReadAccessWhere(userId: string) {
 }
 
 export function activityStatusAccessWhere(userId: string) {
+  const nonStatusChange = { action: { not: 'STATUS_CHANGED' }, OR: [{ fieldName: null }, { fieldName: { notIn: ['status', 'statusId'] } }] };
   return {
     AND: [
-      { OR: [{ oldStatusId: null }, { oldStatus: { project: issueAccessWhere(userId) } }] },
-      { OR: [{ newStatusId: null }, { newStatus: { project: issueAccessWhere(userId) } }] },
+      { OR: [
+        { oldStatusId: null, OR: [nonStatusChange, { oldValue: null, details: null }] },
+        { oldStatus: { project: issueAccessWhere(userId) } },
+      ] },
+      { OR: [
+        { newStatusId: null, OR: [nonStatusChange, { newValue: null, details: null }] },
+        { newStatus: { project: issueAccessWhere(userId) } },
+      ] },
     ],
   } satisfies Prisma.IssueActivityWhereInput;
+}
+
+export async function activityReadAccessWhere(userId: string, where: Prisma.IssueActivityWhereInput): Promise<Prisma.IssueActivityWhereInput> {
+  const scoped = { AND: [where, activityStatusAccessWhere(userId)] };
+  const references = await prisma.issueActivity.findMany({
+    where: scoped,
+    select: { itemId: true, workspaceId: true, projectId: true },
+    distinct: ['itemId', 'workspaceId', 'projectId'],
+  });
+  const issueIds = [...new Set(references.map(row => row.itemId))];
+  const [existing, accessible, workspaces, projects] = await Promise.all([
+    prisma.issue.findMany({ where: { id: { in: issueIds } }, select: { id: true } }),
+    prisma.issue.findMany({ where: { id: { in: issueIds }, ...issueReadAccessWhere(userId) }, select: { id: true } }),
+    prisma.workspace.findMany({ where: { id: { in: references.map(row => row.workspaceId) }, ...issueAccessWhere(userId).workspace }, select: { id: true } }),
+    prisma.project.findMany({ where: { id: { in: references.flatMap(row => row.projectId ? [row.projectId] : []) }, ...issueAccessWhere(userId) }, select: { id: true } }),
+  ]);
+  const projectIds = projects.map(project => project.id);
+  return {
+    AND: [
+      scoped,
+      { workspaceId: { in: workspaces.map(workspace => workspace.id) } },
+      { OR: [{ projectId: null }, { projectId: { in: projectIds } }] },
+      { OR: [
+        { itemId: { in: accessible.map(issue => issue.id) } },
+        { itemId: { notIn: existing.map(issue => issue.id) }, projectId: { in: projectIds } },
+      ] },
+    ],
+  };
 }
 
 /**

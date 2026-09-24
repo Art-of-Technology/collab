@@ -1,4 +1,4 @@
-import { activityStatusAccessWhere } from '@/lib/issue-finder';
+import { activityReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -119,7 +119,7 @@ export async function POST(
 
     for (const query of activityQueries) {
       const activities = await prisma.issueActivity.findMany({
-        where: { AND: [query as any, activityStatusAccessWhere(session.user.id)] },
+        where: await activityReadAccessWhere(session.user.id, query as any),
         select: { itemId: true, newValue: true },
         distinct: ['itemId']
       });

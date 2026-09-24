@@ -915,7 +915,7 @@ test('tenant notification reads and mutations hide revoked post and comment cont
 });
 
 for (const revoke of ['membership', 'mapping', 'user']) test(`tenant open stream closes on ${revoke} revocation before forwarding events`, async () => {
-  const f = fixture(); let callback, unsubscribed = 0, quit = 0;
+  const f = relatedIssueFixture(); let callback, unsubscribed = 0, quit = 0;
   f.dependencies['@/lib/redis'] = { getRedisSubscriber: async () => ({
     subscribe: async (_channel, cb) => { callback = cb; },
     unsubscribe: async () => { unsubscribed++; }, quit: async () => { quit++; },
@@ -926,12 +926,12 @@ for (const revoke of ['membership', 'mapping', 'user']) test(`tenant open stream
   try {
     assert.match(new TextDecoder().decode((await reader.read()).value), /connected/);
     assert.match(new TextDecoder().decode((await reader.read()).value), /realtime.ready/);
-    await callback(JSON.stringify({ type: 'issue.created', key: 'allowed' }));
+    await callback(JSON.stringify({ type: 'issue.created', issueId: 'issue-joined', key: 'allowed' }));
     assert.match(new TextDecoder().decode((await reader.read()).value), /allowed/);
     if (revoke === 'membership') f.workspaces[1].members[0].status = false;
     if (revoke === 'mapping') f.state.mapped = false;
     if (revoke === 'user') f.state.user = null;
-    await callback(JSON.stringify({ type: 'issue.created', key: 'secret-after-revocation' }));
+    await callback(JSON.stringify({ type: 'issue.created', issueId: 'issue-joined', key: 'secret-after-revocation' }));
     const next = await reader.read();
     assert.equal(next.done, true);
     assert.equal(unsubscribed, 1); assert.equal(quit, 1);
@@ -2021,7 +2021,7 @@ for (const endpoint of ['workspaces/[workspaceId]/planning/activity', 'timeline/
     current.statusId = publicStatus.id; current.projectStatus = publicStatus;
     const activities = [];
     f.db.issueActivity.create = async ({ data }) => {
-      const row = { ...data, id: `activity-${activities.length}`, createdAt: new Date(),
+      const row = { ...data, oldValue: data.oldValue ?? null, newValue: data.newValue ?? null, details: data.details ?? null, id: `activity-${activities.length}`, createdAt: new Date(),
         oldStatusId: data.oldStatusId ?? null, newStatusId: data.newStatusId ?? null,
         oldStatus: [privateStatus, publicStatus].find(status => status.id === data.oldStatusId) ?? null,
         newStatus: [privateStatus, publicStatus].find(status => status.id === data.newStatusId) ?? null,
@@ -2414,5 +2414,185 @@ for (const association of ['project', 'status']) {
     assert.equal(response.status, 200);
     assert.deepEqual(f.stored.map(row => row.userId), ['eve']);
     assert.deepEqual(f.deliveries.map(([id]) => id), ['eve']);
+  });
+}
+
+function activitySnapshotFixture() {
+  const f = relatedIssueFixture(), own = f.workspaces[0], joined = f.workspaces[1], activities = [], snapshotsRead = [];
+  f.dependencies['date-fns'] = require('date-fns');
+  f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => (req, params) => handler(req,
+    { workspace: own, user: f.state.user }, params) };
+  f.db.user.findMany = async () => [];
+  f.db.issue.findUnique = f.db.issue.findFirst;
+  f.db.issueActivity.create = async ({ data }) => {
+    const row = { ...data, fieldName: data.fieldName ?? null, id: `snapshot-${activities.length}`, createdAt: new Date(),
+      oldValue: data.oldValue ?? null, newValue: data.newValue ?? null, details: data.details ?? null,
+      projectId: data.projectId ?? null, oldStatusId: data.oldStatusId ?? null, newStatusId: data.newStatusId ?? null,
+      oldStatus: null, newStatus: null, user: f.state.user };
+    activities.push(row); return row;
+  };
+  f.db.issueActivity.findMany = async args => activities.filter(row => matches(row, args.where)).map(row => {
+    if (!args.select || args.select.oldValue || args.select.newValue || args.select.details) snapshotsRead.push(row.id);
+    return f.project(row, args);
+  });
+  f.db.issueActivity.count = async ({ where }) => activities.filter(row => matches(row, where)).length;
+  const producer = load('src/lib/board-item-activity-service.ts', f.dependencies);
+  const call = endpoint => f.route(endpoint).GET(new Request(`https://collab.example.test/?workspaceId=${own.id}&startDate=2026-09-01&endDate=2027-01-01`),
+    { params: Promise.resolve({ workspaceId: own.id, issueId: f.rows[0].id, issueIdOrKey: f.rows[0].id, projectId: f.rows[0].projectId }) });
+  return { ...f, own, joined, activities, snapshotsRead, producer, call };
+}
+
+for (const endpoint of ['workspaces/[workspaceId]/planning/activity', 'timeline/unified', 'apps/auth/workspace/activity',
+  'apps/auth/issues/[issueIdOrKey]/activity', 'apps/auth/projects/[projectId]/activity', 'apps/auth/search/issues-by-activity', 'issues/[issueId]/activities']) {
+  test(`activity underlying issue access removes complete field snapshots in ${endpoint}`, async () => {
+    const f = activitySnapshotFixture(), issue = f.rows[0];
+    const project = endpoint.includes('projects/') ? issue.project : f.rows[1].project;
+    if (endpoint.includes('projects/')) { issue.statusId = 'foreign-status'; issue.projectStatus = { project: f.rows[1].project }; }
+    else { issue.project = project; issue.projectId = project.id; }
+    await f.producer.trackFieldChanges({ itemType: 'ISSUE', itemId: issue.id, userId: 'alice', workspaceId: f.own.id,
+      projectId: project.id, changes: [
+        { field: 'title', oldValue: 'private-old-title', newValue: 'private-new-title' },
+        { field: 'description', oldValue: 'private-old-description', newValue: 'private-new-description' },
+        { field: 'priority', oldValue: 'low', newValue: 'urgent' },
+      ] });
+    f.activities.forEach(row => { row.details = JSON.stringify({ title: 'private-detail' }); });
+    const visible = await f.call(endpoint);
+    const marker = endpoint.includes('search/') ? 'private-new-title' : 'snapshot-';
+    assert.equal(visible.status, 200);
+    assert.equal(JSON.stringify(await visible.json()).includes(marker), true);
+    f.joined.members[0].status = false; f.snapshotsRead.length = 0;
+    const response = await f.call(endpoint), body = JSON.stringify(await response.json());
+    assert.equal(response.status, endpoint === 'apps/auth/issues/[issueIdOrKey]/activity' ? 404 : 200);
+    for (const token of ['snapshot-', 'private-', 'protected-own']) assert.equal(body.includes(token), false, token);
+    assert.deepEqual(f.snapshotsRead, []);
+    const parsed = JSON.parse(body);
+    if (parsed.stats) assert.equal(parsed.stats.todayCount, 0);
+    if (parsed.pagination) assert.equal(parsed.pagination.total, 0);
+    f.joined.ownerId = 'alice';
+    assert.equal(JSON.stringify(await (await f.call(endpoint)).json()).includes(marker), true);
+    assert.equal(f.activities.length, 3);
+    assert.deepEqual(f.writes, []);
+  });
+}
+
+test('activity missing issue requires retained authorized project scope', async () => {
+  const f = activitySnapshotFixture();
+  for (const projectId of [f.rows[0].projectId, f.rows[2].projectId, undefined]) {
+    await f.producer.trackFieldChanges({ itemType: 'ISSUE', itemId: 'deleted-issue', userId: 'alice', workspaceId: f.own.id,
+      projectId, changes: [{ field: 'title', oldValue: 'old-title', newValue: 'new-title' }] });
+  }
+  await f.producer.createActivity({ action: 'CREATED', itemType: 'ISSUE', itemId: f.rows[0].id, userId: 'alice',
+    workspaceId: f.own.id, details: { title: 'allowed-creation' } });
+  const response = await f.call('apps/auth/workspace/activity');
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.deepEqual(result.activities.map(row => row.id), ['snapshot-0', 'snapshot-3']);
+  assert.equal(result.pagination.total, 2);
+  assert.deepEqual(f.snapshotsRead, ['snapshot-0', 'snapshot-3']);
+  assert.equal(f.activities.length, 4);
+});
+
+for (const side of ['old', 'new']) {
+  test(`activity status deletion cannot reauthorize retained ${side} snapshot`, async () => {
+    const f = activitySnapshotFixture(), project = f.rows[1].project;
+    const status = { id: 'unused-status', projectId: project.id, project, name: 'private-deleted-status', isDefault: false };
+    await f.producer.trackStatusChange({ itemType: 'ISSUE', itemId: f.rows[0].id, userId: 'alice', workspaceId: f.own.id,
+      projectId: f.rows[0].projectId, oldStatusId: side === 'old' ? status.id : null, newStatusId: side === 'new' ? status.id : null,
+      oldStatusName: side === 'old' ? status.name : null, newStatusName: side === 'new' ? status.name : null });
+    f.activities[0][`${side}Status`] = status;
+    const read = async () => JSON.stringify(await (await f.call('apps/auth/workspace/activity')).json());
+    assert.equal((await read()).includes(status.name), true);
+    f.joined.members[0].status = false;
+    assert.equal((await read()).includes(status.name), false);
+    f.db.projectStatus.findFirst = async ({ where }) => matches(status, where) ? status : null;
+    f.db.projectStatus.delete = async ({ where }) => {
+      assert.equal(where.id, status.id);
+      const model = require('@prisma/client').Prisma.dmmf.datamodel.models.find(model => model.name === 'IssueActivity');
+      for (const field of model.fields.filter(field => field.type === 'ProjectStatus')) {
+        assert.equal(field.relationOnDelete, 'SetNull');
+        for (const row of f.activities) if (row[field.relationFromFields[0]] === status.id) {
+          row[field.relationFromFields[0]] = null; row[field.name] = null;
+        }
+      }
+      return status;
+    };
+    f.db.$transaction = async callback => callback(f.db);
+    f.joined.ownerId = 'alice';
+    const removed = await f.route('workspaces/[workspaceId]/projects/[projectSlug]/statuses/[statusId]').DELETE(f.request('DELETE', f.joined.id),
+      { params: Promise.resolve({ workspaceId: f.joined.id, projectSlug: 'existing', statusId: status.id }) });
+    assert.equal(removed.status, 200);
+    f.joined.ownerId = 'bob'; f.snapshotsRead.length = 0;
+    assert.equal((await read()).includes(status.name), false);
+    assert.deepEqual(f.snapshotsRead, []);
+    assert.equal(f.activities[0][`${side}Value`], status.name);
+    assert.equal(f.activities[0][`${side}StatusId`], null);
+  });
+}
+
+for (const association of ['project', 'status']) {
+  test(`AI review ${association} access denies linked review retrieval after revocation`, async () => {
+    const f = relatedIssueFixture(), issue = f.rows[0], project = f.rows[1].project;
+    if (association === 'project') { issue.project = project; issue.projectId = project.id; }
+    else { issue.statusId = 'foreign'; issue.projectStatus = { project }; }
+    issue.pullRequests = [{ id: 'pr', title: 'private-pr', aiReviews: [{ id: 'review', content: 'private-review', createdAt: new Date() }] }];
+    f.db.issue.findUnique = f.db.issue.findFirst;
+    const invoke = () => f.route('issues/[issueId]/ai-reviews').GET(f.request(), { params: Promise.resolve({ issueId: issue.id }) });
+    assert.equal(JSON.stringify(await (await invoke()).json()).includes('private-review'), true);
+    f.workspaces[1].members[0].status = false; f.reads.length = 0;
+    const response = await invoke();
+    assert.equal(response.status, 404);
+    assert.equal(JSON.stringify(await response.json()).includes('private-'), false);
+    assert.deepEqual(f.reads, []);
+    f.workspaces[1].ownerId = 'alice';
+    assert.equal(JSON.stringify(await (await invoke()).json()).includes('private-review'), true);
+  });
+}
+
+for (const association of ['project', 'status']) {
+  test(`realtime issue ${association} access gates actual update payload before SSE delivery`, async () => {
+    const f = relatedIssueFixture(), own = f.workspaces[0], joined = f.workspaces[1], issue = f.rows[0];
+    if (association === 'project') { issue.project = f.rows[1].project; issue.projectId = issue.project.id; }
+    else { issue.statusId = 'foreign-status'; issue.projectStatus = { project: f.rows[1].project }; }
+    let callback, payload, unsubscribe = 0;
+    f.dependencies['@/lib/redis'] = {
+      publishEvent: async (_channel, event) => { payload = event; },
+      getRedisSubscriber: async () => ({ subscribe: async (_channel, cb) => { callback = cb; },
+        unsubscribe: async () => { unsubscribe++; }, quit: async () => {} }),
+    };
+    const permissions = load('src/lib/permissions.ts', { './prisma': { prisma: f.db } });
+    f.dependencies['@/lib/permissions'] = { ...permissions,
+      checkUserPermissions: async (_user, _workspace, requested) => Object.fromEntries(requested.map(key => [key, { hasPermission: true }])) };
+    f.dependencies['@/lib/board-item-activity-service'] = { compareObjects: () => [] };
+    f.db.$transaction = async callback => callback(f.db);
+    const updated = await f.route('issues/[issueId]').PUT(f.request('PUT', own.id, { title: 'updated' }),
+      { params: Promise.resolve({ issueId: issue.id }) });
+    assert.equal(updated.status, 200);
+    assert.equal(payload.type, 'issue.updated');
+    assert.equal(payload.issueId, issue.id);
+    const response = await f.route('realtime/workspace/[workspaceId]/stream').GET(f.request(), f.context(own.id));
+    assert.equal(response.status, 200);
+    const reader = response.body.getReader();
+    const next = async () => new TextDecoder().decode((await reader.read()).value);
+    try {
+      await next(); await next();
+      await callback(JSON.stringify(payload));
+      assert.equal((await next()).includes(payload.issueKey), true);
+      joined.members[0].status = false;
+      await callback(JSON.stringify(payload));
+      await callback(JSON.stringify({ type: 'workspace.updated', marker: 'still-authorized' }));
+      assert.equal(await next(), 'data: {"type":"workspace.updated","marker":"still-authorized"}\n\n');
+      assert.equal(unsubscribe, 0);
+      joined.ownerId = 'alice';
+      await callback(JSON.stringify(payload));
+      assert.equal((await next()).includes(payload.issueKey), true);
+      f.rows.splice(0, 1);
+      for (const event of [payload, { ...payload, type: 'issue.deleted' }, { type: 'issue.updated' }]) await callback(JSON.stringify(event));
+      await callback(JSON.stringify({ type: 'workspace.updated', marker: 'after-missing' }));
+      assert.equal(await next(), 'data: {"type":"workspace.updated","marker":"after-missing"}\n\n');
+      f.state.mapped = false;
+      await callback(JSON.stringify(payload));
+      assert.equal((await reader.read()).done, true);
+      assert.equal(unsubscribe, 1);
+    } finally { await reader.cancel(); }
   });
 }

@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
@@ -151,6 +151,12 @@ export async function GET(
                 }
                 if (message && typeof message === 'string') {
                   const parsed = JSON.parse(message);
+                  if ((typeof parsed?.type === 'string' && parsed.type.startsWith('issue.')) || parsed?.issueId !== undefined) {
+                    if (typeof parsed.issueId !== 'string' || !await prisma.issue.findFirst({
+                      where: { id: parsed.issueId, workspaceId, ...issueReadAccessWhere(user.id) },
+                      select: { id: true },
+                    })) return;
+                  }
                   sendEvent(parsed);
                 }
               } catch (parseError) {

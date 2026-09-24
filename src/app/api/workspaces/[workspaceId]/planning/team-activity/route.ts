@@ -1,4 +1,4 @@
-import { activityStatusAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { activityReadAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -326,11 +326,11 @@ export async function GET(
 
     // Get ALL status changes for these issues (need full history)
     const allStatusChanges = await prisma.issueActivity.findMany({
-      where: { AND: [{
+      where: await activityReadAccessWhere(session.user.id, {
         workspaceId,
         action: 'STATUS_CHANGED',
         itemId: { in: allIssues.map(i => i.id) },
-      }, activityStatusAccessWhere(session.user.id)] },
+      }),
       select: {
         id: true,
         itemId: true,

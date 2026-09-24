@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
@@ -20,10 +21,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Get the issue with its project and workspace to verify access
     const issue = await prisma.issue.findUnique({
-      where: { id: issueId, workspace: { OR: [
-        { ownerId: user.id },
-        { members: { some: { userId: user.id, status: true } } },
-      ] } },
+      where: { id: issueId, ...issueReadAccessWhere(user.id) },
       include: {
         pullRequests: {
           include: {
