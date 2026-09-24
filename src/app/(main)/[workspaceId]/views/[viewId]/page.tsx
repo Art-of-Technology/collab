@@ -1,3 +1,4 @@
+import { issueAccessWhere } from '@/lib/issue-finder';
 import { notFound } from 'next/navigation';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -126,6 +127,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
         }
       },
       labels: {
+        where: issueAccessWhere(session.user.id),
         select: {
           id: true,
           name: true,
@@ -133,6 +135,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
         }
       },
       parent: {
+        where: issueAccessWhere(session.user.id),
         select: {
           id: true,
           title: true,
@@ -141,6 +144,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
         }
       },
       children: {
+        where: issueAccessWhere(session.user.id),
         select: {
           id: true,
           title: true,
@@ -161,7 +165,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
       },
       _count: {
         select: {
-          children: true,
+          children: { where: issueAccessWhere(session.user.id) },
           comments: true
         }
       }

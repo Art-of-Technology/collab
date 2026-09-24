@@ -429,7 +429,7 @@ test('issue mutations reject mass assignment, foreign relations and read-only us
       checkUserPermissions: async (_user, _workspace, permissions) => Object.fromEntries(permissions.map(p => [p, { hasPermission: allowed }])),
     },
     '@/lib/issue-finder': {
-      findIssueByIdOrKey: async () => existing, STANDARD_ISSUE_INCLUDE: {},
+      findIssueByIdOrKey: async () => existing, getStandardIssueInclude: () => ({}),
       userHasWorkspaceAccess: async user => user === 'alice',
     },
     '@/lib/board-item-activity-service': { compareObjects: () => [] },
@@ -439,6 +439,7 @@ test('issue mutations reject mass assignment, foreign relations and read-only us
     '@/lib/event-bus': { emitIssueUpdated: async () => {}, emitIssueDeleted: async () => {} },
     '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
   };
+  dependencies['@/lib/issue-references'] = load('src/lib/issue-references.ts', dependencies);
   const route = load('src/app/api/issues/[issueId]/route.ts', dependencies, { URL, console });
   const context = { params: Promise.resolve({ issueId: 'issue' }) };
   for (const body of [
@@ -899,6 +900,9 @@ test('review: alternate Notes handlers filter content and metadata with the real
     '@/lib/auth-options': { authOptions: {} }, '@/lib/auth': { authConfig: {} },
     '@/lib/prisma': { prisma: db }, '@/lib/secrets/access': access,
     '@/lib/feature-access': load('src/lib/feature-access.ts'),
+    '@/lib/issue-finder': load('src/lib/issue-finder.ts', {
+      '@/lib/prisma': { prisma: db }, '@/lib/shared-issue-key-utils': { isIssueKey: () => false },
+    }),
   };
   const search = load('src/app/api/search/route.ts', dependencies, { URL, console });
   const summary = load('src/app/api/projects/[projectId]/summary/route.ts', dependencies, { console });
@@ -1007,7 +1011,10 @@ test('review: issue field grants and atomic same-workspace project moves preserv
     '@/lib/prisma': { prisma: db }, '@/lib/session': { getCurrentUser: async () => ({ id: 'alice' }) },
     '@/lib/permissions': { ...permissionModule,
       checkUserPermissions: async (_user, _workspace, requested) => Object.fromEntries(requested.map(p => [p, { hasPermission: grants.includes(p) }])) },
-    '@/lib/issue-finder': { STANDARD_ISSUE_INCLUDE: {},
+    '@/lib/issue-references': load('src/lib/issue-references.ts', {
+      '@/lib/issue-finder': { userHasWorkspaceAccess: async (user, workspace) => active && workspace === 'joined' && ['alice', 'bob'].includes(user) },
+    }),
+    '@/lib/issue-finder': { getStandardIssueInclude: () => ({}),
       findIssueByIdOrKey: async () => ({ ...state }),
       userHasWorkspaceAccess: async (user, workspace) => active && workspace === 'joined' && ['alice', 'bob'].includes(user) },
     '@/lib/board-item-activity-service': { compareObjects: () => [], trackStatusChange: async () => {}, trackAssignment: async () => {} },

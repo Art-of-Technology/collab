@@ -1,4 +1,4 @@
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { userHasWorkspaceAccess, issueAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -234,6 +234,7 @@ export async function GET(
         targetRelations: {
           where: {
             relationType: 'BLOCKED_BY',
+            sourceIssue: issueAccessWhere(session.user.id),
           },
           select: {
             id: true,

@@ -111,6 +111,7 @@ export const GET = withAppAuth(
               },
             },
             labels: {
+              where: { workspaceId: context.workspace.id },
               select: {
                 id: true,
                 name: true,
@@ -128,7 +129,7 @@ export const GET = withAppAuth(
             _count: {
               select: {
                 comments: true,
-                children: true,
+                children: { where: { workspaceId: context.workspace.id } },
               },
             },
           },

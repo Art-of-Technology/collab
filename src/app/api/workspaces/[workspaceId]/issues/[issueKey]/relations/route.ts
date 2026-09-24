@@ -3,7 +3,7 @@ import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import type { IssueRelationType as PrismaIssueRelationType } from "@prisma/client";
-import { findIssueByIdOrKey } from "@/lib/issue-finder";
+import { findIssueByIdOrKey, issueAccessWhere } from "@/lib/issue-finder";
 
 // GET /api/workspaces/[workspaceId]/issues/[issueKey]/relations
 export async function GET(
@@ -59,7 +59,8 @@ export async function GET(
     // Get all relations where this issue is the source
     const sourceRelations = await prisma.issueRelation.findMany({
       where: {
-        sourceIssueId: issue.id
+        sourceIssueId: issue.id,
+        targetIssue: issueAccessWhere(session.user.id)
       },
       include: {
         targetIssue: {
@@ -76,7 +77,7 @@ export async function GET(
             _count: {
               select: {
                 comments: true,
-                children: true
+                children: { where: issueAccessWhere(session.user.id) }
               }
             }
           }
@@ -87,7 +88,8 @@ export async function GET(
     // Get all relations where this issue is the target
     const targetRelations = await prisma.issueRelation.findMany({
       where: {
-        targetIssueId: issue.id
+        targetIssueId: issue.id,
+        sourceIssue: issueAccessWhere(session.user.id)
       },
       include: {
         sourceIssue: {
@@ -104,7 +106,7 @@ export async function GET(
             _count: {
               select: {
                 comments: true,
-                children: true
+                children: { where: issueAccessWhere(session.user.id) }
               }
             }
           }

@@ -1,3 +1,4 @@
+import { validateIssueReferences } from '@/lib/issue-references';
 /**
  * Third-Party App API: Issues Endpoints
  * GET /api/apps/auth/issues - List issues with filtering by projectId, assigneeId, status, type, priority, search
@@ -207,39 +208,8 @@ export const POST = withAppAuth(
         );
       }
 
-      // Validate assignee exists and is a workspace member
-      if (issueData.assigneeId) {
-        const assignee = await prisma.workspaceMember.findFirst({
-          where: {
-            userId: issueData.assigneeId,
-            workspaceId: context.workspace.id
-          }
-        });
-
-        if (!assignee) {
-          return NextResponse.json(
-            { error: 'assignee_not_found', error_description: 'Assignee not found or not a workspace member' },
-            { status: 404 }
-          );
-        }
-      }
-
-      // Validate parent issue if provided
-      if (issueData.parentId) {
-        const parentIssue = await prisma.issue.findFirst({
-          where: {
-            id: issueData.parentId,
-            workspaceId: context.workspace.id
-          }
-        });
-
-        if (!parentIssue) {
-          return NextResponse.json(
-            { error: 'parent_issue_not_found', error_description: 'Parent issue not found' },
-            { status: 404 }
-          );
-        }
-      }
+      const referenceError = await validateIssueReferences(prisma, context.workspace.id, issueData.projectId, issueData);
+      if (referenceError) return NextResponse.json({ error: 'invalid_reference', error_description: referenceError }, { status: 400 });
 
       // Create the issue with proper issue key generation using transaction
       // to avoid race conditions with concurrent requests
@@ -368,6 +338,7 @@ export const POST = withAppAuth(
               }
             },
             parent: {
+              where: { workspaceId: context.workspace.id },
               select: {
                 id: true,
                 title: true,
@@ -376,6 +347,7 @@ export const POST = withAppAuth(
               }
             },
             labels: {
+              where: { workspaceId: context.workspace.id },
               select: {
                 id: true,
                 name: true,

@@ -1,3 +1,4 @@
+import { validateIssueReferences } from '@/lib/issue-references';
 /**
  * Third-Party App API: Single Issue Endpoints
  * GET /api/apps/auth/issues/:issueIdOrKey - Get issue details
@@ -85,6 +86,7 @@ export const GET = withAppAuth(
             },
           },
           parent: {
+            where: { workspaceId: context.workspace.id },
             select: {
               id: true,
               issueKey: true,
@@ -93,6 +95,7 @@ export const GET = withAppAuth(
             },
           },
           children: {
+            where: { workspaceId: context.workspace.id },
             select: {
               id: true,
               issueKey: true,
@@ -110,6 +113,7 @@ export const GET = withAppAuth(
             },
           },
           labels: {
+            where: { workspaceId: context.workspace.id },
             select: {
               id: true,
               name: true,
@@ -128,9 +132,9 @@ export const GET = withAppAuth(
           _count: {
             select: {
               comments: true,
-              children: true,
-              sourceRelations: true,
-              targetRelations: true,
+              children: { where: { workspaceId: context.workspace.id } },
+              sourceRelations: { where: { targetIssue: { workspaceId: context.workspace.id } } },
+              targetRelations: { where: { sourceIssue: { workspaceId: context.workspace.id } } },
             },
           },
         },
@@ -235,24 +239,11 @@ export const PATCH = withAppAuth(
         update.startDate = updateData.startDate ? new Date(updateData.startDate) : null;
       }
 
-      // Handle assignee change
-      if (updateData.assigneeId !== undefined) {
-        if (updateData.assigneeId) {
-          const member = await prisma.workspaceMember.findFirst({
-            where: {
-              userId: updateData.assigneeId,
-              workspaceId: context.workspace.id,
-            },
-          });
-          if (!member) {
-            return NextResponse.json(
-              { error: 'assignee_not_found', error_description: 'Assignee not found in workspace' },
-              { status: 404 }
-            );
-          }
-        }
-        update.assigneeId = updateData.assigneeId;
-      }
+      const referenceError = await validateIssueReferences(prisma, context.workspace.id, existingIssue.projectId, {
+        ...updateData, id: existingIssue.id,
+      });
+      if (referenceError) return NextResponse.json({ error: 'invalid_reference', error_description: referenceError }, { status: 400 });
+      if (updateData.assigneeId !== undefined) update.assigneeId = updateData.assigneeId;
 
       // Handle status change
       if (updateData.status !== undefined) {
@@ -352,6 +343,7 @@ export const PATCH = withAppAuth(
             },
           },
           labels: {
+            where: { workspaceId: context.workspace.id },
             select: {
               id: true,
               name: true,

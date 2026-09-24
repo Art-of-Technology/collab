@@ -212,6 +212,7 @@ export const GET = withAppAuth(
               },
             },
             labels: {
+              where: { workspaceId: context.workspace.id },
               select: {
                 id: true,
                 name: true,
@@ -228,6 +229,7 @@ export const GET = withAppAuth(
               },
             },
             parent: {
+            where: { workspaceId: context.workspace.id },
               select: {
                 id: true,
                 issueKey: true,
@@ -237,7 +239,7 @@ export const GET = withAppAuth(
             },
             _count: {
               select: {
-                children: true,
+                children: { where: { workspaceId: context.workspace.id } },
                 comments: true,
               },
             },

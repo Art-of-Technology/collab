@@ -1,6 +1,6 @@
 "use server";
 
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { userHasWorkspaceAccess, issueAccessWhere } from '@/lib/issue-finder';
 
 import { NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
@@ -271,14 +271,14 @@ export async function GET(req: Request) {
         where: {
           workspaceId,
           projectStatus: { isFinal: false },
-          targetRelations: { some: { relationType: "BLOCKED_BY" } },
+          targetRelations: { some: { relationType: "BLOCKED_BY", sourceIssue: issueAccessWhere(session.user.id) } },
         },
         include: {
           assignee: { select: { id: true, name: true, image: true } },
           project: { select: { name: true } },
           projectStatus: { select: { name: true, displayName: true, color: true } },
           targetRelations: {
-            where: { relationType: "BLOCKED_BY" },
+            where: { relationType: "BLOCKED_BY", sourceIssue: issueAccessWhere(session.user.id) },
             include: { sourceIssue: { select: { createdAt: true } } },
             take: 1,
           },
@@ -398,7 +398,7 @@ export async function GET(req: Request) {
               id: true,
               dueDate: true,
               projectStatus: { select: { isFinal: true } },
-              targetRelations: { where: { relationType: "BLOCKED_BY" }, select: { id: true } },
+              targetRelations: { where: { relationType: "BLOCKED_BY", sourceIssue: issueAccessWhere(session.user.id) }, select: { id: true } },
             },
           },
         },

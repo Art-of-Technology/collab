@@ -1,4 +1,4 @@
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { userHasWorkspaceAccess, issueAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -295,7 +295,7 @@ export async function GET(
         project: { select: { id: true, name: true, isArchived: true } },
         projectStatus: { select: { id: true, name: true, displayName: true, isFinal: true } },
         targetRelations: {
-          where: { relationType: 'BLOCKED_BY' },
+          where: { relationType: 'BLOCKED_BY', sourceIssue: issueAccessWhere(session.user.id) },
           select: { sourceIssue: { select: { issueKey: true } } },
         },
       },

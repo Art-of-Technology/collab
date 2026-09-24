@@ -135,6 +135,7 @@ function fixture() {
   dependencies['@/lib/auth'] = { authConfig: {}, authOptions: {}, getAuthSession: dependencies['@/lib/request-session'].getServerSession };
   dependencies['@/lib/slug-resolvers'] = load('src/lib/slug-resolvers.ts', dependencies);
   dependencies['@/lib/issue-finder'] = load('src/lib/issue-finder.ts', dependencies);
+  dependencies['@/lib/issue-references'] = load('src/lib/issue-references.ts', dependencies);
   dependencies['@/lib/session'] = load('src/lib/session.ts', dependencies);
   dependencies['@/lib/post-access'] = load('src/lib/post-access.ts', dependencies);
   const route = file => load(`src/app/api/${file}/route.ts`, dependencies);
@@ -1435,3 +1436,180 @@ for (const hook of ['useInvitation', 'useWorkspace']) {
     assert.equal(rows[0].email, 'alice@weezboo.com');
   });
 }
+
+function relatedIssueFixture() {
+  const f = fixture(), reads = [], writes = [];
+  const rows = f.workspaces.map(workspace => ({
+    id: `issue-${workspace.slug}`, issueKey: `${workspace.slug.toUpperCase()}-1`,
+    workspaceId: workspace.id, workspace, projectId: `project-${workspace.slug}`,
+    project: { id: `project-${workspace.slug}`, name: `Project ${workspace.slug}`, workspaceId: workspace.id, workspace },
+    title: `protected-${workspace.slug}`, type: 'TASK', priority: 'high', status: 'open',
+    statusId: null, projectStatus: null, dueDate: new Date(0), createdAt: new Date(0), updatedAt: new Date(0),
+    reporterId: 'alice', assigneeId: null, parentId: null, parent: null,
+    assignee: null, reporter: { id: 'alice' }, children: [], labels: [], comments: [],
+    sourceRelations: [], targetRelations: [],
+  }));
+  const labels = f.workspaces.map(workspace => ({ id: `label-${workspace.slug}`, name: `label-secret-${workspace.slug}`, workspaceId: workspace.id, workspace }));
+  const relations = rows.slice(1).flatMap((row, i) => [
+    { id: `out-${i}`, sourceIssueId: rows[0].id, targetIssueId: row.id, relationType: 'BLOCKS', sourceIssue: rows[0], targetIssue: row },
+    { id: `in-${i}`, sourceIssueId: row.id, targetIssueId: rows[0].id, relationType: 'BLOCKS', sourceIssue: row, targetIssue: rows[0] },
+  ]);
+  rows[0].parent = rows[2]; rows[0].parentId = rows[2].id;
+  rows[0].children = rows.slice(1); rows[0].labels = labels;
+  rows[0].sourceRelations = relations.filter(row => row.sourceIssueId === rows[0].id);
+  rows[0].targetRelations = relations.filter(row => row.targetIssueId === rows[0].id);
+  function project(row, spec = {}) {
+    if (!row || !matches(row, spec.where)) return null;
+    const fields = spec.select || spec.include;
+    if (!fields) return row;
+    if (row.title) reads.push(row.title);
+    if (row.name?.startsWith('label-secret')) reads.push(row.name);
+    const output = spec.include ? Object.fromEntries(Object.entries(row).filter(([, value]) => value === null || typeof value !== 'object' || value instanceof Date)) : {};
+    for (const [key, selection] of Object.entries(fields)) {
+      if (!selection) continue;
+      if (key === '_count') {
+        output[key] = Object.fromEntries(Object.entries(selection.select).map(([name, query]) =>
+          [name, (row[name] || []).filter(item => query === true || matches(item, query.where)).length]));
+      } else if (selection === true) output[key] = row[key];
+      else if (Array.isArray(row[key])) output[key] = row[key].filter(item => matches(item, selection.where)).map(item => project(item, selection));
+      else output[key] = project(row[key], selection);
+    }
+    return output;
+  }
+  f.db.issue = {
+    findFirst: async args => project(rows.find(row => matches(row, args.where)), args),
+    findMany: async args => rows.filter(row => matches(row, args.where)).map(row => project(row, args)),
+    groupBy: async () => [], count: async () => 0,
+    create: async ({ data }) => { writes.push(data); return { ...data, id: 'created', labels: [], workspace: f.workspaces[0] }; },
+    update: async ({ where, data, ...spec }) => { writes.push(data); return project({ ...rows.find(row => row.id === where.id), ...data }, spec); },
+  };
+  f.db.issueRelation = {
+    findMany: async args => relations.filter(row => matches(row, args.where)).map(row => project(row, args)),
+    create: async ({ data }) => { writes.push(data); return data; },
+  };
+  f.db.taskLabel = { count: async ({ where }) => labels.filter(row => matches(row, where)).length };
+  f.db.project.findUnique = async ({ where }) => {
+    const row = rows.find(row => row.projectId === where.id);
+    return row ? { ...row.project, nextIssueNumbers: { TASK: 1 }, issuePrefix: 'NEW' } : null;
+  };
+  f.db.project.update = async ({ data }) => { writes.push(data); return data; };
+  f.db.projectStatus = { findMany: async () => [], findFirst: async () => null };
+  f.db.issueAssignee = { create: async ({ data }) => { writes.push(data); } };
+  f.db.issueActivity = { create: async ({ data }) => { writes.push(data); return data; } };
+  f.db.issueFollower = { findMany: async () => [] }; f.db.projectFollower = { findMany: async () => [] };
+  f.db.featureRequest = { findMany: async () => [] }; f.db.note = { findMany: async () => [] };
+  f.db.repository.findFirst = async () => null;
+  f.dependencies['@prisma/client'] = require('@prisma/client');
+  f.dependencies['@/utils/html-normalizer'] = { normalizeDescriptionHTML: value => value };
+  f.dependencies['@/utils/issueRelations'] = load('src/utils/issueRelations.ts');
+  f.dependencies['@/lib/secrets/access'] = { noteAccessWhere: () => ({}) };
+  f.dependencies['@/lib/board-item-activity-service'] = { trackCreation: async () => { f.calls.writes++; } };
+  f.dependencies['@/lib/redis'] = { publishEvent: async () => { f.calls.writes++; } };
+  f.dependencies['@/lib/event-bus'] = { emitIssueCreated: async () => { f.calls.writes++; }, emitIssueUpdated: async () => { f.calls.writes++; } };
+  return { ...f, rows, labels, reads, writes, project };
+}
+
+for (const endpoint of ['relations', 'detail', 'list', 'summary']) {
+  test(`related issue ${endpoint} filters historical revoked associations and retains authorized peers`, async () => {
+    const f = relatedIssueFixture(), own = f.workspaces[0];
+    if (endpoint === 'summary') own.members.push({ userId: 'alice', user: f.state.user, status: true });
+    const invoke = async () => {
+      if (endpoint === 'relations') return f.route('workspaces/[workspaceId]/issues/[issueKey]/relations').GET(f.request(), { params: Promise.resolve({ workspaceId: own.id, issueKey: 'issue-own' }) });
+      if (endpoint === 'detail') return f.route('issues/[issueId]').GET(f.request(), { params: Promise.resolve({ issueId: 'issue-own' }) });
+      if (endpoint === 'list') return f.route('issues').GET(f.request('GET', own.id));
+      return f.route('projects/[projectId]/summary').GET(f.request(), { params: Promise.resolve({ projectId: 'project-own' }) });
+    };
+    let response = await invoke();
+    assert.equal(response.status, 200);
+    let body = JSON.stringify(await response.json());
+    for (const forbidden of ['protected-revoked', 'protected-foreign', 'label-secret-revoked', 'label-secret-foreign']) {
+      assert.equal(body.includes(forbidden), false, forbidden);
+      assert.equal(f.reads.includes(forbidden), false, `read ${forbidden}`);
+    }
+    if (endpoint !== 'summary') assert.equal(body.includes('protected-joined'), true);
+    own.members.length = 0;
+    f.rows[0].parent = f.rows[1];
+    f.rows[0].parentId = f.rows[1].id;
+    assert.equal(JSON.stringify(await (await invoke()).json()).includes('protected-joined'), true);
+    f.workspaces[1].members[0].status = false;
+    f.reads.length = 0;
+    response = await invoke();
+    assert.equal(response.status, 200);
+    body = JSON.stringify(await response.json());
+    assert.equal(body.includes('protected-joined'), false);
+    assert.equal(f.reads.includes('protected-joined'), false);
+    assert.equal(body.includes('protected-own'), endpoint !== 'relations');
+    assert.deepEqual(f.writes, []);
+  });
+}
+
+for (const refs of [
+  { parentId: 'issue-revoked' }, { parentId: 'missing' },
+  { labels: ['label-own', 'label-revoked'] }, { labels: ['missing'] },
+  { assigneeId: 'outsider' }, { reporterId: 'outsider' },
+]) {
+  test(`issue creation rejects destination references ${JSON.stringify(refs)} without writes or notifications`, async () => {
+    const f = relatedIssueFixture();
+    const response = await f.route('issues').POST(f.request('POST', undefined, {
+      title: 'New', workspaceId: f.workspaces[0].id, projectId: 'project-own', ...refs,
+    }));
+    assert.equal(response.status, 400);
+    assert.deepEqual(f.writes, []);
+    assert.equal(f.calls.writes, 0);
+  });
+}
+
+for (const slug of ['own', 'joined']) {
+  test(`issue creation preserves ${slug} access and valid parent labels participants`, async () => {
+    const f = relatedIssueFixture(), workspace = f.workspaces.find(row => row.slug === slug);
+    const response = await f.route('issues').POST(f.request('POST', undefined, {
+      title: 'New', workspaceId: workspace.id, projectId: `project-${slug}`,
+      parentId: `issue-${slug}`, labels: [`label-${slug}`], assigneeId: 'alice', reporterId: 'alice',
+    }));
+    assert.equal(response.status, 201);
+    assert.equal(f.writes[0].workspaceId, workspace.id);
+    assert.equal(f.writes[0].parentId, `issue-${slug}`);
+    assert.equal(f.writes[0].labels.connect[0].id, `label-${slug}`);
+  });
+}
+
+for (const endpoint of ['apps/auth/issues/[issueIdOrKey]', 'apps/auth/issues/[issueIdOrKey]/relations']) {
+  test(`related issue app scope filters historical foreign associations in ${endpoint}`, async () => {
+    const f = relatedIssueFixture();
+    f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => handler };
+    const response = await f.route(endpoint).GET(f.request(), { workspace: f.workspaces[0], user: { id: 'alice' } },
+      { params: Promise.resolve({ issueIdOrKey: 'issue-own' }) });
+    assert.equal(response.status, 200);
+    const body = JSON.stringify(await response.json());
+    for (const slug of ['joined', 'revoked', 'foreign']) {
+      assert.equal(body.includes(`protected-${slug}`), false);
+      assert.equal(f.reads.includes(`protected-${slug}`), false);
+    }
+  });
+}
+
+test('issue creation app rejects mixed cross-workspace labels without writes', async () => {
+  const f = relatedIssueFixture(), projectId = 'c0000000000000000000000020';
+  f.rows[0].projectId = projectId; f.rows[0].project.id = projectId;
+  f.db.project.findFirst = async ({ where }) => f.rows.map(row => row.project).find(row => matches(row, where)) ?? null;
+  f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => handler };
+  const response = await f.route('apps/auth/issues').POST(f.request('POST', undefined, {
+    title: 'New', projectId, labels: ['label-own', 'label-revoked'],
+  }), { workspace: f.workspaces[0], user: { id: 'alice' } });
+  assert.equal(response.status, 400);
+  assert.deepEqual(f.writes, []);
+  assert.equal(f.calls.writes, 0);
+});
+
+test('issue creation app update rejects foreign parent and mixed labels without writes', async () => {
+  const f = relatedIssueFixture();
+  f.rows[2].id = 'c0000000000000000000000021';
+  f.dependencies['@/lib/apps/auth-middleware'] = { withAppAuth: handler => handler };
+  for (const fields of [{ parentId: f.rows[2].id }, { labels: ['label-own', 'label-revoked'] }]) {
+    const response = await f.route('apps/auth/issues/[issueIdOrKey]').PATCH(f.request('PATCH', undefined, fields),
+      { workspace: f.workspaces[0], user: { id: 'alice' } }, { params: Promise.resolve({ issueIdOrKey: 'issue-own' }) });
+    assert.equal(response.status, 400);
+    assert.deepEqual(f.writes, []);
+    assert.equal(f.calls.writes, 0);
+  }
+});

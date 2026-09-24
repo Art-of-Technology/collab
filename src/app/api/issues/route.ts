@@ -1,3 +1,5 @@
+import { validateIssueReferences } from '@/lib/issue-references';
+import { issueAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth-options";
@@ -17,12 +19,13 @@ const RELATED_ISSUE_SELECT = {
 } as const;
 
 // Reuse a compact include set similar to the detail route
-const LIST_INCLUDE = {
+const listInclude = (userId: string) => ({
   project: { select: { id: true, name: true, slug: true, issuePrefix: true, description: true, color: true } },
   assignee: { select: { id: true, name: true, email: true, image: true } },
   reporter: { select: { id: true, name: true, email: true, image: true } },
-  labels: { select: { id: true, name: true, color: true } },
-  parent: { 
+  labels: { where: issueAccessWhere(userId), select: { id: true, name: true, color: true } },
+  parent: {
+    where: issueAccessWhere(userId),
     select: { 
       id: true, 
       title: true, 
@@ -39,7 +42,8 @@ const LIST_INCLUDE = {
       }
     } 
   },
-  children: { 
+  children: {
+    where: issueAccessWhere(userId),
     select: { 
       id: true, 
       title: true, 
@@ -57,8 +61,9 @@ const LIST_INCLUDE = {
     } 
   },
   projectStatus: { select: { id: true, name: true, displayName: true, color: true, order: true, isDefault: true } },
-  _count: { select: { children: true, comments: true } },
+  _count: { select: { children: { where: issueAccessWhere(userId) }, comments: true } },
   sourceRelations: {
+    where: { targetIssue: issueAccessWhere(userId) },
     select: {
       id: true,
       relationType: true,
@@ -66,13 +71,14 @@ const LIST_INCLUDE = {
     }
   },
   targetRelations: {
+    where: { sourceIssue: issueAccessWhere(userId) },
     select: {
       id: true,
       relationType: true,
       sourceIssue: { select: RELATED_ISSUE_SELECT }
     }
   }
-} as const;
+} as const);
 
 // GET /api/issues - Get issues by workspace/project
 export async function GET(request: NextRequest) {
@@ -118,7 +124,7 @@ export async function GET(request: NextRequest) {
 
     const issues = await prisma.issue.findMany({
       where: whereClause,
-      include: LIST_INCLUDE,
+      include: listInclude(session.user.id),
       orderBy: { updatedAt: 'desc' }
     });
 
@@ -204,6 +210,11 @@ export async function POST(request: NextRequest) {
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
+
+    const referenceError = await validateIssueReferences(prisma, workspace.id, projectId, {
+      labels, parentId, assigneeId, reporterId,
+    });
+    if (referenceError) return NextResponse.json({ error: referenceError }, { status: 400 });
 
     // Use a transaction to ensure atomic counter increment and issue creation
     const created = await prisma.$transaction(async (tx) => {

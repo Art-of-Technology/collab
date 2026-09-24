@@ -1,3 +1,4 @@
+import { issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { featureAccessWhere } from '@/lib/feature-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
@@ -38,13 +39,7 @@ export async function GET(
     }
 
     // Verify user has access to workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
-      where: {
-        user: { email: session.user.email },
-        workspaceId: project.workspaceId,
-        status: true
-      }
-    });
+    const hasAccess = await userHasWorkspaceAccess(session.user.id, project.workspaceId);
 
     if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
@@ -107,11 +102,12 @@ export async function GET(
           select: { id: true, name: true, displayName: true, color: true }
         },
         parent: {
+          where: issueAccessWhere(session.user.id),
           select: { id: true, title: true, issueKey: true }
         },
         // Check if blocked
         targetRelations: {
-          where: { relationType: 'BLOCKS' },
+          where: { relationType: 'BLOCKS', sourceIssue: issueAccessWhere(session.user.id) },
           select: {
             sourceIssue: {
               select: { id: true, title: true, issueKey: true }
@@ -149,6 +145,7 @@ export async function GET(
           select: { id: true, name: true, displayName: true, color: true }
         },
         parent: {
+          where: issueAccessWhere(session.user.id),
           select: { id: true, title: true, issueKey: true }
         }
       },
@@ -279,6 +276,7 @@ export async function GET(
           select: { id: true, name: true, displayName: true, color: true, isFinal: true }
         },
         parent: {
+          where: issueAccessWhere(session.user.id),
           select: { id: true, title: true, issueKey: true }
         }
       },
@@ -439,7 +437,7 @@ export async function GET(
     // Get notes for the workspace (workspace or project scope)
     const notes = await prisma.note.findMany({
       where: {
-        AND: [noteAccessWhere(hasAccess.userId)],
+        AND: [noteAccessWhere(session.user.id)],
         OR: [
           { workspaceId: project.workspaceId, scope: 'WORKSPACE' },
           { projectId: project.id, scope: 'PROJECT' },

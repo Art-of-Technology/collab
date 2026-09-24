@@ -1,3 +1,4 @@
+import { validateIssueReferences } from '@/lib/issue-references';
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -169,6 +170,9 @@ export async function POST(req: Request) {
             error: 'Project not found',
           }, { status: 404 });
         }
+
+        const referenceError = await validateIssueReferences(prisma, workspace.id, projectId, { assigneeId: params.assigneeId });
+        if (referenceError) return NextResponse.json({ success: false, error: referenceError }, { status: 400 });
 
         // Create the issue
         const issueNumber = project._count.issues + 1;

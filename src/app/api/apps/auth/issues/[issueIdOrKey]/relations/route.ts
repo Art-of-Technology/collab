@@ -45,7 +45,7 @@ export const GET = withAppAuth(
 
       // Get relations where this issue is the source
       const sourceRelations = await prisma.issueRelation.findMany({
-        where: { sourceIssueId: issue.id },
+        where: { sourceIssueId: issue.id, targetIssue: { workspaceId: context.workspace.id } },
         include: {
           targetIssue: {
             select: {
@@ -70,7 +70,7 @@ export const GET = withAppAuth(
 
       // Get relations where this issue is the target
       const targetRelations = await prisma.issueRelation.findMany({
-        where: { targetIssueId: issue.id },
+        where: { targetIssueId: issue.id, sourceIssue: { workspaceId: context.workspace.id } },
         include: {
           sourceIssue: {
             select: {

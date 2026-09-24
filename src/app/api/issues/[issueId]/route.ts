@@ -1,3 +1,4 @@
+import { validateIssueReferences } from '@/lib/issue-references';
 import { z } from 'zod';
 import { IssueType, Prisma } from '@prisma/client';
 import { checkUserPermissions, canActOnOwnContent, Permission } from '@/lib/permissions';
@@ -9,7 +10,7 @@ import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
 import { emitIssueUpdated, emitIssueDeleted } from "@/lib/event-bus";
-import { findIssueByIdOrKey, STANDARD_ISSUE_INCLUDE, userHasWorkspaceAccess } from "@/lib/issue-finder";
+import { findIssueByIdOrKey, getStandardIssueInclude, userHasWorkspaceAccess } from "@/lib/issue-finder";
 import { normalizeDescriptionHTML } from "@/utils/html-normalizer";
 
 const UpdateIssueSchema = z.object({
@@ -60,7 +61,7 @@ export async function GET(
     const issue = await findIssueByIdOrKey(issueId, {
       workspaceId: workspaceId || undefined,
       userId: currentUser.id,
-      include: STANDARD_ISSUE_INCLUDE
+      include: getStandardIssueInclude(currentUser.id)
     });
 
     if (!issue) {
@@ -161,24 +162,14 @@ export async function PUT(
       })) {
         return { error: 'Invalid destination project', status: 400 };
       }
-      for (const userId of [body.assigneeId, body.reporterId]) {
-        if (userId && !await userHasWorkspaceAccess(userId, existingIssue.workspaceId)) {
-          return { error: 'Invalid issue participant', status: 400 };
-        }
-      }
-      const parentId = body.parentId !== undefined ? body.parentId : existingIssue.parentId;
-      if ((body.parentId !== undefined || moving) && parentId &&
-          (parentId === existingIssue.id || !await tx.issue.findFirst({
-            where: { id: parentId, workspaceId: existingIssue.workspaceId, projectId },
-            select: { id: true }
-          }))) {
-        return { error: 'Invalid parent issue', status: 400 };
-      }
-      if (labelIds?.length && await tx.taskLabel.count({
-        where: { id: { in: [...new Set(labelIds)] }, workspaceId: existingIssue.workspaceId }
-      }) !== new Set(labelIds).size) {
-        return { error: 'Invalid issue labels', status: 400 };
-      }
+      const referenceError = await validateIssueReferences(tx, existingIssue.workspaceId, projectId, {
+        id: existingIssue.id,
+        assigneeId: body.assigneeId,
+        reporterId: body.reporterId,
+        parentId: body.parentId !== undefined ? body.parentId : moving ? existingIssue.parentId : undefined,
+        labels: labelIds,
+      });
+      if (referenceError) return { error: referenceError, status: 400 };
       if (moving && await tx.issue.findFirst({
         where: {
           id: existingIssue.id,
@@ -255,7 +246,7 @@ export async function PUT(
           ...updateData,
           ...(labelIds ? { labels: { set: labelIds.map(id => ({ id })) } } : {})
         },
-        include: STANDARD_ISSUE_INCLUDE
+        include: getStandardIssueInclude(currentUser.id)
       });
       if (assigneeChanged && issue.assigneeId) {
         await tx.issueAssignee.upsert({

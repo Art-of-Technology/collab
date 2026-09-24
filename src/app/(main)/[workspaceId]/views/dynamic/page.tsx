@@ -1,3 +1,4 @@
+import { issueAccessWhere } from '@/lib/issue-finder';
 import { notFound } from 'next/navigation';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -154,6 +155,7 @@ export default async function DynamicViewPage({ params, searchParams }: DynamicV
         }
       },
       labels: {
+        where: issueAccessWhere(session.user.id),
         select: {
           id: true,
           name: true,
@@ -161,6 +163,7 @@ export default async function DynamicViewPage({ params, searchParams }: DynamicV
         }
       },
       parent: {
+        where: issueAccessWhere(session.user.id),
         select: {
           id: true,
           title: true,
@@ -169,6 +172,7 @@ export default async function DynamicViewPage({ params, searchParams }: DynamicV
         }
       },
       children: {
+        where: issueAccessWhere(session.user.id),
         select: {
           id: true,
           title: true,
@@ -189,7 +193,7 @@ export default async function DynamicViewPage({ params, searchParams }: DynamicV
       },
       _count: {
         select: {
-          children: true,
+          children: { where: issueAccessWhere(session.user.id) },
           comments: true
         }
       }

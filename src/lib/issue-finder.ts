@@ -1,6 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { isIssueKey } from "@/lib/shared-issue-key-utils";
 
+export function issueAccessWhere(userId: string) {
+  return { workspace: { OR: [
+    { ownerId: userId },
+    { members: { some: { userId, status: true } } }
+  ] } };
+}
+
 /**
  * Options for finding issues
  */
@@ -34,12 +41,7 @@ export async function findIssueByIdOrKey<T = any>(
     where: {
       ...(isIssueKey(idOrKey) ? { issueKey: idOrKey } : { id: idOrKey }),
       ...(workspaceId && { workspaceId }),
-      workspace: {
-        OR: [
-          { ownerId: userId },
-          { members: { some: { userId, status: true } } }
-        ]
-      }
+      ...issueAccessWhere(userId)
     },
     ...(include && { include }),
     ...(select && { select })
@@ -49,7 +51,7 @@ export async function findIssueByIdOrKey<T = any>(
 /**
  * Standard issue include object commonly used across API routes
  */
-export const STANDARD_ISSUE_INCLUDE = {
+export const getStandardIssueInclude = (userId: string) => ({
   assignee: {
     select: { id: true, name: true, email: true, image: true, useCustomAvatar: true }
   },
@@ -63,12 +65,15 @@ export const STANDARD_ISSUE_INCLUDE = {
     select: { id: true, name: true, slug: true }
   },
   labels: {
+    where: issueAccessWhere(userId),
     select: { id: true, name: true, color: true }
   },
   parent: {
+    where: issueAccessWhere(userId),
     select: { id: true, title: true, issueKey: true, type: true }
   },
   children: {
+    where: issueAccessWhere(userId),
     select: { id: true, title: true, issueKey: true, type: true, status: true }
   },
   projectStatus: {
@@ -80,8 +85,8 @@ export const STANDARD_ISSUE_INCLUDE = {
     },
     orderBy: { createdAt: 'asc' as const }
   },
-  _count: { select: { children: true, comments: true } }
-} as const;
+  _count: { select: { children: { where: issueAccessWhere(userId) }, comments: true } }
+} as const);
 
 /**
  * Helper function to check if a user has access to a workspace
