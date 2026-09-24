@@ -1,8 +1,8 @@
-import type { Prisma } from '@prisma/client';
+import type { prisma } from '@/lib/prisma';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 
 export async function validateIssueReferences(
-  db: Prisma.TransactionClient,
+  db: Pick<typeof prisma, 'issue' | 'taskLabel'>,
   workspaceId: string,
   projectId: string,
   refs: { id?: string; parentId?: string | null; labels?: string[]; assigneeId?: string | null; reporterId?: string | null }

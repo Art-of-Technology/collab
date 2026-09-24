@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { validateIssueReferences } from '@/lib/issue-references';
 /**
  * Third-Party App API: Issues Endpoints
@@ -97,7 +98,7 @@ export const GET = withAppAuth(
       // Get issues with related data
       const [issues, total] = await Promise.all([
         prisma.issue.findMany({
-          where,
+          where: { AND: [issueReadAccessWhere(context.user.id), where] },
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
@@ -133,7 +134,7 @@ export const GET = withAppAuth(
             }
           }
         }),
-        prisma.issue.count({ where })
+        prisma.issue.count({ where: { AND: [where, issueReadAccessWhere(context.user.id)] } })
       ]);
 
       const response = {

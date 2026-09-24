@@ -1,4 +1,4 @@
-import { issueAccessWhere } from '@/lib/issue-finder';
+import { issueReadAccessWhere, issueAccessWhere } from '@/lib/issue-finder';
 import { notFound } from 'next/navigation';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -136,7 +136,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
         }
       },
       parent: {
-        where: issueAccessWhere(session.user.id),
+        where: issueReadAccessWhere(session.user.id),
         select: {
           id: true,
           title: true,
@@ -145,7 +145,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
         }
       },
       children: {
-        where: issueAccessWhere(session.user.id),
+        where: issueReadAccessWhere(session.user.id),
         select: {
           id: true,
           title: true,
@@ -166,7 +166,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
       },
       _count: {
         select: {
-          children: { where: issueAccessWhere(session.user.id) },
+          children: { where: issueReadAccessWhere(session.user.id) },
           comments: true
         }
       }
@@ -312,7 +312,7 @@ export default async function ViewPage({ params }: ViewPageProps) {
     issuesQuery.where.projectId = { in: projects.map(project => project.id) };
   }
 
-  const issues = await prisma.issue.findMany(issuesQuery);
+  const issues = await prisma.issue.findMany({ ...issuesQuery, where: { AND: [issuesQuery.where, issueReadAccessWhere(session.user.id)] } });
 
   // Transform view data with proper field mapping
   const viewData = {

@@ -1,4 +1,4 @@
-import { issueAccessWhere } from '@/lib/issue-finder';
+import { issueReadAccessWhere, issueAccessWhere } from '@/lib/issue-finder';
 import { notFound } from 'next/navigation';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -163,7 +163,7 @@ export default async function DynamicViewPage({ params, searchParams }: DynamicV
         }
       },
       parent: {
-        where: issueAccessWhere(session.user.id),
+        where: issueReadAccessWhere(session.user.id),
         select: {
           id: true,
           title: true,
@@ -172,7 +172,7 @@ export default async function DynamicViewPage({ params, searchParams }: DynamicV
         }
       },
       children: {
-        where: issueAccessWhere(session.user.id),
+        where: issueReadAccessWhere(session.user.id),
         select: {
           id: true,
           title: true,
@@ -193,7 +193,7 @@ export default async function DynamicViewPage({ params, searchParams }: DynamicV
       },
       _count: {
         select: {
-          children: { where: issueAccessWhere(session.user.id) },
+          children: { where: issueReadAccessWhere(session.user.id) },
           comments: true
         }
       }
@@ -337,7 +337,7 @@ export default async function DynamicViewPage({ params, searchParams }: DynamicV
     }
   }
 
-  const issues = await prisma.issue.findMany(issuesQuery);
+  const issues = await prisma.issue.findMany({ ...issuesQuery, where: { AND: [issuesQuery.where, issueReadAccessWhere(session.user.id)] } });
 
   // Build virtual view data (not from DB)
   const viewData = {

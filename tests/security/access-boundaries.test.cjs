@@ -124,7 +124,7 @@ const prisma = {
     async findFirst({ where }) { return workspaces.find(workspace => matchesWorkspace(workspace, where)) ?? null; },
   },
 };
-const { findIssueByIdOrKey, userHasWorkspaceAccess, issueAccessWhere } = load('src/lib/issue-finder.ts', {
+const { findIssueByIdOrKey, userHasWorkspaceAccess, issueAccessWhere, issueReadAccessWhere } = load('src/lib/issue-finder.ts', {
   '@/lib/prisma': { prisma },
   '@/lib/shared-issue-key-utils': load('src/lib/shared-issue-key-utils.ts'),
 });
@@ -780,9 +780,14 @@ test('AI issue suggestions and relations resolve their source issue inside the a
     const { GET } = load(`src/app/api/ai/issues/${endpoint}/route.ts`, {
       'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
       '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) },
-      '@/lib/auth': { authConfig: {} }, '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere },
+      '@/lib/auth': { authConfig: {} }, '@/lib/issue-finder': { userHasWorkspaceAccess, issueAccessWhere, issueReadAccessWhere },
       '@/lib/prisma': { prisma: { issue: { findFirst: async ({ where }) => {
-        reads++; assert.equal(where.workspaceId, 'joined'); assert.equal(where.id, 'foreign-issue'); return null;
+        reads++;
+        const workspace = workspaces.find(row => row.id === 'joined');
+        const issue = { id: 'foreign-issue', workspaceId: 'joined', workspace, project: { workspace }, statusId: null };
+        assert.equal(matches(issue, where), true);
+        assert.equal(matches({ ...issue, workspaceId: 'foreign' }, where), false);
+        return null;
       } } } },
     }, { URL });
     for (const workspace of ['revoked', 'foreign', 'joined']) {

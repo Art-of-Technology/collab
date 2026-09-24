@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { validateIssueReferences } from '@/lib/issue-references';
 /**
  * Third-Party App API: Single Issue Endpoints
@@ -52,13 +53,13 @@ export const GET = withAppAuth(
       const { issueIdOrKey } = await params;
 
       const issue = await prisma.issue.findFirst({
-        where: {
+        where: { AND: [issueReadAccessWhere(context.user.id), {
           workspaceId: context.workspace.id,
           OR: [
             { id: issueIdOrKey },
             { issueKey: issueIdOrKey },
           ],
-        },
+        }] },
         include: {
           project: {
             select: {

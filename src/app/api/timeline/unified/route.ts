@@ -1,4 +1,4 @@
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 /**
  * Unified Timeline API
  * GET /api/timeline/unified - Get workspace-wide unified activity feed
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
     // Get issue details for context
     const issueIds = [...new Set(activities.map((a) => a.itemId))];
     const issues = await prisma.issue.findMany({
-      where: { id: { in: issueIds } },
+      where: { AND: [issueReadAccessWhere(session.user.id), { id: { in: issueIds } }] },
       include: {
         projectStatus: true,
         project: true,

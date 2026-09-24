@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Single View Endpoint
  * GET /api/apps/auth/views/:viewId - Get view with optional issues
@@ -137,7 +138,7 @@ export const GET = withAppAuth(
 
         const [issues, total] = await Promise.all([
           prisma.issue.findMany({
-            where: issueWhere,
+            where: { AND: [issueReadAccessWhere(context.user.id), issueWhere] },
             take: limit,
             orderBy,
             include: {
@@ -176,7 +177,7 @@ export const GET = withAppAuth(
               },
             },
           }),
-          prisma.issue.count({ where: issueWhere }),
+          prisma.issue.count({ where: { AND: [issueWhere, issueReadAccessWhere(context.user.id)] } }),
         ]);
 
         response.issues = issues.map(issue => ({

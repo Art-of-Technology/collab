@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { publishEvent } from '@/lib/redis';
 import { VIEW_POSITIONS_MAX_BULK_SIZE } from '@/constants/viewPositions';
-import { findIssueByIdOrKey } from '@/lib/issue-finder';
+import { findIssueByIdOrKey, issueReadAccessWhere } from '@/lib/issue-finder';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -227,7 +227,7 @@ export async function GET(
 
     // Get all view-specific positions
     const positions = await prisma.viewIssuePosition.findMany({
-      where: { viewId },
+      where: { viewId, issue: issueReadAccessWhere(currentUser.id) },
       include: {
         issue: {
           select: {

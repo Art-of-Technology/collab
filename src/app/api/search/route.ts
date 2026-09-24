@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from "next/server";
 import { noteAccessWhere } from "@/lib/secrets/access";
 import { prisma } from "@/lib/prisma";
@@ -103,14 +104,14 @@ export async function GET(req: NextRequest) {
 
     // Search Issues
     const issues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(currentUser.id), {
         workspaceId,
         OR: [
           { title: { contains: query, mode: 'insensitive' } },
           { description: { contains: query, mode: 'insensitive' } },
           { issueKey: { contains: query, mode: 'insensitive' } },
         ]
-      },
+      }] },
       select: {
         id: true,
         title: true,
@@ -172,7 +173,7 @@ export async function GET(req: NextRequest) {
         visibility: true,
         ownerId: true,
         _count: {
-          select: { issuePositions: true }
+          select: { issuePositions: { where: { issue: issueReadAccessWhere(currentUser.id) } } }
         }
       },
       take: Math.min(limit, 10),

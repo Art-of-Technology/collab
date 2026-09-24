@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAuthSession } from '@/lib/auth';
@@ -17,13 +18,13 @@ export async function GET(request: NextRequest) {
 
     // Find the issue and its workspace
     const issue = await prisma.issue.findFirst({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         issueKey: issueKey,
         workspace: { OR: [
           { ownerId: session.user.id },
           { members: { some: { userId: session.user.id, status: true } } }
         ] }
-      },
+      }] },
       include: {
         project: {
           include: {

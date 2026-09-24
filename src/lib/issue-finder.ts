@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from "@/lib/prisma";
 import { isIssueKey } from "@/lib/shared-issue-key-utils";
 
@@ -6,6 +7,17 @@ export function issueAccessWhere(userId: string) {
     { ownerId: userId },
     { members: { some: { userId, status: true } } }
   ] } };
+}
+
+export function issueReadAccessWhere(userId: string) {
+  return {
+    ...issueAccessWhere(userId),
+    project: issueAccessWhere(userId),
+    OR: [
+      { statusId: null },
+      { projectStatus: { project: issueAccessWhere(userId) } }
+    ]
+  } satisfies Prisma.IssueWhereInput;
 }
 
 /**
@@ -41,7 +53,7 @@ export async function findIssueByIdOrKey<T = any>(
     where: {
       ...(isIssueKey(idOrKey) ? { issueKey: idOrKey } : { id: idOrKey }),
       ...(workspaceId && { workspaceId }),
-      ...issueAccessWhere(userId)
+      ...issueReadAccessWhere(userId)
     },
     ...(include && { include }),
     ...(select && { select })
@@ -69,14 +81,15 @@ export const getStandardIssueInclude = (userId: string) => ({
     select: { id: true, name: true, color: true }
   },
   parent: {
-    where: issueAccessWhere(userId),
+    where: issueReadAccessWhere(userId),
     select: { id: true, title: true, issueKey: true, type: true }
   },
   children: {
-    where: issueAccessWhere(userId),
+    where: issueReadAccessWhere(userId),
     select: { id: true, title: true, issueKey: true, type: true, status: true }
   },
   projectStatus: {
+    where: { project: issueAccessWhere(userId) },
     select: { id: true, name: true, displayName: true, color: true, iconName: true, order: true }
   },
   comments: {
@@ -85,8 +98,8 @@ export const getStandardIssueInclude = (userId: string) => ({
     },
     orderBy: { createdAt: 'asc' as const }
   },
-  _count: { select: { children: { where: issueAccessWhere(userId) }, comments: true } }
-} as const);
+  _count: { select: { children: { where: issueReadAccessWhere(userId) }, comments: true } }
+} as const satisfies Prisma.IssueInclude);
 
 /**
  * Helper function to check if a user has access to a workspace

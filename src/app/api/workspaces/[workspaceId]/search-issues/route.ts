@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -40,7 +41,7 @@ export async function GET(
 
     // Search issues by title, description, or issue key
     const issues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(currentUser.id), {
         workspaceId: workspaceId,
         OR: [
           {
@@ -62,7 +63,7 @@ export async function GET(
             },
           },
         ],
-      },
+      }] },
       include: {
         assignee: {
           select: {

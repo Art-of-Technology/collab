@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Time Tracking Report
  * GET /api/apps/auth/reports/time-tracking - Get comprehensive time tracking report
@@ -147,7 +148,7 @@ export const GET = withAppAuth(
 
       // Get all work logs for the period
       const workLogs = await prisma.workLog.findMany({
-        where: whereClause,
+        where: { AND: [whereClause, { issue: issueReadAccessWhere(context.user.id) }] },
         include: {
           user: {
             select: {

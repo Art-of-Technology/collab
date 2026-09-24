@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Issue Search
  * GET /api/apps/auth/search/issues - Full-text search across issues with advanced filters
@@ -182,7 +183,7 @@ export const GET = withAppAuth(
 
       const [results, total] = await Promise.all([
         prisma.issue.findMany({
-          where,
+          where: { AND: [issueReadAccessWhere(context.user.id), where] },
           skip,
           take: limit,
           orderBy,
@@ -245,7 +246,7 @@ export const GET = withAppAuth(
             },
           },
         }),
-        prisma.issue.count({ where }),
+        prisma.issue.count({ where: { AND: [where, issueReadAccessWhere(context.user.id)] } }),
       ]);
 
       return NextResponse.json({

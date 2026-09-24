@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 /**
  * Third-Party App API: Issue Relations Endpoints
  * GET /api/apps/auth/issues/:issueIdOrKey/relations - Get issue relations
@@ -45,7 +46,7 @@ export const GET = withAppAuth(
 
       // Get relations where this issue is the source
       const sourceRelations = await prisma.issueRelation.findMany({
-        where: { sourceIssueId: issue.id, targetIssue: { workspaceId: context.workspace.id } },
+        where: { sourceIssueId: issue.id, targetIssue: { AND: [{ workspaceId: context.workspace.id }, issueReadAccessWhere(context.user.id)] } },
         include: {
           targetIssue: {
             select: {
@@ -70,7 +71,7 @@ export const GET = withAppAuth(
 
       // Get relations where this issue is the target
       const targetRelations = await prisma.issueRelation.findMany({
-        where: { targetIssueId: issue.id, sourceIssue: { workspaceId: context.workspace.id } },
+        where: { targetIssueId: issue.id, sourceIssue: { AND: [{ workspaceId: context.workspace.id }, issueReadAccessWhere(context.user.id)] } },
         include: {
           sourceIssue: {
             select: {

@@ -1,4 +1,4 @@
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -94,9 +94,9 @@ export async function GET(
     // Fetch related issues
     const issueIds = [...new Set(resultsToReturn.map((a) => a.itemId))];
     const issues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         id: { in: issueIds },
-      },
+      }] },
       select: {
         id: true,
         title: true,

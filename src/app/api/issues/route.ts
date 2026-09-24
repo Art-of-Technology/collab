@@ -1,5 +1,5 @@
+import { issueReadAccessWhere, issueAccessWhere } from '@/lib/issue-finder';
 import { validateIssueReferences } from '@/lib/issue-references';
-import { issueAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from "@/lib/auth-options";
@@ -25,7 +25,7 @@ const listInclude = (userId: string) => ({
   reporter: { select: { id: true, name: true, email: true, image: true } },
   labels: { where: issueAccessWhere(userId), select: { id: true, name: true, color: true } },
   parent: {
-    where: issueAccessWhere(userId),
+    where: issueReadAccessWhere(userId),
     select: { 
       id: true, 
       title: true, 
@@ -43,7 +43,7 @@ const listInclude = (userId: string) => ({
     } 
   },
   children: {
-    where: issueAccessWhere(userId),
+    where: issueReadAccessWhere(userId),
     select: { 
       id: true, 
       title: true, 
@@ -61,9 +61,9 @@ const listInclude = (userId: string) => ({
     } 
   },
   projectStatus: { select: { id: true, name: true, displayName: true, color: true, order: true, isDefault: true } },
-  _count: { select: { children: { where: issueAccessWhere(userId) }, comments: true } },
+  _count: { select: { children: { where: issueReadAccessWhere(userId) }, comments: true } },
   sourceRelations: {
-    where: { targetIssue: issueAccessWhere(userId) },
+    where: { targetIssue: issueReadAccessWhere(userId) },
     select: {
       id: true,
       relationType: true,
@@ -71,7 +71,7 @@ const listInclude = (userId: string) => ({
     }
   },
   targetRelations: {
-    where: { sourceIssue: issueAccessWhere(userId) },
+    where: { sourceIssue: issueReadAccessWhere(userId) },
     select: {
       id: true,
       relationType: true,
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
     };
 
     const issues = await prisma.issue.findMany({
-      where: whereClause,
+      where: { AND: [issueReadAccessWhere(session.user.id), whereClause] },
       include: listInclude(session.user.id),
       orderBy: { updatedAt: 'desc' }
     });

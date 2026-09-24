@@ -1,4 +1,4 @@
-import { userHasWorkspaceAccess, issueAccessWhere } from '@/lib/issue-finder';
+import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -272,7 +272,7 @@ export async function GET(
     // Get ALL issues ever assigned to these members (for historical reconstruction)
     // Filter out issues from archived projects
     const allIssues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         workspaceId,
         assigneeId: { in: memberUserIds },
         ...(projectIds?.length ? { projectId: { in: projectIds } } : {}),
@@ -281,7 +281,7 @@ export async function GET(
           { project: { isArchived: null } },
           { project: { isArchived: false } },
         ],
-      },
+      }] },
       select: {
         id: true,
         issueKey: true,
@@ -295,7 +295,7 @@ export async function GET(
         project: { select: { id: true, name: true, isArchived: true } },
         projectStatus: { select: { id: true, name: true, displayName: true, isFinal: true } },
         targetRelations: {
-          where: { relationType: 'BLOCKED_BY', sourceIssue: issueAccessWhere(session.user.id) },
+          where: { relationType: 'BLOCKED_BY', sourceIssue: issueReadAccessWhere(session.user.id) },
           select: { sourceIssue: { select: { issueKey: true } } },
         },
       },

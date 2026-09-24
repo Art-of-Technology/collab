@@ -1,4 +1,4 @@
-import { issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueReadAccessWhere, issueAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextResponse } from "next/server";
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from "@/lib/auth";
@@ -39,7 +39,7 @@ export async function GET(req: Request) {
 
     // Get the current issue
     const currentIssue = await prisma.issue.findFirst({
-      where: { id: issueId, workspaceId },
+      where: { AND: [issueReadAccessWhere(session.user.id), { id: issueId, workspaceId }] },
       include: {
         labels: { where: issueAccessWhere(session.user.id) },
         project: true,
@@ -61,13 +61,13 @@ export async function GET(req: Request) {
 
     if (titleWords.length > 0) {
       const similarTitleIssues = await prisma.issue.findMany({
-        where: {
+        where: { AND: [issueReadAccessWhere(session.user.id), {
           project: { workspaceId },
           id: { not: issueId },
           OR: titleWords.map(word => ({
             title: { contains: word, mode: 'insensitive' as const },
           })),
-        },
+        }] },
         include: {
           projectStatus: { select: { name: true, color: true } },
         },
@@ -101,11 +101,11 @@ export async function GET(req: Request) {
     const labelIds = currentIssue.labels.map(l => l.id);
     if (labelIds.length > 0) {
       const sameLabelIssues = await prisma.issue.findMany({
-        where: {
+        where: { AND: [issueReadAccessWhere(session.user.id), {
           project: { workspaceId },
           id: { not: issueId },
           labels: { some: { id: { in: labelIds } } },
-        },
+        }] },
         include: {
           labels: { where: issueAccessWhere(session.user.id) },
           projectStatus: { select: { name: true, color: true } },
@@ -136,6 +136,8 @@ export async function GET(req: Request) {
     // 3. Find explicit issue links
     const linkedIssues = await prisma.issueRelation.findMany({
       where: {
+        sourceIssue: issueReadAccessWhere(session.user.id),
+        targetIssue: issueReadAccessWhere(session.user.id),
         OR: [
           { sourceIssueId: issueId },
           { targetIssueId: issueId },

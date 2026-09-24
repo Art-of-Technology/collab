@@ -1,4 +1,4 @@
-import { userHasWorkspaceAccess, issueAccessWhere } from '@/lib/issue-finder';
+import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -141,9 +141,9 @@ export async function GET(
     // Fetch related issues for the activities
     const issueIds = [...new Set(activities.map((a) => a.itemId))];
     const issues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         id: { in: issueIds },
-      },
+      }] },
       select: {
         id: true,
         title: true,
@@ -198,7 +198,7 @@ export async function GET(
 
     // Fetch ALL assigned issues for each user (current state - not completed)
     const allAssignedIssues = await prisma.issue.findMany({
-      where: {
+      where: { AND: [issueReadAccessWhere(session.user.id), {
         workspaceId,
         assigneeId: { in: uniqueUserIds },
         ...(projectIds?.length ? { projectId: { in: projectIds } } : {}),
@@ -206,7 +206,7 @@ export async function GET(
         projectStatus: {
           isFinal: false,
         },
-      },
+      }] },
       select: {
         id: true,
         title: true,
@@ -234,7 +234,7 @@ export async function GET(
         targetRelations: {
           where: {
             relationType: 'BLOCKED_BY',
-            sourceIssue: issueAccessWhere(session.user.id),
+            sourceIssue: issueReadAccessWhere(session.user.id),
           },
           select: {
             id: true,

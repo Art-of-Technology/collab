@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { validateIssueReferences } from '@/lib/issue-references';
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
@@ -105,7 +106,7 @@ export async function POST(req: Request) {
         }
 
         const issues = await prisma.issue.findMany({
-          where,
+          where: { AND: [issueReadAccessWhere(currentUser.id), where] },
           take: 20,
           orderBy: { updatedAt: 'desc' },
           select: {
