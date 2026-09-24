@@ -1881,17 +1881,17 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   const handleCommandSelect = useCallback((command: { id: string }) => {
     if (!editor) return;
 
-    const currentPosition = editor.view.state.selection.from;
+    const { $from } = editor.state.selection;
 
     // Find and remove the slash trigger
-    const content = editor.state.doc.textBetween(0, currentPosition, ' ', ' ');
+    const content = $from.parent.textBetween(0, $from.parentOffset, ' ', ' ');
     const lastSlashIndex = content.lastIndexOf('/');
 
     if (lastSlashIndex !== -1) {
       // Delete the slash and any text after it
       editor.chain().focus().deleteRange({
-        from: lastSlashIndex,
-        to: currentPosition
+        from: $from.start() + lastSlashIndex,
+        to: $from.pos
       }).run();
     }
 

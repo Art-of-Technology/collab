@@ -161,10 +161,10 @@ export async function GET(req: Request) {
       if (relatedIssues.some(r => r.id === linkedIssue.id)) continue;
 
       let relation: RelatedIssue['relation'] = 'related';
-      if (link.relationType === 'BLOCKS' && link.sourceIssueId === issueId) {
-        relation = 'blocks';
-      } else if (link.relationType === 'BLOCKS' && link.targetIssueId === issueId) {
-        relation = 'dependent';
+      if (link.relationType === 'BLOCKS' || link.relationType === 'BLOCKED_BY') {
+        relation = (link.relationType === 'BLOCKS') === (link.sourceIssueId === issueId)
+          ? 'blocks'
+          : 'dependent';
       }
 
       relatedIssues.push({

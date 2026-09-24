@@ -8,7 +8,9 @@ const ts = require('typescript');
 
 function load(file, dependencies = {}, globals = {}) {
   const exports = {};
-  const source = readFileSync(resolve(process.env.SECURITY_TEST_ROOT || resolve(__dirname, '../../'), file), 'utf8');
+  const source = process.env.SECURITY_TEST_REV
+    ? require('node:child_process').execFileSync('git', ['show', `${process.env.SECURITY_TEST_REV}:${file}`], { encoding: 'utf8' })
+    : readFileSync(resolve(process.env.SECURITY_TEST_ROOT || resolve(__dirname, '../../'), file), 'utf8');
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   });
@@ -390,4 +392,168 @@ test('review: encryption roundtrip and generated Prisma Bytes assignments retain
   assert.equal(diagnostics.length, 0, ts.formatDiagnosticsWithColorAndContext(diagnostics, {
     getCanonicalFileName: name => name, getCurrentDirectory: () => process.cwd(), getNewLine: () => '\n',
   }));
+});
+
+test('push delivery uses global subscriptions for direct, bulk and leave callers', async () => {
+  const sent = [];
+  const rows = ['alice', 'manager', 'hr'].flatMap(userId => [
+    { userId, workspaceId: 'joined', pushNotificationsEnabled: false, pushSubscription: 'workspace-setting' },
+    { userId, workspaceId: null, pushNotificationsEnabled: true,
+      leaveRequestEdited: true, leaveRequestManagerAlert: true, leaveRequestHRAlert: true,
+      pushSubscription: JSON.stringify({ endpoint: `https://push.test/${userId}`, keys: { auth: 'auth', p256dh: 'key' } }) },
+  ]);
+  const workspaceRows = structuredClone(rows.filter(row => row.workspaceId));
+  let expired = false;
+  const db = {
+    notificationPreferences: {
+      findFirst: async ({ where }) => rows.find(row => matches(row, where)),
+      updateMany: async ({ where, data }) => rows.filter(row => matches(row, where)).forEach(row => Object.assign(row, data)),
+    },
+    notification: { groupBy: async () => [], create: async () => {}, createMany: async () => {} },
+    workspaceMember: { findMany: async ({ where }) => [{ userId: typeof where.role === 'string' ? 'hr' : 'manager' }] },
+    workspace: { findUnique: async () => null },
+  };
+  const push = load('src/lib/push-notifications.ts', {
+    '@prisma/client': { Prisma: { DbNull: null } }, '@/lib/prisma': { prisma: db },
+    '@/lib/encryption': { EncryptionService: { decrypt: JSON.parse } },
+    'web-push': { default: { setVapidDetails() {}, async sendNotification(subscription) {
+      if (expired) throw new Error('410');
+      sent.push(subscription.endpoint);
+    } } },
+  }, { Error, console: { log() {}, error() {} }, process: { env: {
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY: 'a'.repeat(87), VAPID_PRIVATE_KEY: 'b'.repeat(43), VAPID_EMAIL: 'mailto:test@example.test',
+  } } });
+  const { NotificationService, NotificationType } = load('src/lib/notification-service.ts', {
+    '@/lib/prisma': { prisma: db }, '@/lib/push-notifications': push,
+    '@/lib/permissions': { WorkspaceRole: { HR: 'HR' } }, 'date-fns': require('date-fns'),
+    '@/lib/logger': { logger: { info() {}, error() {} } }, '@/lib/html-sanitizer': {},
+  });
+  assert.equal(await push.sendPushNotification('alice', { title: 'Title', body: 'Body' }), true);
+  await push.sendPushNotificationToMultipleUsers(['alice', 'manager'], { title: 'Title', body: 'Body' });
+  await NotificationService.sendPushNotificationForUser('alice', NotificationType.ISSUE_MENTION, 'Mention');
+  const leave = { id: 'leave', userId: 'alice', user: { name: 'Alice' },
+    startDate: new Date('2026-09-24'), endDate: new Date('2026-09-25'), policy: { name: 'Medical', workspaceId: 'joined' } };
+  await NotificationService.notifyLeaveSubmission(leave);
+  await NotificationService.notifyLeaveEdit(leave, 'manager');
+  assert.deepEqual(sent.map(url => url.split('/').pop()), ['alice', 'alice', 'manager', 'alice', 'manager', 'hr', 'alice', 'hr']);
+  expired = true;
+  assert.equal(await push.sendPushNotification('alice', { title: 'Title', body: 'Body' }), false);
+  assert.equal(rows.find(row => row.userId === 'alice' && row.workspaceId === null).pushNotificationsEnabled, false);
+  expired = false;
+  assert.equal(await push.sendPushNotification('alice', { title: 'Title', body: 'Body' }), false);
+  assert.equal(await push.sendPushNotification('missing', { title: 'Title', body: 'Body' }), false);
+  assert.deepEqual(rows.filter(row => row.workspaceId), workspaceRows);
+});
+
+test('related issues classify both blocking types in both directions and retain access controls', async () => {
+  let session = { user: { id: 'alice' } };
+  const records = ['a', 'b', 'foreign'].map(id => ({ id, issueKey: id, title: id,
+    workspaceId: id === 'foreign' ? 'foreign' : 'joined', labels: [], projectStatus: { name: 'Open', color: '#fff' } }));
+  let links = [];
+  const { GET } = load('src/app/api/ai/issues/related/route.ts', {
+    'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } },
+    'next-auth': { getServerSession: async () => session }, '@/lib/auth': { authConfig: {} },
+    '@/lib/issue-finder': { userHasWorkspaceAccess },
+    '@/lib/prisma': { prisma: {
+      issue: { findFirst: async ({ where }) => records.find(row => matches(row, where)), findMany: async () => [] },
+      issueRelation: { findMany: async ({ where }) => links.filter(row => matches(row, where)) },
+    } },
+  }, { URL });
+  const request = (id, workspace = 'joined') => GET(new Request(`https://example.test/?issueId=${id}&workspaceId=${workspace}`));
+  for (const [relationType, expected] of [['BLOCKS', ['blocks', 'dependent']], ['BLOCKED_BY', ['dependent', 'blocks']], ['RELATES_TO', ['related', 'related']]]) {
+    links = [{ relationType, sourceIssueId: 'a', targetIssueId: 'b', sourceIssue: records[0], targetIssue: records[1] },
+      { relationType, sourceIssueId: 'a', targetIssueId: 'foreign', sourceIssue: records[0], targetIssue: records[2] }];
+    for (const [index, id] of ['a', 'b'].entries()) {
+      const response = await request(id);
+      assert.equal(response.status, 200);
+      assert.equal(response.body.relatedIssues.length, 1);
+      assert.equal(response.body.relatedIssues[0].id, id === 'a' ? 'b' : 'a');
+      assert.equal(response.body.relatedIssues[0].relation, expected[index], `${relationType}/${id}`);
+      assert.equal(response.body.relatedIssues[0].similarity, 1);
+    }
+  }
+  assert.equal((await request('foreign')).status, 404);
+  assert.equal((await request('a', 'foreign')).status, 403);
+  assert.equal((await request('a', 'revoked')).status, 403);
+  session = null;
+  assert.equal((await request('a')).status, 401);
+});
+
+test('slash menu commands preserve paragraphs, formatting and inline atoms', async () => {
+  const { JSDOM } = require('jsdom');
+  const dom = new JSDOM('<div id="root"></div>', { pretendToBeVisual: true });
+  const names = ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame'];
+  const original = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+  for (const name of names) Object.defineProperty(globalThis, name, { configurable: true, value: dom.window[name] });
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { Editor, Node: TiptapNode } = require('@tiptap/core');
+  const StarterKit = require('@tiptap/starter-kit').default;
+  const atom = TiptapNode.create({ name: 'testAtom', group: 'inline', inline: true, atom: true,
+    parseHTML: () => [{ tag: 'span[data-test-atom]' }], renderHTML: () => ['span', { 'data-test-atom': '' }, 'Existing mention'] });
+  const editor = new Editor({ extensions: [StarterKit, atom], content: '<p>Initial</p>' });
+  editor.view.coordsAtPos = () => ({ top: 0, bottom: 0, left: 0, right: 0 });
+  const ui = ({ children }) => React.createElement('div', null, children);
+  const dependencies = {
+    react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
+    '@tiptap/react': { useEditor: () => editor, EditorContent: () => null },
+    '@/lib/utils': { cn: () => '' }, 'next-auth/react': { useSession: () => ({}) },
+    '@/utils/cloudinary': {}, '@/context/WorkspaceContext': { useWorkspace: () => ({}) },
+    '@/hooks/queries/useUser': { useCurrentUser: () => ({}) },
+    '@/lib/collaboration': { createCollaborationUser: () => ({}) },
+    '@/components/ui/command': { Command: ui, CommandInput: ui, CommandList: ui,
+      CommandItem: ({ children, onSelect }) => React.createElement('button', { onClick: onSelect }, children) },
+  };
+  for (const [file, exports] of Object.entries({
+    button: ['Button'], tooltip: ['Tooltip', 'TooltipContent', 'TooltipProvider', 'TooltipTrigger'], separator: ['Separator'],
+    popover: ['Popover', 'PopoverContent', 'PopoverTrigger'], input: ['Input'],
+    'mention-suggestion': ['MentionSuggestion'], 'task-mention-suggestion': ['TaskMentionSuggestion'],
+    'epic-mention-suggestion': ['EpicMentionSuggestion'], 'story-mention-suggestion': ['StoryMentionSuggestion'],
+    'milestone-mention-suggestion': ['MilestoneMentionSuggestion'],
+  })) dependencies[`@/components/ui/${file}`] = Object.fromEntries(exports.map(name => [name, ui]));
+  for (const name of ['@tiptap/core', '@tiptap/starter-kit', 'lucide-react', ...['link', 'image', 'underline', 'placeholder', 'text-style', 'heading', 'color'].map(name => `@tiptap/extension-${name}`)]) {
+    dependencies[name] = require(name);
+  }
+  const { MarkdownEditor } = load('src/components/ui/markdown-editor.tsx', dependencies, {
+    document: dom.window.document, window: dom.window, console, setTimeout, clearTimeout,
+  });
+  const root = createRoot(dom.window.document.getElementById('root'));
+  try {
+    await React.act(async () => root.render(React.createElement(MarkdownEditor, { compact: true, content: editor.getHTML() })));
+    const cases = [
+      ['<p>Alpha</p><p>Beta </p>', 13],
+      ['<p><strong>Alpha</strong></p><p><em>Beta</em> </p>', 13],
+      ['<p>Alpha</p><blockquote><p><strong>Beta</strong> <span data-test-atom></span> </p></blockquote>', 16],
+    ];
+    for (const [html, position] of cases) {
+      for (const [type, trigger] of [['user', '@'], ['task', '#'], ['epic', '~'], ['story', '^'], ['milestone', '!']]) {
+        await React.act(async () => {
+          editor.commands.setContent(html, false, { preserveWhitespace: 'full' });
+          editor.commands.setTextSelection(position);
+          editor.commands.insertContent('/');
+        });
+        const before = editor.getJSON();
+        const button = [...dom.window.document.querySelectorAll('button')].find(button => button.textContent === `Mention ${type}`);
+        assert.ok(button, `Menu opens for ${type}`);
+        await React.act(async () => button.click());
+        const expected = structuredClone(before);
+        function replaceSlash(node) {
+          if (node.text?.endsWith('/')) node.text = node.text.slice(0, -1) + trigger;
+          node.content?.forEach(replaceSlash);
+        }
+        replaceSlash(expected);
+        assert.deepEqual(editor.getJSON(), expected, `${type}: ${html}`);
+      }
+    }
+  } finally {
+    await React.act(async () => root.unmount());
+    editor.destroy();
+    dom.window.close();
+    delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+    for (const [name, descriptor] of original) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  }
 });
