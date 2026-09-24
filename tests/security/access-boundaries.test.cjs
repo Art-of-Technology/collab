@@ -1144,6 +1144,7 @@ test('disclosure: post GET reuses authenticated reads and denies foreign or revo
     '@/lib/request-session': { getServerSession: async () => session },
     '@/utils/mentions': {}, '@/lib/notification-service': {},
   };
+  dependencies['@/lib/issue-finder'] = { userHasWorkspaceAccess };
   dependencies['@/lib/session'] = load('src/lib/session.ts', dependencies);
   dependencies['@/lib/post-access'] = load('src/lib/post-access.ts', {
     ...dependencies, 'server-only': {}, '@/lib/issue-finder': { userHasWorkspaceAccess },

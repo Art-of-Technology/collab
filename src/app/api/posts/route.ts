@@ -33,15 +33,7 @@ export async function POST(req: Request) {
     }
 
     // Verify user has access to the workspace
-    const workspace = await prisma.workspace.findFirst({
-      where: {
-        id: workspaceId,
-        OR: [
-          { ownerId: user.id },
-          { members: { some: { userId: user.id, status: true } } }
-        ]
-      }
-    });
+    const workspace = await userHasWorkspaceAccess(user.id, workspaceId);
 
     if (!workspace) {
       return new NextResponse("Workspace not found or access denied", { status: 403 });

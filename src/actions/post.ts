@@ -1,5 +1,7 @@
 'use server';
 
+import { getCurrentUser } from '@/lib/session';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { requirePostAccess } from '@/lib/post-access';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
@@ -383,9 +385,9 @@ export async function createPost(data: {
   priority: PostPriority;
   workspaceId: string;
 }) {
-  const session = await getServerSession(authOptions);
+  const user = await getCurrentUser();
   
-  if (!session?.user?.id || !session.user.email) {
+  if (!user) {
     throw new Error('Unauthorized');
   }
   
@@ -408,26 +410,7 @@ export async function createPost(data: {
     throw new Error('Workspace is required');
   }
   
-  // Verify user has access to the workspace
-  const user = await prisma.user.findUnique({
-    where: {
-      email: session.user.email
-    }
-  });
-  
-  if (!user) {
-    throw new Error('User not found');
-  }
-  
-  const workspace = await prisma.workspace.findFirst({
-    where: {
-      id: workspaceId,
-      OR: [
-        { ownerId: user.id },
-        { members: { some: { userId: user.id, status: true } } }
-      ]
-    }
-  });
+  const workspace = await userHasWorkspaceAccess(user.id, workspaceId);
 
   if (!workspace) {
     throw new Error('Workspace not found or access denied');

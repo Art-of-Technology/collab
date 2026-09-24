@@ -1180,3 +1180,71 @@ test('feature mentions deny revoked senders before notification writes', async (
   assert.equal((await call('own')).status, 200);
   assert.equal(f.calls.writes, 1);
 });
+
+for (const path of ['timeline/posts', 'posts', 'action']) {
+  test(`post creation ${path} denies revoked identity and tenants before writes or mentions`, async () => {
+    const f = fixture(), writes = [];
+    f.db.post.create = async ({ data }) => { f.calls.writes++; writes.push(data); return { id: 'post', ...data }; };
+    f.db.postAction = { create: async () => { f.calls.writes++; } };
+    f.dependencies['@/utils/mentions'] = { extractMentionUserIds: () => ['bob'] };
+    f.dependencies['@/lib/html-sanitizer'] = { sanitizeHtmlToPlainText: value => value };
+    f.dependencies['@/lib/notification-service'] = { NotificationService: {
+      notifyUsers: async () => { f.calls.providerCalls++; },
+      autoFollowPost: async () => { f.calls.writes++; },
+    } };
+    const action = path === 'action' ? load('src/actions/post.ts', f.dependencies).createPost : null;
+    const handler = action ? null : f.route(path).POST;
+    const invoke = workspaceId => {
+      const data = { workspaceId, content: 'Hello @bob', message: 'Hello @bob', type: 'UPDATE', priority: 'normal', tags: [] };
+      return action ? action(data) : handler(f.request('POST', undefined, data));
+    };
+    const deny = async (workspaceId, status) => {
+      if (action) await assert.rejects(invoke(workspaceId));
+      else assert.equal((await invoke(workspaceId)).status, status);
+      noContent(f);
+    };
+    for (const key of ['revoked', 'foreign']) await deny(f.workspaces.find(w => w.slug === key).id, 403);
+    await deny(undefined, 400);
+    f.state.mapped = false; await deny(f.workspaces[0].id, 401); f.state.mapped = true;
+    const user = f.state.user; f.state.user = null; await deny(f.workspaces[0].id, 401); f.state.user = user;
+    for (const workspace of f.workspaces.slice(0, 2)) {
+      const result = await invoke(workspace.id);
+      if (!action) assert.equal(result.status, 200);
+    }
+    assert.equal(writes.length, 2);
+    assert.ok(writes.every(row => (row.authorId || row.author?.connect.id) === 'alice'));
+    assert.equal(f.calls.providerCalls, path === 'posts' ? 0 : 2);
+    f.workspaces[1].members[0].status = false;
+    for (const key of Object.keys(f.calls)) f.calls[key] = 0;
+    await deny(f.workspaces[1].id, 403);
+    assert.equal(writes.length, 2);
+  });
+}
+
+test('Coclaw same-content events remain distinct across accessible workspaces and batches', async () => {
+  const f = scopedNotificationFixture();
+  f.db.notification.groupBy = async ({ where }) => {
+    const rows = f.stored.filter(row => matches(row, where));
+    return rows.length ? [{ userId: 'alice', _max: { createdAt: rows.at(-1).createdAt } }] : [];
+  };
+  const opts = key => ({ userId: 'alice', workspaceId: f.workspaces.find(w => w.slug === key).id,
+    type: f.coclaw.CoclawNotificationType.COCLAW_RESPONSE, content: 'Done' });
+  await f.coclaw.createCoclawNotification(opts('own'));
+  assert.equal(f.stored.length, 1);
+  f.stored[0].createdAt = new Date('2026-01-01T00:00:00Z');
+  f.stored[0].read = true;
+  await f.coclaw.createCoclawNotification(opts('joined'));
+  assert.equal(f.stored.length, 2);
+  await f.coclaw.createCoclawNotifications([opts('own'), opts('joined')]);
+  assert.equal(f.stored.length, 4);
+  assert.deepEqual(f.stored.map(row => row.workspaceId), [f.workspaces[0].id, f.workspaces[1].id, f.workspaces[0].id, f.workspaces[1].id]);
+  assert.ok(f.stored.every(row => row.content === 'Done' && row.isPersonal === false));
+  const before = f.calls.writes;
+  f.workspaces[1].members[0].status = false;
+  await f.coclaw.createCoclawNotification(opts('joined'));
+  assert.equal(f.calls.writes, before);
+  f.state.user = null;
+  await f.coclaw.createCoclawNotification(opts('own'));
+  assert.equal(f.calls.writes, before);
+  assert.equal(f.calls.providerCalls, 0);
+});

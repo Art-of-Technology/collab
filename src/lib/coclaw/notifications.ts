@@ -1,5 +1,4 @@
-import { NotificationService } from '@/lib/notification-service';
-import { notificationAccessWhere } from '@/lib/notification-access';
+import { canReceiveNotification, notificationAccessWhere } from '@/lib/notification-access';
 import { prisma } from '@/lib/prisma';
 
 // ---------------------------------------------------------------------------
@@ -45,9 +44,22 @@ export interface CreateCoclawNotificationOptions {
 export async function createCoclawNotification(
   opts: CreateCoclawNotificationOptions,
 ): Promise<void> {
-  await NotificationService.notifyUsers([opts.userId], opts.type, opts.content, opts.userId, {
-    workspaceId: opts.workspaceId,
-  });
+  try {
+    if (!await canReceiveNotification(opts.userId, { workspaceId: opts.workspaceId })) return;
+    await prisma.notification.create({
+      data: {
+        userId: opts.userId,
+        senderId: opts.userId,
+        workspaceId: opts.workspaceId,
+        isPersonal: false,
+        type: opts.type,
+        content: opts.content,
+        read: false,
+      },
+    });
+  } catch (error) {
+    console.error('[coclaw-notification] Failed to create:', error);
+  }
 }
 
 // ---------------------------------------------------------------------------
