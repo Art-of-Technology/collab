@@ -2220,6 +2220,22 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     };
   }, [editor, showCommandMenu]);
 
+  // Escape closes only the command menu; the window capture phase runs before Radix's document listener that dismisses a parent dialog
+  useEffect(() => {
+    if (!showCommandMenu) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setShowCommandMenu(false);
+      editor?.commands.focus();
+    };
+
+    window.addEventListener('keydown', handleEscape, true);
+    return () => window.removeEventListener('keydown', handleEscape, true);
+  }, [editor, showCommandMenu]);
+
   // Close mention suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -2943,9 +2959,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
             }}
             className="transition-all duration-200 animate-in slide-in-from-left-1"
           >
-            <Command onKeyDown={(event) => {
-              if (event.key === "Escape") { setShowCommandMenu(false); editor?.commands.focus(); }
-            }}>
+            <Command>
               <CommandInput autoFocus placeholder="Insert mention…" aria-label="Insert mention" />
               <CommandList>
                 {["user", "task", "epic", "story", "milestone"].map(type => (

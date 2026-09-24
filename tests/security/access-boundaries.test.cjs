@@ -503,7 +503,7 @@ test('related issues override heuristics in both directions and retain access co
 test('slash menu commands preserve paragraphs, formatting and inline atoms', async () => {
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM('<div id="root"></div>', { pretendToBeVisual: true });
-  const names = ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame'];
+  const names = ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame', 'MutationObserver', 'Event', 'CustomEvent', 'NodeFilter', 'HTMLInputElement', 'KeyboardEvent', 'FocusEvent'];
   const original = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
   for (const name of names) Object.defineProperty(globalThis, name, { configurable: true, value: dom.window[name] });
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -567,6 +567,32 @@ test('slash menu commands preserve paragraphs, formatting and inline atoms', asy
         assert.deepEqual(editor.getJSON(), expected, `${type}: ${html}`);
       }
     }
+
+    // Escape in the menu must not dismiss a parent Radix dialog or discard the draft.
+    const Dialog = require('@radix-ui/react-dialog');
+    let dialogOpen = true;
+    const renderDialog = () => root.render(React.createElement(Dialog.Root, { open: dialogOpen, onOpenChange: open => { dialogOpen = open; renderDialog(); } },
+      dialogOpen && React.createElement(Dialog.Content, { 'aria-describedby': undefined },
+        React.createElement(Dialog.Title, null, 'Edit Feature Request'),
+        React.createElement(MarkdownEditor, { compact: true, content: editor.getHTML() }))));
+    await React.act(async () => renderDialog());
+    await React.act(async () => {
+      editor.commands.setContent('<p>Draft </p>', false, { preserveWhitespace: 'full' });
+      editor.commands.setTextSelection(7);
+      editor.commands.insertContent('/');
+    });
+    const menuItem = () => [...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Mention user');
+    assert.ok(menuItem(), 'Menu opens inside dialog');
+    await React.act(async () => {
+      menuItem().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    assert.equal(dialogOpen, true, 'Escape keeps the dialog open');
+    assert.equal(menuItem(), undefined, 'Escape closes the menu');
+    assert.equal(editor.getText(), 'Draft /');
+    await React.act(async () => {
+      dom.window.document.body.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    assert.equal(dialogOpen, false, 'Escape without the menu still dismisses the dialog');
   } finally {
     await React.act(async () => root.unmount());
     editor.destroy();
