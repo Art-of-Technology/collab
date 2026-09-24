@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { requirePostAccess } from "@/lib/post-access";
 
 export async function POST(
   req: Request,
@@ -67,6 +68,7 @@ export async function GET(
   try {
     const _params = await params;
     const postId = await _params.postId;
+    await requirePostAccess(postId);
 
     // First, get all top-level comments (those without a parent)
     const topLevelComments = await prisma.comment.findMany({
@@ -150,7 +152,13 @@ export async function GET(
 
     return NextResponse.json({ comments: commentsWithReplies });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+    if (error instanceof Error && error.message === 'Post not found') {
+      return new NextResponse('Post not found', { status: 404 });
+    }
     console.error("Error fetching comments:", error);
     return new NextResponse("Internal error", { status: 500 });
   }
-} 
+}

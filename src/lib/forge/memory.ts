@@ -3,9 +3,11 @@ import { z } from 'zod';
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 const timestamp = z.string().datetime();
 const source = z.string().url().max(2048).refine(value => {
-  const url = new URL(value);
-  return url.protocol === 'https:' && !url.username && !url.password &&
-    (url.hostname === 'slack.com' || url.hostname.endsWith('.slack.com'));
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password &&
+      (url.hostname === 'slack.com' || url.hostname.endsWith('.slack.com'));
+  } catch { return false; }
 });
 export const memoryDraftSchema = z.object({
   title: z.string().trim().min(1).max(200),

@@ -63,16 +63,13 @@ and redirect regressions are in the security behavior suite.
 Legacy Slack availability and rollout constraints are documented in the
 [README](../../README.md#integration-availability).
 
-## Approved product direction (future slices, not implemented here)
+## Approved product direction
 
-Forge owns project issues and durable context. Collab projects this state and
-reuses Notes as the memory UI. Markdown in the bound repository is canonical;
-there must not be two independently editable copies. Memory types are Rules,
-Strategy, Decisions and Handoffs, with project, owner and revision and a
-Draft -> Approved -> Superseded lifecycle. Approved Rules always load; other
-approved context is retrieved as relevant. Discussion summaries retain Slack
-source links. Notes contain references to credentials, never credential values.
-Existing notes, data and rights must survive the eventual integration.
+The bounded read-only projection has its own
+[Forge board contract](../forge-board.md). The
+[project memory contract](../forge-project-memory.md) owns canonical storage,
+approval, provenance, credential boundaries and existing Notes compatibility.
+The broader integration below remains future work.
 
 Each Slack workspace/channel binds immutably to a project/repository. Agent work
 requires explicit Ready eligibility, atomic claims, idempotency, scoped
@@ -169,10 +166,17 @@ range excludes the locked Next major; no dependency versions were changed.
 
 ## Post and Coclaw disclosure follow-up
 
-Post GET now reuses `getPostById`; the shared action excludes inactive workspace
-members, preserving owner access and authorized post/comment responses. Coclaw
-memory requires active workspace access and applies the shared Notes predicate
-to both its content query and total count, including filtered searches.
+Post GET reuses `getPostById`, which excludes inactive workspace members and
+preserves owner access. Post comment GET and the public `getComments` server
+action use `requirePostAccess` from `src/lib/post-access.ts` before querying
+comment bodies, replies or authors. Both require a current user and active
+workspace membership or ownership. The API returns 401 without a current user
+and 404 for missing or inaccessible posts; the action throws the corresponding
+error. Coverage lives in
+[`tests/security/comment-access.test.cjs`](../../tests/security/comment-access.test.cjs).
+
+Coclaw memory requires active workspace access and applies the shared Notes
+predicate to both its content query and total count, including filtered searches.
 
 Two focused handler regressions passed with
 `node --test --test-name-pattern='disclosure:' tests/security/access-boundaries.test.cjs`.

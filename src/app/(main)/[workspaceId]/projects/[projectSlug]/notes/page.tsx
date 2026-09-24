@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
