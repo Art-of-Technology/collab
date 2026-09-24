@@ -597,6 +597,7 @@ test('webhook delivery requires exact trusted HTTPS origins and never follows re
 test('profile edits cannot create membership in an inaccessible workspace', async () => {
   let writes = 0;
   const { updateUserProfile } = load('src/actions/user.ts', {
+    '@/lib/user-utils': load('src/lib/user-utils.ts'),
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/request-session': { getServerSession: async () => ({ user: { email: 'alice@example.test' } }) },
     '@/lib/issue-finder': { userHasWorkspaceAccess },
@@ -1149,6 +1150,8 @@ test('disclosure: post GET reuses authenticated reads and denies foreign or revo
   const actions = load('src/actions/post.ts', dependencies, { Error });
   const { GET } = load('src/app/api/posts/[postId]/route.ts', {
     'next/server': { NextResponse: Response }, '@/actions/post': actions,
+    '@/lib/user-utils': load('src/lib/user-utils.ts'),
+    '@/lib/post-access': dependencies['@/lib/post-access'],
     '@/lib/prisma': { prisma: db }, '@/lib/session': {},
   }, { Error, console });
   const get = id => GET(new Request('https://example.test/api/posts/' + id), { params: Promise.resolve({ postId: id }) });

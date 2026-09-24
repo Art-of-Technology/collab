@@ -27,7 +27,10 @@ export async function POST(req: Request) {
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: context.workspace.id,
-        members: { some: { userId: currentUser.id } }
+        OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ]
       },
       select: { id: true, slug: true }
     });
@@ -156,7 +159,7 @@ export async function POST(req: Request) {
 
         // Get project details for issue key generation
         const project = await prisma.project.findUnique({
-          where: { id: projectId },
+          where: { id: projectId, workspaceId: workspace.id },
           select: { id: true, issuePrefix: true, _count: { select: { issues: true } } },
         });
 

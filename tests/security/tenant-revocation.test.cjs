@@ -12,9 +12,10 @@ function load(file, dependencies = {}) {
   runInNewContext(ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText, {
-    exports, URL, Headers, Buffer, TextDecoder, Error,
+    exports, URL, Headers, Buffer, TextDecoder, TextEncoder, ReadableStream, Response, Error,
+    setTimeout, clearTimeout, setInterval, clearInterval, ...dependencies.__globals,
     console: { error() {}, log() {} },
-    process: { env: { COLLAB_AUTH_MODE: 'gateway', COLLAB_GATEWAY_ISSUER: issuer } },
+    process: { env: { COLLAB_AUTH_MODE: 'gateway', COLLAB_GATEWAY_ISSUER: issuer, ...dependencies.__env } },
     require(name) {
       if (name in dependencies) return dependencies[name];
       if (name.startsWith('node:') || name === 'zod') return require(name);
@@ -111,7 +112,7 @@ function fixture() {
   });
   const dependencies = {
     'server-only': {}, 'next/server': { NextResponse: Response },
-    '@/lib/prisma': { prisma: db }, '@/lib/auth-options': { authOptions: {} },
+    '@/lib/prisma': { prisma: db }, '@/lib/user-utils': load('src/lib/user-utils.ts'), '@/lib/auth-options': { authOptions: {} },
     '@/lib/github/public-repository': load('src/lib/github/public-repository.ts'),
     '@/lib/utils': { generateUniqueViewSlug: async (_name, workspaceId, check) => {
       await check('default-view', workspaceId); return 'default-view';
@@ -432,4 +433,277 @@ test('leave service binds the actor and denies revoked membership before updates
   await assert.rejects(processLeaveRequestAction({ requestId: 'leave-joined', action: 'REJECTED', actionById: 'alice' }), /Leave request not found/);
   noContent(f);
   assert.equal((await processLeaveRequestAction({ requestId: 'leave-own', action: 'REJECTED', actionById: 'alice' })).status, 'REJECTED');
+});
+
+function indirectFixture() {
+  const f = postFixture();
+  const rows = f.workspaces.map(workspace => ({ id: `repo-${workspace.slug}`, aiReviewEnabled: true,
+    aiReviewAutoTrigger: true, accessToken: 'encrypted', owner: 'example', name: 'repo',
+    project: { workspace }, _count: { commits: 0 }, defaultBranch: 'main' }));
+  const project = (row, select) => row && (select
+    ? Object.fromEntries(Object.keys(select).map(key => [key, row[key]])) : row);
+  const repositoryFind = async ({ where, select }) => {
+    const row = rows.find(row => matches(row, where));
+    if (row && !select) f.calls.otherReads++;
+    return project(row, select) ?? null;
+  };
+  f.db.repository = { findFirst: repositoryFind, findUnique: repositoryFind,
+    update: async ({ where, data }) => { f.calls.writes++; return { ...rows.find(row => matches(row, where)), ...data }; } };
+  const emptyModel = () => ({
+    findMany: async () => { f.calls.otherReads++; return []; },
+    findFirst: async () => { f.calls.otherReads++; return null; },
+    count: async () => { f.calls.otherReads++; return 0; },
+    groupBy: async () => { f.calls.otherReads++; return []; },
+    create: async ({ data }) => { f.calls.writes++; return { id: 'new', ...data }; },
+    update: async ({ data }) => { f.calls.writes++; return { id: 'new', ...data }; },
+    upsert: async ({ create }) => { f.calls.writes++; return create; },
+  });
+  for (const name of ['commit', 'release', 'version', 'deployment', 'branch', 'pRReview', 'aIMessage',
+    'projectFollower', 'viewFollower', 'viewIssuePosition', 'taskLabel']) f.db[name] = emptyModel();
+  f.db.issue.groupBy = async () => { f.calls.issueReads++; return []; };
+  f.db.pullRequest = { ...emptyModel(), findFirst: async () => { f.calls.otherReads++; return { id: 'pr' }; } };
+  f.db.aIPRReview = { ...emptyModel(), findUnique: async () => { f.calls.otherReads++; return { id: 'review' }; } };
+  const conversations = f.workspaces.map(workspace => ({ id: `convo-${workspace.slug}`, workspaceId: workspace.id,
+    workspace, userId: 'alice', isArchived: false, messages: [], agent: null, _count: { messages: 0 } }));
+  f.db.aIConversation = { ...emptyModel(),
+    findFirst: async ({ where, select }) => {
+      const row = conversations.find(row => matches(row, where));
+      if (row && !select) f.calls.otherReads++;
+      return project(row, select) ?? null;
+    },
+  };
+  f.db.post.findMany = async ({ where }) => { f.calls.otherReads++; return f.workspaces
+    .map(workspace => ({ id: `post-${workspace.slug}`, workspaceId: workspace.id }))
+    .filter(row => matches(row, where)); };
+  f.db.post.create = async ({ data }) => { f.calls.writes++; return { id: 'new-post', ...data }; };
+  f.db.post.delete = async () => { f.calls.writes++; };
+  const subscription = { subscribe: async () => { f.calls.providerCalls++; }, unsubscribe: async () => {}, quit: async () => {} };
+  f.dependencies['@/lib/redis'] = { getRedisSubscriber: async () => { f.calls.providerCalls++; return subscription; },
+    publishEvent: async () => { f.calls.providerCalls++; } };
+  f.dependencies['@/lib/github/repository-access'] = load('src/lib/github/repository-access.ts', f.dependencies);
+  f.dependencies['@/lib/github/ai-pr-review-service'] = { aiPRReviewService: { performReview: async () => {
+    f.calls.providerCalls++; f.calls.writes++; return { success: true, reviewId: 'review' };
+  } } };
+  f.dependencies['@prisma/client'] = { AIPRReviewTrigger: { MANUAL: 'MANUAL' }, PRState: { OPEN: 'OPEN' } };
+  f.dependencies['@/actions/post'] = {};
+  f.dependencies['@/lib/ai/agents/registry'] = { getDefaultAgent: async () => {
+    f.calls.otherReads++; return { slug: 'cleo', name: 'Cleo', systemPrompt: 'Hello' };
+  } };
+  f.dependencies['@/lib/ai/mcp-token'] = { getMcpToken: async () => { f.calls.providerCalls++; return 'synthetic-token'; } };
+  f.dependencies['@/lib/ai/mcp-client'] = { createMcpSession: async () => {
+    f.calls.providerCalls++; return { convertToolsToClaudeFormat: () => [], close: async () => {} };
+  } };
+  for (const name of ['@/lib/coclaw/instance-manager', '@/lib/coclaw/key-resolver', '@/lib/secrets/crypto', '@/lib/coclaw/notifications']) {
+    f.dependencies[name] = {};
+  }
+  f.dependencies['@/lib/rate-limit'] = { withRateLimit: handler => handler };
+  f.dependencies['@/constants/viewPositions'] = { VIEW_POSITIONS_MAX_BULK_SIZE: 100 };
+  f.dependencies.__env = { ANTHROPIC_API_KEY: 'synthetic-test-key', OPENAI_API_KEY: 'synthetic-test-key' };
+  f.dependencies['openai'] = { default: class {
+    chat = { completions: { create: async () => { f.calls.providerCalls++; return { choices: [{ message: { content: 'Summary' } }] }; } } };
+  } };
+  f.dependencies['@anthropic-ai/sdk'] = { default: class {
+    messages = { create: async () => { f.calls.providerCalls++; return { content: [{ type: 'text', text: 'Summary' }] }; } };
+  } };
+  f.dependencies.__globals = { fetch: async url => {
+    f.calls.providerCalls++;
+    if (url.includes('anthropic')) return new Response('data: {"type":"message_stop"}\n\n');
+    return Response.json([]);
+  } };
+  return f;
+}
+
+for (const method of ['GET', 'POST']) {
+  test(`indirect posts ${method} denies revoked workspace before reads or writes`, async () => {
+    const f = indirectFixture(), handler = f.route('posts')[method];
+    const call = workspace => handler(f.request(method, workspace.id, {
+      workspaceId: workspace.id, message: 'Hello', type: 'UPDATE', priority: 'normal', tags: [],
+    }));
+    assert.equal((await call(f.workspaces[2])).status, 403); noContent(f);
+    for (const workspace of f.workspaces.slice(0, 2)) assert.equal((await call(workspace)).status, 200);
+    if (method === 'GET') {
+      const all = await handler(f.request());
+      assert.deepEqual((await all.json()).map(row => row.id), ['post-own', 'post-joined']);
+    }
+  });
+}
+for (const method of ['PATCH', 'DELETE']) {
+  test(`indirect post ${method} denies revoked authors with zero effects`, async () => {
+    const f = indirectFixture(), handler = f.route('posts/[postId]')[method];
+    const call = key => handler(f.request(method, undefined, { message: 'Hi', type: 'UPDATE', priority: 'normal', tags: [] }),
+      { params: Promise.resolve({ postId: `post-${key}` }) });
+    assert.equal((await call('revoked')).status, 404); noContent(f);
+    for (const key of ['own', 'joined']) assert.equal((await call(key)).status, method === 'DELETE' ? 204 : 200);
+  });
+}
+
+test('workspace realtime stream denies revoked subscriptions and permits owner and active member', async () => {
+  const f = indirectFixture(), { GET } = f.route('realtime/workspace/[workspaceId]/stream');
+  const call = workspace => GET(f.request(), { params: Promise.resolve({ workspaceId: workspace.id }) });
+  const denied = await call(f.workspaces[2]);
+  await denied.body?.cancel();
+  assert.equal(denied.status, 403); noContent(f);
+  for (const workspace of f.workspaces.slice(0, 2)) {
+    const response = await call(workspace);
+    assert.equal(response.status, 200);
+    const reader = response.body.getReader();
+    assert.match(new TextDecoder().decode((await reader.read()).value), /connected/);
+    await reader.cancel();
+  }
+  assert.ok(f.calls.providerCalls > 0);
+});
+
+test('AI chat denies revoked tenants and cross-tenant conversations before providers or writes', async () => {
+  const f = indirectFixture(), { POST } = f.route('ai/chat/stream');
+  const call = (workspace, conversationId) => POST(f.request('POST', undefined, {
+    message: 'Hello', context: { workspace: { id: workspace.id } }, conversationId,
+  }));
+  assert.equal((await call(f.workspaces[2])).status, 403); noContent(f);
+  assert.equal((await call(f.workspaces[0], 'convo-revoked')).status, 404); noContent(f);
+  for (const workspace of f.workspaces.slice(0, 2)) {
+    const response = await call(workspace, `convo-${workspace.slug}`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /"type":"agent"/);
+  }
+  assert.ok(f.calls.providerCalls > 0);
+  assert.ok(f.calls.writes > 0);
+});
+
+for (const [path, method, expected] of [
+  ['pull-requests/[prId]/ai-review', 'GET', 200], ['pull-requests/[prId]/ai-review', 'POST', 200],
+  ['ai-review-settings', 'GET', 200], ['ai-review-settings', 'PATCH', 200],
+  ...['pull-requests', 'commits', 'dashboard', 'releases', 'deployments', 'contributors', 'activity', 'versions', 'github-branches'].map(path => [path, 'GET', 200]),
+  ['github-branches', 'POST', 200], ['sync-releases', 'POST', 200],
+]) {
+  test(`repository boundary ${method} ${path} denies revoked tenants with zero side effects`, async () => {
+    const f = indirectFixture(), handler = f.route(`github/repositories/[repositoryId]/${path}`)[method];
+    const call = key => handler(f.request(method, undefined, { aiReviewEnabled: true }),
+      { params: Promise.resolve({ repositoryId: `repo-${key}`, prId: 'pr' }) });
+    assert.equal((await call('revoked')).status, 404); noContent(f);
+    for (const key of ['own', 'joined']) assert.equal((await call(key)).status, expected);
+  });
+}
+
+test('repository changelog refuses revoked access before data and provider work', async () => {
+  const f = indirectFixture(), { POST } = f.route('github/repositories/[repositoryId]/generate-changelog');
+  assert.equal((await POST(f.request('POST'), { params: Promise.resolve({ repositoryId: 'repo-revoked' }) })).status, 404);
+  noContent(f);
+});
+
+for (const [path, method, denied] of [
+  ['ai/conversations', 'GET', 404], ['ai/conversations', 'POST', 404],
+  ['ai/conversations/[id]', 'GET', 404], ['ai/conversations/[id]', 'DELETE', 404],
+  ['ai/action', 'POST', 403], ['ai/summarize', 'POST', 403],
+  ['workspaces/[workspaceId]/labels', 'GET', 404],
+  ['users/[userId]/assigned-issues', 'GET', 403],
+]) {
+  test(`indirect tenant boundary ${method} ${path} preserves owner and active access`, async () => {
+    const f = indirectFixture(), handler = f.route(path)[method];
+    const call = workspace => handler(f.request(method, workspace.id, { workspaceId: workspace.id,
+      context: { workspace: { id: workspace.id } }, action: { type: 'search', params: {} }, type: 'general' }),
+    { params: Promise.resolve({ workspaceId: workspace.id, userId: 'alice', id: `convo-${workspace.slug}` }) });
+    assert.equal((await call(f.workspaces[2])).status, denied); noContent(f);
+    for (const workspace of f.workspaces.slice(0, 2)) assert.equal((await call(workspace)).status, 200);
+  });
+}
+
+for (const [path, method] of [['views/[viewId]/follow', 'GET'], ['views/[viewId]/follow', 'POST'],
+  ['views/[viewId]/follow', 'DELETE'], ['views/[viewId]/issue-positions', 'GET'],
+  ['views/[viewId]/issue-positions', 'PUT']]) {
+  test(`view resource boundary ${method} ${path} denies revoked view owners`, async () => {
+    const f = indirectFixture();
+    const views = f.workspaces.map(workspace => ({ id: `view-${workspace.slug}`, ownerId: 'alice',
+      workspaceId: workspace.id, workspace, visibility: 'WORKSPACE', sharedWith: ['alice'] }));
+    f.db.view.findFirst = async ({ where }) => views.find(row => matches(row, where)) ?? null;
+    f.db.viewFollower.findUnique = async () => { f.calls.otherReads++; return null; };
+    f.db.viewFollower.deleteMany = async () => { f.calls.writes++; };
+    f.db.issue.findFirst = async ({ where }) => {
+      const issue = f.workspaces.map(workspace => ({ id: `issue-${workspace.slug}`, workspaceId: workspace.id, workspace }))
+        .find(row => matches(row, where));
+      if (issue) f.calls.issueReads++;
+      return issue ?? null;
+    };
+    const handler = f.route(path)[method];
+    const call = key => handler(f.request(method, undefined, { issueId: `issue-${key}`, columnId: 'column', position: 1 }),
+      { params: Promise.resolve({ viewId: `view-${key}` }) });
+    assert.equal((await call('revoked')).status, 404); noContent(f);
+    for (const key of ['own', 'joined']) assert.equal((await call(key)).status, 200);
+  });
+}
+
+test('user profile scopes posts and stats to authorized tenants', async () => {
+  const f = indirectFixture(), originalFind = f.db.user.findUnique;
+  f.db.user.findUnique = async args => args.where.id === 'bob' ? { id: 'bob' } : originalFind(args);
+  f.db.workspaceMember.findUnique = async () => null;
+  const posts = f.workspaces.map(workspace => ({ id: `post-${workspace.slug}`, authorId: 'bob', workspaceId: workspace.id, workspace }));
+  f.db.post.findMany = async ({ where }) => { f.calls.otherReads++; return posts.filter(row => matches(row, where)); };
+  f.db.comment.count = async ({ where }) => posts.filter(post => matches({ authorId: 'bob', post }, where)).length;
+  f.db.reaction.count = async ({ where }) => posts.filter(post => matches({ post }, where)).length;
+  f.db.conversation = { findFirst: async () => null };
+  const { getUserProfile } = load('src/actions/user.ts', f.dependencies);
+  await assert.rejects(getUserProfile('bob', f.workspaces[2].id), /Workspace not found/); noContent(f);
+  for (const workspace of f.workspaces.slice(0, 2)) {
+    const profile = await getUserProfile('bob', workspace.id);
+    assert.deepEqual(Array.from(profile.posts, post => post.id), [`post-${workspace.slug}`]);
+    assert.equal(profile.stats.commentCount, 1); assert.equal(profile.stats.reactionsReceived, 1);
+  }
+  assert.deepEqual(Array.from((await getUserProfile('bob')).posts, post => post.id), ['post-own', 'post-joined']);
+});
+
+test('AI issue creation rejects projects outside the authorized workspace before writes', async () => {
+  const f = indirectFixture();
+  const projects = f.workspaces.map(workspace => ({ id: `project-${workspace.slug}`, workspaceId: workspace.id,
+    issuePrefix: 'TEST', _count: { issues: 0 } }));
+  f.db.project.findUnique = async ({ where }) => {
+    const row = projects.find(row => matches(row, where));
+    if (row) f.calls.projectReads++;
+    return row ?? null;
+  };
+  f.db.issue.create = async ({ data }) => { f.calls.writes++; return { id: 'new-issue', ...data }; };
+  const { POST } = f.route('ai/action');
+  const call = projectId => POST(f.request('POST', undefined, { context: { workspace: { id: f.workspaces[0].id } },
+    action: { type: 'create_issue', params: { title: 'Hello', projectId } } }));
+  assert.equal((await call('project-revoked')).status, 404); noContent(f);
+  assert.equal((await call('project-own')).status, 200);
+  assert.equal(f.calls.writes, 1);
+});
+
+test('repository access rejects missing identity and foreign membership without side effects', async () => {
+  const f = indirectFixture(), { GET } = f.route('github/repositories/[repositoryId]/releases');
+  const call = key => GET(f.request(), { params: Promise.resolve({ repositoryId: `repo-${key}` }) });
+  assert.equal((await call('foreign')).status, 404); noContent(f);
+  f.state.mapped = false;
+  assert.equal((await call('own')).status, 401); noContent(f);
+});
+
+for (const method of ['GET', 'POST', 'DELETE']) {
+  test(`project follow ${method} rejects revoked membership before follower access`, async () => {
+    const f = indirectFixture();
+    const projects = f.workspaces.map(workspace => ({ id: `project-${workspace.slug}`, workspace }));
+    f.db.project.findFirst = async ({ where }) => projects.find(row => matches(row, where)) ?? null;
+    f.db.projectFollower.findUnique = async () => { f.calls.otherReads++; return null; };
+    f.db.projectFollower.deleteMany = async () => { f.calls.writes++; };
+    const handler = f.route('projects/[projectId]/follow')[method];
+    const call = key => handler(f.request(method), { params: Promise.resolve({ projectId: `project-${key}` }) });
+    assert.equal((await call('revoked')).status, 404); noContent(f);
+    for (const key of ['own', 'joined']) assert.equal((await call(key)).status, 200);
+  });
+}
+
+test('post mutation responses exclude user credentials', async () => {
+  const f = indirectFixture();
+  const author = { id: 'alice', name: 'Alice', githubAccessToken: 'synthetic-user-token', hashedPassword: 'synthetic-password-hash' };
+  const projectAuthor = include => include.author === true ? author
+    : Object.fromEntries(Object.keys(include.author.select).map(key => [key, author[key]]));
+  f.db.post.create = async ({ data, include }) => ({ id: 'post-own', message: data.message, author: projectAuthor(include) });
+  f.db.post.update = async ({ data, include }) => include ? { id: 'post-own', message: data.message, author: projectAuthor(include) } : {};
+  for (const [path, method] of [['posts', 'POST'], ['posts/[postId]', 'PATCH']]) {
+    const response = await f.route(path)[method](f.request(method, undefined, {
+      workspaceId: f.workspaces[0].id, message: 'Hello', type: 'UPDATE', priority: 'normal', tags: [],
+    }), { params: Promise.resolve({ postId: 'post-own' }) });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.author.id, 'alice');
+    for (const secret of ['synthetic-user-token', 'synthetic-password-hash']) assert.equal(JSON.stringify(body).includes(secret), false);
+  }
 });

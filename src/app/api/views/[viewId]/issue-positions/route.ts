@@ -28,6 +28,10 @@ export async function PUT(
     const view = await prisma.view.findFirst({
       where: {
         id: viewId,
+        workspace: { OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ] },
         OR: [
           { ownerId: currentUser.id },
           { visibility: 'SHARED' },
@@ -63,7 +67,7 @@ export async function PUT(
         where: {
           id: { in: uniqueIssueIds },
           workspaceId: view.workspaceId,
-          workspace: { members: { some: { userId: currentUser.id } } }
+          workspace: { OR: [ { ownerId: currentUser.id }, { members: { some: { userId: currentUser.id, status: true } } } ] }
         },
         select: { id: true }
       });
@@ -138,7 +142,8 @@ export async function PUT(
 
     // Verify issue exists and user has access (single update path)
     const issue = await findIssueByIdOrKey(issueId, {
-      userId: currentUser.id
+      userId: currentUser.id,
+      workspaceId: view.workspaceId
     });
 
     if (!issue) {
@@ -204,6 +209,10 @@ export async function GET(
     const view = await prisma.view.findFirst({
       where: {
         id: viewId,
+        workspace: { OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ] },
         OR: [
           { ownerId: currentUser.id },
           { visibility: 'SHARED' },

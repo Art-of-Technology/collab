@@ -1,3 +1,5 @@
+import { userSelectFields } from '@/lib/user-utils';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -36,7 +38,7 @@ export async function POST(req: Request) {
         id: workspaceId,
         OR: [
           { ownerId: user.id },
-          { members: { some: { userId: user.id } } }
+          { members: { some: { userId: user.id, status: true } } }
         ]
       }
     });
@@ -74,7 +76,7 @@ export async function POST(req: Request) {
         }
       },
       include: {
-        author: true,
+        author: { select: { ...userSelectFields, role: true, team: true } },
         tags: true,
         workspace: true
       }
@@ -121,6 +123,9 @@ export async function GET(req: Request) {
 
     // Filter by workspace
     if (workspaceId) {
+      if (!await userHasWorkspaceAccess(currentUser.id, workspaceId)) {
+        return new NextResponse("Workspace not found or access denied", { status: 403 });
+      }
       query.workspaceId = workspaceId;
     } else {
       // Get workspaces the user has access to
@@ -128,7 +133,7 @@ export async function GET(req: Request) {
         where: {
           OR: [
             { ownerId: currentUser.id },
-            { members: { some: { userId: currentUser.id } } }
+            { members: { some: { userId: currentUser.id, status: true } } }
           ]
         },
         select: { id: true }

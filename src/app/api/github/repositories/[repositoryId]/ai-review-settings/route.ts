@@ -19,27 +19,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { repositoryId } = await params;
 
     // Verify repository exists and user has access
-    const repository = await prisma.repository.findUnique({
-      where: { id: repositoryId },
-      select: {
-        id: true,
-        aiReviewEnabled: true,
-        aiReviewAutoTrigger: true,
-        project: {
-          include: {
-            workspace: {
-              include: {
-                members: {
-                  where: { userId: user.id },
-                },
-              },
-            },
-          },
-        },
+    const repository = await prisma.repository.findFirst({
+      where: {
+        id: repositoryId,
+        project: { workspace: { OR: [
+          { ownerId: user.id },
+          { members: { some: { userId: user.id, status: true } } },
+        ] } },
       },
+      select: { id: true, aiReviewEnabled: true, aiReviewAutoTrigger: true },
     });
 
-    if (!repository || repository.project.workspace.members.length === 0) {
+    if (!repository) {
       return NextResponse.json({ error: 'Repository not found or access denied' }, { status: 404 });
     }
 
@@ -68,24 +59,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
 
     // Verify repository exists and user has access
-    const repository = await prisma.repository.findUnique({
-      where: { id: repositoryId },
-      include: {
-        project: {
-          include: {
-            workspace: {
-              include: {
-                members: {
-                  where: { userId: user.id },
-                },
-              },
-            },
-          },
-        },
+    const repository = await prisma.repository.findFirst({
+      where: {
+        id: repositoryId,
+        project: { workspace: { OR: [
+          { ownerId: user.id },
+          { members: { some: { userId: user.id, status: true } } },
+        ] } },
       },
+      select: { id: true, aiReviewEnabled: true, aiReviewAutoTrigger: true },
     });
 
-    if (!repository || repository.project.workspace.members.length === 0) {
+    if (!repository) {
       return NextResponse.json({ error: 'Repository not found or access denied' }, { status: 404 });
     }
 

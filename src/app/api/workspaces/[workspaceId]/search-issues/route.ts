@@ -29,7 +29,7 @@ export async function GET(
         id: workspaceId,
         OR: [
           { ownerId: currentUser.id },
-          { members: { some: { userId: currentUser.id } } },
+          { members: { some: { userId: currentUser.id, status: true } } },
         ],
       },
     });

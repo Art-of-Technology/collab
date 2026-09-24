@@ -1,3 +1,4 @@
+import { requireRepositoryAccess } from '@/lib/github/repository-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { EncryptionService } from "@/lib/encryption";
@@ -9,6 +10,7 @@ export async function POST(
 ) {
   try {
     const { repositoryId } = await params;
+    await requireRepositoryAccess(repositoryId);
 
     // Get repository with access token
     const repository = await prisma.repository.findUnique({
@@ -123,6 +125,9 @@ export async function POST(
       releases: syncedReleases,
     });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Repository not found'].includes(error.message)) {
+      return NextResponse.json({ error: error.message }, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error('[SYNC_RELEASES_POST]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

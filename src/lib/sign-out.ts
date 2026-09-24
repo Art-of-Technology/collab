@@ -3,11 +3,25 @@ import type { Session } from 'next-auth';
 import { signOut } from 'next-auth/react';
 
 export async function signOutCurrentSession(session: Session | null | undefined): Promise<boolean> {
+  if (!session) {
+    const response = await fetch('/api/auth/session', { cache: 'no-store' });
+    if (!response.ok) throw new Error('Unable to resolve the current session');
+    session = await response.json();
+  }
+  if (!session?.user?.id) throw new Error('Unable to resolve the current session');
   if (session?.authMode === 'gateway') {
     // Stock mod_auth_openidc local-session logout; its native landing prevents automatic SSO re-entry.
     window.location.assign(new URL('/oauth2/callback?logout=get', window.location.origin).href);
     return false;
   }
-  await signOut({ redirect: false });
+  if (session.authMode !== undefined && session.authMode !== 'nextauth') throw new Error('Unknown authentication mode');
+  const result = await signOut({ redirect: false });
+  if (!result || typeof result.url !== 'string' || !result.url) throw new Error('Sign out failed');
+  const response = await fetch('/api/auth/session', { cache: 'no-store' });
+  if (!response.ok) throw new Error('Unable to confirm sign out');
+  const remainingSession = await response.json();
+  if (remainingSession !== null && (typeof remainingSession !== 'object' || Object.keys(remainingSession).length !== 0)) {
+    throw new Error('Sign out failed');
+  }
   return true;
 }

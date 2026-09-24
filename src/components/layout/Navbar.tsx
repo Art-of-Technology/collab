@@ -92,13 +92,17 @@ export default function Navbar({
   };
 
   const handleSignOut = async () => {
-    if (!await signOutCurrentSession(session)) return;
-    toast({
-      title: "Signed out successfully",
-      description: "You have been signed out of your account",
-    });
-    router.push("/");
-    router.refresh();
+    try {
+      if (!await signOutCurrentSession(session)) return;
+      toast({
+        title: "Signed out successfully",
+        description: "You have been signed out of your account",
+      });
+      router.push("/");
+      router.refresh();
+    } catch {
+      toast({ title: "Unable to sign out", description: "Please try again.", variant: "destructive" });
+    }
   };
 
   // Handle notification click - mark as read and navigate if needed

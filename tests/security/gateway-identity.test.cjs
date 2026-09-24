@@ -5,7 +5,7 @@ const path = require('node:path');
 const Module = require('node:module');
 const ts = require('typescript');
 function load(relative, mocks = {}) {
-  const filename = path.resolve(__dirname, '../../src', relative);
+  const filename = path.resolve(process.env.SECURITY_TEST_ROOT || path.resolve(__dirname, '../..'), 'src', relative);
   const loaded = new Module(filename, module);
   loaded.filename = filename; loaded.paths = Module._nodeModulePaths(path.dirname(filename));
   const original = loaded.require.bind(loaded);
@@ -100,14 +100,62 @@ test('browser session endpoint exposes gateway identity without enabling legacy 
 
 test('gateway sign-out navigates to qualified native local logout without calling NextAuth', async () => {
   let destination = '', legacy = 0;
-  const previous = global.window;
+  const previous = global.window, previousFetch = global.fetch;
+  global.fetch = async () => Response.json(null);
   global.window = { location: { origin: 'https://collab.example.test', assign: value => { destination = value; } } };
   try {
     const { signOutCurrentSession } = load('lib/sign-out.ts', { 'next-auth/react': { signOut: async options => {
-      assert.deepEqual(options, { redirect: false }); legacy++;
+      assert.deepEqual(options, { redirect: false }); legacy++; return { url: "/" };
     } } });
-    assert.equal(await signOutCurrentSession({ authMode: 'gateway' }), false);
+    assert.equal(await signOutCurrentSession({ authMode: 'gateway', user: { id: 'gateway' } }), false);
     assert.equal(destination, 'https://collab.example.test/oauth2/callback?logout=get'); assert.equal(legacy, 0);
     assert.equal(await signOutCurrentSession({ user: { id: 'legacy' } }), true); assert.equal(legacy, 1);
-  } finally { if (previous === undefined) delete global.window; else global.window = previous; }
+  } finally { if (previous === undefined) delete global.window; else global.window = previous; global.fetch = previousFetch; }
+});
+
+
+test('unresolved logout resolves session mode and rejects session or logout failures', async () => {
+  const previousWindow = global.window, previousFetch = global.fetch;
+  let destination = '', legacy = 0, reads = 0;
+  let response = () => Response.json({ authMode: 'gateway', user: { id: 'gateway' } });
+  let logout = () => { response = () => Response.json(null); return { url: '/' }; };
+  global.window = { location: { origin: 'https://collab.example.test', assign: value => { destination = value; } } };
+  global.fetch = async (url, options) => {
+    assert.equal(url, '/api/auth/session'); assert.equal(options.cache, 'no-store'); reads++;
+    return response();
+  };
+  try {
+    const { signOutCurrentSession } = load('lib/sign-out.ts', {
+      'next-auth/react': { signOut: async () => { legacy++; return logout(); } },
+    });
+    assert.equal(await signOutCurrentSession(undefined), false);
+    assert.equal(destination, 'https://collab.example.test/oauth2/callback?logout=get');
+    assert.equal(legacy, 0); assert.equal(reads, 1);
+    destination = '';
+    response = () => Response.json({ user: { id: 'legacy' } });
+    assert.equal(await signOutCurrentSession(null), true); assert.equal(legacy, 1);
+    assert.equal(destination, '');
+    for (const bad of [
+      () => Response.json({}, { status: 401 }),
+      () => Response.json({}, { status: 503 }),
+      () => Response.json(null),
+      () => Response.json({}),
+      () => new Response('invalid JSON'),
+      () => { throw new Error('Network failure'); },
+    ]) {
+      response = bad;
+      await assert.rejects(signOutCurrentSession(undefined));
+      assert.equal(legacy, 1); assert.equal(destination, '');
+    }
+    response = () => Response.json({ user: { id: 'legacy' } });
+    for (const bad of [() => ({ url: 'https://collab.example.test/api/auth/signout?csrf=true' }), () => ({ error: 'Use the gateway session' }), () => ({}),
+      () => undefined, () => { throw new Error('Network failure'); }]) {
+      logout = bad;
+      await assert.rejects(signOutCurrentSession({ user: { id: 'legacy' } }));
+      assert.equal(destination, '');
+    }
+  } finally {
+    if (previousWindow === undefined) delete global.window; else global.window = previousWindow;
+    global.fetch = previousFetch;
+  }
 });

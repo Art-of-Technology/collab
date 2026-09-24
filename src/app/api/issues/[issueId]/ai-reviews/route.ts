@@ -20,19 +20,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Get the issue with its project and workspace to verify access
     const issue = await prisma.issue.findUnique({
-      where: { id: issueId },
+      where: { id: issueId, workspace: { OR: [
+        { ownerId: user.id },
+        { members: { some: { userId: user.id, status: true } } },
+      ] } },
       include: {
-        project: {
-          include: {
-            workspace: {
-              include: {
-                members: {
-                  where: { userId: user.id },
-                },
-              },
-            },
-          },
-        },
         pullRequests: {
           include: {
             aiReviews: {
@@ -52,7 +44,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       },
     });
 
-    if (!issue || issue.project.workspace.members.length === 0) {
+    if (!issue) {
       return NextResponse.json({ error: 'Issue not found or access denied' }, { status: 404 });
     }
 

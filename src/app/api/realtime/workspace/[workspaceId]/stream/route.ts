@@ -26,7 +26,7 @@ export async function GET(
         id: workspaceId,
         OR: [
           { ownerId: user.id },
-          { members: { some: { userId: user.id } } }
+          { members: { some: { userId: user.id, status: true } } }
         ]
       }
     });

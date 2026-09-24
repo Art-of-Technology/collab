@@ -1,3 +1,4 @@
+import { requireRepositoryAccess } from '@/lib/github/repository-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import OpenAI from 'openai';
@@ -9,6 +10,7 @@ export async function POST(
 ) {
   try {
     const { repositoryId } = await params;
+    await requireRepositoryAccess(repositoryId);
 
     let body: { releaseId?: string; versionId?: string; options?: Record<string, unknown> } = {};
     try {
@@ -43,7 +45,7 @@ export async function POST(
     // If releaseId is provided, get the release
     if (releaseId) {
       release = await prisma.release.findUnique({
-        where: { id: releaseId },
+        where: { id: releaseId, repositoryId },
         include: {
           version: {
             include: {
@@ -56,6 +58,7 @@ export async function POST(
           },
         },
       });
+      if (!release) return NextResponse.json({ error: 'Release not found' }, { status: 404 });
       if (release?.version) {
         targetVersionId = release.version.id;
         version = release.version;
@@ -101,7 +104,7 @@ export async function POST(
       targetVersionId = version?.id;
     } else if (targetVersionId && !version) {
       version = await prisma.version.findUnique({
-        where: { id: targetVersionId },
+        where: { id: targetVersionId, repositoryId },
         include: {
           issues: {
             include: {
@@ -111,6 +114,8 @@ export async function POST(
         },
       });
     }
+
+    if (targetVersionId && !version) return NextResponse.json({ error: 'Version not found' }, { status: 404 });
 
     // Collect data for changelog generation
     const changelogData: {
@@ -292,7 +297,7 @@ ${format === 'plain' ? '- Use plain text with clear structure and bullet points'
     // Store the generated changelog
     if (targetVersionId) {
       await prisma.version.update({
-        where: { id: targetVersionId },
+        where: { id: targetVersionId, repositoryId },
         data: {
           aiChangelog: changelog,
           aiSummary: summary,
@@ -307,6 +312,9 @@ ${format === 'plain' ? '- Use plain text with clear structure and bullet points'
       releaseName: changelogData.releaseName,
     });
   } catch (error) {
+    if (error instanceof Error && ['Unauthorized', 'Repository not found'].includes(error.message)) {
+      return NextResponse.json({ error: error.message }, { status: error.message === 'Unauthorized' ? 401 : 404 });
+    }
     console.error('[GENERATE_CHANGELOG_POST]', error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

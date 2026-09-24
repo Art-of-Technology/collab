@@ -85,7 +85,10 @@ export async function POST(req: Request) {
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: { some: { userId: currentUser.id } }
+        OR: [
+          { ownerId: currentUser.id },
+          { members: { some: { userId: currentUser.id, status: true } } },
+        ]
       }
     });
 

@@ -89,9 +89,13 @@ export default function SimplifiedSidebar({
   }, [views]);
 
   const handleSignOut = async () => {
-    if (!await signOutCurrentSession(session)) return;
-    toast({ title: "Signed out", description: "You have been signed out" });
-    router.push("/");
+    try {
+      if (!await signOutCurrentSession(session)) return;
+      toast({ title: "Signed out", description: "You have been signed out" });
+      router.push("/");
+    } catch {
+      toast({ title: "Unable to sign out", description: "Please try again.", variant: "destructive" });
+    }
   };
 
   const agentColor = currentAgent?.color || '#2563eb';
