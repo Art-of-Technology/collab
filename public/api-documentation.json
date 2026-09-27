@@ -7242,7 +7242,7 @@
     {
       "method": "GET",
       "url": "/api/workspaces/{workspaceId}",
-      "file": "src\\app\\api\\workspaces\\[workspaceId]\\route.ts",
+      "file": "src/app/api/workspaces/[workspaceId]/route.ts",
       "title": "Get Workspaces {workspaceId}",
       "description": "Retrieve workspaces {workspaceid} information",
       "parameters": [
@@ -7325,7 +7325,7 @@
       },
       "codeExamples": {
         "language": "TypeScript",
-        "example": "export async function GET(\r\n  request: NextRequest,\r\n    const session = await getServerSession(authOptions);\r\n      return NextResponse.json(\r\n    const _params = await params;\r\n    const { workspaceId } = _params;\r\n      return NextResponse.json(\r\n    const isMember = workspace.ownerId === session.user.id ||\r\n      return NextResponse.json(\r\n    return NextResponse.json(workspace);\r\n    return NextResponse.json(\r\nexport async function PATCH(\r\n  request: NextRequest,\r\n    const session = await getServerSession(authOptions);\r\n      return NextResponse.json(\r\n    const _params = await params;\r\n    const { workspaceId } = _params;\r\n    const body = await request.json();\r\n    const { name, description, logoUrl } = body;\r\n    const workspace = await prisma.workspace.findUnique({\r"
+        "example": "export async function GET(\n  request: NextRequest,\n    const currentUser = await getCurrentUser();\n      return NextResponse.json(\n    const _params = await params;\n    const { workspaceId } = _params;\n      return NextResponse.json(\n    const isMember = workspace.ownerId === currentUser.id ||\n      return NextResponse.json(\n    return NextResponse.json(workspace);\n    return NextResponse.json(\nexport async function PATCH(\n  request: NextRequest,\n    const currentUser = await getCurrentUser();\n      return NextResponse.json(\n    const _params = await params;\n    const { workspaceId } = _params;\n    const body = await request.json();\n    const { name, description, logoUrl } = body;\n    const workspace = await prisma.workspace.findUnique({"
       },
       "errorHandling": {
         "commonErrors": [
@@ -7422,7 +7422,7 @@
     {
       "method": "DELETE",
       "url": "/api/workspaces/{workspaceId}",
-      "file": "src\\app\\api\\workspaces\\[workspaceId]\\route.ts",
+      "file": "src/app/api/workspaces/[workspaceId]/route.ts",
       "title": "Delete Workspaces {workspaceId}",
       "description": "Remove a workspaces {workspaceid}",
       "parameters": [
@@ -7536,7 +7536,7 @@
       },
       "codeExamples": {
         "language": "TypeScript",
-        "example": "export async function GET(\r\n  request: NextRequest,\r\n    const session = await getServerSession(authOptions);\r\n      return NextResponse.json(\r\n    const _params = await params;\r\n    const { workspaceId } = _params;\r\n      return NextResponse.json(\r\n    const isMember = workspace.ownerId === session.user.id ||\r\n      return NextResponse.json(\r\n    return NextResponse.json(workspace);\r\n    return NextResponse.json(\r\nexport async function PATCH(\r\n  request: NextRequest,\r\n    const session = await getServerSession(authOptions);\r\n      return NextResponse.json(\r\n    const _params = await params;\r\n    const { workspaceId } = _params;\r\n    const body = await request.json();\r\n    const { name, description, logoUrl } = body;\r\n    const workspace = await prisma.workspace.findUnique({\r"
+        "example": "export async function GET(\n  request: NextRequest,\n    const currentUser = await getCurrentUser();\n      return NextResponse.json(\n    const _params = await params;\n    const { workspaceId } = _params;\n      return NextResponse.json(\n    const isMember = workspace.ownerId === currentUser.id ||\n      return NextResponse.json(\n    return NextResponse.json(workspace);\n    return NextResponse.json(\nexport async function PATCH(\n  request: NextRequest,\n    const currentUser = await getCurrentUser();\n      return NextResponse.json(\n    const _params = await params;\n    const { workspaceId } = _params;\n    const body = await request.json();\n    const { name, description, logoUrl } = body;\n    const workspace = await prisma.workspace.findUnique({"
       },
       "errorHandling": {
         "commonErrors": [
@@ -7595,7 +7595,7 @@
     {
       "method": "PATCH",
       "url": "/api/workspaces/{workspaceId}",
-      "file": "src\\app\\api\\workspaces\\[workspaceId]\\route.ts",
+      "file": "src/app/api/workspaces/[workspaceId]/route.ts",
       "title": "Update Workspaces {workspaceId}",
       "description": "Partially update an existing workspaces {workspaceid}",
       "parameters": [
@@ -7709,7 +7709,7 @@
       },
       "codeExamples": {
         "language": "TypeScript",
-        "example": "export async function GET(\r\n  request: NextRequest,\r\n    const session = await getServerSession(authOptions);\r\n      return NextResponse.json(\r\n    const _params = await params;\r\n    const { workspaceId } = _params;\r\n      return NextResponse.json(\r\n    const isMember = workspace.ownerId === session.user.id ||\r\n      return NextResponse.json(\r\n    return NextResponse.json(workspace);\r\n    return NextResponse.json(\r\nexport async function PATCH(\r\n  request: NextRequest,\r\n    const session = await getServerSession(authOptions);\r\n      return NextResponse.json(\r\n    const _params = await params;\r\n    const { workspaceId } = _params;\r\n    const body = await request.json();\r\n    const { name, description, logoUrl } = body;\r\n    const workspace = await prisma.workspace.findUnique({\r"
+        "example": "export async function GET(\n  request: NextRequest,\n    const currentUser = await getCurrentUser();\n      return NextResponse.json(\n    const _params = await params;\n    const { workspaceId } = _params;\n      return NextResponse.json(\n    const isMember = workspace.ownerId === currentUser.id ||\n      return NextResponse.json(\n    return NextResponse.json(workspace);\n    return NextResponse.json(\nexport async function PATCH(\n  request: NextRequest,\n    const currentUser = await getCurrentUser();\n      return NextResponse.json(\n    const _params = await params;\n    const { workspaceId } = _params;\n    const body = await request.json();\n    const { name, description, logoUrl } = body;\n    const workspace = await prisma.workspace.findUnique({"
       },
       "errorHandling": {
         "commonErrors": [
