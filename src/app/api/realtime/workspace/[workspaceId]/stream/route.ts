@@ -141,7 +141,7 @@ export async function GET(
             }
 
             // Subscribe to Redis channel
-            await subscriber.subscribe(channel, async (message: string) => {
+            const processMessage = async (message: string) => {
               // Always check if closed before processing
               if (isClosed) return;
 
@@ -186,6 +186,11 @@ export async function GET(
               } catch (parseError) {
                 await cleanup();
               }
+            };
+            let pendingMessage = Promise.resolve();
+            await subscriber.subscribe(channel, (message: string) => {
+              pendingMessage = pendingMessage.then(() => processMessage(message));
+              return pendingMessage;
             });
 
             isRedisConnected = true;

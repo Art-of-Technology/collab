@@ -5,7 +5,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
 function fixture() {
   const context = new AsyncLocalStorage();
-  const state = { subject: 'actor', userReads: 0, callback: null, subscribed: 0, unsubscribe: 0, quit: 0, issueReads: 0 };
+  const state = { subject: 'actor', userReads: 0, callback: null, subscribed: 0, unsubscribe: 0, quit: 0, issueReads: 0, viewReads: 0 };
   const workspace = { id: 'space', ownerId: 'other', members: [{ userId: 'actor', status: true }] };
   const foreign = { id: 'foreign', ownerId: 'other', members: [] };
   const project = { id: 'project', workspace };
@@ -19,6 +19,8 @@ function fixture() {
     project: { findFirst: async ({ where }) => [project, hiddenProject].find(row => matches(row, where)) ?? null },
     projectStatus: { findFirst: async ({ where }) => matches(status, where) ? status : null },
     view: { findFirst: async ({ where }) => {
+      state.viewReads++;
+      if (state.viewReads === 1 && state.firstViewWait) await state.firstViewWait.promise;
       const { OR, ...scope } = where;
       if (!matches(view, scope)) return null;
       return OR.some(clause => clause.sharedWith ? view.visibility === clause.visibility && view.sharedWith.includes(clause.sharedWith.has) : matches(view, clause)) ? view : null;
@@ -93,3 +95,47 @@ test('malformed IDs, mixed-access batches and mismatched workspace never forward
 test('invalid JSON closes without forwarding raw message', async () => { const f = fixture(), reader = await stream(f); await f.state.callback('private-invalid-json'); assert.equal((await reader.read()).done, true); assert.equal(f.state.quit, 1); });
 test('subscriber acquired after cancellation is released without subscribing', async () => { const f = fixture(); f.state.getWait = deferred(); const reader = await stream(f); await reader.cancel(); f.state.getWait.resolve(); await flush(); assert.equal(f.state.subscribed, 0); assert.equal(f.state.quit, 1); assert.equal(f.intervals.size, 0); assert.equal(f.timeouts.size, 0); });
 test('subscription completing after cancellation is released', async () => { const f = fixture(); f.state.subscribeWait = deferred(); const reader = await stream(f); await reader.cancel(); f.state.subscribeWait.resolve(); await flush(); assert.equal(f.state.unsubscribe, 1); assert.equal(f.state.quit, 1); assert.equal(f.intervals.size, 0); });
+
+test('overlapping position callbacks preserve order through delayed view authorization', { timeout: 5000 }, async () => {
+  const f = fixture(), reader = await stream(f);
+  f.state.firstViewWait = deferred();
+  const events = [1, 2].map(sequence => ({ type: 'view.issue-position.updated', workspaceId: 'space', viewId: 'view', affectedIssues: ['one', 'two'], sequence, batchId: `batch-${sequence}` }));
+  try {
+    const first = f.state.callback(JSON.stringify(events[0]));
+    await flush();
+    assert.equal(f.state.viewReads, 1);
+    const second = f.state.callback(JSON.stringify(events[1]));
+    await flush();
+    f.state.firstViewWait.resolve();
+    await Promise.all([first, second]);
+    for (const event of events) assert.equal(new TextDecoder().decode((await reader.read()).value), `data: ${JSON.stringify(event)}\n\n`);
+    assert.equal(f.state.viewReads, 2);
+    assert.equal(f.state.issueReads, 2);
+  } finally {
+    f.state.firstViewWait.resolve();
+    await reader.cancel();
+  }
+});
+test('cancellation suppresses pending delivery and skips queued authorization', { timeout: 5000 }, async () => {
+  const f = fixture(), reader = await stream(f);
+  f.state.firstViewWait = deferred();
+  const event = { type: 'view.issue-position.updated', viewId: 'view', issueId: 'one' };
+  try {
+    const first = f.state.callback(JSON.stringify(event));
+    await flush();
+    assert.equal(f.state.viewReads, 1);
+    const second = f.state.callback(JSON.stringify(event));
+    await flush();
+    await reader.cancel();
+    f.state.firstViewWait.resolve();
+    await Promise.all([first, second]);
+    assert.equal((await reader.read()).done, true);
+    assert.equal(f.state.viewReads, 1);
+    assert.equal(f.state.userReads, 2);
+    assert.equal(f.state.unsubscribe, 1);
+    assert.equal(f.state.quit, 1);
+    assert.equal(f.intervals.size, 0);
+  } finally {
+    f.state.firstViewWait.resolve();
+  }
+});
