@@ -6,10 +6,10 @@ reading and posting, and editing comments owned by the configured shared Forge
 writer. It never offers labels, native assignees, repository settings or code
 writes. Owner is existing channel-task display metadata, not a Forge assignee.
 
-Every action validates its exact typed payload and checks the current session,
-active workspace membership, project ownership and field-specific permissions
-before loading connection metadata or credentials. Issue editing requires the
-corresponding EDIT_ANY_TASK, CHANGE_TASK_STATUS or ASSIGN_TASK grant. Comment
+Every action validates its exact typed payload and checks the
+[board access requirements](forge-board.md) and field-specific permissions
+before loading connection metadata or credentials. Issue creation requires
+CREATE_TASK. Issue editing requires the corresponding EDIT_ANY_TASK, CHANGE_TASK_STATUS or ASSIGN_TASK grant. Comment
 creation uses COMMENT_ON_TASK; shared-account comment edits require
 EDIT_ANY_COMMENT and the configured immutable Forge author ID. Self-only grants
 are not treated as ownership of the shared provider account. This does not
@@ -30,8 +30,10 @@ Edits fetch the complete raw issue, compare its content fingerprint with the
 reviewed version and preserve unknown channel-task metadata and untouched human
 text outside the block. Malformed or multiple task blocks disable edits pending
 source review. Explicit description edits replace the human description while
-retaining the metadata block. Closing uses native state only and does not rewrite
-the body. Comments do not rewrite the issue body.
+retaining the metadata block. Human descriptions in create/edit requests cannot
+contain `channel-task` blocks; use the individually authorized task fields instead.
+Comment reads are capped at 1,000 with a partial-results warning.
+Closing uses native state only and does not rewrite the body. Comments do not rewrite the issue body.
 
 Forge issue/comment PATCH does not provide atomic client compare-and-swap.
 Preflight detects already-stale reads; an external edit between preflight and
