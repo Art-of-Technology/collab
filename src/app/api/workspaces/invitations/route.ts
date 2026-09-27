@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 
@@ -8,17 +8,28 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user || !session.user.email) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized or missing email' },
         { status: 401 }
       );
     }
 
-    // Get all pending invitations for the user's email
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { email: true }
+    });
+    if (!currentUser?.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized or missing email' },
+        { status: 401 }
+      );
+    }
+
+    // Get all pending invitations for the current database recipient
     const pendingInvitations = await prisma.workspaceInvitation.findMany({
       where: {
-        email: session.user.email,
+        email: currentUser.email,
         status: 'pending',
         expiresAt: {
           gte: new Date()

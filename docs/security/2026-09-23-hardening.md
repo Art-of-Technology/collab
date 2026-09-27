@@ -29,7 +29,7 @@ and the [profile visibility contract](#post-and-coclaw-disclosure-follow-up).
 The nine formerly email-bound authenticated actions in `src/actions/workspace.ts`
 resolve the actor by session subject ID. The member-add target still resolves
 by the supplied email; owner, active workspace-admin and self-removal rules,
-validation and return shapes are preserved. Workspace REST GET/PATCH/DELETE
+validation and return shapes are preserved. Workspace detail REST GET/PATCH/DELETE
 use the shared session helper and return 401 for a missing or deleted subject.
 PATCH permits the workspace owner, active `owner`/`admin` membership
 (`status: true`), or a current database `SYSTEM_ADMIN`. DELETE permits only the
@@ -353,6 +353,8 @@ it to match the current database email; the email parameter is deliberately kept
 The signatures, pending/unexpired filters, descending creation order and existing
 inviter projections remain unchanged. Invitees may read their own invitations
 before joining a workspace; no membership requirement is added.
+For the recipient list API and workspace invitation management, see
+[Workspace API identity and invitation recipients](#workspace-api-identity-and-invitation-recipients).
 
 The [actual-action mocked regression](../../tests/security/invitation-lists.test.cjs)
 covers both exports, missing/deleted subjects,
@@ -482,8 +484,9 @@ For current adapter coverage, see [shared session consumers](#shared-session-con
 [Notes history session adapter](#notes-history-session-adapter),
 [Notes template session adapter](#notes-template-session-adapter),
 [Notes secrets session adapter](#notes-secrets-session-adapter),
-[Issue API session adapter](#issue-api-session-adapter) and
-[Timeline session adapter](#timeline-session-adapter).
+[Issue API session adapter](#issue-api-session-adapter),
+[Timeline session adapter](#timeline-session-adapter) and
+[Workspace API identity and invitation recipients](#workspace-api-identity-and-invitation-recipients).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -1246,3 +1249,36 @@ Gateway and worker stay disabled; trusted ingress, mutation-Origin enforcement,
 integrated staging and restore gates remain. Generic test stage is SKIPPED; source
 review, documentation, scoped lint, CI and exact-head Octopus checks remain required.
 No database, browser, provider, runtime, build or deployment operation was run.
+
+
+## Workspace API identity and invitation recipients
+
+Workspace collection and invitation API handlers now use the shared session
+adapter and require a session user ID before queries or writes. The recipient
+invitation list resolves that ID to the current database email; missing users or
+emails return 401 before invitation queries. Its pending/expiry filters, selected
+workspace/inviter fields and descending-created query order are unchanged.
+
+Workspace listing retains owner/active-member filtering. Creation retains its
+slug generation, current actor ownership and existing free-plan limit. Workspace
+invitation management retains `INVITE_MEMBERS`, including current owner/system-admin
+behavior, duplicate/existing-member checks and foreign-workspace invitation denial.
+Email delivery behavior and payloads are unchanged.
+
+The [focused fixture](../../tests/security/workspace-api-access.test.cjs) executes
+all six handlers with actual session/identity, permission and slug helpers,
+modeled Prisma and an intercepted email sender. Seven baseline failures and three
+controls become ten passing checks. It covers missing IDs, mapped/denied gateway
+identity without fallback, legacy controls, stale-email recipient isolation,
+missing current users/emails, permission denial with zero writes/email effects,
+owner/admin success, foreign invitation IDs and workspace limits. The fixture
+checks the preserved ordering query, not native database ordering. A scoped
+Prisma/Next typecheck covers five exact non-import module bodies.
+
+This does not prove native concurrency, post-lookup revocation, quota/slug/invitation
+uniqueness under races, email delivery or runtime acceptance. Existing creation/input
+validation, role-string conventions, invitation token projections and raw logging
+remain separate. Gateway and worker remain disabled. Generic test is SKIPPED;
+review, documentation, scoped lint, CI, exact-head Octopus and integrated runtime
+acceptance gates remain. No provider, database, browser, build or runtime operation
+was performed.
