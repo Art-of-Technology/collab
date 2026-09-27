@@ -1,10 +1,12 @@
 # Version and release list access
 
 The repository version and release list routes require a current actor and repository
-workspace ownership or active membership. Their final reads repeat repository access.
+workspace ownership or active membership. Missing actors receive 401; missing or
+inaccessible repositories receive 404. Their final reads repeat repository access.
 Versions must retain valid provenance and every linked issue must satisfy the shared
 issue/project/status access predicate. Parent and child version projections apply the
-same checks. Responses are private/no-store; limits are bounded to 1–100.
+same checks. Successful responses set `Cache-Control: no-store`. Integer limits are
+bounded to 1–100; omitted or non-integer limits default to 50 versions or 20 releases.
 
 The migration adds `Version.issueAccessInvalidated`. Existing versions start invalid;
 new versions default valid. Six retained database triggers make invalidation sticky,
