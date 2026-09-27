@@ -36,8 +36,9 @@ test('bootstrap requires explicit empty-database intent before any connection', 
 
 test('native fresh bootstrap, subsequent migrations, and populated-target refusal', { skip: !process.env.COLLAB_BOOTSTRAP_TEST_SERVER_URL, timeout: 180000 }, () => {
   const server = new URL(process.env.COLLAB_BOOTSTRAP_TEST_SERVER_URL);
-  assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(server.hostname), 'only a disposable loopback test server is allowed');
-  const pg = { PGHOST: server.hostname.replace(/^\[|\]$/g, ''), PGPORT: server.port || '5432', PGUSER: decodeURIComponent(server.username), PGPASSWORD: decodeURIComponent(server.password), PGDATABASE: decodeURIComponent(server.pathname.slice(1)) };
+  assert.ok(['127.0.0.1', '[::1]'].includes(server.hostname), 'only a disposable loopback test server is allowed');
+  assert.ok(server.searchParams.getAll('sslmode').length === 1 && ['disable', 'require'].includes(server.searchParams.get('sslmode')), 'fixture requires explicit sslmode');
+  const pg = { PGSSLMODE: server.searchParams.get('sslmode'), PGHOST: server.hostname.replace(/^\[|\]$/g, ''), PGPORT: server.port || '5432', PGUSER: decodeURIComponent(server.username), PGPASSWORD: decodeURIComponent(server.password), PGDATABASE: decodeURIComponent(server.pathname.slice(1)) };
   const names = ['fresh', 'legacy', 'namespace', 'unknown'].map(kind => 'collab_bootstrap_test_' + kind + '_' + randomUUID().replaceAll('-', ''));
   const query = (name, sql) => {
     const result = run('psql', ['-X', '-At', '-v', 'ON_ERROR_STOP=1', '-c', sql], { ...pg, PGDATABASE: name });

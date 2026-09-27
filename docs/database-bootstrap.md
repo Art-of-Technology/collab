@@ -15,6 +15,13 @@ credential custody; never put credentials in command arguments or history.
 `DATABASE_URL` must be present in the process environment; the bootstrap script
 does not load `.env` itself.
 The URL must explicitly name host, user and database; schema must be public.
+Select `sslmode=require` explicitly in the URL. Only an explicitly selected numeric
+loopback fixture (`127.0.0.1` or `::1`) may use `sslmode=disable`. Missing, duplicate,
+opportunistic or other TLS modes refuse before child processes. This requires
+encryption remotely; it is not a certificate-hostname verification guarantee.
+Both Prisma and psql receive the same explicit mode. psql never prompts for a
+password (`-w`); use existing credential custody. A missing psql executable is a
+local prerequisite failure; timeouts and lost acknowledgments remain unconfirmed.
 Only the documented TLS/libpq connection options are accepted, not Prisma pool
 options. Ambient PG variables are cleared so they cannot override that target.
 
@@ -90,7 +97,8 @@ With `COLLAB_BOOTSTRAP_TEST_SERVER_URL` unset,
 intent guard and verifies that the fixture runner clears inherited PG variables
 while preserving explicit overrides; the native check is skipped.
 Set `COLLAB_BOOTSTRAP_TEST_SERVER_URL` to an owned disposable
-loopback PostgreSQL server with create-database rights for the full check. It
+numeric loopback PostgreSQL server with create-database rights and explicit
+`sslmode=disable` (or `require` for TLS) for the full check. It
 creates and removes uniquely named test databases, executes native bootstrap,
 status and deploy, verifies Ready constraints, tests misleading ambient PG
 variables and populated/custom-schema refusal, and injects a lost acknowledgment

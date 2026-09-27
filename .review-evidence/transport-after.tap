@@ -1,0 +1,88 @@
+TAP version 13
+# Subtest: actual bootstrap CLI emits one guarded schema transaction with exact supplements then 12 native baselines
+ok 1 - actual bootstrap CLI emits one guarded schema transaction with exact supplements then 12 native baselines
+  ---
+  duration_ms: 59.165208
+  type: 'test'
+  ...
+# Subtest: changed schema refuses before generation or connection
+ok 2 - changed schema refuses before generation or connection
+  ---
+  duration_ms: 49.227708
+  type: 'test'
+  ...
+# Subtest: changed migration refuses before generation or connection
+ok 3 - changed migration refuses before generation or connection
+  ---
+  duration_ms: 57.467375
+  type: 'test'
+  ...
+# Subtest: changed added-history refuses before generation or connection
+ok 4 - changed added-history refuses before generation or connection
+  ---
+  duration_ms: 53.075291
+  type: 'test'
+  ...
+# Subtest: changed cli refuses before generation or connection
+ok 5 - changed cli refuses before generation or connection
+  ---
+  duration_ms: 47.2635
+  type: 'test'
+  ...
+# Subtest: nonempty does not retry, reset or guess successful baselining
+ok 6 - nonempty does not retry, reset or guess successful baselining
+  ---
+  duration_ms: 53.260084
+  type: 'test'
+  ...
+# Subtest: lost does not retry, reset or guess successful baselining
+ok 7 - lost does not retry, reset or guess successful baselining
+  ---
+  duration_ms: 49.268
+  type: 'test'
+  ...
+# Subtest: diff does not retry, reset or guess successful baselining
+ok 8 - diff does not retry, reset or guess successful baselining
+  ---
+  duration_ms: 49.361333
+  type: 'test'
+  ...
+# Subtest: resolve does not retry, reset or guess successful baselining
+ok 9 - resolve does not retry, reset or guess successful baselining
+  ---
+  duration_ms: 48.503916
+  type: 'test'
+  ...
+# Subtest: invalid intent and unsupported target options never generate or connect
+ok 10 - invalid intent and unsupported target options never generate or connect
+  ---
+  duration_ms: 125.438792
+  type: 'test'
+  ...
+# Subtest: transport must be explicit and remote plaintext refuses before child processes
+ok 11 - transport must be explicit and remote plaintext refuses before child processes
+  ---
+  duration_ms: 297.435166
+  type: 'test'
+  ...
+# Subtest: psql ENOENT classification stops without baselines
+ok 12 - psql ENOENT classification stops without baselines
+  ---
+  duration_ms: 49.634833
+  type: 'test'
+  ...
+# Subtest: psql ETIMEDOUT classification stops without baselines
+ok 13 - psql ETIMEDOUT classification stops without baselines
+  ---
+  duration_ms: 50.192875
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1045.385875

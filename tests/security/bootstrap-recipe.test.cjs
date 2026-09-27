@@ -23,6 +23,7 @@ Module._resolveFilename = function(name, ...args) { if (name === 'prisma/build/i
 child.spawnSync = (command, args, options) => {
   calls.push({ command, args, input: options.input, pg: Object.fromEntries(Object.entries(options.env).filter(([key]) => key.startsWith('PG'))) });
   fs.writeFileSync(${JSON.stringify(capture)}, JSON.stringify(calls));
+  if (command === 'psql' && ['ENOENT', 'ETIMEDOUT'].includes(process.env.FIXTURE_PSQL)) return { status: null, stdout: null, stderr: null, error: { code: process.env.FIXTURE_PSQL } };
   if (command === 'psql') return { status: process.env.FIXTURE_PSQL === 'lost' ? 74 : process.env.FIXTURE_PSQL === 'nonempty' ? 1 : 0, stderr: process.env.FIXTURE_PSQL === 'nonempty' ? 'COLLAB_BOOTSTRAP_DATABASE_NOT_EMPTY' : '' };
   if (args[2] === 'diff') return { status: process.env.FIXTURE_DIFF === 'fail' ? 1 : 0, stdout: ${JSON.stringify(schemaSql)} };
   if (args[2] === 'resolve') return { status: process.env.FIXTURE_RESOLVE === 'fail' ? 1 : 0 };
@@ -50,7 +51,7 @@ test('actual bootstrap CLI emits one guarded schema transaction with exact suppl
   assert.equal(result.status, 0, result.stderr); assert.equal(result.calls.length, 14);
   assert.deepEqual(result.calls[0].args.slice(1, 4), ['migrate', 'diff', '--from-empty']);
   const apply = result.calls[1]; assert.equal(apply.command, 'psql');
-  assert.deepEqual(apply.args, ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '--file=-']);
+  assert.deepEqual(apply.args, ['-X', '-q', '-w', '-v', 'ON_ERROR_STOP=1', '--file=-']);
   assert.equal(apply.pg.PGHOST, '127.0.0.1'); assert.equal(apply.pg.PGDATABASE, 'empty'); assert.equal(apply.pg.PGHOSTADDR, undefined);
   assert.equal(apply.pg.PGSSLMODE, 'require');
   // The emitted psql input is the reviewed bootstrap protocol, not an implementation-text proxy.
@@ -90,4 +91,24 @@ test('invalid intent and unsupported target options never generate or connect', 
   for (const [env, args] of [[{}, []], [{ DATABASE_URL: 'postgresql://fixture@127.0.0.1/empty?schema=private' }], [{ DATABASE_URL: 'postgresql://fixture@127.0.0.1/empty?connection_limit=1' }]]) {
     const result = run(env, args); assert.equal(result.status, 1); assert.equal(result.calls.length, 0);
   }
+});
+
+
+test('transport must be explicit and remote plaintext refuses before child processes', t => {
+  const { run } = fixture(t);
+  for (const url of ['postgresql://fixture@127.0.0.1/empty', 'postgresql://fixture@db.example.test/empty?sslmode=disable', 'postgresql://fixture@db.example.test/empty?sslmode=prefer', 'postgresql://fixture@db.example.test/empty?sslmode=require&sslmode=disable']) {
+    const result = run({ DATABASE_URL: url });
+    assert.equal(result.status, 1); assert.equal(result.calls.length, 0);
+  }
+  for (const [host, mode] of [['127.0.0.1', 'disable'], ['[::1]', 'disable'], ['db.example.test', 'require']]) {
+    const result = run({ DATABASE_URL: `postgresql://fixture@${host}/empty?sslmode=${mode}` });
+    assert.equal(result.status, 0, result.stderr); assert.equal(result.calls[1].pg.PGSSLMODE, mode);
+  }
+});
+
+for (const failure of ['ENOENT', 'ETIMEDOUT']) test(`psql ${failure} classification stops without baselines`, t => {
+  const { run } = fixture(t), result = run({ FIXTURE_PSQL: failure });
+  assert.equal(result.status, 1); assert.equal(result.calls.length, 2);
+  assert.match(result.stderr, failure === 'ENOENT' ? /Install the PostgreSQL psql client/ : /outcome is unconfirmed/);
+  if (failure === 'ENOENT') assert.doesNotMatch(result.stderr, /outcome is unconfirmed/);
 });

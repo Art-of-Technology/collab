@@ -16,6 +16,8 @@ try {
   for (const key of url.searchParams.keys()) {
     if (!['sslmode', 'sslcert', 'sslkey', 'sslrootcert', 'connect_timeout', 'application_name', 'options', 'target_session_attrs'].includes(key)) throw new Error('Remove unsupported connection-pool URL options for this one-off bootstrap.');
   }
+  const modes = url.searchParams.getAll('sslmode');
+  if (modes.length !== 1 || (modes[0] !== 'require' && !(modes[0] === 'disable' && ['127.0.0.1', '[::1]'].includes(url.hostname)))) throw new Error('Select sslmode=require explicitly, or sslmode=disable only for a numeric loopback fixture.');
   const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('PG')));
   const contract = JSON.parse(readFileSync(resolve(root, 'prisma/bootstrap-contract.json'), 'utf8'));
   const sha256 = value => createHash('sha256').update(value).digest('hex');
@@ -60,7 +62,8 @@ COMMIT;
   const connectionEnv = { ...cleanEnv, PGHOST: url.hostname.replace(/^\[|\]$/g, ''), PGPORT: url.port || '5432', PGUSER: decodeURIComponent(url.username), PGPASSWORD: decodeURIComponent(url.password), PGDATABASE: decodeURIComponent(url.pathname.slice(1)), PGCONNECT_TIMEOUT: '10' };
   const pgOptions = { sslmode: 'PGSSLMODE', sslcert: 'PGSSLCERT', sslkey: 'PGSSLKEY', sslrootcert: 'PGSSLROOTCERT', connect_timeout: 'PGCONNECT_TIMEOUT', application_name: 'PGAPPNAME', options: 'PGOPTIONS', target_session_attrs: 'PGTARGETSESSIONATTRS' };
   for (const [key, value] of url.searchParams) connectionEnv[pgOptions[key]] = value;
-  const applied = spawnSync('psql', ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '--file=-'], { cwd: root, input: sql, encoding: 'utf8', maxBuffer: 1024 * 1024, timeout: 150000, env: connectionEnv });
+  const applied = spawnSync('psql', ['-X', '-q', '-w', '-v', 'ON_ERROR_STOP=1', '--file=-'], { cwd: root, input: sql, encoding: 'utf8', maxBuffer: 1024 * 1024, timeout: 150000, env: connectionEnv });
+  if (applied.error?.code === 'ENOENT') throw new Error('Install the PostgreSQL psql client before bootstrap. No SQL was sent.');
   if (applied.status !== 0) throw new Error(applied.stderr?.includes('COLLAB_BOOTSTRAP_DATABASE_NOT_EMPTY') ? 'Refused: database is not empty. Nothing was changed by bootstrap.' : 'Bootstrap outcome is unconfirmed. Keep the app and worker disabled; inspect the selected database before any retry or reset.');
   for (const name of migrations) {
     const baseline = spawnSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'resolve', '--schema', resolve(root, 'prisma/schema.prisma'), '--applied', name], { cwd: root, encoding: 'utf8', maxBuffer: 1024 * 1024, timeout: 120000, env: { ...cleanEnv, NO_COLOR: '1' } });
