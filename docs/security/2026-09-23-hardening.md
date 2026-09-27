@@ -843,3 +843,28 @@ prior source. The exact route body and shared predicates pass a scoped
 Prisma/Next/Node typecheck. These checks mock database operations; they do not prove
 native isolation, access changes after the transaction's check, or concurrent
 single-default uniqueness. Project summary payload scope remains separate.
+
+## Project summary payload access
+
+`GET /api/projects/[projectId]/summary` resolves a live actor by ID and authorizes
+the exact project through workspace owner or active membership. Owners need no
+membership row; absent/deleted actors receive 401, and inaccessible or missing
+projects receive 404. Issue groups, counts and widget lists require the requested
+project/workspace and the shared issue-read predicate. Parent and BLOCKS-source
+projections are independently filtered through the same read policy.
+
+Status, repository and repository-activity queries repeat current project access.
+Features retain project-only rows with a null workspace and matching-workspace
+rows; explicit workspace mismatches are excluded. Notes keep the shared access,
+restriction and expiry policy while requiring consistent workspace/project
+bindings. Workspace Notes linked to another project in the same workspace remain
+visible, as do project-only Notes; foreign workspace bindings do not become
+visible through the project branch of the query.
+
+Existing response projections, widget limits, date windows and ordering remain
+unchanged. Successful responses are `no-store`; unexpected error logs use a fixed
+message. Eleven actual-route modeled checks pass after ten failures and one
+control on prior source; the exact route and shared predicates pass a scoped
+Prisma/Next/Node typecheck. The database boundary is mocked, so native isolation,
+a single consistent snapshot and revocation after a query are not established.
+Feature actions and other endpoint policies remain separate.

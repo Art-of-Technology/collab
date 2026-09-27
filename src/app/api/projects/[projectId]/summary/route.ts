@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authConfig } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/session';
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 
@@ -9,17 +10,18 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const session = await getServerSession(authConfig);
+    const actor = await getCurrentUser();
 
-    if (!session?.user?.email) {
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { projectId } = await params;
 
-    // Get the project to verify access
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
+    // Resolve the exact project under current owner or active-member access.
+    const projectWhere = { id: projectId, workspace: postWorkspaceAccessWhere(actor.id) };
+    const project = await prisma.project.findFirst({
+      where: projectWhere,
       select: {
         id: true,
         name: true,
@@ -36,18 +38,11 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Verify user has access to workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
-      where: {
-        user: { email: session.user.email },
-        workspaceId: project.workspaceId,
-        status: true
-      }
-    });
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const issueWhere = {
+      projectId,
+      workspaceId: project.workspaceId,
+      AND: [issueReadAccessWhere(actor.id)]
+    };
 
     const now = new Date();
     const thirtyDaysAgo = new Date(now);
@@ -58,7 +53,7 @@ export async function GET(
 
     // Get all statuses to identify final (done) statuses
     const projectStatuses = await prisma.projectStatus.findMany({
-      where: { projectId, isActive: true },
+      where: { projectId, project: projectWhere, isActive: true },
       select: { id: true, isFinal: true, name: true, displayName: true, color: true }
     });
 
@@ -69,7 +64,7 @@ export async function GET(
     // Get issue counts by status
     const issueCounts = await prisma.issue.groupBy({
       by: ['statusId'],
-      where: { projectId },
+      where: issueWhere,
       _count: { id: true }
     });
 
@@ -86,7 +81,7 @@ export async function GET(
     // Get overdue issues (dueDate < now AND not in final status)
     const overdueIssues = await prisma.issue.findMany({
       where: {
-        projectId,
+        ...issueWhere,
         dueDate: { lt: now },
         OR: [
           { statusId: { notIn: finalStatusIds } },
@@ -106,11 +101,12 @@ export async function GET(
           select: { id: true, name: true, displayName: true, color: true }
         },
         parent: {
+          where: issueReadAccessWhere(actor.id),
           select: { id: true, title: true, issueKey: true }
         },
         // Check if blocked
         targetRelations: {
-          where: { relationType: 'BLOCKS' },
+          where: { relationType: 'BLOCKS', sourceIssue: issueReadAccessWhere(actor.id) },
           select: {
             sourceIssue: {
               select: { id: true, title: true, issueKey: true }
@@ -125,7 +121,7 @@ export async function GET(
     // Get at-risk issues (due within 2 days, not started or minimal progress, not in final status)
     const atRiskIssues = await prisma.issue.findMany({
       where: {
-        projectId,
+        ...issueWhere,
         dueDate: {
           gte: now,
           lte: twoDaysFromNow
@@ -148,6 +144,7 @@ export async function GET(
           select: { id: true, name: true, displayName: true, color: true }
         },
         parent: {
+          where: issueReadAccessWhere(actor.id),
           select: { id: true, title: true, issueKey: true }
         }
       },
@@ -157,7 +154,7 @@ export async function GET(
 
     // Get recently updated issues
     const recentIssues = await prisma.issue.findMany({
-      where: { projectId },
+      where: issueWhere,
       select: {
         id: true,
         title: true,
@@ -178,7 +175,7 @@ export async function GET(
     // Get recently completed issues (completed in last 30 days)
     const recentlyCompletedIssues = await prisma.issue.findMany({
       where: {
-        projectId,
+        ...issueWhere,
         statusId: { in: finalStatusIds },
         updatedAt: { gte: thirtyDaysAgo }
       },
@@ -205,7 +202,7 @@ export async function GET(
     // Get issues with no dates
     const issuesWithoutDates = await prisma.issue.count({
       where: {
-        projectId,
+        ...issueWhere,
         dueDate: null,
         OR: [
           { statusId: { notIn: finalStatusIds } },
@@ -217,7 +214,7 @@ export async function GET(
     // Get unassigned issues count
     const unassignedIssues = await prisma.issue.count({
       where: {
-        projectId,
+        ...issueWhere,
         assigneeId: null,
         OR: [
           { statusId: { notIn: finalStatusIds } },
@@ -259,7 +256,7 @@ export async function GET(
 
     const timelineIssues = await prisma.issue.findMany({
       where: {
-        projectId,
+        ...issueWhere,
         dueDate: {
           gte: now,
           lte: thirtyDaysFromNow
@@ -278,6 +275,7 @@ export async function GET(
           select: { id: true, name: true, displayName: true, color: true, isFinal: true }
         },
         parent: {
+          where: issueReadAccessWhere(actor.id),
           select: { id: true, title: true, issueKey: true }
         }
       },
@@ -287,7 +285,7 @@ export async function GET(
 
     // Get GitHub repository and activity
     const repository = await prisma.repository.findFirst({
-      where: { projectId },
+      where: { projectId, project: projectWhere },
       select: { id: true, fullName: true }
     });
 
@@ -295,7 +293,7 @@ export async function GET(
     if (repository) {
       // Get commits
       const commits = await prisma.commit.findMany({
-        where: { repositoryId: repository.id },
+        where: { repositoryId: repository.id, repository: { project: projectWhere } },
         orderBy: { commitDate: 'desc' },
         take: 5,
         select: {
@@ -309,7 +307,7 @@ export async function GET(
 
       // Get pull requests
       const pullRequests = await prisma.pullRequest.findMany({
-        where: { repositoryId: repository.id },
+        where: { repositoryId: repository.id, repository: { project: projectWhere } },
         orderBy: { updatedAt: 'desc' },
         take: 5,
         select: {
@@ -327,7 +325,7 @@ export async function GET(
 
       // Get releases
       const releases = await prisma.release.findMany({
-        where: { repositoryId: repository.id },
+        where: { repositoryId: repository.id, repository: { project: projectWhere } },
         orderBy: { publishedAt: 'desc' },
         take: 3,
         select: {
@@ -386,7 +384,11 @@ export async function GET(
 
     // Get feature requests
     const featureRequests = await prisma.featureRequest.findMany({
-      where: { projectId },
+      where: {
+        projectId,
+        project: projectWhere,
+        OR: [{ workspaceId: null }, { workspaceId: project.workspaceId }]
+      },
       include: {
         author: {
           select: { id: true, name: true, image: true },
@@ -438,7 +440,14 @@ export async function GET(
     // Get notes for the workspace (workspace or project scope)
     const notes = await prisma.note.findMany({
       where: {
-        AND: [noteAccessWhere(hasAccess.userId)],
+        AND: [
+          noteAccessWhere(actor.id),
+          { OR: [{ workspaceId: null }, { workspaceId: project.workspaceId }] },
+          { OR: [
+            { projectId: null },
+            { project: { workspaceId: project.workspaceId, workspace: postWorkspaceAccessWhere(actor.id) } }
+          ] }
+        ],
         OR: [
           { workspaceId: project.workspaceId, scope: 'WORKSPACE' },
           { projectId: project.id, scope: 'PROJECT' },
@@ -531,10 +540,10 @@ export async function GET(
       featureRequests: formattedFeatureRequests,
       // Notes widget data
       notes: formattedNotes
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
 
-  } catch (error) {
-    console.error('Error fetching project summary:', error);
+  } catch {
+    console.error('Error fetching project summary');
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
