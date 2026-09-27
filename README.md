@@ -245,6 +245,8 @@ Collab is designed to streamline internal communication and work tracking by off
   [view access contract](docs/security/2026-09-23-hardening.md#view-access-and-session-subjects).
   For project dashboard visibility, see the
   [summary access contract](docs/security/2026-09-23-hardening.md#project-summary-payload-access).
+  For project lists, settings saves and Gantt visibility, see the
+  [project route contract](docs/security/2026-09-23-hardening.md#project-collection-settings-and-gantt-routes).
   For status filter visibility, see the
   [project status access contract](docs/security/2026-09-23-hardening.md#project-status-reads-27-september-2026).
   For listing and creating project statuses, see the

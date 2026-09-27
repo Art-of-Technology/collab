@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 import { generateUniqueViewSlug } from '@/lib/utils';
 
@@ -103,10 +104,11 @@ export async function GET(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const { workspaceId: workspaceSlugOrId } = await params;
     
     // Resolve workspace slug/ID to actual workspace ID
@@ -119,10 +121,7 @@ export async function GET(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        OR: [
-          { ownerId: (session.user as any).id },
-          { members: { some: { userId: (session.user as any).id, status: true } } }
-        ]
+        ...issueAccessWhere(session.user.id).workspace
       }
     });
 
@@ -133,12 +132,13 @@ export async function GET(
     // Fetch projects (converted from TaskBoards) with issue counts and repository data
     const projects = await prisma.project.findMany({
       where: {
-        workspaceId
+        workspaceId,
+        ...issueAccessWhere(userId)
       },
       include: {
         _count: {
           select: {
-            issues: true
+            issues: { where: issueReadAccessWhere(userId) }
           }
         },
         repository: {
@@ -200,12 +200,16 @@ export async function POST(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const { workspaceId: workspaceSlugOrId } = await params;
     const body = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'Invalid project input' }, { status: 400 });
+    }
     
     // Resolve workspace slug/ID to actual workspace ID
     const workspaceId = await resolveWorkspaceSlug(workspaceSlugOrId);
@@ -217,13 +221,7 @@ export async function POST(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        ...issueAccessWhere(session.user.id).workspace
       }
     });
 
@@ -233,7 +231,7 @@ export async function POST(
 
     // Get user
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
+      where: { id: session.user.id }
     });
 
     if (!user) {
@@ -248,7 +246,10 @@ export async function POST(
       issuePrefix
     } = body;
 
-    if (!name) {
+    if (typeof name !== 'string' || !name.trim() ||
+        (description !== undefined && description !== null && typeof description !== 'string') ||
+        (color !== undefined && typeof color !== 'string') ||
+        (issuePrefix !== undefined && typeof issuePrefix !== 'string')) {
       return NextResponse.json(
         { error: 'Name is required' }, 
         { status: 400 }
@@ -311,7 +312,7 @@ export async function POST(
         include: {
           _count: {
             select: {
-              issues: true
+              issues: { where: issueReadAccessWhere(userId) }
             }
           }
         }
