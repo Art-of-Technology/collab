@@ -601,11 +601,9 @@ two runs, not a single combined green run or all-endpoint/provider/DB proof.
 
 For credential and manifest ownership, publisher assignment and reveal limits,
 see [the owner-bound access contract](#app-credential-ownership-and-explicit-reveal).
-OAuth membership gaps remain activation blockers: both authorization routes omit
-active membership status and exclude an owner without a membership; the regular
-authorization fallback has the same status gap.
-The next bounded OAuth fixes must reuse the existing owner/active-member
-workspace predicate with independently scoped code issuance. These findings do
+OAuth issuance now follows the
+[workspace access contract](../oauth-endpoints.md#workspace-access-at-code-issuance).
+Its [modeled regression evidence](#oauth-workspace-access-at-code-issuance) does
 not replace the Features/Changelog blockers or the final alias/wrapper census.
 No edge, auth endpoint, logout, credential custody, runtime or deployment behavior
 is accepted by this import migration.
@@ -638,8 +636,8 @@ Creation still returns credentials for API compatibility. A successful reveal
 claim is one explicit reveal per stored credential state, not global once-only
 issuance: the existing owner-bound developer-docs API-key reader and creation/
 rotation responses remain separate. For public app reads, see
-[App read access](../apps/README.md#app-read-access). OAuth active membership,
-publisher-based deletion and other app lifecycle routes still need their
+[App read access](../apps/README.md#app-read-access). Publisher-based deletion
+and other app lifecycle routes still need their
 separately scoped access review/fixes before gateway activation.
 
 The [ownership regression suite](../../tests/security/app-credential-ownership.test.cjs)
@@ -655,5 +653,18 @@ The public read contract is documented in [App read access](../apps/README.md#ap
 Five focused [actual-handler checks](../../tests/security/app-visibility.test.cjs)
 cover these boundaries with modeled database dependencies. They do not establish
 native authentication, database snapshot isolation, post-lookup revocation,
-browser behavior or integrated gateway/runtime acceptance. OAuth membership and
-the remaining lifecycle access policies retain their separate gates.
+browser behavior or integrated gateway/runtime acceptance. The remaining
+lifecycle access policies retain their separate gates.
+
+### OAuth workspace access at code issuance
+
+The regular and MCP authorization contract, including transaction limits and
+error responses, is documented in
+[workspace access at code issuance](../oauth-endpoints.md#workspace-access-at-code-issuance).
+
+Focused [modeled tests](../../tests/security/oauth-workspace-access.test.cjs)
+reproduce nine failures with three controls on prior
+source. Twelve affected checks pass with a distinct transaction facade, alongside
+four reused gateway cases. The earlier combined 16-pass run preceded that fixture
+strengthening; the current 16 applicable passes span two runs. No native database,
+provider, browser or gateway activation acceptance is implied.
