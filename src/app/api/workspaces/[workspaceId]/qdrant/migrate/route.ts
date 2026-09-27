@@ -4,7 +4,8 @@
  * Bulk-indexes all issues, issue activities, and context (notes)
  * from PostgreSQL into Qdrant for semantic search.
  *
- * Requires the requesting user to be a workspace owner or admin.
+ * GET/POST access policy: docs/security/2026-09-23-hardening.md,
+ * "Qdrant maintenance auth boundary".
  * Idempotent — safe to run multiple times (upserts).
  */
 
