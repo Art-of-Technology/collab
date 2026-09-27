@@ -293,10 +293,11 @@ For Notes visibility, sharing and template restrictions, see the
 For issue visibility, edits and project moves, see the
 [issue access and mutation contract](docs/security/2026-09-23-hardening.md#issue-access-and-mutations).
 
-After the usual sign-in and access checks, opening a missing feature request from
-a workspace or project shows the 404 page. If a project feature link points to a
-feature assigned to another project, you are redirected to the requested project's
-feature list. A failure to load the feature data shows “Something went wrong”.
+After the usual sign-in and page access checks, a missing feature request or one
+denied by the [feature detail access contract](docs/security/feature-detail-read-access.md)
+shows the 404 page. If an accessible feature belongs to another project in the
+same workspace, you are redirected to the requested project's feature list.
+A failure to load the feature data shows “Something went wrong”.
 
 ## API
 
