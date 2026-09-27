@@ -22,6 +22,17 @@ owned by the [shared Prisma client contract](#shared-clients-and-build-repairs).
 See the [user-action subject regressions](../../tests/security/user-action-subject.test.cjs)
 and the [profile visibility contract](#post-and-coclaw-disclosure-follow-up).
 
+The nine email-bound authenticated actions in `src/actions/workspace.ts` now
+resolve the actor by session subject ID. The member-add target still resolves
+by the supplied email; owner, active workspace-admin and self-removal rules,
+validation and return shapes are preserved. Workspace REST GET/PATCH/DELETE
+use the shared session helper to require a live subject. PATCH administrative
+membership requires `status: true`; explicit system-admin privileges remain,
+using the current database user role rather than stale session role metadata.
+See the [workspace actor regressions](../../tests/security/workspace-actor.test.cjs).
+This slice does not close remaining workspace listing/detail/member-list or
+invitation authorization gaps, or prove concurrent revocation atomicity.
+
 `hasWorkspaceAccess` permits workspace owners without a membership row; other
 users require an active membership (`status: true`). Revocation denies access
 through this helper. See the [session and membership regression](../../tests/security/session-membership.test.cjs).

@@ -12,14 +12,14 @@ import { generateWorkspaceSlug } from '@/lib/utils';
 export async function getUserWorkspaces() {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
   // Get the current user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     },
     select: {
       id: true
@@ -107,14 +107,14 @@ export async function getUserWorkspaces() {
 export async function getWorkspaceById(workspaceId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
   // Get the current user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     },
     select: {
       id: true
@@ -213,7 +213,7 @@ export async function createWorkspace(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
@@ -235,7 +235,7 @@ export async function createWorkspace(data: {
   // Get the current user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     }
   });
   
@@ -305,7 +305,7 @@ export async function updateWorkspace(workspaceId: string, data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
@@ -314,7 +314,7 @@ export async function updateWorkspace(workspaceId: string, data: {
   // Get the current user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     }
   });
   
@@ -397,14 +397,14 @@ export async function updateWorkspace(workspaceId: string, data: {
 export async function deleteWorkspace(workspaceId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
   // Get the current user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     }
   });
   
@@ -447,7 +447,7 @@ export async function addWorkspaceMember(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
@@ -456,7 +456,7 @@ export async function addWorkspaceMember(data: {
   // Get the current user
   const currentUser = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     }
   });
   
@@ -545,7 +545,7 @@ export async function removeWorkspaceMember(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
@@ -554,7 +554,7 @@ export async function removeWorkspaceMember(data: {
   // Get the current user
   const currentUser = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     }
   });
   
@@ -607,14 +607,14 @@ export async function removeWorkspaceMember(data: {
 export async function checkWorkspaceLimit() {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
   // Get the current user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     },
     select: {
       id: true
@@ -950,7 +950,7 @@ export async function updateWorkspaceMemberStatus(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
@@ -959,7 +959,7 @@ export async function updateWorkspaceMemberStatus(data: {
   // Get the current user
   const currentUser = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     }
   });
   
