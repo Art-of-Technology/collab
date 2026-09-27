@@ -470,8 +470,9 @@ separate.
 
 ### Gateway session core (inactive integration)
 
-For current adapter coverage, see [shared session consumers](#shared-session-consumers)
-and [direct action session consumers](#direct-action-session-consumers).
+For current adapter coverage, see [shared session consumers](#shared-session-consumers),
+[direct action session consumers](#direct-action-session-consumers) and
+[workspace and project page session consumers](#workspace-and-project-page-session-consumers).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -524,8 +525,9 @@ The eleven action modules for app installation, comments, issue comments, labels
 leave, posts, post statistics, reactions, search, users and workspaces now import
 `getServerSession` from the request-session adapter. Only the import source changes;
 auth options, arguments, action bodies, projections, errors and tenant predicates
-are preserved. Legacy mode remains the deployment mode. Direct page/API consumers
-and the leave-service library still require migration before gateway activation.
+are preserved. Legacy mode remains the deployment mode. See
+[workspace and project page session consumers](#workspace-and-project-page-session-consumers)
+for page migration coverage and the remaining direct consumers.
 
 The actual user-action integration case fails before migration and passes afterward
 with mapped gateway identity, missing claims, revoked mapping, database failure,
@@ -534,3 +536,27 @@ error propagation remain distinct from the serialized/catching session helper.
 Existing affected user, workspace, label, comment, post and leave checks use the
 actual adapter in explicit legacy fixtures. This is modeled source evidence, not
 provider delivery, database isolation, all-route coverage or runtime acceptance.
+
+
+### Workspace and project page session consumers
+
+Fifteen direct NextAuth imports in workspace/project pages now use the shared
+request-session adapter: project details/settings/features/changelog/GitHub,
+workspace apps/views, workspace settings and the workspace list. Import reversal
+restores the prior source byte-for-byte; page bodies, auth arguments, redirects,
+props and existing predicates are unchanged. Five app/developer pages, API
+consumers and the leave-service library still require migration.
+
+The Features and Changelog integration cases execute the actual pages, adapter
+and identity parser with modeled dependencies. They fail before migration and
+pass afterward for mapped gateway identity, missing claims, revoked mapping,
+redirects, returned props and explicit legacy mode. Existing feature navigation
+and page prerequisites remain in the focused check set. These checks do not
+prove hydration, trusted ingress or every page/route behavior.
+
+The project Features and Changelog pages still use email-based membership checks
+without an active-membership condition and lack a current workspace-access
+predicate on their project payload query. These are remaining tenant blockers,
+not closed by this mechanical migration. Resolve the reachable access gaps and
+complete the consumer/alias/wrapper census before any real gateway exposure;
+deployment stays in legacy mode and all final runtime gates remain.
