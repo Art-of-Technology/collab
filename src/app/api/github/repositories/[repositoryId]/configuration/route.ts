@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authConfig } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { repositoryAccessWhere } from "@/lib/github/access";
 
 // PATCH /api/github/repositories/[repositoryId]/configuration - Update repository configuration
 export async function PATCH(
@@ -9,8 +9,8 @@ export async function PATCH(
   { params }: { params: Promise<{ repositoryId: string }> }
 ) {
   try {
-    const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -21,14 +21,7 @@ export async function PATCH(
     const repository = await prisma.repository.findFirst({
       where: {
         id: repositoryId,
-        project: {
-          workspace: {
-            OR: [
-              { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } },
-            ],
-          },
-        },
+        ...repositoryAccessWhere(actor.id),
       },
     });
 
@@ -67,7 +60,7 @@ export async function PATCH(
 
     // Update the repository configuration
     const updatedRepository = await prisma.repository.update({
-      where: { id: repositoryId },
+      where: { id: repositoryId, AND: [repositoryAccessWhere(actor.id)] },
       data: {
         versioningStrategy: versioningStrategy || repository.versioningStrategy,
         developmentBranch: versioningStrategy === 'MULTI_BRANCH' ? developmentBranch : null,
@@ -95,10 +88,10 @@ export async function PATCH(
     return NextResponse.json({
       success: true,
       repository: updatedRepository,
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
 
-  } catch (error) {
-    console.error('[REPOSITORY_CONFIG_UPDATE]', error);
+  } catch {
+    console.error('[REPOSITORY_CONFIG_UPDATE]');
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

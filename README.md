@@ -249,6 +249,10 @@ Collab is designed to streamline internal communication and work tracking by off
 
 ### Integration availability
 
+For GitHub account and repository disconnect behavior, repository details and
+configuration access, see the
+[GitHub lifecycle access contract](docs/security/2026-09-23-hardening.md#github-repository-lifecycle-access).
+
 The legacy Slack `/api/slack/my-tasks` and `/api/slack/create-issue` commands
 return HTTP 503 with an ephemeral unavailable message. Editable profile `slackId`
 values are not verified identities; existing configuration, profile IDs and
