@@ -8,7 +8,7 @@ import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
 import { emitIssueUpdated, emitIssueDeleted } from "@/lib/event-bus";
-import { findIssueByIdOrKey, STANDARD_ISSUE_INCLUDE, userHasWorkspaceAccess } from "@/lib/issue-finder";
+import { findIssueByIdOrKey, getStandardIssueInclude, userHasWorkspaceAccess } from "@/lib/issue-finder";
 import { updateIssue } from "@/lib/issue-mutation";
 
 export const dynamic = 'force-dynamic';
@@ -37,7 +37,7 @@ export async function GET(
     const issue = await findIssueByIdOrKey(issueId, {
       workspaceId: workspaceId || undefined,
       userId: currentUser.id,
-      include: STANDARD_ISSUE_INCLUDE
+      include: getStandardIssueInclude(currentUser.id)
     });
 
     if (!issue) {

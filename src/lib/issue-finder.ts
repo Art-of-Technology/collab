@@ -1,5 +1,23 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from "@/lib/prisma";
-import { isIssueKey } from "@/lib/shared-issue-key-utils";
+
+export function issueAccessWhere(userId: string) {
+  return { workspace: { OR: [
+    { ownerId: userId },
+    { members: { some: { userId, status: true } } }
+  ] } };
+}
+
+export function issueReadAccessWhere(userId: string) {
+  return {
+    ...issueAccessWhere(userId),
+    project: issueAccessWhere(userId),
+    OR: [
+      { statusId: null },
+      { projectStatus: { project: issueAccessWhere(userId) } }
+    ]
+  } satisfies Prisma.IssueWhereInput;
+}
 
 /**
  * Options for finding issues
@@ -16,9 +34,9 @@ export interface FindIssueOptions {
 }
 
 /**
- * Find an issue by ID or issue key with proper workspace scoping
+ * Find an issue by ID or issue key within issueReadAccessWhere's scope
  * 
- * @param idOrKey - Either a UUID (direct ID) or issue key (e.g., "DEF-1")
+ * @param idOrKey - Stored ID or exact issue key
  * @param options - Options for the search
  * @returns Promise<Issue | null>
  */
@@ -32,14 +50,9 @@ export async function findIssueByIdOrKey<T = any>(
 
   return prisma.issue.findFirst({
     where: {
-      ...(isIssueKey(idOrKey) ? { issueKey: idOrKey } : { id: idOrKey }),
+      AND: [{ OR: [{ id: idOrKey }, { issueKey: idOrKey }] }],
       ...(workspaceId && { workspaceId }),
-      workspace: {
-        OR: [
-          { ownerId: userId },
-          { members: { some: { userId, status: true } } }
-        ]
-      }
+      ...issueReadAccessWhere(userId)
     },
     ...(include && { include }),
     ...(select && { select })
@@ -47,9 +60,10 @@ export async function findIssueByIdOrKey<T = any>(
 }
 
 /**
- * Standard issue include object commonly used across API routes
+ * Use only after issueReadAccessWhere authorizes the root issue; root project
+ * and workspace projections rely on that check.
  */
-export const STANDARD_ISSUE_INCLUDE = {
+export const getStandardIssueInclude = (userId: string) => ({
   assignee: {
     select: { id: true, name: true, email: true, image: true, useCustomAvatar: true }
   },
@@ -63,15 +77,19 @@ export const STANDARD_ISSUE_INCLUDE = {
     select: { id: true, name: true, slug: true }
   },
   labels: {
+    where: issueAccessWhere(userId),
     select: { id: true, name: true, color: true }
   },
   parent: {
+    where: issueReadAccessWhere(userId),
     select: { id: true, title: true, issueKey: true, type: true }
   },
   children: {
+    where: issueReadAccessWhere(userId),
     select: { id: true, title: true, issueKey: true, type: true, status: true }
   },
   projectStatus: {
+    where: { project: issueAccessWhere(userId) },
     select: { id: true, name: true, displayName: true, color: true, iconName: true, order: true }
   },
   comments: {
@@ -80,8 +98,8 @@ export const STANDARD_ISSUE_INCLUDE = {
     },
     orderBy: { createdAt: 'asc' as const }
   },
-  _count: { select: { children: true, comments: true } }
-} as const;
+  _count: { select: { children: { where: issueReadAccessWhere(userId) }, comments: true } }
+} as const satisfies Prisma.IssueInclude);
 
 /**
  * Helper function to check if a user has access to a workspace

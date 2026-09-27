@@ -9,7 +9,7 @@ const permissions = load('src/lib/permissions.ts', { './prisma': { prisma: {} } 
 function fixture() {
   const workspace = { id: 'own', ownerId: 'alice', members: [] };
   let state = {
-    id: 'issue', workspaceId: workspace.id, workspace, projectId: 'project',
+    id: 'issue', workspaceId: workspace.id, workspace, projectId: 'project', project: { workspace }, statusId: null,
     reporterId: 'alice', priority: 'MEDIUM', parentId: null,
     updatedAt: new Date('2026-09-24T00:00:00Z'),
   };

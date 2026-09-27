@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { IssueType, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { checkUserPermissions, canActOnOwnContent, Permission } from '@/lib/permissions';
-import { findIssueByIdOrKey, STANDARD_ISSUE_INCLUDE, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { findIssueByIdOrKey, getStandardIssueInclude, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { normalizeDescriptionHTML } from '@/utils/html-normalizer';
 
 const UpdateIssueSchema = z.object({
@@ -85,7 +85,8 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
       const current = await tx.issue.findFirst({
         where: {
           id: existingIssue.id, workspaceId: existingIssue.workspaceId,
-          projectId: existingIssue.projectId, updatedAt: existingIssue.updatedAt
+          projectId: existingIssue.projectId, updatedAt: existingIssue.updatedAt,
+          ...issueReadAccessWhere(userId)
         },
         select: { id: true }
       });
@@ -175,7 +176,7 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
           ...updateData,
           ...(labelIds ? { labels: { set: labelIds.map(id => ({ id })) } } : {})
         },
-        include: STANDARD_ISSUE_INCLUDE
+        include: getStandardIssueInclude(userId)
       });
       if (assigneeChanged && issue.assigneeId) {
         await tx.issueAssignee.upsert({

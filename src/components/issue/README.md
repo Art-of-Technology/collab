@@ -132,7 +132,7 @@ The components expect these API endpoints to be available:
 
 ```
 GET /api/issues/:id              # Fetch issue details
-PATCH /api/issues/:id            # Update issue fields
+PUT /api/issues/:id              # Update issue fields
 DELETE /api/issues/:id           # Delete issue
 GET /api/projects/:id/columns    # Get project columns/statuses
 GET /api/workspaces/:id/members  # Get workspace members
