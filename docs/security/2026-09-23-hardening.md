@@ -1034,6 +1034,10 @@ and precheck/use races remain separate. No keys or live secrets were accessed.
 
 ## Issue API session adapter
 
+For current stored GitHub metadata access, see the
+[issue GitHub projection contract](../issue-github-access.md). The adapter-only
+scope and limitations below record the earlier integration evidence.
+
 Issue list/create, issue search and stored GitHub metadata use the
 [shared adapter contract](#gateway-session-core-inactive-integration). Only three
 session imports changed; `authOptions`, queries, payloads, permissions and
