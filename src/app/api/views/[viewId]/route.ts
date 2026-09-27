@@ -1,5 +1,6 @@
+import { viewReadAccessWhere, viewEditAccessWhere, viewReferencesAllowed } from '@/lib/view-access';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
@@ -10,7 +11,7 @@ export async function GET(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,9 +23,9 @@ export async function GET(
       return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
     }
 
-    // Get user
+    // Resolve the current session subject by immutable ID
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
+      where: { id: session.user.id }
     });
 
     if (!user) {
@@ -33,24 +34,7 @@ export async function GET(
 
     // Fetch view with access control using slug
     const view = await prisma.view.findFirst({
-      where: {
-        slug: viewSlug,
-        workspaceId: workspaceId,
-        OR: [
-          { visibility: 'WORKSPACE' },
-          { visibility: 'SHARED', sharedWith: { has: user.id } },
-          { visibility: 'PERSONAL', ownerId: user.id }
-        ],
-        workspace: {
-          members: {
-            some: {
-              user: {
-                email: session.user.email
-              }
-            }
-          }
-        }
-      },
+      where: { slug: viewSlug, workspaceId, ...viewReadAccessWhere(user.id) },
       include: {
         workspace: {
           select: {
@@ -118,7 +102,7 @@ export async function PUT(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -131,9 +115,9 @@ export async function PUT(
       return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
     }
 
-    // Get user
+    // Resolve the current session subject by immutable ID
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
+      where: { id: session.user.id }
     });
 
     if (!user) {
@@ -142,24 +126,7 @@ export async function PUT(
 
     // Check if user can edit this view (only owner can edit personal views)
     const existingView = await prisma.view.findFirst({
-      where: {
-        slug: viewSlug,
-        workspaceId: workspaceId,
-        OR: [
-          { visibility: 'PERSONAL', ownerId: user.id },
-          { visibility: 'WORKSPACE' }, // TODO: Add proper workspace admin check
-          { visibility: 'SHARED', ownerId: user.id }
-        ],
-        workspace: {
-          members: {
-            some: {
-              user: {
-                email: session.user.email
-              }
-            }
-          }
-        }
-      }
+      where: { slug: viewSlug, workspaceId, ...viewEditAccessWhere(user.id) }
     });
 
     if (!existingView) {
@@ -225,9 +192,13 @@ export async function PUT(
       updateData.visibility = visibility;
     }
 
-    // Update the view
+    if (!await viewReferencesAllowed(user.id, workspaceId, { projectIds, workspaceIds, sharedWith })) {
+      return NextResponse.json({ error: 'Invalid or inaccessible view references' }, { status: 400 });
+    }
+
+    // Update only while current access still permits editing.
     const updatedView = await prisma.view.update({
-      where: { id: existingView.id },
+      where: { id: existingView.id, workspaceId, ...viewEditAccessWhere(user.id) },
       data: updateData,
       include: {
         workspace: {
@@ -292,7 +263,7 @@ export async function DELETE(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -304,9 +275,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
     }
 
-    // Get user
+    // Resolve the current session subject by immutable ID
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
+      where: { id: session.user.id }
     });
 
     if (!user) {
@@ -315,20 +286,7 @@ export async function DELETE(
 
     // Check if user can delete this view (only owner can delete)
     const existingView = await prisma.view.findFirst({
-      where: {
-        slug: viewSlug,
-        workspaceId: workspaceId,
-        ownerId: user.id, // Only creator can delete
-        workspace: {
-          members: {
-            some: {
-              user: {
-                email: session.user.email
-              }
-            }
-          }
-        }
-      }
+      where: { slug: viewSlug, workspaceId, ownerId: user.id, ...viewReadAccessWhere(user.id) }
     });
 
     if (!existingView) {
@@ -339,7 +297,7 @@ export async function DELETE(
 
     // Delete the view
     await prisma.view.delete({
-      where: { id: existingView.id }
+      where: { id: existingView.id, workspaceId, ownerId: user.id, ...viewReadAccessWhere(user.id) }
     });
 
     return NextResponse.json({ message: 'View deleted successfully' });

@@ -3,7 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { publishEvent } from '@/lib/redis';
 import { VIEW_POSITIONS_MAX_BULK_SIZE } from '@/constants/viewPositions';
-import { findIssueByIdOrKey } from '@/lib/issue-finder';
+import { findIssueByIdOrKey, issueReadAccessWhere } from '@/lib/issue-finder';
+import { viewReadAccessWhere } from '@/lib/view-access';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -28,11 +29,7 @@ export async function PUT(
     const view = await prisma.view.findFirst({
       where: {
         id: viewId,
-        OR: [
-          { ownerId: currentUser.id },
-          { visibility: 'SHARED' },
-          { visibility: 'WORKSPACE' }
-        ]
+        ...viewReadAccessWhere(currentUser.id)
       }
     });
 
@@ -63,7 +60,7 @@ export async function PUT(
         where: {
           id: { in: uniqueIssueIds },
           workspaceId: view.workspaceId,
-          workspace: { members: { some: { userId: currentUser.id } } }
+          ...issueReadAccessWhere(currentUser.id)
         },
         select: { id: true }
       });
@@ -71,13 +68,26 @@ export async function PUT(
         return NextResponse.json({ error: 'One or more issues not found or access denied.' }, { status: 404 });
       }
 
+      if (cleanup != null && (!Array.isArray(cleanup.issueIds) ||
+          cleanup.issueIds.some((id: unknown) => typeof id !== 'string' || !uniqueIssueIds.includes(id)) ||
+          typeof cleanup.keepColumnId !== 'string' || !cleanup.keepColumnId)) {
+        return NextResponse.json({ error: 'Cleanup must reference validated bulk issues and a destination column.' }, { status: 400 });
+      }
+
       // Use a single transaction for atomic batch operations
       await prisma.$transaction(async (tx) => {
+        const currentView = await tx.view.findFirst({
+          where: { id: viewId, workspaceId: view.workspaceId, ...viewReadAccessWhere(currentUser.id) },
+          select: { id: true }
+        });
+        if (!currentView) throw new Error('View access changed');
         // Optional cleanup: remove old assignments for provided issues outside the destination column
         if (cleanup?.issueIds?.length && cleanup?.keepColumnId) {
           await tx.viewIssuePosition.deleteMany({
             where: {
               viewId,
+              view: { workspaceId: view.workspaceId, ...viewReadAccessWhere(currentUser.id) },
+              issue: { workspaceId: view.workspaceId, ...issueReadAccessWhere(currentUser.id) },
               issueId: { in: cleanup.issueIds as string[] },
               columnId: { not: cleanup.keepColumnId as string }
             }
@@ -93,15 +103,17 @@ export async function PUT(
                   viewId,
                   issueId: item.issueId,
                   columnId: item.columnId
-                }
+                },
+                view: { workspaceId: view.workspaceId, ...viewReadAccessWhere(currentUser.id) },
+                issue: { workspaceId: view.workspaceId, ...issueReadAccessWhere(currentUser.id) }
               },
               update: { 
                 position: item.position,
                 updatedAt: new Date()
               },
               create: {
-                viewId,
-                issueId: item.issueId,
+                view: { connect: { id: viewId, workspaceId: view.workspaceId, ...viewReadAccessWhere(currentUser.id) } },
+                issue: { connect: { id: item.issueId, workspaceId: view.workspaceId, ...issueReadAccessWhere(currentUser.id) } },
                 columnId: item.columnId,
                 position: item.position
               }
@@ -136,9 +148,15 @@ export async function PUT(
       );
     }
 
+    if (typeof issueId !== 'string' || typeof columnId !== 'string' ||
+        !Number.isFinite(position) || !Number.isInteger(position) || position < 0) {
+      return NextResponse.json({ error: 'Issue and column IDs must be strings; position must be a non-negative integer.' }, { status: 400 });
+    }
+
     // Verify issue exists and user has access (single update path)
     const issue = await findIssueByIdOrKey(issueId, {
-      userId: currentUser.id
+      userId: currentUser.id,
+      workspaceId: view.workspaceId
     });
 
     if (!issue) {
@@ -150,16 +168,18 @@ export async function PUT(
       where: {
         viewId_issueId_columnId: {
           viewId,
-          issueId,
+          issueId: issue.id,
           columnId
-        }
+        },
+        view: { workspaceId: view.workspaceId, ...viewReadAccessWhere(currentUser.id) },
+        issue: { workspaceId: view.workspaceId, ...issueReadAccessWhere(currentUser.id) }
       },
       update: {
         position: position
       },
       create: {
-        viewId,
-        issueId,
+        view: { connect: { id: viewId, workspaceId: view.workspaceId, ...viewReadAccessWhere(currentUser.id) } },
+        issue: { connect: { id: issue.id, workspaceId: view.workspaceId, ...issueReadAccessWhere(currentUser.id) } },
         columnId,
         position: position
       }
@@ -169,7 +189,7 @@ export async function PUT(
       type: 'view.issue-position.updated',
       workspaceId: view.workspaceId,
       viewId,
-      issueId,
+      issueId: issue.id,
       columnId,
       position,
       userId: currentUser.id // Add user context to distinguish actions
@@ -204,11 +224,7 @@ export async function GET(
     const view = await prisma.view.findFirst({
       where: {
         id: viewId,
-        OR: [
-          { ownerId: currentUser.id },
-          { visibility: 'SHARED' },
-          { visibility: 'WORKSPACE' }
-        ]
+        ...viewReadAccessWhere(currentUser.id)
       }
     });
 
@@ -218,7 +234,11 @@ export async function GET(
 
     // Get all view-specific positions
     const positions = await prisma.viewIssuePosition.findMany({
-      where: { viewId },
+      where: {
+        viewId,
+        view: { workspaceId: view.workspaceId, ...viewReadAccessWhere(currentUser.id) },
+        issue: { workspaceId: view.workspaceId, ...issueReadAccessWhere(currentUser.id) }
+      },
       include: {
         issue: {
           select: {

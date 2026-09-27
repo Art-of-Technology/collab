@@ -1,3 +1,4 @@
+import { viewReadAccessWhere } from '@/lib/view-access';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -19,25 +20,7 @@ export const POST = withRateLimit(async function(
 
     // Check if view exists and user has access
     const view = await prisma.view.findFirst({
-      where: {
-        id: viewId,
-        OR: [
-          // User owns the view
-          { ownerId: currentUser.id },
-          // View is shared with user
-          { sharedWith: { has: currentUser.id } },
-          // View is workspace-wide and user is workspace member
-          {
-            visibility: 'WORKSPACE',
-            workspace: {
-              OR: [
-                { ownerId: currentUser.id },
-                { members: { some: { userId: currentUser.id } } }
-              ]
-            }
-          }
-        ]
-      }
+      where: { id: viewId, ...viewReadAccessWhere(currentUser.id) }
     });
 
     if (!view) {
@@ -46,12 +29,7 @@ export const POST = withRateLimit(async function(
 
     // Check if user is already following
     const existingFollower = await prisma.viewFollower.findUnique({
-      where: {
-        viewId_userId: {
-          viewId,
-          userId: currentUser.id
-        }
-      }
+      where: { viewId_userId: { viewId, userId: currentUser.id }, view: viewReadAccessWhere(currentUser.id) }
     });
 
     if (existingFollower) {
@@ -61,8 +39,8 @@ export const POST = withRateLimit(async function(
     // Add user as follower
     await prisma.viewFollower.create({
       data: {
-        viewId,
-        userId: currentUser.id
+        view: { connect: { id: viewId, ...viewReadAccessWhere(currentUser.id) } },
+        user: { connect: { id: currentUser.id } }
       }
     });
 
@@ -88,25 +66,7 @@ export const DELETE = withRateLimit(async function(
 
     // Check if view exists and user has access
     const view = await prisma.view.findFirst({
-      where: {
-        id: viewId,
-        OR: [
-          // User owns the view
-          { ownerId: currentUser.id },
-          // View is shared with user
-          { sharedWith: { has: currentUser.id } },
-          // View is workspace-wide and user is workspace member
-          {
-            visibility: 'WORKSPACE',
-            workspace: {
-              OR: [
-                { ownerId: currentUser.id },
-                { members: { some: { userId: currentUser.id } } }
-              ]
-            }
-          }
-        ]
-      }
+      where: { id: viewId, ...viewReadAccessWhere(currentUser.id) }
     });
 
     if (!view) {
@@ -115,10 +75,7 @@ export const DELETE = withRateLimit(async function(
 
     // Remove user as follower
     await prisma.viewFollower.deleteMany({
-      where: {
-        viewId,
-        userId: currentUser.id
-      }
+      where: { viewId, userId: currentUser.id, view: viewReadAccessWhere(currentUser.id) }
     });
 
     return NextResponse.json({ message: "Successfully unfollowed view" });
@@ -143,25 +100,7 @@ export const GET = withRateLimit(async function(
 
     // Check if view exists and user has access
     const view = await prisma.view.findFirst({
-      where: {
-        id: viewId,
-        OR: [
-          // User owns the view
-          { ownerId: currentUser.id },
-          // View is shared with user
-          { sharedWith: { has: currentUser.id } },
-          // View is workspace-wide and user is workspace member
-          {
-            visibility: 'WORKSPACE',
-            workspace: {
-              OR: [
-                { ownerId: currentUser.id },
-                { members: { some: { userId: currentUser.id } } }
-              ]
-            }
-          }
-        ]
-      }
+      where: { id: viewId, ...viewReadAccessWhere(currentUser.id) }
     });
 
     if (!view) {
@@ -170,17 +109,12 @@ export const GET = withRateLimit(async function(
 
     // Check if user is following the view
     const isFollowing = await prisma.viewFollower.findUnique({
-      where: {
-        viewId_userId: {
-          viewId,
-          userId: currentUser.id
-        }
-      }
+      where: { viewId_userId: { viewId, userId: currentUser.id }, view: viewReadAccessWhere(currentUser.id) }
     });
 
     // Get all followers
     const followers = await prisma.viewFollower.findMany({
-      where: { viewId },
+      where: { viewId, view: viewReadAccessWhere(currentUser.id) },
       include: {
         user: {
           select: {
