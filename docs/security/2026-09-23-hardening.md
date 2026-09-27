@@ -690,8 +690,9 @@ positive controls on prior source. A scoped exact-body Prisma typecheck passes.
 Entry authorization does not cancel an in-flight sync after revocation; existing
 nontransactional writes and globally keyed commit SHA upserts remain separate
 limitations. For OAuth state, see [GitHub OAuth browser state](#github-oauth-browser-state).
-Disconnect lifecycle and other recorded access gaps still require their own fixes
-before activation. For status reorder mutations,
+For disconnect authorization and remaining lifecycle limits, see
+[GitHub repository lifecycle access](#github-repository-lifecycle-access).
+Other recorded access gaps remain activation prerequisites. For status reorder mutations,
 see [Project status reorder access](#project-status-reorder-access).
 No real provider calls, database isolation or integrated runtime acceptance is
 established by these modeled checks.
@@ -783,16 +784,20 @@ Prisma/Next/Node typecheck passes. These checks
 mock provider/database operations and establish no live provider or concurrency
 acceptance. Caller repository ID versus provider-returned ID binding, post-entry
 revocation, shared provider-helper logging, nontransactional webhook/connection
-lifecycle, globally keyed commit SHA writes, and other repository read/lifecycle
-entry points remain separate recorded boundaries.
+lifecycle and globally keyed commit SHA writes remain separate recorded boundaries.
+For repository details, disconnect and configuration access, see
+[GitHub repository lifecycle access](#github-repository-lifecycle-access).
 
 ## GitHub repository lifecycle access
 
-OAuth account disconnect and user-info, repository details/disconnect, and
-configuration updates resolve the current user through the shared session helper.
+`POST /api/github/oauth/disconnect`, `GET /api/github/oauth/user-info`,
+`GET`/`DELETE /api/github/repositories/[repositoryId]`, and
+`PATCH /api/github/repositories/[repositoryId]/configuration` resolve the current
+user through the shared session helper.
 Missing or deleted users receive 401 before credential use or writes. Repository
-reads require the exact repository and workspace owner or active membership; owners
-need no membership row. Configuration update and repository deletion repeat that
+reads require the exact repository and workspace owner or active membership
+(`status: true`); owners need no membership row. Missing or inaccessible
+repositories receive 404. Configuration update and repository deletion repeat that
 predicate in their final database write selector. A failed final selector retains
 the existing generic 500 response; it does not mutate the repository.
 
@@ -808,7 +813,8 @@ provider failures and 404, and may have already called the provider when the fin
 database selector rejects changed access. This is not an atomic provider/database
 transaction or a proof of concurrent revocation safety.
 
-Seventeen actual-route checks with mocked database/provider/encryption boundaries
+Seventeen [actual-route checks](../../tests/security/github-lifecycle-access.test.cjs)
+with mocked database/provider/encryption boundaries
 pass after thirteen regression failures and four controls on prior source. The
 four exact route bodies and shared access helpers pass a scoped Prisma/Next/Node
 typecheck. These are source and modeled behavior checks, not native database,
