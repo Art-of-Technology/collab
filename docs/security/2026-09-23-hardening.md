@@ -1357,8 +1357,10 @@ the remaining delivery and runtime gates remain separate.
 The workspace action-filter endpoint resolves the caller through the shared
 session adapter and authorizes by user ID against workspace ownership or active
 membership. It validates the filter array, scalar action names, supported
-subcondition kinds and string values before queries. Status-name lookup is scoped
-to the requested workspace and current project-workspace access.
+subcondition kinds and string values before workspace, status, activity or issue
+queries. Session identity resolution precedes this validation and may read the
+account mapping. Status-name lookup is scoped to the requested workspace and
+current project-workspace access.
 
 The existing activity intersection, status name/display-name matching and ID
 fallback remain. Before returning IDs, the route applies the shared current issue,
@@ -1366,10 +1368,12 @@ project and status access predicate and requested workspace, removing missing or
 unreadable issues while preserving the original intersection order. Empty or
 unsupported-condition results remain empty.
 
-Eight actual-handler checks pass after five failures and three controls on the
-base. They use the real session/identity and access helpers with modeled Prisma;
-two exact non-import bodies plus the actual ActionFilter interface pass a scoped
-strict Prisma/Next typecheck. No native concurrency or post-query revocation proof
+Eight [actual-handler checks](../../tests/security/action-filter-access.test.cjs)
+pass after five failures and three controls on the base. They use the real
+session/identity and access helpers with modeled Prisma. Their query log excludes
+account mapping lookups: zero logged payload queries does not mean zero identity
+database reads. Two exact non-import bodies plus the actual ActionFilter interface
+pass a scoped strict Prisma/Next typecheck. No native concurrency or post-query revocation proof
 is claimed. Generic tests remain SKIPPED, other delivery gates remain required,
 and gateway/worker activation and runtime/provider/browser/DB operations are not
 part of this slice.
