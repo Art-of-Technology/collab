@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { noteAccessWhere } from '@/lib/secrets/access';
+import { noteTagAccessWhere } from '@/lib/note-tag-access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
@@ -114,6 +115,7 @@ export const GET = withAppAuth(
               },
             },
             tags: {
+              where: noteTagAccessWhere(context.user.id),
               select: {
                 id: true,
                 name: true,

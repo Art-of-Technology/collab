@@ -935,11 +935,8 @@ gateway checks pass with mocked database operations. The
 executes the selector and handlers but does not independently verify the mapping
 query; that coverage belongs to the linked core checks.
 
-This does not authorize gateway activation. Separate tenant-policy repairs remain
-required: tag listing and creation accept a supplied workspace without checking
-membership, tag listing includes unscoped note counts, note creation connects
-supplied tag IDs without checking their ownership/workspace, and issue link previews lack active membership and the
-shared issue-read scope (and exclude owners without membership rows). Existing
+This does not authorize gateway activation. For the subsequent tag and issue-preview
+policy repairs, see [Notes tag access and issue previews](#notes-tag-access-and-issue-previews). Existing
 raw error logging and post-lookup access races also remain outside this import
 change. No runtime, identity provisioning or provider operation was performed.
 
@@ -959,9 +956,9 @@ success, foreign-note denial, identity failure without legacy fallback, and
 explicit/default legacy behavior. Mapping-query behavior remains covered by the
 unchanged core fixture. This is not native database or concurrency acceptance.
 
-Gateway activation remains disabled. The existing unchecked tag-ID connection
-gap also applies to note PATCH (`tags.set`), alongside note creation; both need
-the same eventual tag policy. Existing precheck/final-write races, raw error
+Gateway activation remains disabled. Note creation and PATCH attachment policy is
+documented in [Notes tag access and issue previews](#notes-tag-access-and-issue-previews).
+Existing precheck/final-write races, raw error
 logging and pin authorization for workspace owners without a matching member
 role remain separate. No runtime, provider or identity provisioning occurred.
 
@@ -1460,3 +1457,13 @@ The request proxy now applies the existing strict gateway identity, exact HTTPS 
 Workspace SSE requires owner/active membership at admission and binds the request context for a fresh subject/workspace check before each message. Per-stream authorization and delivery follow Redis callback arrival order, so a slower authorization lookup cannot let a later event overtake an earlier one. Closure suppresses pending delivery and skips authorization for queued messages; the [stream regression fixture](../../tests/security/realtime-stream-access.test.cjs) covers overlapping callbacks with a delayed first view lookup and cancellation. Issue-bearing events require every referenced issue to satisfy the current read policy and retain accessible project/status references. View-bearing events also require the current view read policy in the stream workspace, including private/shared visibility. Invalid JSON closes the stream; malformed payloads and inaccessible references are not forwarded. Subscribers acquired or subscribed after cancellation are released. The separate view-stream endpoint remains disabled (410).
 
 Focused evidence executes actual proxy/session/logout code with Next request/response and matcher utilities, and actual stream/access helpers with Node AsyncLocalStorage/ReadableStream and modeled Prisma/Redis. The original corrected fixture recorded 19 baseline assertion failures plus one control, then 20 passes, before the ordering and queued-cancellation regressions were added. An initial view-query mock incorrectly passed an undefined OR into its predicate evaluator; its 17-pass/three-failure candidate receipt remains historical, with the exact correction and reconstructed initial fixture disclosed. Five exact non-import bodies pass scoped strict Prisma/Next/Redis checking. Current four producer payload shapes are represented as inputs; producers themselves are not re-executed by this fixture. No native Redis/database isolation, browser, IdP, post-lookup race, proxy deployment or installed-stream revocation guarantee is claimed. Gateway and worker remain OFF. Generic pipeline tests are SKIPPED, not PASS; review, docs, scoped lint, CI and full exact-head Octopus remain required.
+
+### Notes tag access and issue previews
+
+Tag lists retain their author/requested-workspace selection, intersected with current owner/active-member workspace access or the caller's own personal tags. Counts include only currently readable notes. Tag creation checks the destination and uses a scoped workspace connection; an empty workspace value creates a personal tag. Historical unauthorized tag links are filtered from Notes collections, detail/pin responses, app context/knowledge list and detail responses, universal search, project summaries and Coclaw memory; tag-based note search uses the same predicate.
+
+Note creation and editing validate tag IDs before encryption or version writes. Attachments accept the caller's personal tags or tags in the note's effective destination: direct workspace first, otherwise the final project's workspace. Scoped connect/set selectors retain that boundary at the write. Empty selections, personal tags, project-only notes and legitimate project changes remain supported. Issue link previews now use the shared issue/project/status read predicate while retaining workspace slug/ID matching, metadata shapes and external previews without fetching.
+
+App context POST and detail PUT apply the same attachment policy using the authenticated user's fixed workspace and final project before writes or events; invalid tags return 403. Omitting `tagIds` preserves existing links on update, while `[]` clears them. Both write responses filter tags by current access. Existing app scopes, current membership, note access, author/settings and secret gates remain in force.
+
+Focused actual-handler execution uses modeled Prisma: before the app-route extension, the corrected fixture recorded 20 baseline assertion failures and one control, followed by 24 passes including three existing Notes regressions. Earlier fixture failures (POST 201 expectation, missing project lookup mock and invalid project-only scope) remain historical. The original five exact non-import bodies passed scoped strict Prisma/Next checking with the actual session augmentation; this is not full-application typing or evidence for the later app-route changes. The [tag-access fixture](../../tests/security/note-tag-access.test.cjs) now also covers app attachment denial before writes/events, valid/empty/omitted tags and context/knowledge projections. Native transaction isolation, post-lookup project/membership changes and atomic versioning remain unproved. Gateway/worker remain OFF. Generic pipeline tests are SKIPPED; source review, documentation, scoped lint, CI and exact-head Octopus remain required.

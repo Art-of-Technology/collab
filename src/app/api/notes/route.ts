@@ -1,3 +1,4 @@
+import { noteTagAccessWhere, noteTagConnections } from '@/lib/note-tag-access';
 import { canWriteNoteDestination, noteAccessWhere } from '@/lib/secrets/access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
         ]
       }),
       ...(isFavorite && { isFavorite: true }),
-      ...(tagId && { tags: { some: { id: tagId } } }),
+      ...(tagId && { tags: { some: { id: tagId, AND: [noteTagAccessWhere(session.user.id)] } } }),
       ...(type && { type }),
       ...(isAiContext && { isAiContext: true }),
     };
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
       const notes = await prisma.note.findMany({
         where: { AND: [where, noteAccessWhere(session.user.id)] },
         include: {
-          tags: true,
+          tags: { where: noteTagAccessWhere(session.user.id) },
           author: {
             select: {
               id: true,
@@ -187,7 +188,7 @@ export async function GET(request: NextRequest) {
     const notes = await prisma.note.findMany({
       where: { AND: [where, noteAccessWhere(session.user.id)] },
       include: {
-        tags: true,
+        tags: { where: noteTagAccessWhere(session.user.id) },
         author: {
           select: {
             id: true,
@@ -332,6 +333,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Workspace ID is required" }, { status: 400 });
     }
 
+    const tagConnections = await noteTagConnections(session.user.id, tagIds, workspaceId || null, projectId || null);
+    if (tagConnections === null) {
+      return NextResponse.json({ error: "Tag access required" }, { status: 403 });
+    }
+
     // Handle secrets encryption for secret note types
     const noteType = type || NoteType.GENERAL;
     const isSecretType = isSecretNoteType(noteType);
@@ -395,14 +401,14 @@ export async function POST(request: NextRequest) {
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         // Template field (Phase 5)
         templateId: templateId || null,
-        ...(tagIds && tagIds.length > 0 && {
+        ...(tagConnections.length > 0 && {
           tags: {
-            connect: tagIds.map((id: string) => ({ id }))
+            connect: tagConnections
           }
         })
       },
       include: {
-        tags: true,
+        tags: { where: noteTagAccessWhere(session.user.id) },
         author: {
           select: {
             id: true,

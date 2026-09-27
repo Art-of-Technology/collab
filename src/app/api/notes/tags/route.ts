@@ -1,3 +1,6 @@
+import { noteTagAccessWhere } from '@/lib/note-tag-access';
+import { noteAccessWhere } from '@/lib/secrets/access';
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
@@ -17,6 +20,7 @@ export async function GET(request: NextRequest) {
 
     const tags = await prisma.noteTag.findMany({
       where: {
+        AND: [noteTagAccessWhere(session.user.id)],
         OR: [
           { authorId: session.user.id },
           ...(workspaceId ? [{ workspaceId }] : []),
@@ -24,7 +28,7 @@ export async function GET(request: NextRequest) {
       },
       include: {
         _count: {
-          select: { notes: true },
+          select: { notes: { where: noteAccessWhere(session.user.id) } },
         },
       },
       orderBy: { name: "asc" },
@@ -52,11 +56,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, color, workspaceId } = body;
 
-    if (!name?.trim()) {
+    if (typeof name !== "string" || !name.trim()) {
       return NextResponse.json(
         { error: "Tag name is required" },
         { status: 400 }
       );
+    }
+
+    if (workspaceId != null && workspaceId !== "" && (typeof workspaceId !== "string" || !await prisma.workspace.findFirst({
+      where: { id: workspaceId, AND: [postWorkspaceAccessWhere(session.user.id)] }, select: { id: true },
+    }))) {
+      return NextResponse.json({ error: "Workspace access required" }, { status: 403 });
     }
 
     // Check if tag with same name already exists for this user/workspace
@@ -79,12 +89,12 @@ export async function POST(request: NextRequest) {
       data: {
         name: name.trim(),
         color: color || "#6366F1",
-        authorId: session.user.id,
-        workspaceId: workspaceId || null,
+        author: { connect: { id: session.user.id } },
+        ...(workspaceId && { workspace: { connect: { id: workspaceId, AND: [postWorkspaceAccessWhere(session.user.id)] } } }),
       },
       include: {
         _count: {
-          select: { notes: true },
+          select: { notes: { where: noteAccessWhere(session.user.id) } },
         },
       },
     });
