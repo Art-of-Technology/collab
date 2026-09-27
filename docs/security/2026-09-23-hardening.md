@@ -461,10 +461,10 @@ passes 16/16 with no skips. This proves the modeled authorization, redirect and
 returned-prop contracts, not hydrated UI, database isolation or changes after the
 query snapshot. No runtime/browser/build/database/provider operation occurred.
 Generic native test stage is SKIPPED; other review/docs/lint/CI/exact-head Octopus
-gates remain. These are gateway prerequisites only: legacy auth mode remains,
-and shared gateway adapter/consumer migration plus private-origin, real-identity,
-isolated-writer, schema/restore and Ready-fence acceptance remain separate.
-
+gates remain. These are gateway prerequisites only; see the
+[inactive gateway core contract](#gateway-session-core-inactive-integration).
+Real-identity, isolated-writer, schema/restore and Ready-fence acceptance remain
+separate.
 
 ### Gateway session core (inactive integration)
 
@@ -474,20 +474,24 @@ is changed by this slice. Existing callers still use NextAuth directly. Gateway
 mode must remain disabled until reachable consumers and the edge/session/logout
 contract have migrated and private-origin enforcement is accepted.
 
-The adapter defaults to `nextauth`, accepts explicit `gateway`, and rejects any
+The adapter defaults to `nextauth`; explicit `nextauth` also preserves the original
+arguments and session. It accepts explicit `gateway` and returns `null` for any
 other `COLLAB_AUTH_MODE`. Gateway sessions require canonical, bounded UTF-8
 base64url issuer/subject/email claims with leading BOM characters preserved,
-literal verified email, the exact configured
-issuer and exact `weezboo.com` domain. The existing Account table must contain the
-explicit `maestro` mapping keyed by SHA-256 of issuer, NUL and subject. The live
-user must have exactly one such mapping and a matching current email; the adapter
-never provisions users, links by email, or falls back to a cookie in gateway mode.
+`x-collab-email-verified: true`, an issuer exactly matching `COLLAB_GATEWAY_ISSUER`,
+and the exact `weezboo.com` domain (case-insensitive). Missing or invalid claims
+return `null`; a missing or empty configured issuer also denies access.
+The existing Account table must contain the explicit `maestro` mapping keyed by
+SHA-256 of issuer, NUL and subject. The live user must have exactly one `maestro`
+account and a matching current email (case-insensitive); the adapter never
+provisions users, links by email, or falls back to a cookie in gateway mode.
 Mapping database errors propagate without legacy fallback. Unsafe requests require
 the exact configured HTTPS Origin when the later edge integration invokes the
 mutation guard; the helper alone does not enforce origin or trusted headers.
 
-The five focused core checks execute the actual identity and session modules with
-modeled headers/Prisma/NextAuth. They qualify parsing, origin decisions and session
+The five [focused core checks](../../tests/security/gateway-session-core.test.cjs)
+execute the actual identity and session modules with modeled headers/Prisma/NextAuth.
+They qualify parsing, origin decisions and session
 selection only, not live issuer trust, proxy stripping, database isolation,
 consumer coverage, browser behavior, or deployment acceptance.
 The two BOM regressions reproduce subject-key conflation and incorrect issuer
