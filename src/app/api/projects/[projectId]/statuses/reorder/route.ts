@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authConfig } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/session';
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { prisma } from '@/lib/prisma';
+
+class ReorderAccessChanged extends Error {}
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const session = await getServerSession(authConfig);
-    if (!session?.user?.email) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,23 +24,13 @@ export async function PATCH(
     }
 
     // Verify project and access
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { workspaceId: true }
+    const projectWhere = { id: projectId, workspace: postWorkspaceAccessWhere(actor.id) };
+    const project = await prisma.project.findFirst({
+      where: projectWhere,
+      select: { id: true }
     });
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-    }
-
-    const member = await prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId: project.workspaceId,
-        user: { email: session.user.email },
-        status: true
-      }
-    });
-    if (!member) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     // Accept either { id, order } or { name, order }
@@ -46,15 +38,19 @@ export async function PATCH(
     const normalized: Update[] = updates.map((u: any) => ({ id: u.id, name: u.name, order: Number(u.order) }));
 
     await prisma.$transaction(async (tx) => {
+      if (!await tx.project.findFirst({ where: projectWhere, select: { id: true } })) {
+        throw new ReorderAccessChanged();
+      }
       for (const u of normalized) {
         if (u.id) {
-          await tx.projectStatus.update({
-            where: { id: u.id },
+          const updated = await tx.projectStatus.updateMany({
+            where: { id: u.id, projectId, project: projectWhere },
             data: { order: u.order }
           });
+          if (updated.count !== 1) throw new ReorderAccessChanged();
         } else if (u.name) {
           await tx.projectStatus.updateMany({
-            where: { projectId, name: u.name },
+            where: { projectId, name: u.name, project: projectWhere },
             data: { order: u.order }
           });
         }
@@ -63,9 +59,11 @@ export async function PATCH(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof ReorderAccessChanged) {
+      return NextResponse.json({ error: 'Status not in project or access changed' }, { status: 409 });
+    }
     console.error('Error reordering project statuses:', error);
     return NextResponse.json({ error: 'Failed to reorder statuses' }, { status: 500 });
   }
 }
-
 

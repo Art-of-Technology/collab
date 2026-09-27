@@ -45693,7 +45693,7 @@
     {
       "method": "PATCH",
       "url": "/api/projects/{projectId}/statuses/reorder",
-      "file": "src\\app\\api\\projects\\[projectId]\\statuses\\reorder\\route.ts",
+      "file": "src/app/api/projects/[projectId]/statuses/reorder/route.ts",
       "title": "Update Projects {projectId} by ID",
       "description": "Partially update an existing projects {projectid}",
       "parameters": [
@@ -45790,7 +45790,7 @@
       },
       "codeExamples": {
         "language": "TypeScript",
-        "example": "export async function PATCH(\r\n  request: NextRequest,\r\n    const session = await getServerSession(authConfig);\r\n      return NextResponse.json({ error: 'Unauthorized' }, { status: <cvv> });\r\n    const { projectId } = await params;\r\n    const body = await request.json();\r\n    const updates = Array.isArray(body?.updates) ? body.updates : null;\r\n      return NextResponse.json({ error: 'No updates provided' }, { status: <cvv> });\r\n    const project = await prisma.project.findUnique({\r\n      return NextResponse.json({ error: 'Project not found' }, { status: <cvv> });\r\n    const member = await prisma.workspaceMember.findFirst({\r\n      return NextResponse.json({ error: 'Access denied' }, { status: <cvv> });\r\n    const normalized: Update[] = updates.map((u: any) => ({ id: u.id, name: u.name, order: Number(u.order) }));\r\n    await prisma.$transaction(async (tx) => {\r\n      for (const u of normalized) {\r\n    return NextResponse.json({ success: true });\r\n    return NextResponse.json({ error: 'Failed to reorder statuses' }, { status: <cvv> });\r"
+        "example": "export async function PATCH(\n  request: NextRequest,\n    const actor = await getCurrentUser();\n      return NextResponse.json({ error: 'Unauthorized' }, { status: <cvv> });\n    const { projectId } = await params;\n    const body = await request.json();\n    const updates = Array.isArray(body?.updates) ? body.updates : null;\n      return NextResponse.json({ error: 'No updates provided' }, { status: <cvv> });\n    const projectWhere = { id: projectId, workspace: postWorkspaceAccessWhere(actor.id) };\n    const project = await prisma.project.findFirst({\n      return NextResponse.json({ error: 'Project not found' }, { status: <cvv> });\n    const normalized: Update[] = updates.map((u: any) => ({ id: u.id, name: u.name, order: Number(u.order) }));\n    await prisma.$transaction(async (tx) => {\n      for (const u of normalized) {\n          const updated = await tx.projectStatus.updateMany({\n    return NextResponse.json({ success: true });\n      return NextResponse.json({ error: 'Status not in project or access changed' }, { status: <cvv> });\n    return NextResponse.json({ error: 'Failed to reorder statuses' }, { status: <cvv> });"
       },
       "errorHandling": {
         "commonErrors": [

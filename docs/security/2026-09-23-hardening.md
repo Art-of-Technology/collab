@@ -689,7 +689,25 @@ and token fallback. The final fixture reproduces twelve failures and five
 positive controls on prior source. A scoped exact-body Prisma typecheck passes.
 Entry authorization does not cancel an in-flight sync after revocation; existing
 nontransactional writes and globally keyed commit SHA upserts remain separate
-limitations. OAuth state, disconnect lifecycle, project-status mutation scope and
-other recorded access gaps still require their own fixes before activation.
+limitations. OAuth state, disconnect lifecycle and other recorded access gaps
+still require their own fixes before activation. For status reorder mutations,
+see [Project status reorder access](#project-status-reorder-access).
 No real provider calls, database isolation or integrated runtime acceptance is
 established by these modeled checks.
+
+## Project status reorder access
+
+`PATCH /api/projects/{projectId}/statuses/reorder` resolves a live database actor
+and requires ownership or active membership in the exact URL project's workspace.
+An absent or deleted actor returns 401; an inaccessible project returns 404.
+The transaction rechecks access and scopes each mutation to that project and
+current workspace predicate. Failed transaction-entry access or foreign or
+missing explicit status IDs return 409 and roll back earlier batch updates.
+
+Name-based multi-project broadcasts retain missing-name no-ops, ID precedence,
+sequential duplicate IDs, numeric order normalization and inactive-status support.
+Nine [modeled actual-route checks](../../tests/security/project-status-reorder-access.test.cjs)
+pass after six failures and three positive controls on prior source. A scoped
+exact-body Prisma/Next typecheck passes. These checks model transaction rollback
+and entry revocation; they do not establish database isolation or revocation
+visibility after a database snapshot.
