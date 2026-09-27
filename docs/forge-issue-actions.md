@@ -48,6 +48,18 @@ review for overlapping edits. Expand **Current source text for comparison** to
 review the latest title, native open/closed state and body before acknowledging
 an overlap. A missing comment edit never becomes a new post.
 
+## New issue drafts
+
+Closing **New issue**, including with Escape, discards its title, description
+and local messages. Reopening starts an empty draft. Closing an unsent draft
+does not create an issue or refresh the board. Closing after submission does
+not cancel or roll back the in-flight request; refresh and inspect the source
+before retrying an uncertain result. A fresh draft is not an exactly-once guarantee.
+For the implementation boundary and focused regression coverage, see
+[dialog lifetime](security/forge-create-dialog-lifetime.md).
+
+## Existing issue edits
+
 In the issue editor, a Forge rejection (including a missing target or a comment
 not owned by the shared writer) retains the draft and board and requires reload
 before another save. A Collab permission denial clears protected issue and board
