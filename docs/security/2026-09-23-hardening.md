@@ -842,7 +842,8 @@ Twelve actual-route modeled checks pass after eleven failures and one control on
 prior source. The exact route body and shared predicates pass a scoped
 Prisma/Next/Node typecheck. These checks mock database operations; they do not prove
 native isolation, access changes after the transaction's check, or concurrent
-single-default uniqueness. Project summary payload scope remains separate.
+single-default uniqueness. For project summary payload scope, see the
+[summary access contract](#project-summary-payload-access).
 
 ## Project summary payload access
 

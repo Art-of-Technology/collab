@@ -234,6 +234,8 @@ Collab is designed to streamline internal communication and work tracking by off
   For invitation links, see the [preview and acceptance contract](docs/security/2026-09-23-hardening.md#invitation-token-preview-and-acceptance-27-september-2026).
 - Use the timeline to post status updates, tasks, and feature requests.
 - Organize work using boards, milestones, and stories.
+  For project dashboard visibility, see the
+  [summary access contract](docs/security/2026-09-23-hardening.md#project-summary-payload-access).
   For status filter visibility, see the
   [project status access contract](docs/security/2026-09-23-hardening.md#project-status-reads-27-september-2026).
   For listing and creating project statuses, see the
