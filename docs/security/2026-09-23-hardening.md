@@ -7,8 +7,10 @@ Status: local implementation; not deployed or release-approved.
 The session helper in `src/lib/session.ts` and the `getCurrentUser`,
 `getUserProfile`, `updateUserProfile` and `updateUserAvatar` actions in
 `src/actions/user.ts` resolve the authenticated viewer by session `user.id`,
-never email. A valid ID works without an email or with an email belonging to
-another account; email cannot substitute for a missing or deleted subject.
+never email. Once a session is accepted, these lookups use its ID even without
+an email or with an email belonging to another account; email cannot substitute
+for a missing or deleted subject. Gateway session acceptance has the additional
+[identity requirements](#gateway-session-core-inactive-integration) below.
 Both `getCurrentUser` implementations return `null` for a missing ID or deleted
 user. The other three actions throw `Unauthorized` for a missing ID and
 `User not found` when their current-user lookup finds no user; profile input
@@ -468,11 +470,10 @@ separate.
 
 ### Gateway session core (inactive integration)
 
-The shared gateway identity and request-session modules are prepared for the later
-consumer migration. No production consumer, proxy, auth route, or deployment mode
-is changed by this slice. Existing callers still use NextAuth directly. Gateway
-mode must remain disabled until reachable consumers and the edge/session/logout
-contract have migrated and private-origin enforcement is accepted.
+For current adapter coverage, see [shared session consumers](#shared-session-consumers).
+No proxy, auth route, or deployment mode changes here. Gateway mode must remain
+disabled until all reachable consumers and the edge/session/logout contract have
+migrated and private-origin enforcement is accepted.
 
 The adapter defaults to `nextauth`; explicit `nextauth` also preserves the original
 arguments and session. It accepts explicit `gateway` and returns `null` for any
@@ -489,10 +490,29 @@ Mapping database errors propagate without legacy fallback. Unsafe requests requi
 the exact configured HTTPS Origin when the later edge integration invokes the
 mutation guard; the helper alone does not enforce origin or trusted headers.
 
-The five [focused core checks](../../tests/security/gateway-session-core.test.cjs)
+The [core parsing, origin and adapter checks](../../tests/security/gateway-session-core.test.cjs)
 execute the actual identity and session modules with modeled headers/Prisma/NextAuth.
 They qualify parsing, origin decisions and session
 selection only, not live issuer trust, proxy stripping, database isolation,
 consumer coverage, browser behavior, or deployment acceptance.
 The two BOM regressions reproduce subject-key conflation and incorrect issuer
 acceptance before the decoder fix; the original three checks continue to pass.
+
+### Shared session consumers
+
+`getAuthSession` in `src/lib/auth.ts` and `getCurrentUser` in `src/lib/session.ts`
+import the shared request-session adapter. Their callers, including Forge Board
+and project memory, inherit it; remaining direct NextAuth consumers are pending.
+Their bodies, legacy auth options/callbacks and current-user ID lookup are
+unchanged. Both inherit the [adapter contract](#gateway-session-core-inactive-integration).
+Mapping database errors propagate from `getAuthSession`; `getCurrentUser` preserves
+its existing catch-and-null behavior.
+Serialized current-user dates and nullable email verification remain unchanged.
+
+Two actual-helper regressions fail before migration and pass afterward alongside
+the existing core, session/membership, workspace-read and page prerequisites.
+Legacy tenant fixtures load the actual adapter with explicit `nextauth` mode;
+the two integration cases load both helpers, adapter and identity parser in
+gateway/invalid/default/legacy modes. Prisma, NextAuth and headers are modeled.
+This proves modeled shared-helper behavior only; activation and acceptance remain
+subject to the [gateway integration requirements](#gateway-session-core-inactive-integration).
