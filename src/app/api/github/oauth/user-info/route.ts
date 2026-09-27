@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authConfig } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { EncryptionService } from "@/lib/encryption";
 
@@ -10,14 +9,14 @@ import { EncryptionService } from "@/lib/encryption";
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Get user's GitHub access token
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: actor.id },
       select: { githubAccessToken: true, githubUsername: true, githubId: true },
     });
 
@@ -70,7 +69,7 @@ export async function GET(request: NextRequest) {
           role: membership?.role || 'unknown',
           state: membership?.state || 'unknown',
         };
-      } catch (error) {
+      } catch {
         return {
           login: org.login,
           id: org.id,
@@ -102,10 +101,10 @@ export async function GET(request: NextRequest) {
         githubId: user.githubId,
       },
       totalReposCount: reposData.length,
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
 
-  } catch (error) {
-    console.error('Error fetching GitHub user info:', error);
+  } catch {
+    console.error('Error fetching GitHub user info');
     return NextResponse.json(
       { error: "Failed to fetch GitHub user info" },
       { status: 500 }

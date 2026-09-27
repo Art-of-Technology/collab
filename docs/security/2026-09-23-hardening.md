@@ -785,3 +785,32 @@ acceptance. Caller repository ID versus provider-returned ID binding, post-entry
 revocation, shared provider-helper logging, nontransactional webhook/connection
 lifecycle, globally keyed commit SHA writes, and other repository read/lifecycle
 entry points remain separate recorded boundaries.
+
+## GitHub repository lifecycle access
+
+OAuth account disconnect and user-info, repository details/disconnect, and
+configuration updates resolve the current user through the shared session helper.
+Missing or deleted users receive 401 before credential use or writes. Repository
+reads require the exact repository and workspace owner or active membership; owners
+need no membership row. Configuration update and repository deletion repeat that
+predicate in their final database write selector. A failed final selector retains
+the existing generic 500 response; it does not mutate the repository.
+
+Repository details retain their existing relation payload and exclude stored
+access tokens and webhook secrets. Configuration fields, validation, and partial
+update behavior remain unchanged. Successful responses are `no-store`; touched
+exception logs use fixed messages instead of provider/database error details.
+
+Account disconnect clears only the current user's GitHub account fields. It does
+not revoke provider credentials or erase repository-stored tokens. Repository
+disconnect still attempts webhook deletion before local cascade deletion, tolerates
+provider failures and 404, and may have already called the provider when the final
+database selector rejects changed access. This is not an atomic provider/database
+transaction or a proof of concurrent revocation safety.
+
+Seventeen actual-route checks with mocked database/provider/encryption boundaries
+pass after thirteen regression failures and four controls on prior source. The
+four exact route bodies and shared access helpers pass a scoped Prisma/Next/Node
+typecheck. These are source and modeled behavior checks, not native database,
+provider or runtime acceptance. Existing configuration-UI strategy mismatches and
+post-snapshot access changes remain separate.

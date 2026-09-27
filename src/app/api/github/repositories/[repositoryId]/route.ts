@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authConfig } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { repositoryAccessWhere } from "@/lib/github/access";
 import { EncryptionService } from "@/lib/encryption";
 
 // GET /api/github/repositories/[repositoryId] - Get repository details
@@ -10,8 +10,8 @@ export async function GET(
   { params }: { params: Promise<{ repositoryId: string }> }
 ) {
   try {
-    const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -20,14 +20,7 @@ export async function GET(
     const repository = await prisma.repository.findFirst({
       where: {
         id: repositoryId,
-        project: {
-          workspace: {
-            OR: [
-              { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } },
-            ],
-          },
-        },
+        ...repositoryAccessWhere(actor.id),
       },
       include: {
         project: {
@@ -64,9 +57,9 @@ export async function GET(
     // Exclude sensitive fields from response
     const { accessToken, webhookSecret, ...safeRepository } = repository;
 
-    return NextResponse.json({ repository: safeRepository });
-  } catch (error) {
-    console.error('[GITHUB_REPOSITORY_GET]', error);
+    return NextResponse.json({ repository: safeRepository }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    console.error('[GITHUB_REPOSITORY_GET]');
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -77,27 +70,20 @@ export async function DELETE(
   { params }: { params: Promise<{ repositoryId: string }> }
 ) {
   try {
-    const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { repositoryId } = await params;
 
-    console.log(`[GITHUB_REPOSITORY_DELETE] Attempting to delete repository: ${repositoryId} for user: ${session.user.id}`);
+    console.log(`[GITHUB_REPOSITORY_DELETE] Attempting to delete repository: ${repositoryId} for user: ${actor.id}`);
 
     // Verify user has access to the repository's project
     const repository = await prisma.repository.findFirst({
       where: {
         id: repositoryId,
-        project: {
-          workspace: {
-            OR: [
-              { ownerId: session.user.id }, // Workspace owners
-              { members: { some: { userId: session.user.id } } }, // Workspace members
-            ],
-          },
-        },
+        ...repositoryAccessWhere(actor.id),
       },
       include: {
         project: {
@@ -109,14 +95,14 @@ export async function DELETE(
     });
 
     if (!repository) {
-      console.error(`[GITHUB_REPOSITORY_DELETE] Repository not found: ${repositoryId} for user: ${session.user.id}`);
+      console.error(`[GITHUB_REPOSITORY_DELETE] Repository not found: ${repositoryId} for user: ${actor.id}`);
       return NextResponse.json(
         { error: "Repository not found or insufficient permissions" },
         { status: 404 }
       );
     }
 
-    console.log(`[GITHUB_REPOSITORY_DELETE] Found repository: ${repository.fullName} (${repository.id}) for user: ${session.user.id}`);
+    console.log(`[GITHUB_REPOSITORY_DELETE] Found repository: ${repository.fullName} (${repository.id}) for user: ${actor.id}`);
 
     // Try to delete webhook from GitHub if we have webhook ID and access token
     if (repository.webhookId && repository.accessToken) {
@@ -125,21 +111,21 @@ export async function DELETE(
         const decryptedToken = EncryptionService.decrypt(repository.accessToken);
         await deleteGitHubWebhook(decryptedToken, repository.owner, repository.name, parseInt(repository.webhookId));
         console.log(`[GITHUB_REPOSITORY_DELETE] Webhook deleted from GitHub: ${repository.webhookId}`);
-      } catch (error) {
-        console.warn(`[GITHUB_REPOSITORY_DELETE] Failed to delete webhook from GitHub: ${error}`);
+      } catch {
+        console.warn('[GITHUB_REPOSITORY_DELETE] Failed to delete webhook from GitHub');
         // Don't fail the disconnect if webhook deletion fails
       }
     }
 
     // Delete repository and all related data (cascades)
     await prisma.repository.delete({
-      where: { id: repositoryId },
+      where: { id: repositoryId, AND: [repositoryAccessWhere(actor.id)] },
     });
 
     console.log(`[GITHUB_REPOSITORY_DELETE] Repository disconnected successfully: ${repository.id}`);
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('[GITHUB_REPOSITORY_DELETE] Error:', error);
+    return NextResponse.json({ success: true }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    console.error('[GITHUB_REPOSITORY_DELETE] Error');
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
