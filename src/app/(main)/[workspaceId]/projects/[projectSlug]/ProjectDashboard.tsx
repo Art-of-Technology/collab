@@ -455,7 +455,10 @@ export function ProjectDashboard({
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/${workspaceSlug}/projects/${projectSlug}/board`}><LayoutGrid className="mr-1.5 h-4 w-4" />Project board</Link>
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"

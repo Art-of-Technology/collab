@@ -12,6 +12,11 @@ Status: local implementation; not deployed or release-approved.
   authorizes status fields and `ASSIGN_TASK` only authorizes assignment. Every
   field in a mixed payload must be authorized. Deletion uses the corresponding
   delete permissions.
+- Priority updates validate case-insensitively against `UpdateIssueSchema` and
+  preserve the submitted casing in storage and responses. Existing uppercase
+  priorities therefore retain their Kanban grouping and filtering behavior;
+  invalid values fail before writes. See the
+  [priority regression](../../tests/security/issue-priority.test.cjs).
 - Same-workspace project moves require edit rights, an accessible destination,
   a valid destination status and compatible retained parent/child, label and
   repository relations. Invalid moves fail atomically without clearing relations;
@@ -65,16 +70,13 @@ and redirect regressions are in the security behavior suite.
 Legacy Slack availability and rollout constraints are documented in the
 [README](../../README.md#integration-availability).
 
-## Approved product direction (future slices, not implemented here)
+## Approved product direction
 
-Forge owns project issues and durable context. Collab projects this state and
-reuses Notes as the memory UI. Markdown in the bound repository is canonical;
-there must not be two independently editable copies. Memory types are Rules,
-Strategy, Decisions and Handoffs, with project, owner and revision and a
-Draft -> Approved -> Superseded lifecycle. Approved Rules always load; other
-approved context is retrieved as relevant. Discussion summaries retain Slack
-source links. Notes contain references to credentials, never credential values.
-Existing notes, data and rights must survive the eventual integration.
+The bounded read-only projection has its own
+[Forge board contract](../forge-board.md). The
+[project memory contract](../forge-project-memory.md) owns canonical storage,
+approval, provenance, credential boundaries and existing Notes compatibility.
+The broader integration below remains future work.
 
 Each Slack workspace/channel binds immutably to a project/repository. Agent work
 requires explicit Ready eligibility, atomic claims, idempotency, scoped
@@ -195,6 +197,8 @@ permission check.
 For app-token access and post response restrictions, see the served
 [authentication](../../public/docs/third-party-api.md#authentication) and
 [posts](../../public/docs/third-party-api.md#posts) reference.
+
+Comment read coverage also remains in `tests/security/comment-access.test.cjs`.
 Coclaw memory requires active workspace access and applies the shared Notes
 predicate to both its content query and total count, including filtered searches.
 
@@ -261,10 +265,11 @@ Other warnings occur in unchanged files; this result is not a zero-warning claim
 The security regressions are split by subject into ordinary executable
 `tests/security/*.test.cjs` files, using the existing VM loader and fixtures in
 `helpers.cjs`. The package entrypoint discovers every file and runs them serially to preserve
-the original single-process resource bound. The feature
-page navigation regression is retained for PR477 integration, and the opt-in
-native PostgreSQL cascade regression still covers both comment deletion paths
-and all three post deletion paths.
+the original single-process resource bound. The integrated feature-page
+regression lives in [`feature-navigation.test.cjs`](../../tests/security/feature-navigation.test.cjs)
+and uses native Next navigation helpers for the 404 and redirect checks.
+The opt-in native PostgreSQL cascade regression still covers both comment
+deletion paths and all three post deletion paths.
 
 Notes-comment notifications now use the existing Notes collection policy for
 recipient delivery, notification reads and mark-read operations. A comment

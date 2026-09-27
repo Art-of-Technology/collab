@@ -230,6 +230,12 @@ Collab is designed to streamline internal communication and work tracking by off
 - Create or join a workspace to start sharing updates.
 - Use the timeline to post status updates, tasks, and feature requests.
 - Organize work using boards, milestones, and stories.
+- Open **Project board** from a project dashboard; see the
+  [Forge board guide](docs/forge-board.md) for views, connection requirements
+  and the limits of this read-only slice.
+- Open **Approved project memory** from Project Notes; see the
+  [project memory guide](docs/forge-project-memory.md) for drafting, approval
+  and connection requirements.
 
 ### Integration availability
 
@@ -244,6 +250,11 @@ For Notes visibility, sharing and template restrictions, see the
 [Notes access contract](docs/security/2026-09-23-hardening.md#notes-access).
 For issue edits and project moves, see the
 [issue mutation contract](docs/security/2026-09-23-hardening.md#issue-access-and-mutations).
+
+After the usual sign-in and access checks, opening a missing feature request from
+a workspace or project shows the 404 page. If a project feature link points to a
+feature assigned to another project, you are redirected to the requested project's
+feature list. A failure to load the feature data shows “Something went wrong”.
 
 ## API
 
