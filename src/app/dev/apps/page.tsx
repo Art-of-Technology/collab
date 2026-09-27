@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Settings, ExternalLink, Package, FileText, CheckCircle, Download } from 'lucide-react';
 import Image from 'next/image';
 import { AppStatusBadge } from '@/components/apps/AppStatusBadge';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';

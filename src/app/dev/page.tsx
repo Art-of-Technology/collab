@@ -1,4 +1,4 @@
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { redirect } from 'next/navigation';
 import { Package, FileText, CheckCircle, Download } from 'lucide-react';

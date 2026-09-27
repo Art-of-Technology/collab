@@ -560,3 +560,20 @@ predicate on their project payload query. These are remaining tenant blockers,
 not closed by this mechanical migration. Resolve the reachable access gaps and
 complete the consumer/alias/wrapper census before any real gateway exposure;
 deployment stays in legacy mode and all final runtime gates remain.
+
+
+### App and developer page session consumers
+
+The app store and four developer pages (dashboard, apps, management and webhooks)
+now import the shared session adapter. Only the import source changes; existing
+optional-session app discovery, user/role guards, data queries and returned props
+are preserved. The developer dashboard integration case fails before migration
+and passes afterward, checking the mapped ID delivered to its data readers,
+login redirects before data reads on missing/revoked/invalid gateway identity,
+returned cards/activity and default/explicit legacy behavior. The actual page
+and adapter execute against modeled dependencies, not live providers or a browser.
+
+The literal page-import inventory is now migrated. This is not a complete reachable
+consumer census: API imports, the leave-service library, aliases/wrappers and
+edge/session/logout integration remain. Known tenant access blockers remain open,
+and gateway mode must stay disabled pending those fixes and final acceptance.

@@ -168,3 +168,55 @@ for (const page of ['features', 'changelog']) {
     }
   });
 }
+
+
+test('developer dashboard passes mapped identity to data readers and keeps legacy redirects and props', async () => {
+  const prior = { mode: process.env.COLLAB_AUTH_MODE, issuer: process.env.COLLAB_GATEWAY_ISSUER };
+  const issuer = 'https://identity.example.test/realms/company';
+  const encode = value => Buffer.from(value).toString('base64url');
+  let headers = new Headers({ 'x-collab-issuer': encode(issuer), 'x-collab-subject': encode('subject'),
+    'x-collab-email': encode('alex@weezboo.com'), 'x-collab-email-verified': 'true' });
+  let mapped = true, legacy = 0;
+  const calls = [];
+  const user = { id: 'mapped', email: 'alex@weezboo.com', accounts: [{ id: 'mapping' }] };
+  const nextAuth = { getServerSession: async () => { legacy++; return { user: { id: 'legacy' } }; } };
+  const identity = load('src/lib/gateway-identity.ts', { 'node:crypto': require('node:crypto') }, { process, Buffer, TextDecoder, URL });
+  const adapter = load('src/lib/request-session.ts', { 'server-only': {}, './gateway-identity': identity,
+    'next-auth': nextAuth, 'next/headers': { headers: async () => headers },
+    '@/lib/prisma': { prisma: { account: { findUnique: async () => mapped ? { user } : null } } } }, { process });
+  const jsx = (type, props) => ({ type, props });
+  const stats = { totalApps: 5, draftApps: 1, inReviewApps: 2, publishedApps: 2, totalInstallations: 9 };
+  const { default: Page } = load('src/app/dev/page.tsx', {
+    '@/lib/request-session': adapter, 'next-auth': nextAuth, '@/lib/auth-options': { authOptions: {} },
+    'next/navigation': { redirect: location => { throw Object.assign(new Error('redirect'), { location }); } },
+    'react/jsx-runtime': { jsx, jsxs: jsx },
+    'lucide-react': { Package: 'Package', FileText: 'FileText', CheckCircle: 'CheckCircle', Download: 'Download' },
+    './dashboard/QuickActions': { default: 'QuickActions' }, './dashboard/SummaryCards': { default: 'SummaryCards' },
+    './dashboard/RecentActivityFeed': { default: 'RecentActivityFeed' },
+    './dashboard/data': {
+      getDashboardStats: async id => { calls.push(['stats', id]); return stats; },
+      getRecentActivities: async (id, limit) => { calls.push(['activity', id, limit]); return ['activity']; },
+    },
+  });
+  try {
+    process.env.COLLAB_AUTH_MODE = 'gateway'; process.env.COLLAB_GATEWAY_ISSUER = issuer;
+    const tree = await Page();
+    assert.deepEqual(calls, [['stats', 'mapped'], ['activity', 'mapped', 10]]);
+    assert.equal(find(tree, 'SummaryCards').props.cards.length, 5);
+    assert.equal(find(tree, 'SummaryCards').props.cards[0].value, 5);
+    assert.equal(find(tree, 'RecentActivityFeed').props.activities[0], 'activity');
+    assert.equal(legacy, 0);
+    mapped = false; await assert.rejects(Page(), redirectTo('/login')); mapped = true;
+    headers = new Headers({ cookie: 'legacy=present' }); await assert.rejects(Page(), redirectTo('/login'));
+    process.env.COLLAB_AUTH_MODE = 'invalid'; await assert.rejects(Page(), redirectTo('/login'));
+    assert.equal(calls.length, 2); assert.equal(legacy, 0);
+    for (const mode of ['nextauth', undefined]) {
+      if (mode) process.env.COLLAB_AUTH_MODE = mode; else delete process.env.COLLAB_AUTH_MODE;
+      await Page(); assert.equal(calls.at(-1)[1], 'legacy');
+    }
+    assert.equal(legacy, 2);
+  } finally {
+    for (const [name, value] of [['COLLAB_AUTH_MODE', prior.mode], ['COLLAB_GATEWAY_ISSUER', prior.issuer]])
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+  }
+});
