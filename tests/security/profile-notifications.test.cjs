@@ -29,7 +29,7 @@ test('profile timeline and notification boundaries recheck current viewer access
     workspace: records(spaces),
     workspaceMember: { findFirst: async ({ where }) => spaces.flatMap(w => w.members.map(m => ({ ...m, workspaceId: w.id })))
       .find(m => matches(m, where)), findUnique: async () => null, findMany: async () => [] },
-    user: { findUnique: async ({ where }) => where.email ? user : author },
+    user: { findUnique: async ({ where }) => [user, author].find(row => row && matches(row, where)) ?? null },
     post: { ...records(posts), findMany: async spec => {
       protectedReads++;
       return posts.filter(row => matches(row, spec.where)).map(post => ({ ...post,
