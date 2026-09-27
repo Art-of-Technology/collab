@@ -2,7 +2,8 @@ import { Permission as PrismaPermission } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 // Default permissions per built-in workspace role
-// Keep this in sync with prisma/scripts/seed-default-permissions.ts
+// Application defaults intentionally differ from the legacy operational seed map.
+// See docs/security/2026-09-23-hardening.md#scoped-permission-reads-and-resets.
 export const defaultRolePermissions: Record<string, PrismaPermission[]> = {
   OWNER: [
     'CREATE_POST',

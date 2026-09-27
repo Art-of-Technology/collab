@@ -210,7 +210,7 @@ export async function PUT(
   }
 }
 
-// POST /api/workspaces/[workspaceId]/permissions/reset - Reset permissions to defaults
+// POST /api/workspaces/[workspaceId]/permissions - Reset permissions to defaults
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ workspaceId: string }> }
@@ -276,4 +276,4 @@ export async function POST(
       { status: 500 }
     );
   }
-} 
+}
