@@ -44,9 +44,9 @@ function fixture(entry) {
     '@/lib/issue-finder': {},
     get '@/lib/avatar-settings'() { return load('src/lib/avatar-settings.ts', { zod: require('zod'), '@/lib/user-utils': load('src/lib/user-utils.ts') }); },
   };
-  const module = load(entry === 'route' ? 'src/app/api/user/avatar/route.ts' : 'src/actions/user.ts', deps,
+  const loadedModule = load(entry === 'route' ? 'src/app/api/user/avatar/route.ts' : 'src/actions/user.ts', deps,
     { console: { error: (...args) => state.logs.push(args.map(String)) } });
-  const invoke = body => entry === 'route' ? module.PATCH(new Request('https://example.test/api/user/avatar', { method: 'PATCH', body: JSON.stringify(body) })) : module.updateUserAvatar(body);
+  const invoke = body => entry === 'route' ? loadedModule.PATCH(new Request('https://example.test/api/user/avatar', { method: 'PATCH', body: JSON.stringify(body) })) : loadedModule.updateUserAvatar(body);
   return { state, env, actor, replacement, invoke };
 }
 
