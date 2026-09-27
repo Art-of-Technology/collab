@@ -232,6 +232,8 @@ Collab is designed to streamline internal communication and work tracking by off
   for identity and membership requirements.
   For pending invitations, see the [recipient access contract](docs/security/2026-09-23-hardening.md#pending-invitation-list-recipient-binding-27-september-2026).
   For invitation links, see the [preview and acceptance contract](docs/security/2026-09-23-hardening.md#invitation-token-preview-and-acceptance-27-september-2026).
+  For permission visibility, toggles and role resets, see the
+  [workspace permissions contract](docs/security/2026-09-23-hardening.md#scoped-permission-reads-and-resets).
 - Use the timeline to post status updates, tasks, and feature requests.
   Dashboard previews and counts follow the [dashboard access contract](docs/security/2026-09-23-hardening.md#ai-dashboard-payload-access).
 - Customize your avatar with partial updates; see the
