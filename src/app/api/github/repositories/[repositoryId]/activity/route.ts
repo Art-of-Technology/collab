@@ -44,8 +44,7 @@ export async function GET(
     });
     if (!repository) return NextResponse.json({ error: "Repository not found" }, { status: 404 });
     const { searchParams } = new URL(request.url);
-    const requestedLimit = Number(searchParams.get('limit') ?? '20');
-    const limit = Number.isInteger(requestedLimit) ? Math.min(100, Math.max(1, requestedLimit)) : 20;
+    const limit = parseInt(searchParams.get('limit') || '20');
     const type = searchParams.get('type');
 
     const activities: ActivityItem[] = [];
