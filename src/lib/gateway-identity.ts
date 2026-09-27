@@ -11,7 +11,7 @@ function decode(value: string | null, maximum: number): string {
   if (!value || value.length > maximum * 2 || !/^[A-Za-z0-9_-]+$/.test(value)) throw new Error('Invalid gateway identity');
   const bytes = Buffer.from(value, 'base64url');
   if (bytes.length > maximum || bytes.toString('base64url') !== value) throw new Error('Invalid gateway encoding');
-  const result = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  const result = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
   if (!result || /[\u0000-\u0020\u007f]/.test(result)) throw new Error('Invalid gateway identity');
   return result;
 }

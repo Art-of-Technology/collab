@@ -476,7 +476,8 @@ contract have migrated and private-origin enforcement is accepted.
 
 The adapter defaults to `nextauth`, accepts explicit `gateway`, and rejects any
 other `COLLAB_AUTH_MODE`. Gateway sessions require canonical, bounded UTF-8
-base64url issuer/subject/email claims, literal verified email, the configured
+base64url issuer/subject/email claims with leading BOM characters preserved,
+literal verified email, the exact configured
 issuer and exact `weezboo.com` domain. The existing Account table must contain the
 explicit `maestro` mapping keyed by SHA-256 of issuer, NUL and subject. The live
 user must have exactly one such mapping and a matching current email; the adapter
@@ -485,7 +486,9 @@ Mapping database errors propagate without legacy fallback. Unsafe requests requi
 the exact configured HTTPS Origin when the later edge integration invokes the
 mutation guard; the helper alone does not enforce origin or trusted headers.
 
-The three focused core checks execute the actual identity and session modules with
+The five focused core checks execute the actual identity and session modules with
 modeled headers/Prisma/NextAuth. They qualify parsing, origin decisions and session
 selection only, not live issuer trust, proxy stripping, database isolation,
 consumer coverage, browser behavior, or deployment acceptance.
+The two BOM regressions reproduce subject-key conflation and incorrect issuer
+acceptance before the decoder fix; the original three checks continue to pass.

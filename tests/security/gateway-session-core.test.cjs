@@ -36,6 +36,19 @@ test('gateway accepts canonical single verified claims and rejects aliases, dupl
   assert.equal(identity.readGatewayIdentity(aliases, issuer), null);
 });
 
+test('gateway preserves a leading BOM in subjects and their account keys', () => {
+  const headers = valid(); headers.set('x-collab-subject', encoded('\uFEFFsubject-1'));
+  const accepted = identity.readGatewayIdentity(headers, issuer);
+  assert.notEqual(accepted.accountKey, identity.readGatewayIdentity(valid(), issuer).accountKey);
+  assert.equal(accepted.subject, '\uFEFFsubject-1');
+  assert.equal(accepted.accountKey, require('node:crypto').createHash('sha256').update(issuer + '\0\uFEFFsubject-1').digest('hex'));
+});
+
+test('gateway rejects a BOM-prefixed issuer that differs from the configured issuer', () => {
+  const headers = valid(); headers.set('x-collab-issuer', encoded('\uFEFF' + issuer));
+  assert.equal(identity.readGatewayIdentity(headers, issuer), null);
+});
+
 test('gateway mutations require the exact pinned HTTPS Origin including form and text/plain requests', () => {
   const origin = 'https://collab.example.test';
   for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
@@ -86,4 +99,3 @@ test('request sessions use explicit issuer-subject account mapping and never fal
       if (value === undefined) delete process.env[name]; else process.env[name] = value;
   }
 });
-
