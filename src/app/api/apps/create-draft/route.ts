@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { generateClientCredentials, encryptToken } from '@/lib/apps/crypto';
 import { z } from 'zod';

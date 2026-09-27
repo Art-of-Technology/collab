@@ -472,8 +472,9 @@ separate.
 
 For current adapter coverage, see [shared session consumers](#shared-session-consumers),
 [direct action session consumers](#direct-action-session-consumers),
-[workspace and project page session consumers](#workspace-and-project-page-session-consumers) and
-[app and developer page session consumers](#app-and-developer-page-session-consumers).
+[workspace and project page session consumers](#workspace-and-project-page-session-consumers),
+[app and developer page session consumers](#app-and-developer-page-session-consumers) and
+[app ecosystem API session consumers](#app-ecosystem-api-session-consumers).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -575,7 +576,39 @@ login redirects before data reads on missing/revoked/invalid gateway identity,
 returned cards/activity and default/explicit legacy behavior. The actual page
 and adapter execute against modeled dependencies, not live providers or a browser.
 
-The literal page-import inventory is now migrated. This is not a complete reachable
-consumer census: API imports, the leave-service library, aliases/wrappers and
-edge/session/logout integration remain. Known tenant access blockers remain open,
-and gateway mode must stay disabled pending those fixes and final acceptance.
+The literal page-import inventory is now migrated. For API coverage and the
+remaining consumer census, see [app ecosystem API session consumers](#app-ecosystem-api-session-consumers).
+
+### App ecosystem API session consumers
+
+Sixteen app, developer, OAuth authorization and admin API routes now import
+`getServerSession` from the shared request-session adapter. Reversing that import
+restores each handler byte-for-byte; request validation, role/owner guards,
+queries, redirects, writes and error responses are unchanged. Gateway mode remains
+disabled pending the remaining API imports, the leave-service library,
+aliases/wrappers, edge/session/logout integration and final acceptance.
+
+Four representative actual handlers (developer API-key read, admin statistics,
+app API-key reveal marker, and OAuth consent) execute with the real adapter and
+parser against modeled dependencies. They cover mapped identity, current role
+and owner denial, missing claims, revoked mapping, invalid mode, database failure
+and legacy/default sessions. The final fixture has four RED results before the
+imports and four PASS after them; eight unchanged core passes are reused from
+the initial run. That initial run also had four fixture failures because its
+isolated parser lacked the process global; the fixture was corrected and only
+the affected route checks were repeated. This is 12 applicable passes across
+two runs, not a single combined green run or all-endpoint/provider/DB proof.
+
+Existing app ownership and OAuth membership gaps remain activation blockers:
+`reveal-secret` and `submit-manifest` lack owner checks; `mark-api-key-revealed`
+and `regenerate-api-key` allow an absent `app.userId` through their conditional
+owner check; `create-draft` accepts a supplied publisher ID without checking actor
+authority. Secret reveal also lacks an enforced previously-revealed guard. Both
+OAuth authorization routes omit active membership status and exclude an owner
+without a membership; the regular authorization fallback has the same status gap.
+The next bounded fixes must enforce actual app authority, fail closed for missing
+owners, constrain publisher assignment and reuse the existing owner/active-member
+workspace predicate with independently scoped code issuance. These findings do
+not replace the Features/Changelog blockers or the final alias/wrapper census.
+No edge, auth endpoint, logout, credential custody, runtime or deployment behavior
+is accepted by this import migration.
