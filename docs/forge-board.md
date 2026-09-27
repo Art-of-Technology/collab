@@ -75,5 +75,5 @@ card. No Forge requests were issued by the browser.
 Forge-backed Notes publication is documented in the
 [project memory guide](forge-project-memory.md).
 Live connection, agent execution, staging acceptance and replacement cutover
-remain outstanding. See the [issue actions guide](forge-issue-actions.md) for
-the required pre-activation write guard.
+remain outstanding. See the [legacy write contract](forge-legacy-write-guard.md)
+for the required pre-activation write guard.

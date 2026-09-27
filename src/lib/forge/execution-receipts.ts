@@ -118,7 +118,7 @@ export async function reserveExecution(target: Target, retryOf: string | null,
   }
 }
 
-// Every state transition reconciles the independent receipt before changing the SQL snapshot.
+// Execution transitions reconcile independent evidence; fail-closed UNKNOWN fencing preserves it unchanged.
 export async function transitionExecution(where: Prisma.ForgeExecutionAttemptWhereInput,
   data: Prisma.ForgeExecutionAttemptUpdateManyMutationInput): Promise<{ count: number }> {
   const initial = await prisma.forgeExecutionAttempt.findFirst({ where });

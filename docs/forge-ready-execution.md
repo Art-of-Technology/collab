@@ -59,8 +59,9 @@ Lost launch responses, disconnected streams without terminal evidence, or lost
 worker heartbeats become UNKNOWN. UNKNOWN remains active and blocks every retry,
 including after restart. Stech has no idempotent start or supported run-ID
 reconciliation read, so the UI cannot safely resolve this automatically. The
-operator and provider owner must establish terminal state before any manually
-reviewed database reconciliation; never delete/expire a row to enable a retry.
+operator and provider owner must follow the
+[independent reconciliation contract](#independent-restore-and-launch-fence)
+before any repair; never delete/expire a row to enable a retry.
 
 Known prelaunch failures and qualified terminal empty-result/cancellation can be retried
 only by a new explicit reviewed request tied to the latest receipt. A cancellation
@@ -70,10 +71,9 @@ invent runtime acknowledgment: nullable acknowledgedAt is preserved, and only a
 terminal cancelled event establishes provider cancellation. A run that completes
 while cancellation is pending still requires result review.
 
-Native Forge issue PATCH has no atomic conditional-write contract. The source
-fingerprint check and readback detect observed conflicts; an external write
-between preflight and PATCH remains a known race, as for issue editing. The
-worker verifies the resulting source again before launch. Agent output renders
+Ready marker writes share the [issue actions guide's](forge-issue-actions.md)
+preflight/PATCH/readback limitation. The worker verifies the resulting source
+again before launch. Agent output renders
 as plain text; it cannot execute HTML or silently become new instructions.
 
 ## Local qualification
@@ -92,8 +92,11 @@ Browser and PostgreSQL qualification reported for the retained September 24 sour
 
 ## Independent restore and launch fence
 
-SQL is not sufficient launch authority after a restore or copy. Every preparation,
-retry and state transition must match an independent receipt. The worker first
+SQL is not sufficient launch authority after a restore or copy. Preparation
+requires explicitly initialized independent authority; a retry or transition
+that could permit execution must match its independent receipt. Fail-closed
+UNKNOWN fencing can update SQL alone, preserving the original external evidence.
+The worker first
 checks that receipt, atomically claims the local READY row, then exclusively
 claims the independent journal before it can issue a provider POST. This is two
 ordered claims, not an atomic transaction across SQL and the filesystem. Two
@@ -121,8 +124,9 @@ attempt identity, generation, tenant binding, reviewed input and fingerprints,
 deployment identity, state and provider run ID; it is not a complete event log.
 
 Exclusive file creation serializes claims. Writes use a new file, file fsync,
-atomic rename and directory fsync. A crashed or uncertain claimant retains its
-lock. No timeout, restart, cancellation or retry removes that lock. Missing,
+atomic rename and directory fsync. A completed journal operation releases its
+own lock; a crashed claimant or uncertain journal write retains the lock.
+No timeout, restart, cancellation or retry clears a retained lock. Missing,
 corrupt, mismatched or newer independent evidence fences the SQL attempt as
 UNKNOWN/nonretryable before launch; a retained receipt absent from restored SQL
 creates an UNKNOWN fence. Old attempts without authority-bound input also fail
