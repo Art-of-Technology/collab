@@ -236,6 +236,8 @@ Collab is designed to streamline internal communication and work tracking by off
 - Organize work using boards, milestones, and stories.
   For status filter visibility, see the
   [project status access contract](docs/security/2026-09-23-hardening.md#project-status-reads-27-september-2026).
+  For label visibility and editing, see the
+  [label access contract](docs/security/2026-09-23-hardening.md#label-action-access-27-september-2026).
 - Open **Project board** from a project dashboard; see the
   [Forge board guide](docs/forge-board.md) for views, connection requirements
   and the limits of this read-only slice.

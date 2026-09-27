@@ -413,7 +413,8 @@ execute the actual action and shared helpers against modeled Prisma, including
 revocation before payload selection. They do not prove native isolation or changes
 after the query snapshot. No database/runtime/browser/build/provider operation was
 performed. Generic pipeline test stage is SKIPPED; review/docs/scoped lint/CI and
-complete exact-head Octopus gates remain. Label mutations are a separate slice.
+complete exact-head Octopus gates remain. For labels, see the
+[label action access contract](#label-action-access-27-september-2026).
 
 ## Label action access (27 September 2026)
 
@@ -428,7 +429,8 @@ ID/name/workspace ID, preserving missing-versus-forbidden errors without loading
 unused workspace relations. Names, trimming, duplicate checks, colors/defaults,
 scalar returns and delete result remain unchanged.
 
-The final 11 label regressions produce 10 failures/one positive on prior source;
+The final 11 [label regressions](../../tests/security/label-access.test.cjs)
+produce 10 failures/one positive on prior source;
 the label/session/status selection passes 18/18 with no skips. Checks execute the
 actual actions, workspace-selection helper and access predicate with modeled
 Prisma, including loss of membership before payload/write and a label moving
