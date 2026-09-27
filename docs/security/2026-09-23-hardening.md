@@ -398,15 +398,17 @@ review/documentation/lint/CI/exact-head Octopus gates remain required.
 
 `getProjectStatuses(projectIds)` resolves the current database user by session
 subject. It applies the existing workspace owner-or-active-member predicate through
-the status's project in the payload query itself. Foreign and inactive-member
-projects are excluded; there is no new global-admin exception. The two status
-selectors and view toolbar retain their signatures and selected project IDs.
+the status's project in the payload query itself. A project is excluded unless the
+viewer owns or actively belongs to its workspace; system-admin role alone grants
+no access. The two status selectors and view toolbar retain their signatures and
+selected project IDs.
 Scalar status fields, inactive statuses, order/name sorting, empty results and
 masked failure message remain unchanged. The earlier project-ID preflight is no
 longer needed because access is checked with the status read.
 
 Four focused regressions failed on the prior source (one positive passed); the
-status/session/workspace-read selection then passed 15/15 with zero skips. Tests
+status/session/workspace-read selection then passed 15/15 with zero skips. The
+[status regressions](../../tests/security/project-status-read.test.cjs)
 execute the actual action and shared helpers against modeled Prisma, including
 revocation before payload selection. They do not prove native isolation or changes
 after the query snapshot. No database/runtime/browser/build/provider operation was
