@@ -1,3 +1,4 @@
+import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -49,7 +50,7 @@ export async function PUT(
       return NextResponse.json({ error: "You can only edit your own comments" }, { status: 403 });
     }
 
-    // Access is already validated by findIssueByIdOrKey with userId
+    await assertLegacyIssueWriteAllowed(issue.id);
 
     const updatedComment = await prisma.issueComment.update({
       where: { id: commentId },
@@ -69,6 +70,7 @@ export async function PUT(
 
     return NextResponse.json(updatedComment);
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("[ISSUE_COMMENT_UPDATE]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
@@ -118,7 +120,7 @@ export async function DELETE(
       return NextResponse.json({ error: "You can only delete your own comments" }, { status: 403 });
     }
 
-    // Access is already validated by findIssueByIdOrKey with userId
+    await assertLegacyIssueWriteAllowed(issue.id);
 
     // If comment has replies, just mark it as deleted but keep the structure
     if (comment.replies && comment.replies.length > 0) {
@@ -154,6 +156,7 @@ export async function DELETE(
       });
     }
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("[ISSUE_COMMENT_DELETE]", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }

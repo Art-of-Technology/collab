@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { IssueRelationType } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
@@ -145,6 +146,8 @@ export async function POST(
       );
     }
 
+    await assertLegacyIssueWriteAllowed(sourceIssue.id, ...targetIssues.map(issue => issue.id));
+
     // Create a map of original ID/key to resolved database ID
     const idMap = new Map<string, string>();
     targetIssues.forEach(issue => {
@@ -203,6 +206,7 @@ export async function POST(
     });
 
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("Error creating bulk relations:", error);
     return NextResponse.json(
       { error: "Internal server error" },

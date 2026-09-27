@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
@@ -351,6 +352,8 @@ export async function POST(
       );
     }
 
+    await assertLegacyIssueWriteAllowed(sourceIssue.id, targetIssue.id);
+
     // Normalize relation: Drop 'CHILD' type by mapping it to 'PARENT' with reversed direction
     const providedType = String(relationType || '').toUpperCase();
     let finalSourceId = sourceIssue.id;
@@ -388,6 +391,7 @@ export async function POST(
     return NextResponse.json({ success: true, relation });
 
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("Error creating relation:", error);
     return NextResponse.json(
       { error: "Internal server error" },

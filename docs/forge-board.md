@@ -40,6 +40,8 @@ Set `COLLAB_FORGE_CONFIG_FILE` to an operator-managed JSON file outside Git:
 
 These are illustrative values, not deployment instructions. Verify immutable
 Slack workspace/channel and Forge repository identities before activation.
+The [legacy write contract](forge-legacy-write-guard.md) owns write restrictions
+and activation prerequisites for configured projects.
 Use a separately authorized application reader; do not reuse dashboard
 credentials. The [project memory connection contract](forge-project-memory.md#connection-and-limits)
 owns the integrated reader/issue-token and isolated Notes-writer boundaries.

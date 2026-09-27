@@ -1,3 +1,4 @@
+import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -40,7 +41,7 @@ export async function POST(
       return new NextResponse("Comment not found", { status: 404 });
     }
 
-    // Access is already validated by findIssueByIdOrKey with userId
+    await assertLegacyIssueWriteAllowed(issue.id);
     
     // Check if the user already liked this comment
     const existingReaction = await prisma.issueCommentReaction.findFirst({
@@ -132,6 +133,7 @@ export async function POST(
     });
 
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("Issue comment like error:", error);
     return new NextResponse("Internal error", { status: 500 });
   }

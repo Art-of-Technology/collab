@@ -275,7 +275,8 @@ For settings-page access and webhook configuration display, see the
 The legacy Slack `/api/slack/my-tasks` and `/api/slack/create-issue` commands
 return HTTP 503 with an ephemeral unavailable message. Editable profile `slackId`
 values are not verified identities; existing configuration, profile IDs and
-issues are retained. Use Collab's existing task UI while the separately planned
+issues are retained. For availability of Collab's existing task UI writes, see
+the [legacy write contract](docs/forge-legacy-write-guard.md).
 Forge-backed commands await verified workspace/channel/project binding.
 Inventory command consumers before deploying this retirement.
 

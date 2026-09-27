@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { z } from 'zod';
 import { IssueType, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -69,6 +70,8 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
     })) {
       return { error: 'No permission to edit these issue fields', status: 403 };
     }
+
+    await assertLegacyProjectWriteAllowed(existingIssue.projectId, body.projectId ?? existingIssue.projectId);
 
     const oldIssue = existingIssue;
     const assigneeChanged = body.assigneeId !== undefined && body.assigneeId !== oldIssue.assigneeId;
@@ -195,6 +198,7 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
     return { issue: result.issue, oldIssue, assigneeChanged, updateData };
 
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return { error: error.message, status: 409 };
     if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2034', 'P2002'].includes(error.code)) {
       return { error: 'Issue update conflict; reload and retry', status: 409 };
     }

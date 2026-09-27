@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
@@ -92,6 +93,8 @@ export async function DELETE(
       }
     }
 
+    await assertLegacyProjectWriteAllowed(project.id);
+
     // Perform the deletion in a transaction
     const result = await prisma.$transaction(async (tx) => {
       // Recheck source and target at transaction entry before touching issues.
@@ -135,6 +138,7 @@ export async function DELETE(
     });
 
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error('Error deleting status:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

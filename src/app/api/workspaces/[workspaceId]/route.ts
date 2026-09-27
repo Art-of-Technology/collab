@@ -1,3 +1,4 @@
+import { assertLegacyWorkspaceDeleteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
@@ -217,6 +218,8 @@ export async function DELETE(
       );
     }
 
+    await assertLegacyWorkspaceDeleteAllowed(workspaceId);
+
     // Delete workspace and all related data
     await prisma.workspace.delete({
       where: { id: workspaceId }
@@ -224,6 +227,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error('Error deleting workspace:', error);
     return NextResponse.json(
       { error: 'Failed to delete workspace' },
