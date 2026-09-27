@@ -83,6 +83,16 @@ test('issue mutations reject mass assignment, foreign relations and read-only us
   assert.equal(response.body.issue.title, 'After');
   assert.equal(response.body.issue.workspaceId, 'own');
   assert.equal(writes, 1);
+  const connectedRoute = load('src/app/api/issues/[issueId]/route.ts', {
+    ...dependencies,
+    './reader': { readForgeBindings: async () => [{ projectId: 'project', workspaceId: 'own' }] },
+  }, { URL, console });
+  const denied = await connectedRoute.PUT(new Request('https://example.test/issues/issue', {
+    method: 'PUT', body: JSON.stringify({ title: 'Blocked' }),
+  }), context);
+  assert.equal(denied.status, 409);
+  assert.match(denied.body.error, /Forge-connected project/);
+  assert.equal(writes, 1);
 });
 
 test('AI issue suggestions and relations resolve their source issue inside the authorized workspace', async () => {

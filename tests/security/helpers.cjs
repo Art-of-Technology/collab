@@ -16,6 +16,12 @@ function load(file, dependencies = {}, globals = {}) {
     exports,
     ...globals,
     require(name) {
+      if (!(name in dependencies) && name === '@/lib/forge/legacy-write-guard') {
+        return load('src/lib/forge/legacy-write-guard.ts', {
+          'server-only': {}, './reader': { readForgeBindings: async () => [] },
+          ...dependencies,
+        }, globals);
+      }
       if (!(name in dependencies) && name === '@/lib/request-session') {
         // Existing tenant fixtures exercise the real adapter in explicit legacy mode.
         const legacyGlobals = { ...globals, process: { env: { COLLAB_AUTH_MODE: 'nextauth' } }, Buffer, TextDecoder, URL };
