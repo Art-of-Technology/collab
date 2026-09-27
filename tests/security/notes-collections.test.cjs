@@ -4,6 +4,7 @@ const { assert, test, resolve, load, matches, workspaces, matchesWorkspace, pris
 test('review: alternate Notes handlers filter content and metadata with the real access policy', async () => {
   const workspace = { id: 'joined', slug: 'joined', name: 'Workspace', ownerId: 'bob',
     members: [{ userId: 'alice', status: true, role: 'MEMBER' }] };
+  const project = { id: 'project', workspaceId: 'joined', workspace };
   const rows = [
     { id: 'restricted', scope: 'WORKSPACE', isRestricted: true },
     { id: 'restricted-project', scope: 'PROJECT', isRestricted: true },
@@ -14,7 +15,7 @@ test('review: alternate Notes handlers filter content and metadata with the real
     { id: 'owned', scope: 'PROJECT', authorId: 'alice', isRestricted: true },
   ].map(row => ({ ...note, isEncrypted: false, title: 'matching-text', content: 'matching-text secret ' + row.id,
     createdAt: new Date(), updatedAt: new Date(), tags: [], comments: [], author: { name: 'Author' },
-    workspace, projectId: 'project', project: { workspace }, ...row }));
+    workspace, projectId: 'project', project, ...row }));
   const access = load('src/lib/secrets/access.ts', {
     '@/lib/prisma': { prisma: {} }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
   });
@@ -25,7 +26,7 @@ test('review: alternate Notes handlers filter content and metadata with the real
       findMany: async ({ where }) => rows.filter(row => matches(row, where)),
       findFirst: async ({ where }) => rows.find(row => matches(row, where)) ?? null,
     },
-    project: { findMany: async () => [], findUnique: async () => ({ id: 'project', workspaceId: 'joined' }) },
+    project: { findMany: async () => [], findFirst: async ({ where }) => matches(project, where) ? project : null },
     issue: { findMany: async () => [], groupBy: async () => [], count: async () => 0 },
     repository: { findFirst: async () => null },
   };
@@ -60,7 +61,7 @@ test('review: alternate Notes handlers filter content and metadata with the real
   }
   workspace.members[0].status = false;
   assert.equal((await search.GET(new Request('https://example.test/api/search?workspace=joined&q=matching-text'))).status, 403);
-  assert.equal((await summary.GET({}, { params: Promise.resolve({ projectId: 'project' }) })).status, 403);
+  assert.equal((await summary.GET({}, { params: Promise.resolve({ projectId: 'project' }) })).status, 404);
   const revokedPreview = await preview.POST(new Request('https://example.test/api/link-preview', {
     method: 'POST', body: JSON.stringify({ url: 'https://example.test/joined/notes/owned' }),
   }));
