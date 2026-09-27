@@ -11,6 +11,7 @@ import { changeIssue, getIssue } from './actions';
 const resultMessage = (result: IssueResult) => result.kind === 'saved' ? 'Saved and verified.' : result.kind === 'conflict'
   ? 'The source changed. Your draft is retained. Reload and review before saving again.'
   : result.kind === 'uncertain' ? 'The result could not be verified. Your draft is retained. Reload the issue and check before trying again.'
+  : result.kind === 'rejected' ? 'The project rejected this change or the target no longer exists. Reload the issue.'
   : result.kind === 'denied' ? 'You do not have permission for this change.'
   : result.kind === 'invalid' ? 'Check the entered values.' : 'The project could not be reached. Your draft is retained.';
 
@@ -53,14 +54,18 @@ export function ForgeIssueEditor({ number, workspaceSlug, projectSlug, onSaved, 
     } catch { setMessage('Reload failed. Your draft is retained.'); }
   });
   const submit = (input: { action: string; [key: string]: unknown }) => start(async () => {
+    let verified = false;
     try {
       const result = await changeIssue(workspaceSlug, projectSlug, input);
       setMessage(resultMessage(result));
       if (result.kind === 'denied') { setView({ kind: 'denied' }); setFields(null); setComment(''); onDenied(); return; }
-      if (result.kind === 'conflict' || result.kind === 'uncertain') setBlocked(true);
+      if (result.kind === 'conflict' || result.kind === 'uncertain' || result.kind === 'rejected') setBlocked(true);
       if (result.kind === 'saved') {
+        verified = true;
+        onSaved();
         const next = await getIssue(workspaceSlug, projectSlug, number);
         setView(next);
+        if (next.kind === 'denied') { setFields(null); setComment(''); onDenied(); return; }
         if (next.kind === 'ready') {
           setBaseline(next.fields);
           if (input.action === 'edit') { setFields(next.fields); dirty.current.clear(); setReviewRequired(false); }
@@ -71,9 +76,12 @@ export function ForgeIssueEditor({ number, workspaceSlug, projectSlug, onSaved, 
           }
         }
         if (input.action !== 'edit') { setComment(''); setEditingComment(null); }
-        onSaved();
       }
-    } catch { setBlocked(true); setMessage('The result is unknown. Reload and check before trying again. Your draft is retained.'); }
+    } catch {
+      setBlocked(true);
+      setMessage(verified ? 'Saved and verified, but the latest details could not be loaded. Reload before editing again.'
+        : 'The result is unknown. Reload and check before trying again. Your draft is retained.');
+    }
   });
   if (!view) return <p role="status">Loading issue and comments…</p>;
   if (!ready || !fields) return <div role="alert"><p>{view.kind === 'denied' ? 'You no longer have access to this issue.' : 'Could not load issue details.'}</p><Button onClick={reload} disabled={pending}>Reload issue</Button></div>;

@@ -11,7 +11,7 @@ const commentSchema = z.object({
 });
 export type ForgeComment = z.infer<typeof commentSchema> & { fingerprint: string; canEdit: boolean };
 export type IssueSnapshot = { issue: SourceIssue; fingerprint: string; comments: ForgeComment[]; partialComments: boolean };
-export type IssueWriteResult = { kind: 'saved'; number: number } | { kind: 'conflict' | 'uncertain' | 'denied' };
+export type IssueWriteResult = { kind: 'saved'; number: number } | { kind: 'conflict' | 'uncertain' | 'rejected' | 'invalid' };
 export type IssueCommand =
   | { action: 'edit'; number: number; expected: string; changes: IssueChanges }
   | { action: 'create'; title: string; description: string }
@@ -59,18 +59,19 @@ export async function writeForgeIssue(binding: ForgeBinding, command: IssueComma
   if (command.action === 'edit') {
     const current = await api.issue(command.number);
     if (current.number !== command.number || issueFingerprint(current) !== command.expected) return { kind: 'conflict' };
-    payload = patchIssueContent(current, command.changes);
+    try { payload = patchIssueContent(current, command.changes); }
+    catch { return { kind: 'invalid' }; }
     if (!Object.keys(payload).length) return { kind: 'saved', number };
     path = `/issues/${number}`; method = 'PATCH';
   } else if (command.action === 'edit-comment') {
     // Fetch through the issue-specific collection before using the repository comment endpoint.
     const snapshot = await readForgeIssue(binding, number, request);
     const comment = snapshot.comments.find(item => item.id === command.commentId);
-    if (!comment || !comment.canEdit) return { kind: 'denied' };
+    if (!comment || !comment.canEdit) return { kind: 'rejected' };
     if (comment.fingerprint !== command.expected) return { kind: 'conflict' };
     path = `/issues/comments/${command.commentId}`; method = 'PATCH'; payload = { body: command.body };
   } else if (command.action === 'comment') {
-    if ((await api.issue(number)).number !== number) return { kind: 'denied' };
+    if ((await api.issue(number)).number !== number) return { kind: 'rejected' };
     path = `/issues/${number}/comments`; method = 'POST'; payload = { body: command.body };
   } else {
     path = '/issues'; method = 'POST'; payload = { title: command.title, body: command.description };
@@ -79,7 +80,7 @@ export async function writeForgeIssue(binding: ForgeBinding, command: IssueComma
   try {
     const response = await api.call(path, method, payload);
     if ([409, 412, 422].includes(response.status)) return { kind: 'conflict' };
-    if ([401, 403, 404].includes(response.status)) return { kind: 'denied' };
+    if ([401, 403, 404].includes(response.status)) return { kind: 'rejected' };
     receipt = await boundedJson(response);
   } catch {
     // Never retry a POST: a lost response can still mean a successful creation.

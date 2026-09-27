@@ -72,6 +72,7 @@ test('scoped Forge writes verify custody, stale edits, own comments, readback, a
       writes++;
       assert.equal(options.headers.Authorization, 'token fixture-writer');
       lastPayload = JSON.parse(options.body);
+      if (mode === 'rejected') return new Response('', { status: 403 });
       if (mode === 'offline') throw new Error('offline');
       if (pathname.endsWith('/issues/1')) {
         issue = { ...issue, ...lastPayload, updated_at: String(writes) };
@@ -104,12 +105,18 @@ test('scoped Forge writes verify custody, stale edits, own comments, readback, a
     edit.expected = issueFingerprint(issue); mode = 'intervening';
     assert.equal((await writeForgeIssue(binding, edit, request)).kind, 'uncertain'); assert.equal(writes, 2);
     mode = ''; const snapshot = await readForgeIssue(binding, 1, request);
-    assert.equal((await writeForgeIssue(binding, { action: 'edit-comment', number: 1, commentId: 3, expected: snapshot.comments[1].fingerprint, body: 'No' }, request)).kind, 'denied'); assert.equal(writes, 2);
+    assert.equal((await writeForgeIssue(binding, { action: 'edit-comment', number: 1, commentId: 3, expected: snapshot.comments[1].fingerprint, body: 'No' }, request)).kind, 'rejected'); assert.equal(writes, 2);
     assert.equal((await writeForgeIssue(binding, { action: 'edit-comment', number: 1, commentId: 2, expected: '0'.repeat(64), body: 'No' }, request)).kind, 'conflict'); assert.equal(writes, 2);
     assert.equal((await writeForgeIssue(binding, { action: 'edit-comment', number: 1, commentId: 2, expected: snapshot.comments[0].fingerprint, body: 'Edited' }, request)).kind, 'saved');
     mode = 'lost';
     assert.equal((await writeForgeIssue(binding, { action: 'comment', number: 1, body: 'Posted once' }, request)).kind, 'uncertain');
     assert.equal(writes, 4); assert.equal(comments.filter(row => row.body === 'Posted once').length, 1);
+    mode = 'rejected';
+    assert.equal((await writeForgeIssue(binding, { action: 'comment', number: 1, body: 'Rejected' }, request)).kind, 'rejected');
+    assert.equal(writes, 5);
+    const oversized = { action: 'edit', number: 1, expected: issueFingerprint(issue), changes: { description: '界'.repeat(400000) } };
+    assert.equal((await writeForgeIssue(binding, oversized, request)).kind, 'invalid');
+    assert.equal(writes, 5);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 

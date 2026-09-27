@@ -22,7 +22,7 @@ const commandSchema = z.discriminatedUnion('action', [
 export type IssueRights = { canCreate: boolean; canEdit: boolean; canStatus: boolean; canAssign: boolean; canComment: boolean; canEditComment: boolean };
 export type IssueFields = { title: string; description: string; status: string; priority: string; owner: string; dueDate: string; followUpDate: string; nextAction: string };
 export type IssueView = { kind: 'ready'; snapshot: IssueSnapshot; rights: IssueRights; bodyWarning: boolean; fields: IssueFields } | { kind: 'denied' | 'unavailable' };
-export type IssueResult = IssueWriteResult | { kind: 'invalid' | 'unavailable' };
+export type IssueResult = IssueWriteResult | { kind: 'denied' | 'unavailable' };
 
 async function authorize(workspaceSlug: string, projectSlug: string) {
   if (!selector.safeParse(workspaceSlug).success || !selector.safeParse(projectSlug).success) return null;
