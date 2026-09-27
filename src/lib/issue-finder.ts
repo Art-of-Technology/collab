@@ -34,9 +34,9 @@ export interface FindIssueOptions {
 }
 
 /**
- * Find an issue by ID or issue key with proper workspace scoping
+ * Find an issue by ID or issue key within issueReadAccessWhere's scope
  * 
- * @param idOrKey - Either a UUID (direct ID) or issue key (e.g., "DEF-1")
+ * @param idOrKey - Stored ID or exact issue key
  * @param options - Options for the search
  * @returns Promise<Issue | null>
  */
@@ -60,7 +60,8 @@ export async function findIssueByIdOrKey<T = any>(
 }
 
 /**
- * Standard issue include object commonly used across API routes
+ * Use only after issueReadAccessWhere authorizes the root issue; root project
+ * and workspace projections rely on that check.
  */
 export const getStandardIssueInclude = (userId: string) => ({
   assignee: {

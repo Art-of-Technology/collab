@@ -250,8 +250,8 @@ Inventory command consumers before deploying this retirement.
 
 For Notes visibility, sharing and template restrictions, see the
 [Notes access contract](docs/security/2026-09-23-hardening.md#notes-access).
-For issue edits and project moves, see the
-[issue mutation contract](docs/security/2026-09-23-hardening.md#issue-access-and-mutations).
+For issue visibility, edits and project moves, see the
+[issue access and mutation contract](docs/security/2026-09-23-hardening.md#issue-access-and-mutations).
 
 After the usual sign-in and access checks, opening a missing feature request from
 a workspace or project shows the 404 page. If a project feature link points to a

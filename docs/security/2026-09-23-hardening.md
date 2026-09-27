@@ -13,10 +13,19 @@ through this helper. See the [session and membership regression](../../tests/sec
 
 ## Issue access and mutations
 
-Issue ID/key lookup now requires access to the issue workspace, its project workspace and any linked status project. Detail and shared mutation responses filter parent/child issues, labels and child counts through the caller's current scope, preserving owner access after membership changes. Historical foreign references remain stored but are excluded from these responses. See [issue read-scope regressions](../../tests/security/issue-read-scope.test.cjs).
-
-- Issue ID and key resolution always requires workspace ownership or active
-  membership. A caller-supplied workspace only narrows that authorized set.
+- Shared issue lookup accepts a stored ID or an exact issue key, including
+  nonnumeric keys such as `A1B-T1`. It requires ownership or active membership in
+  the issue workspace, its project's workspace and any linked status project's
+  workspace. A caller-supplied workspace only narrows that authorized set.
+  REST detail GET and shared updates return 404 when this lookup denies access.
+- Shared updates recheck that access inside the existing serializable transaction,
+  alongside issue identity and version. If this recheck denies access, the update
+  returns 409 before writes, with no issue content in the response.
+- REST detail GET and shared update responses filter parent/child issues, labels
+  and child counts to the caller's current access. Ownership still grants access
+  without active membership. Inaccessible related content is omitted; stored IDs,
+  keys and links are preserved. See the
+  [issue read-scope regressions](../../tests/security/issue-read-scope.test.cjs).
 - Issue updates reject empty, unknown or invalid fields using `UpdateIssueSchema`
   in `src/lib/issue-mutation.ts`, shared by REST and AI updates. General edits require
   `EDIT_ANY_TASK` or reporter-based `EDIT_SELF_TASK`; `CHANGE_TASK_STATUS` only
