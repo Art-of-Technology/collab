@@ -474,8 +474,9 @@ For current adapter coverage, see [shared session consumers](#shared-session-con
 [direct action session consumers](#direct-action-session-consumers),
 [workspace and project page session consumers](#workspace-and-project-page-session-consumers),
 [app and developer page session consumers](#app-and-developer-page-session-consumers),
-[app ecosystem API session consumers](#app-ecosystem-api-session-consumers) and
-[Notes collection session adapter](#notes-collection-session-adapter).
+[app ecosystem API session consumers](#app-ecosystem-api-session-consumers),
+[Notes collection session adapter](#notes-collection-session-adapter) and
+[Notes detail session adapter](#notes-detail-session-adapter).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -932,10 +933,13 @@ change. No runtime, identity provisioning or provider operation was performed.
 
 The note detail (GET/PATCH/DELETE), pin (POST), share (GET/POST/DELETE) and
 individual comment (GET/PATCH/DELETE) handlers now use the shared request-session
-adapter with the same `authOptions`. Only four session imports changed; existing
+adapter with the same `authOptions`, inheriting the
+[adapter contract](#gateway-session-core-inactive-integration).
+Only four session imports changed; existing
 note access, ownership, sharing and comment-author policies remain intact.
 
-The focused fixture executes all ten handlers, the selector, identity parser and
+The [focused fixture](../../tests/security/gateway-notes-detail.test.cjs)
+executes all ten handlers, the selector, identity parser and
 actual personal-note access policy with mocked Prisma. It checks mapped actor
 success, foreign-note denial, identity failure without legacy fallback, and
 explicit/default legacy behavior. Mapping-query behavior remains covered by the
