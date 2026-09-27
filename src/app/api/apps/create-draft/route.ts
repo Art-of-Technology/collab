@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/request-session';
-import { authOptions } from '@/lib/auth-options';
+import { getCurrentUser } from '@/lib/session';
 import { generateClientCredentials, encryptToken } from '@/lib/apps/crypto';
 import { z } from 'zod';
 import { isReservedSlug } from '@/lib/apps/validation';
@@ -18,9 +17,9 @@ const CreateDraftAppSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const actor = await getCurrentUser();
 
-    if (!session?.user?.id) {
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -36,6 +35,10 @@ export async function POST(request: NextRequest) {
     }
 
     const { name, publisherId } = validation.data;
+
+    if (publisherId && publisherId !== actor.id) {
+      return NextResponse.json({ error: 'Forbidden publisher assignment' }, { status: 403 });
+    }
 
     // Generate a slug from the app name
     const slug = name
@@ -81,8 +84,8 @@ export async function POST(request: NextRequest) {
           name,
           slug,
           manifestUrl: null, // Will be set when manifest is submitted
-          publisherId: publisherId || session.user.id,
-          userId: session.user.id,
+          publisherId: publisherId || actor.id,
+          userId: actor.id,
           status: 'DRAFT',
           visibility: 'PRIVATE'
         }
@@ -123,7 +126,7 @@ export async function POST(request: NextRequest) {
         clientSecret: result.plainSecret, // Only returned on creation
         apiKey: credentials.apiKey
       }
-    }, { status: 201 });
+    }, { status: 201, headers: { 'Cache-Control': 'no-store' } });
 
   } catch (error) {
     console.error('Error creating draft app:', error);

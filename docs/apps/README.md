@@ -20,10 +20,10 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 ## Developer Workflow
 
 1. **Create App**
-   - Visit `/dev/apps/new` and provide your app name and optional publisher ID (POST `/api/apps/create-draft`).
+   - Visit `/dev/apps/new` and provide your app name and optionally your own user ID as publisher (POST `/api/apps/create-draft`).
    - OAuth credentials (`client_id`, `client_secret`, and `api_key`) are **generated immediately** and returned on creation.
    - Your app is created in `DRAFT` status with a unique slug auto-generated from the name.
-   - **Important:** Save your `client_secret` securely. See the [credential access limitations and activation blockers](../security/2026-09-23-hardening.md#app-ecosystem-api-session-consumers).
+   - **Important:** Save your `client_secret` securely. The owner-only details page supports an explicit reveal action; credentials are not included in its initial client props. See [credential ownership and reveal limits](../security/2026-09-23-hardening.md#app-credential-ownership-and-explicit-reveal).
 
 2. **Develop Your App**
    - Use the credentials provided in step 1 to develop and test your app.

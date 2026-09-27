@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,10 +23,9 @@ import {
 interface OAuthClient {
   id: string;
   clientId: string;
-  clientSecret?: Uint8Array | null;
   clientType?: string | null;
   secretRevealed?: boolean;
-  apiKey?: string | null;
+  hasApiKey: boolean;
   apiKeyRevealed?: boolean;
   redirectUris?: string[];
 }
@@ -49,8 +48,8 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
   const [showApiKey, setShowApiKey] = useState(false);
   const [copied, setCopied] = useState('');
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [apiKey, setApiKey] = useState<string | null>(oauthClient.apiKey || null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
   const [apiKeyRevealed, setApiKeyRevealed] = useState(oauthClient.apiKeyRevealed || false);
@@ -73,7 +72,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
     return value;
   };
 
-  const fetchClientSecret = useCallback(async () => {
+  const fetchClientSecret = async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`/api/apps/by-id/${appId}/reveal-secret`, {
@@ -91,6 +90,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
 
       if (data.success && data.clientSecret) {
         setClientSecret(data.clientSecret);
+        setShowClientSecret(true);
       }
     } catch (error) {
       console.error('Error fetching client secret:', error);
@@ -102,11 +102,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
     } finally {
       setIsLoading(false);
     }
-  }, [appId, toast]);
-
-  useEffect(() => {
-    fetchClientSecret();
-  }, [fetchClientSecret]);
+  };
 
   const handleRegenerateApiKey = async () => {
     setIsRegenerating(true);
@@ -147,28 +143,29 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
   };
 
   const handleRevealApiKey = async () => {
-    const wasApiKeyHidden = !showApiKey;
-    setShowApiKey(!showApiKey);
-    if (!apiKeyRevealed && wasApiKeyHidden) {
-      try {
-        const response = await fetch(`/api/apps/by-id/${appId}/mark-api-key-revealed`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        if (response.ok) {
-          setApiKeyRevealed(true);
-        } else {
-          const data = await response.json();
-          throw new Error(data.error || 'Failed to mark API key as revealed');
-        }
-      } catch (error) {
-        console.error('Error marking API key as revealed:', error);
-        toast({
-          title: 'Error',
-          description: error instanceof Error ? error.message : 'Failed to mark API key as revealed.',
-          variant: 'destructive',
-        });
+    if (apiKey) {
+      setShowApiKey(!showApiKey);
+      return;
+    }
+    try {
+      const response = await fetch(`/api/apps/by-id/${appId}/mark-api-key-revealed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.apiKey) {
+        throw new Error(data.error || 'Failed to reveal API key');
       }
+      setApiKey(data.apiKey);
+      setApiKeyRevealed(true);
+      setShowApiKey(true);
+    } catch (error) {
+      console.error('Error revealing API key:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to reveal API key.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -233,7 +230,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
                     <div className="flex items-center justify-center h-10 border rounded-md">
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                     </div>
-                  ) : oauthClient.secretRevealed ? (
+                  ) : oauthClient.secretRevealed && !clientSecret ? (
                     <Input
                       id="clientSecret"
                       value={clientSecret ? `****${clientSecret.slice(-4)}` : '••••••••••••••••'}
@@ -250,6 +247,11 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
                         className="font-mono text-xs sm:text-sm pr-8 sm:pr-10"
                         type={showClientSecret ? "text" : "password"}
                       />
+                      {!clientSecret && !oauthClient.secretRevealed && (
+                        <Button onClick={fetchClientSecret} disabled={isLoading} aria-label="Reveal client secret">
+                          Reveal client secret
+                        </Button>
+                      )}
                       {clientSecret && (
                         <Button
                           variant="ghost"
@@ -287,7 +289,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
                 <p className="text-xs text-muted-foreground">
                   Loading client secret...
                 </p>
-              ) : oauthClient.secretRevealed ? (
+              ) : oauthClient.secretRevealed && !clientSecret ? (
                 <p className="text-xs text-muted-foreground text-orange-600">
                   Client secret has been revealed previously and cannot be shown again for security reasons.
                 </p>
@@ -300,12 +302,12 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
           </div>
 
           {/* API Key */}
-          {oauthClient.apiKey && (
+          {oauthClient.hasApiKey && (
             <div className="space-y-2">
               <Label htmlFor="apiKey" className="text-xs sm:text-sm font-medium">API Key</Label>
               <div className="flex gap-2">
                 <div className="relative flex-1 min-w-0">
-                  {apiKeyRevealed ? (
+                  {apiKeyRevealed && !apiKey ? (
                     <Input
                       id="apiKey"
                       value={apiKey ? `****${apiKey.slice(-4)}` : '••••••••••••••••'}
@@ -354,7 +356,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
                 )}
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                {apiKeyRevealed ? (
+                {apiKeyRevealed && !apiKey ? (
                   <p className="text-xs text-muted-foreground text-orange-600">
                     API key has been revealed previously and cannot be shown again for security reasons.
                   </p>

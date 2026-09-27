@@ -612,3 +612,40 @@ workspace predicate with independently scoped code issuance. These findings do
 not replace the Features/Changelog blockers or the final alias/wrapper census.
 No edge, auth endpoint, logout, credential custody, runtime or deployment behavior
 is accepted by this import migration.
+
+### App credential ownership and explicit reveal
+
+The credential reveal, API-key rotation, manifest submission and draft creation
+routes now resolve the live actor through `getCurrentUser`. Credential and
+manifest reads require the actual `App.userId`; an absent owner, a publisher
+label or an admin session does not grant access through these owner routes.
+Draft creation accepts an omitted publisher or the actor's own ID and rejects
+foreign publisher assignment.
+
+Secret and API-key reveal claims condition their update on current app ownership,
+the unrevealed flag and the exact credential read. A failed claim returns no
+credential. Secret decryption happens inside the claim transaction so a failure
+rolls back the claim. Rotation checks ownership again at its update, and manifest
+submission first claims an owner-bound DRAFT app inside its transaction before
+writing versions, scopes or OAuth settings.
+
+The developer app detail page now requires a live owner on the server and sends
+an explicit credentials-card DTO without the API key or encrypted secret. The
+card does not fetch credentials on mount: reveal requires an explicit action,
+successful responses populate local state, and hide/copy remain available.
+Credential-bearing responses use `Cache-Control: no-store`.
+
+Creation still returns credentials for API compatibility. A successful reveal
+claim is one explicit reveal per stored credential state, not global once-only
+issuance: the existing owner-bound developer-docs API-key reader and creation/
+rotation responses remain separate. Public app-detail visibility, OAuth active
+membership, publisher-based deletion and other app lifecycle routes still need
+their separately scoped access review/fixes before gateway activation.
+
+Focused evidence executes actual handlers, the live-user helper, owner predicate,
+page and client component with modeled dependencies. The baseline had 20 failures
+and one positive check; the added client mount-fetch check also failed on prior
+source. The current 26 checks pass (22 ownership/page/client plus four existing
+adapter cases), with a strict scoped real-Prisma route-body typecheck. Competing
+claims, ownership changes and decryption rollback are modeled regression evidence,
+not real database concurrency/isolation or browser/runtime acceptance.

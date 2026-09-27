@@ -1,4 +1,6 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { getCurrentUser } from '@/lib/session';
+import { appOwnerWhere } from '@/lib/apps/ownership';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,9 +20,11 @@ import { AppConfigEditor } from './AppConfigEditor';
 
 import { prisma } from '@/lib/prisma';
 
-async function getApp(slug: string) {
-  const app = await prisma.app.findUnique({
-    where: { slug },
+export const dynamic = 'force-dynamic';
+
+async function getApp(slug: string, userId: string) {
+  const app = await prisma.app.findFirst({
+    where: { slug, ...appOwnerWhere(userId) },
     include: {
       versions: {
         orderBy: { createdAt: 'desc' }
@@ -61,8 +65,10 @@ export default async function AppDetailPage({
 }: { 
   params: Promise<{ slug: string }> 
 }) {
+  const actor = await getCurrentUser();
+  if (!actor) redirect('/login');
   const { slug } = await params;
-  const app = await getApp(slug);
+  const app = await getApp(slug, actor.id);
 
   if (!app) {
     notFound();
@@ -262,7 +268,15 @@ export default async function AppDetailPage({
 
             {/* OAuth Credentials - Always show when available */}
             {app.oauthClient && (
-              <OAuthCredentialsCard oauthClient={app.oauthClient} appId={app.id} appStatus={app.status} />
+              <OAuthCredentialsCard oauthClient={{
+                id: app.oauthClient.id,
+                clientId: app.oauthClient.clientId,
+                clientType: app.oauthClient.clientType,
+                secretRevealed: app.oauthClient.secretRevealed,
+                hasApiKey: Boolean(app.oauthClient.apiKey),
+                apiKeyRevealed: app.oauthClient.apiKeyRevealed,
+                redirectUris: app.oauthClient.redirectUris,
+              }} appId={app.id} appStatus={app.status} />
             )}
             
             {/* App Details */}

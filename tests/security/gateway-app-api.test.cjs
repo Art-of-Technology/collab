@@ -19,20 +19,25 @@ for (const kind of ['developer', 'admin', 'app-owner', 'oauth-consent']) {
     const prisma = {
       account: { findUnique: async () => { mappedReads++; if (broken) throw new Error('unavailable'); return live ? { user } : null; } },
       app: {
-        findFirst: async arg => { calls.push(['app-read', arg]); return { oauthClient: { apiKey: 'fixture-key' } }; },
+        findFirst: async arg => { calls.push(['app-read', arg]);
+          if (kind === 'app-owner') return arg.where.userId === 'mapped' ? { userId: 'mapped', oauthClient: { id: 'client', apiKey: 'fixture-key', apiKeyRevealed: false } } : null;
+          return { oauthClient: { apiKey: 'fixture-key' } }; },
         findUnique: async arg => { calls.push(['app-read', arg]); return { userId: 'mapped', oauthClient: { id: 'client', apiKey: 'fixture-key' } }; },
         count: async arg => { calls.push(['app-count', arg]); return 3; },
       },
-      user: { count: async () => { calls.push(['user-count']); return 1; } },
+      user: { count: async () => { calls.push(['user-count']); return 1; },
+        findUnique: async ({ where }) => ({ ...(where.id === user.id ? user : legacyUser), createdAt: new Date(), updatedAt: new Date() }) },
       workspace: { count: async () => { calls.push(['workspace-count']); return 2; } },
       appInstallation: { count: async () => { calls.push(['install-count']); return 4; } },
-      appOAuthClient: { update: async arg => { calls.push(['write', arg]); return {}; } },
+      appOAuthClient: { updateMany: async arg => { calls.push(['write', arg]); return { count: arg.where.app.userId === 'mapped' ? 1 : 0 }; } },
     };
     const adapter = load('src/lib/request-session.ts', { 'server-only': {}, './gateway-identity': identity,
       'next-auth': nextAuth, 'next/headers': { headers: async () => headers }, '@/lib/prisma': { prisma } }, { process: env });
     const response = { json: (body, init) => ({ status: init?.status ?? 200, body }) };
     const paths = { developer: 'dev/api-key', admin: 'admin/stats', 'app-owner': 'apps/by-id/[id]/mark-api-key-revealed', 'oauth-consent': 'oauth/authorize' };
+    const liveSession = load('src/lib/session.ts', { '@/lib/request-session': adapter, '@/lib/auth-options': { authOptions: options }, '@/lib/prisma': { prisma } }, { console: { error() {} } });
     const handler = load(`src/app/api/${paths[kind]}/route.ts`, {
+      '@/lib/session': liveSession, '@/lib/apps/ownership': load('src/lib/apps/ownership.ts'),
       '@/lib/request-session': adapter, 'next-auth': nextAuth, '@/lib/auth-options': { authOptions: options },
       '@/lib/prisma': { prisma }, 'next/server': { NextResponse: response },
       'next/navigation': { redirect() { throw new Error('Unexpected redirect'); } },
@@ -56,7 +61,7 @@ for (const kind of ['developer', 'admin', 'app-owner', 'oauth-consent']) {
       assert.equal(initial.body.success, true); assert.equal(calls[1][0], 'write');
       assert.equal(calls[1][1].where.id, 'client'); assert.equal(calls[1][1].data.apiKeyRevealed, true);
       user.id = 'foreign'; calls.length = 0;
-      assert.equal((await invoke()).status, 403); assert.equal(calls.length, 1); user.id = 'mapped';
+      assert.equal((await invoke()).status, 404); assert.equal(calls.length, 1); user.id = 'mapped';
     } else {
       const url = new URL(initial.body.redirect);
       assert.equal(url.origin, 'https://client.example.test'); assert.equal(url.searchParams.get('error'), 'access_denied');
@@ -66,14 +71,14 @@ for (const kind of ['developer', 'admin', 'app-owner', 'oauth-consent']) {
       headers = failure === 'missing' ? new Headers({ cookie: 'legacy=present' }) : claims();
       live = failure !== 'revoked'; broken = failure === 'database';
       env.env.COLLAB_AUTH_MODE = failure === 'invalid' ? 'invalid' : 'gateway'; calls.length = 0;
-      assert.equal((await invoke()).status, broken ? 500 : 401, failure);
+      assert.equal((await invoke()).status, broken && kind !== 'app-owner' ? 500 : 401, failure);
       assert.equal(calls.length, 0); assert.equal(legacyCalls, 0);
     }
     broken = false; live = true;
     for (const mode of ['nextauth', undefined]) {
       if (mode) env.env.COLLAB_AUTH_MODE = mode; else delete env.env.COLLAB_AUTH_MODE;
       calls.length = 0;
-      assert.equal((await invoke()).status, ['admin', 'app-owner'].includes(kind) ? 403 : 200);
+      assert.equal((await invoke()).status, kind === 'admin' ? 403 : kind === 'app-owner' ? 404 : 200);
       if (kind === 'developer') assert.equal(calls[0][1].where.userId, 'legacy');
       assert.equal(calls.filter(call => call[0] === 'write').length, 0);
     }

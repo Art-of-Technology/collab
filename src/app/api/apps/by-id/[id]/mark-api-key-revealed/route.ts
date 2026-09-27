@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/request-session';
-import { authOptions } from '@/lib/auth-options';
+import { getCurrentUser } from '@/lib/session';
+import { appOwnerWhere } from '@/lib/apps/ownership';
 import { prisma } from '@/lib/prisma';
+
+const json = (body: unknown, status = 200) =>
+  NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 
 export async function POST(
   request: NextRequest,
@@ -9,50 +12,24 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const app = await prisma.app.findUnique({
-      where: { id },
-      include: {
-        oauthClient: true
-      }
+    const actor = await getCurrentUser();
+    if (!actor) return json({ error: 'Unauthorized' }, 401);
+    const app = await prisma.app.findFirst({
+      where: { id, ...appOwnerWhere(actor.id) }, include: { oauthClient: true },
     });
-
-    if (!app) {
-      return NextResponse.json({ error: 'App not found' }, { status: 404 });
-    }
-
-    if (!app.oauthClient) {
-      return NextResponse.json({ error: 'App has no OAuth client' }, { status: 404 });
-    }
-
-    if (!app.oauthClient.apiKey) {
-      return NextResponse.json({ error: 'No API key available' }, { status: 404 });
-    }
-
-    if (app.userId && app.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    await prisma.appOAuthClient.update({
-      where: { id: app.oauthClient.id },
-      data: { apiKeyRevealed: true }
+    if (!app) return json({ error: 'App not found' }, 404);
+    const client = app.oauthClient;
+    if (!client) return json({ error: 'App has no OAuth client' }, 404);
+    if (!client.apiKey) return json({ error: 'No API key available' }, 404);
+    if (client.apiKeyRevealed) return json({ error: 'API key has already been revealed' }, 409);
+    const claimed = await prisma.appOAuthClient.updateMany({
+      where: { id: client.id, app: appOwnerWhere(actor.id), apiKeyRevealed: false, apiKey: client.apiKey },
+      data: { apiKeyRevealed: true },
     });
-
-    return NextResponse.json({
-      success: true
-    });
-
+    if (claimed.count !== 1) return json({ error: 'Credential changed or access revoked' }, 409);
+    return json({ success: true, apiKey: client.apiKey });
   } catch (error) {
-    console.error('Error marking API key as revealed:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('Error revealing API key:', error);
+    return json({ error: 'Internal server error' }, 500);
   }
 }
-
