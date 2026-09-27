@@ -8,6 +8,7 @@ function matches(row, where = {}) {
     if(key==='NOT')return !matches(row,value);
     const actual=row?.[key];
     if(value===null||typeof value!=='object')return actual===value;
+    if('every'in value)return actual?.every(x=>matches(x,value.every))||false;
     if('some'in value)return actual?.some(x=>matches(x,value.some))||false;
     if('in'in value)return value.in.includes(actual);
     if('notIn'in value)return !value.notIn.includes(actual);
@@ -51,7 +52,8 @@ function fixture(options={}){
  const repo={id:'repo',fullName:'org/repo',projectId:target.id,project:target};
  const commits=[{id:'commit',repositoryId:'repo',repository:repo,sha:'abc',message:'message\nbody',authorName:'Alice',commitDate:date(-1)}];
  const pulls=[{id:'pull',repositoryId:'repo',repository:repo,githubPrId:1,title:'PR',state:'OPEN',createdAt:date(-1),updatedAt:now,mergedAt:null,createdBy:{name:'Alice'}}];
- const releases=[{id:'release',repositoryId:'repo',repository:repo,tagName:'v1',name:'Release',publishedAt:date(-1)}];
+ const version={repository:repo,issueAccessInvalidated:!!options.invalidVersion,issues:options.foreignVersionIssue?[{issue:hidden}]:[]};
+ const releases=[{version,id:'release',repositoryId:'repo',repository:repo,tagName:'v1',name:'Release',publishedAt:date(-1)}];
  const author={id:'alice',name:'Alice',image:null};
  const feature=(id,workspaceId)=>({id,title:id,description:id,status:'PENDING',projectId:target.id,project:target,workspaceId,workspace:projects.find(x=>x.id===workspaceId)?.workspace||null,createdAt:now,author,votes:[{value:1},{value:-1},{value:1}],_count:{comments:2}});
  const features=[feature('project-only',null),feature('same-workspace',target.workspaceId),feature('wrong-workspace','own')];
@@ -64,6 +66,7 @@ function fixture(options={}){
  commit:{findMany:async args=>query(commits,args)},pullRequest:{findMany:async args=>query(pulls,args)},release:{findMany:async args=>query(releases,args)},featureRequest:{findMany:async args=>query(features,args)},note:{findMany:async args=>query(notes,args)}};
  const deps={'@/lib/prisma':{prisma:db},'@/lib/auth':{authConfig:{}},'@/lib/auth-options':{authOptions:{}},'next-auth/next':{getServerSession:async()=>options.absent?null:{user:{id:'alice',email:options.staleEmail?'bob@example.test':actor.email}}},'@/lib/request-session':{getServerSession:async()=>options.absent?null:{user:{id:'alice',email:options.staleEmail?'bob@example.test':actor.email}}},'@/lib/post-access':load('src/lib/post-access.ts'),'next/server':{NextResponse:{json:(body,init={})=>({body,status:init.status||200,headers:new Headers(init.headers)})}}};
  const globals={Error,console:{error:(...args)=>logs.push(args)}};deps['@/lib/session']=load('src/lib/session.ts',deps,globals);deps['@/lib/issue-finder']=load('src/lib/issue-finder.ts',deps,globals);deps['@/lib/secrets/access']=load('src/lib/secrets/access.ts',deps,globals);
+ deps['@/lib/github/version-access']=load('src/lib/github/version-access.ts',{...deps,'./access':load('src/lib/github/access.ts',deps)});
  const route=load('src/app/api/projects/[projectId]/summary/route.ts',deps,globals);
  return{reads,logs,call:(id=target.id)=>route.GET({}, {params:Promise.resolve({projectId:id})})};
 }
@@ -78,3 +81,5 @@ test('payload queries recheck lost project access after initial lookup',async()=
 test('GitHub child activity queries recheck project access after repository lookup',async()=>{const r=await fixture({revokeRepository:true}).call();assert.equal(r.status,200);assert.deepEqual(plain(r.body.github.activities),[]);});
 test('authorized GitHub activity, date windows and response transformations remain',async()=>{const r=await fixture().call();assert.equal(r.status,200);assert.equal(r.body.github.repositoryName,'org/repo');assert.equal(r.body.github.activities.length,3);assert.equal(r.body.github.activities.find(x=>x.type==='commit').description,'message');assert.equal(r.body.recentlyCompleted[0].id,'completed');assert.equal(r.body.timeline[0].id,'upcoming');assert.ok(r.body.atRisk.upcoming[0].daysUntilDue>=0);});
 test('success is no-store and unexpected errors use fixed safe logs',async()=>{assert.equal((await fixture().call()).headers.get('cache-control'),'no-store');const f=fixture({dbError:true});assert.equal((await f.call()).status,500);assert.ok(f.logs.length&&f.logs.every(x=>x.length===1&&!x[0].includes('private-database-detail')));});
+
+test('summary release projection hides invalidated and foreign-issue versions',async()=>{for(const options of [{invalidVersion:true},{foreignVersionIssue:true},{}]){const r=await fixture(options).call();assert.equal(r.status,200);assert.equal(r.body.github.activities.filter(x=>x.type==='release').length,Object.keys(options).length?0:1);}});

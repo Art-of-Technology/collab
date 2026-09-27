@@ -820,8 +820,9 @@ repositories receive 404. Configuration update and repository deletion repeat th
 predicate in their final database write selector. A failed final selector retains
 the existing generic 500 response; it does not mutate the repository.
 
-Repository details retain their existing relation payload and exclude stored
-access tokens and webhook secrets. Configuration fields, validation, and partial
+Repository details retain their existing relation payload shape and exclude stored
+access tokens and webhook secrets. Embedded version visibility and counts follow
+the [version access contract](../github-version-access.md). Configuration fields, validation, and partial
 update behavior remain unchanged. Successful responses are `no-store`; touched
 exception logs use fixed messages instead of provider/database error details.
 
@@ -874,6 +875,7 @@ project/workspace and the shared issue-read predicate. Parent and BLOCKS-source
 projections are independently filtered through the same read policy.
 
 Status, repository and repository-activity queries repeat current project access.
+Release activity also follows the [version access contract](../github-version-access.md).
 Features retain project-only rows with a null workspace and matching-workspace
 rows; explicit workspace mismatches are excluded. Notes keep the shared access,
 restriction and expiry policy while requiring consistent workspace/project
