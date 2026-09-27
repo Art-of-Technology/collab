@@ -355,9 +355,11 @@ covers both exports, missing/deleted subjects,
 foreign recipients, stale session email, database email changes and valid unjoined
 invitees. Four denial checks failed before the fix (two positive checks passed);
 the focused invitation/workspace-read/session checks then passed 16/16 with no
-skips. No email, database, provider or runtime operation was performed. Token
-preview, acceptance mutations and concurrent changes after the user lookup remain
-separate work. The redundant generic pipeline test stage is explicitly skipped;
+skips. No email, database, provider or runtime operation was performed. For token
+preview, acceptance and their remaining verification limits, see the
+[token contract](#invitation-token-preview-and-acceptance-27-september-2026).
+Concurrent changes after the list's user lookup remain separate work.
+The redundant generic pipeline test stage is explicitly skipped;
 review, documentation, scoped lint, CI and exact-head Octopus gates remain.
 
 ## Invitation token preview and acceptance (27 September 2026)
