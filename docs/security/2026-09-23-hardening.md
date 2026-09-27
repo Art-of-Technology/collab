@@ -12,6 +12,11 @@ Status: local implementation; not deployed or release-approved.
   authorizes status fields and `ASSIGN_TASK` only authorizes assignment. Every
   field in a mixed payload must be authorized. Deletion uses the corresponding
   delete permissions.
+- Priority updates validate case-insensitively against `UpdateIssueSchema` and
+  preserve the submitted casing in storage and responses. Existing uppercase
+  priorities therefore retain their Kanban grouping and filtering behavior;
+  invalid values fail before writes. See the
+  [priority regression](../../tests/security/issue-priority.test.cjs).
 - Same-workspace project moves require edit rights, an accessible destination,
   a valid destination status and compatible retained parent/child, label and
   repository relations. Invalid moves fail atomically without clearing relations;
@@ -260,10 +265,11 @@ Other warnings occur in unchanged files; this result is not a zero-warning claim
 The security regressions are split by subject into ordinary executable
 `tests/security/*.test.cjs` files, using the existing VM loader and fixtures in
 `helpers.cjs`. The package entrypoint discovers every file and runs them serially to preserve
-the original single-process resource bound. The feature
-page navigation regression is retained for PR477 integration, and the opt-in
-native PostgreSQL cascade regression still covers both comment deletion paths
-and all three post deletion paths.
+the original single-process resource bound. The integrated feature-page
+regression lives in [`feature-navigation.test.cjs`](../../tests/security/feature-navigation.test.cjs)
+and uses native Next navigation helpers for the 404 and redirect checks.
+The opt-in native PostgreSQL cascade regression still covers both comment
+deletion paths and all three post deletion paths.
 
 Notes-comment notifications now use the existing Notes collection policy for
 recipient delivery, notification reads and mark-read operations. A comment
