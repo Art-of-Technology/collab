@@ -594,7 +594,9 @@ The import migration moved sixteen app, developer, OAuth authorization and admin
 API routes to the shared request-session adapter without changing handler behavior.
 The credential and manifest routes subsequently adopted the live-user helper and
 [owner-bound access contract](#app-credential-ownership-and-explicit-reveal).
-Gateway mode remains disabled pending the remaining API imports, the leave-service library,
+For leave API and service migration status, see
+[leave actor identity and active access](#leave-actor-identity-and-active-access).
+Gateway mode remains disabled pending the remaining API imports,
 aliases/wrappers, edge/session/logout integration and final acceptance.
 
 Four representative actual handlers (developer API-key read, admin statistics,
@@ -1226,7 +1228,7 @@ operation objects. It checks the authenticated actor through the existing
 
 The [focused fixture](../../tests/security/leave-access.test.cjs) runs the actual
 routes, actions, service, session/identity and permission helpers with modeled
-Prisma and intercepted notification/event effects. Twenty-four baseline failures
+Prisma, mocked date arithmetic and intercepted notification/event effects. Twenty-four baseline failures
 and three controls become 27 passing checks. Table-driven checks cover all route
 and action entry points, stale-email binding, gateway denial without fallback,
 inactive membership with zero writes/effects, owner/admin controls, actor spoofing,
