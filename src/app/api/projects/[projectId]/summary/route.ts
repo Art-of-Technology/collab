@@ -1,3 +1,4 @@
+import { versionAccessWhere } from '@/lib/github/version-access';
 import { noteTagAccessWhere } from '@/lib/note-tag-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
@@ -326,7 +327,7 @@ export async function GET(
 
       // Get releases
       const releases = await prisma.release.findMany({
-        where: { repositoryId: repository.id, repository: { project: projectWhere } },
+        where: { repositoryId: repository.id, repository: { project: projectWhere }, version: versionAccessWhere(actor.id) },
         orderBy: { publishedAt: 'desc' },
         take: 3,
         select: {

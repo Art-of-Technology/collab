@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { versionAccessWhere } from "@/lib/github/version-access";
 import { repositoryAccessWhere } from "@/lib/github/access";
 import { EncryptionService } from "@/lib/encryption";
 
@@ -36,6 +37,7 @@ export async function GET(
           orderBy: { githubUpdatedAt: 'desc' },
         },
         versions: {
+          where: versionAccessWhere(actor.id),
           take: 5,
           orderBy: { createdAt: 'desc' },
         },
@@ -44,7 +46,7 @@ export async function GET(
             branches: true,
             pullRequests: true,
             commits: true,
-            versions: true,
+            versions: { where: versionAccessWhere(actor.id) },
           },
         },
       },

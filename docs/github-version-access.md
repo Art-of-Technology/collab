@@ -25,3 +25,10 @@ remain native acceptance requirements.
 Focused check: `node --test tests/security/github-version-access.test.cjs`.
 It executes real handlers/predicates with controlled database responses. It is not
 proof of native database isolation, concurrent revocation or trigger semantics.
+
+Repository detail embeds only versions satisfying the same predicate and counts only
+those versions. Project summary release activity likewise requires an accessible,
+non-invalidated linked version. Targeted checks run the existing handlers with modeled
+rows: `node --test --test-name-pattern='summary release projection|GET preserves owner' tests/security/project-summary-access.test.cjs tests/security/github-lifecycle-access.test.cjs`.
+The repository check verifies both list/count query scopes; the summary check evaluates
+visible, invalidated and foreign-linked-issue versions. Neither executes PostgreSQL.

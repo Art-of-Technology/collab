@@ -19,7 +19,15 @@ function fixture(options = {}) {
       update: async ({ where, data }) => { assert.equal(where.id, 'alice'); if (options.dbError) throw new Error('stored-secret private-detail'); Object.assign(credentials, data); writes.push(['user', plain(data)]); return actor; },
     },
     repository: {
-      findFirst: async ({ where, select: shape }) => { if (options.readError) throw new Error('stored-secret private-detail'); const row = current(where); const result = row ? structuredClone(select(row, shape)) : null; if (row) changeAccess(row); return result; },
+      findFirst: async ({ where, select: shape, include }) => { if (options.readError) throw new Error('stored-secret private-detail'); const row = current(where); const result = row ? structuredClone(select(row, shape)) : null;
+        if (result && include?.versions) {
+          const predicate=include.versions.where;
+          assert.equal(predicate.issueAccessInvalidated,false);
+          assert.ok(predicate.issues.every.issue);
+          assert.equal(matches({project:{workspace:workspaces[2]}},predicate.repository),false);
+          assert.deepEqual(plain(include._count.select.versions.where),plain(predicate));
+        }
+        if (row) changeAccess(row); return result; },
       update: async ({ where, data, select: shape }) => { const row = current(where); if (!row) throw new Error('no matching record'); if (options.dbError) throw new Error('stored-secret private-detail'); Object.assign(row, data); writes.push(['update', plain(data)]); return select(row, shape); },
       delete: async ({ where }) => { const row = current(where); if (!row) throw new Error('no matching record'); if (options.dbError) throw new Error('stored-secret private-detail'); repositories.splice(repositories.indexOf(row), 1); writes.push(['delete', row.id]); return row; },
     },
@@ -39,6 +47,7 @@ function fixture(options = {}) {
   };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, globals);
   deps['@/lib/github/access'] = load('src/lib/github/access.ts', deps);
+  deps['@/lib/github/version-access'] = load('src/lib/github/version-access.ts', { ...deps, './access': deps['@/lib/github/access'] });
   const repo = load('src/app/api/github/repositories/[repositoryId]/route.ts', deps, globals);
   const config = load('src/app/api/github/repositories/[repositoryId]/configuration/route.ts', deps, globals);
   const disconnect = load('src/app/api/github/oauth/disconnect/route.ts', deps, globals);
