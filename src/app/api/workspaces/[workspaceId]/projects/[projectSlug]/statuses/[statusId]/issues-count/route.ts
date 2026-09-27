@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 
 export async function GET(
@@ -11,10 +12,11 @@ export async function GET(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const { workspaceId: workspaceSlugOrId, projectSlug, statusId } = await params;
     
     // Resolve workspace slug/ID to actual workspace ID
@@ -27,13 +29,7 @@ export async function GET(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        ...issueAccessWhere(userId).workspace
       }
     });
 
@@ -45,6 +41,7 @@ export async function GET(
     const project = await prisma.project.findFirst({
       where: {
         workspaceId,
+        ...issueAccessWhere(userId),
         slug: projectSlug
       }
     });
@@ -57,7 +54,8 @@ export async function GET(
     const status = await prisma.projectStatus.findFirst({
       where: {
         id: statusId,
-        projectId: project.id
+        projectId: project.id,
+        project: issueAccessWhere(userId)
       }
     });
 
@@ -69,7 +67,9 @@ export async function GET(
     const issueCount = await prisma.issue.count({
       where: {
         projectId: project.id,
-        statusId: statusId
+        statusId: statusId,
+        workspaceId,
+        ...issueReadAccessWhere(userId)
       }
     });
 

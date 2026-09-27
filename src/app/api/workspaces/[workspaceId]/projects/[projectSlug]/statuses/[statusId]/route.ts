@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 
 export async function DELETE(
@@ -11,12 +12,17 @@ export async function DELETE(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const { workspaceId: workspaceSlugOrId, projectSlug, statusId } = await params;
     const body = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body) ||
+        (body.targetStatusId !== undefined && (typeof body.targetStatusId !== 'string' || !body.targetStatusId.trim()))) {
+      return NextResponse.json({ error: 'Invalid target status' }, { status: 400 });
+    }
     const { targetStatusId } = body;
     
     // Resolve workspace slug/ID to actual workspace ID
@@ -29,13 +35,7 @@ export async function DELETE(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        ...issueAccessWhere(userId).workspace
       }
     });
 
@@ -47,6 +47,7 @@ export async function DELETE(
     const project = await prisma.project.findFirst({
       where: {
         workspaceId,
+        ...issueAccessWhere(userId),
         slug: projectSlug
       }
     });
@@ -59,7 +60,8 @@ export async function DELETE(
     const statusToDelete = await prisma.projectStatus.findFirst({
       where: {
         id: statusId,
-        projectId: project.id
+        projectId: project.id,
+        project: issueAccessWhere(userId)
       }
     });
 
@@ -92,38 +94,38 @@ export async function DELETE(
 
     // Perform the deletion in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // First, move all issues to the target status if specified
+      // Recheck source and target at transaction entry before touching issues.
+      const source = await tx.projectStatus.findFirst({
+        where: { id: statusId, projectId: project.id, isDefault: false, project: issueAccessWhere(userId) }
+      });
+      if (!source) return null;
+      if (targetStatusId && !await tx.projectStatus.findFirst({
+        where: { id: targetStatusId, projectId: project.id, project: issueAccessWhere(userId) }
+      })) return null;
+
+      const movableWhere = { workspaceId, projectId: project.id, statusId, ...issueReadAccessWhere(userId) };
+      // The FK clears every attached issue, including malformed cross-project links.
+      const attached = await tx.issue.count({ where: { statusId } });
+      const movable = await tx.issue.count({ where: movableWhere });
+      if (attached !== movable || (attached > 0 && !targetStatusId)) return null;
+
+      let movedIssuesCount = 0;
       if (targetStatusId) {
-        const updatedIssues = await tx.issue.updateMany({
-          where: {
-            projectId: project.id,
-            statusId: statusId
-          },
-          data: {
-            statusId: targetStatusId
-          }
-        });
-
-        console.log(`Moved ${updatedIssues.count} issues from status ${statusId} to ${targetStatusId}`);
+        const moved = await tx.issue.updateMany({ where: movableWhere, data: { statusId: targetStatusId } });
+        movedIssuesCount = moved.count;
       }
-
-      // Then delete the status
       const deletedStatus = await tx.projectStatus.delete({
         where: {
-          id: statusId
+          id: statusId, projectId: project.id, isDefault: false,
+          project: issueAccessWhere(userId), issues: { none: {} }
         }
       });
-
-      return {
-        deletedStatus,
-        movedIssuesCount: targetStatusId ? await tx.issue.count({
-          where: {
-            projectId: project.id,
-            statusId: targetStatusId
-          }
-        }) : 0
-      };
+      return { deletedStatus, movedIssuesCount };
     });
+
+    if (!result) {
+      return NextResponse.json({ error: 'Status changed or has issues that cannot be moved; reload and choose a valid target' }, { status: 409 });
+    }
 
     return NextResponse.json({ 
       success: true, 
