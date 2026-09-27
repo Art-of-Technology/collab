@@ -55,6 +55,7 @@ const workspaces = [
 ];
 const issues = workspaces.map(workspace => ({
   id: `id-${workspace.id}`, issueKey: `${workspace.id.toUpperCase()}-1`, workspaceId: workspace.id,
+  workspace, project: { workspace }, statusId: null,
 }));
 
 // Evaluate the Prisma predicates against records, including absent predicates.
@@ -69,10 +70,7 @@ function matchesWorkspace(workspace, where) {
 const prisma = {
   issue: {
     async findFirst({ where }) {
-      return issues.find(issue => (!where.id || issue.id === where.id) &&
-        (!where.issueKey || issue.issueKey === where.issueKey) &&
-        (!where.workspaceId || issue.workspaceId === where.workspaceId) &&
-        (!where.workspace || matchesWorkspace(workspaces.find(w => w.id === issue.workspaceId), where.workspace))) ?? null;
+      return issues.find(issue => matches(issue, where)) ?? null;
     },
     async findUnique({ where }) { return issues.find(issue => issue.id === where.id) ?? null; },
   },

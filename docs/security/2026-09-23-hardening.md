@@ -13,6 +13,8 @@ through this helper. See the [session and membership regression](../../tests/sec
 
 ## Issue access and mutations
 
+Issue ID/key lookup now requires access to the issue workspace, its project workspace and any linked status project. Detail and shared mutation responses filter parent/child issues, labels and child counts through the caller's current scope, preserving owner access after membership changes. Historical foreign references remain stored but are excluded from these responses. See [issue read-scope regressions](../../tests/security/issue-read-scope.test.cjs).
+
 - Issue ID and key resolution always requires workspace ownership or active
   membership. A caller-supplied workspace only narrows that authorized set.
 - Issue updates reject empty, unknown or invalid fields using `UpdateIssueSchema`

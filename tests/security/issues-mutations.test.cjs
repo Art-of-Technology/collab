@@ -41,7 +41,7 @@ test('issue mutations reject mass assignment, foreign relations and read-only us
       checkUserPermissions: async (_user, _workspace, permissions) => Object.fromEntries(permissions.map(p => [p, { hasPermission: allowed }])),
     },
     '@/lib/issue-finder': {
-      findIssueByIdOrKey: async () => existing, STANDARD_ISSUE_INCLUDE: {},
+      findIssueByIdOrKey: async () => existing, getStandardIssueInclude: () => ({}),
       userHasWorkspaceAccess: async user => user === 'alice',
     },
     '@/lib/board-item-activity-service': { compareObjects: () => [] },
@@ -147,7 +147,7 @@ test('review: issue field grants and atomic same-workspace project moves preserv
     '@/lib/prisma': { prisma: db }, '@/lib/session': { getCurrentUser: async () => ({ id: 'alice' }) },
     '@/lib/permissions': { ...permissionModule,
       checkUserPermissions: async (_user, _workspace, requested) => Object.fromEntries(requested.map(p => [p, { hasPermission: grants.includes(p) }])) },
-    '@/lib/issue-finder': { STANDARD_ISSUE_INCLUDE: {},
+    '@/lib/issue-finder': { getStandardIssueInclude: () => ({}),
       findIssueByIdOrKey: async () => ({ ...state }),
       userHasWorkspaceAccess: async (user, workspace) => active && workspace === 'joined' && ['alice', 'bob'].includes(user) },
     '@/lib/board-item-activity-service': { compareObjects: () => [], trackStatusChange: async () => {}, trackAssignment: async () => {} },
