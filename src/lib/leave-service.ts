@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
 import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
 import { differenceInDays } from "date-fns";
@@ -87,8 +87,17 @@ async function updateLeaveBalance(data: LeaveBalanceUpdate): Promise<void> {
 export async function processLeaveRequestAction(data: LeaveRequestActionData) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error("Unauthorized");
+  }
+
+  const actorId = session.user.id;
+  if (!data || data.actionById !== actorId) {
+    throw new Error("Unauthorized actor");
+  }
+  if (typeof data.requestId !== "string" || !data.requestId.trim() ||
+      (data.action !== "APPROVED" && data.action !== "REJECTED")) {
+    throw new Error("Invalid leave request action");
   }
 
   // Start a database transaction to ensure atomicity
@@ -123,7 +132,7 @@ export async function processLeaveRequestAction(data: LeaveRequestActionData) {
 
     // Verify the acting user has permission to manage leave requests
     const permissionCheck = await checkUserPermission(
-      data.actionById,
+      actorId,
       leaveRequest.policy.workspaceId,
       Permission.MANAGE_LEAVE
     );
@@ -210,12 +219,12 @@ export async function approveLeaveRequestWithBalance(
 ) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error("Unauthorized");
   }
 
   const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+    where: { id: session.user.id },
     select: { id: true },
   });
 
@@ -240,12 +249,12 @@ export async function rejectLeaveRequestWithBalance(
 ) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error("Unauthorized");
   }
 
   const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+    where: { id: session.user.id },
     select: { id: true },
   });
 

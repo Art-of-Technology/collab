@@ -1206,3 +1206,41 @@ raw error logging remain separate. Gateway and worker stay disabled; trusted
 ingress and mutation-Origin requirements remain. No provider, database, browser,
 runtime or deployment operation was run. Generic test stage is SKIPPED; source
 review, documentation, scoped lint, CI and exact-head Octopus gates remain.
+
+
+## Leave actor identity and active access
+
+The six leave API modules and shared approval service now use the shared session
+adapter. All twelve route handlers, nine existing leave server actions and both
+approval/rejection wrappers resolve actors by session user ID. A reassigned or
+stale session email cannot select a different database user. Existing ownership,
+policy projections, manager permissions, response transforms, dates and notification
+calls remain intact. Membership-based access requires an active row, while workspace
+owners retain access. Request cancellation now also checks current workspace access.
+
+The public `processLeaveRequestAction` rejects a supplied actor that differs from
+the authenticated subject before starting a transaction. It validates a non-empty
+string request ID and the exact APPROVED/REJECTED action values, rejecting Prisma
+operation objects. It checks the authenticated actor through the existing
+`MANAGE_LEAVE` permission helper, preserving current system-admin and owner rules.
+
+The [focused fixture](../../tests/security/leave-access.test.cjs) runs the actual
+routes, actions, service, session/identity and permission helpers with modeled
+Prisma and intercepted notification/event effects. Twenty-four baseline failures
+and three controls become 27 passing checks. Table-driven checks cover all route
+and action entry points, stale-email binding, gateway denial without fallback,
+inactive membership with zero writes/effects, owner/admin controls, actor spoofing,
+malformed service inputs and existing edit/cancel ownership, pending-state and date
+restrictions. Gateway fixture emails match the real allowlist. A scoped strict
+typecheck covers ten exact non-import module bodies against Prisma/Next/Zod/date-fns
+declarations with typed session and external-service boundaries.
+
+These checks do not prove native isolation, post-lookup revocation or concurrency.
+Existing balance writes use the global Prisma client inside the request transaction;
+permission reads also remain outside that transaction client. Atomic balance updates,
+concurrent approval, date/accounting semantics, action input validation beyond this
+service boundary, raw logging and notification/provider delivery remain separate.
+Gateway and worker stay disabled; trusted ingress, mutation-Origin enforcement,
+integrated staging and restore gates remain. Generic test stage is SKIPPED; source
+review, documentation, scoped lint, CI and exact-head Octopus checks remain required.
+No database, browser, provider, runtime, build or deployment operation was run.
