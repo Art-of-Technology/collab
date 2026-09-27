@@ -950,3 +950,24 @@ gap also applies to note PATCH (`tags.set`), alongside note creation; both need
 the same eventual tag policy. Existing precheck/final-write races, raw error
 logging and pin authorization for workspace owners without a matching member
 role remain separate. No runtime, provider or identity provisioning occurred.
+
+## Notes history session adapter
+
+Version list, single-version read/restore, comparison and save-as-template now
+use the shared request-session adapter with unchanged `authOptions`. Only four
+imports changed across five handlers. Existing read/edit, versioning-enabled,
+protected-note and template workspace checks remain intact.
+
+The focused fixture executes the actual handlers, identity parser, selector and
+access helpers with mocked Prisma and versioning operations. It checks mapped
+owner success, restore EDIT-share success, exact actor attribution to restoration
+and template creation, foreign-note denial, identity failure before downstream
+operations and explicit/default legacy behavior. It does not prove native
+version transactions, concurrency, encryption or runtime acceptance. Core
+mapping-query evidence is reused unchanged.
+
+Gateway and worker remain disabled. Existing permissive version parsing,
+unbounded history pagination, precheck/final-write races, split restoration
+metadata/content writes and raw error logging are unchanged. Workspace admins
+can also fail the restore route's additional author/EDIT-share filter. These
+remain separate from session-import convergence.
