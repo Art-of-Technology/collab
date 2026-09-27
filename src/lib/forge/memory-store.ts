@@ -43,8 +43,10 @@ export async function writeProjectMemory(binding: ForgeBinding, expectedSha: str
     // A lost response can follow a committed write. Verify instead of repeating it.
   }
   try {
-    const snapshot = await readProjectMemory(binding, request);
-    if (snapshot.sha && serializeMemory(snapshot.document) === markdown) return { kind: 'saved', snapshot };
+    const snapshot = await readMemoryFile(binding, await tokenFrom(binding.readTokenFile), request);
+    if (snapshot.sha && snapshot.content === markdown) return {
+      kind: 'saved', snapshot: { sha: snapshot.sha, document: parseMemory(snapshot.content, binding.projectId) },
+    };
   } catch { /* Readback is unavailable; retain the user's unsaved draft. */ }
   return { kind: 'uncertain' };
 }

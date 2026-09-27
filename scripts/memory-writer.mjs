@@ -1,11 +1,15 @@
 import { createServer } from 'node:https';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 import { pathToFileURL } from 'node:url';
 import { MEMORY_LIMIT, memorySha, writeMemoryFile } from '../src/lib/forge/memory-file.mjs';
 
 const hash = value => createHash('sha256').update(value).digest();
+const forbiddenHosts = new BlockList();
+forbiddenHosts.addAddress('0.0.0.0');
+forbiddenHosts.addAddress('255.255.255.255');
+forbiddenHosts.addAddress('::', 'ipv6');
 const keysAre = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
 
@@ -60,7 +64,7 @@ export async function startMemoryWriter(configPath = process.env.COLLAB_MEMORY_W
   const config = JSON.parse(bytes.toString('utf8'));
   if (!keysAre(config, ['origin', 'projectId', 'forgeTokenFile', 'serviceTokenFile', 'certificateFile', 'keyFile', 'host', 'port']) ||
     ['forgeTokenFile', 'serviceTokenFile', 'certificateFile', 'keyFile'].some(key => typeof config[key] !== 'string' || !config[key].startsWith('/')) ||
-    !isIP(config.host) || ['0.0.0.0', '::', '255.255.255.255'].includes(config.host) ||
+    !isIP(config.host) || forbiddenHosts.check(config.host, isIP(config.host) === 6 ? 'ipv6' : 'ipv4') ||
     !Number.isInteger(config.port) || config.port < 1024 || config.port > 65535) throw new Error('Invalid writer configuration');
   const [forgeToken, serviceToken, cert, key] = await Promise.all([
     readFile(config.forgeTokenFile, 'utf8'), readFile(config.serviceTokenFile, 'utf8'),

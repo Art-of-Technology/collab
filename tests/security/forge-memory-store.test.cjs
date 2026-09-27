@@ -24,6 +24,35 @@ const { readProjectMemory, writeProjectMemory } = load('memory-store');
 const { saveMemoryDraft, serializeMemory } = load('memory');
 const { writeMemoryFile } = require('../../src/lib/forge/memory-file.mjs');
 
+test('app readback requires exact requested bytes after an uncertain service reply', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-memory-readback-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const reader = path.join(directory, 'reader'), writer = path.join(directory, 'writer');
+  fs.writeFileSync(reader, 'fixture-reader'); fs.writeFileSync(writer, 'fixture-service-credential-only-123456789');
+  const binding = { origin: 'https://forge.example.test', owner: 'Space', repository: 'team-space', repositoryId: 4,
+    projectId: 'project', readTokenFile: reader, memory: { branch: 'main', writerOrigin: 'https://writer.example.test', serviceTokenFile: writer } };
+  const document = { version: 1, projectId: 'project', revisions: [] };
+  for (const exact of [false, true]) {
+    let stored = null, writes = 0;
+    const request = async (url, options) => {
+      if (url === 'https://writer.example.test/v1/project-memory') {
+        writes++;
+        const { content } = JSON.parse(options.body);
+        const bytes = Buffer.from(exact ? content : content.replace('"projectId"', ' "projectId"'));
+        stored = { type: 'file', path: 'project-memory.md', encoding: 'base64', content: bytes.toString('base64'),
+          size: bytes.length, sha: crypto.createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex') };
+        return new Response(null, { status: 503 });
+      }
+      if (url.endsWith('/team-space')) return Response.json({ id: 4, empty: !stored, default_branch: 'main' });
+      return Response.json(stored || []);
+    };
+    const result = await writeProjectMemory(binding, null, document, request);
+    assert.equal(result.kind, exact ? 'saved' : 'uncertain');
+    assert.equal(writes, 1);
+    if (exact) assert.equal(serializeMemory(result.snapshot.document), serializeMemory(document));
+  }
+});
+
 test('fixed-path SHA-CAS preserves concurrent writes, validates file type, and resolves lost responses by readback', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-memory-test-'));
   try {

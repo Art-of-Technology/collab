@@ -78,8 +78,8 @@ stays enabled. The service credential must be distinct from the Forge token,
 contain no whitespace and have at least 32 characters.
 
 The integration mount contract uses
-`COLLAB_FORGE_CONFIG_FILE=/run/config/collab-forge.json` and preserves the existing
-principal11 `read:repository` + `write:issue` token at
+`COLLAB_FORGE_CONFIG_FILE=/run/config/collab-forge.json` and the approved NEW
+Collab-only `read:repository` + `write:issue` token on existing principal11 at
 `/run/secrets/collab-forge-token` for `readTokenFile` and the root-owned issue
 writer. This Notes-only branch does not add the optional `issues` binding;
 the root integration must preserve that independent schema when rebasing.
@@ -88,6 +88,10 @@ No additional principal12 token is implied. The service bearer is mounted at
 `/run/secrets/notes-forge-token` is writer-only. No credentials are provisioned
 by this source change. Forge-only writer egress requires deployment enforcement;
 a fixed URL or Docker bridge alone does not establish it.
+
+Writer startup rejects wildcard and broadcast addresses by parsed address,
+including expanded IPv6 and IPv4-mapped spellings. This local bind guard does
+not establish the separate private-network or egress policy.
 
 Only `POST /v1/project-memory` accepts writes. Its exact body fields are
 `projectId`, `repositoryId`, `expectedSha` and `content`; project and repository
@@ -114,6 +118,8 @@ The file must be a regular file, never a symlink or submodule. Reads verify its
 path, size, canonical base64, Git blob hash, UTF-8, project and metadata schema.
 Leading UTF-8 BOM bytes are preserved for schema validation and exact readback
 comparison; a BOM-prefixed document is rejected, not silently normalized.
+Both writer and app require the raw readback content to equal the requested
+Markdown before confirming a save; equivalent parsed metadata is insufficient.
 There is no generic file API, branch creation, rename, force option, execution
 or migration. File size, revision history, text and source-link limits are
 defined by the [memory schema and serializer](../src/lib/forge/memory.ts), with

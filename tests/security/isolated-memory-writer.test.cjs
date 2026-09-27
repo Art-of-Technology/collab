@@ -7,6 +7,24 @@ const https = require('node:https');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 
+test('startup rejects equivalent wildcard addresses before opening credential files', async t => {
+  const { startMemoryWriter } = await import('../../scripts/memory-writer.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-writer-config-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'config.json');
+  const config = { origin: 'https://forge.example.test', projectId: 'project', forgeTokenFile: path.join(dir, 'absent'),
+    serviceTokenFile: path.join(dir, 'absent'), certificateFile: path.join(dir, 'absent'), keyFile: path.join(dir, 'absent'), port: 3443 };
+  for (const host of ['0:0:0:0:0:0:0:0', '::0', '0000::', '::ffff:0.0.0.0', '::ffff:0:0',
+    '0.0.0.0', '::', '255.255.255.255', '::ffff:255.255.255.255']) {
+    fs.writeFileSync(file, JSON.stringify({ ...config, host }));
+    await assert.rejects(startMemoryWriter(file), /Invalid writer configuration/, host);
+  }
+  for (const host of ['127.0.0.1', '::1', '192.0.2.10']) {
+    fs.writeFileSync(file, JSON.stringify({ ...config, host }));
+    await assert.rejects(startMemoryWriter(file), { code: 'ENOENT' });
+  }
+});
+
 test('isolated HTTPS writer rejects widened authority and retains native create/CAS/readback semantics', async t => {
   const { memoryWriterHandler } = await import('../../scripts/memory-writer.mjs');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-isolated-writer-'));
