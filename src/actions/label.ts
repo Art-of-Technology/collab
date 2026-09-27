@@ -3,7 +3,7 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { cookies } from 'next/headers';
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { getWorkspaceId } from '@/lib/workspace-helpers';
 
 /**
@@ -12,14 +12,14 @@ import { getWorkspaceId } from '@/lib/workspace-helpers';
 export async function getWorkspaceLabels() {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
   // Get the user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     },
     select: {
       id: true
@@ -37,7 +37,8 @@ export async function getWorkspaceLabels() {
     // Get all labels for the current workspace
     const labels = await prisma.taskLabel.findMany({
       where: {
-        workspaceId: workspaceId
+        workspaceId: workspaceId,
+        workspace: postWorkspaceAccessWhere(user.id)
       },
       orderBy: {
         name: 'asc'
@@ -64,14 +65,14 @@ export async function createLabel(data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
   // Get the user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     },
     select: {
       id: true
@@ -96,10 +97,7 @@ export async function createLabel(data: {
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        OR: [
-          { ownerId: user.id },
-          { members: { some: { userId: user.id } } }
-        ]
+        ...postWorkspaceAccessWhere(user.id)
       }
     });
     
@@ -124,7 +122,7 @@ export async function createLabel(data: {
       data: {
         name: name.trim(),
         color,
-        workspaceId
+        workspace: { connect: { id: workspaceId, AND: [postWorkspaceAccessWhere(user.id)] } }
       }
     });
     
@@ -144,14 +142,14 @@ export async function updateLabel(labelId: string, data: {
 }) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
   // Get the user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     },
     select: {
       id: true
@@ -166,9 +164,7 @@ export async function updateLabel(labelId: string, data: {
     // Get the label and verify access
     const label = await prisma.taskLabel.findUnique({
       where: { id: labelId },
-      include: {
-        workspace: true
-      }
+      select: { id: true, name: true, workspaceId: true }
     });
     
     if (!label) {
@@ -179,10 +175,7 @@ export async function updateLabel(labelId: string, data: {
     const hasAccess = await prisma.workspace.findFirst({
       where: {
         id: label.workspaceId,
-        OR: [
-          { ownerId: user.id },
-          { members: { some: { userId: user.id } } }
-        ]
+        ...postWorkspaceAccessWhere(user.id)
       }
     });
     
@@ -207,7 +200,7 @@ export async function updateLabel(labelId: string, data: {
     
     // Update the label
     const updatedLabel = await prisma.taskLabel.update({
-      where: { id: labelId },
+      where: { id: labelId, workspaceId: label.workspaceId, workspace: postWorkspaceAccessWhere(user.id) },
       data: {
         ...(data.name && { name: data.name.trim() }),
         ...(data.color && { color: data.color })
@@ -227,14 +220,14 @@ export async function updateLabel(labelId: string, data: {
 export async function deleteLabel(labelId: string) {
   const session = await getServerSession(authOptions);
   
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     throw new Error('Unauthorized');
   }
   
   // Get the user
   const user = await prisma.user.findUnique({
     where: {
-      email: session.user.email
+      id: session.user.id
     },
     select: {
       id: true
@@ -249,9 +242,7 @@ export async function deleteLabel(labelId: string) {
     // Get the label and verify access
     const label = await prisma.taskLabel.findUnique({
       where: { id: labelId },
-      include: {
-        workspace: true
-      }
+      select: { id: true, name: true, workspaceId: true }
     });
     
     if (!label) {
@@ -262,10 +253,7 @@ export async function deleteLabel(labelId: string) {
     const hasAccess = await prisma.workspace.findFirst({
       where: {
         id: label.workspaceId,
-        OR: [
-          { ownerId: user.id },
-          { members: { some: { userId: user.id } } }
-        ]
+        ...postWorkspaceAccessWhere(user.id)
       }
     });
     
@@ -275,7 +263,7 @@ export async function deleteLabel(labelId: string) {
     
     // Delete the label (this will automatically disconnect it from all tasks, milestones, epics, and stories)
     await prisma.taskLabel.delete({
-      where: { id: labelId }
+      where: { id: labelId, workspaceId: label.workspaceId, workspace: postWorkspaceAccessWhere(user.id) }
     });
     
     return { success: true };
