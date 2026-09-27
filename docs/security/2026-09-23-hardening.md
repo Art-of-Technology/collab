@@ -4,9 +4,24 @@ Status: local implementation; not deployed or release-approved.
 
 ## Session and workspace access
 
-`getCurrentUser` resolves the authenticated session's `user.id`, never its email.
-A missing session ID or deleted user returns no current user, even if the email
-matches another account. A valid session ID does not require an email.
+The session helper in `src/lib/session.ts` and the `getCurrentUser`,
+`getUserProfile`, `updateUserProfile` and `updateUserAvatar` actions in
+`src/actions/user.ts` resolve the authenticated viewer by session `user.id`,
+never email. A valid ID works without an email or with an email belonging to
+another account; email cannot substitute for a missing or deleted subject.
+Both `getCurrentUser` implementations return `null` for a missing ID or deleted
+user. The other three actions throw `Unauthorized` for a missing ID and
+`User not found` when their current-user lookup finds no user; profile input
+validation still precedes that lookup. `getUserProfile` retains `self_profile`
+for the viewer's own profile.
+
+The actions deliberately keep direct lookups: unlike the session helper, they
+preserve Date-valued fields and propagate lookup errors. Their selected fields,
+profile validation and avatar defaults are unchanged; credential omission is
+owned by the [shared Prisma client contract](#shared-clients-and-build-repairs).
+See the [user-action subject regressions](../../tests/security/user-action-subject.test.cjs)
+and the [profile visibility contract](#post-and-coclaw-disclosure-follow-up).
+
 `hasWorkspaceAccess` permits workspace owners without a membership row; other
 users require an active membership (`status: true`). Revocation denies access
 through this helper. See the [session and membership regression](../../tests/security/session-membership.test.cjs).
