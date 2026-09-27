@@ -1,9 +1,9 @@
 # Forge project board
 
 The project dashboard links to `/{workspace}/projects/{project}/board`.
-This first slice is read-only: board/list/attention views, filters and issue
-details retain existing issue numbers, descriptions and follow-up metadata.
-Comments show their source count; comment reading and writes remain pending.
+Board/list/attention views, filters and issue details retain existing issue
+numbers, descriptions and follow-up metadata. For issue creation, editing and
+comments, see the [issue actions guide](forge-issue-actions.md).
 
 Search matches issue number, title, owner and next action, and combines with
 the status filter in every view. Needs attention includes unfinished issues
@@ -12,11 +12,13 @@ Date comparisons use the Europe/London calendar date at load or refresh.
 Select an issue to open its details; use Project notes to reach the existing
 Notes view. The existing project dashboard and Notes routes remain available.
 
-The server requires an authenticated active workspace member (or owner), a
-project in that workspace, and an exact configured project binding before
-opening the credential file or contacting Forge. The browser receives only
-projected issue data. Denied initial access returns 404; refresh rechecks access
-and clears loaded issues when access is denied.
+The board loader requires an authenticated active workspace member (or owner),
+`VIEW_TASKS` permission and a project in that workspace before reading connection
+configuration. An exact configured project binding is required before opening
+the credential file or contacting Forge. The board receives projected issue data;
+the [issue actions guide](forge-issue-actions.md) covers issue detail reads and
+writes. Denied initial access returns 404; refresh rechecks access and clears
+loaded issues when access is denied.
 
 Set `COLLAB_FORGE_CONFIG_FILE` to an operator-managed JSON file outside Git:
 
@@ -55,18 +57,21 @@ limit; oversized responses fail explicitly instead of returning shortened data.
 
 Run `node --test tests/security/forge-*.test.cjs` for executable checks
 covering projection, tenant denial, configuration and bounded upstream reads.
-Targeted ESLint and nonincremental TypeScript also passed for this slice.
+Targeted ESLint and nonincremental TypeScript passed for the original read-only
+slice; these are historical results, not integrated-release acceptance.
 
-Local browser verification used disposable PostgreSQL, synthetic identities and
-a local HTTPS Forge fixture, not live project data. It checked five status
+Historical browser verification of the original read-only slice used disposable
+PostgreSQL, synthetic identities and a local HTTPS Forge fixture, not live
+project data. It checked five status
 columns, search, status and attention filters, issue details, refresh failure
 with retained data, empty results, and revoked-member 404 with zero upstream
-requests. At 320px the page has no horizontal overflow; controls wrap and
-bottom padding lets the last card scroll above the existing chat overlay.
-Enter opens details, Close receives focus, and Escape restores the originating
+requests. At 320px the page had no horizontal overflow; controls wrapped and
+bottom padding let the last card scroll above the then-existing chat overlay.
+Enter opened details, Close received focus, and Escape restored the originating
 card. No Forge requests were issued by the browser.
 
 Forge-backed Notes publication is documented in the
 [project memory guide](forge-project-memory.md).
-Live connection, full comments, issue mutations with readback/conflict handling,
-agent execution, staging acceptance and replacement cutover remain outstanding.
+Live connection, agent execution, staging acceptance and replacement cutover
+remain outstanding. See the [issue actions guide](forge-issue-actions.md) for
+the required pre-activation write guard.

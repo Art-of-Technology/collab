@@ -259,7 +259,7 @@ Collab is designed to streamline internal communication and work tracking by off
   [label access contract](docs/security/2026-09-23-hardening.md#label-action-access-27-september-2026).
 - Open **Project board** from a project dashboard; see the
   [Forge board guide](docs/forge-board.md) for views, connection requirements
-  and the limits of this read-only slice.
+  and the [issue actions guide](docs/forge-issue-actions.md) for editing and comments.
 - Open **Approved project memory** from Project Notes; see the
   [project memory guide](docs/forge-project-memory.md) for drafting, approval
   and connection requirements.

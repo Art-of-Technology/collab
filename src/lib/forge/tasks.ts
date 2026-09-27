@@ -64,7 +64,7 @@ export function projectForgeTask(value: unknown): ForgeTask | null {
     number: Number(issue.number), title: text(issue.title),
     description: body.replace(/^```channel-task\r?\n[\s\S]*?^```\s*$/gm, '').trim(),
     status, priority: taskPriorities.includes(metadata.priority as TaskPriority) ? metadata.priority as TaskPriority : 'normal',
-    owner: text(metadata.owner) || text(record(issue.assignee).login),
+    owner: typeof metadata.owner === 'string' ? metadata.owner : text(record(issue.assignee).login),
     dueDate: taskDate(metadata.dueDate), followUpDate: taskDate(metadata.followUpDate),
     nextAction: text(metadata.nextAction), sourceUrl, updatedAt: text(issue.updated_at),
     comments: Number.isSafeInteger(issue.comments) && Number(issue.comments) >= 0 ? Number(issue.comments) : 0,
