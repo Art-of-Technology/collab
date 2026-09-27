@@ -1,58 +1,25 @@
 'use server'
 
-import { getAuthSession } from '@/lib/auth'
+import { getCurrentUser } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
+import { postWorkspaceAccessWhere } from '@/lib/post-access'
 
 export async function getProjectStatuses(projectIds: string[]) {
   try {
-    // Authentication check
-    const session = await getAuthSession()
-    if (!session?.user?.email) {
-      throw new Error('Unauthorized - Please sign in to access project statuses')
-    }
+    const user = await getCurrentUser()
+    if (!user) throw new Error('Unauthorized')
+    if (projectIds.length === 0) return []
 
-    // Get the current user
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
-
-    if (!user) {
-      throw new Error('User not found')
-    }
-
-    // Verify user has access to the requested projects
-    const accessibleProjects = await prisma.project.findMany({
+    return await prisma.projectStatus.findMany({
       where: {
-        id: { in: projectIds },
-        workspace: {
-          OR: [
-            { ownerId: user.id },
-            { members: { some: { userId: user.id } } }
-          ]
-        }
-      },
-      select: { id: true }
-    })
-
-    const accessibleProjectIds = accessibleProjects.map(p => p.id)
-
-    // Only return statuses for projects the user has access to
-    if (accessibleProjectIds.length === 0) {
-      return []
-    }
-
-    const statuses = await prisma.projectStatus.findMany({
-      where: { 
-        projectId: { in: accessibleProjectIds } 
+        projectId: { in: projectIds },
+        project: { workspace: postWorkspaceAccessWhere(user.id) }
       },
       orderBy: [
         { order: 'asc' },
         { name: 'asc' }
       ]
     })
-
-    return statuses
-
   } catch (error) {
     throw new Error('Failed to fetch project statuses. Please try again.')
   }
