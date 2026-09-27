@@ -2,6 +2,15 @@
 
 Status: local implementation; not deployed or release-approved.
 
+## Session and workspace access
+
+`getCurrentUser` resolves the authenticated session's `user.id`, never its email.
+A missing session ID or deleted user returns no current user, even if the email
+matches another account. A valid session ID does not require an email.
+`hasWorkspaceAccess` permits workspace owners without a membership row; other
+users require an active membership (`status: true`). Revocation denies access
+through this helper. See the [session and membership regression](../../tests/security/session-membership.test.cjs).
+
 ## Issue access and mutations
 
 - Issue ID and key resolution always requires workspace ownership or active
