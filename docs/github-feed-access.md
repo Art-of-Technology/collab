@@ -3,8 +3,10 @@
 Dashboard and activity endpoints require a current actor and repository workspace
 ownership or active membership before content reads. Every subsequent query repeats
 the repository predicate. Release/deployment results and version-related counts also
-use the version provenance predicate. Responses are no-store; activity limits are
-bounded to 1–100. Existing response fields and sorting are retained.
+use the version provenance predicate described in [Version and release list access](github-version-access.md).
+Missing actors receive 401; missing or inaccessible repositories receive 404.
+Successful responses are no-store. Existing activity limit handling, response fields
+and sorting are retained.
 
 Run `node --test tests/security/github-feed-access.test.cjs` for controlled-database
 handler checks. These cover owner/member success and absent, foreign and revoked
