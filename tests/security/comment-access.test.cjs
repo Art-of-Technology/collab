@@ -1,23 +1,9 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { readFileSync } = require('node:fs');
-const { resolve } = require('node:path');
-const { runInNewContext } = require('node:vm');
-const ts = require('typescript');
+const { load: loadModule } = require('./helpers.cjs');
 
 function load(file, dependencies = {}) {
-  const exports = {};
-  const { outputText } = ts.transpileModule(readFileSync(resolve(__dirname, '../../', file), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  });
-  runInNewContext(outputText, {
-    exports, Error, console,
-    require(name) {
-      if (!(name in dependencies)) throw new Error(`Unexpected dependency: ${name}`);
-      return dependencies[name];
-    },
-  });
-  return exports;
+  return loadModule(file, dependencies, { Error, console });
 }
 
 function matches(row, where) {

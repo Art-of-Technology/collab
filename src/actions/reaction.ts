@@ -3,7 +3,7 @@
 import { postAccessWhere, commentAccessWhere } from '@/lib/post-access';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 
 async function requireReactionAccess(userId: string, postId?: string, commentId?: string) {
   if (commentId) {

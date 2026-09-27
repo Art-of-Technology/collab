@@ -100,8 +100,12 @@ test('request sessions use explicit issuer-subject account mapping and never fal
   }
 });
 
-for (const entry of ['getAuthSession', 'getCurrentUser']) {
-  test(`${entry} uses the shared adapter without legacy fallback and preserves legacy results`, async () => {
+for (const [entry, file, serialized] of [
+  ['getAuthSession', 'src/lib/auth.ts', false],
+  ['getCurrentUser', 'src/lib/session.ts', true],
+  ['getCurrentUser', 'src/actions/user.ts', false],
+]) {
+  test(`${file} ${entry} uses the shared adapter without legacy fallback and preserves legacy results`, async () => {
     const previous = { mode: process.env.COLLAB_AUTH_MODE, issuer: process.env.COLLAB_GATEWAY_ISSUER };
     const date = new Date('2026-09-24T00:00:00Z');
     const mapped = { id: 'mapped-user', email: 'alex@weezboo.com', role: 'DEVELOPER',
@@ -127,12 +131,13 @@ for (const entry of ['getAuthSession', 'getCurrentUser']) {
         'next-auth/providers/credentials': { default: () => ({}) },
         'next-auth/providers/github': { default: () => ({}) },
         './custom-prisma-adapter': { CustomPrismaAdapter: () => ({}) } };
-      const fn = load(entry === 'getAuthSession' ? 'src/lib/auth.ts' : 'src/lib/session.ts', deps,
+      const fn = load(file, deps,
         { process, console: { error() {} } })[entry];
       const current = await fn();
       assert.equal(entry === 'getAuthSession' ? current.user.id : current.id, mapped.id);
       if (entry === 'getAuthSession') assert.equal(current.authMode, 'gateway');
-      else { assert.equal(current.createdAt, date.toISOString()); assert.equal(current.emailVerified, null); }
+      else { assert.equal(current.createdAt, serialized ? date.toISOString() : date);
+        if (serialized) assert.equal(current.emailVerified, null); }
       assert.equal(legacyCalls, 0);
       header = new Headers({ cookie: 'legacy=still-present' });
       const priorReads = userReads;
@@ -140,7 +145,7 @@ for (const entry of ['getAuthSession', 'getCurrentUser']) {
       header = valid(); mappedLive = false;
       assert.equal(await fn(), null); assert.equal(legacyCalls, 0);
       mappedLive = true; dbFailure = true;
-      if (entry === 'getAuthSession') await assert.rejects(fn(), /database unavailable/);
+      if (!serialized) await assert.rejects(fn(), /database unavailable/);
       else assert.equal(await fn(), null);
       assert.equal(legacyCalls, 0); dbFailure = false;
       process.env.COLLAB_AUTH_MODE = 'invalid';
@@ -149,7 +154,7 @@ for (const entry of ['getAuthSession', 'getCurrentUser']) {
         if (mode) process.env.COLLAB_AUTH_MODE = mode; else delete process.env.COLLAB_AUTH_MODE;
         const result = await fn();
         if (entry === 'getAuthSession') assert.equal(result, legacy);
-        else { assert.equal(result.id, legacyUser.id); assert.equal(result.updatedAt, date.toISOString()); }
+        else { assert.equal(result.id, legacyUser.id); assert.equal(result.updatedAt, serialized ? date.toISOString() : date); }
       }
       assert.equal(legacyCalls, 2);
     } finally {

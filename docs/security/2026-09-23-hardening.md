@@ -470,7 +470,8 @@ separate.
 
 ### Gateway session core (inactive integration)
 
-For current adapter coverage, see [shared session consumers](#shared-session-consumers).
+For current adapter coverage, see [shared session consumers](#shared-session-consumers)
+and [direct action session consumers](#direct-action-session-consumers).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -516,3 +517,20 @@ the two integration cases load both helpers, adapter and identity parser in
 gateway/invalid/default/legacy modes. Prisma, NextAuth and headers are modeled.
 This proves modeled shared-helper behavior only; activation and acceptance remain
 subject to the [gateway integration requirements](#gateway-session-core-inactive-integration).
+
+### Direct action session consumers
+
+The eleven action modules for app installation, comments, issue comments, labels,
+leave, posts, post statistics, reactions, search, users and workspaces now import
+`getServerSession` from the request-session adapter. Only the import source changes;
+auth options, arguments, action bodies, projections, errors and tenant predicates
+are preserved. Legacy mode remains the deployment mode. Direct page/API consumers
+and the leave-service library still require migration before gateway activation.
+
+The actual user-action integration case fails before migration and passes afterward
+with mapped gateway identity, missing claims, revoked mapping, database failure,
+invalid mode and default/explicit legacy behavior. Its Date-valued projection and
+error propagation remain distinct from the serialized/catching session helper.
+Existing affected user, workspace, label, comment, post and leave checks use the
+actual adapter in explicit legacy fixtures. This is modeled source evidence, not
+provider delivery, database isolation, all-route coverage or runtime acceptance.
