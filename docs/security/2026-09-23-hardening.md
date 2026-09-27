@@ -471,8 +471,9 @@ separate.
 ### Gateway session core (inactive integration)
 
 For current adapter coverage, see [shared session consumers](#shared-session-consumers),
-[direct action session consumers](#direct-action-session-consumers) and
-[workspace and project page session consumers](#workspace-and-project-page-session-consumers).
+[direct action session consumers](#direct-action-session-consumers),
+[workspace and project page session consumers](#workspace-and-project-page-session-consumers) and
+[app and developer page session consumers](#app-and-developer-page-session-consumers).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -544,8 +545,9 @@ Fifteen direct NextAuth imports in workspace/project pages now use the shared
 request-session adapter: project details/settings/features/changelog/GitHub,
 workspace apps/views, workspace settings and the workspace list. Import reversal
 restores the prior source byte-for-byte; page bodies, auth arguments, redirects,
-props and existing predicates are unchanged. Five app/developer pages, API
-consumers and the leave-service library still require migration.
+props and existing predicates are unchanged. See
+[app and developer page session consumers](#app-and-developer-page-session-consumers)
+for the remaining page migration coverage and outstanding consumer census.
 
 The Features and Changelog integration cases execute the actual pages, adapter
 and identity parser with modeled dependencies. They fail before migration and
