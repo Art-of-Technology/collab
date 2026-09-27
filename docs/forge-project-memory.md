@@ -46,10 +46,10 @@ Extend the server-owned [project binding](forge-board.md) with:
 }
 ```
 
-The app reads Forge with the new Collab issue principal's repository-read token.
-Its `issues.writeTokenFile` may point to that same token. Notes writes instead
-use a distinct, server-only service credential; the native Notes repository-write
-token is mounted only in the isolated writer. Existing tokens remain unchanged.
+This replaces the former `memory.writeTokenFile` configuration, which is now
+rejected. `writerOrigin` accepts a credential-free HTTPS origin with or without
+a trailing slash; paths, queries and fragments are rejected. The app always
+addresses `/v1/project-memory` at that origin.
 
 `Dockerfile.memory-writer` declares UID/GID 10002:10002; deployment must run
 Collab as 1001:1001. These source declarations do not prove runtime custody.
@@ -77,9 +77,12 @@ trust the writer certificate and the writer must trust Forge; TLS verification
 stays enabled. The service credential must be distinct from the Forge token,
 contain no whitespace and have at least 32 characters.
 
-Collab uses `COLLAB_FORGE_CONFIG_FILE=/run/config/collab-forge.json` and the
-new principal11 `read:repository` + `write:issue` token at
-`/run/secrets/collab-forge-token`, shared by `readTokenFile` and the issue writer.
+The integration mount contract uses
+`COLLAB_FORGE_CONFIG_FILE=/run/config/collab-forge.json` and preserves the existing
+principal11 `read:repository` + `write:issue` token at
+`/run/secrets/collab-forge-token` for `readTokenFile` and the root-owned issue
+writer. This Notes-only branch does not add the optional `issues` binding;
+the root integration must preserve that independent schema when rebasing.
 No additional principal12 token is implied. The service bearer is mounted at
 `/run/secrets/collab-memory-service` in both services. The native Notes token at
 `/run/secrets/notes-forge-token` is writer-only. No credentials are provisioned
@@ -108,12 +111,14 @@ directory responses and malformed arrays are rejected. Concurrent first saves
 use native create semantics and readback; an uncertain result is never retried.
 
 The file must be a regular file, never a symlink or submodule. Reads verify its
-path, size, canonical base64, Git blob hash, UTF-8, project and metadata schema. Leading UTF-8 BOM bytes
-are preserved for schema validation and exact readback comparison.
+path, size, canonical base64, Git blob hash, UTF-8, project and metadata schema.
+Leading UTF-8 BOM bytes are preserved for schema validation and exact readback
+comparison; a BOM-prefixed document is rejected, not silently normalized.
 There is no generic file API, branch creation, rename, force option, execution
 or migration. File size, revision history, text and source-link limits are
 defined by the [memory schema and serializer](../src/lib/forge/memory.ts), with
-upstream file validation in the [memory store](../src/lib/forge/memory-store.ts).
+upstream byte validation in the shared [file transport](../src/lib/forge/memory-file.mjs)
+and document validation in the [memory store](../src/lib/forge/memory-store.ts).
 Whole-file CAS serializes edits across the project; separate files are the
 upgrade path if edit contention becomes material. Bounds fail visibly.
 
