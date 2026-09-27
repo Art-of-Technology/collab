@@ -18,6 +18,7 @@ export function ForgeIssueEditor({ number, workspaceSlug, projectSlug, onSaved, 
   number: number; workspaceSlug: string; projectSlug: string; onSaved: () => void; onDenied: () => void;
 }) {
   const [view, setView] = useState<IssueView | null>(null);
+  const [baseline, setBaseline] = useState<IssueFields | null>(null);
   const [fields, setFields] = useState<IssueFields | null>(null);
   const [comment, setComment] = useState('');
   const [editingComment, setEditingComment] = useState<number | null>(null);
@@ -31,7 +32,7 @@ export function ForgeIssueEditor({ number, workspaceSlug, projectSlug, onSaved, 
     let active = true;
     getIssue(workspaceSlug, projectSlug, number).then(next => {
       if (!active) return;
-      setView(next); if (next.kind === 'ready') setFields(next.fields);
+      setView(next); if (next.kind === 'ready') { setFields(next.fields); setBaseline(next.fields); }
       if (next.kind === 'denied') onDenied();
     }).catch(() => { if (active) setView({ kind: 'unavailable' }); });
     return () => { active = false; };
@@ -43,7 +44,8 @@ export function ForgeIssueEditor({ number, workspaceSlug, projectSlug, onSaved, 
       setView(next);
       if (next.kind === 'denied') { setFields(null); setComment(''); onDenied(); }
       if (next.kind === 'ready') {
-        setReviewRequired(previous => previous || [...dirty.current].some(key => ready && ready.fields[key] !== next.fields[key]));
+        setBaseline(next.fields);
+        setReviewRequired(previous => previous || [...dirty.current].some(key => baseline && baseline[key] !== next.fields[key]));
         setFields(previous => Object.fromEntries(Object.entries(next.fields).map(([key, value]) =>
           [key, dirty.current.has(key as keyof IssueFields) && previous ? previous[key as keyof IssueFields] : value])) as IssueFields);
         setBlocked(false); setMessage('Source reloaded. Your edits are retained; untouched fields are refreshed. Review any overlapping changes.');
@@ -60,9 +62,10 @@ export function ForgeIssueEditor({ number, workspaceSlug, projectSlug, onSaved, 
         const next = await getIssue(workspaceSlug, projectSlug, number);
         setView(next);
         if (next.kind === 'ready') {
+          setBaseline(next.fields);
           if (input.action === 'edit') { setFields(next.fields); dirty.current.clear(); setReviewRequired(false); }
           else {
-            setReviewRequired(previous => previous || [...dirty.current].some(key => ready && ready.fields[key] !== next.fields[key]));
+            setReviewRequired(previous => previous || [...dirty.current].some(key => baseline && baseline[key] !== next.fields[key]));
             setFields(previous => Object.fromEntries(Object.entries(next.fields).map(([key, value]) =>
               [key, dirty.current.has(key as keyof IssueFields) && previous ? previous[key as keyof IssueFields] : value])) as IssueFields);
           }

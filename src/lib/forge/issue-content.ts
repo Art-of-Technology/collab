@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { taskDate, taskPriorities, taskStatuses } from './tasks';
 
 const date = z.string().refine(value => value === '' || taskDate(value) === value, 'Use a valid date');
+export const issueDescription = z.string().max(500000).refine(value => !/^```channel-task/m.test(value), 'Use the task fields to edit task details');
 export const issueChanges = z.object({
   title: z.string().trim().min(1).max(200).optional(),
-  description: z.string().max(500000).optional(),
+  description: issueDescription.optional(),
   status: z.enum(taskStatuses).optional(),
   priority: z.enum(taskPriorities).optional(),
   owner: z.string().max(200).optional(),
@@ -41,6 +42,7 @@ export function splitIssueBody(body: string) {
 export function patchIssueContent(issue: SourceIssue, changes: IssueChanges) {
   const { before, after, block, metadata } = splitIssueBody(issue.body ?? '');
   const { title, description, ...details } = changes;
+  if (description !== undefined) issueDescription.parse(description);
   if (details.status === 'done') delete details.status; // Closed state is authoritative.
   for (const key of Object.keys(details) as (keyof typeof details)[]) {
     if (details[key] === metadata[key]) delete details[key];

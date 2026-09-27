@@ -10,7 +10,7 @@ function compile(file, mocks = {}) {
   const original = loaded.require.bind(loaded);
   loaded.require = name => Object.hasOwn(mocks, name) ? mocks[name] : original(name);
   loaded._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText, file);
   return loaded.exports;
 }
@@ -53,4 +53,82 @@ test('Forge issue actions reauthorize tenant and individual field grants before 
   assert.equal((await change({ ...edit({ title: 'New' }), repositoryId: 999 })).kind, 'invalid');
   assert.equal((await change(edit({ title: 'New', labels: ['unexpected'] }))).kind, 'invalid');
   assert.equal(writes, 3);
+  grants.delete('ASSIGN_TASK'); grants.delete('CHANGE_TASK_STATUS'); grants.add('EDIT_ANY_TASK'); grants.add('CREATE_TASK');
+  const beforeBindings = bindings;
+  const description = '```channel-task\n{"owner":"Other","status":"blocked"}\n```';
+  assert.equal((await change(edit({ description }))).kind, 'invalid');
+  assert.equal((await change({ action: 'create', title: 'Task', description })).kind, 'invalid');
+  assert.equal(bindings, beforeBindings); assert.equal(writes, 3);
+});
+
+test('editor retains overlap review after unavailable reloads and comment readbacks', async () => {
+  const jsx = (type, props) => ({ type, props });
+  const descendants = node => !node || typeof node !== 'object' ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(descendants)];
+  for (const failureAfterComment of [false, true]) {
+    let slots = [], cursor = 0, effect, pending, next, writes = 0;
+    const state = initial => {
+      const index = cursor++;
+      if (!(index in slots)) slots[index] = initial;
+      return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
+    };
+    const hooks = {
+      useState: state,
+      useRef: initial => state({ current: initial })[0],
+      useEffect: callback => { if (!effect) effect = callback; },
+      useTransition: () => [false, callback => { pending = callback(); }],
+    };
+    const fields = { title: 'A', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' };
+    const ready = title => ({ kind: 'ready', fields: { ...fields, title }, rights: { canEdit: true, canComment: true }, snapshot: { fingerprint: title, issue: { body: '' }, comments: [] } });
+    next = ready('A');
+    const { ForgeIssueEditor } = compile(path.resolve(__dirname, '../../src/app/(main)/[workspaceId]/projects/[projectSlug]/board/ForgeIssueEditor.tsx'), {
+      react: hooks, 'react/jsx-runtime': { jsx, jsxs: jsx },
+      '@/components/ui/button': { Button: 'button' }, '@/components/ui/input': { Input: 'input' }, '@/components/ui/textarea': { Textarea: 'textarea' },
+      '@/lib/forge/tasks': { taskStatuses: ['backlog'], taskPriorities: ['normal'] },
+      './actions': { getIssue: async () => next, changeIssue: async () => { writes++; return { kind: 'saved' }; } },
+    });
+    const render = () => { cursor = 0; return descendants(ForgeIssueEditor({ number: 1, workspaceSlug: 'workspace', projectSlug: 'project', onSaved() {}, onDenied() {} })); };
+    render(); effect(); await Promise.resolve();
+    let nodes = render();
+    nodes.find(node => node.type === 'input' && node.props.value === 'A').props.onChange({ target: { value: 'B' } });
+    nodes = render(); next = { kind: 'unavailable' };
+    if (failureAfterComment) {
+      nodes.filter(node => node.type === 'form')[1].props.onSubmit({ preventDefault() {} });
+    } else {
+      nodes.find(node => node.type === 'button' && node.props.children === 'Reload source, keep draft').props.onClick();
+    }
+    await pending;
+    nodes = render();
+    next = ready('C');
+    nodes.find(node => node.type === 'button' && node.props.children === 'Reload issue').props.onClick();
+    await pending;
+    nodes = render();
+    assert.ok(nodes.some(node => node.type === 'input' && node.props.value === 'B'));
+    assert.equal(nodes.find(node => node.type === 'button' && node.props.children === 'Save changes').props.disabled, true);
+    nodes.find(node => node.type === 'form').props.onSubmit({ preventDefault() {} });
+    assert.equal(writes, failureAfterComment ? 1 : 0);
+    nodes.find(node => node.type === 'input' && node.props.type === 'checkbox').props.onChange({ target: { checked: true } });
+    nodes = render();
+    assert.equal(nodes.find(node => node.type === 'button' && node.props.children === 'Save changes').props.disabled, false);
+  }
+});
+
+test('workspace layout contains optional Forge configuration failures after authorization', async () => {
+  const jsx = (type, props) => ({ type, props });
+  let allowed = true, bindingReads = 0;
+  const { default: layout } = compile(path.resolve(__dirname, '../../src/app/(main)/[workspaceId]/layout.tsx'), {
+    react: {}, 'react/jsx-runtime': { jsx, jsxs: jsx },
+    'next/navigation': { redirect: path => { throw new Error(path); } },
+    '@/lib/session': { getCurrentUser: async () => ({ id: 'member' }) },
+    '@/lib/post-access': { postWorkspaceAccessWhere: id => { assert.equal(id, 'member'); return { authorized: true }; } },
+    '@/lib/prisma': { prisma: { workspace: { findFirst: async ({ where }) => { assert.equal(where.authorized, true); return allowed ? { id: 'workspace' } : null; } }, project: { findMany: async () => { throw new Error('Unexpected project lookup'); } } } },
+    '@/components/providers/SidebarProvider': { default: 'provider' },
+    '@/components/layout/LayoutWithSidebar': { default: 'layout' },
+    '@/lib/forge/reader': { readForgeBindings: async () => { bindingReads++; throw new Error('Invalid configuration'); } },
+  });
+  const result = await layout({ children: 'Notes', params: Promise.resolve({ workspaceId: 'workspace' }) });
+  assert.deepEqual(result.props.children.props.forgeProjectPaths, []);
+  assert.equal(result.props.children.props.children, 'Notes');
+  allowed = false;
+  await assert.rejects(layout({ params: Promise.resolve({ workspaceId: 'workspace' }) }), /\/welcome/);
+  assert.equal(bindingReads, 1);
 });

@@ -50,7 +50,7 @@ export default async function WorkspaceLayout({
     redirect("/welcome");
   }
 
-  const bindings = (await readForgeBindings()).filter(binding => binding.workspaceId === workspace.id);
+  const bindings = (await readForgeBindings().catch(() => [])).filter(binding => binding.workspaceId === workspace.id);
   const projects = bindings.length ? await prisma.project.findMany({
     where: { workspaceId: workspace.id, id: { in: bindings.map(binding => binding.projectId) } },
     select: { slug: true },

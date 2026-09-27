@@ -5,7 +5,7 @@ import { checkUserPermission, getUserWorkspaceRole, Permission } from '@/lib/per
 import { prisma } from '@/lib/prisma';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 import { readForgeBindings } from './reader';
-import { issueChanges, splitIssueBody } from './issue-content';
+import { issueChanges, issueDescription, splitIssueBody } from './issue-content';
 import { taskStatuses, taskPriorities, type TaskStatus, type TaskPriority } from './tasks';
 import { readForgeIssue, writeForgeIssue, type IssueSnapshot, type IssueWriteResult } from './issue-store';
 
@@ -15,7 +15,7 @@ const expected = z.string().regex(/^[a-f0-9]{64}$/);
 const body = z.string().min(1).max(32000);
 const commandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('edit'), number, expected, changes: issueChanges }).strict(),
-  z.object({ action: z.literal('create'), title: z.string().trim().min(1).max(200), description: z.string().max(500000) }).strict(),
+  z.object({ action: z.literal('create'), title: z.string().trim().min(1).max(200), description: issueDescription }).strict(),
   z.object({ action: z.literal('comment'), number, body }).strict(),
   z.object({ action: z.literal('edit-comment'), number, commentId: number, expected, body }).strict(),
 ]);

@@ -44,8 +44,8 @@ review for overlapping edits. A missing comment edit never becomes a new post.
 
 Forge-connected project routes show Board, Project memory, All notes and
 Projects navigation, without the legacy sidebar/chat bar. Other projects retain
-their existing layout. Server-side legacy write protection is documented in
-[forge-legacy-write-guard.md](forge-legacy-write-guard.md).
+their existing layout. Server-side legacy connected-project write protection
+remains a separate pending slice and is required before activation.
 
 Local checks: `node --test tests/security/forge-issue-*.test.cjs` exercises raw
 content preservation, malformed blocks, wrong-token rejection before remote

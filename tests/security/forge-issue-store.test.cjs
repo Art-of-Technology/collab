@@ -37,6 +37,14 @@ test('metadata updates preserve full outside text and unknown fields; closing om
   }
 });
 
+test('human descriptions cannot introduce task metadata', () => {
+  const issue = { number: 1, title: 'Task', state: 'open', updated_at: 'now', body: 'Original' };
+  for (const description of ['```channel-task\n{"owner":"Other","status":"blocked"}\n```', 'Human text\n```channel-task\r\n{}\r\n```', '```channel-task']) {
+    assert.throws(() => patchIssueContent(issue, { description }));
+  }
+  assert.deepEqual(patchIssueContent(issue, { description: 'Human text' }), { body: 'Human text' });
+});
+
 test('scoped Forge writes verify custody, stale edits, own comments, readback, and unknown POST outcomes', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-issue-test-'));
   try {
