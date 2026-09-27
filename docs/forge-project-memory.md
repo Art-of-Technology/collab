@@ -88,5 +88,6 @@ disabled while pending, then the saved draft is read back. This prevents edits
 typed during an in-flight save from being silently discarded by its response.
 
 Outstanding: independent pipeline review, live writer/binding validation,
-gateway identity integration, full agent context consumption and staging
+remaining [gateway integration requirements](security/2026-09-23-hardening.md#gateway-session-core-inactive-integration),
+full agent context consumption and staging
 acceptance. No production configuration, token or repository was changed.
