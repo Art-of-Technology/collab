@@ -711,3 +711,33 @@ pass after six failures and three positive controls on prior source. A scoped
 exact-body Prisma/Next typecheck passes. These checks model transaction rollback
 and entry revocation; they do not establish database isolation or revocation
 visibility after a database snapshot.
+
+## GitHub OAuth browser state
+
+The authorization URL issuer and callback resolve the live database user through
+the shared session adapter. The issuer treats legacy `state=project:<id>` input
+only as project metadata, authorizes that exact project for its workspace owner
+or active member, and generates a random provider-facing nonce. Personal flows
+remain supported. A purpose/version-tagged AES-GCM cookie binds the nonce, actor,
+optional project and ten-minute expiry using the existing encryption service.
+Production uses a host-only `__Host-` Secure, HttpOnly, SameSite=Lax cookie at `/`;
+explicit development uses an unprefixed non-Secure cookie for local HTTP.
+
+The callback rejects missing, duplicate, mismatched, tampered, expired or malformed
+state before provider exchange or credential writes. It trusts project metadata
+only from the sealed cookie and rechecks project access before provider effects.
+Missing/deleted actors redirect to login; other denials return a generic error to
+`/projects`. Authorized project success retains its settings redirect and GitHub
+tab; personal success remains on `/projects`. Callback responses clear the cookie
+on the same path and are `no-store`; authorization URLs and state are not logged,
+and raw provider/decryption errors are not returned in redirects.
+
+Sixteen modeled route/helper checks pass after fifteen failures and one control
+on prior source, using actual encryption and mocked provider/database boundaries.
+A scoped exact-body Prisma/Next/Node typecheck passes. A newer issuer request
+replaces the browser's pending cookie. Clearing it prevents ordinary subsequent
+browser replay, but does not provide atomic single use against concurrent requests
+or a retained copy of the cookie; provider code redemption remains provider-owned.
+No real provider, browser, database concurrency or runtime acceptance is claimed.
+Post-check access/identity changes, repository connection/disconnect lifecycle,
+metadata privacy and other recorded activation gaps remain separate.
