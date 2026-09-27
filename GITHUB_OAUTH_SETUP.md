@@ -15,6 +15,7 @@ This guide will help you set up GitHub OAuth integration for seamless repository
 1. A GitHub account with access to repositories you want to connect
 2. Admin access to repositories (required for webhook creation)
 3. Your Collab application deployed and accessible
+4. Collab project access under the [repository connection contract](docs/security/2026-09-23-hardening.md#github-repository-connection-metadata)
 
 ## 🔧 **Setup Steps**
 
@@ -100,7 +101,7 @@ Ready for version tracking!
 
 2. **Webhook Secrets**: Generated randomly and used to verify webhook authenticity.
 
-3. **Permissions**: Only users with admin access to repositories can connect them.
+3. **Permissions**: See the [repository connection contract](docs/security/2026-09-23-hardening.md#github-repository-connection-metadata) for Collab access and GitHub admin requirements.
 
 4. **Scopes**: The OAuth app requests these permissions:
    - `repo`: Full repository access (needed for webhooks)
@@ -148,6 +149,10 @@ Ready for version tracking!
 - **Connected**: Green checkmark with project name
 - **No Access**: Gray indicator with explanation
 - **Available**: Blue "Connect" button
+
+Status visibility and connection availability follow the
+[repository connection contract](docs/security/2026-09-23-hardening.md#github-repository-connection-metadata);
+an unconnected status does not guarantee that connection will succeed.
 
 ### **Fallback Options**
 - Manual setup option (currently disabled)

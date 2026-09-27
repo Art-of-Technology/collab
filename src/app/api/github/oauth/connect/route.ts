@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authConfig } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/session";
 import { createRepositoryWebhook, getRepositoryDetails } from "@/lib/github/oauth-config";
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 import { EncryptionService } from "@/lib/encryption";
@@ -12,8 +12,8 @@ import { EncryptionService } from "@/lib/encryption";
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -27,34 +27,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user's GitHub access token
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { githubAccessToken: true },
-    });
-
-    if (!user?.githubAccessToken) {
-      return NextResponse.json(
-        { error: "GitHub account not connected" },
-        { status: 400 }
-      );
-    }
-
-    // Decrypt the access token
-    const accessToken = EncryptionService.decrypt(user.githubAccessToken);
-
     // Verify user has access to the project
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
-        workspace: {
-          OR: [
-            { ownerId: session.user.id },
-            { members: { some: { userId: session.user.id } } },
-          ],
-        },
+        workspace: postWorkspaceAccessWhere(actor.id),
       },
-      include: { repository: true },
+      select: { id: true, repository: { select: { id: true } } },
     });
 
     if (!project) {
@@ -74,17 +53,33 @@ export async function POST(request: NextRequest) {
     // Check if repository is already connected to another project
     const existingRepo = await prisma.repository.findFirst({
       where: { githubRepoId: repositoryId.toString() },
-      include: { project: true },
+      select: { id: true },
     });
 
     if (existingRepo) {
       return NextResponse.json(
         { 
-          error: `Repository is already connected to project "${existingRepo.project.name}"` 
+          error: "Repository is already connected to another project"
         },
         { status: 400 }
       );
     }
+
+    // Get user's GitHub access token
+    const user = await prisma.user.findUnique({
+      where: { id: actor.id },
+      select: { githubAccessToken: true },
+    });
+
+    if (!user?.githubAccessToken) {
+      return NextResponse.json(
+        { error: "GitHub account not connected" },
+        { status: 400 }
+      );
+    }
+
+    // Decrypt the access token
+    const accessToken = EncryptionService.decrypt(user.githubAccessToken);
 
     // Get repository details from GitHub to verify access
     const repoDetails = await getRepositoryDetails(accessToken, owner, name);
@@ -123,7 +118,7 @@ export async function POST(request: NextRequest) {
       webhookId = webhook.id;
       console.log(`Webhook created successfully for ${owner}/${name}: ${webhook.id}`);
     } catch (error) {
-      console.error('Failed to create webhook:', error);
+      console.error('Failed to create webhook');
       
       // Check if this is a localhost development issue (only if no public tunnel is configured)
       const isLocalhost = (webhookUrl.includes('localhost') || webhookUrl.includes('127.0.0.1')) && !process.env.WEBHOOK_BASE_URL;
@@ -150,7 +145,7 @@ export async function POST(request: NextRequest) {
         } else {
           // For other errors, still fail the connection
           return NextResponse.json(
-            { error: error.message || "Failed to create webhook. Please check your repository permissions." },
+            { error: "Failed to create webhook. Please check your repository permissions." },
             { status: 500 }
           );
         }
@@ -342,7 +337,7 @@ export async function POST(request: NextRequest) {
 
       console.log(`Auto-sync completed for ${repoDetails.full_name}:`, syncResults);
     } catch (syncError) {
-      console.error('Error during auto-sync:', syncError);
+      console.error('Error during auto-sync');
       // Don't fail the connection if sync fails
     }
 
@@ -368,14 +363,14 @@ export async function POST(request: NextRequest) {
         commits: syncResults.commits,
         releases: syncResults.releases,
       },
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
 
   } catch (error) {
-    console.error('GitHub repository connection error:', error);
+    console.error('GitHub repository connection error');
     
     return NextResponse.json(
       { 
-        error: error instanceof Error ? error.message : "Failed to connect repository" 
+        error: "Failed to connect repository"
       },
       { status: 500 }
     );

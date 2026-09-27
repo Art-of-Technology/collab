@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authConfig } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/session";
 import { getUserRepositories } from "@/lib/github/oauth-config";
+import { repositoryAccessWhere } from "@/lib/github/access";
 import { prisma } from "@/lib/prisma";
 import { EncryptionService } from "@/lib/encryption";
 
@@ -11,14 +11,14 @@ import { EncryptionService } from "@/lib/encryption";
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Get user's GitHub access token
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: actor.id },
       select: { githubAccessToken: true, githubUsername: true },
     });
 
@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
 
     // Check which repositories are already connected to projects
     const connectedRepos = await prisma.repository.findMany({
+      where: repositoryAccessWhere(actor.id),
       select: { githubRepoId: true, project: { select: { id: true, name: true } } },
     });
 
@@ -75,10 +76,10 @@ export async function GET(request: NextRequest) {
       hasMore: search ? false : hasMore, // Disable pagination when searching
       currentPage: page,
       githubUser: user.githubUsername,
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
 
   } catch (error) {
-    console.error('Error fetching GitHub repositories:', error);
+    console.error('Error fetching GitHub repositories');
     
     // Handle specific GitHub API errors
     if (error instanceof Error) {
