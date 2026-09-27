@@ -655,10 +655,15 @@ export async function getPendingInvitations(email: string) {
   if (!email) {
     throw new Error('Email is required');
   }
+
+  const currentUser = await getCurrentUser();
+  if (!currentUser || currentUser.email !== email) {
+    throw new Error('Unauthorized');
+  }
   
   const pendingInvitations = await prisma.workspaceInvitation.findMany({
     where: {
-      email: email,
+      email: currentUser.email,
       status: "pending",
       expiresAt: {
         gte: new Date()

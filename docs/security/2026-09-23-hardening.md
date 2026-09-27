@@ -336,3 +336,21 @@ attached to both a post and a Note must satisfy both policies. Revoked tenant
 membership, expiration and restricted sharing rules remain enforced. App handlers use the actual token
 user for authorization and authorship even when the installer differs; a
 regression check exercises that distinction and subsequent revocation.
+
+## Pending invitation list recipient binding (27 September 2026)
+
+Both `getPendingInvitations(email)` server actions require the current database
+user resolved by the session subject and an exact match with that user's current
+email. Caller-supplied and stale session emails cannot select another recipient.
+The signatures, pending/unexpired filters, descending creation order and existing
+inviter projections remain unchanged. Invitees may read their own invitations
+before joining a workspace; no membership requirement is added.
+
+The actual-action mocked regression covers both exports, missing/deleted subjects,
+foreign recipients, stale session email, database email changes and valid unjoined
+invitees. Four denial checks failed before the fix (two positive checks passed);
+the focused invitation/workspace-read/session checks then passed 16/16 with no
+skips. No email, database, provider or runtime operation was performed. Token
+preview, acceptance mutations and concurrent changes after the user lookup remain
+separate work. The redundant generic pipeline test stage is explicitly skipped;
+review, documentation, scoped lint, CI and exact-head Octopus gates remain.
