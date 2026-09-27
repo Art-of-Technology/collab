@@ -355,7 +355,41 @@ covers both exports, missing/deleted subjects,
 foreign recipients, stale session email, database email changes and valid unjoined
 invitees. Four denial checks failed before the fix (two positive checks passed);
 the focused invitation/workspace-read/session checks then passed 16/16 with no
-skips. No email, database, provider or runtime operation was performed. Token
-preview, acceptance mutations and concurrent changes after the user lookup remain
-separate work. The redundant generic pipeline test stage is explicitly skipped;
+skips. No email, database, provider or runtime operation was performed. For token
+preview, acceptance and their remaining verification limits, see the
+[token contract](#invitation-token-preview-and-acceptance-27-september-2026).
+Concurrent changes after the list's user lookup remain separate work.
+The redundant generic pipeline test stage is explicitly skipped;
 review, documentation, scoped lint, CI and exact-head Octopus gates remain.
+
+## Invitation token preview and acceptance (27 September 2026)
+
+The server actions and exposed `/api/workspaces/invitations/[token]` adapters
+share `src/lib/workspace-invitations.ts`. Preview requires a live session subject
+and current database recipient email before loading workspace/inviter relations;
+no workspace membership is required. Pending status and expiry are checked for
+both preview entry points. Existing inviter/workspace projections are retained.
+
+Acceptance re-reads the subject and recipient inside a serializable transaction,
+then conditionally claims the same pending, unexpired token before creating one
+active `MEMBER` membership. A lost claim grants nothing; membership failure rolls
+back the claim. There is no retry, role escalation or inactive-member reactivation.
+An active existing member retains the action's failure response with the invitation
+pending; REST retains its successful already-member response and consumes the
+invitation atomically. Responses retain the existing success fields and error
+messages, with new authorization/conflict responses where previously unguarded.
+
+Focused actual action/REST/shared-helper checks pass 20/20 (including the six list
+and two session checks). The final baseline had 10 failing regressions and two
+passing existing-member checks. The first draft of the test adapter eagerly ran
+Prisma array operations; it was corrected to deferred operations and rollback
+before that baseline. A later three-test loader failure was fixed by wiring the
+new helper into the existing list fixture. Raw historical receipts are retained.
+Exact helper/action/route bodies also pass a scoped strict TypeScript check with
+real generated Prisma types and declared auth/response boundaries; this is not a
+whole-application build. Mocked transactions establish assertions and rollback
+model behavior, not native isolation or concurrent database scheduling. No database,
+email, provider, browser or runtime operation was performed. Native concurrency,
+post-snapshot identity changes, invitation creation/revocation policy and integrated
+staging remain separate gates. Generic pipeline test stage: SKIPPED; all other
+review/documentation/lint/CI/exact-head Octopus gates remain required.
