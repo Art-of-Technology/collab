@@ -212,7 +212,7 @@ For `mfe_remote` app types, the `mfe` configuration object is required:
    - Confirms the app is `PUBLISHED` and passes `validateAppManifestSecurity`.
    - Creates a `PENDING` installation with requested scopes and logs the attempt (`logAppInstallAttempt`).
 3. The client fetches `/api/apps/:slug` to resolve OAuth metadata and redirects to `/api/oauth/authorize` with PKCE support (`code_challenge` optional, `S256` enforced when present).
-4. Authorization endpoint checks membership, installation status and trims requested scopes to the approved set before issuing a one-time code (10 min expiry) stored in `AppOAuthAuthorizationCode`.
+4. The authorization endpoint applies the [workspace access contract](../oauth-endpoints.md#workspace-access-at-code-issuance), checks installation status and trims requested scopes to the approved set before issuing a one-time code (10 min expiry) stored in `AppOAuthAuthorizationCode`.
 5. The app exchanges the code via `POST /api/oauth/token` (Authorization Code or Refresh Token grant). Access/refresh tokens are random opaque values, encrypted using AES-256-GCM (`encryptToken`) and persisted on the installation.
 6. Once the partner app receives tokens it should call `POST /api/apps/installations/:id/ack` with the Bearer access token so we can log `logAppInstallSuccess` and mark the install as completed.
 7. Introspection is available through `POST /api/oauth/introspect` for apps to validate long-lived tokens. Tokens expire hourly; refresh tokens are required for renewal and are validated by decrypting and comparing stored values.

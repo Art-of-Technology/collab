@@ -49,7 +49,7 @@ Initiates the OAuth authorization flow for third-party applications.
 - `response_type` (required): Must be `code`
 - `scope` (optional): Space-separated list of requested scopes (default: `read`)
 - `state` (optional): CSRF protection token
-- `workspace_id` (optional): Specific workspace to authorize for
+- `workspace_id` (optional): Immutable workspace ID; see [workspace access at code issuance](#workspace-access-at-code-issuance)
 - `code_challenge` (required for public clients): PKCE code challenge
 - `code_challenge_method` (required for public clients): Must be `S256`
 
@@ -59,9 +59,41 @@ GET /api/oauth/authorize?client_id=your_client_id&redirect_uri=https://yourapp.c
 ```
 
 **Response:**
-- Redirects to login if user not authenticated
+- Redirects to login if the session does not resolve to a current database user
 - Shows consent screen (if implemented)
-- Redirects to `redirect_uri` with authorization code or error
+- Redirects to `redirect_uri` with an authorization code on success; workspace denials return JSON errors as described below
+
+#### Workspace access at code issuance
+
+Both `GET /api/oauth/authorize` and `GET /api/oauth/mcp/authorize` resolve the
+current database user and require workspace ownership or an active membership
+(`status: true`). Owners do not need a membership row. Explicit `workspace_id`
+values must match an immutable workspace ID exactly; slugs are not aliases, and
+a denied explicit workspace never falls back to another workspace.
+
+For a non-system app, omitting `workspace_id` on the regular endpoint selects an
+accessible workspace, including one the user owns without a membership row. If
+none is accessible, it returns HTTP 403 `access_denied`. System apps using the
+regular endpoint without a workspace are sent to `/auth/mcp` for selection.
+
+The regular endpoint returns HTTP 403 `access_denied` for a missing or
+inaccessible explicit workspace. The MCP endpoint requires `workspace_id`
+(omission returns HTTP 400 `invalid_request`); an unknown ID returns HTTP 404
+`invalid_request`, while an existing inaccessible workspace returns HTTP 403
+`access_denied`.
+
+Before persisting a code, both routes recheck the exact workspace ID using
+`postWorkspaceAccessWhere(actor.id)` on the same transaction handle that creates
+the code. The ID is a separate filter; the helper's optional slug-capable
+argument is not used. A denial at this lookup returns HTTP 403 `access_denied`
+with no code write. This catches revocation before the transaction lookup; it
+does not guarantee protection against concurrent revocation after that lookup
+or establish database snapshot isolation. Token exchange and later access
+checks remain separate policies.
+
+Regular `POST /api/oauth/authorize` continues to return a forwarding URL for
+approved consent; it does not issue a code. Client, redirect URI, PKCE, scope,
+installation, state, nonce and callback handling are unchanged.
 
 ### 2. Token Endpoint
 
