@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/request-session';
-import { authOptions } from '@/lib/auth-options';
 import { randomBytes } from 'crypto';
 import { isAllowedRedirectUri } from '@/lib/oauth-scopes';
 
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/session';
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 
 /**
  * OAuth Authorization Endpoint for MCP/System Apps
@@ -68,8 +68,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify user is authenticated
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       const loginUrl = new URL('/auth/mcp', request.url);
       loginUrl.search = new URL(request.url).search;
       return NextResponse.redirect(loginUrl);
@@ -136,32 +136,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify workspace exists and user has access
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      include: {
-        members: {
-          where: { userId: session.user.id }
-        }
-      }
+    const workspace = await prisma.workspace.findFirst({
+      where: { id: workspaceId, ...postWorkspaceAccessWhere(actor.id) },
+      select: { id: true }
     });
 
     if (!workspace) {
+      const exists = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } });
       return NextResponse.json(
-        {
-          error: 'invalid_request',
-          error_description: 'Workspace not found'
-        },
-        { status: 404 }
-      );
-    }
-
-    if (workspace.members.length === 0) {
-      return NextResponse.json(
-        {
-          error: 'access_denied',
-          error_description: 'User does not have access to this workspace'
-        },
-        { status: 403 }
+        exists
+          ? { error: 'access_denied', error_description: 'User does not have access to this workspace' }
+          : { error: 'invalid_request', error_description: 'Workspace not found' },
+        { status: exists ? 403 : 404 }
       );
     }
 
@@ -170,25 +156,40 @@ export async function GET(request: NextRequest) {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Store authorization code for MCP
-    await prisma.appOAuthAuthorizationCode.create({
-      data: {
-        code: authorizationCode,
-        clientId,
-        userId: session.user.id,
-        workspaceId,
-        installationId: null, // System apps don't have installations
-        redirectUri,
-        scope,
-        state,
-        code_challenge: codeChallenge,
-        code_challenge_method: codeChallengeMethod,
-        expiresAt,
-        // Mark this as a system app authorization
-        nonce: 'mcp_system_app'
-      }
+    const issued = await prisma.$transaction(async (tx) => {
+      const currentAccess = await tx.workspace.findFirst({
+        where: { id: workspaceId, ...postWorkspaceAccessWhere(actor.id) },
+        select: { id: true }
+      });
+      if (!currentAccess) return false;
+      await tx.appOAuthAuthorizationCode.create({
+        data: {
+          code: authorizationCode,
+          clientId,
+          userId: actor.id,
+          workspaceId,
+          installationId: null, // System apps don't have installations
+          redirectUri,
+          scope,
+          state,
+          code_challenge: codeChallenge,
+          code_challenge_method: codeChallengeMethod,
+          expiresAt,
+          // Mark this as a system app authorization
+          nonce: 'mcp_system_app'
+        }
+      });
+      return true;
     });
 
-    console.log(`MCP OAuth authorization: app=${oauthClient.app.slug}, user=${session.user.id}, workspace=${workspaceId}`);
+    if (!issued) {
+      return NextResponse.json(
+        { error: 'access_denied', error_description: 'Workspace access changed before authorization' },
+        { status: 403 }
+      );
+    }
+
+    console.log(`MCP OAuth authorization: app=${oauthClient.app.slug}, user=${actor.id}, workspace=${workspaceId}`);
 
     // Redirect back with authorization code
     const callbackUrl = new URL(redirectUri);

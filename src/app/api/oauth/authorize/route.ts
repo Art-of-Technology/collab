@@ -6,6 +6,8 @@ import { generateAuthorizationCode } from '@/lib/apps/crypto';
 import { normalizeScopes, filterGrantedScopes, scopesToString, validateScopes, isAllowedRedirectUri } from '@/lib/oauth-scopes';
 
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/session';
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 
 // OAuth 2.0 Authorization Endpoint
 // Handles authorization requests from third-party apps
@@ -55,8 +57,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify user is authenticated
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       // Redirect to login with return URL
       // Use the public URL from headers or environment to avoid Docker internal URLs
       const host = request.headers.get('host') || request.headers.get('x-forwarded-host');
@@ -156,16 +158,12 @@ export async function GET(request: NextRequest) {
     // Verify workspace access if workspace_id is provided
     let targetWorkspaceId = workspaceId;
     if (workspaceId) {
-      const workspace = await prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        include: {
-          members: {
-            where: { userId: session.user.id }
-          }
-        }
+      const workspace = await prisma.workspace.findFirst({
+        where: { id: workspaceId, ...postWorkspaceAccessWhere(actor.id) },
+        select: { id: true }
       });
 
-      if (!workspace || workspace.members.length === 0) {
+      if (!workspace) {
         return NextResponse.json(
           {
             error: 'access_denied',
@@ -175,10 +173,10 @@ export async function GET(request: NextRequest) {
         );
       }
     } else {
-      // If no workspace specified (for non-system apps), use user's first workspace
-      const userWorkspace = await prisma.workspaceMember.findFirst({
-        where: { userId: session.user.id },
-        include: { workspace: true }
+      // For non-system apps without an explicit workspace, use an accessible workspace.
+      const userWorkspace = await prisma.workspace.findFirst({
+        where: postWorkspaceAccessWhere(actor.id),
+        select: { id: true }
       });
 
       if (!userWorkspace) {
@@ -191,7 +189,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      targetWorkspaceId = userWorkspace.workspaceId;
+      targetWorkspaceId = userWorkspace.id;
     }
 
     // Check if app is a system app - system apps don't require installation
@@ -272,25 +270,40 @@ export async function GET(request: NextRequest) {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Store authorization code
-    await prisma.appOAuthAuthorizationCode.create({
-      data: {
-        code: authorizationCode,
-        clientId,
-        userId: session.user.id,
-        workspaceId: targetWorkspaceId!,
-        installationId: isSystemApp ? null : installation!.id,
-        redirectUri,
-        scope: scopesToString(grantedScopes),
-        state,
-        code_challenge,
-        code_challenge_method,
-        nonce: isSystemApp ? 'system_app' : nonce, // Mark system app authorizations
-        expiresAt
-      }
+    const issued = await prisma.$transaction(async (tx) => {
+      const currentAccess = await tx.workspace.findFirst({
+        where: { id: targetWorkspaceId!, ...postWorkspaceAccessWhere(actor.id) },
+        select: { id: true }
+      });
+      if (!currentAccess) return false;
+      await tx.appOAuthAuthorizationCode.create({
+        data: {
+          code: authorizationCode,
+          clientId,
+          userId: actor.id,
+          workspaceId: targetWorkspaceId!,
+          installationId: isSystemApp ? null : installation!.id,
+          redirectUri,
+          scope: scopesToString(grantedScopes),
+          state,
+          code_challenge,
+          code_challenge_method,
+          nonce: isSystemApp ? 'system_app' : nonce, // Mark system app authorizations
+          expiresAt
+        }
+      });
+      return true;
     });
 
+    if (!issued) {
+      return NextResponse.json(
+        { error: 'access_denied', error_description: 'Workspace access changed before authorization' },
+        { status: 403 }
+      );
+    }
+
     // Log authorization for audit trail
-    console.log(`OAuth authorization granted: app=${oauthClient.app.slug}, user=${session.user.id}, workspace=${targetWorkspaceId}, installation=${isSystemApp ? 'system_app' : installation!.id}, scopes=${scopesToString(grantedScopes)}`);
+    console.log(`OAuth authorization granted: app=${oauthClient.app.slug}, user=${actor.id}, workspace=${targetWorkspaceId}, installation=${isSystemApp ? 'system_app' : installation!.id}, scopes=${scopesToString(grantedScopes)}`);
 
     // Redirect back to app with authorization code
     const callbackUrl = new URL(redirectUri);

@@ -657,3 +657,24 @@ cover these boundaries with modeled database dependencies. They do not establish
 native authentication, database snapshot isolation, post-lookup revocation,
 browser behavior or integrated gateway/runtime acceptance. OAuth membership and
 the remaining lifecycle access policies retain their separate gates.
+
+### OAuth workspace access at code issuance
+
+The regular and MCP authorization GET routes resolve the current database actor
+and require workspace ownership or an active membership. Explicit workspace
+parameters match immutable IDs only; they never select a slug or fall back after
+denial. The regular route's existing no-workspace flow chooses an accessible
+workspace, including an owner without a membership row.
+
+Both routes repeat the exact workspace access predicate on the transaction
+handle before creating an authorization code on that handle. Revocation before
+that lookup denies issuance. This does not serialize revocation after the lookup
+or prove database isolation. Client, redirect, PKCE, scope, installation, state
+and nonce handling remain unchanged; regular POST still forwards consent to GET.
+MCP retains its missing-workspace 404 and inaccessible-workspace 403 responses.
+
+Focused modeled tests reproduce nine failures with three controls on prior
+source. Twelve affected checks pass with a distinct transaction facade, alongside
+four reused gateway cases. The earlier combined 16-pass run preceded that fixture
+strengthening; the current 16 applicable passes span two runs. No native database,
+provider, browser or gateway activation acceptance is implied.
