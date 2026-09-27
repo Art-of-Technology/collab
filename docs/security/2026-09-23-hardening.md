@@ -487,7 +487,8 @@ For current adapter coverage, see [shared session consumers](#shared-session-con
 [Issue API session adapter](#issue-api-session-adapter),
 [Timeline session adapter](#timeline-session-adapter) and
 [Workspace API identity and invitation recipients](#workspace-api-identity-and-invitation-recipients).
-No proxy, auth route, or deployment mode changes here. Gateway mode must remain
+For auth routes and client behavior, see [Gateway client session and logout](#gateway-client-session-and-logout).
+Proxy enforcement and deployment activation remain pending. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
 
@@ -1444,7 +1445,7 @@ Focused actual-page and component execution with modeled Prisma/JSX records ten 
 
 ### Gateway client session and logout
 
-The auth catchall reports the configured mode and serves gateway sessions through the existing strict issuer/subject/account mapping, with uncached 401 for absent or revoked mappings. Gateway and invalid modes do not dispatch legacy auth POSTs. Direct local registration is rejected before parsing, password hashing or database access; the register page still redirects to login. Unmapped gateway login and MCP sign-in show an unavailable message without invoking legacy sign-in. Legacy auth handlers and successful login routing remain unchanged.
+The auth catchall reports the configured mode and serves gateway sessions through the existing strict issuer/subject/account mapping, with uncached 401 for absent or revoked mappings. Gateway and invalid modes do not dispatch legacy auth POSTs. In those modes, direct local registration returns 403 before parsing, password hashing or database access; legacy registration remains available and the register page still redirects to login. Unmapped gateway login and MCP sign-in show an unavailable message without invoking legacy sign-in. Legacy auth handlers and successful login routing remain unchanged.
 
 Both logout consumers use a mode-aware helper. Gateway mode navigates to the same-origin local gateway logout endpoint without claiming logout succeeded. Legacy mode verifies the sign-out result and an empty session response before its existing success navigation; malformed responses, surviving sessions and fetch failures show an error. The provider defaults to 60-second polling with its existing focus/offline behavior and explicit overrides. This is not a maximum revocation interval or IdP logout proof.
 

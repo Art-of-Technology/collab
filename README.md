@@ -227,6 +227,8 @@ Collab is designed to streamline internal communication and work tracking by off
 
 - Open your browser and navigate to [http://localhost:3000](http://localhost:3000).
 - Sign up or log in using Google or email.
+  For gateway sign-in availability and sign-out behavior, see the
+  [client session contract](docs/security/2026-09-23-hardening.md#gateway-client-session-and-logout).
 - Create or join a workspace to start sharing updates.
   See the [session and workspace access contract](docs/security/2026-09-23-hardening.md#session-and-workspace-access)
   for identity and membership requirements.
