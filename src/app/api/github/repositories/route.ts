@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authConfig } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/session";
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 import { EncryptionService } from "@/lib/encryption";
@@ -8,8 +8,8 @@ import { EncryptionService } from "@/lib/encryption";
 // POST /api/github/repositories/connect - Connect a GitHub repository to a project
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -27,14 +27,9 @@ export async function POST(request: NextRequest) {
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
-        workspace: {
-          OR: [
-            { ownerId: session.user.id },
-            { members: { some: { userId: session.user.id } } },
-          ],
-        },
+        workspace: postWorkspaceAccessWhere(actor.id),
       },
-      include: { repository: true },
+      select: { id: true, repository: { select: { id: true } } },
     });
 
     if (!project) {
@@ -63,13 +58,6 @@ export async function POST(request: NextRequest) {
         accessToken: accessToken ? await encryptToken(accessToken) : null,
         syncedAt: new Date(),
       },
-      include: {
-        project: {
-          include: {
-            workspace: true,
-          },
-        },
-      },
     });
 
     // Initialize default version if needed
@@ -86,9 +74,9 @@ export async function POST(request: NextRequest) {
         syncedAt: repository.syncedAt,
         webhookSecret: repository.webhookSecret, // Return for webhook setup
       },
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error('[GITHUB_REPOSITORY_CONNECT]', error);
+    console.error('[GITHUB_REPOSITORY_CONNECT]');
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -125,7 +113,7 @@ async function initializeDefaultVersion(repositoryId: string) {
       });
     }
   } catch (error) {
-    console.error('Failed to initialize default version:', error);
+    console.error('Failed to initialize default version');
     // Don't throw - this is not critical for repository connection
   }
 }

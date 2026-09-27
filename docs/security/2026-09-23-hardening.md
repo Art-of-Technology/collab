@@ -754,3 +754,31 @@ or a retained copy of the cookie; provider code redemption remains provider-owne
 No real provider, browser, database concurrency or runtime acceptance is claimed.
 Post-check access/identity changes, repository connection/disconnect lifecycle,
 metadata privacy and other recorded activation gaps remain separate.
+
+## GitHub repository connection metadata
+
+The OAuth repository list resolves a live actor and joins connection metadata only
+through the shared repository owner/active-member predicate. Provider repositories
+remain in the list even when their Collab connection is inaccessible; those rows
+have no connected project metadata and report `isConnected: false`. Authorized
+connection names, provider pagination/search/sort and disconnected-account behavior
+remain intact. Successful responses are `no-store`.
+
+Both OAuth and manual-token connection POST routes require a live actor and exact
+project workspace owner or active-member access before credential use or writes.
+The OAuth route retains the global repository-ID availability check required by
+schema uniqueness, selecting only an identifier and returning a generic duplicate
+message. This still discloses availability, not another project's identity.
+Authorized OAuth webhook creation, admin checks, localhost warning and initial
+sync behavior remain. Manual setup deliberately retains its authorized webhook
+secret response and initial version behavior; neither success response exposes
+stored access tokens. Touched route errors use fixed logs and generic unexpected
+error responses while preserving the existing known provider-error statuses.
+
+Ten modeled actual-route checks pass after five failures and five controls on
+prior source. A scoped exact-body Prisma/Next/Node typecheck passes. These checks
+mock provider/database operations and establish no live provider or concurrency
+acceptance. Caller repository ID versus provider-returned ID binding, post-entry
+revocation, shared provider-helper logging, nontransactional webhook/connection
+lifecycle, globally keyed commit SHA writes, and other repository read/lifecycle
+entry points remain separate recorded boundaries.
