@@ -5,6 +5,8 @@ channel-task status/priority/owner/date/next-action updates, close/reopen, comme
 reading and posting, and editing comments owned by the configured shared Forge
 writer. It never offers labels, native assignees, repository settings or code
 writes. Owner is existing channel-task display metadata, not a Forge assignee.
+Clearing Owner leaves the board unassigned without changing the native assignee;
+the board falls back to the native assignee only when no string owner is stored.
 
 Every action validates its exact typed payload and checks the
 [board access requirements](forge-board.md) and field-specific permissions
@@ -42,7 +44,9 @@ Every accepted write requires a fresh readback. Lost POST responses are uncertai
 and are never automatically retried. Reload and inspect the source before
 retrying to avoid duplicate creation. Pending forms are disabled. Conflict
 reloads retain only dirty fields, refresh untouched fields and require explicit
-review for overlapping edits. A missing comment edit never becomes a new post.
+review for overlapping edits. Expand **Current source text for comparison** to
+review the latest title, native open/closed state and body before acknowledging
+an overlap. A missing comment edit never becomes a new post.
 
 Project routes retain their existing navigation and layout. Server-side legacy
 connected-project write protection

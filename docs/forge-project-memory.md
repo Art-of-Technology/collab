@@ -83,8 +83,8 @@ The integration mount contract uses
 `COLLAB_FORGE_CONFIG_FILE=/run/config/collab-forge.json` and the approved NEW
 Collab-only `read:repository` + `write:issue` token on existing principal11 at
 `/run/secrets/collab-forge-token` for `readTokenFile` and the root-owned issue
-writer. This Notes-only branch does not add the optional `issues` binding;
-the root integration must preserve that independent schema when rebasing.
+writer. The optional `issues` binding is documented in the
+[issue actions guide](forge-issue-actions.md).
 No additional principal12 token is implied. The service bearer is mounted at
 `/run/secrets/collab-memory-service` in both services. The native Notes token at
 `/run/secrets/notes-forge-token` is writer-only. No credentials are provisioned
