@@ -6,7 +6,28 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const root = path.resolve(__dirname, '../..');
-const run = (command, args, env) => spawnSync(command, args, { cwd: root, env: { ...process.env, ...env }, encoding: 'utf8', timeout: 180000 });
+const run = (command, args, env) => spawnSync(command, args, { cwd: root, env: { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('PG'))), ...env }, encoding: 'utf8', timeout: 180000 });
+
+test('fixture runner removes ambient PG variables and preserves explicit overrides', () => {
+  const ambient = { PGHOSTADDR: '192.0.2.1', PGSERVICE: 'ambient-service', PGDATABASE: 'ambient-database' };
+  const saved = Object.fromEntries(Object.keys(ambient).map(key => [key, process.env[key]]));
+  const inspect = ['-e', "process.stdout.write(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith('PG') || key === 'COLLAB_FIXTURE_MARKER'))))"];
+  try {
+    Object.assign(process.env, ambient);
+    const clean = run(process.execPath, inspect, { COLLAB_FIXTURE_MARKER: 'kept' });
+    assert.equal(clean.status, 0, clean.stderr);
+    assert.deepEqual(JSON.parse(clean.stdout), { COLLAB_FIXTURE_MARKER: 'kept' });
+    const overrides = { PGHOSTADDR: '127.0.0.2', PGSERVICE: 'explicit-service', PGHOST: 'ignored.example.test', PGPORT: '1', PGDATABASE: 'ignored' };
+    const explicit = run(process.execPath, inspect, overrides);
+    assert.equal(explicit.status, 0, explicit.stderr);
+    assert.deepEqual(JSON.parse(explicit.stdout), overrides);
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
 
 test('bootstrap requires explicit empty-database intent before any connection', () => {
   const result = run(process.execPath, ['scripts/bootstrap-empty-database.mjs'], { DATABASE_URL: 'postgresql://fixture@127.0.0.1:1/not-contacted' });
