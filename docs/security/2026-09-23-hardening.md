@@ -478,8 +478,9 @@ For current adapter coverage, see [shared session consumers](#shared-session-con
 [Notes collection session adapter](#notes-collection-session-adapter),
 [Notes detail session adapter](#notes-detail-session-adapter),
 [Notes history session adapter](#notes-history-session-adapter),
-[Notes template session adapter](#notes-template-session-adapter) and
-[Notes secrets session adapter](#notes-secrets-session-adapter).
+[Notes template session adapter](#notes-template-session-adapter),
+[Notes secrets session adapter](#notes-secrets-session-adapter) and
+[Issue API session adapter](#issue-api-session-adapter).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -1020,3 +1021,28 @@ Gateway and worker remain disabled. This does not prove real encryption, raw/env
 formats, every admin/filter/copy branch, native concurrency or runtime acceptance.
 Existing cache behavior, input validation, owner/admin nuances, raw error logs
 and precheck/use races remain separate. No keys or live secrets were accessed.
+
+## Issue API session adapter
+
+Issue list/create, issue search and stored GitHub metadata use the
+[shared adapter contract](#gateway-session-core-inactive-integration). Only three
+session imports changed; `authOptions`, queries, payloads, permissions and
+transaction/event behavior remain unchanged.
+
+The [focused fixture](../../tests/security/gateway-issues.test.cjs) executes all
+four handlers with the actual identity selector and relation transformer,
+mocked Prisma and intercepted activity/notification/realtime/webhook calls.
+It checks mapped actor access, explicit-workspace and all-workspace recent
+search, stored GitHub URL enrichment, default reporter, assignment approver,
+activity/notification/webhook attribution, foreign denial before effects,
+identity failure with no downstream reads or effects, and explicit/default
+legacy forwarding. No provider call occurs in the GitHub metadata handler.
+
+Gateway and worker remain disabled. Workspace-only membership checks without
+active/project policy, unscoped nested issue payloads, explicit reporter and
+assignee/parent/label inputs, counter/relation races, precheck/use gaps, raw logs
+and activity/realtime failures after commit remain separate activation concerns.
+The fixture does not prove native transactions, concurrent revocation, provider
+or notification delivery, ranked search branches, nonempty relation policy,
+every optional create input, or runtime acceptance. No runtime, database or
+provider operation was performed.
