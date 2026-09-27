@@ -47,7 +47,7 @@ export interface Project {
   updatedAt: Date;
   statuses?: ProjectStatus[]; // For settings API compatibility
   repository?: Repository; // GitHub integration
-  issueCount?: number; // Total issues count
+  issueCount?: number;
   _count?: {
     issues: number;
   };
