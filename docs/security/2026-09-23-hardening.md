@@ -472,8 +472,9 @@ separate.
 
 For current adapter coverage, see [shared session consumers](#shared-session-consumers),
 [direct action session consumers](#direct-action-session-consumers),
-[workspace and project page session consumers](#workspace-and-project-page-session-consumers) and
-[app and developer page session consumers](#app-and-developer-page-session-consumers).
+[workspace and project page session consumers](#workspace-and-project-page-session-consumers),
+[app and developer page session consumers](#app-and-developer-page-session-consumers) and
+[app ecosystem API session consumers](#app-ecosystem-api-session-consumers).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -575,10 +576,8 @@ login redirects before data reads on missing/revoked/invalid gateway identity,
 returned cards/activity and default/explicit legacy behavior. The actual page
 and adapter execute against modeled dependencies, not live providers or a browser.
 
-The literal page-import inventory is now migrated. This is not a complete reachable
-consumer census: API imports, the leave-service library, aliases/wrappers and
-edge/session/logout integration remain. Known tenant access blockers remain open,
-and gateway mode must stay disabled pending those fixes and final acceptance.
+The literal page-import inventory is now migrated. For API coverage and the
+remaining consumer census, see [app ecosystem API session consumers](#app-ecosystem-api-session-consumers).
 
 ### App ecosystem API session consumers
 
@@ -586,7 +585,8 @@ Sixteen app, developer, OAuth authorization and admin API routes now import
 `getServerSession` from the shared request-session adapter. Reversing that import
 restores each handler byte-for-byte; request validation, role/owner guards,
 queries, redirects, writes and error responses are unchanged. Gateway mode remains
-disabled pending the complete reachable caller census and final acceptance.
+disabled pending the remaining API imports, the leave-service library,
+aliases/wrappers, edge/session/logout integration and final acceptance.
 
 Four representative actual handlers (developer API-key read, admin statistics,
 app API-key reveal marker, and OAuth consent) execute with the real adapter and
