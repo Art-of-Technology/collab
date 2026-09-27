@@ -236,6 +236,8 @@ Collab is designed to streamline internal communication and work tracking by off
 - Organize work using boards, milestones, and stories.
   For status filter visibility, see the
   [project status access contract](docs/security/2026-09-23-hardening.md#project-status-reads-27-september-2026).
+  For listing and creating project statuses, see the
+  [statuses API access contract](docs/security/2026-09-23-hardening.md#project-statuses-api-access).
   For status reordering, see the
   [reorder access contract](docs/security/2026-09-23-hardening.md#project-status-reorder-access).
   For label visibility and editing, see the
