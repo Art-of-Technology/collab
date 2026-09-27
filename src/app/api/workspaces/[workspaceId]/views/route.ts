@@ -1,5 +1,7 @@
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
+import { viewReadAccessWhere, viewReferencesAllowed } from '@/lib/view-access';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateUniqueViewSlug } from '@/lib/utils';
@@ -11,7 +13,7 @@ export async function GET(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -19,22 +21,16 @@ export async function GET(
     
     // Verify user has access to workspace (must be owner or ACTIVE member)
     const workspace = await prisma.workspace.findFirst({
-      where: {
-        id: workspaceId,
-        OR: [
-          { ownerId: (session.user as any).id },
-          { members: { some: { userId: (session.user as any).id, status: true } } }
-        ]
-      }
+      where: { id: workspaceId, ...postWorkspaceAccessWhere(session.user.id) }
     });
 
     if (!workspace) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
-    // Get user for filtering personal views
+    // Resolve the current session subject by immutable ID for filtering personal views
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
+      where: { id: session.user.id }
     });
 
     if (!user) {
@@ -43,14 +39,7 @@ export async function GET(
 
     // Fetch views that the user can access
     const views = await prisma.view.findMany({
-      where: {
-        workspaceId,
-        OR: [
-          { visibility: 'WORKSPACE' },
-          { visibility: 'SHARED', sharedWith: { has: user.id } },
-          { visibility: 'PERSONAL', ownerId: user.id }
-        ]
-      },
+      where: { workspaceId, ...viewReadAccessWhere(user.id) },
       include: {
         owner: {
           select: {
@@ -122,7 +111,7 @@ export async function POST(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -131,25 +120,16 @@ export async function POST(
     
     // Verify user has access to workspace
     const workspace = await prisma.workspace.findFirst({
-      where: {
-        id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
-      }
+      where: { id: workspaceId, ...postWorkspaceAccessWhere(session.user.id) }
     });
 
     if (!workspace) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
-    // Get user
+    // Resolve the current session subject by immutable ID
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
+      where: { id: session.user.id }
     });
 
     if (!user) {
@@ -196,6 +176,10 @@ export async function POST(
       );
     }
 
+    if (!await viewReferencesAllowed(user.id, workspaceId, { projectIds, sharedWith: visibility === 'SHARED' ? sharedWith : undefined })) {
+      return NextResponse.json({ error: 'Invalid or inaccessible view references' }, { status: 400 });
+    }
+
     // Generate unique slug for the view
     const slugChecker = async (slug: string, workspaceId: string) => {
       const existingView = await prisma.view.findFirst({
@@ -229,8 +213,8 @@ export async function POST(
         sharedWith: visibility === 'SHARED' ? sharedWith : [],
         isDefault: false,
         isFavorite: false,
-        workspaceId,
-        ownerId: user.id
+        workspace: { connect: { id: workspaceId, AND: [postWorkspaceAccessWhere(user.id)] } },
+        owner: { connect: { id: user.id } }
       }
     });
 
@@ -270,4 +254,4 @@ export async function POST(
       { status: 500 }
     );
   }
-} 
+}

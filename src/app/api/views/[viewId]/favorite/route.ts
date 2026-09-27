@@ -1,5 +1,6 @@
+import { viewReadAccessWhere } from '@/lib/view-access';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
@@ -10,15 +11,15 @@ export async function POST(
   try {
     const session = await getServerSession(authConfig);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { viewId } = await params;
 
-    // Get user
+    // Resolve the current session subject by immutable ID
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
+      where: { id: session.user.id }
     });
 
     if (!user) {
@@ -27,14 +28,7 @@ export async function POST(
 
     // Check if view exists and user has access to it
     const view = await prisma.view.findFirst({
-      where: {
-        id: viewId,
-        OR: [
-          { visibility: 'WORKSPACE' },
-          { ownerId: user.id },
-          { sharedWith: { has: user.id } }
-        ]
-      }
+      where: { id: viewId, ...viewReadAccessWhere(user.id) }
     });
 
     if (!view) {
@@ -43,12 +37,7 @@ export async function POST(
 
     // Check if already favorited
     const existingFavorite = await prisma.viewFavorite.findUnique({
-      where: {
-        viewId_userId: {
-          viewId: viewId,
-          userId: user.id
-        }
-      }
+      where: { viewId_userId: { viewId, userId: user.id }, view: { ...viewReadAccessWhere(user.id) } }
     });
 
     let isFavorite = false;
@@ -56,17 +45,15 @@ export async function POST(
     if (existingFavorite) {
       // Remove from favorites
       await prisma.viewFavorite.delete({
-        where: {
-          id: existingFavorite.id
-        }
+        where: { id: existingFavorite.id, userId: user.id, view: { ...viewReadAccessWhere(user.id) } }
       });
       isFavorite = false;
     } else {
       // Add to favorites
       await prisma.viewFavorite.create({
         data: {
-          viewId: viewId,
-          userId: user.id
+          view: { connect: { id: viewId, ...viewReadAccessWhere(user.id) } },
+          user: { connect: { id: user.id } }
         }
       });
       isFavorite = true;

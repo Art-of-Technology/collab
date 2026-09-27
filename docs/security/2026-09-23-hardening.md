@@ -1071,3 +1071,40 @@ raw logging remain separate. Fixtures do not prove all feed/parser branches,
 framework handling of rejected POST promises, native concurrency, notification
 delivery or runtime acceptance. Trusted ingress and mutation-Origin enforcement
 remain activation requirements. No runtime, provider or database operation ran.
+
+## View access and session subjects
+
+Seven View API modules use one workspace-and-visibility predicate. Reads require
+workspace ownership or active membership, plus view ownership, WORKSPACE
+visibility or explicit SHARED recipient access. WORKSPACE members retain edit
+access; PERSONAL/SHARED edits and deletion remain owner-only. The workspace
+DELETE route retains its default-view guard; the global slug route retains its
+existing distinct behavior. Five session consumers use the shared adapter and
+resolve the current database user by session ID rather than mutable email.
+
+Supplied project/workspace references require current actor access; recipients
+and replacement owners must belong to the view workspace or own it. Accessible
+cross-workspace configuration remains supported. Favorite/follow and view
+mutations repeat access predicates in their final selectors or checked connects.
+Issue positions independently require accessible issues in the view workspace,
+including payload reads; single issue keys persist the resolved canonical ID.
+Bulk cleanup can reference only issues validated in that batch. Existing
+responses, rate-limit wrappers and WORKSPACE editing policy are retained.
+
+The [focused fixture](../../tests/security/view-access.test.cjs) runs all 14
+handlers with real session/identity and access helpers, modeled Prisma and
+intercepted events. It covers stale-email identity, owner/active-member controls,
+revoked/foreign denial, visibility/recipient boundaries, valid and invalid
+references, issue-key resolution, malformed positions, cleanup bounds and
+modeled revocation at final query evaluation. The baseline 20-case fixture
+produced 17 failures and three positive controls; the expanded final fixture
+passes 23 cases. A scoped typecheck checks the exact non-import bodies against
+installed Prisma, Next and Zod declarations; it is not a full application build.
+
+Gateway and worker remain disabled. Reference validation is a precheck, not an
+atomic reference-revocation guarantee. Modeled transaction and connect checks
+do not prove native database isolation, post-snapshot revocation or concurrency.
+Existing follower-list projections, arbitrary filter configuration, rate-limit
+behavior, raw error logging and event failure after commit remain separate.
+Trusted ingress, mutation-Origin enforcement and integrated runtime acceptance
+remain required. No database, browser, runtime or provider operation was run.
