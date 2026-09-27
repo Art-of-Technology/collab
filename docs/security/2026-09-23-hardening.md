@@ -137,8 +137,8 @@ Legacy Slack availability and rollout constraints are documented in the
 
 ## Approved product direction
 
-The bounded read-only projection has its own
-[Forge board contract](../forge-board.md). The
+The [Forge board contract](../forge-board.md) owns board reads; the
+[issue actions guide](../forge-issue-actions.md) owns editing and comments. The
 [project memory contract](../forge-project-memory.md) owns canonical storage,
 approval, provenance, credential boundaries and existing Notes compatibility.
 The broader integration below remains future work.

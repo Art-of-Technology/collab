@@ -48,6 +48,13 @@ review for overlapping edits. Expand **Current source text for comparison** to
 review the latest title, native open/closed state and body before acknowledging
 an overlap. A missing comment edit never becomes a new post.
 
+In the issue editor, a Forge rejection (including a missing target or a comment
+not owned by the shared writer) retains the draft and board and requires reload
+before another save. A Collab permission denial clears protected issue and board
+state. A verified save starts a board refresh before loading supplemental issue
+details. If that details read fails, the save remains confirmed and retained
+drafts cannot be edited again until a successful reload.
+
 Project routes retain their existing navigation and layout. Server-side legacy
 connected-project write protection
 remains a separate pending slice and is required before activation.
