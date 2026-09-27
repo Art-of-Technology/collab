@@ -40,7 +40,9 @@ We will then take care of the issue as soon as possible.
 ### Local checks
 
 Use the scripts in `package.json`: `npm run lint` runs the Next.js flat ESLint
-configuration; `npm run test:security` runs the offline behavior regressions.
+configuration; `npm run test:security` runs the behavior regressions. The bootstrap
+suite includes an opt-in native database fixture; see the
+[bootstrap check prerequisites](docs/database-bootstrap.md#runnable-check).
 For a fresh type check after dependency changes, run `npm run prisma:generate`
 followed by `npm run typecheck -- --incremental false`. `npm run build` regenerates
 Prisma and runs the production build with TypeScript errors enforced. An earlier

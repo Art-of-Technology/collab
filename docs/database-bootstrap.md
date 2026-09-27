@@ -12,6 +12,8 @@ Node and the native PostgreSQL `psql` client installed. Use a separately admitte
 app and `COLLAB_READY_WORKER` disabled throughout bootstrap and verification.
 Select the new database through `DATABASE_URL` using existing protected
 credential custody; never put credentials in command arguments or history.
+`DATABASE_URL` must be present in the process environment; the bootstrap script
+does not load `.env` itself.
 The URL must explicitly name host, user and database; schema must be public.
 Only the documented TLS/libpq connection options are accepted, not Prisma pool
 options. Ambient PG variables are cleared so they cannot override that target.
@@ -83,8 +85,11 @@ empty. Do not claim that `migrate dev` or a complete historical replay is fixed.
 
 ## Runnable check
 
+With `COLLAB_BOOTSTRAP_TEST_SERVER_URL` unset,
 `node --test tests/security/bootstrap-empty-database.test.cjs` checks the explicit
-intent guard. Set `COLLAB_BOOTSTRAP_TEST_SERVER_URL` to an owned disposable
+intent guard and verifies that the fixture runner clears inherited PG variables
+while preserving explicit overrides; the native check is skipped.
+Set `COLLAB_BOOTSTRAP_TEST_SERVER_URL` to an owned disposable
 loopback PostgreSQL server with create-database rights for the full check. It
 creates and removes uniquely named test databases, executes native bootstrap,
 status and deploy, verifies Ready constraints, tests misleading ambient PG

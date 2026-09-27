@@ -209,11 +209,13 @@ Collab is designed to streamline internal communication and work tracking by off
    # Or install PostgreSQL locally and create a database
    createdb collab_db
    ```
-4. Generate Prisma client and run migrations:
+4. Generate the Prisma client:
    ```bash
    npx prisma generate
-   npx prisma migrate dev --name init
    ```
+   Before starting the app, follow the [fresh database bootstrap guide](docs/database-bootstrap.md)
+   for a new empty database. It also explains the migration-history limitations
+   and why existing installations require their original migrations.
 5. (Optional) Initialize a default workspace:
    ```bash
    npm run prisma:init-workspace
