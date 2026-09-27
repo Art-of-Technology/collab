@@ -10,7 +10,7 @@ This guide documents the database migration steps for deploying the unified Issu
 
 ## Migration Steps
 
-### Step 1: Update FeatureRequest Records (Before Schema Push)
+### Step 1: Update FeatureRequest Records (Before Schema Migration)
 
 The schema change makes `projectId` required on `FeatureRequest`. Update existing NULL values first:
 
@@ -24,20 +24,13 @@ psql "$DATABASE_URL" -c "UPDATE \"FeatureRequest\" SET \"projectId\" = 'cm904qa0
 
 ---
 
-### Step 2: Push Prisma Schema
+### Step 2: Apply Reviewed Schema Migration
 
-```bash
-npx prisma db push
-```
-
-**Expected warnings (safe to accept):**
-- Dropping `UserEvent` table
-- Dropping `UserStatus` table
-- Adding unique constraint on `NotificationPreferences`
-
-When prompted `Do you want to ignore the warning(s)?`, type `yes`.
-
-**Expected output:** `Your database is now in sync with your Prisma schema.`
+The historical schema-push procedure is superseded by the
+[database setup and migration requirements](database-bootstrap.md). Existing
+installations need their reviewed upgrade migrations; the empty-database
+bootstrap is not an upgrade path. Qualify this legacy data-migration sequence
+against the target before continuing.
 
 ---
 
@@ -143,7 +136,7 @@ If issues occur, the schema changes can be reverted by:
 | Step | Duration |
 |------|----------|
 | Step 1: Update FeatureRequest | < 1 second |
-| Step 2: Prisma db push | 15-30 seconds |
+| Step 2: Reviewed schema migration | Requires target-specific qualification |
 | Step 3: BoardItemActivity migration | 1-3 minutes |
 | Step 4: Create indexes | 10-30 seconds |
-| **Total** | **~5 minutes** |
+| **Total** | **Requires target-specific qualification** |

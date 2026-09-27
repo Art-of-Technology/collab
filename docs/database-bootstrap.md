@@ -42,7 +42,9 @@ The current model already creates `Version.issueAccessInvalidated` with default
 false. The historical migration first marks existing rows true; that upgrade
 backfill is deliberately not replayed into an empty bootstrap. Existing databases
 must run the original migration, including its conservative invalidation. The modeled project foreign
-key preserves delete restriction. No `db push` or reset is used.
+key preserves delete restriction. Do not substitute `db push` for bootstrap or
+reviewed upgrade migrations: it does not install the unmodeled constraints and
+Version functions/triggers. No reset is used.
 
 After schema creation, native `prisma migrate resolve --applied` records each
 retained historical migration. These are baselines, not claims that historical

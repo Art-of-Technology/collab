@@ -43,17 +43,8 @@
 ## 🔄 What Needs To Be Done
 
 ### 1. **Apply Database Migration** (REQUIRED)
-The PlanEntry model needs to be added to your database:
-
-```bash
-# Option A: Development (quick)
-npx prisma db push
-
-# Option B: Production (with migration history)
-npx prisma migrate dev --name add_plan_entry_model
-```
-
-**Current Issue**: Shadow DB enum problem. Use `db push` for now.
+For database setup and existing-installation migration requirements, follow the
+[database bootstrap guide](docs/database-bootstrap.md).
 
 ### 2. **Update teamSyncAnalyzer.ts** (REQUIRED)
 Replace the old detection logic with the improved version:
@@ -98,10 +89,7 @@ Modify `src/components/daily-focus/TeamSyncView.tsx` to:
 ## 🎯 Quick Start Guide
 
 ### Step 1: Apply Migration
-```bash
-cd c:/Users/Odin/Desktop/collab
-npx prisma db push
-```
+Follow the [database setup guidance](docs/database-bootstrap.md).
 
 ### Step 2: Replace Detection Logic
 In `src/utils/teamSyncAnalyzer.ts`, find line ~114:
@@ -192,7 +180,7 @@ GET /api/workspaces/{id}/plan-entries?startDate=2025-11-14&endDate=2025-11-15
 
 ## 🐛 Known Issues
 
-- Shadow DB migration blocked (use `db push`)
+- Historical shadow-database replay remains blocked; see the [database guide](docs/database-bootstrap.md).
 - Need to replace original analyzer functions
 - UI not yet updated for manual planning
 
