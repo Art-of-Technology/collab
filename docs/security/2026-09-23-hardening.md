@@ -29,7 +29,7 @@ and the [profile visibility contract](#post-and-coclaw-disclosure-follow-up).
 The nine formerly email-bound authenticated actions in `src/actions/workspace.ts`
 resolve the actor by session subject ID. The member-add target still resolves
 by the supplied email; owner, active workspace-admin and self-removal rules,
-validation and return shapes are preserved. Workspace REST GET/PATCH/DELETE
+validation and return shapes are preserved. Workspace detail REST GET/PATCH/DELETE
 use the shared session helper and return 401 for a missing or deleted subject.
 PATCH permits the workspace owner, active `owner`/`admin` membership
 (`status: true`), or a current database `SYSTEM_ADMIN`. DELETE permits only the
@@ -353,6 +353,8 @@ it to match the current database email; the email parameter is deliberately kept
 The signatures, pending/unexpired filters, descending creation order and existing
 inviter projections remain unchanged. Invitees may read their own invitations
 before joining a workspace; no membership requirement is added.
+For the recipient list API and workspace invitation management, see
+[Workspace API identity and invitation recipients](#workspace-api-identity-and-invitation-recipients).
 
 The [actual-action mocked regression](../../tests/security/invitation-lists.test.cjs)
 covers both exports, missing/deleted subjects,
@@ -482,8 +484,9 @@ For current adapter coverage, see [shared session consumers](#shared-session-con
 [Notes history session adapter](#notes-history-session-adapter),
 [Notes template session adapter](#notes-template-session-adapter),
 [Notes secrets session adapter](#notes-secrets-session-adapter),
-[Issue API session adapter](#issue-api-session-adapter) and
-[Timeline session adapter](#timeline-session-adapter).
+[Issue API session adapter](#issue-api-session-adapter),
+[Timeline session adapter](#timeline-session-adapter) and
+[Workspace API identity and invitation recipients](#workspace-api-identity-and-invitation-recipients).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
