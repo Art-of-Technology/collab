@@ -470,8 +470,9 @@ separate.
 
 ### Gateway session core (inactive integration)
 
-For current adapter coverage, see [shared session consumers](#shared-session-consumers)
-and [direct action session consumers](#direct-action-session-consumers).
+For current adapter coverage, see [shared session consumers](#shared-session-consumers),
+[direct action session consumers](#direct-action-session-consumers) and
+[workspace and project page session consumers](#workspace-and-project-page-session-consumers).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -524,8 +525,9 @@ The eleven action modules for app installation, comments, issue comments, labels
 leave, posts, post statistics, reactions, search, users and workspaces now import
 `getServerSession` from the request-session adapter. Only the import source changes;
 auth options, arguments, action bodies, projections, errors and tenant predicates
-are preserved. Legacy mode remains the deployment mode. Direct page/API consumers
-and the leave-service library still require migration before gateway activation.
+are preserved. Legacy mode remains the deployment mode. See
+[workspace and project page session consumers](#workspace-and-project-page-session-consumers)
+for page migration coverage and the remaining direct consumers.
 
 The actual user-action integration case fails before migration and passes afterward
 with mapped gateway identity, missing claims, revoked mapping, database failure,
