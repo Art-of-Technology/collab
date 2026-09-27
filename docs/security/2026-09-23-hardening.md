@@ -904,3 +904,22 @@ filtering and nested rollback; they do not establish native isolation or access
 revocation after the database statement's snapshot. Automatic following,
 asynchronous notification delivery, and the unchanged permission helper's error
 logging remain separate. No provider or runtime operation was performed.
+
+## Notes collection session adapter
+
+The Notes collection, search, pinned, shared-with-me, tags and link-preview
+modules now use the shared request-session adapter. This covers eight handlers,
+including note and tag creation. Gateway mode requires the existing explicit
+identity mapping and never falls back to a legacy cookie. Invalid mode denies
+access; explicit and default legacy modes retain the same `authOptions` argument.
+Only the session imports changed; handler policies, responses and side effects
+remain unchanged. Nine actual-handler adapter checks and 21 existing Notes and
+gateway checks pass with mocked database operations.
+
+This does not authorize gateway activation. Separate tenant-policy repairs remain
+required: tag listing and creation accept a supplied workspace without checking
+membership, note creation connects supplied tag IDs without checking their
+ownership/workspace, and issue link previews lack active membership and the
+shared issue-read scope (and exclude owners without membership rows). Existing
+raw error logging and post-lookup access races also remain outside this import
+change. No runtime, identity provisioning or provider operation was performed.
