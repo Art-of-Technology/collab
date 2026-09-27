@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/request-session';
-import { authOptions } from '@/lib/auth-options';
+import { getCurrentUser } from '@/lib/session';
+import { appOwnerWhere } from '@/lib/apps/ownership';
 import { AppStatus } from '@prisma/client';
 import { z } from 'zod';
 import { fetchManifest, validateAppManifest } from '@/lib/apps/validation';
@@ -19,9 +19,9 @@ export async function POST(
 ) {
   try {
     const { slug } = await params;
-    const session = await getServerSession(authOptions);
+    const actor = await getCurrentUser();
 
-    if (!session?.user?.id) {
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -39,8 +39,8 @@ export async function POST(
     const { manifestUrl } = validation.data;
 
     // Get the app
-    const app = await prisma.app.findUnique({
-      where: { slug },
+    const app = await prisma.app.findFirst({
+      where: { slug, ...appOwnerWhere(actor.id) },
       include: {
         oauthClient: true,
         scopes: true,
@@ -94,8 +94,8 @@ export async function POST(
     // Update app and create version in a transaction
     const result = await prisma.$transaction(async (tx) => {
       // Update the app with manifest data
-      const updatedApp = await tx.app.update({
-        where: { id: app.id },
+      const updated = await tx.app.updateMany({
+        where: { id: app.id, ...appOwnerWhere(actor.id), status: 'DRAFT' },
         data: {
           manifestUrl,
           iconUrl: manifest.icon_url || app.iconUrl,
@@ -104,6 +104,8 @@ export async function POST(
           status: AppStatus.IN_REVIEW // Move to IN_REVIEW for admin approval
         }
       });
+
+      if (updated.count !== 1) return null;
 
       // Create new version
       const version = await tx.appVersion.create({
@@ -139,9 +141,13 @@ export async function POST(
         });
       }
 
-      return { app: updatedApp, version };
+      return { app: { ...app, status: AppStatus.IN_REVIEW, manifestUrl }, version };
     });
 
+
+    if (!result) {
+      return NextResponse.json({ error: 'App changed or access revoked' }, { status: 409 });
+    }
 
     return NextResponse.json({
       success: true,

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/request-session';
-import { authOptions } from '@/lib/auth-options';
+import { getCurrentUser } from '@/lib/session';
+import { appOwnerWhere } from '@/lib/apps/ownership';
 import { decryptToken } from '@/lib/apps/crypto';
-
 import { prisma } from '@/lib/prisma';
+
+const json = (body: unknown, status = 200) =>
+  NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 
 export async function POST(
   request: NextRequest,
@@ -11,70 +13,34 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
+    const actor = await getCurrentUser();
+    if (!actor) return json({ error: 'Unauthorized' }, 401);
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get the app with OAuth client
-    const app = await prisma.app.findUnique({
-      where: { id },
-      include: {
-        oauthClient: true
+    return await prisma.$transaction(async tx => {
+      const app = await tx.app.findFirst({
+        where: { id, ...appOwnerWhere(actor.id) }, include: { oauthClient: true },
+      });
+      if (!app) return json({ error: 'App not found' }, 404);
+      const client = app.oauthClient;
+      if (!client) return json({ error: 'App has no OAuth client' }, 404);
+      if (client.clientType !== 'confidential') return json({ error: 'Only confidential clients have secrets' }, 400);
+      if (client.tokenEndpointAuthMethod !== 'client_secret_basic') {
+        return json({ error: 'Client secret is only available for client_secret_basic authentication method' }, 400);
       }
+      if (!client.clientSecret) return json({ error: 'No client secret available' }, 404);
+      if (client.secretRevealed) return json({ error: 'Client secret has already been revealed' }, 409);
+
+      const claimed = await tx.appOAuthClient.updateMany({
+        where: { id: client.id, app: appOwnerWhere(actor.id), secretRevealed: false, clientSecret: client.clientSecret },
+        data: { secretRevealed: true },
+      });
+      if (claimed.count !== 1) return json({ error: 'Credential changed or access revoked' }, 409);
+      // A decryption failure escapes the transaction and rolls back the claim.
+      const clientSecret = await decryptToken(Buffer.from(client.clientSecret));
+      return json({ success: true, clientSecret, warning: 'This client secret will not be shown again. Store it securely.' });
     });
-
-    if (!app) {
-      return NextResponse.json({ error: 'App not found' }, { status: 404 });
-    }
-
-    if (!app.oauthClient) {
-      return NextResponse.json({ error: 'App has no OAuth client' }, { status: 404 });
-    }
-
-    if (app.oauthClient.clientType !== 'confidential') {
-      return NextResponse.json({ error: 'Only confidential clients have secrets' }, { status: 400 });
-    }
-
-    if (app.oauthClient.tokenEndpointAuthMethod !== 'client_secret_basic') {
-      return NextResponse.json({ 
-        error: 'Client secret is only available for client_secret_basic authentication method' 
-      }, { status: 400 });
-    }
-
-    if (!app.oauthClient.clientSecret) {
-      return NextResponse.json({ error: 'No client secret available' }, { status: 404 });
-    }
-
-    try {
-      // Decrypt the client secret
-      const decryptedSecret = await decryptToken(Buffer.from(app.oauthClient.clientSecret));
-
-      // Mark the secret as revealed so it can't be shown again
-      await prisma.appOAuthClient.update({
-        where: { id: app.oauthClient.id },
-        data: { secretRevealed: true }
-      });
-
-      return NextResponse.json({
-        success: true,
-        clientSecret: decryptedSecret,
-        warning: 'This client secret will not be shown again. Store it securely.'
-      });
-
-    } catch (decryptionError) {
-      console.error('Failed to decrypt client secret:', decryptionError);
-      return NextResponse.json({ 
-        error: 'Failed to decrypt client secret' 
-      }, { status: 500 });
-    }
-
   } catch (error) {
     console.error('Error revealing client secret:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return json({ error: 'Failed to reveal client secret' }, 500);
   }
 }

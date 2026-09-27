@@ -581,11 +581,11 @@ remaining consumer census, see [app ecosystem API session consumers](#app-ecosys
 
 ### App ecosystem API session consumers
 
-Sixteen app, developer, OAuth authorization and admin API routes now import
-`getServerSession` from the shared request-session adapter. Reversing that import
-restores each handler byte-for-byte; request validation, role/owner guards,
-queries, redirects, writes and error responses are unchanged. Gateway mode remains
-disabled pending the remaining API imports, the leave-service library,
+The import migration moved sixteen app, developer, OAuth authorization and admin
+API routes to the shared request-session adapter without changing handler behavior.
+The credential and manifest routes subsequently adopted the live-user helper and
+[owner-bound access contract](#app-credential-ownership-and-explicit-reveal).
+Gateway mode remains disabled pending the remaining API imports, the leave-service library,
 aliases/wrappers, edge/session/logout integration and final acceptance.
 
 Four representative actual handlers (developer API-key read, admin statistics,
@@ -599,16 +599,51 @@ isolated parser lacked the process global; the fixture was corrected and only
 the affected route checks were repeated. This is 12 applicable passes across
 two runs, not a single combined green run or all-endpoint/provider/DB proof.
 
-Existing app ownership and OAuth membership gaps remain activation blockers:
-`reveal-secret` and `submit-manifest` lack owner checks; `mark-api-key-revealed`
-and `regenerate-api-key` allow an absent `app.userId` through their conditional
-owner check; `create-draft` accepts a supplied publisher ID without checking actor
-authority. Secret reveal also lacks an enforced previously-revealed guard. Both
-OAuth authorization routes omit active membership status and exclude an owner
-without a membership; the regular authorization fallback has the same status gap.
-The next bounded fixes must enforce actual app authority, fail closed for missing
-owners, constrain publisher assignment and reuse the existing owner/active-member
+For credential and manifest ownership, publisher assignment and reveal limits,
+see [the owner-bound access contract](#app-credential-ownership-and-explicit-reveal).
+OAuth membership gaps remain activation blockers: both authorization routes omit
+active membership status and exclude an owner without a membership; the regular
+authorization fallback has the same status gap.
+The next bounded OAuth fixes must reuse the existing owner/active-member
 workspace predicate with independently scoped code issuance. These findings do
 not replace the Features/Changelog blockers or the final alias/wrapper census.
 No edge, auth endpoint, logout, credential custody, runtime or deployment behavior
 is accepted by this import migration.
+
+### App credential ownership and explicit reveal
+
+The credential reveal, API-key rotation, manifest submission and draft creation
+routes now resolve the live actor through `getCurrentUser`. Credential and
+manifest reads require the actual `App.userId`; an absent owner, a publisher
+label or an admin session does not grant access through these owner routes.
+Draft creation accepts an omitted publisher or the actor's own ID and rejects
+foreign publisher assignment.
+
+Secret and API-key reveal claims condition their update on current app ownership,
+the unrevealed flag and the exact credential read. A failed claim returns no
+credential. Secret decryption happens inside the claim transaction so a failure
+rolls back the claim. Rotation checks ownership again at its update, and manifest
+submission first claims an owner-bound DRAFT app inside its transaction before
+writing versions, scopes or OAuth settings.
+
+The developer app detail page now requires a live owner on the server and sends
+an explicit credentials-card DTO without the API key or encrypted secret. The
+card does not fetch credentials on mount: reveal requires an explicit action,
+successful responses populate local state, and hide/copy remain available.
+Successful API-key rotation supersedes pending reveal responses; failed rotation
+preserves a successfully revealed key.
+Credential-bearing responses use `Cache-Control: no-store`.
+
+Creation still returns credentials for API compatibility. A successful reveal
+claim is one explicit reveal per stored credential state, not global once-only
+issuance: the existing owner-bound developer-docs API-key reader and creation/
+rotation responses remain separate. Public app-detail visibility, OAuth active
+membership, publisher-based deletion and other app lifecycle routes still need
+their separately scoped access review/fixes before gateway activation.
+
+The [ownership regression suite](../../tests/security/app-credential-ownership.test.cjs)
+executes actual handlers, the live-user helper, owner predicate, page and client
+component with modeled dependencies; the [gateway adapter cases](../../tests/security/gateway-app-api.test.cjs)
+cover session integration. Competing claims, ownership changes, decryption rollback
+and deferred reveal/rotation ordering are modeled regression evidence, not real
+database concurrency/isolation or browser/runtime acceptance.
