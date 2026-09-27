@@ -689,8 +689,9 @@ and token fallback. The final fixture reproduces twelve failures and five
 positive controls on prior source. A scoped exact-body Prisma typecheck passes.
 Entry authorization does not cancel an in-flight sync after revocation; existing
 nontransactional writes and globally keyed commit SHA upserts remain separate
-limitations. OAuth state, disconnect lifecycle and other recorded access gaps
-still require their own fixes before activation. For status reorder mutations,
+limitations. For OAuth state, see [GitHub OAuth browser state](#github-oauth-browser-state).
+Disconnect lifecycle and other recorded access gaps still require their own fixes
+before activation. For status reorder mutations,
 see [Project status reorder access](#project-status-reorder-access).
 No real provider calls, database isolation or integrated runtime acceptance is
 established by these modeled checks.
@@ -721,7 +722,10 @@ or active member, and generates a random provider-facing nonce. Personal flows
 remain supported. A purpose/version-tagged AES-GCM cookie binds the nonce, actor,
 optional project and ten-minute expiry using the existing encryption service.
 Production uses a host-only `__Host-` Secure, HttpOnly, SameSite=Lax cookie at `/`;
-explicit development uses an unprefixed non-Secure cookie for local HTTP.
+non-production environments use an unprefixed non-Secure cookie for local HTTP.
+The issuer returns 401 without a live actor, 400 for duplicate or invalid project
+state input, and 404 for an inaccessible project. Callback validation bounds the
+cookie to 2,048 characters and the nonce to 64 lowercase hexadecimal characters.
 
 The callback rejects missing, duplicate, mismatched, tampered, expired or malformed
 state before provider exchange or credential writes. It trusts project metadata
@@ -730,13 +734,19 @@ Missing/deleted actors redirect to login; other denials return a generic error t
 `/projects`. Authorized project success retains its settings redirect and GitHub
 tab; personal success remains on `/projects`. Callback responses clear the cookie
 on the same path and are `no-store`; authorization URLs and state are not logged,
-and raw provider/decryption errors are not returned in redirects.
+and raw provider/decryption errors are not returned in redirects. Shared
+encryption/decryption and live-user session failures log only fixed messages.
+Session resolution or user lookup failure returns no actor, so issuance denies
+with 401 and the callback clears the cookie and redirects to login.
 
 The historical sixteen-check route/helper run passed after fifteen failures and
 one control on prior source, using actual encryption and mocked provider/database
 boundaries. The R1 regression additionally captures encryption/decryption logs:
 both shared catch sites emit fixed messages while preserving generic throws,
 and tampered state still denies and clears the cookie before provider effects.
+The [same regression fixture](../../tests/security/github-oauth-state.test.cjs)
+also covers throwing session resolution and live-user lookup through the actual
+shared helper, checking fixed logs and denial without provider or credential effects.
 A scoped exact-body Prisma/Next/Node typecheck passes. A newer issuer request
 replaces the browser's pending cookie. Clearing it prevents ordinary subsequent
 browser replay, but does not provide atomic single use against concurrent requests
