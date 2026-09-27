@@ -1,7 +1,7 @@
 import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth/next";
+import { getServerSession } from "@/lib/request-session";
 import { authConfig } from "@/lib/auth";
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService } from "@/lib/notification-service";

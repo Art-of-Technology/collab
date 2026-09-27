@@ -479,8 +479,9 @@ For current adapter coverage, see [shared session consumers](#shared-session-con
 [Notes detail session adapter](#notes-detail-session-adapter),
 [Notes history session adapter](#notes-history-session-adapter),
 [Notes template session adapter](#notes-template-session-adapter),
-[Notes secrets session adapter](#notes-secrets-session-adapter) and
-[Issue API session adapter](#issue-api-session-adapter).
+[Notes secrets session adapter](#notes-secrets-session-adapter),
+[Issue API session adapter](#issue-api-session-adapter) and
+[Timeline session adapter](#timeline-session-adapter).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -1046,3 +1047,27 @@ The fixture does not prove native transactions, concurrent revocation, provider
 or notification delivery, ranked search branches, nonempty relation policy,
 every optional create input, or runtime acceptance. No runtime, database or
 provider operation was performed.
+
+## Timeline session adapter
+
+Timeline post creation and unified feed reads use the
+[shared adapter contract](#gateway-session-core-inactive-integration). Only two
+session imports changed; POST still passes `authConfig`, GET `authOptions`.
+POST resolves its session outside the catch block, so a mapping database failure
+still rejects before effects; unified GET catches it and returns JSON 500.
+
+The [focused fixture](../../tests/security/gateway-timeline.test.cjs) executes
+both handlers with the real identity selector, workspace predicate, mention
+parser and text sanitizer. Mocked Prisma and intercepted notification/follow
+calls check mapped owner and active-member access, revoked/foreign denial,
+post author and notification sender, `mine` filters, timeline transformation,
+identity failures and exact legacy forwarding. The existing
+[profile/timeline/notification fixture](../../tests/security/profile-notifications.test.cjs)
+passes with the migrated routes; its 20 Node entries include one enclosing test.
+
+Gateway and worker remain disabled. Bare issue-ID hydration, workspace-wide
+stats, cursor/limit behavior, mention autofollow policy, precheck/use races and
+raw logging remain separate. Fixtures do not prove all feed/parser branches,
+framework handling of rejected POST promises, native concurrency, notification
+delivery or runtime acceptance. Trusted ingress and mutation-Origin enforcement
+remain activation requirements. No runtime, provider or database operation ran.
