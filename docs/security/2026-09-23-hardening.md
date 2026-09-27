@@ -442,3 +442,25 @@ post-snapshot revocation. No database/runtime/browser/build/provider operations
 were performed. Generic native test stage is SKIPPED; review/docs/scoped lint/CI
 and complete exact-head Octopus remain required. Native concurrency stays in final
 integrated staging.
+
+## Gateway page prerequisites (27 September 2026)
+
+The workspace layout and Project Context landing page now resolve the live user
+through the shared session-subject helper. Both apply the existing workspace
+owner-or-active-member predicate, without a role-only system-admin exception.
+Layout keeps its slug-first then ID fallback and `/login`/`/welcome` redirects.
+The landing page keeps the existing slug/legacy-ID resolver, missing-workspace
+and project redirects, heading, links and `ProjectNotesList` props. Owners need
+no membership row. Its project payload query also rechecks workspace access after
+the workspace lookup, and `currentUserId` comes from the live subject.
+
+The six page regressions execute the actual TSX server functions and session,
+access and slug helpers against modeled Prisma and JSX objects. Five fail on
+prior source (one positive passes); the page/session/workspace-read selection
+passes 16/16 with no skips. This proves the modeled authorization, redirect and
+returned-prop contracts, not hydrated UI, database isolation or changes after the
+query snapshot. No runtime/browser/build/database/provider operation occurred.
+Generic native test stage is SKIPPED; other review/docs/lint/CI/exact-head Octopus
+gates remain. These are gateway prerequisites only: legacy auth mode remains,
+and shared gateway adapter/consumer migration plus private-origin, real-identity,
+isolated-writer, schema/restore and Ready-fence acceptance remain separate.
