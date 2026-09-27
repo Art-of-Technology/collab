@@ -1,6 +1,7 @@
 import React from "react";
 import { redirect } from "next/navigation";
-import { getAuthSession } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/session";
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { prisma } from "@/lib/prisma";
 import SidebarProvider from "@/components/providers/SidebarProvider";
 import LayoutWithSidebar from "@/components/layout/LayoutWithSidebar";
@@ -18,22 +19,19 @@ export default async function WorkspaceLayout({
 }: WorkspaceLayoutProps) {
   const { workspaceId } = await params;
 
-  // Get the current user session
-  const session = await getAuthSession();
+  // Resolve the current database user by session subject.
+  const user = await getCurrentUser();
 
-  if (!session?.user) {
+  if (!user) {
     redirect("/login");
   }
 
-    // Verify the workspace exists and user has access to it
+  // Verify the workspace exists and user has access to it
   // First try to find by slug, then by ID for backward compatibility
   let workspace = await prisma.workspace.findFirst({
     where: {
       slug: workspaceId,
-      OR: [
-        { ownerId: session.user.id },
-        { members: { some: { userId: session.user.id } } }
-      ]
+      ...postWorkspaceAccessWhere(user.id)
     },
   });
 
@@ -42,10 +40,7 @@ export default async function WorkspaceLayout({
     workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        OR: [
-          { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } }
-        ]
+        ...postWorkspaceAccessWhere(user.id)
       },
     });
   }

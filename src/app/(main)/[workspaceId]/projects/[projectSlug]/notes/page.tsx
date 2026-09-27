@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getServerSession } from "next-auth";
+import { getCurrentUser } from "@/lib/session";
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { ChevronLeft, FileText, Plus } from "lucide-react";
-import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,9 +28,9 @@ export async function generateMetadata({ params }: ProjectNotesPageProps) {
 
 export default async function ProjectNotesPage({ params }: ProjectNotesPageProps) {
   const { workspaceId: workspaceSlugOrId, projectSlug } = await params;
-  const session = await getServerSession(authConfig);
+  const user = await getCurrentUser();
 
-  if (!session?.user?.email) {
+  if (!user) {
     redirect('/login');
   }
 
@@ -44,13 +44,7 @@ export default async function ProjectNotesPage({ params }: ProjectNotesPageProps
   const workspace = await prisma.workspace.findFirst({
     where: {
       id: workspaceId,
-      members: {
-        some: {
-          user: {
-            email: session.user.email
-          }
-        }
-      }
+      ...postWorkspaceAccessWhere(user.id)
     },
     select: {
       id: true,
@@ -66,7 +60,8 @@ export default async function ProjectNotesPage({ params }: ProjectNotesPageProps
   const project = await prisma.project.findFirst({
     where: {
       workspaceId,
-      slug: projectSlug
+      slug: projectSlug,
+      workspace: postWorkspaceAccessWhere(user.id)
     },
     select: {
       id: true,
@@ -78,16 +73,6 @@ export default async function ProjectNotesPage({ params }: ProjectNotesPageProps
 
   if (!project) {
     redirect(`/${workspaceSlugOrId}/projects`);
-  }
-
-  // Get current user ID
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true }
-  });
-
-  if (!user) {
-    redirect('/login');
   }
 
   return (
