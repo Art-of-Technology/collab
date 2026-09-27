@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
   const [copied, setCopied] = useState('');
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const apiKeyGeneration = useRef(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
@@ -121,6 +122,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
       }
 
       if (data.success && data.apiKey) {
+        apiKeyGeneration.current += 1;
         setApiKey(data.apiKey);
         setApiKeyRevealed(false);
         setShowApiKey(true);
@@ -147,6 +149,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
       setShowApiKey(!showApiKey);
       return;
     }
+    const generation = apiKeyGeneration.current;
     try {
       const response = await fetch(`/api/apps/by-id/${appId}/mark-api-key-revealed`, {
         method: 'POST',
@@ -156,6 +159,7 @@ export function OAuthCredentialsCard({ oauthClient, appId, appStatus }: OAuthCre
       if (!response.ok || !data.success || !data.apiKey) {
         throw new Error(data.error || 'Failed to reveal API key');
       }
+      if (generation !== apiKeyGeneration.current) return;
       setApiKey(data.apiKey);
       setApiKeyRevealed(true);
       setShowApiKey(true);

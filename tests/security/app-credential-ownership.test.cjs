@@ -158,12 +158,13 @@ test('owner app detail emits a safe explicit credential-card DTO', async () => {
   assert.equal(JSON.stringify(tree).includes('fixture-key'), false); assert.equal(f.calls.decrypt, 0);
 });
 
-test('credential card reveals only on explicit action and keeps successful local values for hide/copy', async () => {
+function credentialCardFixture(fetchResponse) {
   const states = [], effects = [], requests = [], copied = [], notices = [];
-  let cursor = 0, fail = false;
+  let cursor = 0;
   const jsx = (type, props) => ({ type, props });
   const deps = { react: {
     useState: initial => { const index = cursor++; if (!(index in states)) states[index] = initial; return [states[index], value => { states[index] = value; }]; },
+    useRef: initial => { const index = cursor++; if (!(index in states)) states[index] = { current: initial }; return states[index]; },
     useCallback: fn => fn, useEffect: fn => effects.push(fn),
   }, 'react/jsx-runtime': { jsx, jsxs: jsx }, '@/hooks/use-toast': { useToast: () => ({ toast: value => notices.push(value) }) },
     'lucide-react': Object.fromEntries(['Key', 'Copy', 'Eye', 'EyeOff', 'Check', 'AlertTriangle', 'Loader2', 'RotateCw'].map(name => [name, name])),
@@ -171,12 +172,20 @@ test('credential card reveals only on explicit action and keeps successful local
   for (const [path, names] of [['card', ['Card', 'CardContent', 'CardDescription', 'CardHeader', 'CardTitle']], ['badge', ['Badge']], ['button', ['Button']], ['input', ['Input']], ['label', ['Label']], ['alert', ['Alert', 'AlertDescription']], ['alert-dialog', ['AlertDialog', 'AlertDialogAction', 'AlertDialogCancel', 'AlertDialogContent', 'AlertDialogDescription', 'AlertDialogFooter', 'AlertDialogHeader', 'AlertDialogTitle']]])
     deps[`@/components/ui/${path}`] = Object.fromEntries(names.map(name => [name, name]));
   const component = load('src/app/dev/apps/[slug]/OAuthCredentialsCard.tsx', deps, {
-    console: { error() {} }, setTimeout() {}, navigator: { clipboard: { writeText: async value => copied.push(value) } },
-    fetch: async url => { requests.push(url); return { ok: !fail, json: async () => fail ? { error: 'Denied' } : { success: true, clientSecret: 'fixture-secret', apiKey: 'fixture-key' } }; },
+    Error, console: { error() {} }, setTimeout() {}, navigator: { clipboard: { writeText: async value => copied.push(value) } },
+    fetch: async url => { requests.push(url); return fetchResponse(url); },
   }).OAuthCredentialsCard;
   const render = () => { cursor = 0; return component({ appId: 'app', appStatus: 'DRAFT', oauthClient: { id: 'client', clientId: 'public-client', hasApiKey: true, secretRevealed: false, apiKeyRevealed: false } }); };
   const nodes = tree => !tree || typeof tree !== 'object' ? [] : [tree, ...Object.values(tree).flat().flatMap(nodes)];
   const button = (tree, label) => nodes(tree).find(node => node.type === 'Button' && node.props['aria-label'] === label);
+  return { render, nodes, button, effects, requests, copied, notices };
+}
+
+test('credential card reveals only on explicit action and keeps successful local values for hide/copy', async () => {
+  let fail = false;
+  const { render, nodes, button, effects, requests, copied, notices } = credentialCardFixture(async () => ({
+    ok: !fail, json: async () => fail ? { error: 'Denied' } : { success: true, clientSecret: 'fixture-secret', apiKey: 'fixture-key' },
+  }));
   let tree = render(); for (const effect of effects) await effect(); assert.equal(requests.length, 0);
   await button(tree, 'Reveal client secret').props.onClick(); tree = render();
   assert.equal(requests.length, 1); assert.equal(nodes(tree).find(node => node.type === 'Input' && node.props.id === 'clientSecret').props.value, 'fixture-secret');
@@ -190,3 +199,71 @@ test('credential card reveals only on explicit action and keeps successful local
   for (const node of nodes(tree).filter(node => node.type === 'Button' && node.props.children?.type === 'Copy')) await node.props.onClick();
   assert.ok(copied.includes('fixture-secret')); assert.ok(copied.includes('fixture-key'));
 });
+
+for (const rotationResult of ['success', 'denied', 'network-error']) {
+  for (const revealFirst of [false, true]) {
+    test(`credential card preserves the valid key: rotation ${rotationResult}, reveal finishes ${revealFirst ? 'first' : 'last'}`, async () => {
+      const pending = {};
+      const { render, nodes, button, effects, requests, copied, notices } = credentialCardFixture(url =>
+        new Promise((resolve, reject) => { pending[url.split('/').at(-1)] = { resolve, reject }; }));
+      const input = tree => nodes(tree).find(node => node.type === 'Input' && node.props.id === 'apiKey').props;
+      const copyKey = async tree => {
+        const row = nodes(tree).find(node => node.type === 'div' &&
+          Array.isArray(node.props.children) && node.props.children.some(child => find(child, 'Input')?.props.id === 'apiKey') &&
+          node.props.children.some(child => child?.type === 'Button'));
+        await row.props.children.find(child => child?.type === 'Button').props.onClick();
+      };
+      const oldKey = 'old-fixture-api-key-1111', newKey = 'new-fixture-api-key-2222';
+      let tree = render();
+      for (const effect of effects) await effect();
+      assert.equal(requests.length, 0);
+      const reveal = button(tree, 'Show API key').props.onClick();
+      tree = render();
+      nodes(tree).find(node => node.type === 'Button' && find(node.props.children, 'RotateCw')).props.onClick();
+      tree = render();
+      assert.equal(find(tree, 'AlertDialog').props.open, true);
+      const rotate = find(tree, 'AlertDialogAction').props.onClick();
+      assert.deepEqual(requests, ['/api/apps/by-id/app/mark-api-key-revealed', '/api/apps/by-id/app/regenerate-api-key']);
+      const finishReveal = async () => {
+        pending['mark-api-key-revealed'].resolve({ ok: true, json: async () => ({ success: true, apiKey: oldKey }) });
+        await reveal;
+      };
+      if (revealFirst) {
+        await finishReveal();
+        tree = render();
+        assert.equal(input(tree).value, oldKey);
+        await copyKey(tree);
+        assert.equal(copied.at(-1), oldKey);
+      }
+      if (rotationResult === 'network-error') pending['regenerate-api-key'].reject(new Error('Network unavailable'));
+      else pending['regenerate-api-key'].resolve({ ok: rotationResult === 'success', json: async () =>
+        rotationResult === 'success' ? { success: true, apiKey: newKey } : { error: 'Denied' } });
+      await rotate;
+      tree = render();
+      if (rotationResult === 'success') {
+        assert.equal(input(tree).value, newKey);
+        assert.equal(find(tree, 'AlertDialog').props.open, false);
+        await button(tree, 'Hide API key').props.onClick();
+      } else {
+        assert.equal(notices.at(-1).description, rotationResult === 'denied' ? 'Denied' : 'Network unavailable');
+        assert.equal(notices.at(-1).variant, 'destructive');
+      }
+      if (!revealFirst) await finishReveal();
+      tree = render();
+      const expectedKey = rotationResult === 'success' ? newKey : oldKey;
+      await copyKey(tree);
+      assert.equal(copied.at(-1), expectedKey);
+      assert.equal(input(tree).type, rotationResult === 'success' ? 'password' : 'text');
+      if (rotationResult === 'success') assert.notEqual(input(tree).value, expectedKey);
+      else assert.equal(input(tree).value, expectedKey);
+      if (rotationResult !== 'success') await button(tree, 'Hide API key').props.onClick();
+      tree = render();
+      assert.equal(input(tree).type, 'password');
+      await button(tree, 'Show API key').props.onClick();
+      tree = render();
+      assert.equal(input(tree).value, expectedKey);
+      assert.equal(input(tree).type, 'text');
+      assert.equal(requests.length, 2);
+    });
+  }
+}
