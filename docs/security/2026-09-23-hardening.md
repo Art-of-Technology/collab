@@ -668,3 +668,27 @@ source. Twelve affected checks pass with a distinct transaction facade, alongsid
 four reused gateway cases. The earlier combined 16-pass run preceded that fixture
 strengthening; the current 16 applicable passes span two runs. No native database,
 provider, browser or gateway activation acceptance is implied.
+
+### GitHub repository sync and debug access
+
+Repository sync, release sync and branch GET/POST routes now resolve a live
+database actor and scope the exact repository to workspace ownership or active
+membership before credential decryption, provider calls, branch reads or writes.
+Anonymous/deleted actors receive 401; inaccessible repositories receive 404.
+The sync route retains its explicit current-user token fallback after this gate.
+
+Debug project and repository queries use the same workspace access boundary.
+Both repository response locations select safe metadata explicitly, omitting
+access tokens and webhook secrets. Successful debug responses are `no-store`,
+and errors no longer include raw exception details.
+
+Seventeen modeled actual-handler checks cover denial without effects, legitimate
+owner/active-member behavior, foreign/inactive rows in the debug list, projection
+and token fallback. The final fixture reproduces twelve failures and five
+positive controls on prior source. A scoped exact-body Prisma typecheck passes.
+Entry authorization does not cancel an in-flight sync after revocation; existing
+nontransactional writes and globally keyed commit SHA upserts remain separate
+limitations. OAuth state, disconnect lifecycle, project-status mutation scope and
+other recorded access gaps still require their own fixes before activation.
+No real provider calls, database isolation or integrated runtime acceptance is
+established by these modeled checks.

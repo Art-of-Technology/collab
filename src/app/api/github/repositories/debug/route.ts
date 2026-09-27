@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/session";
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
+import { repositoryAccessWhere } from "@/lib/github/access";
+
+const repositorySelect = {
+  id: true, projectId: true, githubRepoId: true, owner: true, name: true,
+  fullName: true, defaultBranch: true, isActive: true, syncedAt: true,
+  createdAt: true, updatedAt: true,
+  project: { select: { id: true, name: true } },
+} as const;
 
 /**
  * Debug endpoint to help troubleshoot repository connection issues
@@ -9,8 +17,8 @@ import { prisma } from "@/lib/prisma";
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authConfig);
-    if (!session?.user) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -25,15 +33,10 @@ export async function GET(request: NextRequest) {
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
-        workspace: {
-          OR: [
-            { ownerId: session.user.id },
-            { members: { some: { userId: session.user.id } } },
-          ],
-        },
+        workspace: postWorkspaceAccessWhere(actor.id),
       },
       include: {
-        repository: true,
+        repository: { select: repositorySelect },
         workspace: {
           select: {
             id: true,
@@ -50,30 +53,14 @@ export async function GET(request: NextRequest) {
 
     // Get all repositories for debugging
     const allRepositories = await prisma.repository.findMany({
-      where: {
-        project: {
-          workspace: {
-            OR: [
-              { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } },
-            ],
-          },
-        },
-      },
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+      where: repositoryAccessWhere(actor.id),
+      select: repositorySelect,
     });
 
     return NextResponse.json({
       user: {
-        id: session.user.id,
-        email: session.user.email,
+        id: actor.id,
+        email: actor.email,
       },
       project: {
         id: project.id,
@@ -88,13 +75,12 @@ export async function GET(request: NextRequest) {
         repositoryId: project.repository?.id,
         totalRepositories: allRepositories.length,
       },
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
 
   } catch (error) {
     console.error('[GITHUB_REPOSITORY_DEBUG]', error);
     return NextResponse.json({ 
-      error: "Internal server error",
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: "Internal server error"
     }, { status: 500 });
   }
 }
