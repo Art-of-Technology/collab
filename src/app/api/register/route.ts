@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { authMode } from "@/lib/gateway-identity";
 import { hash } from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { generateRandomAvatar } from "@/lib/avatar-generator";
 
 export async function POST(req: Request) {
+  if (authMode() !== "nextauth") return NextResponse.json({ message: "Registration is unavailable" }, { status: 403 });
   try {
     const body = await req.json();
     const { name, email, password, role, team, currentFocus } = body;

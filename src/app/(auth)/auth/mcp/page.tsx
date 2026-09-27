@@ -124,6 +124,19 @@ export default function MCPAuthPage() {
     window.location.href = callbackUrl.toString();
   }
 
+  async function handleSignIn() {
+    try {
+      const response = await fetch('/api/auth/mode', { cache: 'no-store' });
+      const configuration = await response.json();
+      if (!response.ok || configuration.authMode !== 'nextauth') {
+        throw new Error('Sign in is unavailable. Ask your administrator to check your account access.');
+      }
+      await signIn(undefined, { callbackUrl: window.location.href });
+    } catch {
+      setError('Sign in is unavailable. Ask your administrator to check your account access.');
+    }
+  }
+
   // Show login if not authenticated
   if (status === 'unauthenticated') {
     return (
@@ -147,8 +160,9 @@ export default function MCPAuthPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {error && <p role="alert" className="mb-3 text-sm text-red-400">{error}</p>}
               <Button
-                onClick={() => signIn(undefined, { callbackUrl: window.location.href })}
+                onClick={handleSignIn}
                 className="w-full bg-green-500 hover:bg-green-500/90 text-black font-medium"
               >
                 Sign in to Continue
