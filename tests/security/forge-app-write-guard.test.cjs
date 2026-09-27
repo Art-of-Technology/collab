@@ -52,6 +52,12 @@ test('app handlers deny bound issue writes before mutation while allowing unconn
   assert.equal((await call(routes[4][0], 'DELETE', undefined, issues[1].id)).status, 409);
   delete issues[0].parent;
   assert.equal(writes, 0);
+  issues[1].parentId = issues[0].id;
+  for (const parentId of [null, issues[1].id]) {
+    assert.equal((await call(routes[3][0], 'PATCH', { parentId }, issues[1].id)).status, 409);
+    assert.equal(writes, 0);
+  }
+  delete issues[1].parentId;
   const collection = load('src/app/api/apps/auth/issues/route.ts', deps);
   for (const body of [{ title: 'New', projectId: 'c000000000000000000000003' }, { title: 'New', projectId: 'c000000000000000000000004', parentId: 'c000000000000000000000001' }]) {
     assert.equal((await call(collection, 'POST', body, 'unused')).status, 409);

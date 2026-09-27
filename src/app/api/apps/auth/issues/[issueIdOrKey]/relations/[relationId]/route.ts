@@ -86,7 +86,7 @@ export const DELETE = withAppAuth(
         deletedRelationId: relationId,
       });
     } catch (error) {
-      if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
+      if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       console.error('Error deleting relation:', error);
       return NextResponse.json(
         { error: 'server_error', error_description: 'Internal server error' },
