@@ -2,6 +2,7 @@
 
 import { getAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { revalidatePath } from "next/cache";
 
 // Get all feature requests with pagination, filtering and sorting
@@ -217,12 +218,34 @@ export async function getFeatureRequests({
 export async function getFeatureRequestById(id: string, workspaceId?: string) {
   try {
     const session = await getAuthSession();
-    if (!session?.user) {
+    if (!session?.user?.id) {
       throw new Error("Unauthorized");
     }
 
-    const featureRequest = await prisma.featureRequest.findUnique({
+    const actor = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true } });
+    if (!actor) throw new Error("Unauthorized");
+
+    // Read only authority IDs until the current actor's workspace access is established.
+    const scope = await prisma.featureRequest.findUnique({
       where: { id },
+      select: { workspaceId: true, projectId: true, project: { select: { workspaceId: true } } },
+    });
+    if (!scope) return null;
+    const actualWorkspaceId = scope.workspaceId ?? scope.project?.workspaceId;
+    if (!actualWorkspaceId || (scope.project && scope.project.workspaceId !== actualWorkspaceId)) return null;
+    const workspace = await prisma.workspace.findFirst({
+      where: { id: actualWorkspaceId, ...postWorkspaceAccessWhere(actor.id) },
+      select: { id: true, slug: true },
+    });
+    if (!workspace || (workspaceId !== undefined && workspaceId !== workspace.id && workspaceId !== workspace.slug)) return null;
+
+    // Reapply scope on the payload query; caller-provided workspace IDs never grant access.
+    const featureRequest = await prisma.featureRequest.findFirst({
+      where: {
+        id, workspaceId: scope.workspaceId, projectId: scope.projectId,
+        ...(scope.workspaceId ? { workspace: postWorkspaceAccessWhere(actor.id) } : {}),
+        ...(scope.projectId ? { project: { workspaceId: actualWorkspaceId, workspace: postWorkspaceAccessWhere(actor.id) } } : {}),
+      },
       include: {
         author: {
           select: {
@@ -298,23 +321,8 @@ export async function getFeatureRequestById(id: string, workspaceId?: string) {
     }));
 
     // Check user permissions
-    let isAdmin = false;
-    if (workspaceId) {
-      const { checkUserPermission } = await import('@/lib/permissions');
-      const hasPermission = await checkUserPermission(
-        session.user.id,
-        workspaceId,
-        'EDIT_FEATURE_REQUEST' as any
-      );
-      isAdmin = hasPermission.hasPermission;
-    } else {
-      // Fallback to system admin check if no workspace context
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { role: true },
-      });
-      isAdmin = user?.role === 'SYSTEM_ADMIN';
-    }
+    const { checkUserPermission } = await import('@/lib/permissions');
+    const { hasPermission: isAdmin } = await checkUserPermission(actor.id, actualWorkspaceId, 'EDIT_FEATURE_REQUEST' as any);
 
     // Format the feature request data
     const formattedFeatureRequest = {
