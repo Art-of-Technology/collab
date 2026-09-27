@@ -1,34 +1,28 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { avatarUpdateSchema, avatarUserSelect } from '@/lib/avatar-settings';
 
 export async function PATCH(req: Request) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
     
-    const body = await req.json();
-    const { 
-      avatarSkinTone, 
-      avatarEyes, 
-      avatarBrows, 
-      avatarMouth, 
-      avatarNose, 
-      avatarHair, 
-      avatarEyewear, 
-      avatarAccessory, 
-      useCustomAvatar 
-    } = body;
+    const parsed = avatarUpdateSchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      return new NextResponse('Invalid avatar settings', { status: 400 });
+    }
     
     // Get the current user
     const currentUser = await prisma.user.findUnique({
       where: {
-        email: session.user.email
-      }
+        id: session.user.id
+      },
+      select: { id: true }
     });
     
     if (!currentUser) {
@@ -40,17 +34,8 @@ export async function PATCH(req: Request) {
       where: {
         id: currentUser.id
       },
-      data: {
-        avatarSkinTone: avatarSkinTone !== undefined ? avatarSkinTone : currentUser.avatarSkinTone,
-        avatarEyes: avatarEyes !== undefined ? avatarEyes : currentUser.avatarEyes,
-        avatarBrows: avatarBrows !== undefined ? avatarBrows : currentUser.avatarBrows,
-        avatarMouth: avatarMouth !== undefined ? avatarMouth : currentUser.avatarMouth,
-        avatarNose: avatarNose !== undefined ? avatarNose : currentUser.avatarNose,
-        avatarHair: avatarHair !== undefined ? avatarHair : currentUser.avatarHair,
-        avatarEyewear: avatarEyewear !== undefined ? avatarEyewear : currentUser.avatarEyewear,
-        avatarAccessory: avatarAccessory !== undefined ? avatarAccessory : currentUser.avatarAccessory,
-        useCustomAvatar: useCustomAvatar !== undefined ? useCustomAvatar : currentUser.useCustomAvatar
-      }
+      data: parsed.data,
+      select: avatarUserSelect
     });
     
     return NextResponse.json({
@@ -62,7 +47,7 @@ export async function PATCH(req: Request) {
       }
     });
   } catch (error) {
-    console.error("[AVATAR_UPDATE_ERROR]", error);
+    console.error("[AVATAR_UPDATE_ERROR]");
     return new NextResponse("Internal error", { status: 500 });
   }
-} 
+}

@@ -13,14 +13,16 @@ for a missing or deleted subject. Gateway session acceptance has the additional
 [identity requirements](#gateway-session-core-inactive-integration) below.
 Both `getCurrentUser` implementations return `null` for a missing ID or deleted
 user. The other three actions throw `Unauthorized` for a missing ID and
-`User not found` when their current-user lookup finds no user; profile input
-validation still precedes that lookup. `getUserProfile` retains `self_profile`
+`User not found` when their current-user lookup finds no user; profile and avatar
+input validation precede that lookup. `getUserProfile` retains `self_profile`
 for the viewer's own profile.
 
 The actions deliberately keep direct lookups: unlike the session helper, they
-preserve Date-valued fields and propagate lookup errors. Their selected fields,
-profile validation and avatar defaults are unchanged; credential omission is
-owned by the [shared Prisma client contract](#shared-clients-and-build-repairs).
+preserve Date-valued fields and propagate lookup errors. Profile validation is
+unchanged; general credential omission is owned by the
+[shared Prisma client contract](#shared-clients-and-build-repairs). Avatar input
+validation, partial writes and response selection are owned by the
+[avatar update contract](#avatar-updates-and-safe-responses).
 See the [user-action subject regressions](../../tests/security/user-action-subject.test.cjs)
 and the [profile visibility contract](#post-and-coclaw-disclosure-follow-up).
 
@@ -1112,3 +1114,35 @@ Existing follower-list projections, arbitrary filter configuration, rate-limit
 behavior, raw error logging and event failure after commit remain separate.
 Trusted ingress, mutation-Origin enforcement and integrated runtime acceptance
 remain required. No database, browser, runtime or provider operation was run.
+
+## Avatar updates and safe responses
+
+Avatar PATCH and the `updateUserAvatar` server action bind updates to the current
+session user ID. PATCH now uses the shared session adapter. Both entry points
+validate supplied avatar values with one schema: nullable non-negative 32-bit
+integers for numeric settings and a boolean for `useCustomAvatar`. Unknown
+properties are stripped; Prisma operator objects and malformed values are
+rejected. Omitted values are not written, preserving existing settings without
+copying stale values from a prior read. Zero, null and false remain supported.
+
+Both mutations select the existing public avatar fields plus created/updated
+and email-verification dates. Credential fields and unrelated user properties
+are excluded. PATCH retains its user envelope and ISO date serialization;
+the action returns selected fields with Date values. The visible editor ignores
+the mutation response and refreshes the existing current-user query. PATCH
+retains 401/404 and generic 500 responses, returns 400 for invalid bodies, and
+logs only a fixed error marker rather than database exception content.
+
+The [focused fixture](../../tests/security/avatar-access.test.cjs) executes both
+entry points with actual identity/session selection and schema/projection helpers,
+modeled Prisma and synthetic credentials. Six baseline failures and three
+positive controls become nine passing cases. Eight gateway-core cases are
+freshly rerun because the action module and fixture loader changed, for 17
+passing cases total. A scoped typecheck covers exact non-import route/helper
+bodies and the exact avatar action function against Prisma/Next/Zod declarations.
+
+This does not prove native database concurrency, framework serialization of
+unexpected action exceptions, browser rendering, every external consumer or
+runtime acceptance. Gateway and worker remain disabled; trusted ingress and
+mutation-Origin requirements remain. No provider, database, browser, runtime or
+deployment operation was performed.

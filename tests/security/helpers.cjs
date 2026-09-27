@@ -28,6 +28,7 @@ function load(file, dependencies = {}, globals = {}) {
         return load(`src/${name.slice(2)}.ts`, dependencies, globals);
       }
       if (!(name in dependencies) && name === '@prisma/client') return require('@prisma/client');
+      if (!(name in dependencies) && name === '@/lib/avatar-settings') return load('src/lib/avatar-settings.ts', { ...dependencies, zod: require('zod') }, globals);
       if (!(name in dependencies)) throw new Error(`Unexpected dependency: ${name}`);
       return dependencies[name];
     },
