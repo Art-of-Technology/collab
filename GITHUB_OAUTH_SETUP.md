@@ -58,6 +58,11 @@ NEXTAUTH_URL=https://your-collab-domain.com
 ## 🎯 **How It Works**
 
 ### **OAuth Flow**
+
+Start while signed in to Collab and complete authorization in the same browser.
+See the [GitHub OAuth browser-state contract](docs/security/2026-09-23-hardening.md#github-oauth-browser-state)
+for project access, cookie requirements, expiry and replay limits.
+
 ```
 User clicks "Connect with GitHub"
     ↓
@@ -91,7 +96,7 @@ Ready for version tracking!
 
 ## 🔒 **Security Considerations**
 
-1. **Access Tokens**: User and repository tokens are encrypted before storage by [EncryptionService](src/lib/encryption.ts), which requires `ENCRYPTION_KEY`.
+1. **Encryption**: [EncryptionService](src/lib/encryption.ts) requires `ENCRYPTION_KEY` before authorization can start, to seal browser state as well as encrypt user and repository tokens before storage.
 
 2. **Webhook Secrets**: Generated randomly and used to verify webhook authenticity.
 
@@ -104,6 +109,12 @@ Ready for version tracking!
    - `admin:repo_hook`: Manage webhooks
 
 ## 🛠️ **Troubleshooting**
+
+### **"Invalid or expired authorization state" Error**
+
+- Restart with **"Connect with GitHub"** in the original Collab browser session;
+  do not reuse an old authorization URL or callback. Allow cookies for Collab.
+- For cookie and expiry details, see the [browser-state contract](docs/security/2026-09-23-hardening.md#github-oauth-browser-state).
 
 ### **"GitHub account not connected" Error**
 - User needs to complete OAuth flow first

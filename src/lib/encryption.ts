@@ -73,8 +73,8 @@ export class EncryptionService {
       const combined = Buffer.concat([salt, iv, tag, encrypted]);
 
       return combined.toString('base64');
-    } catch (error) {
-      console.error('Encryption error:', error);
+    } catch {
+      console.error('Encryption error');
       throw new Error('Failed to encrypt data');
     }
   }
@@ -114,8 +114,8 @@ export class EncryptionService {
       } catch {
         return decrypted;
       }
-    } catch (error) {
-      console.error('Decryption error:', error);
+    } catch {
+      console.error('Decryption error');
       throw new Error('Failed to decrypt data');
     }
   }
