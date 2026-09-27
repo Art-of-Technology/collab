@@ -473,8 +473,9 @@ separate.
 For current adapter coverage, see [shared session consumers](#shared-session-consumers),
 [direct action session consumers](#direct-action-session-consumers),
 [workspace and project page session consumers](#workspace-and-project-page-session-consumers),
-[app and developer page session consumers](#app-and-developer-page-session-consumers) and
-[app ecosystem API session consumers](#app-ecosystem-api-session-consumers).
+[app and developer page session consumers](#app-and-developer-page-session-consumers),
+[app ecosystem API session consumers](#app-ecosystem-api-session-consumers) and
+[Notes collection session adapter](#notes-collection-session-adapter).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -909,17 +910,20 @@ logging remain separate. No provider or runtime operation was performed.
 
 The Notes collection, search, pinned, shared-with-me, tags and link-preview
 modules now use the shared request-session adapter. This covers eight handlers,
-including note and tag creation. Gateway mode requires the existing explicit
-identity mapping and never falls back to a legacy cookie. Invalid mode denies
-access; explicit and default legacy modes retain the same `authOptions` argument.
+including note and tag creation. They inherit the existing
+[adapter contract](#gateway-session-core-inactive-integration), retaining the
+same `authOptions` argument.
 Only the session imports changed; handler policies, responses and side effects
 remain unchanged. Nine actual-handler adapter checks and 21 existing Notes and
-gateway checks pass with mocked database operations.
+gateway checks pass with mocked database operations. The
+[Notes adapter fixture](../../tests/security/gateway-notes-collections.test.cjs)
+executes the selector and handlers but does not independently verify the mapping
+query; that coverage belongs to the linked core checks.
 
 This does not authorize gateway activation. Separate tenant-policy repairs remain
 required: tag listing and creation accept a supplied workspace without checking
-membership, note creation connects supplied tag IDs without checking their
-ownership/workspace, and issue link previews lack active membership and the
+membership, tag listing includes unscoped note counts, note creation connects
+supplied tag IDs without checking their ownership/workspace, and issue link previews lack active membership and the
 shared issue-read scope (and exclude owners without membership rows). Existing
 raw error logging and post-lookup access races also remain outside this import
 change. No runtime, identity provisioning or provider operation was performed.
