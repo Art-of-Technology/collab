@@ -770,15 +770,16 @@ export class NotificationService {
             postId,
             userId,
           },
+          AND: [{ post: postAccessWhere(postId, userId) }],
         },
         update: {}, // No updates needed if already exists
         create: {
-          postId,
-          userId,
+          post: { connect: { id: postId, AND: [postAccessWhere(postId, userId)] } },
+          user: { connect: { id: userId } },
         },
       });
     } catch (error) {
-      logger.error("Failed to add post follower", error, { postId, userId });
+      logger.error("Failed to add post follower");
       throw error;
     }
   }
@@ -792,10 +793,11 @@ export class NotificationService {
         where: {
           postId,
           userId,
+          post: postAccessWhere(postId, userId),
         },
       });
     } catch (error) {
-      logger.error("Failed to remove post follower", error, { postId, userId });
+      logger.error("Failed to remove post follower");
       throw error;
     }
   }
@@ -807,21 +809,17 @@ export class NotificationService {
     userId: string
   ): Promise<boolean> {
     try {
-      const follower = await prisma.postFollower.findUnique({
+      const follower = await prisma.postFollower.findFirst({
         where: {
-          postId_userId: {
-            postId,
-            userId,
-          },
+          postId,
+          userId,
+          post: postAccessWhere(postId, userId),
         },
       });
 
       return !!follower;
-    } catch (error) {
-      logger.error("Failed to check if user is following post", error, {
-        postId,
-        userId,
-      });
+    } catch {
+      logger.error("Failed to check if user is following post");
       return false;
     }
   }

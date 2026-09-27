@@ -869,3 +869,38 @@ control on prior source; the exact route and shared predicates pass a scoped
 Prisma/Next/Node typecheck. The database boundary is mocked, so native isolation,
 a single consistent snapshot and revocation after a query are not established.
 Feature actions and other endpoint policies remain separate.
+
+## Post pin and manual follow access
+
+Post pin and follow routes resolve the current database actor by session ID.
+Absent or deleted actors receive 401; missing, unscoped or inaccessible posts
+receive 404. Workspace ownership or active membership remains required, including
+for system administrators. Pinning additionally preserves the existing author,
+owner, current system administrator or configured `PIN_POST` role authority.
+
+The final pin update repeats workspace access and pin authority. The configured
+role branch requires both the captured role to remain on the active membership
+and its permission to remain configured. A concurrent change to another role may
+require a new request even if that new role also grants pinning. The pin fields
+and audit action are one nested Prisma write; failure cannot commit one alone.
+Initial permission denial remains 403; a failed final write retains the existing
+generic 500 response.
+
+The three manual follower service methods enforce post access at their database
+boundary. Upsert filters the existing row and separately guards the post
+connection used for creation. Reads and deletes filter through current post
+access. Duplicate follows and repeated unfollows remain successful; access lost
+after the route lookup yields a false follow result or a no-op delete. An add
+that fails its final guard returns the existing generic 500. The read service's
+database-error fallback remains false. Successful responses are `no-store`;
+touched route and manual follower logs use fixed messages.
+
+Twenty focused actual-route/service checks pass after nineteen failures and one
+control on prior source. The nearest post regression file passes 164 subtests
+(165 Node test entries including its enclosing test), with only its role fixture
+extended to model the final permission predicate. Exact route and follower method
+bodies pass a scoped Prisma/Next/Node typecheck. These checks model database
+filtering and nested rollback; they do not establish native isolation or access
+revocation after the database statement's snapshot. Automatic following,
+asynchronous notification delivery, and the unchanged permission helper's error
+logging remain separate. No provider or runtime operation was performed.

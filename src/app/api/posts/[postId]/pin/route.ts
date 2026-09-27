@@ -1,7 +1,6 @@
 import { postAccessWhere } from "@/lib/post-access";
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
+import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 
@@ -10,8 +9,8 @@ export async function PUT(
   { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,7 +21,7 @@ export async function PUT(
 
     // Get the post to check workspace
     const post = await prisma.post.findFirst({
-      where: postAccessWhere(postId, session.user.id),
+      where: postAccessWhere(postId, actor.id),
       select: {
         id: true,
         workspaceId: true,
@@ -35,11 +34,11 @@ export async function PUT(
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
-    const hasPermission = await checkUserPermission(session.user.id, post.workspaceId, Permission.PIN_POST);
+    const hasPermission = await checkUserPermission(actor.id, post.workspaceId, Permission.PIN_POST);
     const workspace = await prisma.workspace.findUnique({
       where: { id: post.workspaceId }, select: { ownerId: true }
     });
-    const canPin = hasPermission.hasPermission || post.authorId === session.user.id || workspace?.ownerId === session.user.id;
+    const canPin = hasPermission.hasPermission || post.authorId === actor.id || workspace?.ownerId === actor.id;
 
     if (!canPin) {
       return NextResponse.json(
@@ -50,11 +49,34 @@ export async function PUT(
 
     // Update the post
     const updatedPost = await prisma.post.update({
-      where: { id: postId },
+      where: {
+        id: postId,
+        AND: [
+          postAccessWhere(postId, actor.id),
+          { OR: [
+            { authorId: actor.id },
+            { workspace: { ownerId: actor.id } },
+            { workspace: { members: { some: {
+              userId: actor.id, status: true, user: { role: 'SYSTEM_ADMIN' },
+            } } } },
+            ...(hasPermission.hasPermission && hasPermission.userRole ? [{ workspace: {
+              AND: [
+                { members: { some: { userId: actor.id, status: true, role: hasPermission.userRole } } },
+                { rolePermissions: { some: { role: hasPermission.userRole, permission: Permission.PIN_POST } } },
+              ],
+            } }] : []),
+          ] },
+        ],
+      },
       data: {
         isPinned,
         pinnedAt: isPinned ? new Date() : null,
-        pinnedBy: isPinned ? session.user.id : null,
+        pinnedBy: isPinned ? actor.id : null,
+        actions: { create: {
+          userId: actor.id,
+          actionType: isPinned ? 'PINNED' : 'UNPINNED',
+          metadata: {},
+        } },
       },
       include: {
         author: {
@@ -74,27 +96,17 @@ export async function PUT(
       }
     });
 
-    // Create a post action for the pin/unpin
-    await prisma.postAction.create({
-      data: {
-        postId,
-        userId: session.user.id,
-        actionType: isPinned ? 'PINNED' : 'UNPINNED',
-        metadata: {},
-      }
-    });
-
     return NextResponse.json({
       success: true,
       post: updatedPost,
       message: isPinned ? 'Post pinned successfully' : 'Post unpinned successfully'
-    });
+    }, { headers: { 'Cache-Control': 'no-store' } });
 
-  } catch (error) {
-    console.error('Error pinning/unpinning post:', error);
+  } catch {
+    console.error('Error pinning/unpinning post');
     return NextResponse.json(
       { error: 'Failed to update post pin status' },
       { status: 500 }
     );
   }
-} 
+}

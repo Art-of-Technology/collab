@@ -7,7 +7,13 @@ test('post sibling readers and mutators enforce access before disclosure or writ
     email: 'private@example.test', hashedPassword: 'synthetic', githubAccessToken: 'synthetic' };
   function reset() {
     user = { id: 'alice', email: 'alice@example.test', name: 'Alice' };
-    spaces = structuredClone(workspaces);
+    spaces = structuredClone(workspaces).map(workspace => ({
+      ...workspace,
+      members: workspace.members.map(member => ({ ...member, role: 'MEMBER' })),
+      get rolePermissions() {
+        return grants.map(permission => ({ workspaceId: workspace.id, role: 'MEMBER', permission }));
+      },
+    }));
     posts = [...spaces, null].map(workspace => ({ id: workspace?.id ?? 'unscoped', workspace,
       workspaceId: workspace?.id ?? null, authorId: 'alice', author, type: 'BLOCKER', priority: 'normal', message: 'Protected post' }));
     comments = posts.map(post => ({ id: `c-${post.id}`, postId: post.id, post, authorId: 'alice', author,
