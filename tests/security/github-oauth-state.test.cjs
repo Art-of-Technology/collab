@@ -17,11 +17,11 @@ function fixture(options = {}) {
   const deps = {
     'next/server': { NextResponse: { json: response, redirect: url => ({ ...response(null, { status: 307 }), url: String(url) }) } },
     'next-auth': { getServerSession: async () => options.absent ? null : { user: actor } },
-    '@/lib/request-session': { getServerSession: async () => options.absent ? null : { user: actor } },
+    '@/lib/request-session': { getServerSession: async () => { if (options.sessionError) throw new Error('sensitive session payload state=raw-state token=provider-token'); return options.absent ? null : { user: actor }; } },
     '@/lib/auth': { authConfig: {} }, '@/lib/auth-options': { authOptions: {} },
     '@/lib/encryption': { EncryptionService: encryption },
     '@/lib/post-access': load('src/lib/post-access.ts'),
-    '@/lib/prisma': { prisma: { user: { findUnique: async () => options.deleted ? null : actor, update: async query => effects.push(['write', query]) }, project: {
+    '@/lib/prisma': { prisma: { user: { findUnique: async () => { if (options.lookupError) throw new Error('sensitive database payload state=raw-state token=provider-token'); return options.deleted ? null : actor; }, update: async query => effects.push(['write', query]) }, project: {
       findUnique: async () => project,
       findFirst: async ({ where }) => !options.denied && matches(project, where) ? project : null,
     } } },
@@ -88,3 +88,12 @@ test('encryption failures log only fixed messages and preserve safe failure beha
   const done = await f.callback('code=valid&state=' + f.nonce, cookie); cleared(done); assert.equal(new URL(done.url).searchParams.get('github_error'), 'OAuth authentication failed'); assert.equal(new URL(done.url).searchParams.has('github_connected'), false); assert.deepEqual(f.effects, [['exchange', 'valid'], ['profile']]);
   assert.deepEqual(f.logs, [['Encryption error'], ['Encryption error'], ['Encryption error']]);
 });
+
+for (const failure of ['lookupError', 'sessionError']) {
+  test(`${failure} fails closed through the shared user helper with safe logging`, async () => {
+    const f = fixture({ [failure]: true });
+    const issued = await f.issue(); assert.equal(issued.status, 401); assert.equal(issued.body.error, 'Unauthorized'); assert.deepEqual(issued.cookies.values, []); assert.deepEqual(f.effects, []);
+    const done = await f.callback('code=valid&state=' + f.nonce, f.envelope()); denied(f, done); assert.equal(done.url, 'https://collab.example/login');
+    assert.deepEqual(f.logs, [['Error getting current user'], ['Error getting current user']]);
+  });
+}
