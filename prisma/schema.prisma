@@ -1466,6 +1466,7 @@ model PRCheck {
 
 // Version Management
 model Version {
+  issueAccessInvalidated Boolean @default(false)
   id            String        @id @default(cuid())
   repositoryId  String
   version       String // e.g., "1.2.3"

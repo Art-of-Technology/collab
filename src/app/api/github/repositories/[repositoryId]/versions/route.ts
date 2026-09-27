@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/session";
+import { repositoryAccessWhere } from "@/lib/github/access";
+import { versionAccessWhere } from "@/lib/github/version-access";
 import { prisma } from "@/lib/prisma";
 
 // GET /api/github/repositories/[repositoryId]/versions - Get versions for repository
@@ -7,16 +10,24 @@ export async function GET(
   { params }: { params: Promise<{ repositoryId: string }> }
 ) {
   try {
+    const actor = await getCurrentUser();
+    if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { repositoryId } = await params;
+    const repository = await prisma.repository.findFirst({
+      where: { id: repositoryId, ...repositoryAccessWhere(actor.id) }, select: { id: true },
+    });
+    if (!repository) return NextResponse.json({ error: "Repository not found" }, { status: 404 });
     const { searchParams } = new URL(request.url);
     
     const environment = searchParams.get('environment');
     const status = searchParams.get('status');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const requestedLimit = Number(searchParams.get('limit') ?? '50');
+    const limit = Number.isInteger(requestedLimit) ? Math.min(100, Math.max(1, requestedLimit)) : 50;
 
     // Build filter conditions
     const where: any = {
       repositoryId,
+      ...versionAccessWhere(actor.id),
     };
 
     if (environment && environment !== 'all') {
@@ -68,6 +79,7 @@ export async function GET(
           orderBy: { createdAt: 'desc' },
         },
         parentVersion: {
+          where: versionAccessWhere(actor.id),
           select: {
             id: true,
             version: true,
@@ -75,6 +87,7 @@ export async function GET(
           },
         },
         childVersions: {
+          where: versionAccessWhere(actor.id),
           select: {
             id: true,
             version: true,
@@ -97,9 +110,9 @@ export async function GET(
       isProduction: v.environment === 'production',
     }));
 
-    return NextResponse.json({ versions: formattedVersions });
-  } catch (error) {
-    console.error('[VERSIONS_GET]', error);
+    return NextResponse.json({ versions: formattedVersions }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    console.error('[VERSIONS_GET]');
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
