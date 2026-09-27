@@ -468,11 +468,13 @@ separate.
 
 ### Gateway session core (inactive integration)
 
-The shared gateway identity and request-session modules are prepared for the later
-consumer migration. No production consumer, proxy, auth route, or deployment mode
-is changed by this slice. Existing callers still use NextAuth directly. Gateway
-mode must remain disabled until reachable consumers and the edge/session/logout
-contract have migrated and private-origin enforcement is accepted.
+The shared gateway identity and request-session modules now serve `getAuthSession`
+and `getCurrentUser`. Their callers, including Forge Board and project memory,
+therefore share the adapter; remaining direct NextAuth consumers are not yet
+migrated. Default/explicit legacy mode is preserved. No proxy, auth route, or
+deployment mode changes here. Gateway mode must remain disabled until all reachable
+consumers and the edge/session/logout contract have migrated and private-origin
+enforcement is accepted.
 
 The adapter defaults to `nextauth`; explicit `nextauth` also preserves the original
 arguments and session. It accepts explicit `gateway` and returns `null` for any
@@ -496,3 +498,21 @@ selection only, not live issuer trust, proxy stripping, database isolation,
 consumer coverage, browser behavior, or deployment acceptance.
 The two BOM regressions reproduce subject-key conflation and incorrect issuer
 acceptance before the decoder fix; the original three checks continue to pass.
+
+
+### Shared session consumers
+
+`getAuthSession` and `getCurrentUser` import the shared request-session adapter.
+Their bodies, legacy auth options/callbacks and current-user ID lookup are
+unchanged. In gateway mode both use the mapped subject and deny missing/invalid
+identity without consulting cookies. Mapping database errors still propagate from
+`getAuthSession`; `getCurrentUser` preserves its existing catch-and-null behavior.
+Serialized current-user dates and nullable email verification remain unchanged.
+
+Two actual-helper regressions fail before migration and pass afterward alongside
+the existing core, session/membership, workspace-read and page prerequisites.
+Legacy tenant fixtures load the actual adapter with explicit `nextauth` mode;
+the two integration cases load both helpers, adapter and identity parser in
+gateway/invalid/default/legacy modes. Prisma, NextAuth and headers are modeled.
+This does not prove all direct consumers have migrated or authorize gateway
+activation, trusted ingress, browser/runtime acceptance or broader tenant access.

@@ -99,3 +99,62 @@ test('request sessions use explicit issuer-subject account mapping and never fal
       if (value === undefined) delete process.env[name]; else process.env[name] = value;
   }
 });
+
+for (const entry of ['getAuthSession', 'getCurrentUser']) {
+  test(`${entry} uses the shared adapter without legacy fallback and preserves legacy results`, async () => {
+    const previous = { mode: process.env.COLLAB_AUTH_MODE, issuer: process.env.COLLAB_GATEWAY_ISSUER };
+    const date = new Date('2026-09-24T00:00:00Z');
+    const mapped = { id: 'mapped-user', email: 'alex@weezboo.com', role: 'DEVELOPER',
+      accounts: [{ id: 'mapping' }], createdAt: date, updatedAt: date, emailVerified: null };
+    const legacyUser = { ...mapped, id: 'legacy-user' };
+    let header = valid(), legacyCalls = 0, userReads = 0, mappedLive = true, dbFailure = false;
+    const legacy = { user: legacyUser, expires: 'legacy-expiry' };
+    const nextAuth = { getServerSession: async () => { legacyCalls++; return legacy; } };
+    const prisma = { account: { findUnique: async () => {
+      if (dbFailure) throw new Error('database unavailable');
+      return mappedLive ? { user: mapped } : null;
+    } }, user: { findUnique: async ({ where }) => {
+      userReads++; assert.equal(Object.keys(where).join(','), 'id');
+      return [mapped, legacyUser].find(user => user.id === where.id) ?? null;
+    } } };
+    try {
+      process.env.COLLAB_AUTH_MODE = 'gateway'; process.env.COLLAB_GATEWAY_ISSUER = issuer;
+      const shared = load('src/lib/request-session.ts', { 'server-only': {}, './gateway-identity': identity,
+        'next-auth': nextAuth, 'next/headers': { headers: async () => header }, '@/lib/prisma': { prisma } }, { process });
+      const deps = { '@/lib/request-session': shared, 'next-auth': nextAuth, 'next-auth/next': nextAuth,
+        '@/lib/prisma': { prisma }, './prisma': { prisma }, '@/lib/auth-options': { authOptions: {} },
+        bcrypt: { compare: async () => false },
+        'next-auth/providers/credentials': { default: () => ({}) },
+        'next-auth/providers/github': { default: () => ({}) },
+        './custom-prisma-adapter': { CustomPrismaAdapter: () => ({}) } };
+      const fn = load(entry === 'getAuthSession' ? 'src/lib/auth.ts' : 'src/lib/session.ts', deps,
+        { process, console: { error() {} } })[entry];
+      const current = await fn();
+      assert.equal(entry === 'getAuthSession' ? current.user.id : current.id, mapped.id);
+      if (entry === 'getAuthSession') assert.equal(current.authMode, 'gateway');
+      else { assert.equal(current.createdAt, date.toISOString()); assert.equal(current.emailVerified, null); }
+      assert.equal(legacyCalls, 0);
+      header = new Headers({ cookie: 'legacy=still-present' });
+      const priorReads = userReads;
+      assert.equal(await fn(), null); assert.equal(userReads, priorReads); assert.equal(legacyCalls, 0);
+      header = valid(); mappedLive = false;
+      assert.equal(await fn(), null); assert.equal(legacyCalls, 0);
+      mappedLive = true; dbFailure = true;
+      if (entry === 'getAuthSession') await assert.rejects(fn(), /database unavailable/);
+      else assert.equal(await fn(), null);
+      assert.equal(legacyCalls, 0); dbFailure = false;
+      process.env.COLLAB_AUTH_MODE = 'invalid';
+      assert.equal(await fn(), null); assert.equal(legacyCalls, 0);
+      for (const mode of ['nextauth', undefined]) {
+        if (mode) process.env.COLLAB_AUTH_MODE = mode; else delete process.env.COLLAB_AUTH_MODE;
+        const result = await fn();
+        if (entry === 'getAuthSession') assert.equal(result, legacy);
+        else { assert.equal(result.id, legacyUser.id); assert.equal(result.updatedAt, date.toISOString()); }
+      }
+      assert.equal(legacyCalls, 2);
+    } finally {
+      for (const [name, value] of [['COLLAB_AUTH_MODE', previous.mode], ['COLLAB_GATEWAY_ISSUER', previous.issuer]])
+        if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  });
+}

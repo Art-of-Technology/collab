@@ -16,6 +16,14 @@ function load(file, dependencies = {}, globals = {}) {
     exports,
     ...globals,
     require(name) {
+      if (!(name in dependencies) && name === '@/lib/request-session') {
+        // Existing tenant fixtures exercise the real adapter in explicit legacy mode.
+        const legacyGlobals = { ...globals, process: { env: { COLLAB_AUTH_MODE: 'nextauth' } }, Buffer, TextDecoder, URL };
+        return load('src/lib/request-session.ts', { ...dependencies, 'server-only': {},
+          './gateway-identity': load('src/lib/gateway-identity.ts', { 'node:crypto': require('node:crypto') }, legacyGlobals),
+          'next/headers': { headers() { throw new Error('Unexpected gateway header read in legacy fixture'); } },
+        }, legacyGlobals);
+      }
       if (!(name in dependencies) && ['@/lib/issue-mutation', '@/lib/post-access', '@/lib/delete-post-comment', '@/lib/user-utils', '@/lib/notification-access', '@/lib/secrets/access', '@/lib/issue-finder', '@/lib/shared-issue-key-utils'].includes(name)) {
         return load(`src/${name.slice(2)}.ts`, dependencies, globals);
       }
