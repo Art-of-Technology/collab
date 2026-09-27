@@ -1,24 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authConfig } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/session';
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { prisma } from '@/lib/prisma';
+
+class StatusAccessChanged extends Error {}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const session = await getServerSession(authConfig);
+    const actor = await getCurrentUser();
     
-    if (!session?.user?.email) {
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { projectId } = await params;
     
-    // Get the project to verify access
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
+    // Get the exact project under current owner or active-member access.
+    const projectWhere = { id: projectId, workspace: postWorkspaceAccessWhere(actor.id) };
+    const project = await prisma.project.findFirst({
+      where: projectWhere,
       select: { 
         workspaceId: true,
         name: true
@@ -29,30 +33,18 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Verify user has access to workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
-      where: {
-        user: { email: session.user.email },
-        workspaceId: project.workspaceId,
-        status: true
-      }
-    });
-
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
-
     // Fetch project statuses with template information
     const projectStatuses = await prisma.projectStatus.findMany({
       where: {
         projectId,
+        project: projectWhere,
         isActive: true
       },
       include: {
         template: true,
         _count: {
           select: {
-            issues: true
+            issues: { where: { projectId, workspaceId: project.workspaceId, AND: [issueReadAccessWhere(actor.id)] } }
           }
         }
       },
@@ -80,10 +72,10 @@ export async function GET(
       } : null
     }));
 
-    return NextResponse.json({ statuses: transformedStatuses });
+    return NextResponse.json({ statuses: transformedStatuses }, { headers: { "Cache-Control": "no-store" } });
 
-  } catch (error) {
-    console.error('Error fetching project statuses:', error);
+  } catch {
+    console.error('Error fetching project statuses');
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -96,9 +88,9 @@ export async function POST(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const session = await getServerSession(authConfig);
+    const actor = await getCurrentUser();
     
-    if (!session?.user?.email) {
+    if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -107,9 +99,10 @@ export async function POST(
     
     const { name, displayName, description, color, iconName, order, isDefault, isFinal, templateId } = body;
 
-    // Get the project to verify access
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
+    // Get the exact project under current owner or active-member access.
+    const projectWhere = { id: projectId, workspace: postWorkspaceAccessWhere(actor.id) };
+    const project = await prisma.project.findFirst({
+      where: projectWhere,
       select: { workspaceId: true }
     });
 
@@ -117,60 +110,56 @@ export async function POST(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Verify user has access to workspace
-    const hasAccess = await prisma.workspaceMember.findFirst({
-      where: {
-        user: { email: session.user.email },
-        workspaceId: project.workspaceId,
-        status: true
+    const newStatus = await prisma.$transaction(async (tx) => {
+      if (!await tx.project.findFirst({ where: projectWhere, select: { id: true } })) {
+        throw new StatusAccessChanged();
       }
-    });
+      // If this is being set as default, unset other defaults
+      if (isDefault) {
+        await tx.projectStatus.updateMany({
+          where: {
+            projectId,
+            project: projectWhere,
+            isDefault: true
+          },
+          data: {
+            isDefault: false
+          }
+        });
+      }
 
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
-
-    // If this is being set as default, unset other defaults
-    if (isDefault) {
-      await prisma.projectStatus.updateMany({
-        where: {
-          projectId,
-          isDefault: true
-        },
+      // Create the new project status
+      return await tx.projectStatus.create({
         data: {
-          isDefault: false
-        }
-      });
-    }
-
-    // Create the new project status
-    const newStatus = await prisma.projectStatus.create({
-      data: {
-        name,
-        displayName,
-        description,
-        color: color || '#6366f1',
-        iconName,
-        order: order || 0,
-        isDefault: isDefault || false,
-        isFinal: isFinal || false,
-        projectId,
-        templateId
-      },
-      include: {
-        template: true,
-        _count: {
-          select: {
-            issues: true
+          name,
+          displayName,
+          description,
+          color: color || '#6366f1',
+          iconName,
+          order: order || 0,
+          isDefault: isDefault || false,
+          isFinal: isFinal || false,
+          projectId,
+          templateId
+        },
+        include: {
+          template: true,
+          _count: {
+            select: {
+              issues: { where: { projectId, workspaceId: project.workspaceId, AND: [issueReadAccessWhere(actor.id)] } }
+            }
           }
         }
-      }
+      });
     });
 
-    return NextResponse.json({ status: newStatus }, { status: 201 });
+    return NextResponse.json({ status: newStatus }, { status: 201, headers: { "Cache-Control": "no-store" } });
 
   } catch (error) {
-    console.error('Error creating project status:', error);
+    if (error instanceof StatusAccessChanged) {
+      return NextResponse.json({ error: 'Project access changed' }, { status: 409 });
+    }
+    console.error('Error creating project status');
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
