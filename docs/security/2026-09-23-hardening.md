@@ -637,9 +637,10 @@ Credential-bearing responses use `Cache-Control: no-store`.
 Creation still returns credentials for API compatibility. A successful reveal
 claim is one explicit reveal per stored credential state, not global once-only
 issuance: the existing owner-bound developer-docs API-key reader and creation/
-rotation responses remain separate. Public app-detail visibility, OAuth active
-membership, publisher-based deletion and other app lifecycle routes still need
-their separately scoped access review/fixes before gateway activation.
+rotation responses remain separate. For public app reads, see
+[App read access](../apps/README.md#app-read-access). OAuth active membership,
+publisher-based deletion and other app lifecycle routes still need their
+separately scoped access review/fixes before gateway activation.
 
 The [ownership regression suite](../../tests/security/app-credential-ownership.test.cjs)
 executes actual handlers, the live-user helper, owner predicate, page and client
@@ -650,17 +651,9 @@ database concurrency/isolation or browser/runtime acceptance.
 
 ### App list and detail visibility
 
-Both public app read routes now scope database reads to published apps or apps
-owned by the current database user. An Authorization header, publisher label or
-administrator role does not grant access to another user's unpublished app.
-Deleted users and ownerless unpublished apps fail closed. List filters are
-conjoined with this scope for both rows and totals before pagination.
-
-Published apps retain anonymous access and their existing installation fields;
-this change does not reinterpret the separate `AppVisibility` field. A live owner
-can read their unpublished apps with their session alone. Response projections,
-ordering and pagination remain unchanged; successful responses are `no-store`.
-Five focused actual-handler checks cover these boundaries with modeled database
-dependencies. They do not establish database snapshot isolation, post-lookup
-revocation behavior or integrated gateway/runtime acceptance. OAuth membership
-and the remaining lifecycle access policies retain their separate gates.
+The public read contract is documented in [App read access](../apps/README.md#app-read-access).
+Five focused [actual-handler checks](../../tests/security/app-visibility.test.cjs)
+cover these boundaries with modeled database dependencies. They do not establish
+native authentication, database snapshot isolation, post-lookup revocation,
+browser behavior or integrated gateway/runtime acceptance. OAuth membership and
+the remaining lifecycle access policies retain their separate gates.

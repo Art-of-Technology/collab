@@ -226,8 +226,8 @@ For `mfe_remote` app types, the `mfe` configuration object is required:
 | POST | `/api/apps/[slug]/submit-manifest` | Submit manifest URL for a DRAFT app. Validates manifest, creates version, and moves app to `IN_REVIEW` status. |
 | DELETE | `/api/apps/[slug]/delete` | Permanently delete an app (owner only, blocked if active installations exist). |
 | POST | `/api/apps/import-manifest` | Legacy: Fetch and register a manifest (create or update app & latest version). Sets status to `IN_REVIEW`. |
-| GET | `/api/apps` | Paginated app list filtered by status or publisher. |
-| GET | `/api/apps/[slug]` | Public app detail, versions, scopes, OAuth metadata. |
+| GET | `/api/apps` | Paginated app list; see [App read access](#app-read-access) for visibility and filters. |
+| GET | `/api/apps/[slug]` | App detail, versions, scopes and OAuth metadata under [App read access](#app-read-access). |
 | PATCH | `/api/apps/by-id/[id]/publish` | Toggle `status` between `DRAFT` and `PUBLISHED` (admin only). |
 | **Installation & OAuth** | | |
 | POST | `/api/apps/[slug]/installations` | Create `PENDING` installation for a workspace admin. |
@@ -241,6 +241,28 @@ For `mfe_remote` app types, the `mfe` configuration object is required:
 | POST | `/api/apps/[slug]/webhooks/test` | Send a test event to a webhook (admin only). |
 | PATCH | `/api/apps/[slug]/webhooks/[webhookId]` | Update webhook configuration. |
 | DELETE | `/api/apps/[slug]/webhooks/[webhookId]` | Remove a webhook subscription. |
+
+### App read access
+
+`GET /api/apps` and `GET /api/apps/[slug]` allow anonymous reads of `PUBLISHED`
+apps. An unpublished app is readable only when the session resolves to a current
+database user whose ID matches `App.userId`; the owner's existing session is
+sufficient. An arbitrary Authorization header, generic app bearer token,
+`publisherId` label or administrator role grants no additional access. Deleted
+users and ownerless unpublished apps receive no owner access. Missing or
+inaccessible app details return 404.
+
+The list applies the same access scope to rows and `total` before pagination,
+conjoined with any requested `publisherId` and accepted `status` filter. The
+accepted statuses remain `DRAFT`, `PUBLISHED` and `SUSPENDED`; other status values
+are ignored. Results remain newest first, with a default limit of 50, maximum
+100 and default offset of 0.
+
+These routes do not filter on the separate `AppVisibility` field: published apps
+remain anonymously readable regardless of that value. Detail responses retain
+the public OAuth `clientId` and `redirectUris` required by `ConsentDialog`, but
+exclude client secrets and API keys. Successful list and detail responses send
+`Cache-Control: no-store`.
 
 ## Webhooks
 - Managed per installation in the Developer Console under the *Webhooks* tab (`WebhookManager`).
