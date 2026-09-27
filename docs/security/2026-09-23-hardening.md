@@ -476,8 +476,9 @@ For current adapter coverage, see [shared session consumers](#shared-session-con
 [app and developer page session consumers](#app-and-developer-page-session-consumers),
 [app ecosystem API session consumers](#app-ecosystem-api-session-consumers),
 [Notes collection session adapter](#notes-collection-session-adapter),
-[Notes detail session adapter](#notes-detail-session-adapter) and
-[Notes history session adapter](#notes-history-session-adapter).
+[Notes detail session adapter](#notes-detail-session-adapter),
+[Notes history session adapter](#notes-history-session-adapter) and
+[Notes template session adapter](#notes-template-session-adapter).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -978,11 +979,14 @@ remain separate from session-import convergence.
 ## Notes template session adapter
 
 Template list/create, individual template read/update/delete and template use now
-use the shared request-session adapter. Three imports cover six handlers; the
+use the shared request-session adapter, inheriting the
+[adapter contract](#gateway-session-core-inactive-integration).
+Three imports cover six handlers; the
 same `authOptions`, built-in guards, workspace/member policy, validation, DTOs
 and side effects remain unchanged.
 
-The focused fixture executes the actual handlers, identity parser, selector,
+The [focused fixture](../../tests/security/gateway-notes-templates.test.cjs)
+executes the actual handlers, identity parser, selector,
 workspace access helper, Zod validation and placeholder replacement with mocked
 Prisma and built-in data. It checks mapped creation authorship and template-use
 user context, foreign-workspace denial, built-in read/edit/delete behavior,
