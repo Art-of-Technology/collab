@@ -38,8 +38,10 @@ Set `COLLAB_FORGE_CONFIG_FILE` to an operator-managed JSON file outside Git:
 
 These are illustrative values, not deployment instructions. Verify immutable
 Slack workspace/channel and Forge repository identities before activation.
-Use a separately authorized application reader; do not reuse dashboard or
-issue-writer credentials. Unset configuration shows a connection-not-ready
+Use a separately authorized application reader; do not reuse dashboard
+credentials. The [project memory connection contract](forge-project-memory.md#connection-and-limits)
+owns the integrated reader/issue-token and isolated Notes-writer boundaries.
+Unset configuration shows a connection-not-ready
 state. No database migration or automatic issue creation is performed.
 
 Reads verify repository ID before pagination, reject redirects, use a shared

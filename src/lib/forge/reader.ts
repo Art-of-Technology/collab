@@ -15,8 +15,12 @@ const bindingSchema = z.object({
   slackChannelId: z.string().regex(/^[CG][A-Z0-9]+$/),
   readTokenFile: z.string().startsWith('/').max(1024),
   memory: z.object({
-    branch: z.string().regex(/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}$/).refine(value => !value.includes('..') && !value.endsWith('.')),
-    writeTokenFile: z.string().startsWith('/').max(1024),
+    branch: z.literal('main'),
+    writerOrigin: z.string().url().refine(value => {
+      const url = new URL(value);
+      return url.protocol === 'https:' && !url.username && !url.password && url.pathname === '/' && !url.search && !url.hash;
+    }),
+    serviceTokenFile: z.string().startsWith('/').max(1024),
   }).strict().optional(),
 }).strict();
 const configSchema = z.object({

@@ -1,0 +1,10 @@
+FROM node:22-alpine@sha256:b6f26b36c8ff49624cfdac716b8ea1138d606df02586a77d364bb5536a634f85
+RUN rm -rf /usr/local/lib/node_modules /opt/yarn-* \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+    /usr/local/bin/corepack /usr/local/bin/pnpm /usr/local/bin/pnpx \
+    && addgroup -S -g 10002 writer && adduser -S -u 10002 -G writer writer
+WORKDIR /app
+COPY scripts/memory-writer.mjs scripts/memory-writer.mjs
+COPY src/lib/forge/memory-file.mjs src/lib/forge/memory-file.mjs
+USER 10002:10002
+CMD ["node", "scripts/memory-writer.mjs"]
