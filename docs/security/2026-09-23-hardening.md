@@ -820,3 +820,26 @@ four exact route bodies and shared access helpers pass a scoped Prisma/Next/Node
 typecheck. These are source and modeled behavior checks, not native database,
 provider or runtime acceptance. Existing configuration-UI strategy mismatches and
 post-snapshot access changes remain separate.
+
+## Project statuses API access
+
+`GET` and `POST /api/projects/[projectId]/statuses` resolve a live user by ID and
+require the exact project's workspace owner or active-member access. Owners need
+no membership row; missing/deleted actors receive 401 and inaccessible or missing
+projects receive 404. GET repeats project access in its status query and retains
+active-status ordering and the existing status/template projection. Issue counts
+require the requested project, its workspace and the shared issue-read predicate.
+Successful responses are `no-store`; unexpected error logs use fixed messages.
+
+POST rechecks project access at transaction entry and returns 409 if it changed.
+Clearing prior defaults and creating the new status use the same transaction, so
+creation or template-FK failures roll back default changes. Existing 201 response,
+optional-field defaults, ordering and global StatusTemplate catalog behavior are
+preserved, including nullable and inactive template references. No new template
+ownership rule or database uniqueness constraint is introduced.
+
+Twelve actual-route modeled checks pass after eleven failures and one control on
+prior source. The exact route body and shared predicates pass a scoped
+Prisma/Next/Node typecheck. These checks mock database operations; they do not prove
+native isolation, access changes after the transaction's check, or concurrent
+single-default uniqueness. Project summary payload scope remains separate.
