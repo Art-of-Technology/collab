@@ -91,7 +91,7 @@ Ready for version tracking!
 
 ## 🔒 **Security Considerations**
 
-1. **Access Tokens**: Currently stored in plain text. In production, encrypt them using a service like AWS KMS or similar.
+1. **Access Tokens**: User and repository tokens are encrypted before storage by [EncryptionService](src/lib/encryption.ts), which requires `ENCRYPTION_KEY`.
 
 2. **Webhook Secrets**: Generated randomly and used to verify webhook authenticity.
 
@@ -119,9 +119,10 @@ Ready for version tracking!
 - Delete existing webhook and try again
 
 ### **"Repository not found" Error**
-- Repository might be private and user doesn't have access
-- Check repository name and owner are correct
-- Verify OAuth token has correct permissions
+- For sync, release sync, branch access and debug failures, check the
+  [Collab repository access contract](docs/security/2026-09-23-hardening.md#github-repository-sync-and-debug-access)
+  before changing GitHub permissions or reconnecting a token.
+- For GitHub provider errors, check the repository name, owner and OAuth permissions.
 
 ## 🎨 **UI Features**
 

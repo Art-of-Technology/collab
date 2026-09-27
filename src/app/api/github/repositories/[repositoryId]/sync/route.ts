@@ -15,7 +15,6 @@ export async function POST(
     if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { repositoryId } = await params;
 
-    // Get repository with project info
     const repository = await prisma.repository.findFirst({
       where: { id: repositoryId, ...repositoryAccessWhere(actor.id) },
     });

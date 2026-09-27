@@ -682,7 +682,8 @@ Both repository response locations select safe metadata explicitly, omitting
 access tokens and webhook secrets. Successful debug responses are `no-store`,
 and errors no longer include raw exception details.
 
-Seventeen modeled actual-handler checks cover denial without effects, legitimate
+The [seventeen modeled actual-handler checks](../../tests/security/github-sync-access.test.cjs)
+cover denial without effects, legitimate
 owner/active-member behavior, foreign/inactive rows in the debug list, projection
 and token fallback. The final fixture reproduces twelve failures and five
 positive controls on prior source. A scoped exact-body Prisma typecheck passes.
