@@ -974,3 +974,24 @@ unbounded history pagination, precheck/final-write races, split restoration
 metadata/content writes and raw error logging are unchanged. Workspace admins
 can also fail the restore route's additional author/EDIT-share filter. These
 remain separate from session-import convergence.
+
+## Notes template session adapter
+
+Template list/create, individual template read/update/delete and template use now
+use the shared request-session adapter. Three imports cover six handlers; the
+same `authOptions`, built-in guards, workspace/member policy, validation, DTOs
+and side effects remain unchanged.
+
+The focused fixture executes the actual handlers, identity parser, selector,
+workspace access helper, Zod validation and placeholder replacement with mocked
+Prisma and built-in data. It checks mapped creation authorship and template-use
+user context, foreign-workspace denial, built-in read/edit/delete behavior,
+identity failures before downstream operations and explicit/default legacy.
+Existing template-use policy evidence and unchanged core mapping-query checks
+remain separate. This does not prove all permission branches or native/runtime
+concurrency.
+
+Gateway and worker remain disabled. Null-workspace custom-template detail access,
+member-level mutation policy, precheck/final-write races, usage-count timing and
+workspace-wide count-based numbering remain existing limitations outside this
+import change. No provider, credential or runtime operation was performed.
