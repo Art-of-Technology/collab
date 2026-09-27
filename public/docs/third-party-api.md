@@ -66,7 +66,9 @@ The following scopes are available for third-party applications:
 
 ## Error Responses
 
-All endpoints return consistent error responses:
+The usual error response format is shown below. For Forge-connected issue write
+restrictions and their error response, see the
+[legacy write contract](../../docs/forge-legacy-write-guard.md).
 
 ```json
 {
