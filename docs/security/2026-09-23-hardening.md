@@ -244,9 +244,10 @@ require current workspace ownership or active membership; authorship alone does
 not retain access after membership is revoked. Workspace filters only narrow
 access. Posts without a workspace are excluded. Profile post lists and post,
 comment and reaction totals are scoped to the viewer's access, not the author's.
-The unified timeline and AI dashboard check workspace access before content
-queries; timeline creation checks the exact destination before writes or
-notifications. Existing operation-specific author and permission checks remain.
+The unified timeline checks workspace access before content queries; timeline
+creation checks the exact destination before writes or notifications. For the
+dashboard, see [AI dashboard payload access](#ai-dashboard-payload-access).
+Existing operation-specific author and permission checks remain.
 
 Post/comment notification delivery rechecks each recipient's current access.
 Stored notifications referencing inaccessible posts or comments are excluded
