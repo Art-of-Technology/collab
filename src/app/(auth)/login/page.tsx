@@ -1,3 +1,4 @@
+import { authMode } from "@/lib/gateway-identity";
 import LoginForm from "@/components/auth/LoginForm";
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
@@ -31,7 +32,9 @@ export default async function LoginPage() {
         
         <div className="bg-card border border-border/40 shadow-lg rounded-lg p-8">
           <h2 className="text-xl font-semibold text-center mb-6">Sign in to your account</h2>
-          <LoginForm />
+          {authMode() === "nextauth" ? <LoginForm /> : (
+            <p role="alert">Sign in is unavailable. Ask your administrator to check your account access.</p>
+          )}
         </div>
       </div>
     </div>
