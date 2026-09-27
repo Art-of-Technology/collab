@@ -6,6 +6,7 @@ import { getServerSession } from '@/lib/request-session';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { userSelectFields } from '@/lib/user-utils';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { avatarUpdateSchema, avatarUserSelect } from '@/lib/avatar-settings';
 
 /**
  * Get the current user profile
@@ -187,14 +188,14 @@ export async function updateUserProfile(
  * Update user's avatar
  */
 export async function updateUserAvatar(data: {
-  avatarSkinTone?: number;
-  avatarEyes?: number;
-  avatarBrows?: number;
-  avatarMouth?: number;
-  avatarNose?: number;
-  avatarHair?: number;
-  avatarEyewear?: number;
-  avatarAccessory?: number;
+  avatarSkinTone?: number | null;
+  avatarEyes?: number | null;
+  avatarBrows?: number | null;
+  avatarMouth?: number | null;
+  avatarNose?: number | null;
+  avatarHair?: number | null;
+  avatarEyewear?: number | null;
+  avatarAccessory?: number | null;
   useCustomAvatar?: boolean;
 }) {
   const session = await getServerSession(authOptions);
@@ -203,23 +204,15 @@ export async function updateUserAvatar(data: {
     throw new Error('Unauthorized');
   }
   
-  const { 
-    avatarSkinTone, 
-    avatarEyes, 
-    avatarBrows, 
-    avatarMouth, 
-    avatarNose, 
-    avatarHair, 
-    avatarEyewear, 
-    avatarAccessory, 
-    useCustomAvatar 
-  } = data;
+  const parsed = avatarUpdateSchema.safeParse(data);
+  if (!parsed.success) throw new Error('Invalid avatar settings');
   
   // Get the current user
   const currentUser = await prisma.user.findUnique({
     where: {
       id: session.user.id
-    }
+    },
+    select: { id: true }
   });
   
   if (!currentUser) {
@@ -231,17 +224,8 @@ export async function updateUserAvatar(data: {
     where: {
       id: currentUser.id
     },
-    data: {
-      avatarSkinTone: avatarSkinTone !== undefined ? avatarSkinTone : currentUser.avatarSkinTone,
-      avatarEyes: avatarEyes !== undefined ? avatarEyes : currentUser.avatarEyes,
-      avatarBrows: avatarBrows !== undefined ? avatarBrows : currentUser.avatarBrows,
-      avatarMouth: avatarMouth !== undefined ? avatarMouth : currentUser.avatarMouth,
-      avatarNose: avatarNose !== undefined ? avatarNose : currentUser.avatarNose,
-      avatarHair: avatarHair !== undefined ? avatarHair : currentUser.avatarHair,
-      avatarEyewear: avatarEyewear !== undefined ? avatarEyewear : currentUser.avatarEyewear,
-      avatarAccessory: avatarAccessory !== undefined ? avatarAccessory : currentUser.avatarAccessory,
-      useCustomAvatar: useCustomAvatar !== undefined ? useCustomAvatar : currentUser.useCustomAvatar
-    }
+    data: parsed.data,
+    select: avatarUserSelect
   });
   
   return updatedUser;
@@ -385,4 +369,4 @@ export async function getUserProfile(userId: string, workspaceId?: string) {
     currentUser,
     existingConversation
   };
-} 
+}
