@@ -11,9 +11,12 @@ write paths.
 Shared preflight guards run after the entrypoint's authorization and before
 mutations. Moves check both projects; relations and parent links check both
 issues; bulk relations check the entire batch before starting writes. Status
-reassignment checks its project. Workspace deletion rejects a workspace with a
-configured binding so cascading deletion cannot remove retained records.
-Onboarding checks its newly created project within the transaction. Invalid
+reassignment checks its project. Deletion-only preflight checks configured issues,
+both endpoints of cascading issue relations, and children whose parent would be
+cleared. Workspace deletion also rejects configured bindings and checks issues
+reached through either their workspace or their project's workspace foreign key.
+Ordinary edits do not scan deletion cascades. Onboarding creates a new project
+and needs no existing-project guard; read handlers need no write-error branch. Invalid
 connection configuration fails closed. Guards read binding metadata, never Forge
 tokens or remote data.
 
@@ -23,6 +26,6 @@ reconciled rollout. This change does not activate a connection or migrate data.
 
 Run `node --test tests/security/forge-legacy-write-guard.test.cjs`. The checks
 execute comment routes/actions, worklog creation, mixed bulk relations, both
-move directions, and workspace deletion routes/actions with controlled database
+move directions, issue deletion, and both workspace deletion callers with controlled database
 dependencies. They assert no writes on denial and preserved unrelated writes;
 they are not a production database or gateway acceptance test.

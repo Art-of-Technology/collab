@@ -23,9 +23,37 @@ function fixture() {
     { id: 'bound', projectId: 'forge', workspaceId: 'workspace', workspace: { ownerId: 'actor', members: [] } },
     { id: 'legacy', projectId: 'ordinary', workspaceId: 'workspace', workspace: { ownerId: 'actor', members: [] } },
   ];
+  const projects = [{ id: 'forge', workspaceId: 'workspace' }, { id: 'ordinary', workspaceId: 'workspace' }];
+  const relations = [];
+  function matchesIssue(issue, where) {
+    if (!issue) return false;
+    return Object.entries(where).every(([key, value]) => {
+      if (key === 'OR') return value.some(condition => matchesIssue(issue, condition));
+      if (key === 'parent') return matchesIssue(issues.find(candidate => candidate.id === issue.parentId), value);
+      if (key === 'project') return Object.entries(value).every(([field, expected]) =>
+        projects.find(project => project.id === issue.projectId)?.[field] === expected);
+      if (key === 'sourceRelations' || key === 'targetRelations') {
+        const ownKey = key === 'sourceRelations' ? 'sourceIssueId' : 'targetIssueId';
+        return relations.filter(relation => relation[ownKey] === issue.id).some(relation =>
+          Object.entries(value.some).every(([endpoint, condition]) => {
+            assert.ok(['sourceIssue', 'targetIssue'].includes(endpoint));
+            return matchesIssue(issues.find(candidate => candidate.id === relation[`${endpoint}Id`]), condition);
+          }));
+      }
+      assert.ok(['id', 'projectId', 'workspaceId'].includes(key), `Unsupported issue predicate: ${key}`);
+      return typeof value === 'object' ? value.in.includes(issue[key]) : issue[key] === value;
+    });
+  }
   const mutate = async () => { writes++; return { id: 'comment', authorId: 'actor' }; };
   const prisma = {
-    issue: { findMany: async ({ where }) => issues.filter(issue => where.id.in.includes(issue.id)) },
+    issue: {
+      findMany: async ({ where }) => issues.filter(issue => matchesIssue(issue, where)),
+      findFirst: async ({ where }) => issues.find(issue => matchesIssue(issue, where)) ?? null,
+      findUnique: async ({ where }) => issues.find(issue => issue.id === where.id) ?? null,
+      delete: mutate,
+    },
+    issueFollower: { findMany: async () => [] },
+    projectFollower: { findMany: async () => [] },
     issueComment: { create: mutate, update: mutate, delete: mutate, findFirst: async () => ({ id: 'comment', authorId: 'actor', replies: [] }), findMany: async () => [] },
     issueCommentReaction: { create: mutate, delete: mutate, findFirst: async () => null },
     issueRelation: { upsert: mutate },
@@ -50,7 +78,7 @@ function fixture() {
     '@/lib/post-access': {},
     '@/lib/notification-service': {}, 'next/cache': { revalidatePath() {} },
   };
-  return { guard, dependencies, writes: () => writes, bind: value => { bindings = value; } };
+  return { guard, dependencies, issues, projects, relations, writes: () => writes, bind: value => { bindings = value; } };
 }
 const request = body => new Request('http://localhost/api/issues', { method: 'POST', body: JSON.stringify(body) });
 const params = issueId => ({ params: Promise.resolve({ issueId, commentId: 'comment', workLogId: 'log' }) });
@@ -131,4 +159,60 @@ test('workspace deletion preflight protects bound records without changing unrel
   assert.equal(f.writes(), 0);
   await actions.deleteWorkspace('other');
   assert.equal(f.writes(), 1);
+});
+
+
+test('issue deletion denies connected cascade endpoints in either direction and allows unrelated deletion', async () => {
+  for (const link of ['outgoing', 'incoming', 'child', 'unrelated']) {
+    const f = fixture();
+    if (link === 'child') f.issues[0].parentId = 'legacy';
+    else f.relations.push({
+      sourceIssueId: link === 'incoming' ? 'bound' : 'legacy',
+      targetIssueId: link === 'outgoing' ? 'bound' : link === 'incoming' ? 'legacy' : 'ordinary-peer',
+    });
+    f.issues.push({ id: 'ordinary-peer', projectId: 'ordinary', workspaceId: 'workspace' });
+    const route = load('src/app/api/issues/[issueId]/route.ts', {
+      ...f.dependencies, '@/lib/issue-mutation': {},
+      '@/lib/permissions': {
+        Permission: { DELETE_ANY_TASK: 'any', DELETE_SELF_TASK: 'self' },
+        checkUserPermissions: async () => ({ any: { hasPermission: true }, self: { hasPermission: true } }),
+        canActOnOwnContent: () => true,
+      },
+      '@/lib/board-item-activity-service': {}, '@/lib/redis': {},
+      '@/lib/event-bus': { emitIssueDeleted: async () => {} },
+    });
+    await f.guard.assertLegacyIssueWriteAllowed('legacy');
+    const response = await route.DELETE(request({}), params('legacy'));
+    assert.equal(response.status, link === 'unrelated' ? 200 : 409, link);
+    assert.equal(f.writes(), link === 'unrelated' ? 1 : 0, link);
+  }
+});
+
+test('both workspace deletion callers deny relation cascades through either issue foreign key', async () => {
+  for (const caller of ['route', 'action']) {
+    for (const foreignKey of ['workspace', 'project']) {
+      for (const direction of ['outgoing', 'incoming', 'unrelated']) {
+        const f = fixture();
+        f.issues[1].workspaceId = foreignKey === 'workspace' ? 'other' : 'workspace';
+        f.projects[1].workspaceId = foreignKey === 'project' ? 'other' : 'workspace';
+        f.issues.push({ id: 'ordinary-peer', projectId: 'ordinary', workspaceId: 'workspace' });
+        f.relations.push({
+          sourceIssueId: direction === 'incoming' ? 'bound' : 'legacy',
+          targetIssueId: direction === 'outgoing' ? 'bound' : direction === 'incoming' ? 'legacy' : 'ordinary-peer',
+        });
+        const allowed = direction === 'unrelated';
+        const context = `${caller}/${foreignKey}/${direction}`;
+        if (caller === 'route') {
+          const route = load('src/app/api/workspaces/[workspaceId]/route.ts', f.dependencies);
+          const response = await route.DELETE(request({}), { params: Promise.resolve({ workspaceId: 'other' }) });
+          assert.equal(response.status, allowed ? 200 : 409, context);
+        } else {
+          const actions = load('src/actions/workspace.ts', { ...f.dependencies, '@/lib/auth': {}, '@/lib/utils': {} });
+          if (allowed) assert.deepEqual(await actions.deleteWorkspace('other'), { success: true });
+          else await assert.rejects(actions.deleteWorkspace('other'), f.guard.ForgeProjectWriteError, context);
+        }
+        assert.equal(f.writes(), allowed ? 1 : 0, context);
+      }
+    }
+  }
 });

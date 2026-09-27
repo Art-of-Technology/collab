@@ -1,4 +1,4 @@
-import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
+import { ForgeProjectWriteError, assertLegacyIssueDeleteAllowed } from '@/lib/forge/legacy-write-guard';
 import { Prisma } from '@prisma/client';
 import { checkUserPermissions, canActOnOwnContent, Permission } from '@/lib/permissions';
 import { NextRequest, NextResponse } from "next/server";
@@ -60,7 +60,6 @@ export async function GET(
     return NextResponse.json({ issue });
 
   } catch (error) {
-    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("Error fetching issue:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -358,7 +357,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'No permission to delete this issue' }, { status: 403 });
     }
 
-    await assertLegacyIssueWriteAllowed(existingIssue.id);
+    await assertLegacyIssueDeleteAllowed(existingIssue.id);
 
     // Prepare notifications before deletion
     let deletionRecipients: string[] = [];

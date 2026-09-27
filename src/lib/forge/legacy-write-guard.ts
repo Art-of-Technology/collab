@@ -1,4 +1,5 @@
 import 'server-only';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { readForgeBindings } from './reader';
 
@@ -7,9 +8,36 @@ export class ForgeProjectWriteError extends Error {
 }
 
 export async function assertLegacyWorkspaceDeleteAllowed(workspaceId: string) {
-  if ((await readForgeBindings()).some(binding => binding.workspaceId === workspaceId)) {
+  const bindings = await readForgeBindings();
+  if (bindings.some(binding => binding.workspaceId === workspaceId)) {
     throw new ForgeProjectWriteError();
   }
+  await assertIssueDeletionAllowed(
+    { OR: [{ workspaceId }, { project: { workspaceId } }] },
+    bindings.map(binding => binding.projectId),
+  );
+}
+
+export async function assertLegacyIssueDeleteAllowed(issueId: string) {
+  const bindings = await readForgeBindings();
+  await assertIssueDeletionAllowed({ id: issueId }, bindings.map(binding => binding.projectId));
+}
+
+async function assertIssueDeletionAllowed(deleted: Prisma.IssueWhereInput, projectIds: string[]) {
+  if (!projectIds.length) return;
+  const affected = await prisma.issue.findFirst({
+    where: {
+      projectId: { in: projectIds },
+      OR: [
+        deleted,
+        { parent: deleted },
+        { sourceRelations: { some: { targetIssue: deleted } } },
+        { targetRelations: { some: { sourceIssue: deleted } } },
+      ],
+    },
+    select: { id: true },
+  });
+  if (affected) throw new ForgeProjectWriteError();
 }
 
 // Call after tenant authorization, before any mutation or transaction.

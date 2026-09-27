@@ -1,4 +1,3 @@
-import { assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultStatusTemplates } from "@/lib/seed-status-templates";
 
@@ -96,8 +95,6 @@ export async function createPersonalWorkspaceForUser(userId: string, userName: s
         }
       }
     });
-
-    await assertLegacyProjectWriteAllowed(project.id);
 
     // 3. Create default statuses for the project
     const defaultStatuses = await tx.statusTemplate.findMany({
