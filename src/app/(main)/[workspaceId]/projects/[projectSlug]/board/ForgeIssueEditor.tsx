@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { IssueView, IssueResult, IssueFields } from '@/lib/forge/issue-service';
 import { taskStatuses, taskPriorities } from '@/lib/forge/tasks';
 import { changeIssue, getIssue } from './actions';
+import { ForgeExecution } from './ForgeExecution';
 
 const resultMessage = (result: IssueResult) => result.kind === 'saved' ? 'Saved and verified.' : result.kind === 'conflict'
   ? 'The source changed. Your draft is retained. Reload and review before saving again.'
@@ -118,6 +119,7 @@ export function ForgeIssueEditor({ number, workspaceSlug, projectSlug, onSaved, 
         {(ready.rights.canEdit || ready.rights.canStatus || ready.rights.canAssign) && <Button type="submit" disabled={reviewRequired}>{pending ? 'Saving…' : 'Save changes'}</Button>}
       </fieldset>
     </form>
+    <ForgeExecution number={number} workspaceSlug={workspaceSlug} projectSlug={projectSlug} expected={ready.snapshot.fingerprint} expectedDiscussion={ready.snapshot.discussionFingerprint} closed={ready.snapshot.issue.state !== 'open'} dirty={Object.entries(fields).some(([key, value]) => value !== ready.fields[key as keyof IssueFields]) || pending || blocked || reviewRequired} onDenied={onDenied} onReady={reload} />
     <section className="min-w-0 space-y-3" aria-label="Issue comments">
       <h3 className="font-medium">Comments</h3>
       {ready.snapshot.partialComments && <p role="status">Only the first 1,000 comments were loaded.</p>}

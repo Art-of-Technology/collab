@@ -4,6 +4,10 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     await import('../sentry.server.config');
     await import('./lib/server-init');
+    if (process.env.COLLAB_READY_WORKER === 'enabled') {
+      const { startReadyWorker } = await import('./lib/forge/execution-worker');
+      startReadyWorker();
+    }
   }
 
   if (process.env.NEXT_RUNTIME === 'edge') {

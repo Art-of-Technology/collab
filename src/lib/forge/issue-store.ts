@@ -3,20 +3,22 @@ import { readFile } from 'node:fs/promises';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { boundedJson, type ForgeBinding } from './reader';
-import { issueFingerprint, patchIssueContent, sourceIssue, type IssueChanges, type SourceIssue } from './issue-content';
+import { issueFingerprint, patchIssueContent, readyIssueContent, sourceIssue, type IssueChanges, type SourceIssue } from './issue-content';
 
 const commentSchema = z.object({
   id: z.number().int().positive(), body: z.string(), updated_at: z.string(),
   user: z.object({ id: z.number().int().positive(), login: z.string() }),
 });
 export type ForgeComment = z.infer<typeof commentSchema> & { fingerprint: string; canEdit: boolean };
-export type IssueSnapshot = { issue: SourceIssue; fingerprint: string; comments: ForgeComment[]; partialComments: boolean };
+export type IssueSnapshot = { issue: SourceIssue; fingerprint: string; comments: ForgeComment[]; partialComments: boolean; discussionFingerprint: string };
 export type IssueWriteResult = { kind: 'saved'; number: number } | { kind: 'conflict' | 'uncertain' | 'rejected' | 'invalid' };
 export type IssueCommand =
   | { action: 'edit'; number: number; expected: string; changes: IssueChanges }
+  | { action: 'ready'; number: number; expected: string; ready: { attemptId: string; deploymentKey: string; configuredModel: string } }
   | { action: 'create'; title: string; description: string }
   | { action: 'comment'; number: number; body: string }
   | { action: 'edit-comment'; number: number; commentId: number; expected: string; body: string };
+export const discussionFingerprint = (comments: { id: number; fingerprint: string }[]) => createHash('sha256').update(JSON.stringify(comments.map(({ id, fingerprint }) => [id, fingerprint]))).digest('hex');
 const fingerprintComment = (comment: z.infer<typeof commentSchema>) => createHash('sha256')
   .update(JSON.stringify([comment.id, comment.body, comment.updated_at, comment.user.id])).digest('hex');
 
@@ -47,19 +49,20 @@ export async function readForgeIssue(binding: ForgeBinding, number: number, requ
   for (let page = 1; page <= 20; page++) {
     const rows = z.array(commentSchema).max(50).parse(await boundedJson(await api.call(`/issues/${number}/comments?limit=50&page=${page}`)));
     for (const row of rows) comments.push({ ...row, fingerprint: fingerprintComment(row), canEdit: row.user.id === binding.issues?.principalId });
-    if (rows.length < 50) return { issue, fingerprint: issueFingerprint(issue), comments, partialComments: false };
+    if (rows.length < 50) return { issue, fingerprint: issueFingerprint(issue), comments, partialComments: false, discussionFingerprint: discussionFingerprint(comments) };
   }
-  return { issue, fingerprint: issueFingerprint(issue), comments, partialComments: true };
+  return { issue, fingerprint: issueFingerprint(issue), comments, partialComments: true, discussionFingerprint: discussionFingerprint(comments) };
 }
 
 export async function writeForgeIssue(binding: ForgeBinding, command: IssueCommand, request: typeof fetch = fetch): Promise<IssueWriteResult> {
   const api = await connect(binding, true, request);
   let path: string, method: string, payload: Record<string, unknown>;
   let number = 'number' in command ? command.number : 0;
-  if (command.action === 'edit') {
+  if (command.action === 'edit' || command.action === 'ready') {
     const current = await api.issue(command.number);
     if (current.number !== command.number || issueFingerprint(current) !== command.expected) return { kind: 'conflict' };
-    try { payload = patchIssueContent(current, command.changes); }
+    if (command.action === 'ready' && current.state !== 'open') return { kind: 'rejected' };
+    try { payload = command.action === 'edit' ? patchIssueContent(current, command.changes) : readyIssueContent(current, command.ready); }
     catch { return { kind: 'invalid' }; }
     if (!Object.keys(payload).length) return { kind: 'saved', number };
     path = `/issues/${number}`; method = 'PATCH';
@@ -89,7 +92,7 @@ export async function writeForgeIssue(binding: ForgeBinding, command: IssueComma
   try {
     // Use a fresh read connection/time budget after an ambiguous write response.
     const read = await connect(binding, false, request);
-    if (command.action === 'edit' || command.action === 'create') {
+    if (command.action === 'edit' || command.action === 'ready' || command.action === 'create') {
       if (command.action === 'create') number = sourceIssue.parse(receipt).number;
       const current = await read.issue(number);
       const matches = current.number === number && Object.entries(payload).every(([key, value]) => current[key as keyof SourceIssue] === value);
