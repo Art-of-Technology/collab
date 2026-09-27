@@ -141,6 +141,9 @@ The [Forge board contract](../forge-board.md) owns board reads; the
 [issue actions guide](../forge-issue-actions.md) owns editing and comments. The
 [project memory contract](../forge-project-memory.md) owns canonical storage,
 approval, provenance, credential boundaries and existing Notes compatibility.
+The [Ready execution contract](../forge-ready-execution.md) binds reviewed runs
+and an independent journal outside the SQL restore boundary. Its source checks
+do not qualify native mount durability, provider routing or activation.
 The broader integration below remains future work.
 
 Each Slack workspace/channel binds immutably to a project/repository. Agent work

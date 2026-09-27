@@ -260,6 +260,8 @@ Collab is designed to streamline internal communication and work tracking by off
 - Open **Project board** from a project dashboard; see the
   [Forge board guide](docs/forge-board.md) for views, connection requirements
   and the [issue actions guide](docs/forge-issue-actions.md) for editing and comments.
+  The [Ready execution contract](docs/forge-ready-execution.md) covers reviewed
+  runs and independent restore fencing; the worker remains off pending qualification.
 - Open **Approved project memory** from Project Notes; see the
   [project memory guide](docs/forge-project-memory.md) for drafting, approval
   and connection requirements.

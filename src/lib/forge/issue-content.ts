@@ -60,3 +60,12 @@ export function patchIssueContent(issue: SourceIssue, changes: IssueChanges) {
   }
   return patch;
 }
+
+export function readyIssueContent(issue: SourceIssue, ready: { attemptId: string; deploymentKey: string; configuredModel: string }) {
+  const { before, after, block, metadata } = splitIssueBody(issue.body ?? '');
+  const previous = metadata.execution && typeof metadata.execution === 'object' && !Array.isArray(metadata.execution) ? metadata.execution : {};
+  const next = '```channel-task\n' + JSON.stringify({ ...metadata, execution: { ...previous, status: 'ready', ...ready } }, null, 2) + '\n```';
+  const body = block ? before + next + after : before + (before ? '\n\n' : '') + next;
+  if (Buffer.byteLength(body, 'utf8') > 1024 * 1024) throw new Error('Issue body is too large');
+  return { body };
+}
