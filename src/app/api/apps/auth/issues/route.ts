@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 /**
  * Third-Party App API: Issues Endpoints
  * GET /api/apps/auth/issues - List issues with filtering by projectId, assigneeId, status, type, priority, search
@@ -243,6 +244,9 @@ export const POST = withAppAuth(
 
       // Create the issue with proper issue key generation using transaction
       // to avoid race conditions with concurrent requests
+      await assertLegacyProjectWriteAllowed(project.id);
+      if (issueData.parentId) await assertLegacyIssueWriteAllowed(issueData.parentId);
+
       const newIssue = await prisma.$transaction(async (tx) => {
         // Get project with current nextIssueNumbers counter
         const projectWithCounter = await tx.project.findUnique({
@@ -447,6 +451,7 @@ export const POST = withAppAuth(
       return NextResponse.json(newIssue, { status: 201 });
 
     } catch (error) {
+      if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
         return NextResponse.json(
           { 

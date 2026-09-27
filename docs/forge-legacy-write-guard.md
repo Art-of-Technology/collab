@@ -2,9 +2,8 @@
 
 A project in `COLLAB_FORGE_CONFIG_FILE` uses Forge issue authority. Legacy issue
 creation, editing, moves, deletion, comments, reactions, relations, assignment,
-and work logs through browser routes, server actions and AI actions reject writes
-affecting that project. Third-party app API guards are a separate required slice
-before activation; this change alone does not protect those endpoints. Existing database records
+and work logs through browser routes, server actions, AI actions and third-party app API handlers
+reject writes affecting that project. Existing database records
 and read endpoints remain available. Other legacy projects retain their normal
 write paths.
 
@@ -29,3 +28,9 @@ execute comment routes/actions, worklog creation, mixed bulk relations, both
 move directions, issue deletion, and both workspace deletion callers with controlled database
 dependencies. They assert no writes on denial and preserved unrelated writes;
 they are not a production database or gateway acceptance test.
+
+The app API composition check is `node --test tests/security/forge-app-write-guard.test.cjs`.
+It exercises guarded create, edit, assignment, comment, work-log and relation
+mutations, including parent-deletion effects and foreign-workspace denials.
+It uses controlled database dependencies and does not qualify OAuth middleware
+or production database concurrency.

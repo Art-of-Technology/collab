@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
 /**
  * Third-Party App API: Issue Work Logs Endpoints
  * GET /api/apps/auth/issues/:issueIdOrKey/work-logs - List work logs
@@ -139,6 +140,8 @@ export const POST = withAppAuth(
       }
 
       // Create work log and update issue time spent in a transaction
+      await assertLegacyIssueWriteAllowed(issue.id);
+
       const result = await prisma.$transaction(async (tx) => {
         // Create the work log
         const workLog = await tx.workLog.create({
@@ -222,6 +225,7 @@ export const POST = withAppAuth(
         },
       }, { status: 201 });
     } catch (error) {
+      if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
         return NextResponse.json(
           {

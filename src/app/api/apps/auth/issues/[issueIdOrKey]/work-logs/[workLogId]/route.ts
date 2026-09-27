@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
 /**
  * Third-Party App API: Individual Work Log Endpoints
  * GET /api/apps/auth/issues/:issueIdOrKey/work-logs/:workLogId - Get work log
@@ -147,6 +148,8 @@ export const PATCH = withAppAuth(
         : 0;
 
       // Update work log and issue time spent in a transaction
+      await assertLegacyIssueWriteAllowed(issue.id);
+
       const result = await prisma.$transaction(async (tx) => {
         const updatedWorkLog = await tx.workLog.update({
           where: { id: workLogId },
@@ -225,6 +228,7 @@ export const PATCH = withAppAuth(
         },
       });
     } catch (error) {
+      if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
         return NextResponse.json(
           {
@@ -276,6 +280,8 @@ export const DELETE = withAppAuth(
       }
 
       // Delete work log and update issue time spent in a transaction
+      await assertLegacyIssueWriteAllowed(issue.id);
+
       await prisma.$transaction(async (tx) => {
         await tx.workLog.delete({
           where: { id: workLogId },
@@ -325,6 +331,7 @@ export const DELETE = withAppAuth(
         deletedWorkLogId: workLogId,
       });
     } catch (error) {
+      if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
       console.error('Error deleting work log:', error);
       return NextResponse.json(
         { error: 'server_error', error_description: 'Internal server error' },

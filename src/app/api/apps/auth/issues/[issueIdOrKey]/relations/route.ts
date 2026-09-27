@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
 /**
  * Third-Party App API: Issue Relations Endpoints
  * GET /api/apps/auth/issues/:issueIdOrKey/relations - Get issue relations
@@ -217,6 +218,8 @@ export const POST = withAppAuth(
         );
       }
 
+      await assertLegacyIssueWriteAllowed(sourceIssue.id, targetIssue.id);
+
       // Prevent self-relation
       if (sourceIssue.id === targetIssue.id) {
         return NextResponse.json(
@@ -405,6 +408,7 @@ export const POST = withAppAuth(
 
       return NextResponse.json(relation, { status: 201 });
     } catch (error) {
+      if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
         return NextResponse.json(
           {
