@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 import { EncryptionService } from "@/lib/encryption";
 
-// POST /api/github/repositories/connect - Connect a GitHub repository to a project
+// POST /api/github/repositories - Connect a GitHub repository to a project
 export async function POST(request: NextRequest) {
   try {
     const actor = await getCurrentUser();

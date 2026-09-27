@@ -752,20 +752,22 @@ replaces the browser's pending cookie. Clearing it prevents ordinary subsequent
 browser replay, but does not provide atomic single use against concurrent requests
 or a retained copy of the cookie; provider code redemption remains provider-owned.
 No real provider, browser, database concurrency or runtime acceptance is claimed.
-Post-check access/identity changes, repository connection/disconnect lifecycle,
-metadata privacy and other recorded activation gaps remain separate.
+For repository connection access, metadata privacy and remaining lifecycle limits,
+see [GitHub repository connection metadata](#github-repository-connection-metadata).
 
 ## GitHub repository connection metadata
 
-The OAuth repository list resolves a live actor and joins connection metadata only
-through the shared repository owner/active-member predicate. Provider repositories
+`GET /api/github/oauth/repositories` resolves a live actor and joins connection
+metadata only through the shared repository owner/active-member predicate. Provider repositories
 remain in the list even when their Collab connection is inaccessible; those rows
 have no connected project metadata and report `isConnected: false`. Authorized
 connection names, provider pagination/search/sort and disconnected-account behavior
 remain intact. Successful responses are `no-store`.
 
-Both OAuth and manual-token connection POST routes require a live actor and exact
-project workspace owner or active-member access before credential use or writes.
+Both `POST /api/github/oauth/connect` and manual-token `POST /api/github/repositories`
+require a live actor and exact project workspace owner or active-member access
+before credential use or writes. Owners do not need a membership row. Missing or
+deleted actors receive 401; inaccessible projects receive 404.
 The OAuth route retains the global repository-ID availability check required by
 schema uniqueness, selecting only an identifier and returning a generic duplicate
 message. This still discloses availability, not another project's identity.
@@ -775,8 +777,9 @@ secret response and initial version behavior; neither success response exposes
 stored access tokens. Touched route errors use fixed logs and generic unexpected
 error responses while preserving the existing known provider-error statuses.
 
-Ten modeled actual-route checks pass after five failures and five controls on
-prior source. A scoped exact-body Prisma/Next/Node typecheck passes. These checks
+Ten [modeled actual-route checks](../../tests/security/github-repository-metadata.test.cjs)
+pass after five failures and five controls on prior source. A scoped exact-body
+Prisma/Next/Node typecheck passes. These checks
 mock provider/database operations and establish no live provider or concurrency
 acceptance. Caller repository ID versus provider-returned ID binding, post-entry
 revocation, shared provider-helper logging, nontransactional webhook/connection
