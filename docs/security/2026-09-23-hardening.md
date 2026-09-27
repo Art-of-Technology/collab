@@ -693,3 +693,9 @@ limitations. OAuth state, disconnect lifecycle, project-status mutation scope an
 other recorded access gaps still require their own fixes before activation.
 No real provider calls, database isolation or integrated runtime acceptance is
 established by these modeled checks.
+
+## Project status reorder access
+
+Status reordering resolves a live database actor and exact project workspace owner or active-member access. An inaccessible project returns 404. The transaction rechecks access and scopes each mutation to that project and current workspace predicate. Foreign or missing explicit status IDs return 409 and roll back earlier batch updates.
+
+Name-based multi-project broadcasts retain missing-name no-ops, ID precedence, sequential duplicate IDs, numeric order normalization and inactive-status support. Nine modeled actual-route checks pass after six failures and three positive controls on prior source. A scoped exact-body Prisma/Next typecheck passes. These checks model transaction rollback and entry revocation; they do not establish database isolation or revocation visibility after a database snapshot.
