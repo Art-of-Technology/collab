@@ -53,12 +53,13 @@ test('profile timeline and notification boundaries recheck current viewer access
     '@/lib/prisma': { prisma: db }, 'next/server': { NextResponse: Response },
     'next-auth': { getServerSession: async () => user && { user } }, 'next-auth/next': { getServerSession: async () => user && { user } },
     '@/lib/session': { getCurrentUser: async () => user }, '@/lib/auth': {}, '@/lib/auth-options': {},
-    '@/lib/issue-finder': {}, '@/lib/user-utils': load('src/lib/user-utils.ts'),
+    '@/lib/issue-finder': load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma: db } }), '@/lib/user-utils': load('src/lib/user-utils.ts'),
     '@/utils/teamSyncAnalyzer': { classifyStatus: () => 'todo' }, '@/utils/mentions': { extractMentionUserIds: () => ['bob'] },
     '@/lib/html-sanitizer': { sanitizeHtmlToPlainText: value => value },
     '@/lib/push-notifications': { sendPushNotification: async id => { deliveries.push(id); } },
     '@/lib/permissions': {}, 'date-fns': {}, '@/lib/logger': { logger: { info() {}, error() {} } },
   };
+  deps['@/lib/view-access'] = load('src/lib/view-access.ts', deps);
   const service = load('src/lib/notification-service.ts', deps, { console }).NotificationService;
   deps['@/lib/notification-service'] = { NotificationService: service };
   service.autoFollowPost = async () => { writes.push('follow'); };

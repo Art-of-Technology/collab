@@ -1,10 +1,12 @@
 "use server";
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth";
 import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { prisma } from "@/lib/prisma";
+import { issueAccessWhere, issueReadAccessWhere } from "@/lib/issue-finder";
+import { viewReadAccessWhere } from "@/lib/view-access";
 import { classifyStatus } from "@/utils/teamSyncAnalyzer";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -153,6 +155,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
+    const issueAccess = { workspaceId, ...issueReadAccessWhere(userId) };
+    const blockingRelationAccess = {
+      relationType: "BLOCKED_BY" as const,
+      sourceIssue: issueReadAccessWhere(userId),
+      targetIssue: issueAccess,
+    };
+
     // ─── Date calculations ───
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -193,6 +202,7 @@ export async function GET(req: Request) {
       // ── My Queue: Overdue issues ──
       prisma.issue.findMany({
         where: {
+          AND: [issueAccess],
           workspaceId,
           dueDate: { lt: today },
           projectStatus: { isFinal: false },
@@ -209,6 +219,7 @@ export async function GET(req: Request) {
       // ── My Queue: Due today ──
       prisma.issue.findMany({
         where: {
+          AND: [issueAccess],
           workspaceId,
           dueDate: { gte: today, lt: tomorrow },
           projectStatus: { isFinal: false },
@@ -224,6 +235,7 @@ export async function GET(req: Request) {
       // ── My Queue: Stale issues (in progress but no update in 3+ days) ──
       prisma.issue.findMany({
         where: {
+          AND: [issueAccess],
           workspaceId,
           assigneeId: userId,
           projectStatus: { isFinal: false, name: { contains: "progress", mode: "insensitive" } },
@@ -240,6 +252,7 @@ export async function GET(req: Request) {
       // ── My Queue: High priority not started ──
       prisma.issue.findMany({
         where: {
+          AND: [issueAccess],
           workspaceId,
           assigneeId: userId,
           priority: { in: ["urgent", "high"] },
@@ -257,6 +270,7 @@ export async function GET(req: Request) {
       // ── Work In Progress: User's active issues ──
       prisma.issue.findMany({
         where: {
+          AND: [issueAccess],
           workspaceId,
           assigneeId: userId,
           projectStatus: { isFinal: false },
@@ -271,16 +285,17 @@ export async function GET(req: Request) {
       // ── Blockers: Issues with blocking relations ──
       prisma.issue.findMany({
         where: {
+          AND: [issueAccess],
           workspaceId,
           projectStatus: { isFinal: false },
-          targetRelations: { some: { relationType: "BLOCKED_BY" } },
+          targetRelations: { some: blockingRelationAccess },
         },
         include: {
           assignee: { select: { id: true, name: true, image: true } },
           project: { select: { name: true } },
           projectStatus: { select: { name: true, displayName: true, color: true } },
           targetRelations: {
-            where: { relationType: "BLOCKED_BY" },
+            where: blockingRelationAccess,
             include: { sourceIssue: { select: { createdAt: true } } },
             take: 1,
           },
@@ -292,6 +307,7 @@ export async function GET(req: Request) {
       prisma.post.findMany({
         where: {
           workspaceId,
+          workspace: postWorkspaceAccessWhere(userId),
           type: "BLOCKER",
           resolvedAt: null,
         },
@@ -305,7 +321,7 @@ export async function GET(req: Request) {
       // ── Waiting: Comments mentioning current user that they haven't replied to ──
       prisma.issueComment.findMany({
         where: {
-          issue: { workspaceId },
+          issue: issueAccess,
           content: { contains: `@${session.user.name || ""}`, mode: "insensitive" },
           authorId: { not: userId },
           createdAt: { gte: sevenDaysAgo },
@@ -320,7 +336,7 @@ export async function GET(req: Request) {
 
       // ── Team Pulse: All workspace members with their issues ──
       prisma.workspaceMember.findMany({
-        where: { workspaceId, status: true },
+        where: { workspaceId, status: true, workspace: postWorkspaceAccessWhere(userId) },
         include: {
           user: {
             select: {
@@ -329,6 +345,7 @@ export async function GET(req: Request) {
               image: true,
               assignedIssues: {
                 where: {
+                  AND: [issueAccess],
                   workspaceId,
                   projectStatus: { isFinal: false },
                 },
@@ -350,6 +367,7 @@ export async function GET(req: Request) {
       prisma.view.findMany({
         where: {
           workspaceId,
+          ...viewReadAccessWhere(userId),
           lastAccessedAt: { not: null },
         },
         select: {
@@ -368,9 +386,11 @@ export async function GET(req: Request) {
       prisma.project.findMany({
         where: {
           workspaceId,
+          ...issueAccessWhere(userId),
           isArchived: false,
           issues: {
             some: {
+              AND: [issueAccess],
               OR: [
                 { assigneeId: userId },
                 { reporterId: userId },
@@ -392,15 +412,16 @@ export async function GET(req: Request) {
 
       // ── Projects: With stats ──
       prisma.project.findMany({
-        where: { workspaceId, isArchived: false },
+        where: { workspaceId, isArchived: false, ...issueAccessWhere(userId) },
         include: {
-          _count: { select: { issues: true } },
+          _count: { select: { issues: { where: issueAccess } } },
           issues: {
+            where: issueAccess,
             select: {
               id: true,
               dueDate: true,
               projectStatus: { select: { isFinal: true } },
-              targetRelations: { where: { relationType: "BLOCKED_BY" }, select: { id: true } },
+              targetRelations: { where: blockingRelationAccess, select: { id: true } },
             },
           },
         },
@@ -411,6 +432,7 @@ export async function GET(req: Request) {
       // ── Completed this week (for team pulse) ──
       prisma.issue.findMany({
         where: {
+          AND: [issueAccess],
           workspaceId,
           projectStatus: { isFinal: true },
           updatedAt: { gte: sevenDaysAgo },
@@ -423,6 +445,7 @@ export async function GET(req: Request) {
       // ── Recent Interactions: Issues user interacted with recently ──
       prisma.issue.findMany({
         where: {
+          AND: [issueAccess],
           workspaceId,
           OR: [
             { reporterId: userId }, // Created by user
@@ -442,7 +465,7 @@ export async function GET(req: Request) {
       prisma.issueComment.findMany({
         where: {
           authorId: userId,
-          issue: { workspaceId },
+          issue: issueAccess,
           createdAt: { gte: sevenDaysAgo },
         },
         include: {
