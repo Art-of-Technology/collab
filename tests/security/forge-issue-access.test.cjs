@@ -121,25 +121,37 @@ test('editor retains overlap review after unavailable reloads and comment readba
 test('editor preserves rejected drafts and confirmed saves when a later refresh fails', async () => {
   const jsx = (type, props) => ({ type, props });
   const nodesOf = node => !node || typeof node !== 'object' ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(nodesOf)];
-  for (const outcome of ['rejected', 'saved', 'denied']) {
+  for (const outcome of ['rejected', 'saved', 'saved-unavailable', 'denied']) {
     const slots = []; let cursor = 0, effect, pending, failedRead = false, saved = 0, denied = 0;
     const state = initial => {
       const i = cursor++; if (!(i in slots)) slots[i] = initial;
       return [slots[i], value => { slots[i] = typeof value === 'function' ? value(slots[i]) : value; }];
     };
-    const ready = { kind: 'ready', fields: { title: 'A', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' }, rights: { canEdit: true }, snapshot: { fingerprint: 'a'.repeat(64), issue: { title: 'A', state: 'open', body: '' }, comments: [] } };
+    const ready = { kind: 'ready', bodyWarning: false, fields: { title: 'A', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' }, rights: { canEdit: true }, snapshot: { fingerprint: 'a'.repeat(64), issue: { title: 'A', state: 'open', body: '' }, comments: [] } };
     const { ForgeIssueEditor } = compile(path.resolve(__dirname, '../../src/app/(main)/[workspaceId]/projects/[projectSlug]/board/ForgeIssueEditor.tsx'), {
       react: { useState: state, useRef: initial => state({ current: initial })[0], useEffect: cb => { if (!effect) effect = cb; }, useTransition: () => [false, cb => { pending = cb(); }] },
       'react/jsx-runtime': { jsx, jsxs: jsx }, '@/components/ui/button': { Button: 'button' }, '@/components/ui/input': { Input: 'input' }, '@/components/ui/textarea': { Textarea: 'textarea' },
       '@/lib/forge/tasks': { taskStatuses: ['backlog'], taskPriorities: ['normal'] },
-      './actions': { getIssue: async () => { if (failedRead) throw new Error('refresh offline'); return ready; }, changeIssue: async () => ({ kind: outcome, number: 1 }) },
+      './actions': { getIssue: async () => { if (failedRead) { if (outcome === 'saved-unavailable') { assert.equal(saved, 1); return { kind: 'unavailable' }; } throw new Error('refresh offline'); } return ready; }, changeIssue: async () => ({ kind: outcome === 'saved-unavailable' ? 'saved' : outcome, number: 1 }) },
     });
     const render = () => { cursor = 0; return nodesOf(ForgeIssueEditor({ number: 1, workspaceSlug: 'workspace', projectSlug: 'project', onSaved: () => { saved++; }, onDenied: () => { denied++; } })); };
     render(); effect(); await Promise.resolve();
     render().find(n => n.type === 'input' && n.props.value === 'A').props.onChange({ target: { value: 'B' } });
     failedRead = true;
     render().find(n => n.type === 'form').props.onSubmit({ preventDefault() {} }); await pending;
-    const nodes = render();
+    let nodes = render();
+    if (outcome === 'saved-unavailable') {
+      assert.equal(saved, 1); assert.equal(denied, 0);
+      assert.match(nodes.find(n => n.props.role === 'status').props.children, /Saved and verified/);
+      assert.ok(!nodes.some(n => n.type === 'form'));
+      failedRead = false;
+      nodes.find(n => n.type === 'button' && n.props.children === 'Reload issue').props.onClick(); await pending;
+      nodes = render();
+      assert.ok(nodes.some(n => n.type === 'input' && n.props.value === 'B'));
+      assert.equal(nodes.find(n => n.type === 'fieldset').props.disabled, false);
+      assert.equal(saved, 1); assert.equal(denied, 0);
+      continue;
+    }
     if (outcome === 'denied') { assert.equal(denied, 1); assert.ok(!nodes.some(n => n.type === 'form')); continue; }
     assert.equal(denied, 0); assert.ok(nodes.some(n => n.type === 'input' && n.props.value === 'B'));
     assert.equal(nodes.find(n => n.type === 'fieldset').props.disabled, true);

@@ -65,6 +65,7 @@ export function ForgeIssueEditor({ number, workspaceSlug, projectSlug, onSaved, 
         onSaved();
         const next = await getIssue(workspaceSlug, projectSlug, number);
         setView(next);
+        if (next.kind === 'unavailable') setBlocked(true);
         if (next.kind === 'denied') { setFields(null); setComment(''); onDenied(); return; }
         if (next.kind === 'ready') {
           setBaseline(next.fields);
@@ -84,7 +85,7 @@ export function ForgeIssueEditor({ number, workspaceSlug, projectSlug, onSaved, 
     }
   });
   if (!view) return <p role="status">Loading issue and comments…</p>;
-  if (!ready || !fields) return <div role="alert"><p>{view.kind === 'denied' ? 'You no longer have access to this issue.' : 'Could not load issue details.'}</p><Button onClick={reload} disabled={pending}>Reload issue</Button></div>;
+  if (!ready || !fields) return <div role="alert">{view.kind !== 'denied' && message && <p role="status">{message}</p>}<p>{view.kind === 'denied' ? 'You no longer have access to this issue.' : 'Could not load issue details.'}</p><Button onClick={reload} disabled={pending}>Reload issue</Button></div>;
   const set = (key: keyof IssueFields, value: string) => {
     if (value === ready.fields[key]) dirty.current.delete(key); else dirty.current.add(key);
     setFields({ ...fields, [key]: value });
