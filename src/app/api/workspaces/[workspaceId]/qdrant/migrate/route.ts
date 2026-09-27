@@ -4,13 +4,15 @@
  * Bulk-indexes all issues, issue activities, and context (notes)
  * from PostgreSQL into Qdrant for semantic search.
  *
- * Requires the requesting user to be a workspace owner or admin.
+ * GET/POST access policy: docs/security/2026-09-23-hardening.md,
+ * "Qdrant maintenance auth boundary".
  * Idempotent — safe to run multiple times (upserts).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
+import { authMode } from '@/lib/gateway-identity';
 import { prisma } from '@/lib/prisma';
 import {
   batchSyncIssuesToQdrant,
@@ -32,6 +34,10 @@ export async function POST(
   { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
+    // Legacy maintenance only until gateway data-export policy is defined.
+    if (authMode() !== 'nextauth') {
+      return NextResponse.json({ error: 'Bulk migration is unavailable in this auth mode' }, { status: 403 });
+    }
     // Support internal API key auth for CLI/migration scripts
     const internalKey = request.headers.get('x-internal-key');
     const isInternalAuth =
@@ -303,6 +309,10 @@ export async function GET(
   { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
+    // Legacy maintenance only until gateway data-export policy is defined.
+    if (authMode() !== 'nextauth') {
+      return NextResponse.json({ error: 'Bulk migration is unavailable in this auth mode' }, { status: 403 });
+    }
     // Support internal API key auth for CLI/migration scripts
     const internalKey = request.headers.get('x-internal-key');
     const isInternalAuth =
