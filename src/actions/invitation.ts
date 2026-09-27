@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { getAuthSession } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/session';
 
 /**
  * Get pending workspace invitations for a user
@@ -11,9 +12,14 @@ export async function getPendingInvitations(email: string) {
     throw new Error('Email is required');
   }
 
+  const currentUser = await getCurrentUser();
+  if (!currentUser || currentUser.email !== email) {
+    throw new Error('Unauthorized');
+  }
+
   const pendingInvitations = await prisma.workspaceInvitation.findMany({
     where: {
-      email,
+      email: currentUser.email,
       status: "pending",
       expiresAt: {
         gte: new Date()

@@ -230,6 +230,7 @@ Collab is designed to streamline internal communication and work tracking by off
 - Create or join a workspace to start sharing updates.
   See the [session and workspace access contract](docs/security/2026-09-23-hardening.md#session-and-workspace-access)
   for identity and membership requirements.
+  For pending invitations, see the [recipient access contract](docs/security/2026-09-23-hardening.md#pending-invitation-list-recipient-binding-27-september-2026).
 - Use the timeline to post status updates, tasks, and feature requests.
 - Organize work using boards, milestones, and stories.
 - Open **Project board** from a project dashboard; see the

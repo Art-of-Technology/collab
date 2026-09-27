@@ -42,8 +42,10 @@ forbidden errors; the payload query independently scopes access, so revocation
 between metadata and payload lookup denies without loading relations. Existing
 member/invitation projections remain available to authorized viewers.
 See the [workspace read regressions](../../tests/security/workspace-reads.test.cjs).
-Invitation entry-point authorization, mutation revocation atomicity and actual
-stored workspace-role casing remain follow-ups. These mocked checks do not prove
+For invitation list authorization and remaining invitation work, see
+[pending invitation list recipient binding](#pending-invitation-list-recipient-binding-27-september-2026).
+Mutation revocation atomicity and actual stored workspace-role casing remain
+follow-ups. These mocked checks do not prove
 revocation after the payload query snapshot or final integrated staging.
 
 `hasWorkspaceAccess` permits workspace owners without a membership row; other
@@ -336,3 +338,24 @@ attached to both a post and a Note must satisfy both policies. Revoked tenant
 membership, expiration and restricted sharing rules remain enforced. App handlers use the actual token
 user for authorization and authorship even when the installer differs; a
 regression check exercises that distinction and subsequent revocation.
+
+## Pending invitation list recipient binding (27 September 2026)
+
+Both `getPendingInvitations(email)` server actions require the current database
+user resolved by the session subject and an exact match with that user's current
+email. Caller-supplied and stale session emails cannot select another recipient.
+An outdated email argument fails with `Unauthorized` until the caller refreshes
+it to match the current database email; the email parameter is deliberately kept.
+The signatures, pending/unexpired filters, descending creation order and existing
+inviter projections remain unchanged. Invitees may read their own invitations
+before joining a workspace; no membership requirement is added.
+
+The [actual-action mocked regression](../../tests/security/invitation-lists.test.cjs)
+covers both exports, missing/deleted subjects,
+foreign recipients, stale session email, database email changes and valid unjoined
+invitees. Four denial checks failed before the fix (two positive checks passed);
+the focused invitation/workspace-read/session checks then passed 16/16 with no
+skips. No email, database, provider or runtime operation was performed. Token
+preview, acceptance mutations and concurrent changes after the user lookup remain
+separate work. The redundant generic pipeline test stage is explicitly skipped;
+review, documentation, scoped lint, CI and exact-head Octopus gates remain.
