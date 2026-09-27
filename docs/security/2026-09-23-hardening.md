@@ -1043,5 +1043,6 @@ active/project policy, unscoped nested issue payloads, explicit reporter and
 assignee/parent/label inputs, counter/relation races, precheck/use gaps, raw logs
 and activity/realtime failures after commit remain separate activation concerns.
 The fixture does not prove native transactions, concurrent revocation, provider
-or notification delivery, ranked search branches, every optional create input,
-or runtime acceptance. No runtime, database or provider operation was performed.
+or notification delivery, ranked search branches, nonempty relation policy,
+every optional create input, or runtime acceptance. No runtime, database or
+provider operation was performed.
