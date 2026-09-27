@@ -151,7 +151,7 @@ export async function PATCH(
     const isOwnerOrAdmin = 
       workspace.ownerId === currentUser.id ||
       workspace.members.length > 0 || 
-      currentUser.role === 'admin';
+      currentUser.role === 'SYSTEM_ADMIN';
 
     if (!isOwnerOrAdmin) {
       return NextResponse.json(
@@ -210,7 +210,7 @@ export async function DELETE(
     }
 
     // Allow owner or system admin to delete workspace
-    if (workspace.ownerId !== currentUser.id && currentUser.role !== 'admin') {
+    if (workspace.ownerId !== currentUser.id && currentUser.role !== 'SYSTEM_ADMIN') {
       return NextResponse.json(
         { error: 'Only the workspace owner or system admin can delete it' },
         { status: 403 }

@@ -1,7 +1,7 @@
 const { assert, test, load, matches } = require('./helpers.cjs');
 
 function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }) {
-  const users = ['alice', 'bob', 'carol'].map(id => ({ id, email: `${id}@example.test`, role: id === 'carol' ? 'admin' : 'user', createdAt: new Date(), updatedAt: new Date() }));
+  const users = ['alice', 'bob', 'carol'].map(id => ({ id, email: `${id}@example.test`, role: id === 'carol' ? 'SYSTEM_ADMIN' : 'DEVELOPER', createdAt: new Date(), updatedAt: new Date() }));
   const spaces = [
     { id: 'own', slug: 'own-slug', ownerId: 'alice', members: [{ id: 'carol-member', workspaceId: 'own', userId: 'carol', status: true, role: 'MEMBER' }] },
     ...['active', 'revoked', 'foreign'].map(id => ({ id, slug: `${id}-slug`, ownerId: 'bob', members: id === 'foreign' ? [] : [
@@ -37,7 +37,7 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }) {
   };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, { console });
   return { actions: load('src/actions/workspace.ts', deps),
-    rest: load('src/app/api/workspaces/[workspaceId]/route.ts', deps, { console }), calls, spaces };
+    rest: load('src/app/api/workspaces/[workspaceId]/route.ts', deps, { console }), calls, spaces, users };
 }
 
 const cases = [
@@ -94,7 +94,7 @@ const request = (method, workspaceId) => new Request(`https://example.test/api/w
 const params = workspaceId => ({ params: Promise.resolve({ workspaceId }) });
 
 test('workspace REST requires subject ID before reads/writes in all methods', async () => {
-  for (const user of [null, { email: 'alice@example.test', role: 'admin' }, { id: '', role: 'admin' }, { id: 'deleted', email: 'alice@example.test', role: 'admin' }]) {
+  for (const user of [null, { email: 'alice@example.test', role: 'SYSTEM_ADMIN' }, { id: '', role: 'SYSTEM_ADMIN' }, { id: 'deleted', email: 'alice@example.test', role: 'SYSTEM_ADMIN' }]) {
     const { rest, calls } = fixture(user);
     for (const method of ['GET', 'PATCH', 'DELETE']) {
       const response = await rest[method](request(method, 'own'), params('own'));
@@ -105,7 +105,7 @@ test('workspace REST requires subject ID before reads/writes in all methods', as
   }
 });
 
-test('workspace REST update rejects revoked admins and preserves active-admin/owner/system-admin rules', async () => {
+test('workspace REST update rejects revoked admins and preserves active-admin/owner rules', async () => {
   const { rest, calls } = fixture({ id: 'alice', email: 'bob@example.test' });
   for (const id of ['revoked', 'foreign']) {
     const response = await rest.PATCH(request('PATCH', id), params(id));
@@ -122,9 +122,19 @@ test('workspace REST update rejects revoked admins and preserves active-admin/ow
   assert.equal((await rest.DELETE(request('DELETE', 'active'), params('active'))).status, 403);
   assert.equal(calls.writes.length, before);
   assert.equal((await rest.DELETE(request('DELETE', 'own'), params('own'))).status, 200);
-  const staleAdmin = fixture({ id: 'alice', role: 'admin' });
-  for (const method of ['PATCH', 'DELETE']) assert.equal((await staleAdmin.rest[method](request(method, 'foreign'), params('foreign'))).status, 403);
+});
+
+for (const method of ['PATCH', 'DELETE']) test(`workspace REST ${method} uses current SYSTEM_ADMIN authority and denies ordinary/demoted users without writes`, async () => {
+  const staleAdmin = fixture({ id: 'alice', role: 'SYSTEM_ADMIN' });
+  assert.equal((await staleAdmin.rest[method](request(method, 'foreign'), params('foreign'))).status, 403);
   assert.equal(staleAdmin.calls.writes.length, 0);
-  const admin = fixture({ id: 'carol', role: 'admin' });
-  for (const method of ['PATCH', 'DELETE']) assert.equal((await admin.rest[method](request(method, 'foreign'), params('foreign'))).status, 200);
+  const admin = fixture({ id: 'carol', role: 'DEVELOPER' });
+  assert.equal((await admin.rest[method](request(method, 'foreign'), params('foreign'))).status, 200);
+  assert.equal(admin.calls.writes.length, 1);
+  assert.equal(admin.calls.writes[0].operation, method === 'PATCH' ? 'update' : 'delete');
+  assert.equal(admin.calls.writes[0].where.id, 'foreign');
+  admin.users.find(user => user.id === 'carol').role = 'DEVELOPER';
+  admin.calls.writes.length = 0;
+  assert.equal((await admin.rest[method](request(method, 'foreign'), params('foreign'))).status, 403);
+  assert.equal(admin.calls.writes.length, 0);
 });
