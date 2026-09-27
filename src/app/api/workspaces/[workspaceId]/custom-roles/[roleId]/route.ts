@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { checkUserPermission, Permission as PermissionEnum } from '@/lib/permissions';
+import { checkUserPermission, WorkspaceRole, Permission as PermissionEnum } from '@/lib/permissions';
 import { Permission } from '@prisma/client';
 
 // GET /api/workspaces/[workspaceId]/custom-roles/[roleId] - Get custom role details
@@ -85,6 +85,14 @@ export async function PUT(
     const body = await request.json();
     const { name, description, color, permissions } = body;
 
+    if ((name !== undefined && (typeof name !== 'string' || !name.trim() ||
+        Object.values(WorkspaceRole).some(role => role === name.trim().toUpperCase()) ||
+        name in Object.prototype)) ||
+        (permissions !== undefined && (!Array.isArray(permissions) ||
+          !permissions.every(value => Object.values(Permission).includes(value))))) {
+      return NextResponse.json({ error: 'Invalid role name or permissions' }, { status: 400 });
+    }
+
     // Check if user has permission to manage workspace permissions
     const hasPermission = await checkUserPermission(
       session.user.id,
@@ -109,6 +117,11 @@ export async function PUT(
 
     if (!existingRole) {
       return NextResponse.json({ error: 'Custom role not found' }, { status: 404 });
+    }
+
+    if (Object.values(WorkspaceRole).some(role => role === existingRole.name.trim().toUpperCase()) ||
+        existingRole.name in Object.prototype) {
+      return NextResponse.json({ error: 'Custom role conflicts with a reserved role name' }, { status: 409 });
     }
 
     // If name is being changed, check for duplicates
@@ -166,6 +179,13 @@ export async function PUT(
             }))
           });
         }
+      }
+
+      if (permissions === undefined && name && name !== existingRole.name) {
+        await tx.rolePermission.updateMany({
+          where: { workspaceId, role: existingRole.name },
+          data: { role: name }
+        });
       }
 
       // If role name changed, update WorkspaceMember records
@@ -232,6 +252,11 @@ export async function DELETE(
 
     if (!customRole) {
       return NextResponse.json({ error: 'Custom role not found' }, { status: 404 });
+    }
+
+    if (Object.values(WorkspaceRole).some(role => role === customRole.name.trim().toUpperCase()) ||
+        customRole.name in Object.prototype) {
+      return NextResponse.json({ error: 'Custom role conflicts with a reserved role name' }, { status: 409 });
     }
 
     // Check if any members have this role

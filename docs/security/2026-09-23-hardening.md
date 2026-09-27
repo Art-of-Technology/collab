@@ -1318,8 +1318,36 @@ Prisma/Next typecheck covers three exact non-import module bodies, preserving th
 dynamic permissions import through a typecheck path mapping.
 
 This is not native isolation, concurrent reset/permission changes or post-lookup
-revocation proof. Existing custom-role naming/namespace semantics, raw logging and
+revocation proof. Custom-role naming follows the
+[custom-role contract](#custom-role-and-member-role-boundaries); raw logging and
 original casts remain separate. Gateway/worker stay off, generic test is SKIPPED,
 and review/docs/scoped lint/CI/exact-head Octopus and integrated acceptance gates
 remain. No operational seed, database, provider, browser, build or runtime action
 was executed.
+
+## Custom-role and member-role boundaries
+
+The custom-role collection/detail and member-role routes use the shared session
+adapter with the existing active-member and current management-permission checks.
+Custom-role names must be nonblank strings and cannot collide with built-in role
+names (including case/outer-whitespace aliases) or Object prototype keys.
+Permissions must be arrays of generated Prisma permission values. A legacy custom
+role with a reserved name returns 409 on update/delete instead of changing shared
+built-in grants; repairing stored collisions remains a separate data task.
+
+Custom-role creation and its grants share a transaction. Renaming without a
+permissions payload moves existing grants and member assignments in that same
+transaction; supplying permissions replaces the selected role's grants. Foreign
+workspace rows remain outside those mutations. Member assignments reject object
+filters and retain the existing active target, permission and self-downgrade rules.
+
+The [focused actual-handler tests](../../tests/security/workspace-custom-role-access.test.cjs)
+model Prisma reads and rollback: 13 failures and four
+controls on the base, then 17 passing cases. Five exact non-import source bodies
+pass a scoped strict Prisma/Next typecheck. This is not native isolation or
+concurrent revocation/rename/delete proof. Case-insensitive duplicate checks remain
+pre-transaction, and member assignment still calls the existing default-permission
+helper through the global Prisma client from inside its transaction. These checks
+do not establish atomicity of that helper, repair historical data, change role
+hierarchy, or authorize gateway activation. Generic pipeline tests remain SKIPPED;
+the remaining delivery and runtime gates remain separate.

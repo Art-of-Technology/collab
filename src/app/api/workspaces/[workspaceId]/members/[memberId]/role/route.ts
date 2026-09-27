@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { Permission, WorkspaceRole, checkUserPermission } from '@/lib/permissions';
@@ -21,7 +21,7 @@ export async function PUT(
     const body = await request.json();
     const { role } = body;
 
-    if (!role) {
+    if (typeof role !== 'string' || !role.trim() || role in Object.prototype) {
       return NextResponse.json(
         { error: 'Role is required' },
         { status: 400 }

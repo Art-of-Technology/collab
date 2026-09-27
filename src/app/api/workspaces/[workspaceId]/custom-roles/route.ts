@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
-import { checkUserPermission, Permission as PermissionEnum } from '@/lib/permissions';
+import { checkUserPermission, WorkspaceRole, Permission as PermissionEnum } from '@/lib/permissions';
 import { Permission } from '@prisma/client';
 
 // GET /api/workspaces/[workspaceId]/custom-roles - List custom roles
@@ -85,7 +85,11 @@ export async function POST(
     const body = await request.json();
     const { name, description, color, permissions } = body;
 
-    if (!name || !Array.isArray(permissions)) {
+    if (typeof name !== 'string' || !name.trim() ||
+        Object.values(WorkspaceRole).some(role => role === name.trim().toUpperCase()) ||
+        name in Object.prototype ||
+        !Array.isArray(permissions) ||
+        !permissions.every(value => Object.values(Permission).includes(value))) {
       return NextResponse.json(
         { error: 'Name and permissions array are required' },
         { status: 400 }
@@ -124,26 +128,28 @@ export async function POST(
       );
     }
 
-    // Create the custom role
-    const customRole = await prisma.customRole.create({
-      data: {
-        name,
-        description,
-        color: color || '#6366F1',
-        workspaceId
-      }
-    });
-
-    // Create role permissions
-    if (permissions.length > 0) {
-      await prisma.rolePermission.createMany({
-        data: permissions.map((permission: string) => ({
-          workspaceId,
-          role: customRole.name,
-          permission: permission as Permission
-        }))
+    const customRole = await prisma.$transaction(async (tx) => {
+      const created = await tx.customRole.create({
+        data: {
+          name,
+          description,
+          color: color || '#6366F1',
+          workspaceId
+        }
       });
-    }
+
+      // Create role permissions
+      if (permissions.length > 0) {
+        await tx.rolePermission.createMany({
+          data: permissions.map((permission: string) => ({
+            workspaceId,
+            role: created.name,
+            permission: permission as Permission
+          }))
+        });
+      }
+      return created;
+    });
 
     // Return the custom role with permissions
     return NextResponse.json({
