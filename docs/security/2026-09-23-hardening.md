@@ -1377,3 +1377,36 @@ pass a scoped strict Prisma/Next typecheck. No native concurrency or post-query 
 is claimed. Generic tests remain SKIPPED, other delivery gates remain required,
 and gateway/worker activation and runtime/provider/browser/DB operations are not
 part of this slice.
+
+## Issue-relation endpoint visibility
+
+The three issue-relation routes use the shared session adapter and require a
+stable user ID. Workspace resolution requires ownership or active membership;
+DELETE now follows that same owner-or-active-member policy. The existing issue
+finder still authorizes the source issue. Both source and target endpoints are
+independently filtered by current issue/project/status access for relation reads,
+and nested child counts use the same predicate. Child progress is computed from
+the filtered relation children.
+
+Single creation writes the resolved target database ID even when given an issue
+key, including reversed CHILD-to-PARENT relations. Bulk target-ID lookup applies
+the same readable-issue predicate as key lookup, with active target membership.
+Both mutation inputs reject object-valued IDs/types, and bulk types must match the
+generated relation enum. DELETE requires both endpoints to remain readable in its
+lookup and deletion predicates. Readable cross-workspace links, existing relation
+normalization and response grouping remain supported.
+
+Thirteen actual-handler checks pass after eleven failures and two controls on the
+corrected base fixture; four exact non-import bodies pass scoped strict Prisma/Next
+checking. The initial fixture omitted its returned environment handle; those four
+fixture failures are historical, not vulnerability reproductions. The corrected
+baseline used nine retained source/helper files captured before production edits.
+The bulk handler captures the guarded user ID before callbacks, addressing the
+strict typecheck's optional-session errors without weakening types.
+
+Prisma is modeled, including Promise.all for the bulk transaction; this does not
+prove rollback, native atomicity, concurrent endpoint edits or post-snapshot
+revocation safety. Existing duplicate/alias cardinality behavior, generic error
+mapping, relation-cycle policy and transaction isolation are separate. Generic
+tests remain SKIPPED; other delivery gates and gateway/worker activation remain
+separate. No native DB/provider/browser/runtime operations were performed.

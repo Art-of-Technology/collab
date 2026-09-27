@@ -1,8 +1,9 @@
+import { IssueRelationType } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/request-session";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth-options";
-import { findIssueByIdOrKey } from "@/lib/issue-finder";
+import { findIssueByIdOrKey, issueReadAccessWhere } from "@/lib/issue-finder";
 
 // POST /api/workspaces/[workspaceId]/issues/[issueKey]/relations/bulk
 export async function POST(
@@ -11,14 +12,19 @@ export async function POST(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const { workspaceId, issueKey } = await params;
     const { relations } = await request.json();
 
-    if (!Array.isArray(relations) || relations.length === 0) {
+    if (!Array.isArray(relations) || relations.length === 0 ||
+        !relations.every(relation => relation &&
+          typeof relation.targetIssueId === 'string' && relation.targetIssueId.trim() &&
+          typeof relation.relationType === 'string' &&
+          Object.values(IssueRelationType).some(type => type === relation.relationType.toUpperCase()))) {
       return NextResponse.json(
         { error: "Relations array is required" },
         { status: 400 }
@@ -34,8 +40,8 @@ export async function POST(
           },
           {
             OR: [
-              { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } }
+              { ownerId: userId },
+              { members: { some: { userId: userId, status: true } } }
             ]
           }
         ]
@@ -52,7 +58,7 @@ export async function POST(
     // Find the source issue
     const sourceIssue = await findIssueByIdOrKey(issueKey, {
       workspaceId: workspace.id,
-      userId: session.user.id
+      userId: userId
     });
 
     if (!sourceIssue) {
@@ -69,7 +75,8 @@ export async function POST(
     // Try to find issues by ID first (most common case)
     let targetIssues = await prisma.issue.findMany({
       where: {
-        id: { in: targetIssueIds }
+        id: { in: targetIssueIds },
+        ...issueReadAccessWhere(userId)
       },
       include: {
         workspace: {
@@ -78,7 +85,7 @@ export async function POST(
             name: true,
             ownerId: true,
             members: {
-              where: { userId: session.user.id },
+              where: { userId: userId, status: true },
               select: { id: true }
             }
           }
@@ -95,7 +102,7 @@ export async function POST(
       const issuesByKey = await Promise.all(
         notFoundIds.map(idOrKey => 
           findIssueByIdOrKey(idOrKey, {
-            userId: session.user.id,
+            userId: userId,
             include: {
               workspace: {
                 select: {
@@ -103,7 +110,7 @@ export async function POST(
                   name: true,
                   ownerId: true,
                   members: {
-                    where: { userId: session.user.id },
+                    where: { userId: userId, status: true },
                     select: { id: true }
                   }
                 }
@@ -127,7 +134,7 @@ export async function POST(
 
     // Verify user has access to all target issue workspaces
     const inaccessibleIssues = targetIssues.filter(issue => 
-      issue.workspace.ownerId !== session.user.id && 
+      issue.workspace.ownerId !== userId &&
       issue.workspace.members.length === 0
     );
 
@@ -159,14 +166,14 @@ export async function POST(
           sourceIssueId: resolvedTargetId,
           targetIssueId: sourceIssue.id,
           relationType: 'PARENT',
-          createdBy: session.user.id
+          createdBy: userId
         };
       }
       return {
         sourceIssueId: sourceIssue.id,
         targetIssueId: resolvedTargetId,
         relationType: providedType,
-        createdBy: session.user.id
+        createdBy: userId
       };
     });
 

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import type { IssueRelationType as PrismaIssueRelationType } from "@prisma/client";
-import { findIssueByIdOrKey } from "@/lib/issue-finder";
+import { findIssueByIdOrKey, issueReadAccessWhere } from "@/lib/issue-finder";
 
 // GET /api/workspaces/[workspaceId]/issues/[issueKey]/relations
 export async function GET(
@@ -12,7 +12,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -28,7 +28,7 @@ export async function GET(
           {
             OR: [
               { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } }
+              { members: { some: { userId: session.user.id, status: true } } }
             ]
           }
         ]
@@ -59,7 +59,9 @@ export async function GET(
     // Get all relations where this issue is the source
     const sourceRelations = await prisma.issueRelation.findMany({
       where: {
-        sourceIssueId: issue.id
+        sourceIssueId: issue.id,
+        sourceIssue: issueReadAccessWhere(session.user.id),
+        targetIssue: issueReadAccessWhere(session.user.id)
       },
       include: {
         targetIssue: {
@@ -76,7 +78,7 @@ export async function GET(
             _count: {
               select: {
                 comments: true,
-                children: true
+                children: { where: issueReadAccessWhere(session.user.id) }
               }
             }
           }
@@ -87,7 +89,9 @@ export async function GET(
     // Get all relations where this issue is the target
     const targetRelations = await prisma.issueRelation.findMany({
       where: {
-        targetIssueId: issue.id
+        targetIssueId: issue.id,
+        sourceIssue: issueReadAccessWhere(session.user.id),
+        targetIssue: issueReadAccessWhere(session.user.id)
       },
       include: {
         sourceIssue: {
@@ -104,7 +108,7 @@ export async function GET(
             _count: {
               select: {
                 comments: true,
-                children: true
+                children: { where: issueReadAccessWhere(session.user.id) }
               }
             }
           }
@@ -259,14 +263,15 @@ export async function POST(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { workspaceId, issueKey } = await params;
     const { targetIssueId, relationType } = await request.json();
 
-    if (!targetIssueId || !relationType) {
+    if (typeof targetIssueId !== 'string' || !targetIssueId.trim() ||
+        typeof relationType !== 'string' || !relationType) {
       return NextResponse.json(
         { error: "targetIssueId and relationType are required" },
         { status: 400 }
@@ -283,7 +288,7 @@ export async function POST(
           {
             OR: [
               { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } }
+              { members: { some: { userId: session.user.id, status: true } } }
             ]
           }
         ]
@@ -320,7 +325,7 @@ export async function POST(
             name: true,
             ownerId: true,
             members: {
-              where: { userId: session.user.id },
+              where: { userId: session.user.id, status: true },
               select: { id: true }
             }
           }
@@ -349,12 +354,12 @@ export async function POST(
     // Normalize relation: Drop 'CHILD' type by mapping it to 'PARENT' with reversed direction
     const providedType = String(relationType || '').toUpperCase();
     let finalSourceId = sourceIssue.id;
-    let finalTargetId = targetIssueId;
+    let finalTargetId = targetIssue.id;
     let finalType: PrismaIssueRelationType;
 
     if (providedType === 'CHILD') {
       // Current issue is the parent; target becomes the child
-      finalSourceId = targetIssueId;
+      finalSourceId = targetIssue.id;
       finalTargetId = sourceIssue.id;
       finalType = 'PARENT';
     } else if (
