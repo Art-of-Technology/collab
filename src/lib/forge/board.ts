@@ -1,6 +1,6 @@
 import 'server-only';
 import { getAuthSession } from '@/lib/auth';
-import { getUserWorkspaceRole } from '@/lib/permissions';
+import { getUserWorkspaceRole, checkUserPermission, Permission } from '@/lib/permissions';
 import { prisma } from '@/lib/prisma';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 import { readForgeBindings, readForgeIssues } from './reader';
@@ -18,6 +18,7 @@ export async function loadForgeBoard(workspaceSlug: string, projectSlug: string)
   if (!session?.user?.id) return { kind: 'denied' };
   const workspaceId = await resolveWorkspaceSlug(workspaceSlug);
   if (!workspaceId || !await getUserWorkspaceRole(session.user.id, workspaceId)) return { kind: 'denied' };
+  if (!(await checkUserPermission(session.user.id, workspaceId, Permission.VIEW_TASKS)).hasPermission) return { kind: 'denied' };
   const project = await prisma.project.findFirst({
     where: { workspaceId, slug: projectSlug }, select: { id: true, name: true },
   });

@@ -8,6 +8,7 @@ const ts = require('typescript');
 test('board reads authorize the session and active tenant before credentials or upstream access', async () => {
   let session = null;
   let role = null;
+  let canView = true;
   let project = { id: 'project-a', name: 'Example project' };
   let credentialReads = 0;
   let providerReads = 0;
@@ -17,7 +18,7 @@ test('board reads authorize the session and active tenant before credentials or 
   const dependencies = {
     'server-only': {},
     '@/lib/auth': { getAuthSession: async () => session },
-    '@/lib/permissions': { getUserWorkspaceRole: async (user, workspace) => { assert.equal(user, 'member'); assert.equal(workspace, 'workspace-a'); return role; } },
+    '@/lib/permissions': { Permission: { VIEW_TASKS: 'VIEW_TASKS' }, checkUserPermission: async (user, workspace, permission) => { assert.equal(user, 'member'); assert.equal(workspace, 'workspace-a'); assert.equal(permission, 'VIEW_TASKS'); return { hasPermission: canView }; }, getUserWorkspaceRole: async (user, workspace) => { assert.equal(user, 'member'); assert.equal(workspace, 'workspace-a'); return role; } },
     '@/lib/slug-resolvers': { resolveWorkspaceSlug: async () => 'workspace-a' },
     '@/lib/prisma': { prisma: { project: { findFirst: async query => {
       assert.deepEqual(query.where, { workspaceId: 'workspace-a', slug: 'example' }); return project;
@@ -37,6 +38,11 @@ test('board reads authorize the session and active tenant before credentials or 
   assert.deepEqual(await loadForgeBoard('workspace-a', 'example'), { kind: 'denied' });
   assert.equal(credentialReads, 0);
   role = 'MEMBER';
+  canView = false;
+  assert.deepEqual(await loadForgeBoard('workspace-a', 'example'), { kind: 'denied' });
+  assert.equal(credentialReads, 0);
+  assert.equal(providerReads, 0);
+  canView = true;
   project = null;
   assert.deepEqual(await loadForgeBoard('workspace-a', 'example'), { kind: 'denied' });
   assert.equal(providerReads, 0);

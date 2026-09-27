@@ -14,6 +14,11 @@ const bindingSchema = z.object({
   slackWorkspaceId: z.string().regex(/^T[A-Z0-9]+$/),
   slackChannelId: z.string().regex(/^[CG][A-Z0-9]+$/),
   readTokenFile: z.string().startsWith('/').max(1024),
+  issues: z.object({
+    writeTokenFile: z.string().startsWith('/').max(1024),
+    principalId: z.number().int().positive(),
+    tokenSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  }).strict().optional(),
   memory: z.object({
     branch: z.literal('main'),
     writerOrigin: z.string().url().refine(value => {

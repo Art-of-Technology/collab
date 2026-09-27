@@ -8,15 +8,19 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { ChatBar } from "@/components/ai/ChatBar";
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 interface LayoutWithSidebarProps {
   children: React.ReactNode;
   pathname: string;
+  forgeProjectPaths?: string[];
 }
 
 export default function LayoutWithSidebar({
   children,
   pathname,
+  forgeProjectPaths = [],
 }: LayoutWithSidebarProps) {
   const {
     isCollapsedDesktop,
@@ -31,6 +35,20 @@ export default function LayoutWithSidebar({
     if (isMobileOpen) return "calc(var(--sidebar-open))";
     return "0px";
   }, [isMdUp, isMobileOpen]);
+  const currentPath = usePathname();
+  const forgeProject = forgeProjectPaths.find(path => currentPath === path || currentPath?.startsWith(path + '/'));
+
+  if (forgeProject) return <AIProvider>
+    <div className="flex h-dvh min-w-0 flex-col bg-background text-foreground">
+      <nav aria-label="Project navigation" className="flex shrink-0 flex-wrap gap-4 border-b p-4 text-sm">
+        <Link href={forgeProject + '/board'} className="underline underline-offset-4">Board</Link>
+        <Link href={forgeProject + '/notes/memory'} className="underline underline-offset-4">Project memory</Link>
+        <Link href={forgeProject + '/notes'} className="underline underline-offset-4">All notes</Link>
+        <Link href={pathname + '/projects'} className="underline underline-offset-4">Projects</Link>
+      </nav>
+      <main className="min-h-0 min-w-0 flex-1 overflow-auto">{children}</main>
+    </div>
+  </AIProvider>;
 
   return (
     <AIProvider>

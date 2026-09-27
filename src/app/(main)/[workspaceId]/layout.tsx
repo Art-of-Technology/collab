@@ -5,6 +5,7 @@ import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { prisma } from "@/lib/prisma";
 import SidebarProvider from "@/components/providers/SidebarProvider";
 import LayoutWithSidebar from "@/components/layout/LayoutWithSidebar";
+import { readForgeBindings } from "@/lib/forge/reader";
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
@@ -49,10 +50,18 @@ export default async function WorkspaceLayout({
     redirect("/welcome");
   }
 
+  const bindings = (await readForgeBindings()).filter(binding => binding.workspaceId === workspace.id);
+  const projects = bindings.length ? await prisma.project.findMany({
+    where: { workspaceId: workspace.id, id: { in: bindings.map(binding => binding.projectId) } },
+    select: { slug: true },
+  }) : [];
+  const forgeProjectPaths = projects.map(project => `/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(project.slug)}`);
+
   return (
     <SidebarProvider>
       <LayoutWithSidebar
         pathname={`/${workspaceId}`}
+        forgeProjectPaths={forgeProjectPaths}
       >
         {children}
       </LayoutWithSidebar>

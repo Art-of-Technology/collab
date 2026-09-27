@@ -1,19 +1,22 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useCallback, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import type { IssueRights } from '@/lib/forge/issue-service';
+import { ForgeIssueEditor, ForgeIssueCreate } from './ForgeIssueEditor';
 import type { ForgeBoard } from '@/lib/forge/board';
 import { needsAttention, taskStatuses, type ForgeTask, type TaskStatus } from '@/lib/forge/tasks';
 import { refreshForgeBoard } from './actions';
 
 const labels: Record<TaskStatus, string> = { backlog: 'Backlog', 'in-progress': 'In progress', waiting: 'Waiting', blocked: 'Blocked', done: 'Done' };
 
-export function ForgeBoardView({ initial, workspaceSlug, projectSlug }: {
+export function ForgeBoardView({ initial, rights, workspaceSlug, projectSlug }: {
   initial: Exclude<ForgeBoard, { kind: 'denied' }>;
+  rights?: IssueRights | null;
   workspaceSlug: string;
   projectSlug: string;
 }) {
@@ -23,8 +26,10 @@ export function ForgeBoardView({ initial, workspaceSlug, projectSlug }: {
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'board' | 'list' | 'attention'>('board');
   const [status, setStatus] = useState<TaskStatus | 'all'>('all');
+  const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const selectedButton = useRef<HTMLButtonElement | null>(null);
+  const denied = useCallback(() => { setBoard({ kind: 'denied' }); setSelected(null); setCreating(false); }, []);
   const ready = board.kind === 'ready' ? board : null;
   const tasks = ready?.tasks.filter(task =>
     (status === 'all' || task.status === status) &&
@@ -63,13 +68,14 @@ export function ForgeBoardView({ initial, workspaceSlug, projectSlug }: {
           <p className="mt-1 text-sm text-collab-400">Project work and follow-ups</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {ready && rights?.canCreate && <Button onClick={() => setCreating(true)}>New issue</Button>}
           <Button variant="outline" asChild><Link href={`/${workspaceSlug}/projects/${projectSlug}/notes`}>Project notes</Link></Button>
           <Button variant="outline" onClick={refresh} disabled={pending}>{pending ? 'Refreshing…' : 'Refresh'}</Button>
         </div>
       </header>
       <div aria-live="polite" className="text-sm text-collab-400">
         {refreshError ? <p role="alert" className="rounded-lg border border-amber-400/40 p-3 text-amber-300">{ready ? 'Refresh failed. Showing the last loaded issues; try Refresh again.' : 'Refresh failed. Try Refresh again.'}</p> :
-          ready && <p>Read-only · {ready.tasks.length} issues · Updated {new Date(ready.fetchedAt).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })} London time</p>}
+          ready && <p>{rights?.canCreate || rights?.canEdit || rights?.canStatus ? 'Forge issues' : 'Read-only'} · {ready.tasks.length} issues · Updated {new Date(ready.fetchedAt).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })} London time</p>}
       </div>
       {board.kind === 'denied' && <p role="alert">You no longer have access to this project.</p>}
       {board.kind === 'not-connected' && <div className="rounded-xl border border-collab-700 bg-collab-800 p-6">
@@ -106,14 +112,17 @@ export function ForgeBoardView({ initial, workspaceSlug, projectSlug }: {
           </section>)}
         </div> : <div className="grid gap-3 md:grid-cols-2">{tasks.map(card)}</div>}
       </>}
+      <Dialog open={creating} onOpenChange={setCreating}>
+        <DialogContent><DialogHeader><DialogTitle>New issue</DialogTitle><DialogDescription>Create work in the connected Forge project.</DialogDescription></DialogHeader>
+          <ForgeIssueCreate workspaceSlug={workspaceSlug} projectSlug={projectSlug} onSaved={() => { setCreating(false); refresh(); }} />
+        </DialogContent>
+      </Dialog>
       <Dialog open={Boolean(current)} onOpenChange={open => { if (!open) setSelected(null); }}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl" onCloseAutoFocus={event => { if (selectedButton.current?.isConnected) { event.preventDefault(); selectedButton.current.focus(); } }}>
           {current && <><DialogHeader><DialogTitle className="break-words">#{current.number} {current.title}</DialogTitle>
             <DialogDescription>{labels[current.status]} · {current.priority} priority · {current.owner || 'Unassigned'}</DialogDescription></DialogHeader>
             {current.warning && <p role="status" className="text-sm text-amber-300">{current.warning}</p>}
-            <p className="whitespace-pre-wrap break-words text-sm">{current.description || 'No description yet.'}</p>
-            {current.nextAction && <p className="break-words text-sm"><strong>Next action:</strong> {current.nextAction}</p>}
-            <p className="text-sm text-muted-foreground">{current.comments} comments on the source issue. Editing and comments are not available in this view yet.</p>
+            <ForgeIssueEditor key={current.number} number={current.number} workspaceSlug={workspaceSlug} projectSlug={projectSlug} onSaved={refresh} onDenied={denied} />
             {current.sourceUrl && <a href={current.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-sm underline underline-offset-4">Open source discussion</a>}
             <Button variant="outline" onClick={() => setSelected(null)}>Close</Button>
           </>}
