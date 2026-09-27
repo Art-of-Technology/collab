@@ -62,7 +62,7 @@ function fixture() {
       hasSignificantChange: () => true, detectChangeType: () => 'UPDATE' },
     '@/lib/event-bus': {},
   };
-  const route = file => load(file, dependencies, { URL, console });
+  const route = (file, overrides = {}) => load(file, { ...dependencies, ...overrides }, { URL, console });
   const request = (body, url = 'https://example.test/api', method = 'POST') => new Request(url, { method, body: JSON.stringify(body) });
   return { ws, tags, note, notes, state, db, route, request };
 }
@@ -184,4 +184,84 @@ test('issue previews use current issue, project and status access; owner and ext
   }
   const response = await route.POST(f.request({ url: 'https://example.org/some-page' }));
   assert.equal((await response.json()).type, 'external');
+});
+
+
+function appFixture() {
+  const f = fixture();
+  const context = { user: { id: 'alice' }, workspace: f.ws[1], token: { scopes: [] } };
+  const route = file => f.route(file, {
+    zod: require('zod'),
+    '@/lib/apps/auth-middleware': { withAppAuth: (handler, options) => (request, params) => {
+      if (!options.requiredScopes.every(scope => context.token.scopes.includes(scope))) {
+        return Response.json({ error: 'insufficient_scope' }, { status: 403 });
+      }
+      return handler(request, context, params);
+    } },
+    '@/lib/html-sanitizer': { stripHtmlToPlainText: text => text },
+    '@/lib/event-bus': {
+      emitContextCreated: async () => { f.state.effects++; },
+      emitContextUpdated: async () => { f.state.effects++; },
+    },
+  });
+  return { ...f, context, route };
+}
+
+for (const method of ['POST', 'PUT']) {
+  const file = method === 'POST' ? 'src/app/api/apps/auth/context/route.ts' : 'src/app/api/apps/auth/context/[id]/route.ts';
+  test(`app ${method} rejects unauthorized tags before writes and events`, async () => {
+    for (const tagIds of [['foreign'], ['revoked'], ['other-personal'], ['own'], ['missing'], ['']]) {
+      const f = appFixture(); f.context.token.scopes = ['context:write'];
+      const response = await f.route(file)[method](f.request({ title: 'updated', content: 'updated', tagIds }, undefined, method), { params: Promise.resolve({ id: 'note' }) });
+      assert.equal(response.status, 403, JSON.stringify(tagIds));
+      assert.equal(f.state.writes, 0); assert.equal(f.state.effects, 0);
+    }
+  });
+  test(`app ${method} preserves valid scoped tags, clear and omitted tags and filters write projections`, async () => {
+    for (const tagIds of [['joined', 'personal', 'joined'], [], undefined]) {
+      const f = appFixture(); f.context.token.scopes = ['context:write'];
+      const response = await f.route(file)[method](f.request({ title: 'updated', content: 'updated', tagIds }, undefined, method), { params: Promise.resolve({ id: 'note' }) });
+      assert.equal(response.status, method === 'POST' ? 201 : 200);
+      assert.equal(f.state.writes, 1); assert.equal(f.state.effects, 1);
+      const tags = f.state.lastWrite.data.tags;
+      if (tagIds === undefined || (method === 'POST' && tagIds.length === 0)) assert.equal(tags, undefined);
+      else {
+        const selectors = tags[method === 'POST' ? 'connect' : 'set'];
+        assert.deepEqual(Array.from(selectors, s => s.id), [...new Set(tagIds)]);
+        for (const selector of selectors) {
+          const original = f.tags.find(t => t.id === selector.id);
+          assert.ok(matches(original, selector));
+          for (const denied of ['foreign', 'revoked', 'own', 'other-personal']) {
+            const replacement = { ...f.tags.find(t => t.id === denied), id: selector.id };
+            assert.equal(matches(replacement, selector), false);
+          }
+        }
+      }
+      assert.deepEqual((await response.json()).tags.map(t => t.id).sort(), ['joined', 'own', 'personal']);
+    }
+  });
+}
+
+for (const [path, extract] of [
+  ['context', b => b.context], ['context/[id]', b => [b]],
+  ['context/knowledge', b => b.articles], ['context/knowledge/[id]', b => [b]],
+]) test(`app ${path} filters historical tag links using current access`, async () => {
+  const f = appFixture(); f.note.type = 'GUIDE';
+  f.context.token.scopes = ['context:read', 'knowledge:read'];
+  const handler = f.route(`src/app/api/apps/auth/${path}/route.ts`).GET;
+  const get = () => handler(new Request('https://example.test/api?q=needle'), { params: Promise.resolve({ id: 'note' }) });
+  for (const owner of ['alice', 'bob']) {
+    f.ws[0].ownerId = owner;
+    const response = await get(); assert.equal(response.status, 200);
+    const rows = extract(await response.json()); assert.equal(rows.length, 1);
+    assert.deepEqual(rows[0].tags.map(t => t.id).sort(), owner === 'alice' ? ['joined', 'own', 'personal'] : ['joined', 'personal']);
+  }
+  if (path === 'context/[id]') {
+    f.note.isEncrypted = true;
+    const body = await (await get()).json();
+    assert.equal(body.content, '[REDACTED - secrets:read scope required]');
+    assert.deepEqual(body.tags.map(t => t.id).sort(), ['joined', 'personal']);
+  }
+  f.ws[1].members[0].status = false;
+  assert.equal((await get()).status, 403);
 });

@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { noteAccessWhere } from '@/lib/secrets/access';
+import { noteTagAccessWhere, noteTagConnections } from '@/lib/note-tag-access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
@@ -142,6 +143,7 @@ export const GET = withAppAuth(
               },
             },
             tags: {
+              where: noteTagAccessWhere(context.user.id),
               select: {
                 id: true,
                 name: true,
@@ -236,6 +238,16 @@ export const POST = withAppAuth(
         );
       }
 
+      const tagConnections = await noteTagConnections(
+        context.user.id, noteData.tagIds, context.workspace.id, noteData.projectId || null,
+      );
+      if (!tagConnections) {
+        return NextResponse.json(
+          { error: 'forbidden', error_description: 'Invalid note tags' },
+          { status: 403 }
+        );
+      }
+
       const note = await prisma.note.create({
         data: {
           title: noteData.title,
@@ -250,7 +262,7 @@ export const POST = withAppAuth(
           isFavorite: false,
           ...(noteData.tagIds && noteData.tagIds.length > 0 && {
             tags: {
-              connect: noteData.tagIds.map(id => ({ id })),
+              connect: tagConnections,
             },
           }),
         },
@@ -279,6 +291,7 @@ export const POST = withAppAuth(
             },
           },
           tags: {
+            where: noteTagAccessWhere(context.user.id),
             select: {
               id: true,
               name: true,
