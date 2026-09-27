@@ -178,9 +178,8 @@ and optional projects within that workspace.
 
 Notes creation and project reassignment now validate the destination workspace
 and project, including active membership and consistent tenant IDs. Template
-management requires active membership. The two AI issue suggestion/related
-routes now scope their source issue to the authorized workspace while using
-current schema relationships.
+management requires active membership. For the AI issue suggestion/related
+routes' access contract, see [AI issue recommendations](#ai-issue-recommendations).
 
 Type repair removed an unreferenced legacy assistant widget, repaired editor
 command declarations and stale schema references, and preserved compiler checks.
@@ -1183,6 +1182,8 @@ No database, provider, browser, runtime or deployment operation was run.
 Related-issue and suggestion handlers use the shared session adapter and the
 existing current workspace owner/active-member gate. Root issues additionally
 require `issueReadAccessWhere`, covering their project and optional status project.
+An inaccessible root issue returns 404 before dependent queries; denied workspace
+access returns 403, and a missing authenticated session returns 401.
 Candidate lists and counts retain their title/label/project criteria while
 requiring the requested issue workspace and current issue-read access. Both
 endpoints of explicit issue links must be readable in the requested workspace.
@@ -1193,8 +1194,8 @@ These handlers perform local database heuristics, not AI provider calls.
 The [focused fixture](../../tests/security/ai-issue-access.test.cjs) runs both
 actual handlers and session/identity/access helpers with modeled Prisma. Seven
 baseline failures and two controls become nine passing cases. Coverage includes
-root project/status denial before dependent queries, owner access without a member
-row, inactive membership, denied gateway mapping without fallback, inaccessible
+root project/status denial before dependent queries, owner access with inactive
+membership, inactive non-owner denial, denied gateway mapping without fallback, inaccessible
 candidates/labels/link endpoints, and visible-link suppression of link suggestions.
 A scoped Prisma/Next typecheck covers three exact non-import module bodies.
 
