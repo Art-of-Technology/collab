@@ -464,3 +464,28 @@ Generic native test stage is SKIPPED; other review/docs/lint/CI/exact-head Octop
 gates remain. These are gateway prerequisites only: legacy auth mode remains,
 and shared gateway adapter/consumer migration plus private-origin, real-identity,
 isolated-writer, schema/restore and Ready-fence acceptance remain separate.
+
+
+### Gateway session core (inactive integration)
+
+The shared gateway identity and request-session modules are prepared for the later
+consumer migration. No production consumer, proxy, auth route, or deployment mode
+is changed by this slice. Existing callers still use NextAuth directly. Gateway
+mode must remain disabled until reachable consumers and the edge/session/logout
+contract have migrated and private-origin enforcement is accepted.
+
+The adapter defaults to `nextauth`, accepts explicit `gateway`, and rejects any
+other `COLLAB_AUTH_MODE`. Gateway sessions require canonical, bounded UTF-8
+base64url issuer/subject/email claims, literal verified email, the configured
+issuer and exact `weezboo.com` domain. The existing Account table must contain the
+explicit `maestro` mapping keyed by SHA-256 of issuer, NUL and subject. The live
+user must have exactly one such mapping and a matching current email; the adapter
+never provisions users, links by email, or falls back to a cookie in gateway mode.
+Mapping database errors propagate without legacy fallback. Unsafe requests require
+the exact configured HTTPS Origin when the later edge integration invokes the
+mutation guard; the helper alone does not enforce origin or trusted headers.
+
+The three focused core checks execute the actual identity and session modules with
+modeled headers/Prisma/NextAuth. They qualify parsing, origin decisions and session
+selection only, not live issuer trust, proxy stripping, database isolation,
+consumer coverage, browser behavior, or deployment acceptance.

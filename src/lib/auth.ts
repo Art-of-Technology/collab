@@ -9,6 +9,7 @@ import { CustomPrismaAdapter } from "./custom-prisma-adapter";
 // Extend the next-auth session types
 declare module "next-auth" {
   interface Session {
+    authMode?: "nextauth" | "gateway";
     user: {
       id: string;
       role: string;
