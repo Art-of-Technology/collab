@@ -114,7 +114,7 @@ export function ForgeBoardView({ initial, rights, workspaceSlug, projectSlug }: 
       </>}
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent><DialogHeader><DialogTitle>New issue</DialogTitle><DialogDescription>Create work in the connected Forge project.</DialogDescription></DialogHeader>
-          <ForgeIssueCreate workspaceSlug={workspaceSlug} projectSlug={projectSlug} onSaved={() => { setCreating(false); refresh(); }} />
+          {creating && <ForgeIssueCreate workspaceSlug={workspaceSlug} projectSlug={projectSlug} onSaved={() => { setCreating(false); refresh(); }} />}
         </DialogContent>
       </Dialog>
       <Dialog open={Boolean(current)} onOpenChange={open => { if (!open) setSelected(null); }}>
