@@ -234,6 +234,8 @@ Collab is designed to streamline internal communication and work tracking by off
   For invitation links, see the [preview and acceptance contract](docs/security/2026-09-23-hardening.md#invitation-token-preview-and-acceptance-27-september-2026).
 - Use the timeline to post status updates, tasks, and feature requests.
 - Organize work using boards, milestones, and stories.
+  For status filter visibility, see the
+  [project status access contract](docs/security/2026-09-23-hardening.md#project-status-reads-27-september-2026).
 - Open **Project board** from a project dashboard; see the
   [Forge board guide](docs/forge-board.md) for views, connection requirements
   and the limits of this read-only slice.
