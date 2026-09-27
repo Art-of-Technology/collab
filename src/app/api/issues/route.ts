@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
@@ -206,6 +207,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Use a transaction to ensure atomic counter increment and issue creation
+    await assertLegacyProjectWriteAllowed(project.id);
+    if (parentId) await assertLegacyIssueWriteAllowed(parentId);
+
     const created = await prisma.$transaction(async (tx) => {
       // Get the latest project data with current counters
       const currentProject = await tx.project.findUnique({
@@ -469,6 +473,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ issue: created }, { status: 201 });
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error('[ISSUES_POST]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

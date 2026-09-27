@@ -1,5 +1,7 @@
 'use server';
 
+import { assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
+
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
@@ -51,7 +53,7 @@ export async function toggleIssueCommentLike(issueId: string, commentId: string)
       throw new Error('Comment not found');
     }
 
-    // Access is already validated by findIssueByIdOrKey with userId
+    await assertLegacyIssueWriteAllowed(issue.id);
     
     // Check if the user already liked this comment
     const existingReaction = await prisma.issueCommentReaction.findFirst({
@@ -181,7 +183,7 @@ export async function updateIssueComment(issueId: string, commentId: string, dat
       throw new Error('You can only edit your own comments');
     }
 
-    // Access is already validated by findIssueByIdOrKey with userId
+    await assertLegacyIssueWriteAllowed(issue.id);
 
     const updatedComment = await prisma.issueComment.update({
       where: { id: commentId },
@@ -262,7 +264,7 @@ export async function deleteIssueComment(issueId: string, commentId: string) {
       throw new Error('You can only delete your own comments');
     }
 
-    // Access is already validated by findIssueByIdOrKey with userId
+    await assertLegacyIssueWriteAllowed(issue.id);
 
     let result;
 

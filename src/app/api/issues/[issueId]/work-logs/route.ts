@@ -1,3 +1,4 @@
+import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -136,6 +137,8 @@ export async function POST(
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });
     }
 
+    await assertLegacyIssueWriteAllowed(issue.id);
+
     // Create work log and update issue time spent in a transaction
     const result = await prisma.$transaction(async (tx) => {
       // Create the work log
@@ -223,6 +226,7 @@ export async function POST(
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("[WORK_LOGS_POST]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

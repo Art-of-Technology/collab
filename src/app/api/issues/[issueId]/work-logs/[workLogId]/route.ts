@@ -1,3 +1,4 @@
+import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -125,6 +126,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       data.timeSpent !== undefined ? data.timeSpent - workLog.timeSpent : 0;
 
     // Update work log and issue time spent in a transaction
+    await assertLegacyIssueWriteAllowed(issue.id);
+
     const result = await prisma.$transaction(async (tx) => {
       const updatedWorkLog = await tx.workLog.update({
         where: { id: workLogId },
@@ -203,6 +206,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       },
     });
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("[WORK_LOG_PATCH]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -231,6 +235,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (!workLog) {
       return NextResponse.json({ error: "Work log not found" }, { status: 404 });
     }
+
+    await assertLegacyIssueWriteAllowed(issue.id);
 
     // Delete work log and update issue time spent in a transaction
     await prisma.$transaction(async (tx) => {
@@ -282,6 +288,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       deletedWorkLogId: workLogId,
     });
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("[WORK_LOG_DELETE]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

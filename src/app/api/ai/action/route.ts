@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -184,6 +185,8 @@ export async function POST(req: Request) {
           }, { status: 404 });
         }
 
+        await assertLegacyProjectWriteAllowed(project.id);
+
         // Create the issue
         const issueNumber = project._count.issues + 1;
         const issueKey = `${project.issuePrefix}-${issueNumber}`;
@@ -259,6 +262,7 @@ export async function POST(req: Request) {
         }, { status: 400 });
     }
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error('Error in AI action API:', error);
     return NextResponse.json(
       { error: "Failed to execute action" },

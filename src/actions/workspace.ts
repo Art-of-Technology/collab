@@ -1,5 +1,6 @@
 'use server';
 
+import { assertLegacyWorkspaceDeleteAllowed } from '@/lib/forge/legacy-write-guard';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from '@/lib/request-session';
@@ -408,6 +409,8 @@ export async function deleteWorkspace(workspaceId: string) {
     throw new Error('Only the workspace owner can delete it');
   }
   
+  await assertLegacyWorkspaceDeleteAllowed(workspaceId);
+
   // Delete the workspace
   await prisma.workspace.delete({
     where: {

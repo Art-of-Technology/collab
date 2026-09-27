@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { Prisma } from '@prisma/client';
 import { checkUserPermissions, canActOnOwnContent, Permission } from '@/lib/permissions';
 import { NextRequest, NextResponse } from "next/server";
@@ -59,6 +60,7 @@ export async function GET(
     return NextResponse.json({ issue });
 
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("Error fetching issue:", error);
     return NextResponse.json(
       { error: "Internal server error" },
@@ -291,6 +293,7 @@ export async function PUT(
     return NextResponse.json({ issue: updatedIssue });
 
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2034', 'P2002'].includes(error.code)) {
       return NextResponse.json({ error: 'Issue update conflict; reload and retry' }, { status: 409 });
     }
@@ -354,6 +357,8 @@ export async function DELETE(
       permissions[Permission.DELETE_SELF_TASK].hasPermission)) {
       return NextResponse.json({ error: 'No permission to delete this issue' }, { status: 403 });
     }
+
+    await assertLegacyIssueWriteAllowed(existingIssue.id);
 
     // Prepare notifications before deletion
     let deletionRecipients: string[] = [];
@@ -440,6 +445,7 @@ export async function DELETE(
     return NextResponse.json({ message: "Issue deleted successfully" });
 
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("Error deleting issue:", error);
     return NextResponse.json(
       { error: "Internal server error" },

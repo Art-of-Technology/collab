@@ -1,3 +1,4 @@
+import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -91,6 +92,8 @@ export async function POST(
 
     // Access is already validated by findIssueByIdOrKey with userId
 
+    await assertLegacyIssueWriteAllowed(issue.id);
+
     // Verify parentId belongs to this issue
     if (parentId) {
       const parent = await prisma.issueComment.findFirst({ where: { id: parentId, issueId: issue.id } });
@@ -152,6 +155,7 @@ export async function POST(
 
     return NextResponse.json(comment, { status: 201 });
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("[ISSUE_COMMENTS_POST]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

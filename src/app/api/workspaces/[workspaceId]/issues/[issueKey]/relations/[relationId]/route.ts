@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
@@ -68,6 +69,8 @@ export async function DELETE(
       );
     }
 
+    await assertLegacyIssueWriteAllowed(relation.sourceIssueId, relation.targetIssueId);
+
     // Delete the relation
     await prisma.issueRelation.delete({
       where: {
@@ -83,6 +86,7 @@ export async function DELETE(
     });
 
   } catch (error) {
+    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("Error deleting relation:", error);
     return NextResponse.json(
       { error: "Internal server error" },
