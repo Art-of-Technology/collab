@@ -475,8 +475,9 @@ For current adapter coverage, see [shared session consumers](#shared-session-con
 [workspace and project page session consumers](#workspace-and-project-page-session-consumers),
 [app and developer page session consumers](#app-and-developer-page-session-consumers),
 [app ecosystem API session consumers](#app-ecosystem-api-session-consumers),
-[Notes collection session adapter](#notes-collection-session-adapter) and
-[Notes detail session adapter](#notes-detail-session-adapter).
+[Notes collection session adapter](#notes-collection-session-adapter),
+[Notes detail session adapter](#notes-detail-session-adapter) and
+[Notes history session adapter](#notes-history-session-adapter).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -954,11 +955,13 @@ role remain separate. No runtime, provider or identity provisioning occurred.
 ## Notes history session adapter
 
 Version list, single-version read/restore, comparison and save-as-template now
-use the shared request-session adapter with unchanged `authOptions`. Only four
+use the shared request-session adapter with unchanged `authOptions`, inheriting
+the [adapter contract](#gateway-session-core-inactive-integration). Only four
 imports changed across five handlers. Existing read/edit, versioning-enabled,
 protected-note and template workspace checks remain intact.
 
-The focused fixture executes the actual handlers, identity parser, selector and
+The [focused fixture](../../tests/security/gateway-notes-history.test.cjs)
+executes the actual handlers, identity parser, selector and
 access helpers with mocked Prisma and versioning operations. It checks mapped
 owner success, restore EDIT-share success, exact actor attribution to restoration
 and template creation, foreign-note denial, identity failure before downstream
