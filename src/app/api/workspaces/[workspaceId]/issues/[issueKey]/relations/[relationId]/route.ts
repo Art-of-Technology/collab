@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
-import { findIssueByIdOrKey } from "@/lib/issue-finder";
+import { findIssueByIdOrKey, issueReadAccessWhere } from "@/lib/issue-finder";
 
 // DELETE /api/workspaces/[workspaceId]/issues/[issueKey]/relations/[relationId]
 export async function DELETE(
@@ -11,7 +11,7 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -21,7 +21,10 @@ export async function DELETE(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: { some: { userId: session.user.id } }
+        OR: [
+          { ownerId: session.user.id },
+          { members: { some: { userId: session.user.id, status: true } } }
+        ]
       }
     });
 
@@ -49,6 +52,8 @@ export async function DELETE(
     const relation = await prisma.issueRelation.findFirst({
       where: {
         id: relationId,
+        sourceIssue: issueReadAccessWhere(session.user.id),
+        targetIssue: issueReadAccessWhere(session.user.id),
         OR: [
           { sourceIssueId: issue.id },
           { targetIssueId: issue.id }
@@ -65,7 +70,11 @@ export async function DELETE(
 
     // Delete the relation
     await prisma.issueRelation.delete({
-      where: { id: relationId }
+      where: {
+        id: relationId,
+        sourceIssue: issueReadAccessWhere(session.user.id),
+        targetIssue: issueReadAccessWhere(session.user.id)
+      }
     });
 
     return NextResponse.json({ 
