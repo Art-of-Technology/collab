@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/session";
+import { repositoryAccessWhere } from "@/lib/github/access";
 import { EncryptionService } from "@/lib/encryption";
 
 // POST /api/github/repositories/[repositoryId]/sync-releases - Sync releases from GitHub
@@ -8,11 +10,13 @@ export async function POST(
   { params }: { params: Promise<{ repositoryId: string }> }
 ) {
   try {
+    const actor = await getCurrentUser();
+    if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { repositoryId } = await params;
 
     // Get repository with access token
-    const repository = await prisma.repository.findUnique({
-      where: { id: repositoryId },
+    const repository = await prisma.repository.findFirst({
+      where: { id: repositoryId, ...repositoryAccessWhere(actor.id) },
     });
 
     if (!repository) {

@@ -1,8 +1,8 @@
 import type { PRState } from '@prisma/client';
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/session";
+import { repositoryAccessWhere } from "@/lib/github/access";
 import { EncryptionService } from "@/lib/encryption";
 
 // POST /api/github/repositories/[repositoryId]/sync - Sync all data from GitHub
@@ -11,26 +11,12 @@ export async function POST(
   { params }: { params: Promise<{ repositoryId: string }> }
 ) {
   try {
+    const actor = await getCurrentUser();
+    if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { repositoryId } = await params;
-    const session = await getServerSession(authConfig);
 
-    // Get repository with project info
-    const repository = await prisma.repository.findUnique({
-      where: { id: repositoryId },
-      include: {
-        project: {
-          include: {
-            workspace: {
-              include: {
-                members: {
-                  where: session?.user?.id ? { userId: session.user.id } : undefined,
-                  take: 1,
-                }
-              }
-            }
-          }
-        }
-      }
+    const repository = await prisma.repository.findFirst({
+      where: { id: repositoryId, ...repositoryAccessWhere(actor.id) },
     });
 
     if (!repository) {
@@ -51,9 +37,9 @@ export async function POST(
     }
 
     // Fall back to current user's GitHub token
-    if (!accessToken && session?.user?.id) {
+    if (!accessToken && actor.id) {
       const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
+        where: { id: actor.id },
         select: { githubAccessToken: true },
       });
 
