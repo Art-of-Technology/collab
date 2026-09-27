@@ -28,6 +28,7 @@ function fixture(file, sessionUser = { id: 'alice', email: 'bob@example.test' })
     '@/lib/auth': { getAuthSession: async () => sessionUser && { user: sessionUser } },
     '@/lib/auth-options': {}, '@/lib/prisma': { prisma: db }, '@/lib/utils': {} };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, { console });
+  deps['@/lib/workspace-invitations'] = load('src/lib/workspace-invitations.ts', deps, { console });
   return { action: load(file, deps).getPendingInvitations, users, reads, invitations };
 }
 

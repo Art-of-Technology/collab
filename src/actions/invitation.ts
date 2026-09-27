@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { getAuthSession } from '@/lib/auth';
 import { getCurrentUser } from '@/lib/session';
+import { readWorkspaceInvitation, acceptWorkspaceInvitation } from '@/lib/workspace-invitations';
 
 /**
  * Get pending workspace invitations for a user
@@ -73,113 +74,48 @@ export async function checkUserHasWorkspaces() {
  * Get workspace invitation by token
  */
 export async function getInvitationByToken(token: string) {
-  if (!token) {
-    throw new Error('Token is required');
+  if (!token) throw new Error('Token is required');
+  const result = await readWorkspaceInvitation(token);
+  if (result.error) {
+    const messages = {
+      unauthorized: 'Unauthorized',
+      forbidden: 'This invitation is for a different email. Please sign in with the invited account.',
+      missing: 'Invitation not found or expired',
+      processed: 'This invitation has already been processed.',
+      expired: 'Invitation has expired',
+    };
+    throw new Error(messages[result.error]);
   }
-
-  const invitation = await prisma.workspaceInvitation.findUnique({
-    where: { token },
-    include: {
-      workspace: true,
-      invitedBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          image: true
-        }
-      }
-    }
-  });
-
-  if (!invitation) {
-    throw new Error('Invitation not found or expired');
-  }
-
-  // Check if invitation has expired
-  if (invitation.expiresAt < new Date()) {
-    throw new Error('Invitation has expired');
-  }
-
-  return invitation;
+  return result.invitation;
 }
 
 /**
  * Accept workspace invitation
  */
 export async function acceptInvitation(token: string) {
-  const session = await getAuthSession();
-
-  if (!session?.user) {
-    return { success: false, message: 'You must be logged in to accept this invitation.' } as const;
-  }
-
-  const invitation = await prisma.workspaceInvitation.findUnique({
-    where: { token },
-    include: { workspace: true }
-  });
-
-  if (!invitation) {
-    return { success: false, message: 'We could not find this invitation. It may have been withdrawn.' } as const;
-  }
-
-  if (invitation.status !== 'pending') {
-    return { success: false, message: 'This invitation has already been processed.' } as const;
-  }
-
-  if (invitation.expiresAt < new Date()) {
-    return { success: false, message: 'This invitation has expired.' } as const;
-  }
-
-  if (invitation.email !== session.user.email) {
-    return { success: false, message: 'This invitation is for a different email. Please sign in with the invited account.' } as const;
-  }
-
-  // Check if user is already a member of the workspace
-  const existingMember = await prisma.workspaceMember.findFirst({
-    where: {
-      workspaceId: invitation.workspaceId,
-      status: true,
-      user: {
-        email: session.user.email
-      }
-    }
-  });
-
-  if (existingMember) {
-    return { success: false, message: 'You are already a member of this workspace.' } as const;
-  }
-
   try {
-    await prisma.$transaction(async (tx) => {
-      // Create workspace member
-      await tx.workspaceMember.create({
-        data: {
-          workspaceId: invitation.workspaceId,
-          userId: session.user.id,
-          // Use default role if not specified
-          role: 'MEMBER'
-        }
-      });
-
-      // Update invitation status
-      await tx.workspaceInvitation.update({
-        where: { id: invitation.id },
-        data: {
-          status: 'accepted'
-        }
-      });
-    });
-  
-  } catch (e) {
-    console.error('Failed to accept invitation:', e);
+    const result = await acceptWorkspaceInvitation(token, false);
+    if (result.error) {
+      const messages = {
+        unauthorized: 'You must be logged in to accept this invitation.',
+        missing: 'We could not find this invitation. It may have been withdrawn.',
+        processed: 'This invitation has already been processed.',
+        expired: 'This invitation has expired.',
+        forbidden: 'This invitation is for a different email. Please sign in with the invited account.',
+        'already-member': 'You are already a member of this workspace.',
+        'inactive-member': 'We couldn’t accept the invitation. Please try again.',
+        conflict: 'This invitation changed. Please reload and try again.',
+      };
+      return { success: false, message: messages[result.error] } as const;
+    }
+    return {
+      success: true,
+      workspaceId: result.workspace.id,
+      workspaceName: result.workspace.name,
+      workspaceSlug: result.workspace.slug,
+    };
+  } catch (error) {
+    console.error('Failed to accept invitation:', error);
     return { success: false, message: 'We couldn’t accept the invitation. Please try again.' } as const;
   }
-
-  return {
-    success: true,
-    workspaceId: invitation.workspaceId,
-    workspaceName: invitation.workspace.name,
-    workspaceSlug: invitation.workspace.slug
-  };
-} 
+}
