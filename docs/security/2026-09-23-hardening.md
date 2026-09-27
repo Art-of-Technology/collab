@@ -1410,3 +1410,12 @@ revocation safety. Existing duplicate/alias cardinality behavior, generic error
 mapping, relation-cycle policy and transaction isolation are separate. Generic
 tests remain SKIPPED; other delivery gates and gateway/worker activation remain
 separate. No native DB/provider/browser/runtime operations were performed.
+
+
+### Project collection, settings and Gantt routes
+
+The three workspace project routes (five handlers) use the shared session adapter and a stable user ID. Workspace and project reads require current ownership or active membership; project creation binds the default view owner to that ID rather than the session email. List/detail/update counts and Gantt issues, dates, progress and health use the same `issueReadAccessWhere` subset. The detail repository projection retains metadata but excludes `webhookSecret` and `accessToken`; the hook no longer promises a webhook secret.
+
+Settings saves update existing status IDs in place, preserving internal names and default/final flags and therefore existing issue links. New client IDs are only creation hints. Omitted used/default statuses conflict before writes; the dedicated move/delete flow remains separate. Scalar/array validation and duplicate ID/internal-name rejection precede mutation. This preserves the existing owner/active-member mutation policy, without adding an administrator requirement.
+
+Focused actual-handler tests use modeled Prisma: corrected baseline 19 assertion failures and two controls, followed by 21 passes. Five exact non-import source bodies passed scoped strict checking against the retained generated Prisma/Next types. The initial gateway fixture used an email outside the existing allowlist; those initial 16-failure/one-control and 12-pass/five-failure receipts remain historical. No database isolation, rollback or concurrent new status-link/revocation proof is claimed. Default view creation remains outside the project/status transaction; prefix/slug races, separate status count/delete routes and the GitHub settings-page webhook projection remain separate work. Generic pipeline tests are explicitly SKIPPED, not PASS; review, docs, scoped lint, CI and full exact-head Octopus gates remain. Gateway and worker remain OFF.
