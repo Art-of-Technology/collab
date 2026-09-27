@@ -2,6 +2,7 @@ import { getServerSession } from "@/lib/request-session";
 import { redirect } from "next/navigation";
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { issueAccessWhere } from "@/lib/issue-finder";
 import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
 import { GitHubSettingsClient } from "./GitHubSettingsClient";
 
@@ -16,7 +17,7 @@ export default async function GitHubSettingsPage({ params }: GitHubSettingsPageP
   const { workspaceId: workspaceSlugOrId, projectSlug } = await params;
   const session = await getServerSession(authConfig);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     redirect('/login');
   }
 
@@ -30,13 +31,7 @@ export default async function GitHubSettingsPage({ params }: GitHubSettingsPageP
   const workspace = await prisma.workspace.findFirst({
     where: {
       id: workspaceId,
-      members: {
-        some: {
-          user: {
-            email: session.user.email
-          }
-        }
-      }
+      ...issueAccessWhere(session.user.id).workspace
     }
   });
 
@@ -48,6 +43,7 @@ export default async function GitHubSettingsPage({ params }: GitHubSettingsPageP
   const project = await prisma.project.findFirst({
     where: {
       workspaceId,
+      ...issueAccessWhere(session.user.id),
       slug: projectSlug
     },
     include: {
@@ -99,7 +95,7 @@ export default async function GitHubSettingsPage({ params }: GitHubSettingsPageP
     branchEnvironmentMap: project.repository.branchEnvironmentMap as Record<string, string> || {},
     issueTypeMapping: project.repository.issueTypeMapping as Record<string, string> || {},
     webhookId: project.repository.webhookId,
-    webhookSecret: project.repository.webhookSecret,
+    webhookConfigured: Boolean(project.repository.webhookSecret),
     syncedAt: project.repository.syncedAt?.toISOString() || null,
     branches: project.repository.branches.map(b => ({
       id: b.id,
