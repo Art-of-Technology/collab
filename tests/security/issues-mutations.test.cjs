@@ -1,4 +1,5 @@
-const { assert, test, resolve, load, matches, issues, prisma, findIssueByIdOrKey, userHasWorkspaceAccess } = require('./helpers.cjs');
+const { assert, test, resolve, load, matches, workspaces, issues, prisma, findIssueByIdOrKey, userHasWorkspaceAccess } = require('./helpers.cjs');
+const { issueReadAccessWhere } = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } });
 
 
 test('issue IDs and keys require ownership or active membership, even with explicit workspace', async () => {
@@ -20,9 +21,11 @@ test('issue IDs and keys require ownership or active membership, even with expli
 test('issue mutations reject mass assignment, foreign relations and read-only users', async () => {
   let allowed = true;
   let writes = 0;
-  const existing = { id: 'issue', workspaceId: 'own', projectId: 'project', reporterId: 'alice', title: 'Before' };
+  const workspace = workspaces.find(row => row.id === 'own');
+  const existing = { id: 'issue', workspaceId: 'own', projectId: 'project', reporterId: 'alice', title: 'Before',
+    workspace, project: { workspace }, statusId: null };
   const db = {
-    issue: { findFirst: async ({ where }) => where.id === existing.id ? existing : null, findUnique: async () => existing, delete: async () => { writes++; },
+    issue: { findFirst: async ({ where }) => matches(existing, where) ? existing : null, findUnique: async () => existing, delete: async () => { writes++; },
       update: async ({ data }) => { writes++; return { ...existing, ...data }; } },
     project: { findFirst: async () => null },
     projectStatus: { findMany: async () => [] },
@@ -41,6 +44,7 @@ test('issue mutations reject mass assignment, foreign relations and read-only us
       checkUserPermissions: async (_user, _workspace, permissions) => Object.fromEntries(permissions.map(p => [p, { hasPermission: allowed }])),
     },
     '@/lib/issue-finder': {
+      issueReadAccessWhere,
       findIssueByIdOrKey: async () => existing, getStandardIssueInclude: () => ({}),
       userHasWorkspaceAccess: async user => user === 'alice',
     },
@@ -147,7 +151,7 @@ test('review: issue field grants and atomic same-workspace project moves preserv
     '@/lib/prisma': { prisma: db }, '@/lib/session': { getCurrentUser: async () => ({ id: 'alice' }) },
     '@/lib/permissions': { ...permissionModule,
       checkUserPermissions: async (_user, _workspace, requested) => Object.fromEntries(requested.map(p => [p, { hasPermission: grants.includes(p) }])) },
-    '@/lib/issue-finder': { getStandardIssueInclude: () => ({}),
+    '@/lib/issue-finder': { getStandardIssueInclude: () => ({}), issueReadAccessWhere,
       findIssueByIdOrKey: async () => ({ ...state }),
       userHasWorkspaceAccess: async (user, workspace) => active && workspace === 'joined' && ['alice', 'bob'].includes(user) },
     '@/lib/board-item-activity-service': { compareObjects: () => [], trackStatusChange: async () => {}, trackAssignment: async () => {} },
@@ -156,7 +160,9 @@ test('review: issue field grants and atomic same-workspace project moves preserv
     '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
   }, { URL, console });
   function reset() {
+    const workspace = workspaces.find(row => row.id === 'joined');
     state = { id: 'issue', workspaceId: 'joined', projectId: 'source', reporterId: 'bob', assigneeId: 'alice',
+      workspace, project: { workspace }, projectStatus: { project: { workspace } },
       statusId: 'old-todo', statusValue: 'todo', status: 'todo', title: 'Keep', issueKey: 'SOURCE-1',
       updatedAt: new Date('2026-09-23T00:00:00Z'), parentId: null, labels: [{ id: 'label', workspaceId: 'joined' }],
       children: [], branches: [], commits: [], pullRequests: [], versionIssues: [], description: 'Keep content' };

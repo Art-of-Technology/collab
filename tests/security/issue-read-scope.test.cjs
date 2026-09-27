@@ -1,10 +1,10 @@
 const { assert, test, load, matches } = require('./helpers.cjs');
 
-function fixture() {
+function fixture(beforeTransaction = () => {}) {
   const own = { id: 'own', ownerId: 'alice', members: [] };
   const joined = { id: 'joined', ownerId: 'bob', members: [{ userId: 'alice', status: true }] };
   const project = { id: 'project', workspace: own };
-  const otherProject = { id: 'other-project', workspace: joined };
+  const otherProject = { id: 'other-project', name: 'private project', description: 'private description', workspace: joined };
   const child = { id: 'child', title: 'private child', workspace: joined, project: otherProject, statusId: null };
   const root = { id: 'issue', issueKey: 'OWN-1', title: 'Root', workspaceId: own.id, workspace: own,
     projectId: project.id, project, statusId: null, projectStatus: null, reporterId: 'alice', parentId: child.id,
@@ -33,7 +33,11 @@ function fixture() {
       update: async ({ data, include }) => { writes++; Object.assign(root, data); return projectResult(root, include); },
     },
     issueFollower: { findMany: async () => [] }, projectFollower: { findMany: async () => [] },
-    $transaction: async (fn, options) => { assert.equal(options.isolationLevel, 'Serializable'); return fn(db); },
+    $transaction: async (fn, options) => {
+      assert.equal(options.isolationLevel, 'Serializable');
+      beforeTransaction();
+      return fn(db);
+    },
   };
   const permissions = load('src/lib/permissions.ts', { './prisma': { prisma: {} } });
   const dependencies = {
@@ -52,6 +56,48 @@ function fixture() {
     method, ...(method === 'PUT' ? { body: JSON.stringify({ title: 'Updated' }) } : {}),
   }), { params: Promise.resolve({ issueId: key }) });
   return { root, child, joined, otherProject, invoke, contentReads, writes: () => writes };
+}
+
+for (const association of ['workspace', 'project', 'status']) {
+  test(`PUT denies ${association} revocation at transaction entry after successful lookup`, async () => {
+    let entries = 0;
+    let before;
+    const f = fixture(() => {
+      entries++;
+      assert.equal(f.joined.members[0].status, true);
+      f.joined.members[0].status = false;
+      before = structuredClone(f.root);
+    });
+    if (association === 'workspace') {
+      f.root.workspaceId = f.joined.id;
+      f.root.workspace = f.joined;
+    } else if (association === 'project') {
+      f.root.projectId = f.otherProject.id;
+      f.root.project = f.otherProject;
+    } else {
+      f.root.statusId = 'status';
+      f.root.projectStatus = { id: 'status', name: 'private status', project: f.otherProject };
+    }
+    const denied = await f.invoke('PUT');
+    assert.equal(entries, 1);
+    assert.equal(denied.status, 409);
+    assert.equal(denied.body.error, 'Issue changed; reload and retry');
+    assert.equal(denied.body.issue, undefined);
+    assert.equal(JSON.stringify(denied.body).includes('private'), false);
+    assert.equal(f.writes(), 0);
+    assert.deepEqual(f.root, before);
+    assert.deepEqual(f.contentReads, []);
+
+    f.joined.ownerId = 'alice';
+    f.joined.members[0].status = true;
+    const allowed = await f.invoke('PUT');
+    assert.equal(entries, 2);
+    assert.equal(f.joined.members[0].status, false);
+    assert.equal(allowed.status, 200);
+    assert.equal(allowed.body.issue.title, 'Updated');
+    assert.equal(f.root.title, 'Updated');
+    assert.equal(f.writes(), 1);
+  });
 }
 
 for (const association of ['project', 'status']) {
