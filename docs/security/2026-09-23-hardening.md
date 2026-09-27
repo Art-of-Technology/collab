@@ -470,7 +470,8 @@ separate.
 
 ### Gateway session core (inactive integration)
 
-For current adapter coverage, see [shared session consumers](#shared-session-consumers).
+For current adapter coverage, see [shared session consumers](#shared-session-consumers)
+and [direct action session consumers](#direct-action-session-consumers).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -516,7 +517,6 @@ the two integration cases load both helpers, adapter and identity parser in
 gateway/invalid/default/legacy modes. Prisma, NextAuth and headers are modeled.
 This proves modeled shared-helper behavior only; activation and acceptance remain
 subject to the [gateway integration requirements](#gateway-session-core-inactive-integration).
-
 
 ### Direct action session consumers
 
