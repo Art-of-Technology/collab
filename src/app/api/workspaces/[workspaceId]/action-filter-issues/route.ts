@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import type { ActionFilter } from '@/components/views/selectors/ActionFiltersSelector';
 
 export async function POST(
@@ -11,24 +12,28 @@ export async function POST(
   try {
     const session = await getServerSession(authConfig);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { workspaceId } = await params;
-    const { actionFilters }: { actionFilters: ActionFilter[] } = await request.json();
+    const body = await request.json();
+    const actionFilters: ActionFilter[] = body?.actionFilters;
+    if (!Array.isArray(actionFilters) || !actionFilters.every(filter =>
+      filter && typeof filter.actionType === 'string' && filter.actionType.trim() &&
+      (filter.subConditions === undefined || (filter.subConditions &&
+        ['to', 'from', 'by'].includes(filter.subConditions.type) &&
+        Array.isArray(filter.subConditions.values) &&
+        filter.subConditions.values.every(value => typeof value === 'string')))
+    )) {
+      return NextResponse.json({ error: 'Invalid action filters' }, { status: 400 });
+    }
 
     // Verify user has access to workspace
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: {
-          some: {
-            user: {
-              email: session.user.email
-            }
-          }
-        }
+        ...issueAccessWhere(session.user.id).workspace
       }
     });
 
@@ -62,7 +67,7 @@ export async function POST(
               const statusRecords = await prisma.projectStatus.findMany({
                 where: {
                   id: { in: values },
-                  project: { workspaceId }
+                  project: { workspaceId, ...issueAccessWhere(session.user.id) }
                 },
                 select: { name: true, displayName: true }
               });
@@ -145,6 +150,15 @@ export async function POST(
       issueIds = Array.from(firstSet).filter(issueId =>
         queryResults.every(resultSet => resultSet.has(issueId))
       );
+    }
+
+    if (issueIds.length > 0) {
+      const readable = await prisma.issue.findMany({
+        where: { workspaceId, id: { in: issueIds }, ...issueReadAccessWhere(session.user.id) },
+        select: { id: true }
+      });
+      const readableIds = new Set(readable.map(issue => issue.id));
+      issueIds = issueIds.filter(id => readableIds.has(id));
     }
 
     return NextResponse.json({ issueIds });
