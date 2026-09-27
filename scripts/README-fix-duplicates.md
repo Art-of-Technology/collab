@@ -18,10 +18,9 @@ npx tsx scripts/fix-duplicate-issue-prefixes.ts
 ```
 
 ### Step 2: Apply database constraints
-```bash
-npx prisma db push
-npx prisma generate
-```
+Use the reviewed migration process described in the
+[database guide](../docs/database-bootstrap.md), then regenerate the Prisma client
+with `npx prisma generate`.
 
 ## Example Output
 ```
@@ -41,7 +40,6 @@ npx prisma generate
    • Projects successfully updated: 1
 
 ✅ All duplicate issue prefixes have been fixed!
-💡 You can now run: npx prisma db push
 ```
 
 ## Safety Features

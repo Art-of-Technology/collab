@@ -75,12 +75,8 @@ Create:
 ## 📋 Pending Tasks
 
 ### 1. Database Migration
-Currently blocked by shadow DB issue. Workaround:
-```bash
-npx prisma db push  # For development
-# OR
-Fix shadow DB and run: npx prisma migrate dev
-```
+See the [database bootstrap guide](docs/database-bootstrap.md) for empty-database
+setup, existing-installation requirements and historical replay limitations.
 
 ### 2. UI Enhancements
 Need to add to `TeamSyncView` and `PlanningViewRenderer`:
@@ -141,7 +137,7 @@ Person Y moves Issue-123 (assigned to Person X) to Done
 
 ## 🚀 Next Steps
 
-1. **Apply Migration** - Run `npx prisma db push` or fix shadow DB
+1. **Apply Migration** - Follow the [database guide](docs/database-bootstrap.md)
 2. **Create API** - Manual planning endpoints
 3. **Update UI** - Add manual planning controls
 4. **Test** - Verify with real team data
