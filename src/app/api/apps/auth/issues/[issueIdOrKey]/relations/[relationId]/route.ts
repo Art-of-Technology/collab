@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
 /**
  * Third-Party App API: Issue Relation Delete Endpoint
  * DELETE /api/apps/auth/issues/:issueIdOrKey/relations/:relationId - Delete relation
@@ -58,6 +59,8 @@ export const DELETE = withAppAuth(
         );
       }
 
+      await assertLegacyIssueWriteAllowed(relation.sourceIssueId, relation.targetIssueId);
+
       // Delete the relation
       await prisma.issueRelation.delete({
         where: { id: relationId },
@@ -83,6 +86,7 @@ export const DELETE = withAppAuth(
         deletedRelationId: relationId,
       });
     } catch (error) {
+      if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       console.error('Error deleting relation:', error);
       return NextResponse.json(
         { error: 'server_error', error_description: 'Internal server error' },

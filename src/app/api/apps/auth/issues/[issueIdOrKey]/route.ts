@@ -1,3 +1,4 @@
+import { ForgeProjectWriteError, assertLegacyIssueDeleteAllowed, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
 /**
  * Third-Party App API: Single Issue Endpoints
  * GET /api/apps/auth/issues/:issueIdOrKey - Get issue details
@@ -216,6 +217,12 @@ export const PATCH = withAppAuth(
         );
       }
 
+      await assertLegacyIssueWriteAllowed(
+        existingIssue.id,
+        ...(updateData.parentId !== undefined && existingIssue.parentId ? [existingIssue.parentId] : []),
+        ...(updateData.parentId ? [updateData.parentId] : []),
+      );
+
       // Build update object
       const update: any = {};
 
@@ -401,6 +408,7 @@ export const PATCH = withAppAuth(
 
       return NextResponse.json(updatedIssue);
     } catch (error) {
+      if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
         return NextResponse.json(
           {
@@ -439,6 +447,8 @@ export const DELETE = withAppAuth(
         );
       }
 
+      await assertLegacyIssueDeleteAllowed(existingIssue.id);
+
       // Delete the issue
       await prisma.issue.delete({
         where: { id: existingIssue.id },
@@ -466,6 +476,7 @@ export const DELETE = withAppAuth(
         },
       });
     } catch (error) {
+      if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       console.error('Error deleting issue:', error);
       return NextResponse.json(
         { error: 'server_error', error_description: 'Internal server error' },

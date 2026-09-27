@@ -66,7 +66,10 @@ The following scopes are available for third-party applications:
 
 ## Error Responses
 
-All endpoints return consistent error responses:
+The usual error response format is shown below. Legacy issue writes affecting
+Forge-connected projects return HTTP 409 with `error` set to
+`forge_connected_project` and a human-readable `error_description` in this same
+JSON envelope.
 
 ```json
 {

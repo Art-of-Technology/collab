@@ -37,24 +37,7 @@ The following scopes are available for third-party applications:
 
 ## Error Responses
 
-All endpoints return consistent error responses:
-
-```json
-{
-  "error": "error_code",
-  "error_description": "Human-readable error description",
-  "details": {} // Optional additional error details
-}
-```
-
-Common error codes:
-- `missing_token` - No authorization token provided
-- `invalid_token` - Invalid or expired access token
-- `insufficient_scope` - Token doesn't have required scopes
-- `validation_error` - Request data validation failed
-- `resource_not_found` - Requested resource not found
-- `insufficient_permissions` - User lacks required permissions
-- `server_error` - Internal server error
+See the served reference for [error responses](../public/docs/third-party-api.md#error-responses).
 
 ## Rate Limiting
 

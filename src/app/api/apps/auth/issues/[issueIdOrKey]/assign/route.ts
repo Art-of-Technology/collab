@@ -1,3 +1,4 @@
+import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 /**
  * Third-Party App API: Issue Assignment Endpoint
  * POST /api/apps/auth/issues/:issueIdOrKey/assign - Assign/unassign issue
@@ -51,6 +52,8 @@ export const POST = withAppAuth(
           { status: 404 }
         );
       }
+
+      await assertLegacyIssueWriteAllowed(issue.id);
 
       const oldAssigneeId = issue.assigneeId;
 
@@ -196,6 +199,7 @@ export const POST = withAppAuth(
         },
       });
     } catch (error) {
+      if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
         return NextResponse.json(
           {
