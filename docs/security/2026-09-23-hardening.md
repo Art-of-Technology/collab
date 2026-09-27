@@ -1076,18 +1076,22 @@ remain activation requirements. No runtime, provider or database operation ran.
 
 Seven View API modules use one workspace-and-visibility predicate. Reads require
 workspace ownership or active membership, plus view ownership, WORKSPACE
-visibility or explicit SHARED recipient access. WORKSPACE members retain edit
-access; PERSONAL/SHARED edits and deletion remain owner-only. The workspace
-DELETE route retains its default-view guard; the global slug route retains its
-existing distinct behavior. Five session consumers use the shared adapter and
-resolve the current database user by session ID rather than mutable email.
+visibility or explicit SHARED recipient access. Active workspace members and
+workspace owners retain edit access to WORKSPACE views; PERSONAL/SHARED edits
+and deletion of any view remain view-owner-only, with workspace access required.
+`/api/views/[viewId]` resolves a slug with a required `workspaceId` query parameter;
+the workspace routes and favorite/follow/issue-position subroutes use view IDs.
+The workspace DELETE route rejects default views; the global slug DELETE route
+has no default-view guard. Five session-consuming modules use the shared adapter
+and resolve the current database user by session ID rather than mutable email.
 
 Supplied project/workspace references require current actor access; recipients
-and replacement owners must belong to the view workspace or own it. Accessible
-cross-workspace configuration remains supported. Favorite/follow and view
+and replacement owners must actively belong to the view workspace or own it.
+Accessible cross-workspace configuration remains supported. Favorite/follow and view
 mutations repeat access predicates in their final selectors or checked connects.
-Issue positions independently require accessible issues in the view workspace,
-including payload reads; single issue keys persist the resolved canonical ID.
+Issue-position writes require view read access, not view edit access. Position
+reads and writes independently require accessible issues in the view workspace;
+single issue keys persist the resolved canonical ID.
 Bulk cleanup can reference only issues validated in that batch. Existing
 responses, rate-limit wrappers and WORKSPACE editing policy are retained.
 
