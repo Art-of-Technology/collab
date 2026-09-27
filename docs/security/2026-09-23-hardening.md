@@ -1146,3 +1146,32 @@ unexpected action exceptions, browser rendering, every external consumer or
 runtime acceptance. Gateway and worker remain disabled; trusted ingress and
 mutation-Origin requirements remain. No provider, database, browser, runtime or
 deployment operation was performed.
+
+## AI dashboard payload access
+
+The dashboard uses the shared session adapter and repeats current workspace
+owner/active-member access on payload queries. Recent views use the existing
+view visibility/recipient predicate, protecting both recently-viewed results
+and interaction shortcuts. Root issues, comment issue previews, team assignments,
+project issue lists and counts use `issueReadAccessWhere`. Blocking relations
+require both endpoints to be readable. Existing status, date and reporter/assignee
+filters remain conjunctive with access; ordering, limits, classifier and response
+transformations are unchanged. These are local database heuristics, not model
+provider calls.
+
+The [focused fixture](../../tests/security/ai-dashboard-access.test.cjs) runs
+the actual handler, session/identity/access helpers and status classifier with
+modeled Prisma. Five baseline failures and one control become six passing cases,
+including private/shared views in both response paths, inconsistent issue
+project/status/workspace references, nested counts, hidden blocking endpoints,
+owner access without membership, gateway denial and modeled query-time revocation.
+The neighboring profile/timeline/notification fixture also passes: 26 Node entries
+in total include one enclosing test, representing 25 distinct applicable cases.
+A scoped Prisma/Next typecheck covers five exact non-import module bodies.
+
+This does not establish native isolation, post-snapshot revocation, every time
+window or ranking branch, provider/runtime acceptance or browser rendering.
+View project-ID configuration, name-based mention matching, raw error logging
+and cross-query snapshot consistency remain separate. Gateway and worker remain
+disabled; trusted ingress and mutation-Origin enforcement remain required.
+No database, provider, browser, runtime or deployment operation was run.
