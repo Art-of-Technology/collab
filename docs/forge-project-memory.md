@@ -72,8 +72,10 @@ path is `/run/config/collab-memory-writer.json`, selected by
 
 These addresses are examples, not deployment configuration. Network Doctor owns
 the actual private address, TLS trust, secret custody and network policy:
-app to writer only, writer to Forge only, no published host port. The app must
-trust the writer certificate and the writer must trust Forge; TLS verification
+only Collab may reach the writer, writer egress is Forge-only, and the writer
+has no published host port. Collab retains direct Forge access for reads and
+save readback using its application token. The app must trust the writer
+certificate and the writer must trust Forge; TLS verification
 stays enabled. The service credential must be distinct from the Forge token,
 contain no whitespace and have at least 32 characters.
 
