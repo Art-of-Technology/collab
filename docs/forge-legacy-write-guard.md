@@ -19,8 +19,9 @@ and needs no existing-project guard; read handlers need no write-error branch. I
 connection configuration fails closed. Guards read binding metadata, never Forge
 tokens or remote data.
 
-Forge guard denials in the third-party app API return HTTP 409 with
-`error: forge_connected_project` and a human-readable `error_description`.
+Forge guard denials in the third-party app API return HTTP 409 with the normal
+JSON error envelope: `error` set to `forge_connected_project` and a human-readable
+`error_description`.
 Parent changes check the old and new parent before writes. Existing OAuth, scope and
 workspace access checks still apply.
 
