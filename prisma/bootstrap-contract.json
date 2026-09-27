@@ -1,0 +1,85 @@
+{
+  "format": "collab-empty-bootstrap-v1",
+  "prismaVersion": "6.19.3",
+  "schemaSha256": "ae7238b993f65867d349a522832526ab6e59d3f1b805d1841081fd345357b791",
+  "migrations": [
+    {
+      "name": "20250101000000_remove_task_relations_foreign_key",
+      "sha256": "e7c624833b10bf2e75bff5a2126be4d0dad35de9c150b1a9c776c378de5c752f"
+    },
+    {
+      "name": "20250109000000_knowledge_system_notes",
+      "sha256": "bb97ef733663802340ee7b05fecf6e3d562570c5b38b7be01a28a94010af9bfb"
+    },
+    {
+      "name": "20250112000000_note_pinning",
+      "sha256": "5133c1723e3798890703fb7d42332d01afcf7acacb7e803af2422bb5b320e93b"
+    },
+    {
+      "name": "20250113000000_secrets_vault",
+      "sha256": "0aa70d7ca92e7f60aeb36e8b637871327890763025d16bf5c7f1943e4ac815af"
+    },
+    {
+      "name": "20250115120000_add_api_key_revealed",
+      "sha256": "4c89e6c0c821371f8e7eb2dde67e58e1eda2da736f4d6fe3252231bbf51d1e34"
+    },
+    {
+      "name": "20250820135504_task_relations",
+      "sha256": "5c12aa49fd93a652bcd4bd144ea0b71f6129b596ce791abd470719d3e3cafac4"
+    },
+    {
+      "name": "20250820140038_workspace_member_user_status",
+      "sha256": "9a376da3db1444ece89eb266b69a985a14311d364c397b79f1f10739b639f77d"
+    },
+    {
+      "name": "20250821092437_bug_enum_type_added",
+      "sha256": "1df0ba14b3229d82c6b53decf3366a888e27b45b1954d628519d2d2b60f5c8ac"
+    },
+    {
+      "name": "20251211000000_migrate_board_item_activity",
+      "sha256": "57b16134dc9cf3c3eeead51b40dfdbee792b1e639fc9c3883177f613bd84942e"
+    },
+    {
+      "name": "20251211_migrate_board_item_activity_to_issue_activity",
+      "sha256": "2e8924288f389527c1ec0b063b13491cef0507a6fe718e63fb03285aad682f9d"
+    },
+    {
+      "name": "20260924010000_forge_execution_attempt",
+      "sha256": "7a4b4f4dcb182bc49df770a600309a63466849df6e14d02b3250d1fee722561a"
+    },
+    {
+      "name": "20260924130000_version_access_invalidation",
+      "sha256": "6169ee2e50de8e57b3537f3a93bbe5d38a55548c4a7d542a331e243cb2209dff"
+    }
+  ],
+  "unmodeledCatalog": {
+    "readyStateCheck": "ForgeExecutionAttempt_state_check",
+    "readyActiveUniqueIndex": "ForgeExecutionAttempt_active_issue_key",
+    "versionFunctionsAndTriggers": [
+      {
+        "name": "retain_version_access_invalidation",
+        "table": "Version"
+      },
+      {
+        "name": "invalidate_child_version_access",
+        "table": "Version"
+      },
+      {
+        "name": "invalidate_unlinked_version_access",
+        "table": "VersionIssue"
+      },
+      {
+        "name": "invalidate_issue_version_access",
+        "table": "Issue"
+      },
+      {
+        "name": "invalidate_project_version_access",
+        "table": "Project"
+      },
+      {
+        "name": "invalidate_status_version_access",
+        "table": "ProjectStatus"
+      }
+    ]
+  }
+}

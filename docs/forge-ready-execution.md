@@ -17,7 +17,7 @@ deployment occurs. The configured model label is not runtime model attestation.
 ## Deployment contract
 
 Apply `20260924010000_forge_execution_attempt` using the normal reviewed
-migration process. New empty databases require a separately qualified bootstrap; historical migrations do not initialize them. Its partial unique index permits only one active attempt per
+migration process. New empty databases require the [explicit bootstrap](database-bootstrap.md), separately qualified against the exact schema and migration contract; historical migrations do not initialize them. Its partial unique index permits only one active attempt per
 project/issue; the generation index fences competing preparation transactions.
 Do not replace migration execution with Prisma db push, which omits the partial
 index and state constraint. Persist and back up these rows with the app database.
