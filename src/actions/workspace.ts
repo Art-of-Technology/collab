@@ -3,8 +3,19 @@
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
-import { getAuthSession } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/session';
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { generateWorkspaceSlug } from '@/lib/utils';
+
+async function resolveWorkspaceReadId(slugOrId: string) {
+  const workspace = await prisma.workspace.findUnique({
+    where: { slug: slugOrId }, select: { id: true },
+  }) ?? await prisma.workspace.findUnique({
+    where: { id: slugOrId }, select: { id: true },
+  });
+  if (!workspace) throw new Error('Workspace not found');
+  return workspace.id;
+}
 
 /**
  * Get all workspaces for the current user
@@ -63,7 +74,8 @@ export async function getUserWorkspaces() {
     where: {
       members: {
         some: {
-          userId: user.id
+          userId: user.id,
+          status: true
         }
       },
       NOT: {
@@ -125,11 +137,9 @@ export async function getWorkspaceById(workspaceId: string) {
     throw new Error('User not found');
   }
   
-    // Try to find by slug first, then by ID for backward compatibility
-  let workspace = await prisma.workspace.findUnique({
-    where: {
-      slug: workspaceId
-    },
+  const resolvedId = await resolveWorkspaceReadId(workspaceId);
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: resolvedId, AND: [postWorkspaceAccessWhere(user.id)] },
     include: {
       owner: {
         select: {
@@ -153,43 +163,13 @@ export async function getWorkspaceById(workspaceId: string) {
     }
   });
 
-  // If not found by slug, try by ID for backward compatibility
   if (!workspace) {
-    workspace = await prisma.workspace.findUnique({
-      where: {
-        id: workspaceId
-      },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            image: true
-          }
-        },
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
-                role: true
-              }
-            }
-          }
-        }
-      }
-    });
-  }
-
-  if (!workspace) {
-    throw new Error('Workspace not found');
+    throw new Error('You do not have access to this workspace');
   }
   
   // Check if the user has access to this workspace
   const isOwner = workspace.ownerId === user.id;
-  const isMember = workspace.members.some((member) => member.userId === user.id);
+  const isMember = workspace.members.some((member) => member.userId === user.id && member.status === true);
   
   if (!isOwner && !isMember) {
     throw new Error('You do not have access to this workspace');
@@ -648,13 +628,11 @@ export async function getUserWorkspacesById(userId: string, limit?: number) {
     throw new Error('User ID is required');
   }
   
+  const currentUser = await getCurrentUser();
+  if (!currentUser || currentUser.id !== userId) throw new Error('Unauthorized');
+
   const userWorkspaces = await prisma.workspace.findMany({
-    where: {
-      OR: [
-        { ownerId: userId },
-        { members: { some: { userId } } }
-      ]
-    },
+    where: postWorkspaceAccessWhere(currentUser.id),
     take: limit || undefined,
     include: {
       owner: {
@@ -706,16 +684,18 @@ export async function getPendingInvitations(email: string) {
  * Get a workspace by ID with full details for the workspace detail page
  */
 export async function getDetailedWorkspaceById(workspaceId: string) {
-  const session = await getAuthSession();
+  const currentUser = await getCurrentUser();
   
-  if (!session?.user?.id) {
+  if (!currentUser) {
     throw new Error('Unauthorized');
   }
   
-  // Try to find by slug first, then by ID for backward compatibility
-  let workspace = await prisma.workspace.findUnique({
+  const resolvedId = await resolveWorkspaceReadId(workspaceId);
+  const isAdmin = currentUser.role === 'SYSTEM_ADMIN';
+  const workspace = await prisma.workspace.findUnique({
     where: {
-      slug: workspaceId
+      id: resolvedId,
+      ...(isAdmin ? {} : { AND: [postWorkspaceAccessWhere(currentUser.id)] }),
     },
     include: {
       owner: {
@@ -779,83 +759,13 @@ export async function getDetailedWorkspaceById(workspaceId: string) {
     }
   });
 
-  // If not found by slug, try by ID for backward compatibility
   if (!workspace) {
-    workspace = await prisma.workspace.findUnique({
-      where: {
-        id: workspaceId
-      },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-            role: true,
-            useCustomAvatar: true,
-            avatarSkinTone: true,
-            avatarEyes: true,
-            avatarBrows: true,
-            avatarMouth: true,
-            avatarNose: true,
-            avatarHair: true,
-            avatarEyewear: true,
-            avatarAccessory: true
-          }
-        },
-        members: {
-          select: {
-            id: true,
-            role: true,
-            status: true,
-            createdAt: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-                role: true,
-                useCustomAvatar: true,
-                avatarSkinTone: true,
-                avatarEyes: true,
-                avatarBrows: true,
-                avatarMouth: true,
-                avatarNose: true,
-                avatarHair: true,
-                avatarEyewear: true,
-                avatarAccessory: true
-              }
-            }
-          },
-          orderBy: { createdAt: 'asc' }
-        },
-        invitations: {
-          where: { status: 'pending' },
-          orderBy: { createdAt: 'desc' },
-          include: {
-            invitedBy: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              }
-            }
-          }
-        }
-      }
-    });
-  }
-  
-  if (!workspace) {
-    throw new Error('Workspace not found');
+    throw new Error('You do not have access to this workspace');
   }
   
   // Check if the user has access to this workspace
-  const isOwner = workspace.ownerId === session.user.id;
-  const isMember = workspace.members.some((member: { user: { id: string } }) => member.user.id === session.user.id);
-  const isAdmin = session.user.role === 'admin';
+  const isOwner = workspace.ownerId === currentUser.id;
+  const isMember = workspace.members.some((member) => member.user.id === currentUser.id && member.status === true);
   
   if (!isOwner && !isMember && !isAdmin) {
     throw new Error('You do not have access to this workspace');
@@ -877,9 +787,12 @@ export async function getWorkspaceMembers(workspaceId: string) {
     throw new Error('Workspace ID is required');
   }
   
+  const currentUser = await getCurrentUser();
+  if (!currentUser) throw new Error('Unauthorized');
+
   // Get workspace with members
   const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
+    where: { id: workspaceId, AND: [postWorkspaceAccessWhere(currentUser.id)] },
     include: {
       owner: {
         select: {

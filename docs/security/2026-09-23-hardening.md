@@ -33,8 +33,18 @@ workspace owner or a current database `SYSTEM_ADMIN`. Stale session role
 metadata does not grant either privilege. GET still requires ownership or active
 membership; system-admin status alone does not bypass this check.
 See the [workspace actor regressions](../../tests/security/workspace-actor.test.cjs).
-This slice does not close remaining workspace listing/detail/member-list or
-invitation authorization gaps, or prove concurrent revocation atomicity.
+The workspace read actions now list owned or actively joined workspaces only;
+`getUserWorkspacesById` requires a live caller matching the supplied user ID.
+Basic detail and member-list reads require ownership or active membership.
+Detailed reads preserve the explicit current-database `SYSTEM_ADMIN` exception.
+Slug-first metadata resolution selects only the ID, preserving missing versus
+forbidden errors; the payload query independently scopes access, so revocation
+between metadata and payload lookup denies without loading relations. Existing
+member/invitation projections remain available to authorized viewers.
+See the [workspace read regressions](../../tests/security/workspace-reads.test.cjs).
+Invitation entry-point authorization, mutation revocation atomicity and actual
+stored workspace-role casing remain follow-ups. These mocked checks do not prove
+revocation after the payload query snapshot or final integrated staging.
 
 `hasWorkspaceAccess` permits workspace owners without a membership row; other
 users require an active membership (`status: true`). Revocation denies access
