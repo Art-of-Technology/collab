@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/session";
+import { repositoryAccessWhere } from "@/lib/github/access";
+import { versionAccessWhere } from "@/lib/github/version-access";
 import { prisma } from "@/lib/prisma";
 
 interface ActivityItem {
@@ -31,7 +34,15 @@ export async function GET(
   { params }: { params: Promise<{ repositoryId: string }> }
 ) {
   try {
+    const actor = await getCurrentUser();
+    if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { repositoryId } = await params;
+    const scope = { repositoryId, repository: repositoryAccessWhere(actor.id) };
+    const versionScope = { ...scope, version: versionAccessWhere(actor.id) };
+    const repository = await prisma.repository.findFirst({
+      where: { id: repositoryId, ...repositoryAccessWhere(actor.id) }, select: { id: true },
+    });
+    if (!repository) return NextResponse.json({ error: "Repository not found" }, { status: 404 });
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '20');
     const type = searchParams.get('type');
@@ -41,7 +52,7 @@ export async function GET(
     // Get commits
     if (!type || type === 'commit') {
       const commits = await prisma.commit.findMany({
-        where: { repositoryId },
+        where: scope,
         orderBy: { commitDate: 'desc' },
         take: Math.floor(limit / 2),
         select: {
@@ -74,7 +85,7 @@ export async function GET(
     // Get pull requests
     if (!type || type === 'pull_request') {
       const pullRequests = await prisma.pullRequest.findMany({
-        where: { repositoryId },
+        where: scope,
         orderBy: { updatedAt: 'desc' },
         take: Math.floor(limit / 3),
         select: {
@@ -118,7 +129,7 @@ export async function GET(
     if (!type || type === 'review') {
       const reviews = await prisma.pRReview.findMany({
         where: {
-          pullRequest: { repositoryId },
+          pullRequest: scope,
         },
         orderBy: { submittedAt: 'desc' },
         take: Math.floor(limit / 4),
@@ -157,7 +168,7 @@ export async function GET(
     // Get releases
     if (!type || type === 'release') {
       const releases = await prisma.release.findMany({
-        where: { repositoryId },
+        where: versionScope,
         orderBy: { publishedAt: 'desc' },
         take: Math.floor(limit / 4),
         select: {
@@ -190,7 +201,7 @@ export async function GET(
     // Get deployments
     if (!type || type === 'deployment') {
       const deployments = await prisma.deployment.findMany({
-        where: { repositoryId },
+        where: versionScope,
         orderBy: { deployedAt: 'desc' },
         take: Math.floor(limit / 4),
         include: {
@@ -225,9 +236,9 @@ export async function GET(
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
 
-    return NextResponse.json({ activities: activities.slice(0, limit) });
-  } catch (error) {
-    console.error('[ACTIVITY_GET]', error);
+    return NextResponse.json({ activities: activities.slice(0, limit) }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    console.error('[ACTIVITY_GET]');
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

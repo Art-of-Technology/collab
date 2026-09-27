@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/session";
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
+import { repositoryAccessWhere } from "@/lib/github/access";
+import { versionAccessWhere } from "@/lib/github/version-access";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/version.json - Public endpoint for version information
+// GET /api/version.json - Authenticated project version information
 export async function GET(request: NextRequest) {
   try {
+    const actor = await getCurrentUser();
+    if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('project');
     const environment = searchParams.get('environment') || 'production';
@@ -16,14 +22,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Find the project and its repository
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, workspace: postWorkspaceAccessWhere(actor.id) },
       include: {
-        repository: true,
+        repository: { select: { id: true } },
       },
     });
 
-    if (!project?.repository) {
+    if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    if (!project.repository) {
       return NextResponse.json(
         {
           version: "0.0.0",
@@ -40,7 +47,7 @@ export async function GET(request: NextRequest) {
         { 
           status: 200,
           headers: {
-            'Cache-Control': 'public, max-age=300', // Cache for 5 minutes
+            'Cache-Control': 'no-store',
           },
         }
       );
@@ -52,6 +59,8 @@ export async function GET(request: NextRequest) {
         repositoryId: project.repository.id,
         environment,
         isActive: true,
+        repository: repositoryAccessWhere(actor.id),
+        version: versionAccessWhere(actor.id),
       },
       include: {
         version: true,
@@ -63,7 +72,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(versionFile.content, {
         status: 200,
         headers: {
-          'Cache-Control': 'public, max-age=300',
+          'Cache-Control': 'no-store',
         },
       });
     }
@@ -74,6 +83,7 @@ export async function GET(request: NextRequest) {
         repositoryId: project.repository.id,
         environment,
         status: 'RELEASED',
+        ...versionAccessWhere(actor.id),
       },
       include: {
         issues: {
@@ -118,7 +128,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(versionData, {
         status: 200,
         headers: {
-          'Cache-Control': 'public, max-age=600', // Cache fallback longer
+          'Cache-Control': 'no-store',
         },
       });
     }
@@ -140,12 +150,12 @@ export async function GET(request: NextRequest) {
       { 
         status: 200,
         headers: {
-          'Cache-Control': 'public, max-age=60', // Cache errors briefly
+          'Cache-Control': 'no-store',
         },
       }
     );
-  } catch (error) {
-    console.error('[VERSION_JSON_GET]', error);
+  } catch {
+    console.error('[VERSION_JSON_GET]');
     
     // Return safe fallback even on error
     return NextResponse.json(
@@ -165,7 +175,7 @@ export async function GET(request: NextRequest) {
       { 
         status: 200, // Don't break deployments
         headers: {
-          'Cache-Control': 'public, max-age=60',
+          'Cache-Control': 'no-store',
         },
       }
     );

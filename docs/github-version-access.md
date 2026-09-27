@@ -15,9 +15,10 @@ issue tenant/status associations, projects or statuses are removed or changed. A
 this migration can hide historical version/release records. Do not automatically clear
 flags or infer safe historical provenance from the current absence of links.
 
+For dashboard, activity and project version.json access, see
+[Repository dashboard and activity access](github-feed-access.md).
 For changelog generation access, see [Changelog generation access](github-changelog-access.md).
-This slice does not qualify every repository route. Dashboard, activity,
-version.json and other version projections still require separate current-source
+Other version projections still require separate current-source
 reconciliation before gateway activation. The migration has not been executed against
 the final integrated database; trigger behavior, populated restore and catalog equality
 remain native acceptance requirements.
