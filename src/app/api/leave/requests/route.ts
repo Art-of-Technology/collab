@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     // Get the current user
     const user = await prisma.user.findUnique({
       where: {
-        email: session.user.email,
+        id: session.user.id,
       },
     });
 
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
       where: { id: workspaceId },
       include: {
         members: {
-          where: { userId: user.id },
+          where: { userId: user.id, status: true },
         },
       },
     });
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
     // Get the current user
     const user = await prisma.user.findUnique({
       where: {
-        email: session.user.email,
+        id: session.user.id,
       },
     });
 
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
       where: { id: policy.workspaceId },
       include: {
         members: {
-          where: { userId: user.id },
+          where: { userId: user.id, status: true },
         },
       },
     });

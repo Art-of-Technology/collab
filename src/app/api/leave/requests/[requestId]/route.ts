@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
+import { userHasWorkspaceAccess } from "@/lib/issue-finder";
 import { prisma } from "@/lib/prisma";
 import { processLeaveRequestAction } from "@/lib/leave-service";
 import { NotificationService } from "@/lib/notification-service";
@@ -47,7 +48,7 @@ export async function PATCH(
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -70,7 +71,7 @@ export async function PATCH(
     // Get the current user
     const user = await prisma.user.findUnique({
       where: {
-        email: session.user.email,
+        id: session.user.id,
       },
     });
 
@@ -165,7 +166,7 @@ export async function PUT(
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -186,7 +187,7 @@ export async function PUT(
     // Get the current user
     const user = await prisma.user.findUnique({
       where: {
-        email: session.user.email,
+        id: session.user.id,
       },
     });
 
@@ -243,7 +244,7 @@ export async function PUT(
       where: { id: existingRequest.policy.workspaceId },
       include: {
         members: {
-          where: { userId: user.id },
+          where: { userId: user.id, status: true },
         },
       },
     });
@@ -400,7 +401,7 @@ export async function DELETE(
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -409,7 +410,7 @@ export async function DELETE(
     // Get the current user
     const user = await prisma.user.findUnique({
       where: {
-        email: session.user.email,
+        id: session.user.id,
       },
     });
 
@@ -459,6 +460,10 @@ export async function DELETE(
         { error: "Cannot cancel requests that have already started" },
         { status: 400 }
       );
+    }
+
+    if (!await userHasWorkspaceAccess(user.id, existingRequest.policy.workspaceId)) {
+      return NextResponse.json({ error: "Access denied to workspace" }, { status: 403 });
     }
 
     // Update the request status to CANCELED
