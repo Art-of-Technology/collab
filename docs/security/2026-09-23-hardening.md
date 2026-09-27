@@ -477,8 +477,9 @@ For current adapter coverage, see [shared session consumers](#shared-session-con
 [app ecosystem API session consumers](#app-ecosystem-api-session-consumers),
 [Notes collection session adapter](#notes-collection-session-adapter),
 [Notes detail session adapter](#notes-detail-session-adapter),
-[Notes history session adapter](#notes-history-session-adapter) and
-[Notes template session adapter](#notes-template-session-adapter).
+[Notes history session adapter](#notes-history-session-adapter),
+[Notes template session adapter](#notes-template-session-adapter) and
+[Notes secrets session adapter](#notes-secrets-session-adapter).
 No proxy, auth route, or deployment mode changes here. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
@@ -999,3 +1000,23 @@ Gateway and worker remain disabled. Null-workspace custom-template detail access
 member-level mutation policy, precheck/final-write races, usage-count timing and
 workspace-wide count-based numbering remain existing limitations outside this
 import change. No provider, credential or runtime operation was performed.
+
+## Notes secrets session adapter
+
+Audit-log GET, copy POST, export GET and reveal POST now inherit the
+[shared adapter contract](#gateway-session-core-inactive-integration). Only four
+session imports changed; `authOptions`, note access, owner/admin gates, audit
+behavior, crypto boundaries, responses and headers remain unchanged.
+
+The [focused fixture](../../tests/security/gateway-notes-secrets.test.cjs) executes
+the actual handlers, identity selector and access/audit helpers with mocked
+Prisma and dummy decryption. It checks mapped actor success, variables/JSON
+responses, audit attribution, explicit/default legacy behavior and identity
+failure before downstream reads or audits. Mapped users denied note access
+still receive the existing ACCESS_DENIED audit for copy/export/reveal, without
+decryption or a success audit; audit-log GET retains its initial 404 denial.
+
+Gateway and worker remain disabled. This does not prove real encryption, raw/env
+formats, every admin/filter/copy branch, native concurrency or runtime acceptance.
+Existing cache behavior, input validation, owner/admin nuances, raw error logs
+and precheck/use races remain separate. No keys or live secrets were accessed.
