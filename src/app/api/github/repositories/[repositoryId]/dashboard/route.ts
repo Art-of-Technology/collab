@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/session";
+import { repositoryAccessWhere } from "@/lib/github/access";
+import { versionAccessWhere } from "@/lib/github/version-access";
 import { prisma } from "@/lib/prisma";
 
 // GET /api/github/repositories/[repositoryId]/dashboard - Get dashboard stats
@@ -7,18 +10,22 @@ export async function GET(
   { params }: { params: Promise<{ repositoryId: string }> }
 ) {
   try {
+    const actor = await getCurrentUser();
+    if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { repositoryId } = await params;
+    const scope = { repositoryId, repository: repositoryAccessWhere(actor.id) };
+    const versionScope = { ...scope, version: versionAccessWhere(actor.id) };
 
     // Get repository with counts
-    const repository = await prisma.repository.findUnique({
-      where: { id: repositoryId },
+    const repository = await prisma.repository.findFirst({
+      where: { id: repositoryId, ...repositoryAccessWhere(actor.id) },
       include: {
         _count: {
           select: {
             commits: true,
             pullRequests: true,
-            versions: true,
-            releases: true,
+            versions: { where: versionAccessWhere(actor.id) },
+            releases: { where: { version: versionAccessWhere(actor.id) } },
             branches: true,
           },
         },
@@ -35,7 +42,7 @@ export async function GET(
 
     const recentCommitsCount = await prisma.commit.count({
       where: {
-        repositoryId,
+        ...scope,
         commitDate: { gte: weekAgo },
       },
     });
@@ -43,19 +50,19 @@ export async function GET(
     // Get open, merged, and total PRs
     const [openPRs, mergedPRs, totalPRs] = await Promise.all([
       prisma.pullRequest.count({
-        where: { repositoryId, state: 'OPEN' },
+        where: { ...scope, state: 'OPEN' },
       }),
       prisma.pullRequest.count({
-        where: { repositoryId, state: 'MERGED' },
+        where: { ...scope, state: 'MERGED' },
       }),
       prisma.pullRequest.count({
-        where: { repositoryId },
+        where: scope,
       }),
     ]);
 
     // Get latest release
     const latestRelease = await prisma.release.findFirst({
-      where: { repositoryId },
+      where: versionScope,
       orderBy: { publishedAt: 'desc' },
       select: {
         tagName: true,
@@ -66,7 +73,7 @@ export async function GET(
 
     // Get total releases count
     const totalReleases = await prisma.release.count({
-      where: { repositoryId },
+      where: versionScope,
     });
 
     // Get branch counts (total and recently updated as "active")
@@ -75,11 +82,11 @@ export async function GET(
 
     const [totalBranches, activeBranches] = await Promise.all([
       prisma.branch.count({
-        where: { repositoryId },
+        where: scope,
       }),
       prisma.branch.count({
         where: {
-          repositoryId,
+          ...scope,
           updatedAt: { gte: monthAgo },
         },
       }),
@@ -107,9 +114,9 @@ export async function GET(
         total: totalBranches,
         active: activeBranches,
       },
-    });
-  } catch (error) {
-    console.error('[DASHBOARD_GET]', error);
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    console.error('[DASHBOARD_GET]');
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
