@@ -260,6 +260,8 @@ Collab is designed to streamline internal communication and work tracking by off
 - Open **Project board** from a project dashboard; see the
   [Forge board guide](docs/forge-board.md) for views, connection requirements
   and the [issue actions guide](docs/forge-issue-actions.md) for editing and comments.
+  The [Ready execution contract](docs/forge-ready-execution.md) covers reviewed
+  runs and independent restore fencing; the worker remains off pending qualification.
 - Open **Approved project memory** from Project Notes; see the
   [project memory guide](docs/forge-project-memory.md) for drafting, approval
   and connection requirements.
@@ -271,6 +273,8 @@ configuration access, see the
 [GitHub lifecycle access contract](docs/security/2026-09-23-hardening.md#github-repository-lifecycle-access).
 For version and release list visibility and migration effects, see the
 [version access contract](docs/github-version-access.md).
+For GitHub metadata visibility on an issue, see the
+[issue GitHub projection contract](docs/issue-github-access.md).
 For settings-page access and webhook configuration display, see the
 [GitHub settings contract](docs/security/2026-09-23-hardening.md#github-settings-page-access-and-webhook-display).
 

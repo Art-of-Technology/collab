@@ -485,6 +485,7 @@ model Project {
   followers       ProjectFollower[]
   featureRequests FeatureRequest[] // Feature requests linked to this project
   notes           Note[] // Knowledge System: project-level notes
+  forgeAttempts   ForgeExecutionAttempt[]
 
   // GitHub Integration - One-to-one relationship with Repository
   repository Repository? // Connected GitHub repository
@@ -494,6 +495,43 @@ model Project {
   @@unique([issuePrefix, workspaceId])
   @@index([workspaceId])
   @@index([workspaceId, isArchived])
+}
+
+model ForgeExecutionAttempt {
+  id                   String    @id @default(uuid())
+  projectId            String
+  workspaceId          String
+  generation           Int       @default(1)
+  issueNumber          Int
+  repositoryId         Int
+  requestedBy          String
+  retryOf              String?
+  state                String    @default("PREPARING")
+  safeToRetry          Boolean   @default(false)
+  sourceFingerprint    String
+  readyFingerprint     String?
+  memorySha            String
+  deploymentKey        String
+  configuredModel      String
+  deploymentRevision   String
+  deploymentIdentity   String
+  input                Json
+  workerId             String?
+  providerRunId        String?
+  heartbeatAt          DateTime?
+  cancelRequestedAt    DateTime?
+  cancelAcknowledgedAt DateTime?
+  finishedAt           DateTime?
+  result               String?
+  stopReason           String?
+  receipt              String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  project              Project   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, issueNumber, generation])
+  @@index([projectId, issueNumber, createdAt])
+  @@index([state, heartbeatAt])
 }
 
 model Issue {

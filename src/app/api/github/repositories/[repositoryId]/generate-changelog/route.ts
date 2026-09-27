@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/session";
+import { repositoryAccessWhere } from "@/lib/github/access";
+import { versionAccessWhere } from "@/lib/github/version-access";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import OpenAI from 'openai';
 
@@ -8,14 +12,22 @@ export async function POST(
   { params }: { params: Promise<{ repositoryId: string }> }
 ) {
   try {
+    const actor = await getCurrentUser();
+    if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { repositoryId } = await params;
+    const scope = { repositoryId, repository: repositoryAccessWhere(actor.id) };
+    const versionScope = { ...scope, ...versionAccessWhere(actor.id) };
 
-    let body: { releaseId?: string; versionId?: string; options?: Record<string, unknown> } = {};
-    try {
-      body = await request.json();
-    } catch {
-      // No body provided, will use defaults
-    }
+    const text = await request.text();
+    let input: unknown;
+    try { input = text.trim() ? JSON.parse(text) : {}; }
+    catch { return NextResponse.json({ error: "Invalid request" }, { status: 400 }); }
+    const parsed = z.object({ releaseId: z.string().min(1).optional(), versionId: z.string().min(1).optional(),
+      options: z.object({ includeCommits: z.boolean().optional(), includePRs: z.boolean().optional(),
+        includeReleaseNotes: z.boolean().optional(), format: z.enum(['markdown', 'html', 'plain']).optional() }).optional(),
+    }).strict().safeParse(input);
+    if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    const body = parsed.data;
 
     const { releaseId, versionId, options } = body;
 
@@ -27,8 +39,9 @@ export async function POST(
     } = options || {};
 
     // Get repository
-    const repository = await prisma.repository.findUnique({
-      where: { id: repositoryId },
+    const repository = await prisma.repository.findFirst({
+      where: { id: repositoryId, ...repositoryAccessWhere(actor.id) },
+      select: { id: true },
     });
 
     if (!repository) {
@@ -42,8 +55,8 @@ export async function POST(
 
     // If releaseId is provided, get the release
     if (releaseId) {
-      release = await prisma.release.findUnique({
-        where: { id: releaseId },
+      release = await prisma.release.findFirst({
+        where: { id: releaseId, ...scope, version: versionAccessWhere(actor.id) },
         include: {
           version: {
             include: {
@@ -56,6 +69,8 @@ export async function POST(
           },
         },
       });
+      if (!release) return NextResponse.json({ error: "Release not found" }, { status: 404 });
+      if (versionId && release.version.id !== versionId) return NextResponse.json({ error: "Conflicting targets" }, { status: 400 });
       if (release?.version) {
         targetVersionId = release.version.id;
         version = release.version;
@@ -63,9 +78,9 @@ export async function POST(
     }
 
     // If no release specified, get the latest release
-    if (!release) {
+    if (!release && !releaseId && !versionId) {
       release = await prisma.release.findFirst({
-        where: { repositoryId },
+        where: { ...scope, version: versionAccessWhere(actor.id) },
         orderBy: { publishedAt: 'desc' },
         include: {
           version: {
@@ -88,7 +103,7 @@ export async function POST(
     // If still no version, get the latest version directly
     if (!version && !targetVersionId) {
       version = await prisma.version.findFirst({
-        where: { repositoryId },
+        where: versionScope,
         orderBy: { createdAt: 'desc' },
         include: {
           issues: {
@@ -100,8 +115,8 @@ export async function POST(
       });
       targetVersionId = version?.id;
     } else if (targetVersionId && !version) {
-      version = await prisma.version.findUnique({
-        where: { id: targetVersionId },
+      version = await prisma.version.findFirst({
+        where: { id: targetVersionId, ...versionScope },
         include: {
           issues: {
             include: {
@@ -111,6 +126,8 @@ export async function POST(
         },
       });
     }
+
+    if (targetVersionId && !version) return NextResponse.json({ error: "Version not found" }, { status: 404 });
 
     // Collect data for changelog generation
     const changelogData: {
@@ -151,7 +168,7 @@ export async function POST(
     // Always get commits from database (they're synced)
     if (includeCommits) {
       const commits = await prisma.commit.findMany({
-        where: { repositoryId },
+        where: scope,
         orderBy: { commitDate: 'desc' },
         take: 100,
         select: {
@@ -174,7 +191,7 @@ export async function POST(
     if (includePRs) {
       const prs = await prisma.pullRequest.findMany({
         where: {
-          repositoryId,
+          ...scope,
           state: 'MERGED',
         },
         orderBy: { mergedAt: 'desc' },
@@ -214,6 +231,12 @@ export async function POST(
 
     // Categorize commits by type
     const categorizedCommits = categorizeCommits(changelogData.commits);
+
+    // Recheck before forwarding private context to the provider.
+    const current = targetVersionId
+      ? await prisma.version.findFirst({ where: { id: targetVersionId, ...versionScope }, select: { id: true } })
+      : await prisma.repository.findFirst({ where: { id: repositoryId, ...repositoryAccessWhere(actor.id) }, select: { id: true } });
+    if (!current) return NextResponse.json({ error: "Access changed" }, { status: 404 });
 
     // Generate changelog with AI
     const openai = new OpenAI({
@@ -292,7 +315,7 @@ ${format === 'plain' ? '- Use plain text with clear structure and bullet points'
     // Store the generated changelog
     if (targetVersionId) {
       await prisma.version.update({
-        where: { id: targetVersionId },
+        where: { id: targetVersionId, ...versionScope },
         data: {
           aiChangelog: changelog,
           aiSummary: summary,
@@ -305,9 +328,9 @@ ${format === 'plain' ? '- Use plain text with clear structure and bullet points'
       summary,
       versionId: targetVersionId,
       releaseName: changelogData.releaseName,
-    });
-  } catch (error) {
-    console.error('[GENERATE_CHANGELOG_POST]', error);
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    console.error('[GENERATE_CHANGELOG_POST]');
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

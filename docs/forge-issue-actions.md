@@ -55,9 +55,10 @@ state. A verified save starts a board refresh before loading supplemental issue
 details. If that details read fails, the save remains confirmed and retained
 drafts cannot be edited again until a successful reload.
 
-Project routes retain their existing navigation and layout. Server-side legacy
-connected-project write protection
-remains a separate pending slice and is required before activation.
+Project routes retain their existing navigation and layout. The
+[legacy write contract](forge-legacy-write-guard.md) owns connected-project write
+protection and its remaining activation prerequisites. Reviewed agent runs from
+the issue editor follow the [Ready execution contract](forge-ready-execution.md).
 
 Local checks: `node --test tests/security/forge-issue-*.test.cjs` exercises raw
 content preservation, malformed blocks, wrong-token rejection before remote

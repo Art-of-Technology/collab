@@ -117,6 +117,17 @@ test('scoped Forge writes verify custody, stale edits, own comments, readback, a
     const oversized = { action: 'edit', number: 1, expected: issueFingerprint(issue), changes: { description: '界'.repeat(400000) } };
     assert.equal((await writeForgeIssue(binding, oversized, request)).kind, 'invalid');
     assert.equal(writes, 5);
+    mode = ''; const beforeReady = await readForgeIssue(binding, 1, request);
+    comments[0].body = 'Discussion changed';
+    assert.notEqual((await readForgeIssue(binding, 1, request)).discussionFingerprint, beforeReady.discussionFingerprint);
+    const ready = { action: 'ready', number: 1, expected: issueFingerprint(issue), ready: { attemptId: crypto.randomUUID(), deploymentKey: 'reviewed', configuredModel: 'model' } };
+    issue.state = 'closed'; ready.expected = issueFingerprint(issue);
+    assert.equal((await writeForgeIssue(binding, ready, request)).kind, 'rejected'); assert.equal(writes, 5);
+    issue.state = 'open'; ready.expected = issueFingerprint(issue);
+    assert.equal((await writeForgeIssue(binding, ready, request)).kind, 'saved'); assert.equal(writes, 6);
+    assert.equal(splitIssueBody(issue.body).metadata.execution.attemptId, ready.ready.attemptId);
+    assert.equal(splitIssueBody(issue.body).metadata.execution.status, 'ready');
+    assert.equal((await writeForgeIssue(binding, ready, request)).kind, 'conflict'); assert.equal(writes, 6);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 

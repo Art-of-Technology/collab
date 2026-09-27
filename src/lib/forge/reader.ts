@@ -19,6 +19,21 @@ const bindingSchema = z.object({
     principalId: z.number().int().positive(),
     tokenSha256: z.string().regex(/^[a-f0-9]{64}$/),
   }).strict().optional(),
+  execution: z.object({
+    deployments: z.array(z.object({
+      key: segment,
+      label: z.string().min(1).max(100),
+      origin: z.string().url().refine(value => {
+        try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password && url.pathname === '/' && !url.search && !url.hash; }
+        catch { return false; }
+      }),
+      organization: segment,
+      agentId: segment,
+      configuredModel: z.string().min(1).max(200),
+      revision: z.string().regex(/^[a-f0-9]{64}$/),
+      tokenFile: z.string().startsWith('/').max(1024),
+    }).strict()).min(1).max(10).refine(items => new Set(items.map(item => item.key)).size === items.length),
+  }).strict().optional(),
   memory: z.object({
     branch: z.literal('main'),
     writerOrigin: z.string().url().refine(value => {

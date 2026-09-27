@@ -141,6 +141,9 @@ The [Forge board contract](../forge-board.md) owns board reads; the
 [issue actions guide](../forge-issue-actions.md) owns editing and comments. The
 [project memory contract](../forge-project-memory.md) owns canonical storage,
 approval, provenance, credential boundaries and existing Notes compatibility.
+The [Ready execution contract](../forge-ready-execution.md) binds reviewed runs
+and an independent journal outside the SQL restore boundary. Its source checks
+do not qualify native mount durability, provider routing or activation.
 The broader integration below remains future work.
 
 Each Slack workspace/channel binds immutably to a project/repository. Agent work
@@ -1030,6 +1033,10 @@ Existing cache behavior, input validation, owner/admin nuances, raw error logs
 and precheck/use races remain separate. No keys or live secrets were accessed.
 
 ## Issue API session adapter
+
+For current stored GitHub metadata access, see the
+[issue GitHub projection contract](../issue-github-access.md). The adapter-only
+scope and limitations below record the earlier integration evidence.
 
 Issue list/create, issue search and stored GitHub metadata use the
 [shared adapter contract](#gateway-session-core-inactive-integration). Only three
