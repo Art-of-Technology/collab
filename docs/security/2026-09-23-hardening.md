@@ -647,3 +647,20 @@ component with modeled dependencies; the [gateway adapter cases](../../tests/sec
 cover session integration. Competing claims, ownership changes, decryption rollback
 and deferred reveal/rotation ordering are modeled regression evidence, not real
 database concurrency/isolation or browser/runtime acceptance.
+
+### App list and detail visibility
+
+Both public app read routes now scope database reads to published apps or apps
+owned by the current database user. An Authorization header, publisher label or
+administrator role does not grant access to another user's unpublished app.
+Deleted users and ownerless unpublished apps fail closed. List filters are
+conjoined with this scope for both rows and totals before pagination.
+
+Published apps retain anonymous access and their existing installation fields;
+this change does not reinterpret the separate `AppVisibility` field. A live owner
+can read their unpublished apps with their session alone. Response projections,
+ordering and pagination remain unchanged; successful responses are `no-store`.
+Five focused actual-handler checks cover these boundaries with modeled database
+dependencies. They do not establish database snapshot isolation, post-lookup
+revocation behavior or integrated gateway/runtime acceptance. OAuth membership
+and the remaining lifecycle access policies retain their separate gates.

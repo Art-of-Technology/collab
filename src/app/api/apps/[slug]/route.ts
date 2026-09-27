@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AppDetailResponse, AppNotFoundError } from '@/lib/apps/types';
+import { AppDetailResponse } from '@/lib/apps/types';
+import { getCurrentUser } from '@/lib/session';
+import { appReadAccessWhere } from '@/lib/apps/ownership';
 
 import { prisma } from '@/lib/prisma';
 
@@ -9,10 +11,11 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
+    const actor = await getCurrentUser();
 
     // Fetch app with all related data
-    const app = await prisma.app.findUnique({
-      where: { slug },
+    const app = await prisma.app.findFirst({
+      where: { slug, ...appReadAccessWhere(actor?.id) },
       include: {
         versions: {
           orderBy: { createdAt: 'desc' }
@@ -25,16 +28,6 @@ export async function GET(
     if (!app) {
       return NextResponse.json(
         { error: `App with slug "${slug}" not found` },
-        { status: 404 }
-      );
-    }
-
-    // Only return published apps for public access
-    // (In a real implementation, you'd check authentication/authorization here)
-    const isPublicRequest = !request.headers.get('authorization');
-    if (isPublicRequest && app.status !== 'PUBLISHED') {
-      return NextResponse.json(
-        { error: 'App not found' },
         { status: 404 }
       );
     }
@@ -70,7 +63,7 @@ export async function GET(
       permissions: app.permissions as { org: boolean; user: boolean; }
     };
 
-    return NextResponse.json(response);
+    return NextResponse.json(response, { headers: { 'Cache-Control': 'no-store' } });
 
   } catch (error) {
     console.error('Error fetching app details:', error);

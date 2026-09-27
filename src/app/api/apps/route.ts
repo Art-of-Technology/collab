@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AppListResponse } from '@/lib/apps/types';
+import { getCurrentUser } from '@/lib/session';
+import { appReadAccessWhere } from '@/lib/apps/ownership';
 
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
+    const actor = await getCurrentUser();
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const publisherId = searchParams.get('publisherId');
@@ -12,7 +15,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     // Build where clause
-    const where: any = {};
+    const where: any = { AND: [appReadAccessWhere(actor?.id)] };
     if (status && ['DRAFT', 'PUBLISHED', 'SUSPENDED'].includes(status)) {
       where.status = status;
     }
@@ -53,7 +56,7 @@ export async function GET(request: NextRequest) {
       total
     };
 
-    return NextResponse.json(response);
+    return NextResponse.json(response, { headers: { 'Cache-Control': 'no-store' } });
 
   } catch (error) {
     console.error('Error fetching apps:', error);
