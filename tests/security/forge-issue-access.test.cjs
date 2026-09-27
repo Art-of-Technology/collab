@@ -78,7 +78,7 @@ test('editor retains overlap review after unavailable reloads and comment readba
       useTransition: () => [false, callback => { pending = callback(); }],
     };
     const fields = { title: 'A', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' };
-    const ready = title => ({ kind: 'ready', fields: { ...fields, title }, rights: { canEdit: true, canComment: true }, snapshot: { fingerprint: title, issue: { body: '' }, comments: [] } });
+    const ready = title => ({ kind: 'ready', fields: { ...fields, title }, rights: { canEdit: true, canComment: true }, snapshot: { fingerprint: title, issue: { title, state: title === 'C' ? 'closed' : 'open', body: 'Source body' }, comments: [] } });
     next = ready('A');
     const { ForgeIssueEditor } = compile(path.resolve(__dirname, '../../src/app/(main)/[workspaceId]/projects/[projectSlug]/board/ForgeIssueEditor.tsx'), {
       react: hooks, 'react/jsx-runtime': { jsx, jsxs: jsx },
@@ -103,6 +103,11 @@ test('editor retains overlap review after unavailable reloads and comment readba
     await pending;
     nodes = render();
     assert.ok(nodes.some(node => node.type === 'input' && node.props.value === 'B'));
+    const source = nodes.find(node => node.type === 'details');
+    const visibleText = node => node == null ? '' : typeof node !== 'object' ? String(node) : [node.props?.children].flat(Infinity).map(visibleText).join(' ');
+    assert.match(visibleText(source), /Title:\s+C/);
+    assert.match(visibleText(source), /Status:\s+closed/);
+    assert.match(visibleText(source), /Source body/);
     assert.equal(nodes.find(node => node.type === 'button' && node.props.children === 'Save changes').props.disabled, true);
     nodes.find(node => node.type === 'form').props.onSubmit({ preventDefault() {} });
     assert.equal(writes, failureAfterComment ? 1 : 0);
@@ -110,25 +115,4 @@ test('editor retains overlap review after unavailable reloads and comment readba
     nodes = render();
     assert.equal(nodes.find(node => node.type === 'button' && node.props.children === 'Save changes').props.disabled, false);
   }
-});
-
-test('workspace layout contains optional Forge configuration failures after authorization', async () => {
-  const jsx = (type, props) => ({ type, props });
-  let allowed = true, bindingReads = 0;
-  const { default: layout } = compile(path.resolve(__dirname, '../../src/app/(main)/[workspaceId]/layout.tsx'), {
-    react: {}, 'react/jsx-runtime': { jsx, jsxs: jsx },
-    'next/navigation': { redirect: path => { throw new Error(path); } },
-    '@/lib/session': { getCurrentUser: async () => ({ id: 'member' }) },
-    '@/lib/post-access': { postWorkspaceAccessWhere: id => { assert.equal(id, 'member'); return { authorized: true }; } },
-    '@/lib/prisma': { prisma: { workspace: { findFirst: async ({ where }) => { assert.equal(where.authorized, true); return allowed ? { id: 'workspace' } : null; } }, project: { findMany: async () => { throw new Error('Unexpected project lookup'); } } } },
-    '@/components/providers/SidebarProvider': { default: 'provider' },
-    '@/components/layout/LayoutWithSidebar': { default: 'layout' },
-    '@/lib/forge/reader': { readForgeBindings: async () => { bindingReads++; throw new Error('Invalid configuration'); } },
-  });
-  const result = await layout({ children: 'Notes', params: Promise.resolve({ workspaceId: 'workspace' }) });
-  assert.deepEqual(result.props.children.props.forgeProjectPaths, []);
-  assert.equal(result.props.children.props.children, 'Notes');
-  allowed = false;
-  await assert.rejects(layout({ params: Promise.resolve({ workspaceId: 'workspace' }) }), /\/welcome/);
-  assert.equal(bindingReads, 1);
 });

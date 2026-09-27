@@ -112,3 +112,14 @@ test('scoped Forge writes verify custody, stale edits, own comments, readback, a
     assert.equal(writes, 4); assert.equal(comments.filter(row => row.body === 'Posted once').length, 1);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
+
+
+test('clearing metadata owner stays cleared while absent owner uses the native assignee', () => {
+  const { projectForgeTask } = load('tasks');
+  const issue = { number: 1, title: 'Task', state: 'open', assignee: { login: 'Alice' }, body: '```channel-task\n{"owner":"Bob"}\n```' };
+  assert.equal(projectForgeTask(issue).owner, 'Bob');
+  const cleared = { ...issue, ...patchIssueContent(issue, { owner: '' }) };
+  assert.equal(projectForgeTask(cleared).owner, '');
+  assert.equal(cleared.assignee.login, 'Alice');
+  assert.equal(projectForgeTask({ ...issue, body: 'No metadata' }).owner, 'Alice');
+});

@@ -91,7 +91,7 @@ export function ForgeIssueEditor({ number, workspaceSlug, projectSlug, onSaved, 
   return <div className="min-w-0 space-y-5">
     {message && <p role="status" className="break-words text-sm">{message}</p>}
     <Button variant="outline" onClick={reload} disabled={pending}>Reload source, keep draft</Button>
-    <details className="text-sm"><summary className="cursor-pointer">Current source text for comparison</summary><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border p-3">{ready.snapshot.issue.body || 'No description'}</pre></details>
+    <details className="text-sm"><summary className="cursor-pointer">Current source text for comparison</summary><p>Title: {ready.snapshot.issue.title}</p><p>Status: {ready.snapshot.issue.state}</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border p-3">{ready.snapshot.issue.body || 'No description'}</pre></details>
     {ready.bodyWarning && <p role="alert" className="text-amber-300">Task detail blocks need review in the source issue before editing. Comments remain available.</p>}
     <form onSubmit={save}>
       <fieldset disabled={pending || blocked || ready.bodyWarning} className="min-w-0 space-y-3">

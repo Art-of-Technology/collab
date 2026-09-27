@@ -74,4 +74,4 @@ Forge-backed Notes publication is documented in the
 [project memory guide](forge-project-memory.md).
 Live connection, agent execution, staging acceptance and replacement cutover
 remain outstanding. See the [issue actions guide](forge-issue-actions.md) for
-connected-project navigation and the required pre-activation write guard.
+the required pre-activation write guard.

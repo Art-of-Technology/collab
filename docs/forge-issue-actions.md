@@ -44,9 +44,8 @@ retrying to avoid duplicate creation. Pending forms are disabled. Conflict
 reloads retain only dirty fields, refresh untouched fields and require explicit
 review for overlapping edits. A missing comment edit never becomes a new post.
 
-Forge-connected project routes show Board, Project memory, All notes and
-Projects navigation, without the legacy sidebar/chat bar. Other projects retain
-their existing layout. Server-side legacy connected-project write protection
+Project routes retain their existing navigation and layout. Server-side legacy
+connected-project write protection
 remains a separate pending slice and is required before activation.
 
 Local checks: `node --test tests/security/forge-issue-*.test.cjs` exercises raw
