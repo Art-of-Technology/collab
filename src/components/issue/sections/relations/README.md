@@ -57,7 +57,7 @@ relations/
 
 ### 🚀 Robust Functionality
 - **Optimistic Updates**: Immediate UI feedback with error handling
-- **Smart Validation**: Prevents invalid relationships and circular dependencies
+- **Validation and Access**: See the [relation access contract](../../../../../docs/security/2026-09-23-hardening.md#issue-relation-endpoint-visibility) for visibility, input validation, and policy limits.
 - **Efficient Caching**: React Query for optimal data management
 - **API Integration**: Full CRUD operations with proper error handling
 
@@ -110,57 +110,11 @@ import { RelationItem, AddRelationModal } from "@/components/issue/sections/rela
 
 ### Backend Endpoints
 
-#### Get Relations
-```
-GET /api/issues/{issueId}/relations
-Response: {
-  relations: [
-    {
-      id: string,
-      relationType: 'parent' | 'child' | 'blocks' | 'blocked_by' | 'relates_to' | 'duplicates' | 'duplicated_by',
-      relatedItem: {
-        id: string,
-        title: string,
-        issueKey?: string,
-        status?: string,
-        priority?: string,
-        type: 'issue' | 'epic' | 'story' | 'task' | 'milestone',
-        assignee?: User,
-        project?: Project,
-        // ... other fields
-      }
-    }
-  ]
-}
-```
+Relation request and response contracts are owned by the route implementations:
 
-#### Add Relation
-```
-POST /api/issues/{issueId}/relations
-Body: {
-  relatedItemId: string,
-  relationType: RelationType
-}
-```
-
-#### Add Multiple Relations
-```
-POST /api/issues/{issueId}/relations/bulk
-Body: {
-  relations: Array<{
-    relatedItemId: string,
-    relationType: RelationType
-  }>
-}
-```
-
-#### Remove Relation
-```
-DELETE /api/issues/{issueId}/relations/{relatedItemId}
-Body: {
-  relationType: RelationType
-}
-```
+- [Read and create relations](../../../../app/api/workspaces/[workspaceId]/issues/[issueKey]/relations/route.ts)
+- [Create multiple relations](../../../../app/api/workspaces/[workspaceId]/issues/[issueKey]/relations/bulk/route.ts)
+- [Remove a relation](../../../../app/api/workspaces/[workspaceId]/issues/[issueKey]/relations/[relationId]/route.ts)
 
 #### Search Items
 ```
