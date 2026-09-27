@@ -1,3 +1,4 @@
+import { noteTagAccessWhere } from '@/lib/note-tag-access';
 import { noteAccessWhere } from '@/lib/secrets/access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
     const notes = await prisma.note.findMany({
       where: { AND: [where, noteAccessWhere(session.user.id)] },
       include: {
-        tags: true,
+        tags: { where: noteTagAccessWhere(session.user.id) },
         author: {
           select: {
             id: true,

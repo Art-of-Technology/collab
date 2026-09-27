@@ -1,3 +1,4 @@
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
@@ -88,17 +89,12 @@ export async function POST(req: NextRequest) {
         const issue = await prisma.issue.findFirst({
           where: {
             issueKey: id,
+            AND: [issueReadAccessWhere(session.user.id)],
             workspace: {
               OR: [
                 { slug: workspaceIdentifier },
                 { id: workspaceIdentifier }
               ],
-              // User must be a member of the workspace to access issue metadata
-              members: {
-                some: {
-                  userId: session.user.id,
-                },
-              },
             },
           },
           select: {

@@ -1,3 +1,4 @@
+import { noteTagAccessWhere } from '@/lib/note-tag-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
@@ -454,7 +455,7 @@ export async function GET(
         ],
       },
       include: {
-        tags: true,
+        tags: { where: noteTagAccessWhere(actor.id) },
         author: {
           select: { id: true, name: true, image: true },
         },

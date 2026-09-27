@@ -1,3 +1,4 @@
+import { noteTagAccessWhere } from '@/lib/note-tag-access';
 import { canAccessNote } from '@/lib/secrets/access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
@@ -102,7 +103,7 @@ export async function POST(
             slug: true
           }
         },
-        tags: true
+        tags: { where: noteTagAccessWhere(session.user.id) }
       }
     });
 

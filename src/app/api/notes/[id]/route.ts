@@ -1,3 +1,4 @@
+import { noteTagAccessWhere, noteTagConnections } from '@/lib/note-tag-access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
@@ -51,7 +52,7 @@ export async function GET(
         ]
       },
       include: {
-        tags: true,
+        tags: { where: noteTagAccessWhere(session.user.id) },
         author: {
           select: {
             id: true,
@@ -255,6 +256,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Workspace or project access required" }, { status: 403 });
     }
 
+    const tagConnections = await noteTagConnections(session.user.id, tagIds, existingNote.workspaceId, finalProjectId);
+    if (tagConnections === null) {
+      return NextResponse.json({ error: "Tag access required" }, { status: 403 });
+    }
+
     // Handle secrets encryption for secret note types
     const noteType = type !== undefined ? type : existingNote.type;
     const isSecretType = isSecretNoteType(noteType);
@@ -365,14 +371,14 @@ export async function PATCH(
         ...(isOwner && encryptedData.secretVariables !== undefined && { secretVariables: encryptedData.secretVariables }),
         ...(isOwner && isRestricted !== undefined && { isRestricted }),
         ...(isOwner && expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
-        ...(tagIds && {
+        ...(tagIds !== undefined && {
           tags: {
-            set: tagIds.map((tagId: string) => ({ id: tagId }))
+            set: tagConnections
           }
         })
       },
       include: {
-        tags: true,
+        tags: { where: noteTagAccessWhere(session.user.id) },
         author: {
           select: {
             id: true,

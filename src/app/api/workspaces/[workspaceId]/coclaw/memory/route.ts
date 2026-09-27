@@ -1,3 +1,4 @@
+import { noteTagAccessWhere } from '@/lib/note-tag-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { Prisma } from '@prisma/client';
@@ -82,6 +83,7 @@ export async function GET(
         createdAt: true,
         updatedAt: true,
         tags: {
+          where: noteTagAccessWhere(session.user.id),
           select: {
             id: true,
             name: true,
