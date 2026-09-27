@@ -1,6 +1,6 @@
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/request-session";
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -36,9 +36,9 @@ export async function GET(req: Request) {
 
     // Get the current issue with all related data
     const issue = await prisma.issue.findFirst({
-      where: { id: issueId, workspaceId },
+      where: { id: issueId, workspaceId, ...issueReadAccessWhere(session.user.id) },
       include: {
-        labels: true,
+        labels: { where: issueAccessWhere(session.user.id) },
         projectStatus: true,
         assignee: true,
         project: {
@@ -130,7 +130,7 @@ export async function GET(req: Request) {
     if (!issue.labels || issue.labels.length === 0) {
       // Check workspace labels to suggest
       const workspaceLabels = await prisma.taskLabel.findMany({
-        where: { workspaceId },
+        where: { workspaceId, ...issueAccessWhere(session.user.id) },
         take: 5,
       });
 
@@ -187,7 +187,8 @@ export async function GET(req: Request) {
     // 7. Suggest linking to related issues
     const similarIssuesCount = await prisma.issue.count({
       where: {
-        project: { workspaceId },
+        workspaceId,
+        AND: [issueReadAccessWhere(session.user.id), { project: { workspaceId } }],
         id: { not: issueId },
         title: { contains: issue.title.split(' ')[0], mode: 'insensitive' },
       },
@@ -196,6 +197,8 @@ export async function GET(req: Request) {
     if (similarIssuesCount > 0) {
       const existingLinks = await prisma.issueRelation.count({
         where: {
+          sourceIssue: { workspaceId, ...issueReadAccessWhere(session.user.id) },
+          targetIssue: { workspaceId, ...issueReadAccessWhere(session.user.id) },
           OR: [
             { sourceIssueId: issueId },
             { targetIssueId: issueId },
