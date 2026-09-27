@@ -732,8 +732,11 @@ tab; personal success remains on `/projects`. Callback responses clear the cooki
 on the same path and are `no-store`; authorization URLs and state are not logged,
 and raw provider/decryption errors are not returned in redirects.
 
-Sixteen modeled route/helper checks pass after fifteen failures and one control
-on prior source, using actual encryption and mocked provider/database boundaries.
+The historical sixteen-check route/helper run passed after fifteen failures and
+one control on prior source, using actual encryption and mocked provider/database
+boundaries. The R1 regression additionally captures encryption/decryption logs:
+both shared catch sites emit fixed messages while preserving generic throws,
+and tampered state still denies and clears the cookie before provider effects.
 A scoped exact-body Prisma/Next/Node typecheck passes. A newer issuer request
 replaces the browser's pending cookie. Clearing it prevents ordinary subsequent
 browser replay, but does not provide atomic single use against concurrent requests

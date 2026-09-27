@@ -7,8 +7,11 @@ function fixture(options = {}) {
   let actor = { id: 'alice', email: 'alice@example.test', createdAt: new Date(), updatedAt: new Date() };
   const effects = [], logs = [];
   const requestCookieName = options.environment === 'development' ? 'collab-github-oauth' : cookieName;
-  const globals = { URL, Buffer, crypto, Error, process: { env: { NODE_ENV: options.environment || 'production', ENCRYPTION_KEY: 'X7!kPd4@vL9#qR2$wN6%aB8&zC3*mF5+' } }, console: { log: (...v) => logs.push(v), warn() {}, error() {} } };
-  const encryption = load('src/lib/encryption.ts', { crypto: { default: crypto } }, globals).EncryptionService;
+  const globals = { URL, Buffer, crypto, Error, process: { env: { NODE_ENV: options.environment || 'production', ENCRYPTION_KEY: 'X7!kPd4@vL9#qR2$wN6%aB8&zC3*mF5+' } }, console: { log: (...v) => logs.push(v), warn: (...v) => logs.push(v), error: (...v) => logs.push(v) } };
+  const encryption = load('src/lib/encryption.ts', { crypto: { default: { ...crypto, createCipheriv(...args) {
+    if (options.encryptError) throw new Error('raw state=' + 'a'.repeat(64) + ' token=provider-token key=' + globals.process.env.ENCRYPTION_KEY + ' sensitive provider payload');
+    return crypto.createCipheriv(...args);
+  } } } }, globals).EncryptionService;
   const project = { id: 'p1', slug: 'project', workspace: { slug: 'workspace', ownerId: options.access ? 'bob' : 'alice', members: options.access === 'member' || options.access === 'revoked' ? [{ userId: 'alice', status: options.access === 'member' }] : [] } };
   const response = (body, init = {}) => ({ body, status: init.status || 200, headers: new Headers(init.headers), cookies: { values: [], set(...args) { this.values.push(args); } } });
   const deps = {
@@ -33,7 +36,7 @@ function fixture(options = {}) {
   const nonce = 'a'.repeat(64);
   const envelope = overrides => encryption.encrypt({ kind: 'github-oauth-state', version: 1, nonce, userId: 'alice', projectId: null, expiresAt: Date.now() + 300000, ...overrides });
   const request = (path, cookie) => ({ url: 'https://collab.example' + path, cookies: { get: name => name === requestCookieName && cookie ? { value: cookie } : undefined } });
-  return { effects, logs, nonce, envelope, options, setActor: id => actor = { ...actor, id }, issue: query => issuer(request('/api/github/oauth/auth-url' + (query || ''))), callback: (query, cookie) => callback(request('/api/github/oauth/callback?' + query, cookie)) };
+  return { effects, logs, nonce, envelope, encryption, options, setActor: id => actor = { ...actor, id }, issue: query => issuer(request('/api/github/oauth/auth-url' + (query || ''))), callback: (query, cookie) => callback(request('/api/github/oauth/callback?' + query, cookie)) };
 }
 function cleared(response) { assert.ok(response.cookies.values.some(([name, value, opts]) => name === cookieName && value === '' && opts.maxAge === 0 && opts.path === '/')); }
 function denied(f, response) { assert.equal(new URL(response.url).searchParams.has('github_connected'), false); assert.deepEqual(f.effects, []); cleared(response); }
@@ -51,7 +54,7 @@ test('missing or mismatched state and cookie deny before provider effects', asyn
 });
 test('tampered ciphertext, expired state, wrong actor and wrong envelope kind deny', async () => {
   for (const overrides of [{ expiresAt: Date.now() - 1 }, { userId: 'bob' }, { kind: 'other-purpose' }, { projectId: {} }]) { const f = fixture(); denied(f, await f.callback('code=evil&state=' + f.nonce, f.envelope(overrides))); }
-  const f = fixture(); const cookie = f.envelope(); denied(f, await f.callback('code=evil&state=' + f.nonce, cookie.slice(0, 12) + 'XXXX' + cookie.slice(16)));
+  const f = fixture(); const cookie = f.envelope(); denied(f, await f.callback('code=evil&state=' + f.nonce, cookie.slice(0, 12) + 'XXXX' + cookie.slice(16))); assert.deepEqual(f.logs, [['Decryption error']]);
 });
 test('callback rejects duplicate state/code parameters', async () => { for (const suffix of ['&state=other', '&code=other']) { const f = fixture(); denied(f, await f.callback('code=x&state=' + f.nonce + suffix, f.envelope())); } });
 test('callback missing/deleted actor has no provider effects and clears transaction', async () => { for (const flag of ['absent', 'deleted']) { const f = fixture({ [flag]: true }); denied(f, await f.callback('code=x&state=' + f.nonce, f.envelope())); } });
@@ -76,4 +79,12 @@ test('project active member succeeds while revoked and foreign actors cannot iss
 test('personal issuer and explicit local development cookie retain matching callback behavior', async () => {
   const f = fixture({ environment: 'development' }); const r = await f.issue(); const [name, cookie, opts] = r.cookies.values[0]; assert.equal(name, 'collab-github-oauth'); assert.equal(opts.secure, false); assert.equal(opts.httpOnly, true);
   const done = await f.callback('code=ok&state=' + r.body.state, cookie); assert.equal(new URL(done.url).pathname, '/projects'); assert.equal(new URL(done.url).searchParams.get('github_connected'), 'true'); assert.ok(done.cookies.values.some(([key, value, options]) => key === name && value === '' && options.path === '/' && options.maxAge === 0));
+});
+
+test('encryption failures log only fixed messages and preserve safe failure behavior', async () => {
+  const f = fixture(); const cookie = f.envelope(); f.options.encryptError = true;
+  assert.throws(() => f.encryption.encrypt('provider-token'), { message: 'Failed to encrypt data' });
+  const issued = await f.issue(); assert.equal(issued.status, 500); assert.equal(issued.body.error, 'Failed to generate authorization URL'); assert.deepEqual(issued.cookies.values, []); assert.deepEqual(f.effects, []);
+  const done = await f.callback('code=valid&state=' + f.nonce, cookie); cleared(done); assert.equal(new URL(done.url).searchParams.get('github_error'), 'OAuth authentication failed'); assert.equal(new URL(done.url).searchParams.has('github_connected'), false); assert.deepEqual(f.effects, [['exchange', 'valid'], ['profile']]);
+  assert.deepEqual(f.logs, [['Encryption error'], ['Encryption error'], ['Encryption error']]);
 });
