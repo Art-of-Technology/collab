@@ -1318,12 +1318,14 @@ Prisma/Next typecheck covers three exact non-import module bodies, preserving th
 dynamic permissions import through a typecheck path mapping.
 
 This is not native isolation, concurrent reset/permission changes or post-lookup
-revocation proof. Existing custom-role naming/namespace semantics, raw logging and
+revocation proof. Custom-role naming follows the
+[custom-role contract](#custom-role-and-member-role-boundaries); raw logging and
 original casts remain separate. Gateway/worker stay off, generic test is SKIPPED,
 and review/docs/scoped lint/CI/exact-head Octopus and integrated acceptance gates
 remain. No operational seed, database, provider, browser, build or runtime action
 was executed.
-# Custom-role and member-role boundaries
+
+## Custom-role and member-role boundaries
 
 The custom-role collection/detail and member-role routes use the shared session
 adapter with the existing active-member and current management-permission checks.
@@ -1339,7 +1341,8 @@ transaction; supplying permissions replaces the selected role's grants. Foreign
 workspace rows remain outside those mutations. Member assignments reject object
 filters and retain the existing active target, permission and self-downgrade rules.
 
-Focused actual-handler tests model Prisma reads and rollback: 13 failures and four
+The [focused actual-handler tests](../../tests/security/workspace-custom-role-access.test.cjs)
+model Prisma reads and rollback: 13 failures and four
 controls on the base, then 17 passing cases. Five exact non-import source bodies
 pass a scoped strict Prisma/Next typecheck. This is not native isolation or
 concurrent revocation/rename/delete proof. Case-insensitive duplicate checks remain
