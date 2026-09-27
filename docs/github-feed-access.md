@@ -17,5 +17,6 @@ The project version.json endpoint now requires current project access and checks
 stored/fallback version provenance. Its previous public cache directives are removed;
 unauthenticated callers receive 401 and inaccessible projects receive 404.
 
-Changelog generation and remaining repository projections require
-separate reconciliation; this is not whole-repository authorization acceptance.
+For changelog generation access, see [Changelog generation access](github-changelog-access.md).
+Remaining repository projections require separate reconciliation; this is not
+whole-repository authorization acceptance.
