@@ -488,7 +488,8 @@ For current adapter coverage, see [shared session consumers](#shared-session-con
 [Timeline session adapter](#timeline-session-adapter) and
 [Workspace API identity and invitation recipients](#workspace-api-identity-and-invitation-recipients).
 For auth routes and client behavior, see [Gateway client session and logout](#gateway-client-session-and-logout).
-Proxy enforcement and deployment activation remain pending. Gateway mode must remain
+For proxy enforcement, see [Gateway request and realtime authorization](#gateway-request-and-realtime-authorization).
+Deployment activation remains pending. Gateway mode must remain
 disabled until all reachable consumers and the edge/session/logout contract have
 migrated and private-origin enforcement is accepted.
 
@@ -503,9 +504,9 @@ The existing Account table must contain the explicit `maestro` mapping keyed by
 SHA-256 of issuer, NUL and subject. The live user must have exactly one `maestro`
 account and a matching current email (case-insensitive); the adapter never
 provisions users, links by email, or falls back to a cookie in gateway mode.
-Mapping database errors propagate without legacy fallback. Unsafe requests require
-the exact configured HTTPS Origin when the later edge integration invokes the
-mutation guard; the helper alone does not enforce origin or trusted headers.
+Mapping database errors propagate without legacy fallback. For request Origin
+enforcement and trusted-ingress requirements, see
+[Gateway request and realtime authorization](#gateway-request-and-realtime-authorization).
 
 The [core parsing, origin and adapter checks](../../tests/security/gateway-session-core.test.cjs)
 execute the actual identity and session modules with modeled headers/Prisma/NextAuth.
@@ -600,8 +601,8 @@ The credential and manifest routes subsequently adopted the live-user helper and
 [owner-bound access contract](#app-credential-ownership-and-explicit-reveal).
 For leave API and service migration status, see
 [leave actor identity and active access](#leave-actor-identity-and-active-access).
-Gateway mode remains disabled pending the remaining API imports,
-aliases/wrappers, edge/session/logout integration and final acceptance.
+Gateway mode remains disabled subject to the
+[gateway integration requirements](#gateway-session-core-inactive-integration).
 
 Four representative actual handlers (developer API-key read, admin statistics,
 app API-key reveal marker, and OAuth consent) execute with the real adapter and
@@ -1246,8 +1247,9 @@ Existing balance writes use the global Prisma client inside the request transact
 permission reads also remain outside that transaction client. Atomic balance updates,
 concurrent approval, date/accounting semantics, action input validation beyond this
 service boundary, raw logging and notification/provider delivery remain separate.
-Gateway and worker stay disabled; trusted ingress, mutation-Origin enforcement,
-integrated staging and restore gates remain. Generic test stage is SKIPPED; source
+Gateway and worker stay disabled; trusted ingress, integrated staging and restore
+gates remain. For mutation-Origin enforcement, see
+[Gateway request and realtime authorization](#gateway-request-and-realtime-authorization). Generic test stage is SKIPPED; source
 review, documentation, scoped lint, CI and exact-head Octopus checks remain required.
 No database, browser, provider, runtime, build or deployment operation was run.
 
@@ -1449,12 +1451,12 @@ The auth catchall reports the configured mode and serves gateway sessions throug
 
 Both logout consumers use a mode-aware helper. Gateway mode navigates to the same-origin local gateway logout endpoint without claiming logout succeeded. Legacy mode verifies the sign-out result and an empty session response before its existing success navigation; malformed responses, surviving sessions and fetch failures show an error. The provider defaults to 60-second polling with its existing focus/offline behavior and explicit overrides. This is not a maximum revocation interval or IdP logout proof.
 
-Focused actual route, adapter, component and helper execution uses modeled dependencies: 15 baseline failures (14 assertions and one missing session-user error from legacy response) plus seven controls, followed by 22 passes. Three exact non-import bodies passed scoped strict checking against retained NextAuth/Next/React types. Hooks/effects, browser hydration, provider logout and native database behavior were not executed. The request proxy origin/identity gate and realtime coverage are an immediately dependent source slice; helper presence does not enforce the HTTP boundary. Gateway and worker remain OFF. Generic tests are explicitly SKIPPED, not PASS; review, docs, scoped lint, CI and full exact-head Octopus gates remain.
+Focused actual route, adapter, component and helper execution uses modeled dependencies: 15 baseline failures (14 assertions and one missing session-user error from legacy response) plus seven controls, followed by 22 passes. Three exact non-import bodies passed scoped strict checking against retained NextAuth/Next/React types. Hooks/effects, browser hydration, provider logout and native database behavior were not executed. For the request proxy origin/identity gate and realtime coverage, see [Gateway request and realtime authorization](#gateway-request-and-realtime-authorization). Gateway and worker remain OFF. Generic tests are explicitly SKIPPED, not PASS; review, docs, scoped lint, CI and full exact-head Octopus gates remain.
 
 ### Gateway request and realtime authorization
 
 The request proxy now applies the existing strict gateway identity, exact HTTPS unsafe-request Origin and current account-mapping checks before forwarding matched requests. Invalid configuration fails closed. Only exact GET `/api/health` and `/api/auth/mode` bypass gateway identity and mapping; the mode endpoint remains reachable after mapping revocation so local gateway logout can still be requested. The health exemption does not establish a health handler or service-health proof. Realtime paths now enter the matcher. Existing CSP and security-header construction remains unchanged, and forwarded gateway responses are private/no-store. Legacy mode preserves forwarding. Trusted-header stripping and a private origin remain deployment requirements.
 
-Workspace SSE requires owner/active membership at admission and binds the request context for a fresh subject/workspace check before each message. Issue-bearing events require every referenced issue to satisfy the current read policy and retain accessible project/status references. View-bearing events also require the current view read policy in the stream workspace, including private/shared visibility. Invalid JSON closes the stream; malformed payloads and inaccessible references are not forwarded. Subscribers acquired or subscribed after cancellation are released. The separate view-stream endpoint remains disabled (410).
+Workspace SSE requires owner/active membership at admission and binds the request context for a fresh subject/workspace check before each message. Per-stream authorization and delivery follow Redis callback arrival order, so a slower authorization lookup cannot let a later event overtake an earlier one. Closure suppresses pending delivery and skips authorization for queued messages; the [stream regression fixture](../../tests/security/realtime-stream-access.test.cjs) covers overlapping callbacks with a delayed first view lookup and cancellation. Issue-bearing events require every referenced issue to satisfy the current read policy and retain accessible project/status references. View-bearing events also require the current view read policy in the stream workspace, including private/shared visibility. Invalid JSON closes the stream; malformed payloads and inaccessible references are not forwarded. Subscribers acquired or subscribed after cancellation are released. The separate view-stream endpoint remains disabled (410).
 
-Focused evidence executes actual proxy/session/logout code with Next request/response and matcher utilities, and actual stream/access helpers with Node AsyncLocalStorage/ReadableStream and modeled Prisma/Redis. The corrected fixture produces 19 baseline assertion failures plus one control, then 20 passes. An initial view-query mock incorrectly passed an undefined OR into its predicate evaluator; its 17-pass/three-failure candidate receipt remains historical, with the exact correction and reconstructed initial fixture disclosed. Five exact non-import bodies pass scoped strict Prisma/Next/Redis checking. Current four producer payload shapes are represented as inputs; producers themselves are not re-executed by this fixture. No native Redis/database isolation, browser, IdP, post-lookup race, proxy deployment or installed-stream revocation guarantee is claimed. Gateway and worker remain OFF. Generic pipeline tests are SKIPPED, not PASS; review, docs, scoped lint, CI and full exact-head Octopus remain required.
+Focused evidence executes actual proxy/session/logout code with Next request/response and matcher utilities, and actual stream/access helpers with Node AsyncLocalStorage/ReadableStream and modeled Prisma/Redis. The original corrected fixture recorded 19 baseline assertion failures plus one control, then 20 passes, before the ordering and queued-cancellation regressions were added. An initial view-query mock incorrectly passed an undefined OR into its predicate evaluator; its 17-pass/three-failure candidate receipt remains historical, with the exact correction and reconstructed initial fixture disclosed. Five exact non-import bodies pass scoped strict Prisma/Next/Redis checking. Current four producer payload shapes are represented as inputs; producers themselves are not re-executed by this fixture. No native Redis/database isolation, browser, IdP, post-lookup race, proxy deployment or installed-stream revocation guarantee is claimed. Gateway and worker remain OFF. Generic pipeline tests are SKIPPED, not PASS; review, docs, scoped lint, CI and full exact-head Octopus remain required.
