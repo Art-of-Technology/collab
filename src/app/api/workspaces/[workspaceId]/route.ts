@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
+import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 
 // GET /api/workspaces/[workspaceId] - Get workspace details
@@ -9,9 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const currentUser = await getCurrentUser();
 
-    if (!session?.user) {
+    if (!currentUser) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -88,8 +87,8 @@ export async function GET(
     }
 
     // Check if user is an ACTIVE member or owner
-    const isMember = workspace.ownerId === session.user.id ||
-      workspace.members.some(member => member.userId === session.user.id && member.status === true);
+    const isMember = workspace.ownerId === currentUser.id ||
+      workspace.members.some(member => member.userId === currentUser.id && member.status === true);
 
     if (!isMember) {
       return NextResponse.json(
@@ -114,9 +113,9 @@ export async function PATCH(
   { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const currentUser = await getCurrentUser();
 
-    if (!session?.user) {
+    if (!currentUser) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -133,7 +132,8 @@ export async function PATCH(
       include: {
         members: {
           where: {
-            userId: session.user.id,
+            userId: currentUser.id,
+            status: true,
             role: { in: ['owner', 'admin'] }
           }
         }
@@ -149,9 +149,9 @@ export async function PATCH(
 
     // Check if user is owner, admin in the workspace, or a system admin
     const isOwnerOrAdmin = 
-      workspace.ownerId === session.user.id || 
+      workspace.ownerId === currentUser.id ||
       workspace.members.length > 0 || 
-      session.user.role === 'admin';
+      currentUser.role === 'SYSTEM_ADMIN';
 
     if (!isOwnerOrAdmin) {
       return NextResponse.json(
@@ -186,9 +186,9 @@ export async function DELETE(
   { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const currentUser = await getCurrentUser();
 
-    if (!session?.user) {
+    if (!currentUser) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -210,7 +210,7 @@ export async function DELETE(
     }
 
     // Allow owner or system admin to delete workspace
-    if (workspace.ownerId !== session.user.id && session.user.role !== 'admin') {
+    if (workspace.ownerId !== currentUser.id && currentUser.role !== 'SYSTEM_ADMIN') {
       return NextResponse.json(
         { error: 'Only the workspace owner or system admin can delete it' },
         { status: 403 }
