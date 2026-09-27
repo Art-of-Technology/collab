@@ -413,4 +413,32 @@ execute the actual action and shared helpers against modeled Prisma, including
 revocation before payload selection. They do not prove native isolation or changes
 after the query snapshot. No database/runtime/browser/build/provider operation was
 performed. Generic pipeline test stage is SKIPPED; review/docs/scoped lint/CI and
-complete exact-head Octopus gates remain. Label mutations are a separate slice.
+complete exact-head Octopus gates remain. For labels, see the
+[label action access contract](#label-action-access-27-september-2026).
+
+## Label action access (27 September 2026)
+
+The four label actions resolve the session subject by ID while preserving their
+`Unauthorized` and `User not found` errors. Workspace selection still uses the
+existing cookie/fallback helper. Label payload reads and create/update/delete
+access checks reuse the owner-or-active-member predicate, with no global-admin
+exception. Create binds the workspace relation through a scoped `connect`;
+update/delete bind both the label ID and the original workspace ID plus current
+workspace access in the write predicate. Preliminary label lookups select only
+ID/name/workspace ID, preserving missing-versus-forbidden errors without loading
+unused workspace relations. Names, trimming, duplicate checks, colors/defaults,
+scalar returns and delete result remain unchanged.
+
+The final 11 [label regressions](../../tests/security/label-access.test.cjs)
+produce 10 failures/one positive on prior source;
+the label/session/status selection passes 18/18 with no skips. Checks execute the
+actual actions, workspace-selection helper and access predicate with modeled
+Prisma, including loss of membership before payload/write and a label moving
+between accessible workspaces before update/delete. Exact action/predicate bodies
+pass strict TypeScript against generated Prisma types. That check initially found
+a spread-type error in nested connect; explicit ID plus an AND predicate fixed it.
+These checks do not prove native nested-write execution, isolation or concurrent
+post-snapshot revocation. No database/runtime/browser/build/provider operations
+were performed. Generic native test stage is SKIPPED; review/docs/scoped lint/CI
+and complete exact-head Octopus remain required. Native concurrency stays in final
+integrated staging.
