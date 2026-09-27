@@ -13,14 +13,16 @@ for a missing or deleted subject. Gateway session acceptance has the additional
 [identity requirements](#gateway-session-core-inactive-integration) below.
 Both `getCurrentUser` implementations return `null` for a missing ID or deleted
 user. The other three actions throw `Unauthorized` for a missing ID and
-`User not found` when their current-user lookup finds no user; profile input
-validation still precedes that lookup. `getUserProfile` retains `self_profile`
+`User not found` when their current-user lookup finds no user; profile and avatar
+input validation precede that lookup. `getUserProfile` retains `self_profile`
 for the viewer's own profile.
 
 The actions deliberately keep direct lookups: unlike the session helper, they
-preserve Date-valued fields and propagate lookup errors. Their selected fields,
-profile validation and avatar defaults are unchanged; credential omission is
-owned by the [shared Prisma client contract](#shared-clients-and-build-repairs).
+preserve Date-valued fields and propagate lookup errors. Profile validation is
+unchanged; general credential omission is owned by the
+[shared Prisma client contract](#shared-clients-and-build-repairs). Avatar input
+validation, partial writes and response selection are owned by the
+[avatar update contract](#avatar-updates-and-safe-responses).
 See the [user-action subject regressions](../../tests/security/user-action-subject.test.cjs)
 and the [profile visibility contract](#post-and-coclaw-disclosure-follow-up).
 
