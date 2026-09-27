@@ -1246,3 +1246,36 @@ Gateway and worker stay disabled; trusted ingress, mutation-Origin enforcement,
 integrated staging and restore gates remain. Generic test stage is SKIPPED; source
 review, documentation, scoped lint, CI and exact-head Octopus checks remain required.
 No database, browser, provider, runtime, build or deployment operation was run.
+
+
+## Workspace API identity and invitation recipients
+
+Workspace collection and invitation API handlers now use the shared session
+adapter and require a session user ID before queries or writes. The recipient
+invitation list resolves that ID to the current database email; missing users or
+emails return 401 before invitation queries. Its pending/expiry filters, selected
+workspace/inviter fields and descending-created query order are unchanged.
+
+Workspace listing retains owner/active-member filtering. Creation retains its
+slug generation, current actor ownership and existing free-plan limit. Workspace
+invitation management retains `INVITE_MEMBERS`, including current owner/system-admin
+behavior, duplicate/existing-member checks and foreign-workspace invitation denial.
+Email delivery behavior and payloads are unchanged.
+
+The [focused fixture](../../tests/security/workspace-api-access.test.cjs) executes
+all six handlers with actual session/identity, permission and slug helpers,
+modeled Prisma and an intercepted email sender. Seven baseline failures and three
+controls become ten passing checks. It covers missing IDs, mapped/denied gateway
+identity without fallback, legacy controls, stale-email recipient isolation,
+missing current users/emails, permission denial with zero writes/email effects,
+owner/admin success, foreign invitation IDs and workspace limits. The fixture
+checks the preserved ordering query, not native database ordering. A scoped
+Prisma/Next typecheck covers five exact non-import module bodies.
+
+This does not prove native concurrency, post-lookup revocation, quota/slug/invitation
+uniqueness under races, email delivery or runtime acceptance. Existing creation/input
+validation, role-string conventions, invitation token projections and raw logging
+remain separate. Gateway and worker remain disabled. Generic test is SKIPPED;
+review, documentation, scoped lint, CI, exact-head Octopus and integrated runtime
+acceptance gates remain. No provider, database, browser, build or runtime operation
+was performed.
