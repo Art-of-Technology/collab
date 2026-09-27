@@ -1,6 +1,6 @@
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { issueAccessWhere, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/request-session";
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -39,9 +39,9 @@ export async function GET(req: Request) {
 
     // Get the current issue
     const currentIssue = await prisma.issue.findFirst({
-      where: { id: issueId, workspaceId },
+      where: { id: issueId, workspaceId, ...issueReadAccessWhere(session.user.id) },
       include: {
-        labels: true,
+        labels: { where: issueAccessWhere(session.user.id) },
         project: true,
       },
     });
@@ -62,7 +62,8 @@ export async function GET(req: Request) {
     if (titleWords.length > 0) {
       const similarTitleIssues = await prisma.issue.findMany({
         where: {
-          project: { workspaceId },
+          workspaceId,
+          AND: [issueReadAccessWhere(session.user.id), { project: { workspaceId } }],
           id: { not: issueId },
           OR: titleWords.map(word => ({
             title: { contains: word, mode: 'insensitive' as const },
@@ -102,12 +103,13 @@ export async function GET(req: Request) {
     if (labelIds.length > 0) {
       const sameLabelIssues = await prisma.issue.findMany({
         where: {
-          project: { workspaceId },
+          workspaceId,
+          AND: [issueReadAccessWhere(session.user.id), { project: { workspaceId } }],
           id: { not: issueId },
-          labels: { some: { id: { in: labelIds } } },
+          labels: { some: { id: { in: labelIds }, ...issueAccessWhere(session.user.id) } },
         },
         include: {
-          labels: true,
+          labels: { where: issueAccessWhere(session.user.id) },
           projectStatus: { select: { name: true, color: true } },
         },
         take: 5,
@@ -136,6 +138,8 @@ export async function GET(req: Request) {
     // 3. Find explicit issue links
     const linkedIssues = await prisma.issueRelation.findMany({
       where: {
+        sourceIssue: { workspaceId, ...issueReadAccessWhere(session.user.id) },
+        targetIssue: { workspaceId, ...issueReadAccessWhere(session.user.id) },
         OR: [
           { sourceIssueId: issueId },
           { targetIssueId: issueId },

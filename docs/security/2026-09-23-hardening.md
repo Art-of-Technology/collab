@@ -1176,3 +1176,32 @@ View project-ID configuration, name-based mention matching, raw error logging
 and cross-query snapshot consistency remain separate. Gateway and worker remain
 disabled; trusted ingress and mutation-Origin enforcement remain required.
 No database, provider, browser, runtime or deployment operation was run.
+
+
+## AI issue recommendations
+
+Related-issue and suggestion handlers use the shared session adapter and the
+existing current workspace owner/active-member gate. Root issues additionally
+require `issueReadAccessWhere`, covering their project and optional status project.
+Candidate lists and counts retain their title/label/project criteria while
+requiring the requested issue workspace and current issue-read access. Both
+endpoints of explicit issue links must be readable in the requested workspace.
+Root/candidate labels and available workspace labels use the existing access
+predicate. Ranking, limits, suggestions and response transformations are unchanged.
+These handlers perform local database heuristics, not AI provider calls.
+
+The [focused fixture](../../tests/security/ai-issue-access.test.cjs) runs both
+actual handlers and session/identity/access helpers with modeled Prisma. Seven
+baseline failures and two controls become nine passing cases. Coverage includes
+root project/status denial before dependent queries, owner access without a member
+row, inactive membership, denied gateway mapping without fallback, inaccessible
+candidates/labels/link endpoints, and visible-link suppression of link suggestions.
+A scoped Prisma/Next typecheck covers three exact non-import module bodies.
+
+This is not native database isolation, post-lookup revocation, cross-query snapshot
+consistency or runtime/browser acceptance. Issue activity remains a scalar item
+and workspace lookup after root authorization. Existing heuristic limitations and
+raw error logging remain separate. Gateway and worker stay disabled; trusted
+ingress and mutation-Origin requirements remain. No provider, database, browser,
+runtime or deployment operation was run. Generic test stage is SKIPPED; source
+review, documentation, scoped lint, CI and exact-head Octopus gates remain.
