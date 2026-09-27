@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import ProjectSettingsClient from './ProjectSettingsClient';
 import { authConfig } from '@/lib/auth';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from '@/lib/request-session';
 
 interface ProjectSettingsPageProps {
   params: Promise<{

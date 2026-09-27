@@ -97,3 +97,74 @@ test('Notes payload rechecks membership lost after workspace preflight', async (
   const f = fixture({ id: 'alice', email: 'alice@example.test' }, spaces => { spaces.find(row => row.slug === 'joined').members[0].status = false; });
   await assert.rejects(f.notes('joined'), redirectTo('/joined/projects'));
 });
+
+for (const page of ['features', 'changelog']) {
+  test(`${page} page uses mapped gateway identity and preserves redirects, props and legacy mode`, async () => {
+    const before = { mode: process.env.COLLAB_AUTH_MODE, issuer: process.env.COLLAB_GATEWAY_ISSUER };
+    const issuer = 'https://identity.example.test/realms/company';
+    const encode = value => Buffer.from(value).toString('base64url');
+    let headers = new Headers({ 'x-collab-issuer': encode(issuer), 'x-collab-subject': encode('subject'),
+      'x-collab-email': encode('alex@weezboo.com'), 'x-collab-email-verified': 'true' });
+    let mapped = true, legacy = 0, workspaceReads = 0, projectExists = true, repositoryExists = true;
+    const user = { id: 'mapped', email: 'alex@weezboo.com', accounts: [{ id: 'mapping' }] };
+    const prisma = {
+      account: { findUnique: async () => mapped ? { user } : null },
+      workspace: { findFirst: async ({ where }) => {
+        workspaceReads++;
+        const expectedEmail = process.env.COLLAB_AUTH_MODE === 'gateway' ? user.email : 'legacy@weezboo.com';
+        return where.id === 'workspace' && where.members.some.user.email === expectedEmail ? { id: 'workspace' } : null;
+      } },
+      project: { findFirst: async () => projectExists ? { id: 'project', name: 'Project', slug: 'project',
+        repository: repositoryExists ? { id: 'repository' } : null } : null },
+      user: { findUnique: async ({ where }) => ({ id: where.email === user.email ? 'mapped' : 'legacy' }) },
+    };
+    const nextAuth = { getServerSession: async () => { legacy++; return { user: { id: 'legacy', email: 'legacy@weezboo.com' } }; } };
+    const identity = load('src/lib/gateway-identity.ts', { 'node:crypto': require('node:crypto') }, { process, Buffer, TextDecoder, URL });
+    const adapter = load('src/lib/request-session.ts', { 'server-only': {}, './gateway-identity': identity,
+      'next-auth': nextAuth, 'next/headers': { headers: async () => headers }, '@/lib/prisma': { prisma } }, { process });
+    const jsx = (type, props) => ({ type, props });
+    const deps = { '@/lib/request-session': adapter, 'next-auth': nextAuth, '@/lib/auth': { authConfig: {} },
+      '@/lib/prisma': { prisma }, '@/lib/slug-resolvers': { resolveWorkspaceSlug: async value => value === 'missing' ? null : 'workspace' },
+      'next/navigation': { redirect: location => { throw Object.assign(new Error('redirect'), { location }); } },
+      'react/jsx-runtime': { jsx, jsxs: jsx }, react: { Suspense: 'Suspense' },
+      'next/link': { default: 'Link' }, 'lucide-react': { ChevronLeft: 'ChevronLeft' },
+      '@/components/features/FeatureRequestsList': { default: 'FeatureRequestsList' },
+      '@/components/features/CreateFeatureRequestButton': { default: 'CreateFeatureRequestButton' },
+      '@/components/ui/skeleton': { Skeleton: 'Skeleton' }, '@/components/ui/button': { Button: 'Button' },
+      '@/components/layout/PageHeader': { default: 'PageHeader' },
+      './ChangelogPageClient': { ChangelogPageClient: 'ChangelogPageClient' },
+    };
+    const Page = load(`src/app/(main)/[workspaceId]/projects/[projectSlug]/${page}/page.tsx`, deps).default;
+    const render = (workspaceId = 'workspace-slug') => Page({ params: Promise.resolve({ workspaceId, projectSlug: 'project' }) });
+    try {
+      process.env.COLLAB_AUTH_MODE = 'gateway'; process.env.COLLAB_GATEWAY_ISSUER = issuer;
+      const tree = await render();
+      if (page === 'features') {
+        assert.equal(find(tree, 'FeatureRequestsList').props.currentUserId, 'mapped');
+        assert.equal(find(tree, 'FeatureRequestsList').props.projectId, 'project');
+        assert.equal(find(tree, 'PageHeader').props.title, 'Feature Requests');
+      } else {
+        assert.equal(tree.props.repositoryId, 'repository'); assert.equal(tree.props.projectName, 'Project');
+        assert.equal(tree.props.workspaceId, 'workspace'); assert.equal(tree.props.projectSlug, 'project');
+      }
+      assert.equal(legacy, 0);
+      await assert.rejects(render('missing'), redirectTo('/'));
+      projectExists = false; await assert.rejects(render(), redirectTo('/workspace-slug/projects')); projectExists = true;
+      if (page === 'changelog') {
+        repositoryExists = false; await assert.rejects(render(), redirectTo('/workspace-slug/projects/project/settings')); repositoryExists = true;
+      }
+      mapped = false; const reads = workspaceReads;
+      await assert.rejects(render(), redirectTo('/login')); assert.equal(workspaceReads, reads); mapped = true;
+      headers = new Headers({ cookie: 'legacy=present' });
+      await assert.rejects(render(), redirectTo('/login')); assert.equal(workspaceReads, reads); assert.equal(legacy, 0);
+      process.env.COLLAB_AUTH_MODE = 'nextauth';
+      const legacyTree = await render();
+      if (page === 'features') assert.equal(find(legacyTree, 'FeatureRequestsList').props.currentUserId, 'legacy');
+      else assert.equal(legacyTree.props.repositoryId, 'repository');
+      assert.equal(legacy, 1);
+    } finally {
+      for (const [name, value] of [['COLLAB_AUTH_MODE', before.mode], ['COLLAB_GATEWAY_ISSUER', before.issuer]])
+        if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  });
+}
