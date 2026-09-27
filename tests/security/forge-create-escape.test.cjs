@@ -35,6 +35,7 @@ test('closing a retained dialog discards create title and description without su
   try {
     await act(async () => root.render(h(ForgeBoardView, { initial, rights: { canCreate: true }, workspaceSlug: 'workspace', projectSlug: 'project' })));
     await open(); await fill(form().querySelector('input'), 'UNSAVED TITLE'); await fill(form().querySelector('textarea'), 'UNSAVED DESCRIPTION');
+    assert.equal(form().querySelector('input').value, 'UNSAVED TITLE'); assert.equal(form().querySelector('textarea').value, 'UNSAVED DESCRIPTION');
     await act(async () => form().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     assert.equal(form(), null); assert.deepEqual(creates, []); assert.equal(refreshes, 0);
     await open(); assert.equal(form().querySelector('input').value, ''); assert.equal(form().querySelector('textarea').value, '');
