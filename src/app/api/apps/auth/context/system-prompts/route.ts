@@ -8,6 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
@@ -27,6 +29,12 @@ const PROMPT_TYPES: NoteType[] = [
 export const GET = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
     try {
+      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
+        return NextResponse.json(
+          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
+          { status: 403 }
+        );
+      }
       const { searchParams } = new URL(request.url);
       const projectId = searchParams.get('projectId');
       const scopeFilter = searchParams.get('scope'); // 'workspace' | 'project' | 'all'
@@ -34,6 +42,7 @@ export const GET = withAppAuth(
 
       // Build base where clause (common filters)
       const baseWhere: any = {
+        AND: [noteAccessWhere(context.user.id)],
         workspaceId: context.workspace.id,
         isAiContext: true,
         type: typeFilter && PROMPT_TYPES.includes(typeFilter) ? typeFilter : { in: PROMPT_TYPES },

@@ -6,6 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { noteAccessWhere, canAccessNote, canWriteNoteDestination } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
@@ -22,11 +24,18 @@ export const GET = withAppAuth(
   // with structure { params: Promise<{ id: string }> } due to async params in App Router
   async (request: NextRequest, context: AppAuthContext, routeParams: { params: Promise<{ id: string }> }) => {
     try {
+      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
+        return NextResponse.json(
+          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
+          { status: 403 }
+        );
+      }
       const { id } = await routeParams.params;
 
       // Find the context document
       const note = await prisma.note.findFirst({
         where: {
+          AND: [noteAccessWhere(context.user.id)],
           id,
           workspaceId: context.workspace.id,
           // Only allow access to non-personal notes via MCP
@@ -138,7 +147,20 @@ export const GET = withAppAuth(
 export const PUT = withAppAuth(
   async (request: NextRequest, context: AppAuthContext, routeParams: { params: Promise<{ id: string }> }) => {
     try {
+      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
+        return NextResponse.json(
+          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
+          { status: 403 }
+        );
+      }
       const { id } = await routeParams.params;
+      const access = await canAccessNote(context.user.id, id);
+      if (!access.canEdit) {
+        return NextResponse.json(
+          { error: 'context_not_found', error_description: 'Context document not found or edit denied' },
+          { status: 404 }
+        );
+      }
       const body = await request.json();
 
       // Validate request body
@@ -166,6 +188,7 @@ export const PUT = withAppAuth(
       // Verify note exists in the workspace
       const existingNote = await prisma.note.findFirst({
         where: {
+          AND: [noteAccessWhere(context.user.id)],
           id,
           workspaceId: context.workspace.id,
           scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },
@@ -179,20 +202,35 @@ export const PUT = withAppAuth(
         );
       }
 
-      // Prevent updating TO secret types
-      const secretTypes: NoteType[] = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
-      if (updateData.type && secretTypes.includes(updateData.type)) {
+      if (!access.isOwner && ['type', 'scope', 'projectId', 'isAiContext', 'aiContextPriority'].some(field => field in updateData)) {
         return NextResponse.json(
-          { error: 'invalid_request', error_description: 'Cannot update to secret types' },
+          { error: 'forbidden', error_description: 'Only the owner can change note settings' },
+          { status: 403 }
+        );
+      }
+
+      const secretTypes: NoteType[] = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
+      if (existingNote.isEncrypted || secretTypes.includes(existingNote.type) || (updateData.type && secretTypes.includes(updateData.type))) {
+        return NextResponse.json(
+          { error: 'invalid_request', error_description: 'Cannot update secret documents via this endpoint' },
           { status: 400 }
         );
       }
 
-      // If scope is being changed to PROJECT, require projectId
-      if (updateData.scope === NoteScope.PROJECT && !updateData.projectId) {
+      const finalScope = updateData.scope ?? existingNote.scope;
+      const finalProjectId = updateData.projectId !== undefined ? updateData.projectId : existingNote.projectId;
+      if (finalScope === NoteScope.PROJECT && !finalProjectId) {
         return NextResponse.json(
           { error: 'invalid_request', error_description: 'projectId is required for PROJECT scope' },
           { status: 400 }
+        );
+      }
+
+      if ((updateData.projectId !== undefined || updateData.scope !== undefined) &&
+          !await canWriteNoteDestination(context.user.id, context.workspace.id, finalProjectId)) {
+        return NextResponse.json(
+          { error: 'forbidden', error_description: 'Invalid note destination' },
+          { status: 403 }
         );
       }
 

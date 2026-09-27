@@ -1,3 +1,4 @@
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
@@ -14,18 +15,27 @@ export async function POST(req: Request) {
 
   try {
     const { content, workspaceId } = await req.json();
-    const sanitizedContent = sanitizeHtmlToPlainText(content || "");
 
-    if (!content || !content.trim()) {
+    if (typeof content !== "string" || !content.trim()) {
       return new NextResponse("Content is required", { status: 400 });
     }
+
+    if (typeof workspaceId !== "string" || !workspaceId) {
+      return new NextResponse("Workspace ID required", { status: 400 });
+    }
+    const workspace = await prisma.workspace.findFirst({
+      where: { id: workspaceId, ...postWorkspaceAccessWhere(session.user.id) },
+      select: { id: true },
+    });
+    if (!workspace) return new NextResponse("Access denied", { status: 403 });
+    const sanitizedContent = sanitizeHtmlToPlainText(content);
 
     // Create the post
     const post = await prisma.post.create({
       data: {
         message: content.trim(),
         authorId: session.user.id,
-        workspaceId: workspaceId || null,
+        workspaceId: workspace.id,
         type: "UPDATE" // Default type
       },
       include: {

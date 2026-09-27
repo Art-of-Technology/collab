@@ -1,3 +1,4 @@
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -30,7 +31,7 @@ export async function GET(
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: { some: { userId: session.user.id } },
+        ...postWorkspaceAccessWhere(session.user.id),
       },
       select: { id: true },
     });

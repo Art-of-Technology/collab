@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { prisma } from "@/lib/prisma";
 
 // Activity actions we want to show in the timeline (skip noise like VIEWED)
@@ -47,14 +48,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify workspace access
-    const membership = await prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId,
-        userId: session.user.id,
-      },
+    const workspace = await prisma.workspace.findFirst({
+      where: { id: workspaceId, ...postWorkspaceAccessWhere(session.user.id) },
+      select: { id: true },
     });
 
-    if (!membership) {
+    if (!workspace) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 

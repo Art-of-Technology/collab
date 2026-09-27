@@ -9,6 +9,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { noteAccessWhere } from '@/lib/secrets/access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
@@ -28,6 +30,12 @@ const AI_CONTEXT_TYPES = [
 export const GET = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
     try {
+      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
+        return NextResponse.json(
+          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
+          { status: 403 }
+        );
+      }
       const { searchParams } = new URL(request.url);
       const projectId = searchParams.get('projectId');
       const includeKnowledge = searchParams.get('includeKnowledge') === 'true';
@@ -35,6 +43,7 @@ export const GET = withAppAuth(
       // 1. Fetch workspace-level AI context notes
       const workspacePrompts = await prisma.note.findMany({
         where: {
+          AND: [noteAccessWhere(context.user.id)],
           workspaceId: context.workspace.id,
           isAiContext: true,
           scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC] },
@@ -83,6 +92,7 @@ export const GET = withAppAuth(
 
         projectPrompts = await prisma.note.findMany({
           where: {
+            AND: [noteAccessWhere(context.user.id)],
             projectId,
             isAiContext: true,
             type: { in: AI_CONTEXT_TYPES },
@@ -160,6 +170,7 @@ export const GET = withAppAuth(
       if (includeKnowledge) {
         const knowledgeNotes = await prisma.note.findMany({
           where: {
+            AND: [noteAccessWhere(context.user.id)],
             workspaceId: context.workspace.id,
             type: { in: [NoteType.GUIDE, NoteType.README, NoteType.ARCHITECTURE] },
             scope: { in: knowledgeScopes },

@@ -1,9 +1,10 @@
-import { PrismaClient } from "@prisma/client";
+import type { prisma as appPrisma } from "./prisma";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import type { Adapter } from "next-auth/adapters";
 
-export function CustomPrismaAdapter(prisma: PrismaClient): Adapter {
-  const adapter = PrismaAdapter(prisma);
+export function CustomPrismaAdapter(prisma: typeof appPrisma): Adapter {
+  // Auth.js types do not model global omission of application-only credentials.
+  const adapter = PrismaAdapter(prisma as unknown as Parameters<typeof PrismaAdapter>[0]);
   
   // Override the getUserByAccount method to handle UserRole enum
   const originalGetUserByAccount = adapter.getUserByAccount;

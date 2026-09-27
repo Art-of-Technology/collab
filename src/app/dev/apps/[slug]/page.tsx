@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { PrismaClient } from '@prisma/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,7 +16,7 @@ import { ManifestSubmissionCard } from './ManifestSubmissionCard';
 import { DeleteButton } from './DeleteButton';
 import { AppConfigEditor } from './AppConfigEditor';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 async function getApp(slug: string) {
   const app = await prisma.app.findUnique({
@@ -53,7 +52,6 @@ async function getApp(slug: string) {
     }
   });
 
-  await prisma.$disconnect();
   return app;
 }
 

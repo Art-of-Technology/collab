@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { encryptToken, decryptToken } from '@/lib/apps/crypto';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 const SystemAppTokenSchema = z.object({
   workspaceId: z.string().cuid('Invalid workspace ID'),
@@ -215,7 +214,6 @@ export async function POST(
       });
     }
 
-    await prisma.$disconnect();
 
     return NextResponse.json({
       access_token: accessToken,
@@ -227,7 +225,7 @@ export async function POST(
 
   } catch (error) {
     console.error('System app token generation error:', error);
-    await prisma.$disconnect();
+
     return NextResponse.json(
       { error: 'server_error', error_description: 'Internal server error' },
       { status: 500 }

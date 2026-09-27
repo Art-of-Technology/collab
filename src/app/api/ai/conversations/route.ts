@@ -1,3 +1,4 @@
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
@@ -32,7 +33,7 @@ export async function GET(req: Request) {
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
-        members: { some: { userId: currentUser.id } },
+        ...postWorkspaceAccessWhere(currentUser.id),
       },
       select: { id: true },
     });
@@ -180,6 +181,12 @@ export async function POST(req: Request) {
     if (!workspaceId) {
       return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 });
     }
+
+    const workspace = await prisma.workspace.findFirst({
+      where: { id: workspaceId, ...postWorkspaceAccessWhere(currentUser.id) },
+      select: { id: true },
+    });
+    if (!workspace) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
 
     // Find agent
     let agentId: string | null = null;

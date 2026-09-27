@@ -1,3 +1,4 @@
+import { canAccessNote } from '@/lib/secrets/access';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
@@ -17,6 +18,11 @@ export async function GET(
     }
 
     const { id } = await params;
+    const access = await canAccessNote(session.user.id, id);
+    if (!access.canAccess) {
+      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
+    }
+
 
     // Check if note exists and user is the owner
     const note = await prisma.note.findFirst({
@@ -69,6 +75,11 @@ export async function POST(
     }
 
     const { id } = await params;
+    const access = await canAccessNote(session.user.id, id);
+    if (!access.canAccess) {
+      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
+    }
+
     const body = await request.json();
     const { userId, email, permission = NoteSharePermission.READ } = body;
 
@@ -197,6 +208,11 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const access = await canAccessNote(session.user.id, id);
+    if (!access.canAccess) {
+      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
+    }
+
     const { searchParams } = new URL(request.url);
     const shareId = searchParams.get("shareId");
     const userId = searchParams.get("userId");

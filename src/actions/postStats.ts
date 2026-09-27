@@ -1,5 +1,6 @@
 'use server';
 
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -16,44 +17,12 @@ export async function getPostStats({
 }) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.email || !session.user.id) {
     throw new Error('Unauthorized');
   }
   
-  // Build the query
-  const query: any = {};
-  
-  // Filter by workspace
-  if (workspaceId) {
-    query.workspaceId = workspaceId;
-  } else {
-    // Get workspaces the user has access to
-    const accessibleWorkspaces = await prisma.workspace.findMany({
-      where: {
-        OR: [
-          { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } }
-        ]
-      },
-      select: { id: true }
-    });
-    
-    if (accessibleWorkspaces.length === 0) {
-      return {
-        total: 0,
-        updates: 0,
-        blockers: 0,
-        ideas: 0,
-        questions: 0,
-        priority: 0
-      };
-    }
-    
-    query.workspaceId = {
-      in: accessibleWorkspaces.map(w => w.id)
-    };
-  }
-  
+  const query = { workspace: postWorkspaceAccessWhere(session.user.id, workspaceId) };
+
   // Get counts for each type and priority
   const [
     total,

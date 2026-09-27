@@ -2976,4 +2976,4 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
   );
 });
 
-MarkdownEditor.displayName = 'MarkdownEditor'; 
+MarkdownEditor.displayName = 'MarkdownEditor';
