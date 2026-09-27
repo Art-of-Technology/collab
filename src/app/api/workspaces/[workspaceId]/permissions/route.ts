@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
+import { defaultRolePermissions } from '@/lib/role-permission-defaults';
 import { Permission, WorkspaceRole, checkUserPermission } from '@/lib/permissions';
 
 // GET /api/workspaces/[workspaceId]/permissions - Get permissions for a workspace or user
@@ -28,6 +29,17 @@ export async function GET(
 
     // If requesting specific user permissions (for permission hook)
     if (userId) {
+      if (userId !== session.user.id) {
+        const access = await checkUserPermission(
+          session.user.id, workspaceId, Permission.MANAGE_WORKSPACE_PERMISSIONS
+        );
+        if (!access.hasPermission) {
+          return NextResponse.json(
+            { error: 'You do not have permission to view this user permissions' },
+            { status: 403, headers: { 'Cache-Control': 'no-store' } }
+          );
+        }
+      }
       const { getUserPermissions, getUserWorkspaceRole } = await import('@/lib/permissions');
 
       const userPermissions = await getUserPermissions(userId, workspaceId);
@@ -118,7 +130,9 @@ export async function PUT(
     const body = await request.json();
     const { role, permission, enabled } = body;
 
-    if (!role || !permission || typeof enabled !== 'boolean') {
+    if (typeof role !== 'string' || !role.trim() ||
+        typeof permission !== 'string' || !Object.values(Permission).some(value => value === permission) ||
+        typeof enabled !== 'boolean') {
       return NextResponse.json(
         { error: 'Role, permission, and enabled status are required' },
         { status: 400 }
@@ -212,9 +226,9 @@ export async function POST(
     const body = await request.json();
     const { role } = body;
 
-    if (!role) {
+    if (typeof role !== 'string' || !Object.prototype.hasOwnProperty.call(defaultRolePermissions, role)) {
       return NextResponse.json(
-        { error: 'Role is required' },
+        { error: 'A built-in role is required' },
         { status: 400 }
       );
     }
@@ -233,19 +247,22 @@ export async function POST(
       );
     }
 
-    // Import the seed function
-    const { seedDefaultPermissions } = await import('@prisma/scripts/seed-default-permissions');
+    const defaults = defaultRolePermissions[role];
+    if (role === hasPermission.userRole &&
+        !defaults.includes(Permission.MANAGE_WORKSPACE_PERMISSIONS)) {
+      return NextResponse.json(
+        { error: 'You cannot remove your own permission management access' },
+        { status: 400 }
+      );
+    }
 
-    // Delete existing permissions for the role
-    await (prisma as any).rolePermission.deleteMany({
-      where: {
-        workspaceId,
-        role
-      }
+    await prisma.$transaction(async (tx) => {
+      await tx.rolePermission.deleteMany({ where: { workspaceId, role } });
+      await tx.rolePermission.createMany({
+        data: defaults.map(permission => ({ workspaceId, role, permission })),
+        skipDuplicates: true
+      });
     });
-
-    // Reseed default permissions for this workspace
-    await seedDefaultPermissions();
 
     return NextResponse.json({
       success: true,

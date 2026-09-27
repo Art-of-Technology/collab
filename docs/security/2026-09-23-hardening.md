@@ -1282,3 +1282,44 @@ remain separate. Gateway and worker remain disabled. Generic test is SKIPPED;
 review, documentation, scoped lint, CI, exact-head Octopus and integrated runtime
 acceptance gates remain. No provider, database, browser, build or runtime operation
 was performed.
+
+
+## Scoped permission reads and resets
+
+The workspace permissions endpoint now uses the shared session adapter. A request
+for another user's permissions requires the caller's current
+`MANAGE_WORKSPACE_PERMISSIONS` permission before target-user lookups. Self queries
+retain the active-role/owner check and 404 when no workspace role exists. Existing
+management responses and no-store headers remain.
+
+Permission toggles require scalar non-empty role names, a known permission value
+and a boolean enabled flag. This prevents Prisma operator objects from bypassing
+the existing own-management-access check. Reset accepts only own keys from the
+application's existing built-in defaults and preserves the same self-management
+protection when a configured role's defaults would remove that permission.
+Owner/system-admin authority remains governed by the existing permission helper.
+
+Reset no longer imports the operational seed script, whose import executes an
+all-workspace reseed. It replaces permissions only for the requested workspace
+and role in one transaction, using `defaultRolePermissions` unchanged. This map
+intentionally follows current application defaults: compared with the older seed
+map, OWNER includes MANAGE_LEAVE and ADMIN omits EDIT_ANY_NOTE/DELETE_ANY_NOTE.
+Other workspace/role rows are preserved. The operational script is unchanged and
+was neither imported nor executed during this work.
+
+The [focused fixture](../../tests/security/workspace-permissions-access.test.cjs)
+runs all three handlers with real session/identity/permission/default helpers,
+modeled Prisma and a seed-function spy. Nine baseline failures and two controls
+become eleven passing checks: foreign-target denial before reads, self-role denial,
+selected-role defaults and unaffected rows, modeled rollback after insert failure,
+prototype/unknown/object role rejection, malformed permission input, self-lockout
+prevention, owner/admin controls and gateway/revoked-member denial. A scoped strict
+Prisma/Next typecheck covers three exact non-import module bodies, preserving the
+dynamic permissions import through a typecheck path mapping.
+
+This is not native isolation, concurrent reset/permission changes or post-lookup
+revocation proof. Existing custom-role naming/namespace semantics, raw logging and
+original casts remain separate. Gateway/worker stay off, generic test is SKIPPED,
+and review/docs/scoped lint/CI/exact-head Octopus and integrated acceptance gates
+remain. No operational seed, database, provider, browser, build or runtime action
+was executed.
