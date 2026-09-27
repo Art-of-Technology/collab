@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     });
 
 
-    // Return the app data and credentials (IMPORTANT: plainSecret is only shown once)
+    // Preserve creation-response credentials independently of the explicit reveal claim.
     return NextResponse.json({
       success: true,
       app: {
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       },
       credentials: {
         clientId: credentials.clientId,
-        clientSecret: result.plainSecret, // Only returned on creation
+        clientSecret: result.plainSecret,
         apiKey: credentials.apiKey
       }
     }, { status: 201, headers: { 'Cache-Control': 'no-store' } });

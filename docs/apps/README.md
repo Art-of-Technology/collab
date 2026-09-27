@@ -13,7 +13,7 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 - `App`: canonical registration record with slug, publisher, manifest URL (optional for DRAFT apps) and lifecycle status (`DRAFT | IN_REVIEW | PUBLISHED | SUSPENDED`). Apps start in `DRAFT` status with credentials generated immediately.
 - `AppVersion`: immutable snapshot of every imported manifest version.
 - `AppScope`: normalized list of granted scopes used during consent.
-- `AppOAuthClient`: stores OAuth credentials (client secrets encrypted with bcrypt) and redirect URIs. Generated immediately upon app creation.
+- `AppOAuthClient`: stores OAuth credentials and redirect URIs. See [credential storage](#security-guarantees).
 - `AppInstallation`: tracks workspace installs, OAuth tokens (AES-256-GCM encrypted and base64-encoded) and granted scopes.
 - `AppWebhook` / `AppWebhookDelivery`: manage webhook subscriptions and delivery attempts per installation.
 
@@ -21,9 +21,9 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 
 1. **Create App**
    - Visit `/dev/apps/new` and provide your app name and optionally your own user ID as publisher (POST `/api/apps/create-draft`).
-   - OAuth credentials (`client_id`, `client_secret`, and `api_key`) are **generated immediately** and returned on creation.
+   - OAuth credentials are **generated immediately** and returned as `credentials.clientId`, `credentials.clientSecret`, and `credentials.apiKey` on creation.
    - Your app is created in `DRAFT` status with a unique slug auto-generated from the name.
-   - **Important:** Save your `client_secret` securely. The owner-only details page supports an explicit reveal action; credentials are not included in its initial client props. See [credential ownership and reveal limits](../security/2026-09-23-hardening.md#app-credential-ownership-and-explicit-reveal).
+   - **Important:** Save your `client_secret` securely. Use **Reveal client secret** or **Show API key** on the details page to request credentials. See [credential ownership and reveal limits](../security/2026-09-23-hardening.md#app-credential-ownership-and-explicit-reveal).
 
 2. **Develop Your App**
    - Use the credentials provided in step 1 to develop and test your app.
@@ -32,7 +32,7 @@ The Collab App Store enables third-party developers to ship apps that workspace 
    - Host your manifest on HTTPS (HTTP allowed for localhost development).
 
 3. **Submit Manifest for Review**
-   - When your app is ready, navigate to `/dev/apps/[slug]` and submit your manifest URL (POST `/api/apps/[slug]/submit-manifest`).
+   - As the app owner, navigate to `/dev/apps/[slug]` and submit your manifest URL (POST `/api/apps/[slug]/submit-manifest`).
    - The API fetches, validates with Zod, and persists the manifest snapshot.
    - App status changes from `DRAFT` to `IN_REVIEW`.
    - **Important:** The manifest `slug` must match your app's slug, and do NOT include `client_id` or `client_secret` in your manifest.
@@ -45,7 +45,7 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 5. **Manage & Update**
    - `/dev/apps/[slug]` displays credentials, manifest details, installation analytics, and webhook settings.
    - Delete your app anytime from the "Danger Zone" in the app details card (only if no active installations exist).
-   - Re-submit updated manifests to create new versions and update scopes.
+   - Manifest submission is available only while the app is `DRAFT`; see step 3.
 
 ## App Manifest Reference
 ```json
@@ -137,7 +137,7 @@ The platform supports three OAuth 2.0 client authentication methods:
 #### 2. Confidential Clients with Client Secret (`client_type: "confidential"`)
 - **Auth Method**: `token_endpoint_auth_method: "client_secret_basic"`
 - **Credentials**: Both `client_id` and `client_secret` are generated
-- **Security**: Client secret is shown only once after approval and must be stored securely
+- **Security**: Store the client secret securely; see [credential ownership and reveal limits](../security/2026-09-23-hardening.md#app-credential-ownership-and-explicit-reveal).
 - **Use Case**: Server-side applications that can securely store secrets
 
 ```json
@@ -222,7 +222,7 @@ For `mfe_remote` app types, the `mfe` configuration object is required:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | **App Management** | | |
-| POST | `/api/apps/create-draft` | Create a new draft app with immediate OAuth credential generation. Returns `client_id`, `client_secret` (shown once), and `api_key`. |
+| POST | `/api/apps/create-draft` | Create a draft app; see [Developer Workflow](#developer-workflow) for credential handling. |
 | POST | `/api/apps/[slug]/submit-manifest` | Submit manifest URL for a DRAFT app. Validates manifest, creates version, and moves app to `IN_REVIEW` status. |
 | DELETE | `/api/apps/[slug]/delete` | Permanently delete an app (owner only, blocked if active installations exist). |
 | POST | `/api/apps/import-manifest` | Legacy: Fetch and register a manifest (create or update app & latest version). Sets status to `IN_REVIEW`. |
@@ -265,7 +265,7 @@ allowlist and does not authorize deployment.
 ## Security Guarantees
 - Manifests validated with Zod before storage; reserved slug list blocks collisions with core routes.
 - `validateAppManifestSecurity` enforces HTTPS entrypoints and flags suspicious scopes during install.
-- OAuth client secrets hashed with bcrypt; secure string comparison prevents timing attacks.
+- Draft app client secrets are encrypted with AES-256-GCM by `encryptToken` before storage; see [credential ownership and reveal limits](../security/2026-09-23-hardening.md#app-credential-ownership-and-explicit-reveal).
 - Access & refresh tokens encrypted using AES-256-GCM with 32-byte `APP_TOKENS_KEY`; decrypted lazily when validating refreshes or introspecting.
 - Workspace membership checks ensure only admins can install/uninstall or manage webhooks.
 - Consent dialog forces explicit acknowledgement when scopes are marked high risk.
@@ -278,7 +278,7 @@ allowlist and does not authorize deployment.
 
 ## Useful UI Routes
 - `/dev/apps` – app catalog, status badges, quick stats.
-- `/dev/apps/new` – create new app with immediate credential generation (app name + optional publisher ID).
+- `/dev/apps/new` – create an app; see [Developer Workflow](#developer-workflow) for inputs and credentials.
 - `/dev/apps/[slug]` – app detail page with:
   - **Overview tab**: OAuth credentials, manifest submission form (for DRAFT apps), app metadata
   - **Installations tab**: list of workspace installations and their status
@@ -301,7 +301,7 @@ allowlist and does not authorize deployment.
 - **No Circular Dependency**: Credentials available from day one
 - **Smooth Development**: Use correct credentials from the start, no redeployment needed
 - **Clear Process**: Three distinct steps (create, develop, publish)
-- **Better Security**: Client secret shown once at creation, then securely encrypted
+- **Credential handling**: See [credential ownership and reveal limits](../security/2026-09-23-hardening.md#app-credential-ownership-and-explicit-reveal).
 - **Flexible**: Develop at your own pace before submitting manifest
 
 ## Next Steps
