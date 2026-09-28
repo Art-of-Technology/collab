@@ -132,6 +132,9 @@ class LocalCoclawManager implements ICoclawManager {
     workspaceId: string,
     spawnConfig: CoclawSpawnConfig,
   ): Promise<CoclawProcessInfo> {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Local Coclaw execution is disabled in production.');
+    }
     const k = this.key(userId, workspaceId);
 
     // 1. Check in-memory map

@@ -281,7 +281,8 @@ No live database or broader validation gates were run in this review round.
 
 Conversation list, creation, detail and archival require current workspace
 ownership or active membership; detail and archival also require conversation
-ownership. Both chat stream branches (Anthropic/MCP and Coclaw) enforce workspace
+ownership. When admitted by the [core-first execution boundary](#core-first-execution-boundary),
+both chat stream branches (Anthropic/MCP and Coclaw) enforce workspace
 access before credential resolution, provider calls or conversation/message
 writes. When supplied, `conversationId` must identify the caller's conversation
 in that workspace. Omitting it does not bypass workspace access.
@@ -1476,3 +1477,11 @@ Note creation and editing validate tag IDs before encryption or version writes. 
 App context POST and detail PUT apply the same attachment policy using the authenticated user's fixed workspace and final project before writes or events; invalid tags return 403. Omitting `tagIds` preserves existing links on update, while `[]` clears them. Both write responses filter tags by current access. Existing app scopes, current membership, note access, author/settings and secret gates remain in force.
 
 Focused actual-handler execution uses modeled Prisma: before the app-route extension, the corrected fixture recorded 20 baseline assertion failures and one control, followed by 24 passes including three existing Notes regressions. Earlier fixture failures (POST 201 expectation, missing project lookup mock and invalid project-only scope) remain historical. The original five exact non-import bodies passed scoped strict Prisma/Next checking with the actual session augmentation; this is not full-application typing or evidence for the later app-route changes. The [tag-access fixture](../../tests/security/note-tag-access.test.cjs) now also covers app attachment denial before writes/events, valid/empty/omitted tags and context/knowledge projections. Native transaction isolation, post-lookup project/membership changes and atomic versioning remain unproved. Gateway/worker remain OFF. Generic pipeline tests are SKIPPED; source review, documentation, scoped lint, CI and exact-head Octopus remain required.
+
+## Core-first execution boundary
+
+Production local Coclaw execution is refused at the shared `LocalCoclawManager.getOrCreateInstance` entry before cached-instance reuse, manager database/configuration work or process spawn. This covers explicit instance creation, status polling's automatic restart and Coclaw chat provisioning. Development mode and explicitly configured remote-manager selection remain unchanged; startup and shutdown imports still work. The focused actual-module regression is `tests/security/coclaw-production-boundary.test.cjs`.
+
+The authenticated `/api/ai/chat/stream` entry returns 503 in production unless `COLLAB_AGENT_EXECUTION` is exactly `enabled`. Anonymous requests still return 401. This default-off refusal precedes body parsing, persistence, agent selection, token provisioning, MCP discovery and provider dispatch for both Coclaw and non-Coclaw chat. The same focused fixture checks refusal, zero downstream calls and input-validation controls for explicit opt-in/development; it does not exercise a live provider.
+
+Initial core cutover requires `NODE_ENV=production`, `COLLAB_AGENT_EXECUTION` unset or disabled, absent `COCLAW_MANAGER_URL` and `COCLAW_MANAGER_TOKEN`, Ready worker OFF (`COLLAB_READY_WORKER` must not equal `enabled`), and no existing active executor. Later agent opt-in or remote-manager configuration requires separate deployment approval; local production spawning remains prohibited even with chat opt-in. Ordinary model-only requests, explicit UI action dispatch, caller-side credential resolution in other Coclaw routes and cancellation of an existing provider run remain separate boundaries. No runtime or deployment acceptance follows from these source regressions.

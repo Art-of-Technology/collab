@@ -37,6 +37,9 @@ export async function POST(req: Request) {
     if (!currentUser?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (process.env.NODE_ENV === 'production' && process.env.COLLAB_AGENT_EXECUTION !== 'enabled') {
+      return NextResponse.json({ error: 'Agent execution is unavailable.' }, { status: 503 });
+    }
 
     const body: ChatRequestBody = await req.json();
     const { message, context, history, conversationId, webSearchEnabled, agentSlug } = body;

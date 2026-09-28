@@ -170,6 +170,9 @@ Collab is designed to streamline internal communication and work tracking by off
    CI="true"  # Set in CI/CD environments for build optimizations
    ```
 
+   Before production setup, follow the [core-first execution boundary](docs/security/2026-09-23-hardening.md#core-first-execution-boundary)
+   for agent chat availability, required initial settings and later execution approval.
+
    ### How to Obtain Credentials
 
    #### Google OAuth Setup
