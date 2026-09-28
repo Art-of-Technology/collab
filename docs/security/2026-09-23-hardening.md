@@ -281,7 +281,8 @@ No live database or broader validation gates were run in this review round.
 
 Conversation list, creation, detail and archival require current workspace
 ownership or active membership; detail and archival also require conversation
-ownership. Both chat stream branches (Anthropic/MCP and Coclaw) enforce workspace
+ownership. When admitted by the [core-first execution boundary](#core-first-execution-boundary),
+both chat stream branches (Anthropic/MCP and Coclaw) enforce workspace
 access before credential resolution, provider calls or conversation/message
 writes. When supplied, `conversationId` must identify the caller's conversation
 in that workspace. Omitting it does not bypass workspace access.
