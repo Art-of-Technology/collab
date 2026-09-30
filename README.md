@@ -66,7 +66,7 @@ Collab is designed to streamline internal communication and work tracking by off
 - Threaded comments, reactions, and notifications
 - Feature requests with voting and prioritization
 - AI-assisted content improvement and summarization
-- OAuth authentication (Google, Email) via NextAuth.js
+- Account sign-in via NextAuth.js (see [Usage](#usage))
 - File uploads and customizable user avatars
 - Workspace and team management with role-based access
 - RESTful API for integration with external tools
@@ -231,7 +231,12 @@ Collab is designed to streamline internal communication and work tracking by off
 ## Usage
 
 - Open your browser and navigate to [http://localhost:3000](http://localhost:3000).
-- Sign up or log in using Google or email.
+- Sign up or log in using Google.
+  When native Maestro is enabled, open **Profile → Connect Maestro**, choose
+  **Verify Google account**, complete the Google round trip with the same account,
+  then choose **Connect Maestro**. Once connected, **Sign in with Maestro** returns
+  to your existing Collab account; Google remains available. For availability,
+  configuration and linking safeguards, see the [native Maestro guide](docs/native-maestro-link.md).
   For gateway sign-in availability and sign-out behavior, see the
   [client session contract](docs/security/2026-09-23-hardening.md#gateway-client-session-and-logout).
 - Create or join a workspace to start sharing updates.
@@ -248,6 +253,9 @@ Collab is designed to streamline internal communication and work tracking by off
 - Customize your avatar with partial updates; see the
   [avatar update contract](docs/security/2026-09-23-hardening.md#avatar-updates-and-safe-responses).
 - Organize work using boards, milestones, and stories.
+  New issues, including related issues created with them, show **Reporter: you**.
+  See the [issue list/create contract](docs/security/2026-09-23-hardening.md#issue-list-and-create-access)
+  for access and reporter requirements.
   For view visibility, editing and issue positions, see the
   [view access contract](docs/security/2026-09-23-hardening.md#view-access-and-session-subjects).
   For project dashboard visibility, see the
