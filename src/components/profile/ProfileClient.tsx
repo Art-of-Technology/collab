@@ -1,5 +1,6 @@
 'use client';
 
+import Link from "next/link";
 import { useState } from 'react';
 import { useInfiniteUserProfilePosts, useCurrentUserProfile } from "@/hooks/queries/useUser";
 import ProfileForm from "@/components/profile/ProfileForm";
@@ -107,6 +108,7 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="profile" className="mt-4">
+          <Link href="/account/link-maestro" className="block mb-4 underline">Connect Maestro</Link>
           <ProfileForm user={{
             ...user,
             expertise: user.expertise || []

@@ -9,7 +9,6 @@ import { IssueStatusSelector } from "./selectors/IssueStatusSelector";
 import { IssuePrioritySelector } from "./selectors/IssuePrioritySelector";
 import { IssueAssigneeSelector } from "./selectors/IssueAssigneeSelector";
 import { IssueLabelSelector } from "./selectors/IssueLabelSelector";
-import { IssueReporterSelector } from "./selectors/IssueReporterSelector";
 import { IssueDateSelector } from "./selectors/IssueDateSelector";
 import { IssueProjectSelector } from "./selectors/IssueProjectSelector";
 import { IssueTypeSelector } from "./selectors/IssueTypeSelector";
@@ -86,7 +85,6 @@ export default function NewIssueModal({
   const [status, setStatus] = useState<string | undefined>(defaultStatus);
   const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("MEDIUM");
   const [assigneeId, setAssigneeId] = useState<string | undefined>(undefined);
-  const [reporterId, setReporterId] = useState<string | undefined>(undefined);
   const [labels, setLabels] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [issueType, setIssueType] = useState<IssueType>("TASK");
@@ -101,13 +99,6 @@ export default function NewIssueModal({
   const createIssueMutation = useCreateIssue();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  // Auto-set reporter to current user when modal opens
-  useEffect(() => {
-    if (open && currentUserId && !reporterId) {
-      setReporterId(currentUserId);
-    }
-  }, [open, currentUserId, reporterId]);
 
   // Sync internal fullscreen state with prop
   useEffect(() => {
@@ -193,7 +184,7 @@ export default function NewIssueModal({
         projectId: selectedProjectId,
         workspaceId,
         assigneeId: assigneeId || undefined,
-        reporterId: reporterId || currentUserId,
+        reporterId: currentUserId,
         labels,
         dueDate,
       });
@@ -216,7 +207,7 @@ export default function NewIssueModal({
               projectId: selectedProjectId,
               workspaceId,
               assigneeId: relation.assigneeId,
-              reporterId: reporterId || currentUserId,
+              reporterId: currentUserId,
               labels: relation.labels || [],
               parentId: relation.relationType === 'child' ? mainIssueId : undefined,
             });
@@ -272,7 +263,6 @@ export default function NewIssueModal({
         setStatus(defaultStatus);
         setPriority("MEDIUM");
         setAssigneeId(undefined);
-        setReporterId(currentUserId); // Keep reporter as current user
         setLabels([]);
         setDueDate(undefined);
         setRelations([]); // Clear relations
@@ -290,7 +280,6 @@ export default function NewIssueModal({
         setStatus(defaultStatus);
         setPriority("MEDIUM");
         setAssigneeId(undefined);
-        setReporterId(currentUserId);
         setLabels([]);
         setDueDate(undefined);
         setIssueType("TASK");
@@ -321,7 +310,7 @@ export default function NewIssueModal({
     } finally {
       setCreating(false);
     }
-  }, [canCreate, selectedProjectId, createIssueMutation, title, description, issueType, status, priority, workspaceId, assigneeId, reporterId, currentUserId, labels, dueDate, relations, createMore, defaultStatus, onOpenChange, onCreated, projectId, toast, queryClient]);
+  }, [canCreate, selectedProjectId, createIssueMutation, title, description, issueType, status, priority, workspaceId, assigneeId, currentUserId, labels, dueDate, relations, createMore, defaultStatus, onOpenChange, onCreated, projectId, toast, queryClient]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -423,11 +412,7 @@ export default function NewIssueModal({
               onChange={setAssigneeId as any} 
               workspaceId={workspaceId} 
             />
-            <IssueReporterSelector 
-              value={reporterId} 
-              onChange={setReporterId as any} 
-              workspaceId={workspaceId} 
-            />
+            <span className="text-xs text-muted-foreground self-center">Reporter: you</span>
             <IssueProjectSelector 
               value={selectedProjectId} 
               onChange={setSelectedProjectId} 

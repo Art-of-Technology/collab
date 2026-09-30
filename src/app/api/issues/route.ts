@@ -79,7 +79,7 @@ const LIST_INCLUDE = {
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
         id: workspaceId,
         OR: [
           { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } },
+          { members: { some: { userId: session.user.id, status: true } } },
         ],
       },
     });
@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -175,6 +175,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (reporterId !== undefined && reporterId !== session.user.id) {
+      return NextResponse.json({ error: "Reporter must be the current user" }, { status: 403 });
+    }
+
     // Verify access to workspace and project
     // Support both workspace ID and slug
     const workspace = await prisma.workspace.findFirst({
@@ -189,7 +193,7 @@ export async function POST(request: NextRequest) {
           {
             OR: [
               { ownerId: session.user.id },
-              { members: { some: { userId: session.user.id } } },
+              { members: { some: { userId: session.user.id, status: true } } },
             ]
           }
         ]
@@ -296,7 +300,7 @@ export async function POST(request: NextRequest) {
           projectId,
           workspaceId: workspace.id,
           assigneeId: assigneeId || null,
-          reporterId: reporterId || session.user.id,
+          reporterId: session.user.id,
           issueKey,
           dueDate: dueDate ? new Date(dueDate) : null,
           parentId: parentId || null,

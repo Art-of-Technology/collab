@@ -8,7 +8,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-export default function LoginForm() {
+export default function LoginForm({ maestroEnabled = false }: { maestroEnabled?: boolean }) {
   const [isLoading, setIsLoading] = useState(false);
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/";
@@ -53,6 +53,11 @@ export default function LoginForm() {
         )}
       </Button>
       
+      {maestroEnabled && <Button className="w-full" disabled={isLoading} onClick={async () => {
+        setIsLoading(true);
+        try { await signIn("maestro", { callbackUrl }); }
+        catch { toast.error("Failed to sign in with Maestro"); setIsLoading(false); }
+      }}>Sign in with Maestro</Button>}
       <p className="text-center text-sm text-muted-foreground">
         By signing in, you agree to our <br /> 
         <Link href="/terms" className="text-primary hover:underline">Terms</Link> and <Link href="/privacy-policy" className="text-primary hover:underline">Privacy Policy</Link>.
