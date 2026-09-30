@@ -28,9 +28,9 @@ process.env.MAESTRO_CLIENT_ID = 'fixture-client';
 function load(file, mocks = {}) {
   const source = process.env.MAESTRO_TEST_BASELINE_ISSUES === '1' && file === 'src/app/api/issues/route.ts' ? require('node:child_process').execFileSync('git', ['show', 'fddd90cadeb79faea4954a2bc399f404bfbdb0e2:'+file], { cwd: root, encoding: 'utf8' }) : fs.readFileSync(path.join(root, file), 'utf8');
   const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText;
-  const module = { exports: {} };
-  vm.runInThisContext(`(function(require,module,exports){${js}\n})`, { filename: file })(id => id in mocks ? mocks[id] : require(id), module, module.exports);
-  return module.exports;
+  const loadedModule = { exports: {} };
+  vm.runInThisContext(`(function(require,module,exports){${js}\n})`, { filename: file })(id => id in mocks ? mocks[id] : require(id), loadedModule, loadedModule.exports);
+  return loadedModule.exports;
 }
 process.env.COLLAB_AUTH_MODE = 'nextauth';
 const gateway = load('src/lib/gateway-identity.ts');
@@ -166,13 +166,13 @@ test('actual OAuth profile refusal logger omits raw claims; token exchange/verif
   const checks = require(path.join(authRoot, 'core/lib/oauth/checks.js'));
   for (const kind of ['state','nonce','pkce']) await checks[kind].create(options, cookieList, params);
   const realRequire = require('node:module').createRequire(oauthPath);
-  const module = { exports: {} };
+  const loadedModule = { exports: {} };
   vm.runInThisContext(`(function(require,module,exports){${fs.readFileSync(oauthPath, 'utf8')}\n})`)(id => id === './client' ? { openidClient: async () => ({
     callbackParams: () => ({}), callback: async () => ({ claims: () => ({ iss: helper.MAESTRO_ISSUER, sub: 's', email: 'PRIVATE@example.test', email_verified: 'true', access_token: 'PRIVATE' }) }),
-  }) } : realRequire(id), module, module.exports);
+  }) } : realRequire(id), loadedModule, loadedModule.exports);
   console.error = (...args) => output.push(args);
   try {
-    const result = await module.exports.default({ options, method: 'GET', query: {}, body: {}, cookies: Object.fromEntries(cookieList.map(c => [c.name,c.value])) });
+    const result = await loadedModule.exports.default({ options, method: 'GET', query: {}, body: {}, cookies: Object.fromEntries(cookieList.map(c => [c.name,c.value])) });
     assert.equal(result.account, undefined); assert.equal(result.profile, undefined);
   } finally { console.error = original; }
   assert.deepEqual(output, [['AUTH_FAILED']]);
