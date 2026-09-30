@@ -49,9 +49,10 @@ async function loadOverview(workspaceSelector: string, projectSelector: string |
       select: { id: true, slug: true, name: true },
     });
     if (!project) return { kind: "denied" };
+    const scope = { workspaceId: workspace.id, projectId: project.id };
     const [board, memory] = await Promise.all([
-      issuesUnavailable ? { kind: "unavailable" as const, projectName: project.name } : issues.hasPermission ? loadForgeBoard(workspaceSlug, project.slug).catch(() => ({ kind: "unavailable" as const, projectName: project.name })) : { kind: "denied" as const },
-      notesUnavailable ? { kind: "unavailable" as const, projectName: project.name } : notes.hasPermission ? loadProjectMemory(workspaceSlug, project.slug).catch(() => ({ kind: "unavailable" as const, projectName: project.name })) : { kind: "denied" as const },
+      issuesUnavailable ? { kind: "unavailable" as const, projectName: project.name } : issues.hasPermission ? loadForgeBoard(workspaceSlug, project.slug, scope).catch(() => ({ kind: "unavailable" as const, projectName: project.name })) : { kind: "denied" as const },
+      notesUnavailable ? { kind: "unavailable" as const, projectName: project.name } : notes.hasPermission ? loadProjectMemory(workspaceSlug, project.slug, scope).catch(() => ({ kind: "unavailable" as const, projectName: project.name })) : { kind: "denied" as const },
     ]);
     return { kind: "ready", workspaceName: workspace.name, workspaceSlug, projects, selected: { project, board, memory } };
   } catch {

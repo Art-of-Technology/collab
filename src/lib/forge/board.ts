@@ -11,18 +11,20 @@ export type ForgeBoard =
   | { kind: 'not-connected' | 'unavailable'; projectName: string }
   | { kind: 'ready'; projectName: string; tasks: ForgeTask[]; truncated: boolean; fetchedAt: string; today: string };
 
-export async function loadForgeBoard(workspaceSlug: string, projectSlug: string): Promise<ForgeBoard> {
+export async function loadForgeBoard(workspaceSlug: string, projectSlug: string, expected?: { workspaceId: string; projectId: string }): Promise<ForgeBoard> {
   if (typeof workspaceSlug !== 'string' || typeof projectSlug !== 'string' ||
     !workspaceSlug || !projectSlug || workspaceSlug.length > 200 || projectSlug.length > 200) return { kind: 'denied' };
   const session = await getAuthSession();
   if (!session?.user?.id) return { kind: 'denied' };
   const workspaceId = await resolveWorkspaceSlug(workspaceSlug);
-  if (!workspaceId || !await getUserWorkspaceRole(session.user.id, workspaceId)) return { kind: 'denied' };
-  if (!(await checkUserPermission(session.user.id, workspaceId, Permission.VIEW_TASKS)).hasPermission) return { kind: 'denied' };
+  if (!workspaceId || (expected && workspaceId !== expected.workspaceId) || !await getUserWorkspaceRole(session.user.id, workspaceId)) return { kind: 'denied' };
+  const permission = await checkUserPermission(session.user.id, workspaceId, Permission.VIEW_TASKS);
+  if (permission.reason === 'Internal error') return { kind: 'unavailable', projectName: 'Issues' };
+  if (!permission.hasPermission) return { kind: 'denied' };
   const project = await prisma.project.findFirst({
     where: { workspaceId, slug: projectSlug }, select: { id: true, name: true },
   });
-  if (!project) return { kind: 'denied' };
+  if (!project || (expected && project.id !== expected.projectId)) return { kind: 'denied' };
   try {
     const binding = (await readForgeBindings()).find(item => item.workspaceId === workspaceId && item.projectId === project.id);
     if (!binding) return { kind: 'not-connected', projectName: project.name };

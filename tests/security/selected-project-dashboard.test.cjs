@@ -13,8 +13,8 @@ const Overview = load(root + 'components/DashboardClient.tsx', {
   '@/components/ui/page-layout': load('src/components/ui/page-layout.tsx', ui),
   '@/components/ui/page-header': load('src/components/ui/page-header.tsx', ui),
 }).default;
-function fixture() {
-  const state = { actorId: 'actor', permissions: new Set(['VIEW_TASKS', 'VIEW_NOTES']), failedPermissions: new Set(), reads: [], provider: [], writes: 0 };
+function fixture(actualLoaders = false) {
+  const state = { actorId: 'actor', permissions: new Set(['VIEW_TASKS', 'VIEW_NOTES']), failedPermissions: new Set(), failedRechecks: new Set(), deniedRechecks: new Set(), permissionReads: new Map(), bindingReads: 0, reads: [], provider: [], writes: 0 };
   const workspace = { id: 'ws', slug: 'space', name: 'Team space', ownerId: 'other', members: [{ userId: 'actor', status: true, role: 'MEMBER' }] };
   const other = { id: 'foreign', slug: 'foreign', name: 'Secret workspace', ownerId: 'other', members: [] };
   const projects = [
@@ -31,20 +31,28 @@ function fixture() {
       if (state.failDatabase) throw Error('private database failure');
       const result = select([workspace, other].find(row => matches(row, where)), fields);
       state.afterWorkspace?.(); return result;
-    } }),
+    }, findUnique: async ({ where, select: fields }) => select([workspace, other].find(row => matches(row, where)), fields) }),
     project: model({
       findMany: async ({ where, select: fields }) => { state.reads.push('projects'); return projects.filter(row => matches(row, where)).map(row => select(row, fields)); },
-      findFirst: async ({ where, select: fields }) => { state.reads.push('selected'); state.beforeSelected?.(); return select(projects.find(row => matches(row, where)), fields); },
+      findFirst: async ({ where, select: fields }) => {
+        state.reads.push('selected'); state.beforeSelected?.();
+        const result = select(projects.find(row => matches(row, where)), fields);
+        if (where.id) state.afterSelected?.();
+        return result;
+      },
     }),
     user: model({ findUnique: async ({ where, include }) => {
       if (state.failUserLookup) throw Error('private user lookup failure');
       if (where.id !== 'actor' || state.deletedActor) return null;
-      const membership = workspace.members.filter(row => row.userId === where.id && matches({ ...row, workspaceId: workspace.id }, include.workspaceMemberships.where));
-      return { id: 'actor', role: 'DEVELOPER', workspaceMemberships: membership, ownedWorkspaces: workspace.ownerId === where.id && matches(workspace, include.ownedWorkspaces.where) ? [workspace] : [] };
+      const membership = [workspace, other].flatMap(ws => ws.members.filter(row => row.userId === where.id && matches({ ...row, workspaceId: ws.id }, include.workspaceMemberships.where)));
+      return { id: 'actor', role: 'DEVELOPER', workspaceMemberships: membership, ownedWorkspaces: [workspace, other].filter(ws => ws.ownerId === where.id && matches(ws, include.ownedWorkspaces.where)) };
     } }),
     rolePermission: model({ findUnique: async ({ where }) => {
       const { permission } = where.workspaceId_role_permission;
-      if (state.failedPermissions.has(permission)) throw Error('private role lookup failure');
+      const count = (state.permissionReads.get(permission) ?? 0) + 1;
+      state.permissionReads.set(permission, count);
+      if (state.failedPermissions.has(permission) || (count > 1 && state.failedRechecks.has(permission))) throw Error('private role lookup failure');
+      if (count > 1 && state.deniedRechecks.has(permission)) return null;
       return state.permissions.has(permission) ? { id: 'grant' } : null;
     } }),
   }, { get: (target, key) => key in target ? target[key] : model({}) });
@@ -69,12 +77,31 @@ function fixture() {
     './components/DashboardClient': { default: Overview },
     'next/navigation': { redirect: path => { throw Error('redirect:' + path); }, notFound: () => { throw Error('not-found'); } },
   };
+  if (actualLoaders) {
+    const loaderDependencies = {
+      ...dependencies,
+      'server-only': {},
+      '@/lib/slug-resolvers': load('src/lib/slug-resolvers.ts', { '@/lib/prisma': { prisma }, '@/lib/url-utils': load('src/lib/url-utils.ts') }),
+      './reader': {
+        readForgeBindings: async () => { state.bindingReads++; return projects.map(project => ({ workspaceId: project.workspaceId, projectId: project.id, memory: { branch: 'main' } })); },
+        readForgeIssues: async binding => { state.provider.push(['issues', binding.workspaceId, binding.projectId]); return { tasks: [task(binding.projectId + ' task')], truncated: false, fetchedAt: '2026-01-01T00:00:00Z' }; },
+      },
+      './memory-store': {
+        readProjectMemory: async binding => { state.provider.push(['memory', binding.workspaceId, binding.projectId]); return { sha: null, document: { version: 1, projectId: binding.projectId, revisions: [] } }; },
+        writeProjectMemory: forbidden,
+      },
+      './memory': load('src/lib/forge/memory.ts', { zod: require('zod') }, { URL }),
+      'node:crypto': require('node:crypto'), zod: require('zod'),
+    };
+    dependencies['@/lib/forge/board'] = load('src/lib/forge/board.ts', loaderDependencies);
+    dependencies['@/lib/forge/memory-service'] = load('src/lib/forge/memory-service.ts', loaderDependencies);
+  }
   const page = load(root + 'page.tsx', dependencies).default;
   function render(project, ws = 'space') {
     if (arguments.length === 0) project = 'a';
     return page({ params: Promise.resolve({ workspaceId: ws }), searchParams: Promise.resolve(project === undefined ? {} : { project }) });
   }
-  return { state, workspace, projects, render, html: async (...args) => renderToStaticMarkup(await render(...args)) };
+  return { state, workspace, other, projects, render, html: async (...args) => renderToStaticMarkup(await render(...args)), loadBoard: dependencies['@/lib/forge/board'].loadForgeBoard, ...dependencies['@/lib/forge/memory-service'] };
 }
 
 test('missing stable actor redirects before data', async () => { const f = fixture(); f.state.actorId = undefined; await assert.rejects(f.render(), { message: 'redirect:/login' }); assert.equal(f.state.reads.length, 0); });
@@ -132,3 +159,79 @@ test('switching project creates only new scoped payload and canonical links', as
 test('chooser is a GET navigation and overview exposes no mutation form', async () => { const f = fixture(); const html = await f.html(); assert.match(html, /<form\b[^>]*action="\/space\/dashboard"[^>]*method="get"/); assert.doesNotMatch(html, /method="post"|All clear|Ready to Deploy/); assert.equal(f.state.writes, 0); });
 
 test('memory read failures and revocation do not masquerade as no revisions', async () => { const f = fixture(); f.state.memory = { kind: 'unavailable', projectName: 'Alpha' }; let html = await f.html(); assert.match(html, /Project memory could not be loaded/); assert.doesNotMatch(html, /No project memory revisions|0 notes|Open an issue for Ready review/); f.state.memory = { kind: 'denied' }; html = await f.html(); assert.match(html, /do not have access to Project memory/); assert.doesNotMatch(html, /Review project memory/); });
+
+test('actual loaders retain matching selected IDs through permission rechecks and provider reads', async () => {
+  const f = fixture(true); const node = await f.render();
+  assert.equal(node.props.data.selected.project.id, 'a');
+  assert.equal(node.props.data.selected.board.kind, 'ready');
+  assert.equal(node.props.data.selected.memory.kind, 'ready');
+  assert.match(renderToStaticMarkup(node), /a task/);
+  assert.equal(node.props.data.selected.memory.snapshot.document.projectId, 'a');
+  assert.deepEqual(f.state.provider, [['issues', 'ws', 'a'], ['memory', 'ws', 'a']]);
+  assert.equal(f.state.permissionReads.get('VIEW_TASKS'), 2);
+  assert.equal(f.state.permissionReads.get('VIEW_NOTES'), 2);
+  assert.equal(f.state.writes, 0);
+});
+for (const reassignment of ['workspace', 'project']) {
+  test(`actual loaders refuse ${reassignment} slug reassignment before any binding or payload read`, async () => {
+    const f = fixture(true);
+    f.state.afterSelected = () => {
+      if (reassignment === 'workspace') {
+        f.workspace.slug = 'old-space'; f.other.slug = 'space';
+        f.other.members = [{ userId: 'actor', status: true, role: 'MEMBER' }];
+        f.projects[2].slug = 'alpha';
+      } else {
+        f.projects[0].slug = 'old-alpha'; f.projects[1].slug = 'alpha';
+      }
+    };
+    const node = await f.render();
+    assert.equal(node.props.data.selected.project.name, 'Alpha');
+    assert.equal(node.props.data.selected.board.kind, 'denied');
+    assert.equal(node.props.data.selected.memory.kind, 'denied');
+    assert.equal(f.state.bindingReads, 0);
+    assert.deepEqual(f.state.provider, []);
+    assert.equal(f.state.writes, 0);
+  });
+}
+for (const [permission, failedSection, allowedProvider] of [['VIEW_TASKS', 'board', 'memory'], ['VIEW_NOTES', 'memory', 'issues']]) {
+  test(`actual loader ${permission} recheck failure is unavailable and never reads that provider`, async () => {
+    const f = fixture(true); f.state.failedRechecks.add(permission);
+    const node = await f.render();
+    assert.equal(node.props.data.selected[failedSection].kind, 'unavailable');
+    assert.equal(node.props.data.selected[failedSection === 'board' ? 'memory' : 'board'].kind, 'ready');
+    assert.equal(f.state.permissionReads.get(permission), 2);
+    assert.equal(f.state.bindingReads, 1);
+    assert.deepEqual(f.state.provider, [[allowedProvider, 'ws', 'a']]);
+    assert.doesNotMatch(renderToStaticMarkup(node), /do not have access|private|All clear|Open an issue for Ready review/);
+  });
+}
+test('both actual loader permission recheck failures prevent all binding and provider reads', async () => {
+  const f = fixture(true); f.state.failedRechecks = new Set(['VIEW_TASKS', 'VIEW_NOTES']);
+  const node = await f.render();
+  assert.equal(node.props.data.selected.board.kind, 'unavailable');
+  assert.equal(node.props.data.selected.memory.kind, 'unavailable');
+  assert.equal(f.state.bindingReads, 0);
+  assert.deepEqual(f.state.provider, []);
+});
+test('actual loader permission revocation remains denied without provider reads', async () => {
+  const f = fixture(true); f.state.deniedRechecks = new Set(['VIEW_TASKS', 'VIEW_NOTES']);
+  const node = await f.render();
+  assert.equal(node.props.data.selected.board.kind, 'denied');
+  assert.equal(node.props.data.selected.memory.kind, 'denied');
+  assert.equal(f.state.bindingReads, 0);
+  assert.deepEqual(f.state.provider, []);
+});
+test('existing two-argument loader callers still load their authorized project', async () => {
+  const f = fixture(true);
+  assert.equal((await f.loadBoard('space', 'alpha')).kind, 'ready');
+  assert.equal((await f.loadProjectMemory('space', 'alpha')).kind, 'ready');
+  assert.deepEqual(f.state.provider, [['issues', 'ws', 'a'], ['memory', 'ws', 'a']]);
+});
+test('memory mutations retain denial on permission lookup failure without reads or writes', async () => {
+  const f = fixture(true); f.state.failedPermissions.add('VIEW_NOTES');
+  const result = await f.changeProjectMemory('space', 'alpha', { action: 'save', noteId: null, expectedSha: null, draft: { title: 'Rules', type: 'Rules', body: 'Draft', sources: [] } });
+  assert.equal(result.kind, 'denied');
+  assert.equal(f.state.bindingReads, 0);
+  assert.deepEqual(f.state.provider, []);
+  assert.equal(f.state.writes, 0);
+});
