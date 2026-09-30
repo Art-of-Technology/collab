@@ -1,138 +1,82 @@
-"use client";
+import type { ForgeBoard } from "@/lib/forge/board";
+import type { MemoryView } from "@/lib/forge/memory-service";
+import { needsAttention } from "@/lib/forge/tasks";
+import { PageLayout } from "@/components/ui/page-layout";
+import { PageHeader } from "@/components/ui/page-header";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
-import { useWorkspace } from "@/context/WorkspaceContext";
-import SimplifiedDashboard from "@/components/dashboard/SimplifiedDashboard";
+type Project = { id: string; slug: string; name: string };
+export type DashboardData = { kind: "denied" | "unavailable" } | {
+  kind: "ready"; workspaceName: string; workspaceSlug: string; projects: Project[];
+  selected: { project: Project; board: ForgeBoard; memory: MemoryView } | null;
+};
 
-// ─── API Response Types ───────────────────────────────────────────────────────
+const linkStyle = "text-sm underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4";
+const cardStyle = "min-w-0 space-y-4 rounded-xl border border-border bg-card p-5";
 
-interface QueueItem {
-  id: string;
-  issueKey: string;
-  title: string;
-  priority: "urgent" | "high" | "medium" | "low" | null;
-  status: string | null;
-  statusColor: string | null;
-  dueDate: string | null;
-  projectId: string;
-  projectName: string;
-  projectColor: string;
-  reason: "overdue" | "due-today" | "mentioned" | "stale" | "high-priority";
-  daysOverdue?: number;
-  daysSinceUpdate?: number;
+function ReadState({ kind, label }: { kind: "denied" | "unavailable" | "not-connected"; label: string }) {
+  return <p role="status" className="text-sm text-muted-foreground">{kind === "denied"
+    ? `You do not have access to ${label}.`
+    : kind === "not-connected" ? `${label} is not connected for this project.`
+      : `${label} could not be loaded. Reload this overview to try again.`}</p>;
 }
 
-interface WorkItem {
-  id: string;
-  issueKey: string;
-  title: string;
-  status: string | null;
-  statusColor: string | null;
-  daysInStatus: number;
-  projectName: string;
-  projectColor: string;
-}
-
-interface RecentInteraction {
-  id: string;
-  type: "issue" | "project" | "view";
-  issueKey?: string;
-  title: string;
-  color: string;
-  projectSlug?: string;
-  viewSlug?: string;
-  action: "created" | "assigned" | "status_changed" | "commented" | "viewed";
-  timestamp: string;
-}
-
-interface DashboardData {
-  greeting: string;
-  summary: string;
-  myQueue: QueueItem[];
-  workInProgress: {
-    inProgress: WorkItem[];
-    inReview: WorkItem[];
-    readyToDeploy: WorkItem[];
-  };
-  recentInteractions: RecentInteraction[];
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
-interface DashboardClientProps {
-  workspaceId: string;
-  workspaceSlug: string;
-  userName: string;
-}
-
-export default function DashboardClient({
-  workspaceId,
-  userName,
-}: DashboardClientProps) {
-  const { currentWorkspace } = useWorkspace();
-  const { data: session } = useSession();
-
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const wsId = currentWorkspace?.id || workspaceId;
-  const displayName = session?.user?.name || userName || "there";
-
-  const fetchData = useCallback(async () => {
-    if (!wsId) return;
-    try {
-      const res = await fetch(`/api/ai/dashboard?workspaceId=${wsId}`);
-      if (res.ok) {
-        setDashboardData(await res.json());
-      }
-    } catch (e) {
-      console.error("Failed to fetch dashboard data:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, [wsId]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  if (loading && !dashboardData) {
-    return (
-      <div className="h-full w-full overflow-y-auto">
-        <div className="flex flex-col gap-8 p-8 max-w-[1400px] mx-auto animate-pulse">
-          {/* Header skeleton */}
-          <div>
-            <div className="h-8 w-48 bg-collab-800 rounded-lg mb-2" />
-            <div className="h-4 w-64 bg-collab-800 rounded-lg" />
-          </div>
-
-          {/* Stats skeleton */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-24 bg-collab-800 rounded-2xl border border-collab-700" />
-            ))}
-          </div>
-
-          {/* Work sections skeleton */}
-          <div className="flex gap-3">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="w-[320px] h-[280px] bg-collab-800 rounded-2xl border border-collab-700 flex-shrink-0" />
-            ))}
-          </div>
-        </div>
+// Server-rendered overview: navigation reloads the selected scope without retaining client data.
+export default function DashboardOverview({ data }: { data: DashboardData }) {
+  if (data.kind !== "ready") return <PageLayout>
+    <PageHeader title="Project overview" />
+    <ReadState kind={data.kind} label="Project overview" />
+  </PageLayout>;
+  const { selected, projects, workspaceSlug } = data;
+  const dashboardPath = `/${encodeURIComponent(workspaceSlug)}/dashboard`;
+  const base = selected ? `/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(selected.project.slug)}` : "";
+  const board = selected?.board;
+  const memory = selected?.memory;
+  return <PageLayout>
+    <PageHeader title="Project overview" subtitle={data.workspaceName} />
+    <form action={dashboardPath} method="get" className="flex flex-wrap items-end gap-3">
+      <div className="min-w-0 flex-1 space-y-2">
+        <label htmlFor="overview-project" className="text-sm font-medium">Project</label>
+        <select id="overview-project" name="project" defaultValue={selected?.project.id ?? ""} className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <option value="">Choose a project</option>
+          {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+        </select>
       </div>
-    );
-  }
-
-  return (
-    <SimplifiedDashboard
-      userName={displayName}
-      greeting={dashboardData?.greeting || "Welcome back"}
-      summary={dashboardData?.summary}
-      myQueue={dashboardData?.myQueue || []}
-      workInProgress={dashboardData?.workInProgress || { inProgress: [], inReview: [], readyToDeploy: [] }}
-      recentInteractions={dashboardData?.recentInteractions || []}
-    />
-  );
+      <button type="submit" disabled={!projects.length} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">Show project</button>
+      {selected && <a className={linkStyle} href={`${dashboardPath}?project=${encodeURIComponent(selected.project.id)}`}>Reload overview</a>}
+    </form>
+    {!selected ? <p role="status" className="text-sm text-muted-foreground">{projects.length ? "Choose a project to see its issues and memory." : "No projects are available in this workspace."}</p> : <>
+      <h2 className="text-lg font-medium break-words">{selected.project.name}</h2>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <section aria-label="Issues" className={cardStyle}>
+          <h3 className="font-medium">Issues</h3>
+          {board?.kind === "ready" ? <>
+            <p className="text-sm">{board.tasks.length} loaded issues · {board.tasks.filter(task => needsAttention(task, board.today)).length} need attention</p>
+            <p className="text-xs text-muted-foreground">Fetched {board.fetchedAt}</p>
+            {board.truncated && <p role="status" className="text-sm">Partial result: only the first 1,000 issues were loaded. Counts are not repository totals.</p>}
+            {board.tasks.length === 0 ? <p className="text-sm">No issues in this loaded result.</p> : <ul className="space-y-2 text-sm">
+              {board.tasks.slice(0, 5).map(task => <li key={task.number} className="break-words">#{task.number} {task.title} <span className="text-muted-foreground">· {task.status}</span></li>)}
+            </ul>}
+          </> : board && <ReadState kind={board.kind} label="Issues" />}
+          {board?.kind !== "denied" && <a className={linkStyle} href={`${base}/board`}>Open issue board</a>}
+        </section>
+        <section aria-label="Project memory" className={cardStyle}>
+          <h3 className="font-medium">Project memory</h3>
+          <p className="text-sm text-muted-foreground">Rules, Strategy, Decisions and Handoffs · Draft → Approved → Superseded</p>
+          {memory?.kind === "ready" ? <>
+            <p className="text-sm">{new Set(memory.snapshot.document.revisions.map(note => note.id)).size} notes · {memory.snapshot.document.revisions.filter(note => note.state === "Draft").length} draft revisions · {memory.snapshot.document.revisions.filter(note => note.state === "Approved").length} approved revisions</p>
+            {memory.snapshot.document.revisions.length === 0 ? <p className="text-sm">No project memory revisions yet.</p> : <ul className="space-y-2 text-sm">
+              {memory.snapshot.document.revisions.slice(0, 6).map(note => <li key={`${note.id}-${note.revision}`} className="break-words">{note.title} <span className="text-muted-foreground">· {note.type} · {note.state} · revision {note.revision}</span></li>)}
+            </ul>}
+            <p className="text-xs text-muted-foreground">Review the full revision list and approval details in project memory.</p>
+          </> : memory && <ReadState kind={memory.kind} label="Project memory" />}
+          {memory?.kind !== "denied" && <a className={linkStyle} href={`${base}/notes/memory`}>Review project memory</a>}
+        </section>
+      </div>
+      <section aria-label="Ready review" className={cardStyle}>
+        <h3 className="font-medium">Ready review</h3>
+        <p className="text-sm text-muted-foreground">Open an issue to review its approved memory and configured Ready options. Ready does not grant merge or deploy permission. Execution availability and recorded attempts are shown per issue when configured.</p>
+        {board?.kind === "ready" && memory?.kind === "ready" ? <a className={linkStyle} href={`${base}/board`}>Open an issue for Ready review</a> : <p role="status" className="text-sm">Ready review requires access to connected issues and project memory.</p>}
+      </section>
+    </>}
+  </PageLayout>;
 }
