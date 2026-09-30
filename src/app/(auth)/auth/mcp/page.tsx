@@ -144,7 +144,7 @@ export default function MCPAuthPage() {
         <div className="w-full max-w-md px-8">
           <div className="flex flex-col items-center justify-center text-center mb-8">
             <Link href="/" className="mb-4">
-              <Image src="/logo-text.svg" width={125} height={125} alt="Collab" />
+              <Image unoptimized src="/logo-text.svg" width={125} height={125} alt="Collab" />
             </Link>
             <p className="mt-2 text-gray-400">Sign in to connect your workspace</p>
           </div>
@@ -227,7 +227,7 @@ export default function MCPAuthPage() {
       <div className="w-full max-w-md px-8">
         <div className="flex flex-col items-center justify-center text-center mb-8">
           <Link href="/" className="mb-4">
-            <Image src="/logo-text.svg" width={125} height={125} alt="Collab" />
+            <Image unoptimized src="/logo-text.svg" width={125} height={125} alt="Collab" />
           </Link>
         </div>
 

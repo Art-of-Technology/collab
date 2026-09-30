@@ -91,7 +91,7 @@ export default function DevSidebar({
         <div className="p-2 border-b border-collab-700">
           <div className="flex justify-center">
             <Link href="/dev" className="flex items-center">
-              <Image src="/logo-icon.svg" width={32} height={32} alt="Collab" className="h-8 w-auto" />
+              <Image unoptimized src="/logo-icon.svg" width={32} height={32} alt="Collab" className="h-8 w-auto" />
             </Link>
           </div>
         </div>
@@ -167,7 +167,7 @@ export default function DevSidebar({
       {/* Header - Collab Logo with Developer Console subtitle */}
       <div className="p-3 border-b border-collab-700">
         <Link href="/dev" className="flex flex-col items-start gap-1">
-          <Image src="/logo-text.svg" width={100} height={100} alt="Collab" className="h-6 w-auto" />
+          <Image unoptimized src="/logo-text.svg" width={100} height={100} alt="Collab" className="h-6 w-auto" />
           <span className="text-xs text-gray-500 font-medium">Developer Console</span>
         </Link>
       </div>

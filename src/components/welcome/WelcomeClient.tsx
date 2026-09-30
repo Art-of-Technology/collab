@@ -33,7 +33,7 @@ export default function WelcomeClient({ initialInvitations }: WelcomeClientProps
   return (
     <div>
       <div className="flex flex-col items-center text-center mb-8">
-        <Image src="/logo-icon.svg" width={120} height={120} alt="Collab" className="h-10 mb-4" />
+        <Image unoptimized src="/logo-icon.svg" width={120} height={120} alt="Collab" className="h-10 mb-4" />
         <h1 className="text-3xl font-bold">Welcome to Collab</h1>
         <p className="text-muted-foreground mt-2 max-w-lg">
           Let&apos;s get you set up! Create a new workspace or accept an invitation to start collaborating.

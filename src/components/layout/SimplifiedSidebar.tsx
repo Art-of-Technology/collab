@@ -115,7 +115,7 @@ export default function SimplifiedSidebar({
         <div className="px-2 mb-4 flex justify-center">
           <Link href={`${workspaceBase}/dashboard`}>
             <div className="p-2 rounded-lg hover:bg-collab-800 transition-colors">
-              <Image src="/logo-icon.svg" width={24} height={24} alt="Collab" />
+              <Image unoptimized src="/logo-icon.svg" width={24} height={24} alt="Collab" />
             </div>
           </Link>
         </div>
@@ -201,7 +201,7 @@ export default function SimplifiedSidebar({
       {/* Header */}
       <div className="flex items-center justify-between pt-3.5 px-2">
         <Link href={`${workspaceBase}/dashboard`} className="flex items-center">
-          <Image src="/logo-text.svg" width={100} height={28} alt="Collab" />
+          <Image unoptimized src="/logo-text.svg" width={100} height={28} alt="Collab" />
         </Link>
         <div className="flex items-center gap-1">
           <NotificationPopover />

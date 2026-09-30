@@ -86,7 +86,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Header - Collab Logo with Admin Dashboard subtitle */}
         <div className="p-3 border-b border-collab-700">
           <Link href="/admin" className="flex flex-col items-start gap-1">
-            <Image src="/logo-text.svg" width={100} height={100} alt="Collab" className="h-6 w-auto" />
+            <Image unoptimized src="/logo-text.svg" width={100} height={100} alt="Collab" className="h-6 w-auto" />
             <span className="text-xs text-gray-500 font-medium">Admin Dashboard</span>
           </Link>
         </div>

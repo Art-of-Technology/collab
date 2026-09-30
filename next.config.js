@@ -31,7 +31,9 @@ const nextConfig = {
     'bcrypt',
   ],
   images: {
-    // Allow SVG images (for logo-text.svg and other SVGs)
+    // Keep SVG optimization available for callers that have not opted out.
+    // Fixed logos use per-image unoptimized to retain gateway identity on raw
+    // asset requests; see tests/security/local-svg-images.test.cjs.
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
