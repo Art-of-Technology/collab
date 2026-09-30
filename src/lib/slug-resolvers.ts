@@ -19,7 +19,7 @@ function isDatabaseId(str: string): boolean {
  * Resolve workspace slug to workspace ID
  * Supports both slugs and legacy UUIDs for backward compatibility
  */
-export async function resolveWorkspaceSlug(slugOrId: string): Promise<string | null> {
+export async function resolveWorkspaceSlug(slugOrId: string, throwOnError = false): Promise<string | null> {
   try {
     // If it's already a database ID (UUID or CUID), return it (legacy support)
     if (isDatabaseId(slugOrId)) {
@@ -39,6 +39,7 @@ export async function resolveWorkspaceSlug(slugOrId: string): Promise<string | n
 
     return workspace?.id || null;
   } catch (error) {
+    if (throwOnError) throw error;
     console.error('Error resolving workspace slug:', error);
     return null;
   }

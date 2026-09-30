@@ -297,7 +297,8 @@ export async function getUserPermissions(
  */
 export async function getUserWorkspaceRole(
   userId: string,
-  workspaceId: string
+  workspaceId: string,
+  throwOnError = false
 ): Promise<string | null> {
   try {
     const user = await prisma.user.findUnique({
@@ -327,6 +328,7 @@ export async function getUserWorkspaceRole(
     const membership = user.workspaceMemberships[0];
     return membership?.role || null;
   } catch (error) {
+    if (throwOnError) throw error;
     console.error("Error getting user workspace role:", error);
     return null;
   }

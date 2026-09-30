@@ -23,13 +23,13 @@ export type MemoryView = { kind: 'denied' } | { kind: 'unavailable' | 'not-conne
 };
 export type MemoryResult = { kind: 'saved'; view: MemoryView } | { kind: 'denied' | 'invalid' | 'conflict' | 'uncertain' | 'unavailable' };
 
-async function authorize(workspaceSlug: string, projectSlug: string, expected?: { workspaceId: string; projectId: string }) {
+async function authorize(workspaceSlug: string, projectSlug: string, expected?: { workspaceId: string; projectId: string }, throwOnLookupError = false) {
   if (!selector.safeParse(workspaceSlug).success || !selector.safeParse(projectSlug).success) return null;
   const session = await getAuthSession();
   if (!session?.user?.id) return null;
-  const workspaceId = await resolveWorkspaceSlug(workspaceSlug);
+  const workspaceId = await resolveWorkspaceSlug(workspaceSlug, throwOnLookupError);
   if (!workspaceId || (expected && workspaceId !== expected.workspaceId)) return null;
-  const role = await getUserWorkspaceRole(session.user.id, workspaceId);
+  const role = await getUserWorkspaceRole(session.user.id, workspaceId, throwOnLookupError);
   if (!role) return null;
   const permission = await checkUserPermission(session.user.id, workspaceId, Permission.VIEW_NOTES);
   if (permission.reason === 'Internal error') return { kind: 'unavailable' as const };
@@ -44,7 +44,7 @@ async function authorize(workspaceSlug: string, projectSlug: string, expected?: 
 export async function loadProjectMemory(workspaceSlug: string, projectSlug: string, expected?: { workspaceId: string; projectId: string }): Promise<MemoryView> {
   let projectName = 'Project memory';
   try {
-    const access = await authorize(workspaceSlug, projectSlug, expected);
+    const access = await authorize(workspaceSlug, projectSlug, expected, true);
     if (!access) return { kind: 'denied' };
     if ('kind' in access) return { kind: 'unavailable', projectName };
     projectName = access.project.name;

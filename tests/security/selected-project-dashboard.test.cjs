@@ -31,7 +31,11 @@ function fixture(actualLoaders = false) {
       if (state.failDatabase) throw Error('private database failure');
       const result = select([workspace, other].find(row => matches(row, where)), fields);
       state.afterWorkspace?.(); return result;
-    }, findUnique: async ({ where, select: fields }) => select([workspace, other].find(row => matches(row, where)), fields) }),
+    }, findUnique: async ({ where, select: fields }) => {
+      if (state.failWorkspaceLookup) throw Error('private workspace lookup failure');
+      if (state.missingWorkspaceLookup) return null;
+      return select([workspace, other].find(row => matches(row, where)), fields);
+    } }),
     project: model({
       findMany: async ({ where, select: fields }) => { state.reads.push('projects'); return projects.filter(row => matches(row, where)).map(row => select(row, fields)); },
       findFirst: async ({ where, select: fields }) => {
@@ -66,6 +70,7 @@ function fixture(actualLoaders = false) {
     state.provider.push(['memory', ws, project]);
     return state.memory ?? { kind: 'ready', projectName: project, snapshot: { sha: null, document: { version: 1, projectId: project, revisions: [] } }, actorId: 'actor', canCreate: true, canEditOwn: true, canEditAny: false, canApprove: false };
   };
+  const slugResolvers = load('src/lib/slug-resolvers.ts', { '@/lib/prisma': { prisma }, '@/lib/url-utils': load('src/lib/url-utils.ts') });
   const dependencies = {
     'react/jsx-runtime': jsx,
     '@/lib/auth': { getAuthSession: async () => ({ user: { id: state.actorId, email: 'stale@example.test' } }) },
@@ -81,7 +86,7 @@ function fixture(actualLoaders = false) {
     const loaderDependencies = {
       ...dependencies,
       'server-only': {},
-      '@/lib/slug-resolvers': load('src/lib/slug-resolvers.ts', { '@/lib/prisma': { prisma }, '@/lib/url-utils': load('src/lib/url-utils.ts') }),
+      '@/lib/slug-resolvers': slugResolvers,
       './reader': {
         readForgeBindings: async () => { state.bindingReads++; return projects.map(project => ({ workspaceId: project.workspaceId, projectId: project.id, memory: { branch: 'main' } })); },
         readForgeIssues: async binding => { state.provider.push(['issues', binding.workspaceId, binding.projectId]); return { tasks: [task(binding.projectId + ' task')], truncated: false, fetchedAt: '2026-01-01T00:00:00Z' }; },
@@ -101,7 +106,7 @@ function fixture(actualLoaders = false) {
     if (arguments.length === 0) project = 'a';
     return page({ params: Promise.resolve({ workspaceId: ws }), searchParams: Promise.resolve(project === undefined ? {} : { project }) });
   }
-  return { state, workspace, other, projects, render, html: async (...args) => renderToStaticMarkup(await render(...args)), loadBoard: dependencies['@/lib/forge/board'].loadForgeBoard, ...dependencies['@/lib/forge/memory-service'] };
+  return { state, workspace, other, projects, render, html: async (...args) => renderToStaticMarkup(await render(...args)), loadBoard: dependencies['@/lib/forge/board'].loadForgeBoard, ...dependencies['@/lib/forge/memory-service'], resolveWorkspaceSlug: slugResolvers.resolveWorkspaceSlug, getUserWorkspaceRole: dependencies['@/lib/permissions'].getUserWorkspaceRole };
 }
 
 test('missing stable actor redirects before data', async () => { const f = fixture(); f.state.actorId = undefined; await assert.rejects(f.render(), { message: 'redirect:/login' }); assert.equal(f.state.reads.length, 0); });
@@ -235,3 +240,67 @@ test('memory mutations retain denial on permission lookup failure without reads 
   assert.deepEqual(f.state.provider, []);
   assert.equal(f.state.writes, 0);
 });
+
+for (const [section, permission, otherPermission] of [['board', 'VIEW_TASKS', 'VIEW_NOTES'], ['memory', 'VIEW_NOTES', 'VIEW_TASKS']]) {
+  for (const lookup of ['workspace', 'role']) {
+    test(`${section} ${lookup} lookup failure after overview authorization is unavailable without provider reads`, async () => {
+      const f = fixture(true); f.state.permissions.delete(otherPermission);
+      f.state.afterSelected = () => {
+        assert.equal(f.state.permissionReads.get(permission), 1);
+        f.state[lookup === 'workspace' ? 'failWorkspaceLookup' : 'failUserLookup'] = true;
+      };
+      const node = await f.render();
+      assert.equal(node.props.data.selected[section].kind, 'unavailable');
+      assert.equal(node.props.data.selected[section === 'board' ? 'memory' : 'board'].kind, 'denied');
+      const html = renderToStaticMarkup(node);
+      assert.match(html, new RegExp((section === 'board' ? 'Issues' : 'Project memory') + ' could not be loaded'));
+      assert.doesNotMatch(html, /private|All clear|Open an issue for Ready review/);
+      assert.equal(f.state.bindingReads, 0);
+      assert.deepEqual(f.state.provider, []);
+      assert.equal(f.state.writes, 0);
+    });
+  }
+  for (const missing of ['workspace', 'user', 'membership']) {
+    test(`${section} missing ${missing} after overview authorization remains denied`, async () => {
+      const f = fixture(true); f.state.permissions.delete(otherPermission);
+      f.state.afterSelected = () => {
+        if (missing === 'workspace') f.state.missingWorkspaceLookup = true;
+        else if (missing === 'user') f.state.deletedActor = true;
+        else f.workspace.members = [];
+      };
+      const node = await f.render();
+      assert.equal(node.props.data.selected[section].kind, 'denied');
+      assert.equal(f.state.bindingReads, 0);
+      assert.deepEqual(f.state.provider, []);
+      assert.equal(f.state.writes, 0);
+    });
+  }
+}
+test('workspace lookup propagation is opt-in for both slugs and legacy IDs', async () => {
+  const f = fixture(true); f.state.failWorkspaceLookup = true;
+  for (const selector of ['space', '123e4567-e89b-12d3-a456-426614174000']) {
+    assert.equal(await f.resolveWorkspaceSlug(selector), null);
+    await assert.rejects(f.resolveWorkspaceSlug(selector, true), { message: 'private workspace lookup failure' });
+  }
+  f.state.failWorkspaceLookup = false;
+  assert.equal(await f.resolveWorkspaceSlug('space'), 'ws');
+  assert.equal(await f.resolveWorkspaceSlug('space', true), 'ws');
+});
+test('role lookup propagation is opt-in and preserves successful roles', async () => {
+  const f = fixture(true); f.state.failUserLookup = true;
+  assert.equal(await f.getUserWorkspaceRole('actor', 'ws'), null);
+  await assert.rejects(f.getUserWorkspaceRole('actor', 'ws', true), { message: 'private user lookup failure' });
+  f.state.failUserLookup = false;
+  assert.equal(await f.getUserWorkspaceRole('actor', 'ws'), 'MEMBER');
+  assert.equal(await f.getUserWorkspaceRole('actor', 'ws', true), 'MEMBER');
+});
+for (const lookup of ['workspace', 'role']) {
+  test(`memory mutations retain denial on ${lookup} lookup failure without reads or writes`, async () => {
+    const f = fixture(true); f.state[lookup === 'workspace' ? 'failWorkspaceLookup' : 'failUserLookup'] = true;
+    const result = await f.changeProjectMemory('space', 'alpha', { action: 'save', noteId: null, expectedSha: null, draft: { title: 'Rules', type: 'Rules', body: 'Draft', sources: [] } });
+    assert.equal(result.kind, 'denied');
+    assert.equal(f.state.bindingReads, 0);
+    assert.deepEqual(f.state.provider, []);
+    assert.equal(f.state.writes, 0);
+  });
+}

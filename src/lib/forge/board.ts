@@ -14,18 +14,20 @@ export type ForgeBoard =
 export async function loadForgeBoard(workspaceSlug: string, projectSlug: string, expected?: { workspaceId: string; projectId: string }): Promise<ForgeBoard> {
   if (typeof workspaceSlug !== 'string' || typeof projectSlug !== 'string' ||
     !workspaceSlug || !projectSlug || workspaceSlug.length > 200 || projectSlug.length > 200) return { kind: 'denied' };
-  const session = await getAuthSession();
-  if (!session?.user?.id) return { kind: 'denied' };
-  const workspaceId = await resolveWorkspaceSlug(workspaceSlug);
-  if (!workspaceId || (expected && workspaceId !== expected.workspaceId) || !await getUserWorkspaceRole(session.user.id, workspaceId)) return { kind: 'denied' };
-  const permission = await checkUserPermission(session.user.id, workspaceId, Permission.VIEW_TASKS);
-  if (permission.reason === 'Internal error') return { kind: 'unavailable', projectName: 'Issues' };
-  if (!permission.hasPermission) return { kind: 'denied' };
-  const project = await prisma.project.findFirst({
-    where: { workspaceId, slug: projectSlug }, select: { id: true, name: true },
-  });
-  if (!project || (expected && project.id !== expected.projectId)) return { kind: 'denied' };
+  let projectName = 'Issues';
   try {
+    const session = await getAuthSession();
+    if (!session?.user?.id) return { kind: 'denied' };
+    const workspaceId = await resolveWorkspaceSlug(workspaceSlug, true);
+    if (!workspaceId || (expected && workspaceId !== expected.workspaceId) || !await getUserWorkspaceRole(session.user.id, workspaceId, true)) return { kind: 'denied' };
+    const permission = await checkUserPermission(session.user.id, workspaceId, Permission.VIEW_TASKS);
+    if (permission.reason === 'Internal error') return { kind: 'unavailable', projectName };
+    if (!permission.hasPermission) return { kind: 'denied' };
+    const project = await prisma.project.findFirst({
+      where: { workspaceId, slug: projectSlug }, select: { id: true, name: true },
+    });
+    if (!project || (expected && project.id !== expected.projectId)) return { kind: 'denied' };
+    projectName = project.name;
     const binding = (await readForgeBindings()).find(item => item.workspaceId === workspaceId && item.projectId === project.id);
     if (!binding) return { kind: 'not-connected', projectName: project.name };
     const result = await readForgeIssues(binding);
@@ -34,6 +36,6 @@ export async function loadForgeBoard(workspaceSlug: string, projectSlug: string,
     return { kind: 'ready', projectName: project.name, ...result, today };
   } catch {
     // Never expose provider response bodies, configured paths or credentials.
-    return { kind: 'unavailable', projectName: project.name };
+    return { kind: 'unavailable', projectName };
   }
 }
