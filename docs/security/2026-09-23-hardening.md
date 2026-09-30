@@ -1163,8 +1163,8 @@ deployment operation was performed.
 
 ## AI dashboard payload access
 
-The dashboard uses the shared session adapter and repeats current workspace
-owner/active-member access on payload queries. Recent views use the existing
+The retained `/api/ai/dashboard` endpoint uses the shared session adapter and
+repeats current workspace owner/active-member access on payload queries. Recent views use the existing
 view visibility/recipient predicate, protecting both recently-viewed results
 and interaction shortcuts. Root issues, comment issue previews, team assignments,
 project issue lists and counts use `issueReadAccessWhere`. Blocking relations
@@ -1189,6 +1189,36 @@ View project-ID configuration, name-based mention matching, raw error logging
 and cross-query snapshot consistency remain separate. Gateway and worker remain
 disabled; trusted ingress and mutation-Origin enforcement remain required.
 No database, provider, browser, runtime or deployment operation was run.
+
+## Selected-project overview access
+
+For navigation and read-state behavior, see [Project overview](../../README.md#project-overview).
+The workspace overview authorizes the exact URL workspace against the current
+stable session user ID, requiring ownership or active membership. Missing
+identity redirects to login; denied workspace/project selection returns 404.
+The chooser requires `VIEW_TASKS` or `VIEW_NOTES` and projects are queried within
+that same authorized workspace. Malformed, repeated or foreign nonempty project
+selectors are rejected before any provider read.
+
+The selected project query repeats current workspace access. Its immutable
+workspace/project IDs are passed to `loadForgeBoard` and `loadProjectMemory`;
+both reject re-resolved slug identities that differ before reading bindings or
+providers. Each loader repeats actor, membership and its section permission
+checks. Existing two-argument callers retain their authorization checks without
+the optional expected-ID assertion.
+
+Authorization lookup failures are unavailable, while genuine missing membership
+or permission remains denied. A failed section authorization prevents that
+section's provider read; an independently allowed section can still load. If
+neither section is allowed and either permission lookup fails, the overview is
+unavailable before querying projects. Read loaders opt into lookup-error
+propagation; helper defaults and memory mutation denial behavior are preserved.
+
+The [selected-project fixture](../../tests/security/selected-project-dashboard.test.cjs)
+covers these boundaries through actual route/helper/loader code and React SSR
+with modeled Prisma/provider dependencies. It does not establish live acceptance
+or native database isolation. Gateway and worker remain disabled under their
+existing admission contracts.
 
 
 ## AI issue recommendations

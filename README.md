@@ -52,9 +52,9 @@ Collab is designed to streamline internal communication and work tracking by off
 
 #### Screenshots
 
-| ![Timeline](/public/screenshots/Screenshot-3.png) | ![Dashboard](/public/screenshots/Screenshot-2.png) | ![Task](/public/screenshots/Screenshot-1.png) |
+| ![Timeline](/public/screenshots/Screenshot-3.png) | ![Legacy dashboard](/public/screenshots/Screenshot-2.png) | ![Task](/public/screenshots/Screenshot-1.png) |
 |:--:|:--:|:--:|
-| [**Timeline**](/public/screenshots/Screenshot-3.png) | [**Dashboard**](/public/screenshots/Screenshot-2.png) | [**Task**](/public/screenshots/Screenshot-1.png) |
+| [**Timeline**](/public/screenshots/Screenshot-3.png) | [**Legacy dashboard**](/public/screenshots/Screenshot-2.png) | [**Task**](/public/screenshots/Screenshot-1.png) |
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -244,7 +244,7 @@ Collab is designed to streamline internal communication and work tracking by off
   For custom-role names, grants and member assignments, see the
   [custom-role contract](docs/security/2026-09-23-hardening.md#custom-role-and-member-role-boundaries).
 - Use the timeline to post status updates, tasks, and feature requests.
-  Dashboard previews and counts follow the [dashboard access contract](docs/security/2026-09-23-hardening.md#ai-dashboard-payload-access).
+- Use the workspace [Project overview](#project-overview) to select a project.
 - Customize your avatar with partial updates; see the
   [avatar update contract](docs/security/2026-09-23-hardening.md#avatar-updates-and-safe-responses).
 - Organize work using boards, milestones, and stories.
@@ -270,6 +270,30 @@ Collab is designed to streamline internal communication and work tracking by off
 - Open **Approved project memory** from Project Notes; see the
   [project memory guide](docs/forge-project-memory.md) for drafting, approval
   and connection requirements.
+
+### Project overview
+
+Open `/{workspace}/dashboard`, choose a project and select **Show project**.
+The GET selector uses `?project=<project-id>` and reloads only that project's
+overview. A sole eligible project is selected automatically only when the
+parameter is absent; submitting **Choose a project** leaves `?project=` empty
+and loads no project payload. Multiple projects are never aggregated.
+
+Issues shows counts for the loaded result, a short issue preview and any
+partial-results warning. Project memory previews revisions and links to the
+[full memory lifecycle](docs/forge-project-memory.md). **Open issue board** and
+**Review project memory** lead to the selected project's canonical pages.
+**Reload overview** fetches the selected scope again. Denied, unavailable,
+not-connected and successful empty reads have distinct messages; failed reads
+never become an empty success or “All clear”. See the
+[overview access contract](docs/security/2026-09-23-hardening.md#selected-project-overview-access)
+for chooser and payload authorization.
+
+When both reads succeed, **Open an issue for Ready review** leads to the board's
+existing issue editor. The overview provides navigation only, with no execution
+totals or merge/deploy authority; the [Ready contract](docs/forge-ready-execution.md)
+owns consent and runtime admission. The shared legacy dashboard API and
+components remain available separately.
 
 ### Integration availability
 

@@ -243,7 +243,7 @@ The standard clickable card pattern used everywhere:
 
 ### IssueListItem (Shared)
 
-The universal issue row used in dashboard AND AI chat:
+The shared issue row used in legacy dashboard components and AI chat:
 
 ```tsx
 <div className="group flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-collab-700 transition-colors">
@@ -572,7 +572,10 @@ transition={{ type: "spring", stiffness: 260, damping: 25 }}
 | Padding | `p-8` (32px) |
 | Section gap | `gap-6` (24px) |
 
-### Dashboard Work Sections
+### Legacy Dashboard Work Sections
+
+These retained component patterns do not describe the current
+[Project overview](README.md#project-overview).
 
 | State | Width |
 |-------|-------|
@@ -627,7 +630,7 @@ transition={{ type: "spring", stiffness: 260, damping: 25 }}
 | `PageLayout` | `ui/page-layout.tsx` | Every page wrapper (`p-8`, `max-w-[1400px]`) |
 | `PageHeader` | `ui/page-header.tsx` | Page title + subtitle + actions |
 | `StatCard` | `ui/stat-card.tsx` | Numeric stat display with variant colors |
-| `IssueListItem` | `ui/issue-list-item.tsx` | Universal issue row (dashboard + AI chat) |
+| `IssueListItem` | `ui/issue-list-item.tsx` | Shared issue row (legacy dashboard + AI chat) |
 | `UserAvatar` | `ui/user-avatar.tsx` | User avatar with xs/sm/md/lg sizes |
 | `Badge` | `ui/badge.tsx` | Shadcn badge (often overridden with custom classes) |
 | `Button` | `ui/button.tsx` | Shadcn button — use this, not raw `<button>` |

@@ -1,0 +1,328 @@
+TAP version 13
+# Subtest: board reads authorize the session and active tenant before credentials or upstream access
+ok 1 - board reads authorize the session and active tenant before credentials or upstream access
+  ---
+  duration_ms: 39.155292
+  type: 'test'
+  ...
+# Subtest: memory actions enforce current tenant rights and exact reviewed SHA before approval or writes
+ok 2 - memory actions enforce current tenant rights and exact reviewed SHA before approval or writes
+  ---
+  duration_ms: 72.900459
+  type: 'test'
+  ...
+# Subtest: missing stable actor redirects before data
+ok 3 - missing stable actor redirects before data
+  ---
+  duration_ms: 25.136708
+  type: 'test'
+  ...
+# Subtest: foreign URL does not fall back to an accessible workspace
+ok 4 - foreign URL does not fall back to an accessible workspace
+  ---
+  duration_ms: 14.944583
+  type: 'test'
+  ...
+# Subtest: inactive membership is refused before project payload
+ok 5 - inactive membership is refused before project payload
+  ---
+  duration_ms: 16.312916
+  type: 'test'
+  ...
+# Subtest: owner without membership retains access
+ok 6 - owner without membership retains access
+  ---
+  duration_ms: 22.326125
+  type: 'test'
+  ...
+# Subtest: current member ID works independently of stale session email
+ok 7 - current member ID works independently of stale session email
+  ---
+  duration_ms: 18.795833
+  type: 'test'
+  ...
+# Subtest: no section permissions means no chooser/project query
+ok 8 - no section permissions means no chooser/project query
+  ---
+  duration_ms: 14.81625
+  type: 'test'
+  ...
+# Subtest: user lookup failures make the overview unavailable before project reads
+ok 9 - user lookup failures make the overview unavailable before project reads
+  ---
+  duration_ms: 14.723625
+  type: 'test'
+  ...
+# Subtest: role lookup failures make the overview unavailable before project reads
+ok 10 - role lookup failures make the overview unavailable before project reads
+  ---
+  duration_ms: 14.566667
+  type: 'test'
+  ...
+# Subtest: VIEW_TASKS lookup failure is unavailable while only the allowed section loads
+ok 11 - VIEW_TASKS lookup failure is unavailable while only the allowed section loads
+  ---
+  duration_ms: 11.496958
+  type: 'test'
+  ...
+# Subtest: VIEW_NOTES lookup failure is unavailable while only the allowed section loads
+ok 12 - VIEW_NOTES lookup failure is unavailable while only the allowed section loads
+  ---
+  duration_ms: 15.401
+  type: 'test'
+  ...
+# Subtest: failed permission with the other denied exposes no chooser or project payload
+ok 13 - failed permission with the other denied exposes no chooser or project payload
+  ---
+  duration_ms: 19.859375
+  type: 'test'
+  ...
+# Subtest: notes-only permission does not call issue loader or offer Ready link
+ok 14 - notes-only permission does not call issue loader or offer Ready link
+  ---
+  duration_ms: 9.310625
+  type: 'test'
+  ...
+# Subtest: issues-only permission does not call memory loader
+ok 15 - issues-only permission does not call memory loader
+  ---
+  duration_ms: 11.820333
+  type: 'test'
+  ...
+# Subtest: explicit foreign/missing/multiple project selector is denied without provider reads
+ok 16 - explicit foreign/missing/multiple project selector is denied without provider reads
+  ---
+  duration_ms: 30.064833
+  type: 'test'
+  ...
+# Subtest: chooser has only scoped projections and no cross-project reads
+ok 17 - chooser has only scoped projections and no cross-project reads
+  ---
+  duration_ms: 8.96425
+  type: 'test'
+  ...
+# Subtest: absent project parameter auto-selects the sole eligible project
+ok 18 - absent project parameter auto-selects the sole eligible project
+  ---
+  duration_ms: 11.469458
+  type: 'test'
+  ...
+# Subtest: explicit empty project parameter leaves the sole eligible project unselected
+ok 19 - explicit empty project parameter leaves the sole eligible project unselected
+  ---
+  duration_ms: 9.792125
+  type: 'test'
+  ...
+# Subtest: empty project list remains distinct for absent and empty selectors
+ok 20 - empty project list remains distinct for absent and empty selectors
+  ---
+  duration_ms: 22.725042
+  type: 'test'
+  ...
+# Subtest: selected payload repeats current access after chooser
+ok 21 - selected payload repeats current access after chooser
+  ---
+  duration_ms: 9.116083
+  type: 'test'
+  ...
+# Subtest: project moving workspaces between chooser and payload is refused
+ok 22 - project moving workspaces between chooser and payload is refused
+  ---
+  duration_ms: 17.574334
+  type: 'test'
+  ...
+# Subtest: provider error is explicit, sanitized and never All clear/empty success
+ok 23 - provider error is explicit, sanitized and never All clear/empty success
+  ---
+  duration_ms: 16.734333
+  type: 'test'
+  ...
+# Subtest: database failure is an unavailable overview without protected metadata
+ok 24 - database failure is an unavailable overview without protected metadata
+  ---
+  duration_ms: 16.199916
+  type: 'test'
+  ...
+# Subtest: successful empty issue response is distinct from disconnected or denied
+ok 25 - successful empty issue response is distinct from disconnected or denied
+  ---
+  duration_ms: 17.53225
+  type: 'test'
+  ...
+# Subtest: loaded counts and truncation remain qualified
+ok 26 - loaded counts and truncation remain qualified
+  ---
+  duration_ms: 16.563125
+  type: 'test'
+  ...
+# Subtest: memory counts notes separately from revisions and preserves lifecycle
+ok 27 - memory counts notes separately from revisions and preserves lifecycle
+  ---
+  duration_ms: 15.024417
+  type: 'test'
+  ...
+# Subtest: switching project creates only new scoped payload and canonical links
+ok 28 - switching project creates only new scoped payload and canonical links
+  ---
+  duration_ms: 11.311167
+  type: 'test'
+  ...
+# Subtest: chooser is a GET navigation and overview exposes no mutation form
+ok 29 - chooser is a GET navigation and overview exposes no mutation form
+  ---
+  duration_ms: 14.457417
+  type: 'test'
+  ...
+# Subtest: memory read failures and revocation do not masquerade as no revisions
+ok 30 - memory read failures and revocation do not masquerade as no revisions
+  ---
+  duration_ms: 11.059625
+  type: 'test'
+  ...
+# Subtest: actual loaders retain matching selected IDs through permission rechecks and provider reads
+ok 31 - actual loaders retain matching selected IDs through permission rechecks and provider reads
+  ---
+  duration_ms: 38.76975
+  type: 'test'
+  ...
+# Subtest: actual loaders refuse workspace slug reassignment before any binding or payload read
+ok 32 - actual loaders refuse workspace slug reassignment before any binding or payload read
+  ---
+  duration_ms: 20.366583
+  type: 'test'
+  ...
+# Subtest: actual loaders refuse project slug reassignment before any binding or payload read
+ok 33 - actual loaders refuse project slug reassignment before any binding or payload read
+  ---
+  duration_ms: 18.317708
+  type: 'test'
+  ...
+# Subtest: actual loader VIEW_TASKS recheck failure is unavailable and never reads that provider
+ok 34 - actual loader VIEW_TASKS recheck failure is unavailable and never reads that provider
+  ---
+  duration_ms: 20.475584
+  type: 'test'
+  ...
+# Subtest: actual loader VIEW_NOTES recheck failure is unavailable and never reads that provider
+ok 35 - actual loader VIEW_NOTES recheck failure is unavailable and never reads that provider
+  ---
+  duration_ms: 28.582875
+  type: 'test'
+  ...
+# Subtest: both actual loader permission recheck failures prevent all binding and provider reads
+ok 36 - both actual loader permission recheck failures prevent all binding and provider reads
+  ---
+  duration_ms: 18.874625
+  type: 'test'
+  ...
+# Subtest: actual loader permission revocation remains denied without provider reads
+ok 37 - actual loader permission revocation remains denied without provider reads
+  ---
+  duration_ms: 20.205334
+  type: 'test'
+  ...
+# Subtest: existing two-argument loader callers still load their authorized project
+ok 38 - existing two-argument loader callers still load their authorized project
+  ---
+  duration_ms: 17.712334
+  type: 'test'
+  ...
+# Subtest: memory mutations retain denial on permission lookup failure without reads or writes
+ok 39 - memory mutations retain denial on permission lookup failure without reads or writes
+  ---
+  duration_ms: 20.829917
+  type: 'test'
+  ...
+# Subtest: board workspace lookup failure after overview authorization is unavailable without provider reads
+ok 40 - board workspace lookup failure after overview authorization is unavailable without provider reads
+  ---
+  duration_ms: 24.260833
+  type: 'test'
+  ...
+# Subtest: board role lookup failure after overview authorization is unavailable without provider reads
+ok 41 - board role lookup failure after overview authorization is unavailable without provider reads
+  ---
+  duration_ms: 23.920792
+  type: 'test'
+  ...
+# Subtest: board missing workspace after overview authorization remains denied
+ok 42 - board missing workspace after overview authorization remains denied
+  ---
+  duration_ms: 25.143375
+  type: 'test'
+  ...
+# Subtest: board missing user after overview authorization remains denied
+ok 43 - board missing user after overview authorization remains denied
+  ---
+  duration_ms: 19.043083
+  type: 'test'
+  ...
+# Subtest: board missing membership after overview authorization remains denied
+ok 44 - board missing membership after overview authorization remains denied
+  ---
+  duration_ms: 31.134125
+  type: 'test'
+  ...
+# Subtest: memory workspace lookup failure after overview authorization is unavailable without provider reads
+ok 45 - memory workspace lookup failure after overview authorization is unavailable without provider reads
+  ---
+  duration_ms: 33.708041
+  type: 'test'
+  ...
+# Subtest: memory role lookup failure after overview authorization is unavailable without provider reads
+ok 46 - memory role lookup failure after overview authorization is unavailable without provider reads
+  ---
+  duration_ms: 25.090167
+  type: 'test'
+  ...
+# Subtest: memory missing workspace after overview authorization remains denied
+ok 47 - memory missing workspace after overview authorization remains denied
+  ---
+  duration_ms: 16.274375
+  type: 'test'
+  ...
+# Subtest: memory missing user after overview authorization remains denied
+ok 48 - memory missing user after overview authorization remains denied
+  ---
+  duration_ms: 18.332375
+  type: 'test'
+  ...
+# Subtest: memory missing membership after overview authorization remains denied
+ok 49 - memory missing membership after overview authorization remains denied
+  ---
+  duration_ms: 13.390125
+  type: 'test'
+  ...
+# Subtest: workspace lookup propagation is opt-in for both slugs and legacy IDs
+ok 50 - workspace lookup propagation is opt-in for both slugs and legacy IDs
+  ---
+  duration_ms: 13.73675
+  type: 'test'
+  ...
+# Subtest: role lookup propagation is opt-in and preserves successful roles
+ok 51 - role lookup propagation is opt-in and preserves successful roles
+  ---
+  duration_ms: 17.139708
+  type: 'test'
+  ...
+# Subtest: memory mutations retain denial on workspace lookup failure without reads or writes
+ok 52 - memory mutations retain denial on workspace lookup failure without reads or writes
+  ---
+  duration_ms: 17.460208
+  type: 'test'
+  ...
+# Subtest: memory mutations retain denial on role lookup failure without reads or writes
+ok 53 - memory mutations retain denial on role lookup failure without reads or writes
+  ---
+  duration_ms: 18.911792
+  type: 'test'
+  ...
+1..53
+# tests 53
+# suites 0
+# pass 53
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1528.503

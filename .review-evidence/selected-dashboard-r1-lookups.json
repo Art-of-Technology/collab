@@ -1,0 +1,53 @@
+{
+  "startingHead": "556bede03dc874ce895ab8adf7bccb3e03dbb111",
+  "scope": "R1 opt-in workspace/role lookup failure propagation for read loaders, working-tree successor",
+  "command": "node --test --test-concurrency=1 tests/security/selected-project-dashboard.test.cjs tests/security/forge-board-access.test.cjs tests/security/forge-memory-access.test.cjs",
+  "started": "2026-09-30T05:00:02.322Z",
+  "finished": "2026-09-30T05:00:03.882Z",
+  "exitCode": 0,
+  "signal": null,
+  "node": "v22.23.1",
+  "dependencies": {
+    "typescript": "5.9.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "3.25.76"
+  },
+  "hashes": {
+    "src/app/(main)/[workspaceId]/dashboard/page.tsx": "3e238d05a7654a8f3a7c43895d575a345718c8b118daa6e7d654d67269ef949b",
+    "src/app/(main)/[workspaceId]/dashboard/components/DashboardClient.tsx": "122c5adb1363331ab52359201df5e48e7471dccb4937f352cb0bb60acdde9a18",
+    "tests/security/selected-project-dashboard.test.cjs": "67ca6e692d5e14de3ffd128b1d42d71876fe1ac629c2822717006b300c77e1d9",
+    "tests/security/forge-board-access.test.cjs": "cd7a83b4a6853a46c15c5a84c7569d6a6293e16119947776afb8d4a74d5e56aa",
+    "tests/security/forge-memory-access.test.cjs": "230ece16403f18dea19b419c6f29de71b64f6fba0d8beb4f10a632678d2c0043",
+    "tests/security/helpers.cjs": "533719af3fb1cd4bb53e27a9ba9ebf81601b3683ceccd7b7cba4848fa4143dce",
+    "src/lib/permissions.ts": "a5a933c328ff4135e3af8a07b10ab12afa205f08f6be2a6703f8f5c44e3c1d42",
+    "src/lib/post-access.ts": "87b702f54b798f496c610f996fa9c99a90c05b3cbfa8fd0749b849711859003c",
+    "src/lib/slug-resolvers.ts": "92987889fd5e1de358df2d13c7c27aeb3062e847ca070ea0c79d521aebd794fb",
+    "src/lib/url-utils.ts": "c258370db25cfbdb347a0d6e5fc0bb6bbde7bb9af600a969891990c54e0d37bb",
+    "src/lib/forge/board.ts": "7713041aafd1a7065568012581561349d68fc7cbd4f3610fe16929850ecbc434",
+    "src/lib/forge/memory-service.ts": "4b19f38643d6aa4ff6772b056f926ff782aec0864377a9b410c904710ec82011",
+    "src/lib/forge/memory.ts": "fcd30cb3c61a2676ab49854a7c9c9c387b7a38c38d9cce8a2de68d754d287aea",
+    "src/lib/forge/tasks.ts": "c28d3ccb8e6cbb42762115f9f845dfdc4f888432eb417723be316812f3a6f8d5",
+    "src/components/ui/page-layout.tsx": "d87aa60d42344a60354e697c29076849c32574a3397141e75d9fe372ff8bb680",
+    "src/components/ui/page-header.tsx": "814c3bf7f4cafc2f4c68aae74aec4b330cb0f7863d0f7b555ac7c1c02599688a",
+    "package.json": "c64c89e5f6e9f44a7b805e50427640d0ad33a59099c409caf15e3ef1e748c706",
+    "package-lock.json": "8aff379c8614864909d4135f9c8acd754d3016113238e8528a4cef8957c34d94"
+  },
+  "evidence": {
+    "stdout": ".review-evidence/selected-dashboard-r1-lookups.tap",
+    "stderr": ".review-evidence/selected-dashboard-r1-lookups.stderr.log",
+    "summary": [
+      "# tests 53",
+      "# pass 53",
+      "# fail 0",
+      "# skipped 0",
+      "# duration_ms 1528.503"
+    ]
+  },
+  "environment": "Actual route, permission helpers, slug resolver and board/memory loader bodies; modeled Prisma/auth/provider I/O; React SSR. No live providers, database, build or browser.",
+  "baselineRed": "Not run; all fixes applied before one focused verification; no baseline RED claimed",
+  "callerReview": "Traced resolveWorkspaceSlug and getUserWorkspaceRole call sites in src. Existing callers retain default false opt-in flags and Promise<string|null> return types. Board reads and memory read authorization opt in; memory mutation authorization remains default.",
+  "instructorReview": "Root-authorized helper scope supplied in task; no new consultation or approval claimed within worktree-only boundary",
+  "priorEvidence": "selected-dashboard-r1-r2 and selected-dashboard-r1-r3 evidence preserved unchanged",
+  "remainingGates": "Outer executor owns generic test, lint, review, draft PR and CI; none skipped or advanced"
+}

@@ -1,0 +1,49 @@
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: @auth/core@0.41.3
+npm warn Found: nodemailer@10.0.10
+npm warn node_modules/nodemailer
+npm warn   nodemailer@"10.0.10" from the root project
+npm warn
+npm warn Could not resolve dependency:
+npm warn peerOptional nodemailer@"^7.0.7 || ^8.0.5" from @auth/core@0.41.3
+npm warn node_modules/@auth/core
+npm warn   @auth/core@"0.41.3" from @auth/prisma-adapter@2.11.3
+npm warn   node_modules/@auth/prisma-adapter
+npm warn
+npm warn Conflicting peer dependency: nodemailer@8.0.11
+npm warn node_modules/nodemailer
+npm warn   peerOptional nodemailer@"^7.0.7 || ^8.0.5" from @auth/core@0.41.3
+npm warn   node_modules/@auth/core
+npm warn     @auth/core@"0.41.3" from @auth/prisma-adapter@2.11.3
+npm warn     node_modules/@auth/prisma-adapter
+npm error code ERESOLVE
+npm error ERESOLVE could not resolve
+npm error
+npm error While resolving: api-scanner@2.0.1
+npm error Found: next@16.3.6
+npm error node_modules/next
+npm error   next@"16.3.6" from the root project
+npm error   peer next@"^13.2.0 || ^14.0 || ^15.0.0-rc.0 || ^16.0.0-0" from @sentry/nextjs@10.75.3
+npm error   node_modules/@sentry/nextjs
+npm error     @sentry/nextjs@"^10.12.0" from the root project
+npm error   2 more (next-auth, next-cloudinary)
+npm error
+npm error Could not resolve dependency:
+npm error peer next@"^13.0.0 || ^14.0.0 || ^15.0.0" from api-scanner@2.0.1
+npm error node_modules/api-scanner
+npm error   api-scanner@"^2.0.1" from the root project
+npm error
+npm error Conflicting peer dependency: next@15.5.26
+npm error node_modules/next
+npm error   peer next@"^13.0.0 || ^14.0.0 || ^15.0.0" from api-scanner@2.0.1
+npm error   node_modules/api-scanner
+npm error     api-scanner@"^2.0.1" from the root project
+npm error
+npm error Fix the upstream dependency conflict, or retry
+npm error this command with --force or --legacy-peer-deps
+npm error to accept an incorrect (and potentially broken) dependency resolution.
+npm error
+npm error
+npm error For a full report see:
+npm error /Users/cem/.npm/_logs/2026-09-30T04_43_47_506Z-eresolve-report.txt
+npm error A complete log of this run can be found in: /Users/cem/.npm/_logs/2026-09-30T04_43_47_506Z-debug-0.log

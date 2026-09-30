@@ -294,10 +294,13 @@ export async function getUserPermissions(
 
 /**
  * Get user's role in a workspace
+ * Lookup failures return null by default. Read callers may opt into throwing
+ * to distinguish unavailable authorization from genuine absent membership.
  */
 export async function getUserWorkspaceRole(
   userId: string,
-  workspaceId: string
+  workspaceId: string,
+  throwOnError = false
 ): Promise<string | null> {
   try {
     const user = await prisma.user.findUnique({
@@ -327,6 +330,7 @@ export async function getUserWorkspaceRole(
     const membership = user.workspaceMemberships[0];
     return membership?.role || null;
   } catch (error) {
+    if (throwOnError) throw error;
     console.error("Error getting user workspace role:", error);
     return null;
   }
