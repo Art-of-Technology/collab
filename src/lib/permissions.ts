@@ -294,6 +294,8 @@ export async function getUserPermissions(
 
 /**
  * Get user's role in a workspace
+ * Lookup failures return null by default. Read callers may opt into throwing
+ * to distinguish unavailable authorization from genuine absent membership.
  */
 export async function getUserWorkspaceRole(
   userId: string,

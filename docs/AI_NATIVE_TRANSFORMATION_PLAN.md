@@ -10,22 +10,8 @@ This document outlines a comprehensive plan to transform Collab into an AI-Nativ
 
 ### 1.1 Dashboard Issues
 
-**Current Problems:**
-- The dashboard (`/dashboard/page.tsx`) displays static metrics without actionable insights
-- Content is generic: blockers, ideas, questions, tags, leave management - no personalized AI-driven guidance
-- No quick actions or smart suggestions based on user context
-- Missing AI-powered summaries of what needs attention
-
-**Current Components:**
-```
-- TeamMetrics (static stats display)
-- TeamActivity (simple activity list)
-- UserPosts (user's posts)
-- PostsByType (BLOCKER, IDEA, QUESTION)
-- PopularTags
-- UnansweredPosts
-- MyLeave / LeaveRequestsDashboard
-```
+The dashboard proposals below are historical planning material. Current workspace
+dashboard behavior is owned by [Project overview](../README.md#project-overview).
 
 ### 1.2 Navigation/Sidebar Complexity
 

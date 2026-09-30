@@ -18,6 +18,8 @@ function isDatabaseId(str: string): boolean {
 /**
  * Resolve workspace slug to workspace ID
  * Supports both slugs and legacy UUIDs for backward compatibility
+ * Lookup failures return null by default. Read callers may opt into throwing
+ * to distinguish an unavailable lookup from a missing workspace.
  */
 export async function resolveWorkspaceSlug(slugOrId: string, throwOnError = false): Promise<string | null> {
   try {
