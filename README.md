@@ -10,7 +10,7 @@
 <br />
 <div align="center" >
   <a href="https://github.com/Art-of-Technology/collab" style="background-color: black; padding: 10px; display: inline-block;">
-    <img src="https://teams.weezboo.com/_next/image?url=%2Flogo-text.svg&w=128&q=75"  alt="Logo" width="128">
+    <img src="public/logo-text.svg"  alt="Logo" width="128">
   </a>
   <h3 align="center">About Collab</h3>
 
