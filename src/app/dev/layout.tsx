@@ -117,6 +117,7 @@ export default function DevLayout({ children }: { children: React.ReactNode }) {
       <div className="p-3 border-b border-collab-700">
         <Link href="/dev" className="flex flex-col items-start gap-1">
           <Image
+            unoptimized
             src="/logo-text.svg"
             width={100}
             height={100}
@@ -242,6 +243,7 @@ export default function DevLayout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center justify-between p-3">
           <Link href="/dev" className="flex items-center gap-2">
             <Image
+              unoptimized
               src="/logo-icon.svg"
               width={32}
               height={32}

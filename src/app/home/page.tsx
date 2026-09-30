@@ -56,6 +56,7 @@ export default function LandingPage() {
                 <div className="flex items-center">
                     <span className="text-xl sm:text-2xl font-bold flex items-center">
                         <Image
+                            unoptimized
                             src="/logo-text.svg"
                             alt="Collab"
                             width={120}
