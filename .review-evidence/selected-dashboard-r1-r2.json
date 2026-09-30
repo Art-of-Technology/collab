@@ -1,0 +1,43 @@
+{
+  "startingHead": "6cf746bdd83fc5bb72b011bff158eed4fac7418a",
+  "scope": "R1/R2 review fixes, working tree successor",
+  "command": "node --test --test-concurrency=1 tests/security/selected-project-dashboard.test.cjs",
+  "started": "2026-09-30T04:44:46.994Z",
+  "finished": "2026-09-30T04:44:47.656Z",
+  "exitCode": 0,
+  "signal": null,
+  "node": "v22.23.1",
+  "dependencies": {
+    "typescript": "5.9.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "hashes": {
+    "src/app/(main)/[workspaceId]/dashboard/page.tsx": "9b02c06283a20bd3aae8afd6e1473a97d91812de6aca27780ed31b7e8a484211",
+    "src/app/(main)/[workspaceId]/dashboard/components/DashboardClient.tsx": "122c5adb1363331ab52359201df5e48e7471dccb4937f352cb0bb60acdde9a18",
+    "tests/security/selected-project-dashboard.test.cjs": "731252798e87e2524875176bfeeb1905021bb22238789d9d09487d634769b7df",
+    "tests/security/helpers.cjs": "533719af3fb1cd4bb53e27a9ba9ebf81601b3683ceccd7b7cba4848fa4143dce",
+    "src/lib/permissions.ts": "3f2f772e91929dbcfc1cabeab46b281adfeca30fe6c8b123159bd24b483c7e57",
+    "src/lib/post-access.ts": "87b702f54b798f496c610f996fa9c99a90c05b3cbfa8fd0749b849711859003c",
+    "src/lib/forge/tasks.ts": "c28d3ccb8e6cbb42762115f9f845dfdc4f888432eb417723be316812f3a6f8d5",
+    "src/components/ui/page-layout.tsx": "d87aa60d42344a60354e697c29076849c32574a3397141e75d9fe372ff8bb680",
+    "src/components/ui/page-header.tsx": "814c3bf7f4cafc2f4c68aae74aec4b330cb0f7863d0f7b555ac7c1c02599688a",
+    "package.json": "c64c89e5f6e9f44a7b805e50427640d0ad33a59099c409caf15e3ef1e748c706",
+    "package-lock.json": "8aff379c8614864909d4135f9c8acd754d3016113238e8528a4cef8957c34d94"
+  },
+  "baselineRed": "Not run; no baseline RED claimed",
+  "instructorReview": "Unavailable: consultation writes outside the permitted worktree boundary",
+  "remainingGates": "Outer executor owns generic test, lint, review, PR and CI phases; none skipped or advanced",
+  "installation": [
+    {
+      "command": "npm ci --ignore-scripts --no-audit --no-fund",
+      "exitCode": 1,
+      "log": ".review-evidence/selected-dashboard-r1-r2-install.log"
+    },
+    {
+      "command": "npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund",
+      "exitCode": 0,
+      "log": ".review-evidence/selected-dashboard-r1-r2-install-legacy.log"
+    }
+  ]
+}

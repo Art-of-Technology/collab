@@ -14,7 +14,7 @@ const Overview = load(root + 'components/DashboardClient.tsx', {
   '@/components/ui/page-header': load('src/components/ui/page-header.tsx', ui),
 }).default;
 function fixture() {
-  const state = { actorId: 'actor', permissions: new Set(['VIEW_TASKS', 'VIEW_NOTES']), reads: [], provider: [], writes: 0 };
+  const state = { actorId: 'actor', permissions: new Set(['VIEW_TASKS', 'VIEW_NOTES']), failedPermissions: new Set(), reads: [], provider: [], writes: 0 };
   const workspace = { id: 'ws', slug: 'space', name: 'Team space', ownerId: 'other', members: [{ userId: 'actor', status: true, role: 'MEMBER' }] };
   const other = { id: 'foreign', slug: 'foreign', name: 'Secret workspace', ownerId: 'other', members: [] };
   const projects = [
@@ -37,11 +37,16 @@ function fixture() {
       findFirst: async ({ where, select: fields }) => { state.reads.push('selected'); state.beforeSelected?.(); return select(projects.find(row => matches(row, where)), fields); },
     }),
     user: model({ findUnique: async ({ where, include }) => {
+      if (state.failUserLookup) throw Error('private user lookup failure');
       if (where.id !== 'actor' || state.deletedActor) return null;
       const membership = workspace.members.filter(row => row.userId === where.id && matches({ ...row, workspaceId: workspace.id }, include.workspaceMemberships.where));
       return { id: 'actor', role: 'DEVELOPER', workspaceMemberships: membership, ownedWorkspaces: workspace.ownerId === where.id && matches(workspace, include.ownedWorkspaces.where) ? [workspace] : [] };
     } }),
-    rolePermission: model({ findUnique: async ({ where }) => state.permissions.has(where.workspaceId_role_permission.permission) ? { id: 'grant' } : null }),
+    rolePermission: model({ findUnique: async ({ where }) => {
+      const { permission } = where.workspaceId_role_permission;
+      if (state.failedPermissions.has(permission)) throw Error('private role lookup failure');
+      return state.permissions.has(permission) ? { id: 'grant' } : null;
+    } }),
   }, { get: (target, key) => key in target ? target[key] : model({}) });
   const task = title => ({ number: 1, title, description: '', status: 'blocked', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '', sourceUrl: '', updatedAt: '2026-01-01', comments: 0, warning: '' });
   const readBoard = async (ws, project) => {
@@ -65,7 +70,10 @@ function fixture() {
     'next/navigation': { redirect: path => { throw Error('redirect:' + path); }, notFound: () => { throw Error('not-found'); } },
   };
   const page = load(root + 'page.tsx', dependencies).default;
-  const render = (project = 'a', ws = 'space') => page({ params: Promise.resolve({ workspaceId: ws }), searchParams: Promise.resolve(project === undefined ? {} : { project }) });
+  function render(project, ws = 'space') {
+    if (arguments.length === 0) project = 'a';
+    return page({ params: Promise.resolve({ workspaceId: ws }), searchParams: Promise.resolve(project === undefined ? {} : { project }) });
+  }
   return { state, workspace, projects, render, html: async (...args) => renderToStaticMarkup(await render(...args)) };
 }
 
@@ -75,11 +83,44 @@ test('inactive membership is refused before project payload', async () => { cons
 test('owner without membership retains access', async () => { const f = fixture(); f.workspace.ownerId = 'actor'; f.workspace.members = []; assert.match(await f.html(), /alpha task/); });
 test('current member ID works independently of stale session email', async () => { const f = fixture(); assert.match(await f.html(), /alpha task/); assert.equal(f.state.writes, 0); });
 test('no section permissions means no chooser/project query', async () => { const f = fixture(); f.state.permissions.clear(); await assert.rejects(f.render(), { message: 'not-found' }); assert.deepEqual(f.state.reads, ['workspace']); });
+for (const failure of ['user', 'role']) {
+  test(`${failure} lookup failures make the overview unavailable before project reads`, async () => {
+    const f = fixture();
+    if (failure === 'user') f.state.failUserLookup = true;
+    else f.state.failedPermissions = new Set(['VIEW_TASKS', 'VIEW_NOTES']);
+    const html = await f.html();
+    assert.match(html, /Project overview could not be loaded/);
+    assert.doesNotMatch(html, /do not have access|Team space|Alpha|private|All clear/);
+    assert.deepEqual(f.state.reads, ['workspace']);
+    assert.deepEqual(f.state.provider, []);
+  });
+}
+for (const [permission, label, allowedLoader] of [['VIEW_TASKS', 'Issues', 'memory'], ['VIEW_NOTES', 'Project memory', 'issues']]) {
+  test(`${permission} lookup failure is unavailable while only the allowed section loads`, async () => {
+    const f = fixture(); f.state.failedPermissions.add(permission);
+    const node = await f.render();
+    const html = renderToStaticMarkup(node);
+    assert.equal(node.props.data.selected[allowedLoader === 'memory' ? 'memory' : 'board'].kind, 'ready');
+    assert.match(html, new RegExp(label + ' could not be loaded'));
+    assert.doesNotMatch(html, /do not have access|private|All clear|Open an issue for Ready review/);
+    assert.deepEqual(f.state.provider, [[allowedLoader, 'space', 'alpha']]);
+  });
+}
+test('failed permission with the other denied exposes no chooser or project payload', async () => {
+  for (const permission of ['VIEW_TASKS', 'VIEW_NOTES']) {
+    const f = fixture(); f.state.permissions.clear(); f.state.failedPermissions.add(permission);
+    assert.match(await f.html(), /Project overview could not be loaded/);
+    assert.deepEqual(f.state.reads, ['workspace']);
+    assert.deepEqual(f.state.provider, []);
+  }
+});
 test('notes-only permission does not call issue loader or offer Ready link', async () => { const f = fixture(); f.state.permissions.delete('VIEW_TASKS'); const html = await f.html(); assert.match(html, /do not have access to Issues/); assert.doesNotMatch(html, /Open an issue for Ready review/); assert.deepEqual(f.state.provider, [['memory', 'space', 'alpha']]); });
 test('issues-only permission does not call memory loader', async () => { const f = fixture(); f.state.permissions.delete('VIEW_NOTES'); const html = await f.html(); assert.match(html, /do not have access to Project memory/); assert.deepEqual(f.state.provider, [['issues', 'space', 'alpha']]); });
 test('explicit foreign/missing/multiple project selector is denied without provider reads', async () => { for (const selector of ['hidden', 'missing', ['a', 'b']]) { const f = fixture(); await assert.rejects(f.render(selector), { message: 'not-found' }); assert.equal(f.state.provider.length, 0); } });
 test('chooser has only scoped projections and no cross-project reads', async () => { const f = fixture(); const node = await f.render(''); assert.equal(node.props.data.selected, null); assert.deepEqual(JSON.parse(JSON.stringify(node.props.data.projects)), [{ id: 'a', slug: 'alpha', name: 'Alpha' }, { id: 'b', slug: 'beta', name: 'Beta' }]); assert.equal(f.state.provider.length, 0); assert.doesNotMatch(renderToStaticMarkup(node), /Secret|not-selected/); });
-test('sole project auto-selects and empty project list remains distinct', async () => { const f = fixture(); f.projects.splice(1, 1); assert.match(await f.html(''), /alpha task/); f.projects.splice(0, 1); assert.match(await f.html(''), /No projects are available/); });
+test('absent project parameter auto-selects the sole eligible project', async () => { const f = fixture(); f.projects.splice(1, 1); assert.match(await f.html(undefined), /alpha task/); assert.deepEqual(f.state.provider, [['issues', 'space', 'alpha'], ['memory', 'space', 'alpha']]); });
+test('explicit empty project parameter leaves the sole eligible project unselected', async () => { const f = fixture(); f.projects.splice(1, 1); const node = await f.render(''); assert.equal(node.props.data.selected, null); assert.match(renderToStaticMarkup(node), /Choose a project to see/); assert.deepEqual(f.state.reads, ['workspace', 'projects']); assert.deepEqual(f.state.provider, []); });
+test('empty project list remains distinct for absent and empty selectors', async () => { for (const selector of [undefined, '']) { const f = fixture(); f.projects.splice(0, 2); assert.match(await f.html(selector), /No projects are available/); assert.deepEqual(f.state.reads, ['workspace', 'projects']); assert.deepEqual(f.state.provider, []); } });
 test('selected payload repeats current access after chooser', async () => { const f = fixture(); f.state.beforeSelected = () => { f.workspace.members[0].status = false; }; await assert.rejects(f.render(), { message: 'not-found' }); assert.equal(f.state.provider.length, 0); });
 test('project moving workspaces between chooser and payload is refused', async () => { const f = fixture(); f.state.beforeSelected = () => { f.projects[0].workspaceId = 'foreign'; }; await assert.rejects(f.render(), { message: 'not-found' }); assert.equal(f.state.provider.length, 0); });
 test('provider error is explicit, sanitized and never All clear/empty success', async () => { const f = fixture(); f.state.boardError = true; const html = await f.html(); assert.match(html, /Issues could not be loaded/); assert.doesNotMatch(html, /All clear|No issues in this loaded result|private provider token|0 loaded issues/); });

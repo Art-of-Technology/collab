@@ -29,7 +29,9 @@ async function loadOverview(workspaceSelector: string, projectSelector: string |
       checkUserPermission(actorId, workspace.id, Permission.VIEW_TASKS),
       checkUserPermission(actorId, workspace.id, Permission.VIEW_NOTES),
     ]);
-    if (!issues.hasPermission && !notes.hasPermission) return { kind: "denied" };
+    const issuesUnavailable = issues.reason === "Internal error";
+    const notesUnavailable = notes.reason === "Internal error";
+    if (!issues.hasPermission && !notes.hasPermission) return { kind: issuesUnavailable || notesUnavailable ? "unavailable" : "denied" };
     const projects = await prisma.project.findMany({
       where: { workspaceId: workspace.id, workspace: postWorkspaceAccessWhere(actorId) },
       select: { id: true, slug: true, name: true },
@@ -37,7 +39,7 @@ async function loadOverview(workspaceSelector: string, projectSelector: string |
     });
     const selected = projectSelector
       ? projects.find(project => project.id === projectSelector)
-      : projects.length === 1 ? projects[0] : undefined;
+      : projectSelector === undefined && projects.length === 1 ? projects[0] : undefined;
     if (projectSelector && !selected) return { kind: "denied" };
     const workspaceSlug = workspace.slug || workspace.id;
     if (!selected) return { kind: "ready", workspaceName: workspace.name, workspaceSlug, projects, selected: null };
@@ -48,8 +50,8 @@ async function loadOverview(workspaceSelector: string, projectSelector: string |
     });
     if (!project) return { kind: "denied" };
     const [board, memory] = await Promise.all([
-      issues.hasPermission ? loadForgeBoard(workspaceSlug, project.slug).catch(() => ({ kind: "unavailable" as const, projectName: project.name })) : Promise.resolve({ kind: "denied" as const }),
-      notes.hasPermission ? loadProjectMemory(workspaceSlug, project.slug).catch(() => ({ kind: "unavailable" as const, projectName: project.name })) : Promise.resolve({ kind: "denied" as const }),
+      issuesUnavailable ? { kind: "unavailable" as const, projectName: project.name } : issues.hasPermission ? loadForgeBoard(workspaceSlug, project.slug).catch(() => ({ kind: "unavailable" as const, projectName: project.name })) : { kind: "denied" as const },
+      notesUnavailable ? { kind: "unavailable" as const, projectName: project.name } : notes.hasPermission ? loadProjectMemory(workspaceSlug, project.slug).catch(() => ({ kind: "unavailable" as const, projectName: project.name })) : { kind: "denied" as const },
     ]);
     return { kind: "ready", workspaceName: workspace.name, workspaceSlug, projects, selected: { project, board, memory } };
   } catch {
