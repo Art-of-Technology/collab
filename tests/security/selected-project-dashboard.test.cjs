@@ -22,7 +22,15 @@ function fixture(actualLoaders = false) {
     { id: 'b', slug: 'beta', name: 'Beta', workspaceId: 'ws', workspace, privateField: 'not-selected' },
     { id: 'hidden', slug: 'hidden', name: 'Secret project', workspaceId: 'foreign', workspace: other },
   ];
-  const select = (row, fields) => row ? Object.fromEntries(Object.keys(fields).map(key => [key, row[key]])) : null;
+  projects[0].issues = [
+    { id: 'native-a', issueKey: 'ALPHA-1', title: 'Restored native issue', status: 'TODO', workspaceId: 'ws', projectId: 'a' },
+    { id: 'native-foreign-workspace', issueKey: 'HIDDEN-1', title: 'Foreign workspace issue', status: 'TODO', workspaceId: 'foreign', projectId: 'a' },
+    { id: 'native-foreign-project', issueKey: 'BETA-1', title: 'Other project issue', status: 'TODO', workspaceId: 'ws', projectId: 'b' },
+  ];
+  projects[1].issues = [];
+  const select = (row, fields) => row ? Object.fromEntries(Object.keys(fields).map(key => [key,
+    key === 'issues' ? (row.issues ?? []).filter(issue => matches(issue, fields.issues.where)).slice(0, fields.issues.take).map(issue => select(issue, fields.issues.select)) : row[key]
+  ])) : null;
   const forbidden = () => { state.writes++; throw Error('Unexpected mutation'); };
   const model = methods => new Proxy(methods, { get: (target, key) => key in target ? target[key] : forbidden });
   const prisma = new Proxy({
@@ -39,7 +47,8 @@ function fixture(actualLoaders = false) {
     project: model({
       findMany: async ({ where, select: fields }) => { state.reads.push('projects'); return projects.filter(row => matches(row, where)).map(row => select(row, fields)); },
       findFirst: async ({ where, select: fields }) => {
-        state.reads.push('selected'); state.beforeSelected?.();
+        state.reads.push(fields.issues ? 'native-issues' : 'selected'); state.beforeSelected?.();
+        if (fields.issues && state.failNativeIssues) throw Error('private native database failure');
         const result = select(projects.find(row => matches(row, where)), fields);
         if (where.id) state.afterSelected?.();
         return result;
@@ -88,7 +97,7 @@ function fixture(actualLoaders = false) {
       'server-only': {},
       '@/lib/slug-resolvers': slugResolvers,
       './reader': {
-        readForgeBindings: async () => { state.bindingReads++; return projects.map(project => ({ workspaceId: project.workspaceId, projectId: project.id, memory: { branch: 'main' } })); },
+        readForgeBindings: async () => { state.bindingReads++; state.afterBinding?.(); if (state.noBinding) return []; return projects.map(project => ({ workspaceId: project.workspaceId, projectId: project.id, memory: { branch: 'main' } })); },
         readForgeIssues: async binding => { state.provider.push(['issues', binding.workspaceId, binding.projectId]); return { tasks: [task(binding.projectId + ' task')], truncated: false, fetchedAt: '2026-01-01T00:00:00Z' }; },
       },
       './memory-store': {
@@ -102,11 +111,15 @@ function fixture(actualLoaders = false) {
     dependencies['@/lib/forge/memory-service'] = load('src/lib/forge/memory-service.ts', loaderDependencies);
   }
   const page = load(root + 'page.tsx', dependencies).default;
+  const nativePage = load('src/app/(main)/[workspaceId]/projects/[projectSlug]/page.tsx', {
+    ...dependencies, '@/lib/request-session': { getServerSession: async () => ({ user: { id: state.actorId, email: 'stale@example.test' } }) },
+    '@/lib/slug-resolvers': slugResolvers, './ProjectDashboard': { ProjectDashboard: () => null },
+  }).default;
   function render(project, ws = 'space') {
     if (arguments.length === 0) project = 'a';
     return page({ params: Promise.resolve({ workspaceId: ws }), searchParams: Promise.resolve(project === undefined ? {} : { project }) });
   }
-  return { state, workspace, other, projects, render, html: async (...args) => renderToStaticMarkup(await render(...args)), loadBoard: dependencies['@/lib/forge/board'].loadForgeBoard, ...dependencies['@/lib/forge/memory-service'], resolveWorkspaceSlug: slugResolvers.resolveWorkspaceSlug, getUserWorkspaceRole: dependencies['@/lib/permissions'].getUserWorkspaceRole };
+  return { state, workspace, other, projects, render, native: () => nativePage({ params: Promise.resolve({ workspaceId: 'space', projectSlug: 'alpha' }) }), html: async (...args) => renderToStaticMarkup(await render(...args)), loadBoard: dependencies['@/lib/forge/board'].loadForgeBoard, ...dependencies['@/lib/forge/memory-service'], resolveWorkspaceSlug: slugResolvers.resolveWorkspaceSlug, getUserWorkspaceRole: dependencies['@/lib/permissions'].getUserWorkspaceRole };
 }
 
 test('missing stable actor redirects before data', async () => { const f = fixture(); f.state.actorId = undefined; await assert.rejects(f.render(), { message: 'redirect:/login' }); assert.equal(f.state.reads.length, 0); });
@@ -157,7 +170,7 @@ test('selected payload repeats current access after chooser', async () => { cons
 test('project moving workspaces between chooser and payload is refused', async () => { const f = fixture(); f.state.beforeSelected = () => { f.projects[0].workspaceId = 'foreign'; }; await assert.rejects(f.render(), { message: 'not-found' }); assert.equal(f.state.provider.length, 0); });
 test('provider error is explicit, sanitized and never All clear/empty success', async () => { const f = fixture(); f.state.boardError = true; const html = await f.html(); assert.match(html, /Issues could not be loaded/); assert.doesNotMatch(html, /All clear|No issues in this loaded result|private provider token|0 loaded issues/); });
 test('database failure is an unavailable overview without protected metadata', async () => { const f = fixture(); f.state.failDatabase = true; const html = await f.html(); assert.match(html, /Project overview could not be loaded/); assert.doesNotMatch(html, /private database|Team space|Alpha/); });
-test('successful empty issue response is distinct from disconnected or denied', async () => { const f = fixture(); f.state.board = { kind: 'ready', projectName: 'Alpha', tasks: [], fetchedAt: 'now', today: '2026-01-01', truncated: false }; assert.match(await f.html(), /No issues in this loaded result/); f.state.board = { kind: 'not-connected', projectName: 'Alpha' }; assert.match(await f.html(), /Issues is not connected/); f.state.board = { kind: 'denied' }; const html = await f.html(); assert.match(html, /do not have access to Issues/); assert.doesNotMatch(html, /Open issue board/); });
+test('successful empty issue response is distinct from disconnected or denied', async () => { const f = fixture(); f.state.board = { kind: 'ready', projectName: 'Alpha', tasks: [], fetchedAt: 'now', today: '2026-01-01', truncated: false }; assert.match(await f.html(), /No issues in this loaded result/); f.state.board = { kind: 'not-connected', projectName: 'Alpha' }; assert.match(await f.html(), /Restored native issue/); f.state.board = { kind: 'denied' }; const html = await f.html(); assert.match(html, /do not have access to Issues/); assert.doesNotMatch(html, /Open issue board/); });
 test('loaded counts and truncation remain qualified', async () => { const f = fixture(); const node = await f.render(); node.props.data.selected.board.truncated = true; const html = renderToStaticMarkup(node); assert.match(html, /1 loaded issues/); assert.match(html, /1 need attention/); assert.match(html, /Counts are not repository totals/); });
 test('memory counts notes separately from revisions and preserves lifecycle', async () => { const f = fixture(); const node = await f.render(); node.props.data.selected.memory.snapshot.document.revisions = ['Draft', 'Approved', 'Superseded'].map((state, i) => ({ id: 'rule', title: 'Project rule', type: 'Rules', state, revision: 3 - i })); const html = renderToStaticMarkup(node); assert.match(html, /1 notes/); assert.match(html, /1 draft revisions/); assert.match(html, /1 approved revisions/); assert.match(html, /Superseded/); assert.match(html, /revision 3/); });
 test('switching project creates only new scoped payload and canonical links', async () => { const f = fixture(); const first = await f.html('a'); const second = await f.html('b'); assert.match(first, /alpha task/); assert.doesNotMatch(second, /alpha task/); assert.match(second, /beta task/); assert.match(second, /href="\/space\/projects\/beta\/board"/); assert.match(second, /href="\/space\/projects\/beta\/notes\/memory"/); assert.match(second, /Open an issue for Ready review/); assert.match(second, /Ready does not grant merge or deploy permission/); assert.deepEqual(f.state.provider, [['issues', 'space', 'alpha'], ['memory', 'space', 'alpha'], ['issues', 'space', 'beta'], ['memory', 'space', 'beta']]); assert.equal(f.state.writes, 0); });
@@ -304,3 +317,42 @@ for (const lookup of ['workspace', 'role']) {
     assert.equal(f.state.writes, 0);
   });
 }
+
+
+test('unconnected selected project reads restored native issues with scoped links', async () => {
+  const f = fixture(true); f.state.noBinding = true;
+  const html = await f.html();
+  assert.match(html, /Restored native issue/);
+  assert.match(html, /href="\/space\/issues\/native-a"/);
+  assert.match(html, /href="\/space\/projects\/alpha"/);
+  assert.doesNotMatch(html, /Foreign workspace issue|Other project issue|Issues is not connected|Open issue board|Open an issue for Ready review/);
+  assert.deepEqual(f.state.provider, []);
+  assert.equal(f.state.reads.filter(value => value === 'native-issues').length, 1);
+  assert.equal(f.state.writes, 0);
+});
+test('native issue read failure stays unavailable and reveals no private exception', async () => {
+  const f = fixture(true); f.state.noBinding = true; f.state.failNativeIssues = true;
+  const html = await f.html();
+  assert.match(html, /Project overview could not be loaded/);
+  assert.doesNotMatch(html, /private native|No issues|Restored native/);
+});
+test('revocation before native project read prevents restored payload', async () => {
+  const f = fixture(true); f.state.noBinding = true;
+  f.state.afterBinding = () => { f.workspace.members[0].status = false; };
+  await assert.rejects(f.render(), { message: 'not-found' });
+  assert.deepEqual(f.state.provider, []);
+});
+test('connected Forge project never queries native issue rows', async () => {
+  const f = fixture(true); await f.html();
+  assert.equal(f.state.reads.includes('native-issues'), false);
+  assert.deepEqual(f.state.provider, [['issues', 'ws', 'a'], ['memory', 'ws', 'a']]);
+});
+
+test('native project entry uses current ID for members and owners, and rejects inactive access', async () => {
+  const f = fixture();
+  assert.equal((await f.native()).props.projectId, 'a');
+  f.workspace.ownerId = 'actor'; f.workspace.members = [];
+  assert.equal((await f.native()).props.projectId, 'a');
+  f.workspace.ownerId = 'other'; f.workspace.members = [{ userId: 'actor', status: false }];
+  await assert.rejects(f.native(), { message: 'redirect:/' });
+});

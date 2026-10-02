@@ -5,9 +5,10 @@ import { PageLayout } from "@/components/ui/page-layout";
 import { PageHeader } from "@/components/ui/page-header";
 
 type Project = { id: string; slug: string; name: string };
+type NativeIssue = { id: string; issueKey: string | null; title: string; status: string | null };
 export type DashboardData = { kind: "denied" | "unavailable" } | {
   kind: "ready"; workspaceName: string; workspaceSlug: string; projects: Project[];
-  selected: { project: Project; board: ForgeBoard; memory: MemoryView } | null;
+  selected: { project: Project; board: ForgeBoard; memory: MemoryView; nativeIssues: NativeIssue[] | null } | null;
 };
 
 const linkStyle = "text-sm underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4";
@@ -49,7 +50,15 @@ export default function DashboardOverview({ data }: { data: DashboardData }) {
       <div className="grid gap-5 lg:grid-cols-2">
         <section aria-label="Issues" className={cardStyle}>
           <h3 className="font-medium">Issues</h3>
-          {board?.kind === "ready" ? <>
+          {selected.nativeIssues !== null ? <>
+            <p className="text-sm">Recent Collab issues</p>
+            {selected.nativeIssues.length === 0 ? <p className="text-sm">No issues in this project yet.</p> : <ul className="space-y-2 text-sm">
+              {selected.nativeIssues.map(issue => <li key={issue.id} className="break-words">
+                <a className={linkStyle} href={`/${encodeURIComponent(workspaceSlug)}/issues/${encodeURIComponent(issue.id)}`}>{issue.issueKey} {issue.title}</a>
+                {issue.status && <span className="text-muted-foreground"> · {issue.status}</span>}
+              </li>)}
+            </ul>}
+          </> : board?.kind === "ready" ? <>
             <p className="text-sm">{board.tasks.length} loaded issues · {board.tasks.filter(task => needsAttention(task, board.today)).length} need attention</p>
             <p className="text-xs text-muted-foreground">Fetched {board.fetchedAt}</p>
             {board.truncated && <p role="status" className="text-sm">Partial result: only the first 1,000 issues were loaded. Counts are not repository totals.</p>}
@@ -57,7 +66,8 @@ export default function DashboardOverview({ data }: { data: DashboardData }) {
               {board.tasks.slice(0, 5).map(task => <li key={task.number} className="break-words">#{task.number} {task.title} <span className="text-muted-foreground">· {task.status}</span></li>)}
             </ul>}
           </> : board && <ReadState kind={board.kind} label="Issues" />}
-          {board?.kind !== "denied" && <a className={linkStyle} href={`${base}/board`}>Open issue board</a>}
+          {selected.nativeIssues !== null ? <a className={linkStyle} href={base}>Open project</a>
+            : board?.kind !== "denied" && <a className={linkStyle} href={`${base}/board`}>Open issue board</a>}
         </section>
         <section aria-label="Project memory" className={cardStyle}>
           <h3 className="font-medium">Project memory</h3>

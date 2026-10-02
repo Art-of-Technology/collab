@@ -54,7 +54,20 @@ async function loadOverview(workspaceSelector: string, projectSelector: string |
       issuesUnavailable ? { kind: "unavailable" as const, projectName: project.name } : issues.hasPermission ? loadForgeBoard(workspaceSlug, project.slug, scope).catch(() => ({ kind: "unavailable" as const, projectName: project.name })) : { kind: "denied" as const },
       notesUnavailable ? { kind: "unavailable" as const, projectName: project.name } : notes.hasPermission ? loadProjectMemory(workspaceSlug, project.slug, scope).catch(() => ({ kind: "unavailable" as const, projectName: project.name })) : { kind: "denied" as const },
     ]);
-    return { kind: "ready", workspaceName: workspace.name, workspaceSlug, projects, selected: { project, board, memory } };
+    let nativeIssues = null;
+    if (board.kind === "not-connected") {
+      const nativeProject = await prisma.project.findFirst({
+        where: { id: project.id, workspaceId: workspace.id, workspace: postWorkspaceAccessWhere(actorId) },
+        select: { issues: {
+          where: { workspaceId: workspace.id, projectId: project.id },
+          select: { id: true, issueKey: true, title: true, status: true },
+          orderBy: [{ updatedAt: "desc" }, { id: "asc" }], take: 5,
+        } },
+      });
+      if (!nativeProject) return { kind: "denied" };
+      nativeIssues = nativeProject.issues;
+    }
+    return { kind: "ready", workspaceName: workspace.name, workspaceSlug, projects, selected: { project, board, memory, nativeIssues } };
   } catch {
     return { kind: "unavailable" };
   }
