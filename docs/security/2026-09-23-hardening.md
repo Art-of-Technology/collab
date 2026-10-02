@@ -525,8 +525,14 @@ acceptance before the decoder fix; the original three checks continue to pass.
 `getAuthSession` in `src/lib/auth.ts` and `getCurrentUser` in `src/lib/session.ts`
 import the shared request-session adapter. Their callers, including Forge Board
 and project memory, inherit it; remaining direct NextAuth consumers are pending.
-Their bodies, legacy auth options/callbacks and current-user ID lookup are
-unchanged. Both inherit the [adapter contract](#gateway-session-core-inactive-integration).
+Both inherit the [adapter contract](#gateway-session-core-inactive-integration).
+In `nextauth` mode, they use the canonical options in `src/lib/auth-options.ts`;
+`src/lib/auth.ts` re-exports those options as both `authOptions` and `authConfig`.
+The JWT callback resolves the current local user by `token.sub`, rejects missing
+or deleted subjects, and refreshes name, email, image, team, current focus,
+expertise and role from that row. The session callback exposes that local ID and
+those refreshed fields. External Maestro claims do not set local roles; see the
+[native linking contract](../native-maestro-link.md) for account binding.
 Mapping database errors propagate from `getAuthSession`; `getCurrentUser` preserves
 its existing catch-and-null behavior.
 Serialized current-user dates and nullable email verification remain unchanged.
@@ -1038,13 +1044,14 @@ and precheck/use races remain separate. No keys or live secrets were accessed.
 ## Issue API session adapter
 
 For current stored GitHub metadata access, see the
-[issue GitHub projection contract](../issue-github-access.md). The adapter-only
-scope and limitations below record the earlier integration evidence.
+[issue GitHub projection contract](../issue-github-access.md). Current collection
+rules are in [Issue list and create access](#issue-list-and-create-access).
+The adapter-only scope and limitations below record the earlier integration evidence.
 
 Issue list/create, issue search and stored GitHub metadata use the
 [shared adapter contract](#gateway-session-core-inactive-integration). Only three
-session imports changed; `authOptions`, queries, payloads, permissions and
-transaction/event behavior remain unchanged.
+session imports changed in that earlier integration; queries, payloads,
+permissions and transaction/event behavior were unchanged in that step.
 
 The [focused fixture](../../tests/security/gateway-issues.test.cjs) executes all
 four handlers with the actual identity selector and relation transformer,
@@ -1055,14 +1062,29 @@ activity/notification/webhook attribution, foreign denial before effects,
 identity failure with no downstream reads or effects, and explicit/default
 legacy forwarding. No provider call occurs in the GitHub metadata handler.
 
-Gateway and worker remain disabled. Workspace-only membership checks without
-active/project policy, unscoped nested issue payloads, explicit reporter and
-assignee/parent/label inputs, counter/relation races, precheck/use gaps, raw logs
+Gateway and worker remain disabled. Issue search membership policy, project
+privacy, unscoped nested issue payloads, assignee/parent/label inputs,
+counter/relation races, precheck/use gaps, raw logs
 and activity/realtime failures after commit remain separate activation concerns.
 The fixture does not prove native transactions, concurrent revocation, provider
 or notification delivery, ranked search branches, nonempty relation policy,
 every optional create input, or runtime acceptance. No runtime, database or
 provider operation was performed.
+
+### Issue list and create access
+
+`GET /api/issues` and `POST /api/issues` require a session `user.id` (401 when
+absent) and workspace ownership or active membership (`status: true`). Inactive
+non-owners and foreign users receive 403 before issue reads or creation.
+On creation, `reporterId` may be omitted or must equal the authenticated local
+user ID; any other supplied value returns 403. The stored reporter always comes
+from the session. For the creation UI, see [Usage](../../README.md#usage), and for
+Forge-connected projects, see the [legacy write guard](../forge-legacy-write-guard.md).
+
+The [native Maestro fixture](../../tests/native-maestro-link.test.cjs) covers
+these guards with modeled collaborators. Detail editing, relation selectors,
+project privacy and post-check revocation remain separate policy surfaces;
+these collection guards are not a whole-app tenant audit.
 
 ## Timeline session adapter
 

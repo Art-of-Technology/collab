@@ -1,3 +1,4 @@
+import { maestroEnabled, maestroProvider, safeAuthLogger, safeAuthRedirect, COLLAB_ORIGIN } from "@/lib/maestro-link";
 import { type AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "@/lib/prisma";
@@ -10,9 +11,11 @@ export const authOptions: AuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string
-    })
+    }),
+    ...(maestroEnabled() ? [maestroProvider()] : []),
   ],
-  debug: process.env.NODE_ENV === "development",
+  debug: false,
+  logger: safeAuthLogger,
   session: {
     strategy: "jwt",
   },
@@ -108,8 +111,15 @@ export const authOptions: AuthOptions = {
       return true;
     },
     async session({ session, token }) {
-      if (token.sub && session.user) {
+      if (!token.sub) throw new Error("Invalid session");
+      if (session.user) {
         session.user.id = token.sub;
+        session.user.name = token.name;
+        session.user.email = token.email;
+        session.user.image = token.picture;
+        session.user.team = token.team as string | null;
+        session.user.currentFocus = token.currentFocus as string | null;
+        session.user.expertise = token.expertise as string[] | null;
       }
 
       if (token.role && session.user) {
@@ -119,7 +129,7 @@ export const authOptions: AuthOptions = {
       return session;
     },
     async jwt({ token }) {
-      if (!token.sub) return token;
+      if (!token.sub) throw new Error("Invalid session");
 
       const existingUser = await prisma.user.findUnique({
         where: {
@@ -127,26 +137,21 @@ export const authOptions: AuthOptions = {
         },
       });
 
-      if (!existingUser) return token;
+      if (!existingUser) throw new Error("Invalid session");
 
       // Convert UserRole enum to string for NextAuth compatibility
       token.role = existingUser.role.toString();
+      token.name = existingUser.name;
+      token.email = existingUser.email;
+      token.picture = existingUser.image;
+      token.team = existingUser.team;
+      token.currentFocus = existingUser.currentFocus;
+      token.expertise = existingUser.expertise;
 
       return token;
     },
     async redirect({ url, baseUrl }) {
-      // Ensure we redirect to the home page after login
-      if (url.includes('/api/auth/signin') || url.includes('/api/auth/callback')) {
-        return baseUrl;
-      }
-
-      try {
-        const target = new URL(url, baseUrl);
-        if (target.origin === new URL(baseUrl).origin) return target.href;
-      } catch {
-        // Invalid callback URLs fall back to the application home page.
-      }
-      return baseUrl;
+      return safeAuthRedirect(url, maestroEnabled() ? COLLAB_ORIGIN : baseUrl);
     },
   }
 };

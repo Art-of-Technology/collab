@@ -1,3 +1,4 @@
+import { maestroEnabled } from "@/lib/maestro-link";
 import { redirect } from "next/navigation";
 import { getAuthSession } from "@/lib/auth";
 import { getPosts } from "@/actions/post";
@@ -35,7 +36,8 @@ export default async function ProfilePage({ params }: { params: Promise<{ worksp
   
   // Render the client component with initial data
   return (
-    <ProfileClient 
+    <ProfileClient
+      maestroEnabled={maestroEnabled()}
       initialData={{
         user: initialData?.user || null,
         stats: initialData?.stats || null,
