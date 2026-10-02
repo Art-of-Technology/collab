@@ -26,7 +26,8 @@ function fixture(actualLoaders = false) {
     { id: 'native-a', issueKey: 'ALPHA-1', title: 'Restored native issue', status: 'TODO', workspaceId: 'ws', projectId: 'a' },
     { id: 'native-foreign-workspace', issueKey: 'HIDDEN-1', title: 'Foreign workspace issue', status: 'TODO', workspaceId: 'foreign', projectId: 'a' },
     { id: 'native-foreign-project', issueKey: 'BETA-1', title: 'Other project issue', status: 'TODO', workspaceId: 'ws', projectId: 'b' },
-  ];
+  ].map(issue => ({ ...issue, statusId: null, projectStatus: null,
+    workspace: [workspace, other].find(ws => ws.id === issue.workspaceId), project: projects.find(project => project.id === issue.projectId) }));
   projects[1].issues = [];
   const select = (row, fields) => row ? Object.fromEntries(Object.keys(fields).map(key => [key,
     key === 'issues' ? (row.issues ?? []).filter(issue => matches(issue, fields.issues.where)).slice(0, fields.issues.take).map(issue => select(issue, fields.issues.select)) : row[key]
@@ -321,13 +322,45 @@ for (const lookup of ['workspace', 'role']) {
 
 test('unconnected selected project reads restored native issues with scoped links', async () => {
   const f = fixture(true); f.state.noBinding = true;
-  const html = await f.html();
+  f.other.members = [{ userId: 'actor', status: true, role: 'MEMBER' }];
+  Object.assign(f.projects[0].issues[0], { status: 'Deleted status', statusId: 'replacement',
+    projectStatus: { id: 'replacement', name: 'Current status', project: f.projects[0] } });
+  const node = await f.render();
+  assert.deepEqual(JSON.parse(JSON.stringify(node.props.data.selected.nativeIssues)), [
+    { id: 'native-a', issueKey: 'ALPHA-1', title: 'Restored native issue' },
+  ]);
+  const html = renderToStaticMarkup(node);
   assert.match(html, /Restored native issue/);
   assert.match(html, /href="\/space\/issues\/native-a"/);
   assert.match(html, /href="\/space\/projects\/alpha"/);
-  assert.doesNotMatch(html, /Foreign workspace issue|Other project issue|Issues is not connected|Open issue board|Open an issue for Ready review/);
+  assert.doesNotMatch(html, /Foreign workspace issue|Other project issue|Deleted status|Current status|Issues is not connected|Open issue board|Open an issue for Ready review/);
   assert.deepEqual(f.state.provider, []);
   assert.equal(f.state.reads.filter(value => value === 'native-issues').length, 1);
+  assert.equal(f.state.writes, 0);
+});
+test('native overview rechecks linked-status membership and preserves owner and unlinked access', async () => {
+  const f = fixture(true); f.state.noBinding = true;
+  f.other.members = [{ userId: 'actor', status: true, role: 'MEMBER' }];
+  const issue = f.projects[0].issues[0];
+  f.projects[0].issues.push({ ...issue, id: 'native-visible', issueKey: 'ALPHA-2', title: 'Unlinked issue' });
+  issue.statusId = 'foreign-status';
+  issue.projectStatus = { id: 'foreign-status', name: 'Private status', project: f.projects[2] };
+  assert.match(await f.html(), /href="\/space\/issues\/native-a"/);
+
+  f.state.afterBinding = () => { f.other.members[0].status = false; };
+  const revoked = await f.render();
+  assert.deepEqual(JSON.parse(JSON.stringify(revoked.props.data.selected.nativeIssues)), [
+    { id: 'native-visible', issueKey: 'ALPHA-2', title: 'Unlinked issue' },
+  ]);
+  assert.doesNotMatch(renderToStaticMarkup(revoked), /native-a|ALPHA-1|Restored native issue|Private status/);
+  f.state.afterBinding = undefined;
+  f.other.members = [];
+  assert.doesNotMatch(await f.html(), /native-a|ALPHA-1|Restored native issue/);
+
+  f.other.ownerId = 'actor';
+  f.workspace.ownerId = 'actor'; f.workspace.members = [];
+  assert.match(await f.html(), /href="\/space\/issues\/native-a"/);
+  assert.deepEqual(f.state.provider, []);
   assert.equal(f.state.writes, 0);
 });
 test('native issue read failure stays unavailable and reveals no private exception', async () => {

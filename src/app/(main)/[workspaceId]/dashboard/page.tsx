@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { postWorkspaceAccessWhere } from "@/lib/post-access";
+import { issueReadAccessWhere } from "@/lib/issue-finder";
 import { checkUserPermission, Permission } from "@/lib/permissions";
 import { loadForgeBoard } from "@/lib/forge/board";
 import { loadProjectMemory } from "@/lib/forge/memory-service";
@@ -59,8 +60,8 @@ async function loadOverview(workspaceSelector: string, projectSelector: string |
       const nativeProject = await prisma.project.findFirst({
         where: { id: project.id, workspaceId: workspace.id, workspace: postWorkspaceAccessWhere(actorId) },
         select: { issues: {
-          where: { workspaceId: workspace.id, projectId: project.id },
-          select: { id: true, issueKey: true, title: true, status: true },
+          where: { workspaceId: workspace.id, projectId: project.id, ...issueReadAccessWhere(actorId) },
+          select: { id: true, issueKey: true, title: true },
           orderBy: [{ updatedAt: "desc" }, { id: "asc" }], take: 5,
         } },
       });

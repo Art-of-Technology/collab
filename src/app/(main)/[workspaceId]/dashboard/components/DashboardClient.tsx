@@ -5,7 +5,7 @@ import { PageLayout } from "@/components/ui/page-layout";
 import { PageHeader } from "@/components/ui/page-header";
 
 type Project = { id: string; slug: string; name: string };
-type NativeIssue = { id: string; issueKey: string | null; title: string; status: string | null };
+type NativeIssue = { id: string; issueKey: string | null; title: string };
 export type DashboardData = { kind: "denied" | "unavailable" } | {
   kind: "ready"; workspaceName: string; workspaceSlug: string; projects: Project[];
   selected: { project: Project; board: ForgeBoard; memory: MemoryView; nativeIssues: NativeIssue[] | null } | null;
@@ -55,7 +55,6 @@ export default function DashboardOverview({ data }: { data: DashboardData }) {
             {selected.nativeIssues.length === 0 ? <p className="text-sm">No issues in this project yet.</p> : <ul className="space-y-2 text-sm">
               {selected.nativeIssues.map(issue => <li key={issue.id} className="break-words">
                 <a className={linkStyle} href={`/${encodeURIComponent(workspaceSlug)}/issues/${encodeURIComponent(issue.id)}`}>{issue.issueKey} {issue.title}</a>
-                {issue.status && <span className="text-muted-foreground"> · {issue.status}</span>}
               </li>)}
             </ul>}
           </> : board?.kind === "ready" ? <>
