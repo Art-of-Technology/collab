@@ -287,8 +287,11 @@ overview. A sole eligible project is selected automatically only when the
 parameter is absent; submitting **Choose a project** leaves `?project=` empty
 and loads no project payload. Multiple projects are never aggregated.
 
-Issues shows counts for the loaded result, a short issue preview and any
-partial-results warning. Project memory previews revisions and links to the
+For a Forge-connected project, Issues shows counts for the loaded result, a
+short issue preview and any partial-results warning. Projects without a Forge
+binding show up to five readable Collab issues, most recently updated first,
+with linked keys and titles; **Open project** opens the existing project overview
+and views. Project memory previews revisions and links to the
 [full memory lifecycle](docs/forge-project-memory.md). **Open issue board** and
 **Review project memory** lead to the selected project's canonical pages.
 **Reload overview** fetches the selected scope again. Denied, unavailable,
@@ -297,7 +300,7 @@ never become an empty success or “All clear”. See the
 [overview access contract](docs/security/2026-09-23-hardening.md#selected-project-overview-access)
 for chooser and payload authorization.
 
-When both reads succeed, **Open an issue for Ready review** leads to the board's
+When both Forge reads succeed, **Open an issue for Ready review** leads to the board's
 existing issue editor. The overview provides navigation only, with no execution
 totals or merge/deploy authority; the [Ready contract](docs/forge-ready-execution.md)
 owns consent and runtime admission. The shared legacy dashboard API and

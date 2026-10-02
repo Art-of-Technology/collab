@@ -4,6 +4,7 @@ import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveWorkspaceSlug } from "@/lib/slug-resolvers";
 import { ProjectDashboard } from "./ProjectDashboard";
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
 
 interface ProjectPageProps {
   params: Promise<{
@@ -16,12 +17,12 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const { workspaceId: workspaceSlugOrId, projectSlug } = await params;
   const session = await getServerSession(authConfig);
 
-  if (!session?.user?.email) {
+  if (!session?.user?.id) {
     redirect('/login');
   }
 
   // Resolve workspace slug/ID to actual workspace ID
-  const workspaceId = await resolveWorkspaceSlug(workspaceSlugOrId);
+  const workspaceId = await resolveWorkspaceSlug(workspaceSlugOrId, true);
   if (!workspaceId) {
     redirect('/');
   }
@@ -30,13 +31,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const workspace = await prisma.workspace.findFirst({
     where: {
       id: workspaceId,
-      members: {
-        some: {
-          user: {
-            email: session.user.email
-          }
-        }
-      }
+      ...postWorkspaceAccessWhere(session.user.id),
     },
     select: {
       id: true,
@@ -52,7 +47,8 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const project = await prisma.project.findFirst({
     where: {
       workspaceId,
-      slug: projectSlug
+      slug: projectSlug,
+      workspace: postWorkspaceAccessWhere(session.user.id),
     },
     select: {
       id: true,
