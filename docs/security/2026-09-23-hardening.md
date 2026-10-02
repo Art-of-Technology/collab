@@ -1229,11 +1229,13 @@ providers. Each loader repeats actor, membership and its section permission
 checks. Existing two-argument callers retain their authorization checks without
 the optional expected-ID assertion.
 
-An authorized project with no Forge binding reads at most five native Collab
-issues. This query repeats current workspace access and fixes both project and
-issue workspace IDs; unavailable or denied Forge reads never trigger it. The
-native project entry also uses the stable session user ID and shared
-owner-or-active-member predicate, independently of session email.
+Only an authorized `not-connected` board result triggers a native Collab issue
+query. The project query repeats current workspace access; its nested issue
+query fixes the immutable workspace and project IDs and applies
+`issueReadAccessWhere` from the [shared issue access contract](#issue-access-and-mutations).
+Unavailable or denied Forge reads never trigger this query. The native project
+entry also uses the stable session user ID and shared owner-or-active-member
+predicate, independently of session email.
 
 Authorization lookup failures are unavailable, while genuine missing membership
 or permission remains denied. A failed section authorization prevents that

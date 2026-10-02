@@ -30,7 +30,11 @@ function fixture(actualLoaders = false) {
     workspace: [workspace, other].find(ws => ws.id === issue.workspaceId), project: projects.find(project => project.id === issue.projectId) }));
   projects[1].issues = [];
   const select = (row, fields) => row ? Object.fromEntries(Object.keys(fields).map(key => [key,
-    key === 'issues' ? (row.issues ?? []).filter(issue => matches(issue, fields.issues.where)).slice(0, fields.issues.take).map(issue => select(issue, fields.issues.select)) : row[key]
+    key === 'issues' ? (row.issues ?? []).filter(issue => matches(issue, fields.issues.where))
+      .sort((a, b) => (fields.issues.orderBy ?? []).reduce((result, clause) => {
+        const [field, direction] = Object.entries(clause)[0];
+        return result || (a[field] < b[field] ? -1 : a[field] > b[field] ? 1 : 0) * (direction === 'desc' ? -1 : 1);
+      }, 0)).slice(0, fields.issues.take).map(issue => select(issue, fields.issues.select)) : row[key]
   ])) : null;
   const forbidden = () => { state.writes++; throw Error('Unexpected mutation'); };
   const model = methods => new Proxy(methods, { get: (target, key) => key in target ? target[key] : forbidden });
@@ -338,6 +342,24 @@ test('unconnected selected project reads restored native issues with scoped link
   assert.equal(f.state.reads.filter(value => value === 'native-issues').length, 1);
   assert.equal(f.state.writes, 0);
 });
+test('native overview returns only five most recent issues with stable ties and an explicit empty state', async () => {
+  const f = fixture(true); f.state.noBinding = true;
+  const issue = f.projects[0].issues[0];
+  f.projects[0].issues = [1, 7, 2, 6, 3, 5, 4].map(number => ({
+    ...issue, id: `recent-${number}`, title: `Issue ${number}`,
+    updatedAt: new Date(`2026-01-0${Math.min(number, 6)}T00:00:00Z`),
+  }));
+  const node = await f.render();
+  assert.deepEqual(Array.from(node.props.data.selected.nativeIssues, row => row.id),
+    ['recent-6', 'recent-7', 'recent-5', 'recent-4', 'recent-3']);
+  assert.doesNotMatch(renderToStaticMarkup(node), /Issue 1|Issue 2/);
+  const empty = await f.html('b');
+  assert.match(empty, /No issues in this project yet/);
+  assert.match(empty, /href="\/space\/projects\/beta"/);
+  assert.doesNotMatch(empty, /recent-|Open an issue for Ready review/);
+  assert.deepEqual(f.state.provider, []);
+  assert.equal(f.state.writes, 0);
+});
 test('native overview rechecks linked-status membership and preserves owner and unlinked access', async () => {
   const f = fixture(true); f.state.noBinding = true;
   f.other.members = [{ userId: 'actor', status: true, role: 'MEMBER' }];
@@ -379,6 +401,20 @@ test('connected Forge project never queries native issue rows', async () => {
   const f = fixture(true); await f.html();
   assert.equal(f.state.reads.includes('native-issues'), false);
   assert.deepEqual(f.state.provider, [['issues', 'ws', 'a'], ['memory', 'ws', 'a']]);
+});
+
+test('denied, unavailable and throwing Forge reads never fall back to native issues', async () => {
+  for (const kind of ['denied', 'unavailable', 'throw']) {
+    const f = fixture();
+    if (kind === 'throw') f.state.boardError = true;
+    else f.state.board = { kind };
+    const node = await f.render();
+    assert.equal(node.props.data.selected.nativeIssues, null);
+    assert.equal(f.state.reads.includes('native-issues'), false);
+    assert.doesNotMatch(renderToStaticMarkup(node), /Restored native issue|Recent Collab issues|Open an issue for Ready review|private provider token/);
+    assert.deepEqual(f.state.provider, [['issues', 'space', 'alpha'], ['memory', 'space', 'alpha']]);
+    assert.equal(f.state.writes, 0);
+  }
 });
 
 test('native project entry uses current ID for members and owners, and rejects inactive access', async () => {

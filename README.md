@@ -288,9 +288,10 @@ parameter is absent; submitting **Choose a project** leaves `?project=` empty
 and loads no project payload. Multiple projects are never aggregated.
 
 For a Forge-connected project, Issues shows counts for the loaded result, a
-short issue preview and any partial-results warning. Other projects show up to
-five recent Collab issues with links to their issue details; **Open project**
-opens the existing project overview and views. Project memory previews revisions and links to the
+short issue preview and any partial-results warning. Projects without a Forge
+binding show up to five readable Collab issues, most recently updated first,
+with linked keys and titles; **Open project** opens the existing project overview
+and views. Project memory previews revisions and links to the
 [full memory lifecycle](docs/forge-project-memory.md). **Open issue board** and
 **Review project memory** lead to the selected project's canonical pages.
 **Reload overview** fetches the selected scope again. Denied, unavailable,
