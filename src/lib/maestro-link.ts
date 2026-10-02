@@ -12,8 +12,11 @@ export const LINK_SECONDS = 300;
 export const LINK_COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: "lax" as const, path: "/" };
 
 export function maestroEnabled() {
-  return authMode() === "nextauth" && process.env.MAESTRO_ENABLED === "true" && process.env.NEXTAUTH_URL === COLLAB_ORIGIN &&
-    !!process.env.MAESTRO_CLIENT_ID && !!process.env.NEXTAUTH_SECRET;
+  if (authMode() !== "nextauth" || process.env.MAESTRO_ENABLED !== "true") return false;
+  if (process.env.NEXTAUTH_URL !== COLLAB_ORIGIN || !process.env.MAESTRO_CLIENT_ID?.trim() || !process.env.NEXTAUTH_SECRET?.trim()) {
+    throw new Error("Invalid Maestro configuration");
+  }
+  return true;
 }
 
 export function safeAuthRedirect(url: string, baseUrl: string) {
@@ -26,10 +29,18 @@ export function safeAuthRedirect(url: string, baseUrl: string) {
   } catch { return baseUrl; }
 }
 
-// Never emit OAuth profiles, tokens, upstream payloads or database errors.
+// Fixed codes from installed NextAuth v4; never emit arbitrary codes or metadata.
+const AUTH_ERROR_CODES = new Set([
+  "SIGNIN_OAUTH_ERROR", "SIGNIN_EMAIL_ERROR", "OAUTH_CALLBACK_HANDLER_ERROR", "OAUTH_CALLBACK_ERROR",
+  "CALLBACK_EMAIL_ERROR", "SIGNOUT_ERROR", "JWT_SESSION_ERROR", "SESSION_ERROR",
+  "OAUTH_V1_GET_ACCESS_TOKEN_ERROR", "OAUTH_PARSE_PROFILE_ERROR", "AUTH_ON_ERROR_PAGE_ERROR", "LOGGER_ERROR",
+  "MISSING_NEXTAUTH_API_ROUTE_ERROR", "NO_SECRET", "CALLBACK_CREDENTIALS_HANDLER_ERROR",
+  "EMAIL_REQUIRES_ADAPTER_ERROR", "MISSING_ADAPTER_METHODS_ERROR", "CALLBACK_CREDENTIALS_JWT_ERROR", "INVALID_CALLBACK_URL_ERROR",
+]);
+const AUTH_WARNING_CODES = new Set(["NEXTAUTH_URL", "NO_SECRET", "TWITTER_OAUTH_2_BETA", "DEBUG_ENABLED"]);
 export const safeAuthLogger = {
-  error() { console.error("AUTH_FAILED"); },
-  warn() { console.warn("AUTH_WARNING"); },
+  error(code?: unknown) { console.error("AUTH_FAILED", typeof code === "string" && AUTH_ERROR_CODES.has(code) ? code : "UNKNOWN"); },
+  warn(code?: unknown) { console.warn("AUTH_WARNING", typeof code === "string" && AUTH_WARNING_CODES.has(code) ? code : "UNKNOWN"); },
   debug() {},
 };
 

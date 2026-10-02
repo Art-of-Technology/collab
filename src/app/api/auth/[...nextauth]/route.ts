@@ -18,7 +18,8 @@ async function handler(request: NextRequest, context: { params: Promise<{ nextau
   let googleCompleted = false;
   let maestroCompleted = false;
   const deny = () => {
-    const response = NextResponse.redirect(new URL(hasIntent ? `${LINK_PATH}?error=AccessDenied` : "/login?error=AccessDenied", COLLAB_ORIGIN));
+    const path = hasIntent ? `${LINK_PATH}?error=AccessDenied` : "/login?error=AccessDenied";
+    const response = new NextResponse(null, { status: 302, headers: { Location: maestroEnabled() ? `${COLLAB_ORIGIN}${path}` : path } });
     response.cookies.set(LINK_COOKIE, "", { ...LINK_COOKIE_OPTIONS, maxAge: 0 });
     return response;
   };

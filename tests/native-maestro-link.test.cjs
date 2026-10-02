@@ -27,7 +27,7 @@ process.env.MAESTRO_ENABLED = 'true';
 process.env.MAESTRO_CLIENT_ID = 'fixture-client';
 function load(file, mocks = {}) {
   const source = process.env.MAESTRO_TEST_BASELINE_ISSUES === '1' && file === 'src/app/api/issues/route.ts' ? require('node:child_process').execFileSync('git', ['show', 'fddd90cadeb79faea4954a2bc399f404bfbdb0e2:'+file], { cwd: root, encoding: 'utf8' }) : fs.readFileSync(path.join(root, file), 'utf8');
-  const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText;
+  const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const loadedModule = { exports: {} };
   vm.runInThisContext(`(function(require,module,exports){${js}\n})`, { filename: file })(id => id in mocks ? mocks[id] : require(id), loadedModule, loadedModule.exports);
   return loadedModule.exports;
@@ -86,7 +86,7 @@ function NextAuth(options) {
     return new Response(null, { status: 302, headers: { Location: result.redirect } });
   };
 }
-const NextResponse = { json: (body, init) => Response.json(body, init), redirect(url) { const r = new Response(null, { status: 302, headers: { Location: String(url) } }); r.cookies = { set(name, value) { r.headers.append('Set-Cookie', `${name}=${value}`); } }; return r; } };
+const { NextResponse } = require('next/server');
 const authOptions = load('src/lib/auth-options.ts', { '@/lib/prisma': { prisma: db }, '@/utils/user-image-handler': { processUserProfileImage: async () => null }, '@/lib/custom-prisma-adapter': { CustomPrismaAdapter: baseAdapter }, '@/lib/maestro-link': helper }).authOptions;
 const route = load('src/app/api/auth/[...nextauth]/route.ts', {
   '@/lib/auth-options': { authOptions }, '@/lib/gateway-identity': gateway, '@/lib/request-session': { getGatewaySession: async () => ({ user, authMode: 'gateway' }) },
@@ -175,7 +175,7 @@ test('actual OAuth profile refusal logger omits raw claims; token exchange/verif
     const result = await loadedModule.exports.default({ options, method: 'GET', query: {}, body: {}, cookies: Object.fromEntries(cookieList.map(c => [c.name,c.value])) });
     assert.equal(result.account, undefined); assert.equal(result.profile, undefined);
   } finally { console.error = original; }
-  assert.deepEqual(output, [['AUTH_FAILED']]);
+  assert.deepEqual(output, [['AUTH_FAILED', 'OAUTH_PARSE_PROFILE_ERROR']]);
 });
 
 test('installed OIDC validates actual signed ID token, issuer/audience/expiry/nonce/RS256; transport mocked', async () => {
@@ -344,7 +344,7 @@ test('authorization DB failure is generic in actual core redirect/body/logs with
     const visible = JSON.stringify({ location: response.headers.get('location'), body: await response.text(), logs });
     assert.equal(visible.includes(sentinel), false);
     assert.match(response.headers.get('location'), /AccessDenied/);
-    assert.deepEqual(logs, [['AUTH_FAILED']]);
+    assert.deepEqual(logs, [['AUTH_FAILED', 'UNKNOWN']]);
     assert.deepEqual(writes, []); assert.equal(lastSession, null);
   } finally { db.account.findUnique = originalFind; console.error = originalError; }
 });
@@ -402,4 +402,102 @@ test('dashboard shared accessor preserves canonical native options and gateway h
     process.env.COLLAB_AUTH_MODE = 'nextauth';
     if (oldIssuer === undefined) delete process.env.COLLAB_GATEWAY_ISSUER; else process.env.COLLAB_GATEWAY_ISSUER = oldIssuer;
   }
+});
+
+
+test('safe auth logger keeps only known codes, redacting unknown codes and private metadata', () => {
+  const originalError = console.error, originalWarn = console.warn, originalDebug = console.debug;
+  const output = [];
+  console.error = console.warn = console.debug = (...args) => output.push(args);
+  const privateValue = 'PRIVATE_AUTH_LOG_SENTINEL';
+  try {
+    helper.safeAuthLogger.error('JWT_SESSION_ERROR', { error: new Error(privateValue), token: privateValue });
+    helper.safeAuthLogger.warn('NO_SECRET', { secret: privateValue });
+    helper.safeAuthLogger.error(privateValue, { error: new Error(privateValue) });
+    helper.safeAuthLogger.warn(privateValue);
+    helper.safeAuthLogger.error({ toString() { throw new Error('must not coerce input'); } });
+    helper.safeAuthLogger.debug(privateValue, { token: privateValue });
+  } finally { console.error = originalError; console.warn = originalWarn; console.debug = originalDebug; }
+  assert.deepEqual(output, [['AUTH_FAILED', 'JWT_SESSION_ERROR'], ['AUTH_WARNING', 'NO_SECRET'],
+    ['AUTH_FAILED', 'UNKNOWN'], ['AUTH_WARNING', 'UNKNOWN'], ['AUTH_FAILED', 'UNKNOWN']]);
+  assert.equal(JSON.stringify(output).includes(privateValue), false);
+});
+
+test('Maestro defaults off; explicit native enablement rejects invalid config with a fixed error', () => {
+  const keys = ['MAESTRO_ENABLED', 'NEXTAUTH_URL', 'MAESTRO_CLIENT_ID', 'NEXTAUTH_SECRET', 'COLLAB_AUTH_MODE'];
+  const saved = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  const restore = () => { for (const key of keys) { if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key]; } };
+  const options = () => load('src/lib/auth-options.ts', { '@/lib/prisma': { prisma: db }, '@/utils/user-image-handler': {}, '@/lib/custom-prisma-adapter': { CustomPrismaAdapter: baseAdapter }, '@/lib/maestro-link': helper }).authOptions;
+  try {
+    for (const flag of [undefined, 'false']) {
+      restore(); if (flag === undefined) delete process.env.MAESTRO_ENABLED; else process.env.MAESTRO_ENABLED = flag;
+      delete process.env.MAESTRO_CLIENT_ID;
+      assert.equal(helper.maestroEnabled(), false);
+      assert.deepEqual(options().providers.map(p => p.id), ['google']);
+    }
+    for (const [key, value] of [['NEXTAUTH_URL', 'https://PRIVATE_CONFIG_SENTINEL.test'], ['MAESTRO_CLIENT_ID', ''], ['MAESTRO_CLIENT_ID', '   '], ['NEXTAUTH_SECRET', '']]) {
+      restore(); process.env[key] = value;
+      assert.throws(options, { message: 'Invalid Maestro configuration' });
+    }
+    for (const mode of ['gateway', 'invalid']) {
+      restore(); process.env.COLLAB_AUTH_MODE = mode; delete process.env.MAESTRO_CLIENT_ID;
+      assert.equal(helper.maestroEnabled(), false);
+    }
+    restore(); assert.equal(helper.maestroEnabled(), true);
+    assert.deepEqual(options().providers.map(p => p.id), ['google', 'maestro']);
+  } finally { restore(); }
+});
+
+test('disabled Maestro and stale intent refuse locally, clear intent, and leave ordinary Google available', async () => {
+  const oldEnabled = process.env.MAESTRO_ENABLED, oldUrl = process.env.NEXTAUTH_URL;
+  try {
+    process.env.MAESTRO_ENABLED = 'false'; process.env.NEXTAUTH_URL = 'http://localhost:3151';
+    for (const [provider, stale, expected] of [['maestro', null, '/login?error=AccessDenied'], ['google', intent({ phase: 'google', expires: Date.now()-1 }), helper.LINK_PATH+'?error=AccessDenied']]) {
+      reset(); captured = null;
+      const response = await invoke(provider, stale);
+      assert.equal(response.headers.get('location'), expected);
+      assert.match(response.headers.get('set-cookie'), /Max-Age=0/i);
+      assert.match(response.headers.get('set-cookie'), /HttpOnly/i);
+      assert.equal(captured, null); assert.equal(lastSession, null); assert.deepEqual(writes, []);
+    }
+    reset(); currentToken = null; returnedIdentity = { provider: 'google', subject: 'google-sub' };
+    await invoke('google'); assert.equal(lastSession.sub, user.id); assert.deepEqual(writes, []);
+    process.env.MAESTRO_ENABLED = oldEnabled; process.env.NEXTAUTH_URL = oldUrl;
+    const response = await invoke('maestro', intent({ expires: Date.now()-1 }));
+    assert.equal(response.headers.get('location'), helper.COLLAB_ORIGIN+helper.LINK_PATH+'?error=AccessDenied');
+  } finally { process.env.MAESTRO_ENABLED = oldEnabled; process.env.NEXTAUTH_URL = oldUrl; }
+});
+
+test('profile server flag controls actual client link without sending server configuration', async () => {
+  const react = require('react');
+  const mocks = {
+    react: { ...react, useState: value => [typeof value === 'function' ? value() : value] },
+    'next/link': { __esModule: true, default: 'a' },
+    '@/hooks/queries/useUser': { useCurrentUserProfile: () => ({}), useInfiniteUserProfilePosts: () => ({}) },
+    '@/context/WorkspaceContext': { useWorkspace: () => ({ currentWorkspace: { id: 'workspace' } }) },
+  };
+  for (const name of ['ProfileForm', 'NotificationSettings']) mocks['@/components/profile/'+name] = { __esModule: true, default: name };
+  mocks['@/components/posts/PostList'] = { __esModule: true, default: 'PostList' };
+  for (const [file, names] of [['card', ['Card', 'CardContent', 'CardHeader']], ['user-avatar', ['UserAvatar']], ['tabs', ['Tabs', 'TabsContent', 'TabsList', 'TabsTrigger']], ['custom-avatar', ['CustomAvatar']]]) {
+    mocks['@/components/ui/'+file] = Object.fromEntries(names.map(name => [name, name]));
+  }
+  const client = load('src/components/profile/ProfileClient.tsx', mocks).default;
+  const page = load('src/app/(main)/[workspaceId]/profile/page.tsx', {
+    'next/navigation': { redirect() { throw new Error('unexpected redirect'); } }, '@/lib/auth': { getAuthSession: async () => ({ user }) },
+    '@/lib/session': { getCurrentUser: async () => user }, '@/actions/post': { getPosts: async () => ({ user, stats: {}, posts: [] }) },
+    '@/components/profile/ProfileClient': { __esModule: true, default: client }, '@/lib/maestro-link': helper,
+  }).default;
+  const links = node => Array.isArray(node) ? node.flatMap(links) : !node || typeof node !== 'object' ? [] :
+    [...(node.type === 'a' && node.props.href === helper.LINK_PATH ? [node] : []), ...links(node.props?.children)];
+  const oldEnabled = process.env.MAESTRO_ENABLED;
+  try {
+    for (const enabled of [false, true]) {
+      process.env.MAESTRO_ENABLED = String(enabled);
+      const element = await page({ params: Promise.resolve({ workspaceId: 'workspace' }) });
+      assert.equal(element.type, client); assert.equal(element.props.maestroEnabled, enabled);
+      assert.deepEqual(Object.keys(element.props).sort(), ['initialData', 'maestroEnabled']);
+      assert.equal(links(client(element.props)).length, enabled ? 1 : 0);
+    }
+    assert.equal(links(client({ initialData: { user, stats: {}, posts: [] } })).length, 0);
+  } finally { process.env.MAESTRO_ENABLED = oldEnabled; }
 });

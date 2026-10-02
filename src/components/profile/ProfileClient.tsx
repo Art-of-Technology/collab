@@ -14,9 +14,10 @@ import NotificationSettings from "@/components/profile/NotificationSettings";
 
 interface ProfileClientProps {
   initialData: any;
+  maestroEnabled?: boolean;
 }
 
-export default function ProfileClient({ initialData }: ProfileClientProps) {
+export default function ProfileClient({ initialData, maestroEnabled = false }: ProfileClientProps) {
   const { currentWorkspace } = useWorkspace();
   const workspaceId = currentWorkspace?.id || '';
   const [initialWorkspaceId] = useState(() => workspaceId);
@@ -108,7 +109,7 @@ export default function ProfileClient({ initialData }: ProfileClientProps) {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="profile" className="mt-4">
-          <Link href="/account/link-maestro" className="block mb-4 underline">Connect Maestro</Link>
+          {maestroEnabled && <Link href="/account/link-maestro" className="block mb-4 underline">Connect Maestro</Link>}
           <ProfileForm user={{
             ...user,
             expertise: user.expertise || []
