@@ -17,6 +17,10 @@ subject. The five-minute encrypted, HttpOnly/Secure/SameSite cookie binds the
 original local user, Google subject and each actual OAuth state. Session JWT issuance time is never Google
 proof. Google account selection/SSO proves the provider account; it does not
 claim the user re-entered a Google password. Expiry covers the entire flow.
+Google verification returns to the linking page for the Maestro step. A completed
+Maestro callback clears the intent and redirects to `/`, where existing workspace
+selection takes over. An already-linked signed-in user visiting the linking page
+also continues to `/`; a refused, uncompleted link remains on the error flow.
 
 Native Maestro is off by default. It is available only in
 `COLLAB_AUTH_MODE=nextauth` (the default), with `MAESTRO_ENABLED=true`,

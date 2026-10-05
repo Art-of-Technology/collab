@@ -234,7 +234,8 @@ Collab is designed to streamline internal communication and work tracking by off
 - Sign up or log in using Google.
   When native Maestro is enabled, open **Profile → Connect Maestro**, choose
   **Verify Google account**, complete the Google round trip with the same account,
-  then choose **Connect Maestro**. Once connected, **Sign in with Maestro** returns
+  then choose **Connect Maestro**. Successful linking opens your Collab workspace
+  immediately; revisiting the linking page also continues into Collab. **Sign in with Maestro** returns
   to your existing Collab account; Google remains available. For availability,
   configuration and linking safeguards, see the [native Maestro guide](docs/native-maestro-link.md).
   For gateway sign-in availability and sign-out behavior, see the

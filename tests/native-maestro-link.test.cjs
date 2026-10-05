@@ -110,7 +110,9 @@ test('actual NextAuth core refuses unmapped ordinary Maestro, creates no account
   assert.match(response.headers.get('location'), /AccessDenied/); assert.deepEqual(writes, []); assert.equal(lastSession, null);
 });
 test('explicit state-bound link preserves local user/Google/role and omits provider tokens', async () => {
-  reset(); await invoke('maestro', intent());
+  reset(); const response = await invoke('maestro', intent());
+  assert.equal(response.headers.get('location'), `${helper.COLLAB_ORIGIN}/`);
+  assert.match(response.headers.get('set-cookie'), /Max-Age=0/i);
   assert.equal(lastSession.sub, user.id); assert.equal(lastSession.role, 'DEVELOPER');
   assert.equal(accounts[0].id, 'google-row'); assert.deepEqual(writes, [{ userId: user.id, type: 'oauth', provider: 'maestro', providerAccountId: 'maestro-sub' }]);
 });
@@ -134,12 +136,43 @@ test('foreign binding, different user subject, stale/swapped state and lost Goog
 test('Google proof advances only verified same original Google callback, never JWT refresh', async () => {
   reset(); returnedIdentity = { provider: 'google', subject: 'google-sub' };
   const response = await invoke('google', intent({ phase: 'google' }));
+  assert.equal(response.headers.get('location'), helper.COLLAB_ORIGIN + helper.LINK_PATH);
   const sealed = response.headers.get('set-cookie').split('=')[1].split(';')[0];
   const advanced = await helper.readIntent(sealed); assert.equal(advanced.phase, 'maestro'); assert.equal(advanced.state, undefined); assert.equal(advanced.userId, user.id);
   const refreshed = await authOptions.callbacks.jwt({ token: { sub: user.id, iat: Date.now() } });
   assert.equal(refreshed.googleVerified, undefined);
   reset(); returnedIdentity = { provider: 'google', subject: 'other-google' };
   const denied = await invoke('google', intent({ phase: 'google' })); assert.match(denied.headers.get('location'), /AccessDenied/); assert.deepEqual(writes, []);
+});
+
+test('connected link page enters Collab without another sign-in; unlinked users keep verification and refusal UI', async () => {
+  reset();
+  let cookieReads = 0;
+  let pageIntent = null;
+  const page = load('src/app/account/link-maestro/page.tsx', {
+    'next/navigation': { redirect: url => { throw Object.assign(new Error('redirect'), { destination: url }); } },
+    'next/headers': { cookies: async () => { cookieReads++; return { get: () => undefined }; } },
+    '@/lib/session': { getCurrentUser: async () => user },
+    '@/lib/prisma': { prisma: db },
+    '@/lib/maestro-link': { ...helper, readIntent: async () => pageIntent },
+    '@/components/auth/LinkMaestro': { __esModule: true, default: 'LinkMaestro' },
+  }).default;
+  const descendants = node => Array.isArray(node) ? node.flatMap(descendants) : !node || typeof node !== 'object' ? [] :
+    [node, ...descendants(node.props?.children)];
+  for (const verified of [false, true]) {
+    pageIntent = verified ? intent({ state: undefined }) : null;
+    const nodes = descendants(await page({ searchParams: Promise.resolve({}) }));
+    assert.equal(nodes.find(n => n.type === 'LinkMaestro').props.googleVerified, verified);
+  }
+  const failed = descendants(await page({ searchParams: Promise.resolve({ error: 'AccessDenied' }) }));
+  assert.ok(failed.some(n => n.props.role === 'alert'));
+  accounts.push({ provider: 'maestro', providerAccountId: 'maestro-sub', userId: user.id });
+  cookieReads = 0;
+  for (const params of [{}, { error: 'AccessDenied' }]) {
+    await assert.rejects(page({ searchParams: Promise.resolve(params) }), { destination: '/' });
+  }
+  assert.equal(cookieReads, 0, 'completed accounts must not restart the link flow');
+  assert.deepEqual(writes, []);
 });
 test('OAuth initiation captures actual returned state in encrypted intent', async () => {
   reset(); const response = await invoke('maestro', intent({ state: undefined }), '', 'signin');
