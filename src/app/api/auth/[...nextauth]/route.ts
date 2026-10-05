@@ -84,7 +84,7 @@ async function handler(request: NextRequest, context: { params: Promise<{ nextau
         response.headers.set("Location", `${COLLAB_ORIGIN}${LINK_PATH}`);
       } else {
         response.headers.append("Set-Cookie", `${LINK_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
-        response.headers.set("Location", `${COLLAB_ORIGIN}${LINK_PATH}${maestroCompleted && completed ? "" : "?error=AccessDenied"}`);
+        response.headers.set("Location", maestroCompleted && completed ? `${COLLAB_ORIGIN}/` : `${COLLAB_ORIGIN}${LINK_PATH}?error=AccessDenied`);
       }
     }
     return response;
