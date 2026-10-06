@@ -107,7 +107,7 @@ Errors are one JSON object on stderr, with no raw remote response body. After `o
 
 ## Administrator setup
 
-From the application checkout, inspect the public definition first:
+From the application checkout, inspect the public app and scope summary first:
 
 ```sh
 node scripts/setup-cli-oauth-client.mjs

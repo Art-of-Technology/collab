@@ -27,7 +27,7 @@ export async function provision(prisma) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (process.argv.length === 2) console.log(JSON.stringify({ dryRun: true, definition }));
+  if (process.argv.length === 2) console.log(JSON.stringify({ dryRun: true, app: definition.slug, scopes }));
   else if (process.argv.length === 3 && process.argv[2] === '--apply') {
     // Plan mode above imports no Prisma or environment loader.
     let prisma;
