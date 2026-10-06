@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
+import { createServer, request } from 'node:http';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, symlinkSync, statSync } from 'node:fs';
@@ -194,7 +194,7 @@ test('timed-out mutation reports uncertain outcome after exactly one dispatch', 
   assert.equal(result.error.error, 'outcome_unknown'); assert.equal(result.stdout, ''); assert.equal(f.calls.length, 1);
 });
 
-test('actual login performs PKCE, rejects wrong state, verifies identity, stores private credentials', async t => {
+test('actual login performs PKCE, rejects malformed callbacks and wrong state, verifies identity, stores private credentials', async t => {
   let authorization, verifier;
   const f = await fixture(t, (req, res, body) => {
     if (req.url === '/api/oauth/mcp/token') {
@@ -212,17 +212,35 @@ test('actual login performs PKCE, rejects wrong state, verifies identity, stores
     assert.deepEqual(authorization.searchParams.get('scope').split(' '), ['user:read', 'workspace:read', 'workspace:write', 'projects:read', 'projects:write', 'issues:read', 'issues:write', 'context:read', 'context:write', 'prompts:read', 'knowledge:read']);
     callback = (async () => {
       const redirect = new URL(authorization.searchParams.get('redirect_uri'));
+      const malformed = await new Promise((resolve, reject) => {
+        const req = request({ hostname: redirect.hostname, port: redirect.port, path: 'http://[SYNTHETIC_PRIVATE_SENTINEL', agent: false }, res => {
+          let body = '';
+          res.setEncoding('utf8');
+          res.on('data', chunk => { body += chunk; });
+          res.on('end', () => resolve({ status: res.statusCode, body }));
+          res.on('error', reject);
+        });
+        req.on('error', reject);
+        req.end();
+      });
+      assert.deepEqual(malformed, { status: 400, body: 'Invalid callback.' });
+      assert.equal(f.calls.length, 0);
+      assert.throws(() => readFileSync(path.join(f.dir, 'default.json')), { code: 'ENOENT' });
       redirect.search = new URLSearchParams({ state: 'wrong', code: 'synthetic-code' });
       assert.equal((await fetch(redirect)).status, 400);
       redirect.searchParams.set('state', authorization.searchParams.get('state'));
       assert.equal((await fetch(redirect)).status, 200);
-    })();
+    })().catch(error => error);
   } });
-  await callback;
+  const callbackError = await callback;
   assert.equal(result.code, 0, result.stderr); assert.equal(result.data.identity.id, 'same-user');
+  assert.equal(callbackError, undefined);
+  assert.equal(f.calls.length, 2);
+  assert.throws(() => statSync(path.join(f.dir, 'default.json.lock')), { code: 'ENOENT' });
   assert.equal(authorization.searchParams.get('code_challenge_method'), 'S256'); assert.equal(authorization.searchParams.get('code_challenge'), createHash('sha256').update(verifier).digest('base64url'));
   assert.ok(!result.stdout.includes('PRIVATE_')); assert.ok(!result.stderr.includes('PRIVATE_'));
   const file = path.join(f.dir, 'default.json'), stored = JSON.parse(readFileSync(file));
+  assert.equal(stored.accessToken, 'PRIVATE_ACCESS'); assert.equal(stored.refreshToken, 'PRIVATE_REFRESH');
   assert.equal(stored.tokenWorkspace, 'workspace-one'); assert.equal(stored.userId, 'same-user');
   assert.equal(stored.workspace, 'workspace-one'); assert.equal(stored.origin, f.url); assert.equal(statSync(file).mode & 0o777, 0o600);
   assert.equal((await f.run(['auth', 'logout'], { env: { COLLAB_TOKEN: '' } })).data.serverRevocationConfirmed, false);

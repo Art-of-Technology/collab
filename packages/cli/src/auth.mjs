@@ -31,7 +31,9 @@ export async function login(options, state, save) {
   const server = createServer((req, res) => {
     res.setHeader('content-type', 'text/plain; charset=utf-8');
     res.setHeader('cache-control', 'no-store');
-    const url = new URL(req.url || '/', 'http://127.0.0.1');
+    let url;
+    try { url = new URL(req.url || '/', 'http://127.0.0.1'); }
+    catch { res.writeHead(400); res.end('Invalid callback.'); return; }
     const returnedState = url.searchParams.get('state') || '';
     const equalState = Buffer.byteLength(returnedState) === Buffer.byteLength(stateNonce) && timingSafeEqual(Buffer.from(returnedState), Buffer.from(stateNonce));
     if (settled || req.method !== 'GET' || url.pathname !== '/callback' || !equalState || url.searchParams.getAll('state').length !== 1) { res.writeHead(400); res.end('Invalid callback.'); return; }
