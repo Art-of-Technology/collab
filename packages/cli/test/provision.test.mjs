@@ -11,7 +11,8 @@ test('CLI registration creates a dedicated app transactionally and never changes
   assert.equal((await provision(prisma)).created, true);
   assert.equal(writes.length, 1); assert.equal(writes[0].oauthClient.create.clientType, 'public'); assert.equal(writes[0].oauthClient.create.tokenEndpointAuthMethod, 'none');
   assert.ok(writes[0].scopes.create.some(s => s.scope === 'context:write'));
-  assert.ok(!writes[0].scopes.create.some(s => s.scope.startsWith('secrets:')));
+  assert.deepEqual(writes[0].scopes.create.map(s => s.scope), ['user:read', 'workspace:read', 'workspace:write', 'projects:read', 'projects:write', 'issues:read', 'issues:write', 'context:read', 'context:write', 'prompts:read', 'knowledge:read']);
+  assert.equal(writes[0].oauthClient.create.clientId, 'collab-cli');
   record = { ...definition, id: 'existing', scopes: definition.scopes.map(scope => ({ scope })) };
   assert.equal((await provision(prisma)).created, false); assert.equal(writes.length, 1);
   for (const change of [{ isSystemApp: false }, { publisherId: 'other' }, { status: 'SUSPENDED' }, { scopes: [] }, { oauthClient: { ...definition.oauthClient, clientSecret: 'private' } }]) {

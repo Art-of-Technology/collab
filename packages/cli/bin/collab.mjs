@@ -44,7 +44,7 @@ async function boundedInput(file) {
   } finally { clearTimeout(timer); if (file !== '-') stream.destroy(); }
 }
 function help() {
-  return { name: 'collab', version: '0.1.0', output: 'JSON on stdout; errors on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query)].map(flagName) }])), localCommands: ['auth login [--client-id collab-cli]', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
+  return { name: 'collab', version: '0.1.0', output: 'JSON on stdout; errors on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query)].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
 }
 async function main() {
   const { words, options } = parse(process.argv.slice(2));
@@ -53,7 +53,7 @@ async function main() {
   const stateStore = store(options.profile);
   for (const key of ['workspace', 'project', 'workspace-id', 'project-id']) if (options[key] !== undefined && !/^[a-zA-Z0-9_-]+$/.test(options[key])) throw new CliError('invalid_identifier', 'Workspace and project selectors must be nonempty IDs.');
   if (name.startsWith('auth ') || name.startsWith('config ')) {
-    const localOptions = name === 'auth login' ? ['url', 'workspace', 'client-id', 'read-only'] : name === 'config set' ? ['workspace', 'project'] : [];
+    const localOptions = name === 'auth login' ? ['url', 'workspace', 'read-only'] : name === 'config set' ? ['workspace', 'project'] : [];
     allowed(options, ['profile', 'json', ...localOptions]);
     if (words.length !== 2) throw new CliError('unexpected_arguments', 'Unexpected positional arguments.');
     const state = stateStore.load();

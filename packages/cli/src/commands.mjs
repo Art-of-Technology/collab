@@ -57,5 +57,5 @@ export const commands = {
   'reports time': command('GET', 'reports/time-tracking', {}, { ...projectQuery, period: string, startDate: string, endDate: string, userId: string, groupBy: string, includeDetails: boolean }),
 };
 
-export const scopes = ['user:read', 'workspace:read', 'workspace:write', 'projects:read', 'projects:write', 'issues:read', 'issues:write', 'comments:read', 'comments:write', 'context:read', 'context:write', 'prompts:read', 'knowledge:read'];
+export const scopes = ['user:read', 'workspace:read', 'workspace:write', 'projects:read', 'projects:write', 'issues:read', 'issues:write', 'context:read', 'context:write', 'prompts:read', 'knowledge:read'];
 export const flagName = key => key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);

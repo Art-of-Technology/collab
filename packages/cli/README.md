@@ -13,7 +13,7 @@ collab projects list
 
 Login prints a browser URL. Sign in to Collab with your existing account (including linked Maestro), select a workspace and approve. The CLI uses the existing Collab public OAuth flow with S256 PKCE and a random loopback port. It does not open a browser automatically or ask for your Google/Maestro password. Remote terminals require forwarding the printed loopback callback port to the machine running the CLI.
 
-The deployment administrator must provision the dedicated `collab-cli` OAuth client first; see [administrator setup](#administrator-setup). A missing client is not fixed by substituting another application's client ID or token.
+The deployment administrator must provision the dedicated `collab-cli` OAuth client first; see [administrator setup](#administrator-setup). Login and refresh use only `collab-cli`; alternate client IDs are not supported. A missing client is not fixed by substituting another application's client ID or token.
 
 ## Agent workflow
 
@@ -84,7 +84,7 @@ collab auth refresh
 collab auth logout
 ```
 
-Refresh is explicit to avoid concurrent processes rotating the same token. Login/configuration writes are serialized by a local exclusive lock. After a crashed login, confirm no other process owns that profile before manually removing its `.lock` file.
+Refresh is explicit to avoid concurrent processes rotating the same token. It verifies the original token workspace and user while preserving the selected workspace and project. Profiles without a saved token workspace/user binding must log in again before refreshing. Login/configuration writes are serialized by a local exclusive lock. After a crashed login, confirm no other process owns that profile before manually removing its `.lock` file.
 
 Use `collab auth login --read-only` for an agent that only needs to inspect projects, issues and Notes. The browser consent lists the requested read permissions; write commands will be denied by the server.
 
@@ -115,7 +115,7 @@ node scripts/setup-cli-oauth-client.mjs
 node scripts/setup-cli-oauth-client.mjs --apply
 ```
 
-The apply operation transactionally creates only the dedicated `collab-cli` system app, its public OAuth client and scopes. Existing matching registrations are reused; conflicting registrations are refused without modification. No user tokens are minted, no account is linked and no schema migration is required. Each user still authorizes access in the browser. Existing system-app redirect policy allows dynamic loopback callback ports. `workspace:write` is required by the existing label-create endpoint; no secrets scopes are requested.
+The apply operation transactionally creates only the dedicated `collab-cli` system app, its public OAuth client and scopes. Existing matching registrations are reused; conflicting registrations are refused without modification. No user tokens are minted, no account is linked and no schema migration is required. Each user still authorizes access in the browser. Existing system-app redirect policy allows dynamic loopback callback ports. `workspace:write` is required by the existing label-create endpoint; comments use the existing `issues:read`/`issues:write` scopes, and no separate comments or secrets scopes are requested.
 
 ## Validation and release
 

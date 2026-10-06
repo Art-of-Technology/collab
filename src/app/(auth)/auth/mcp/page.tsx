@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
-import { oauthConsentPermissions } from '@/lib/apps/oauth-consent';
+import { getScopeDescription, normalizeScopes } from '@/lib/oauth-scopes';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Loader2, CheckCircle2, XCircle, Terminal, ChevronDown } from 'lucide-react';
@@ -293,7 +293,7 @@ export default function MCPAuthPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-300">Permissions requested</label>
               <div className="p-3 bg-collab-700 rounded-lg space-y-2">
-                {oauthConsentPermissions(scope).map(permission => (
+                {normalizeScopes(scope).map(getScopeDescription).map(permission => (
                   <div key={permission} className="flex items-center gap-2 text-sm text-gray-300">
                     <CheckCircle2 className="w-4 h-4 text-green-500" />
                     <span>{permission}</span>

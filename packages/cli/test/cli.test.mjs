@@ -101,6 +101,7 @@ test('invalid input, unsupported flags, empty identifiers and destructive omissi
     ['issues', 'list', '--limit', '0'], ['issues', 'list', '--limit', 'NaN'], ['issues', 'list', '--workspace', ''],
     ['projects', 'create', '--naem', 'typo'], ['notes', 'update', 'note-one', '--input', '-'],
     ['issues', 'list', '--workspace', 'a', '--workspace', 'b'], ['whoami', '--all'],
+    ['auth', 'login', '--client-id', 'collab-mcp'],
     ['notes', 'create', '--title', 'Secret', '--content', 'secret', '--type', 'CREDENTIALS'],
     ['notes', 'create', '--title', 'Personal', '--content', 'text', '--scope', 'PERSONAL'],
   ]) assert.notEqual((await f.run(args, { input: '{"authorId":"someone-else"}' })).code, 0, args.join(' '));
@@ -160,10 +161,10 @@ test('explicit refresh verifies identity before saving and sends no refresh toke
       const form = new URLSearchParams(body);
       assert.equal(form.get('grant_type'), 'refresh_token'); assert.equal(form.get('refresh_token'), 'PRIVATE_REFRESH');
       res.end(JSON.stringify({ access_token: 'PRIVATE_ROTATED', token_type: 'Bearer', expires_in: 3600, workspace_id: 'workspace-one', scope: 'issues:read' }));
-    } else res.end(JSON.stringify({ id: 'same-user' }));
+    } else res.end(JSON.stringify({ id: 'same-user', workspace: { id: 'workspace-one' } }));
   });
   const file = path.join(f.dir, 'default.json');
-  writeFileSync(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'expired', refreshToken: 'PRIVATE_REFRESH', expiresAt: 0, workspace: 'workspace-one' }), { mode: 0o600 });
+  writeFileSync(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'expired', refreshToken: 'PRIVATE_REFRESH', expiresAt: 0, workspace: 'workspace-one', tokenWorkspace: 'workspace-one', userId: 'same-user' }), { mode: 0o600 });
   assert.equal((await f.run(['whoami'], { env: { COLLAB_TOKEN: '' } })).error.error, 'token_expired');
   const result = await f.run(['auth', 'refresh'], { env: { COLLAB_TOKEN: '' } });
   assert.equal(result.code, 0); assert.ok(!result.stdout.includes('PRIVATE_')); assert.equal(f.calls.length, 2);
@@ -177,6 +178,8 @@ test('read-only login requests no write scopes and denial stores no credentials'
     const match = output.match(/http:\/\/127\.0\.0\.1:\d+\/auth\/mcp\?[^\s]+/); if (!match) return;
     const authorization = new URL(match[0]);
     assert.ok(authorization.searchParams.get('scope').split(' ').every(scope => scope.endsWith(':read')));
+    assert.ok(!authorization.searchParams.get('scope').split(' ').includes('comments:read'));
+    assert.equal(authorization.searchParams.get('client_id'), 'collab-cli');
     const redirect = new URL(authorization.searchParams.get('redirect_uri'));
     redirect.search = new URLSearchParams({ error: 'access_denied', state: authorization.searchParams.get('state') });
     callback = fetch(redirect);
@@ -199,13 +202,14 @@ test('actual login performs PKCE, rejects wrong state, verifies identity, stores
       assert.equal(form.get('grant_type'), 'authorization_code'); assert.equal(form.get('code'), 'synthetic-code'); assert.equal(form.get('client_id'), 'collab-cli');
       assert.equal(form.get('redirect_uri'), authorization.searchParams.get('redirect_uri'));
       res.end(JSON.stringify({ access_token: 'PRIVATE_ACCESS', refresh_token: 'PRIVATE_REFRESH', token_type: 'Bearer', expires_in: 3600, workspace_id: 'workspace-one', scope: 'issues:read context:write' }));
-    } else res.end(JSON.stringify({ id: 'same-user', name: 'Synthetic user' }));
+    } else res.end(JSON.stringify({ id: 'same-user', name: 'Synthetic user', workspace: { id: 'workspace-one' } }));
   });
   let callback;
   const result = await f.run(['auth', 'login'], { env: { COLLAB_TOKEN: '' }, stderrCallback: output => {
     if (callback) return;
     const match = output.match(/http:\/\/127\.0\.0\.1:\d+\/auth\/mcp\?[^\s]+/); if (!match) return;
     authorization = new URL(match[0]);
+    assert.deepEqual(authorization.searchParams.get('scope').split(' '), ['user:read', 'workspace:read', 'workspace:write', 'projects:read', 'projects:write', 'issues:read', 'issues:write', 'context:read', 'context:write', 'prompts:read', 'knowledge:read']);
     callback = (async () => {
       const redirect = new URL(authorization.searchParams.get('redirect_uri'));
       redirect.search = new URLSearchParams({ state: 'wrong', code: 'synthetic-code' });
@@ -219,7 +223,93 @@ test('actual login performs PKCE, rejects wrong state, verifies identity, stores
   assert.equal(authorization.searchParams.get('code_challenge_method'), 'S256'); assert.equal(authorization.searchParams.get('code_challenge'), createHash('sha256').update(verifier).digest('base64url'));
   assert.ok(!result.stdout.includes('PRIVATE_')); assert.ok(!result.stderr.includes('PRIVATE_'));
   const file = path.join(f.dir, 'default.json'), stored = JSON.parse(readFileSync(file));
+  assert.equal(stored.tokenWorkspace, 'workspace-one'); assert.equal(stored.userId, 'same-user');
   assert.equal(stored.workspace, 'workspace-one'); assert.equal(stored.origin, f.url); assert.equal(statSync(file).mode & 0o777, 0o600);
   assert.equal((await f.run(['auth', 'logout'], { env: { COLLAB_TOKEN: '' } })).data.serverRevocationConfirmed, false);
   assert.deepEqual(JSON.parse(readFileSync(file)), {});
+});
+
+
+test('refresh retains a validated workspace and project selection while rotating the original token', async t => {
+  let rotated = false;
+  const f = await fixture(t, (req, res, body) => {
+    if (req.url === '/api/oauth/mcp/token') {
+      const form = new URLSearchParams(body);
+      assert.equal(form.get('client_id'), 'collab-cli');
+      assert.equal(form.get('refresh_token'), 'PRIVATE_REFRESH');
+      rotated = true;
+      res.end(JSON.stringify({ access_token: 'PRIVATE_ROTATED', refresh_token: 'PRIVATE_NEW_REFRESH', token_type: 'Bearer', expires_in: 3600, workspace_id: 'workspace-a', scope: 'user:read workspace:read projects:read issues:read' }));
+      return;
+    }
+    assert.equal(req.headers.authorization, `Bearer ${rotated ? 'PRIVATE_ROTATED' : 'PRIVATE_ACCESS'}`);
+    if (req.url === '/api/apps/auth/user/me') {
+      res.end(JSON.stringify({ id: 'same-user', workspace: { id: 'workspace-a' } }));
+    } else if (req.url === '/api/apps/auth/workspace?workspaceId=workspace-b') {
+      res.end(JSON.stringify({ id: 'workspace-b' }));
+    } else if (req.url === '/api/apps/auth/projects/project-b?workspaceId=workspace-b') {
+      res.end(JSON.stringify({ id: 'project-b', workspaceId: 'workspace-b' }));
+    } else {
+      assert.equal(req.url, '/api/apps/auth/issues?workspaceId=workspace-b&projectId=project-b');
+      assert.equal(rotated, true);
+      res.end(JSON.stringify({ issues: [{ id: 'issue-b' }] }));
+    }
+  });
+  const file = path.join(f.dir, 'default.json'), env = { COLLAB_TOKEN: '' };
+  writeFileSync(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'PRIVATE_ACCESS', refreshToken: 'PRIVATE_REFRESH', expiresAt: Date.now() + 60000, tokenWorkspace: 'workspace-a', userId: 'same-user', workspace: 'workspace-a', project: 'project-a' }), { mode: 0o600 });
+  for (const args of [['config', 'set', '--workspace', 'workspace-b', '--project', 'project-b'], ['auth', 'refresh'], ['issues', 'list']]) {
+    const result = await f.run(args, { env });
+    assert.equal(result.code, 0, result.stderr);
+    assert.ok(!result.stdout.includes('PRIVATE_')); assert.ok(!result.stderr.includes('PRIVATE_'));
+    if (args[0] === 'issues') assert.deepEqual(result.data.issues, [{ id: 'issue-b' }]);
+  }
+  const stored = JSON.parse(readFileSync(file));
+  assert.equal(stored.tokenWorkspace, 'workspace-a'); assert.equal(stored.userId, 'same-user');
+  assert.equal(stored.workspace, 'workspace-b'); assert.equal(stored.project, 'project-b');
+  assert.equal(stored.accessToken, 'PRIVATE_ROTATED'); assert.equal(stored.refreshToken, 'PRIVATE_NEW_REFRESH');
+  assert.equal(f.calls.length, 5);
+});
+
+test('refresh rejects invalid local bindings before dispatch and refuses changed remote bindings without saving', async t => {
+  for (const [change, responseWorkspace, identity, expected, dispatches] of [
+    [{ clientId: 'collab-mcp' }, 'workspace-a', {}, 'client_mismatch', 0],
+    [{ tokenWorkspace: undefined }, 'workspace-a', {}, 'invalid_credentials', 0],
+    [{ userId: undefined }, 'workspace-a', {}, 'invalid_credentials', 0],
+    [{ refreshToken: 'PRIVATE_ INVALID' }, 'workspace-a', {}, 'invalid_credentials', 0],
+    [{ origin: 'https://example.test/path' }, 'workspace-a', {}, 'invalid_origin', 0],
+    [{}, 'workspace-b', {}, 'workspace_mismatch', 1],
+    [{}, 'workspace-a', { id: 'same-user', workspace: { id: 'workspace-b' } }, 'workspace_mismatch', 2],
+    [{}, 'workspace-a', { id: 'other-user', workspace: { id: 'workspace-a' } }, 'identity_mismatch', 2],
+    [{}, 'workspace-a', { workspace: { id: 'workspace-a' } }, 'invalid_identity', 2],
+  ]) {
+    const f = await fixture(t, (req, res) => res.end(JSON.stringify(req.url === '/api/oauth/mcp/token'
+      ? { access_token: 'PRIVATE_ROTATED', token_type: 'Bearer', expires_in: 3600, workspace_id: responseWorkspace }
+      : identity)));
+    const file = path.join(f.dir, 'default.json');
+    const original = JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'PRIVATE_ACCESS', refreshToken: 'PRIVATE_REFRESH', tokenWorkspace: 'workspace-a', userId: 'same-user', workspace: 'workspace-b', project: 'project-b', ...change });
+    writeFileSync(file, original, { mode: 0o600 });
+    const result = await f.run(['auth', 'refresh'], { env: { COLLAB_TOKEN: '' } });
+    assert.notEqual(result.code, 0); assert.equal(result.error.error, expected);
+    assert.equal(result.stdout, ''); assert.ok(!result.stderr.includes('PRIVATE_'));
+    assert.equal(f.calls.length, dispatches); assert.equal(readFileSync(file, 'utf8'), original);
+  }
+});
+
+test('login refuses token workspace and identity workspace mismatches without saving credentials', async t => {
+  for (const [workspace, identityWorkspace, dispatches] of [['workspace-b', 'workspace-b', 1], ['workspace-a', 'workspace-b', 2]]) {
+    const f = await fixture(t, (req, res) => res.end(JSON.stringify(req.url === '/api/oauth/mcp/token'
+      ? { access_token: 'PRIVATE_ACCESS', refresh_token: 'PRIVATE_REFRESH', token_type: 'Bearer', expires_in: 3600, workspace_id: workspace }
+      : { id: 'same-user', workspace: { id: identityWorkspace } })));
+    let callback;
+    const result = await f.run(['auth', 'login', '--workspace', 'workspace-a'], { env: { COLLAB_TOKEN: '' }, stderrCallback: output => {
+      if (callback) return;
+      const match = output.match(/http:\/\/127\.0\.0\.1:\d+\/auth\/mcp\?[^\s]+/); if (!match) return;
+      const authorization = new URL(match[0]), redirect = new URL(authorization.searchParams.get('redirect_uri'));
+      redirect.search = new URLSearchParams({ state: authorization.searchParams.get('state'), code: 'synthetic-code' });
+      callback = fetch(redirect);
+    } });
+    await callback;
+    assert.equal(result.code, 3); assert.match(result.stderr, /"error":"workspace_mismatch"/);
+    assert.equal(result.stdout, ''); assert.ok(!result.stderr.includes('PRIVATE_')); assert.equal(f.calls.length, dispatches);
+    assert.throws(() => readFileSync(path.join(f.dir, 'default.json')), { code: 'ENOENT' });
+  }
 });

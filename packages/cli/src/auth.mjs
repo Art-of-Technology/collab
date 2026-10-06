@@ -9,18 +9,20 @@ function tokens(data, previous = {}) {
     throw new CliError('invalid_token_response', 'Login returned an invalid token response. Credentials were not saved.', 3);
   }
   if (data.refresh_token !== undefined && (typeof data.refresh_token !== 'string' || !data.refresh_token || /\s/.test(data.refresh_token))) throw new CliError('invalid_token_response', 'Invalid refresh token. Credentials were not saved.', 3);
-  return { ...previous, accessToken: data.access_token, refreshToken: data.refresh_token || previous.refreshToken, expiresAt: Date.now() + data.expires_in * 1000, workspace: data.workspace_id, scopes: typeof data.scope === 'string' ? data.scope.split(' ').filter(Boolean) : [] };
+  return { ...previous, accessToken: data.access_token, refreshToken: data.refresh_token || previous.refreshToken, expiresAt: Date.now() + data.expires_in * 1000, tokenWorkspace: data.workspace_id, workspace: previous.workspace ?? data.workspace_id, scopes: typeof data.scope === 'string' ? data.scope.split(' ').filter(Boolean) : [] };
 }
 
-async function verifyIdentity(base, token) {
+async function verifyIdentity(base, token, workspace, userId) {
   const identity = await request(base, '/api/apps/auth/user/me', { token });
   if (!identity || typeof identity.id !== 'string' || !identity.id) throw new CliError('invalid_identity', 'Login identity could not be verified. Credentials were not saved.', 3);
+  if (identity.workspace?.id !== workspace) throw new CliError('workspace_mismatch', 'Token identity belongs to another workspace. Credentials were not saved.', 3);
+  if (userId !== undefined && identity.id !== userId) throw new CliError('identity_mismatch', 'Refresh changed the token user. Credentials were not saved.', 3);
   return identity;
 }
 
 export async function login(options, state, save) {
   const base = origin(options.url || process.env.COLLAB_URL || state.origin || 'https://collab.weez.boo');
-  const clientId = options['client-id'] || 'collab-cli';
+  const clientId = 'collab-cli';
   const verifier = randomBytes(32).toString('base64url');
   const stateNonce = randomBytes(32).toString('base64url');
   let resolveCode, rejectCode, settled = false;
@@ -55,8 +57,9 @@ export async function login(options, state, save) {
     const code = await codePromise;
     const data = await request(base, '/api/oauth/mcp/token', { method: 'POST', form: true, body: { grant_type: 'authorization_code', client_id: clientId, redirect_uri: redirect, code, code_verifier: verifier } });
     const next = tokens(data);
-    const identity = await verifyIdentity(base, next.accessToken);
-    save({ ...next, origin: base, clientId });
+    if (options.workspace && next.tokenWorkspace !== options.workspace) throw new CliError('workspace_mismatch', 'Login returned another workspace. Credentials were not saved.', 3);
+    const identity = await verifyIdentity(base, next.accessToken, next.tokenWorkspace);
+    save({ ...next, origin: base, clientId, userId: identity.id });
     return { authenticated: true, origin: base, workspace: next.workspace, identity };
   } finally {
     clearTimeout(timer); process.removeListener('SIGINT', interrupt); process.removeListener('SIGTERM', interrupt);
@@ -66,10 +69,13 @@ export async function login(options, state, save) {
 
 export async function refresh(state, save) {
   if (!state.origin || !state.refreshToken || !state.clientId) throw new CliError('login_required', 'No refreshable login in this profile.', 3);
-  const data = await request(state.origin, '/api/oauth/mcp/token', { method: 'POST', form: true, body: { grant_type: 'refresh_token', client_id: state.clientId, refresh_token: state.refreshToken } });
+  if (state.clientId !== 'collab-cli') throw new CliError('client_mismatch', 'This profile is not a Collab CLI login. Run collab auth login.', 3);
+  if (typeof state.refreshToken !== 'string' || /[\s\x00-\x1f]/.test(state.refreshToken) || ![state.tokenWorkspace, state.userId].every(value => typeof value === 'string' && value)) throw new CliError('invalid_credentials', 'Token workspace or user binding is missing or invalid. Run collab auth login.', 3);
+  const base = origin(state.origin);
+  const data = await request(base, '/api/oauth/mcp/token', { method: 'POST', form: true, body: { grant_type: 'refresh_token', client_id: 'collab-cli', refresh_token: state.refreshToken } });
   const next = tokens(data, state);
-  if (next.workspace !== state.workspace) throw new CliError('workspace_mismatch', 'Refresh changed the token workspace. Credentials were not saved.', 3);
-  await verifyIdentity(state.origin, next.accessToken);
+  if (next.tokenWorkspace !== state.tokenWorkspace) throw new CliError('workspace_mismatch', 'Refresh changed the token workspace. Credentials were not saved.', 3);
+  await verifyIdentity(base, next.accessToken, next.tokenWorkspace, state.userId);
   save(next);
   return { refreshed: true, origin: state.origin, workspace: next.workspace };
 }
