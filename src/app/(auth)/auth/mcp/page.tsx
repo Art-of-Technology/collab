@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
+import { getScopeDescription, normalizeScopes } from '@/lib/oauth-scopes';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Loader2, CheckCircle2, XCircle, Terminal, ChevronDown } from 'lucide-react';
@@ -154,7 +155,7 @@ export default function MCPAuthPage() {
               <div className="mx-auto mb-4 w-12 h-12 bg-collab-700 rounded-xl flex items-center justify-center">
                 <Terminal className="w-6 h-6 text-green-500" />
               </div>
-              <CardTitle className="text-white">Connect to Collab MCP</CardTitle>
+              <CardTitle className="text-white">Connect to Collab</CardTitle>
               <CardDescription className="text-gray-400">
                 Sign in to authorize access to your workspace
               </CardDescription>
@@ -236,7 +237,7 @@ export default function MCPAuthPage() {
             <div className="mx-auto mb-4 w-12 h-12 bg-collab-700 rounded-xl flex items-center justify-center">
               <Terminal className="w-6 h-6 text-green-500" />
             </div>
-            <CardTitle className="text-white">Authorize Collab MCP</CardTitle>
+            <CardTitle className="text-white">Authorize {clientId === 'collab-cli' ? 'Collab CLI' : 'Collab MCP'}</CardTitle>
             <CardDescription className="text-gray-400">
               Connect your AI assistant to Collab
             </CardDescription>
@@ -292,22 +293,12 @@ export default function MCPAuthPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-300">Permissions requested</label>
               <div className="p-3 bg-collab-700 rounded-lg space-y-2">
-                <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  <span>Read and write issues</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  <span>Read and write projects</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  <span>Read workspace information</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  <span>Read and write comments</span>
-                </div>
+                {normalizeScopes(scope).map(getScopeDescription).map(permission => (
+                  <div key={permission} className="flex items-center gap-2 text-sm text-gray-300">
+                    <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    <span>{permission}</span>
+                  </div>
+                ))}
               </div>
             </div>
 

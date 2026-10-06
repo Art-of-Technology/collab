@@ -1,0 +1,20 @@
+name: Collab CLI
+on:
+  pull_request:
+    paths: ['packages/cli/**', 'scripts/setup-cli-oauth-client.mjs', '.github/workflows/cli.yml']
+  push:
+    branches: [main]
+    paths: ['packages/cli/**', 'scripts/setup-cli-oauth-client.mjs', '.github/workflows/cli.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm test --prefix packages/cli
+      - run: npm pack ./packages/cli --dry-run

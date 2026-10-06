@@ -243,12 +243,16 @@ export function isSupportedScope(scope: string): scope is SupportedScope {
  */
 export function getScopeDescription(scope: string): string {
   const descriptions: Record<string, string> = {
-    'issues:read': 'Read access to issues',
-    'issues:write': 'Create and modify issues',
+    'user:read': 'Read your Collab profile',
+    'user:write': 'Update your Collab profile',
+    'projects:read': 'Read projects',
+    'projects:write': 'Create and update projects',
+    'issues:read': 'Read issues, comments, relations and work logs',
+    'issues:write': 'Create, update and delete issues, relations and work logs, and add comments',
     'posts:read': 'Read access to posts',
     'posts:write': 'Create and modify posts',
-    'workspace:read': 'Read access to workspace information',
-    'workspace:write': 'Modify workspace settings',
+    'workspace:read': 'Read workspace information, members, labels, views and reports',
+    'workspace:write': 'Update workspace information and create labels',
     'profile:read': 'Read access to user profiles',
     'profile:write': 'Modify user profiles',
     'comments:read': 'Read access to comments',
@@ -256,14 +260,14 @@ export function getScopeDescription(scope: string): string {
     'leave:read': 'Read access to leave requests',
     'leave:write': 'Create and modify leave requests',
     // Context & Knowledge System (Phase 6)
-    'context:read': 'Read context documents and knowledge base articles',
-    'context:write': 'Create and modify context documents',
-    'knowledge:read': 'Access knowledge base and documentation',
-    'prompts:read': 'Read AI system prompts and context',
+    'context:read': 'Read shared Notes and project context',
+    'context:write': 'Create and update shared Notes',
+    'knowledge:read': 'Read shared knowledge articles',
+    'prompts:read': 'Read AI system prompts, context and knowledge',
     'secrets:read': 'Read encrypted secrets (requires explicit grant)',
   };
 
-  return descriptions[scope] || `Access to ${scope}`;
+  return Object.hasOwn(descriptions, scope) ? descriptions[scope] : `Requested permission: ${scope}`;
 }
 
 /**

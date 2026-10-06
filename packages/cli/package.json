@@ -1,0 +1,12 @@
+{
+  "name": "@art-of-technology/collab-cli",
+  "version": "0.1.0",
+  "description": "Collab projects, issues and Notes for people and AI agents",
+  "type": "module",
+  "bin": { "collab": "bin/collab.mjs" },
+  "files": ["bin", "src", "README.md"],
+  "engines": { "node": ">=22" },
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "license": "Apache-2.0",
+  "repository": { "type": "git", "url": "https://github.com/Art-of-Technology/collab.git", "directory": "packages/cli" }
+}
