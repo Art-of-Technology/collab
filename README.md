@@ -21,6 +21,8 @@
 </div>
 
 <!-- TABLE OF CONTENTS -->
+For project, issue and Notes automation, see the [Collab CLI and agent workflow](packages/cli/README.md).
+
 <details>
   <summary>Table of Contents</summary>
   <ol>

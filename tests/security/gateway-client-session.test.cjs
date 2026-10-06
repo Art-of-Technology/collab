@@ -28,6 +28,7 @@ function fixture(mode = 'gateway') {
   const nextAuthReact = { signIn: async (...args) => state.signin.push(args), signOut: async () => { state.signout++; return state.signoutResult; }, useSession: () => ({ status: state.sessionStatus ?? 'authenticated', data: { user: { id: 'actor' } } }), SessionProvider: 'NextAuthSessionProvider' };
   let hookIndex = 0;
   const deps = {
+    '@/lib/apps/oauth-consent': load('src/lib/apps/oauth-consent.ts'),
     'react/jsx-runtime': jsx,
     react: { useState: v => { const i = hookIndex++; return [v, x => { state.hookValues[i] = x; }]; }, useEffect() {}, useMemo: fn => fn() },
     'next-auth/react': nextAuthReact,
