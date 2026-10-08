@@ -70,6 +70,11 @@ function appNotesHarness() {
       decryptVariables: (...args) => { state.decryptions++; return secrets.decryptVariables(...args); },
     },
   };
+  const searchQuery = load('src/lib/agent-search-query.ts', { zod: require('zod') }, { Buffer });
+  deps['@/lib/agent-search-query'] = searchQuery;
+  deps['@/lib/agent-project-context'] = load('src/lib/agent-project-context.ts', {
+    ...deps, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), './agent-search-query': searchQuery,
+  }, { Buffer });
   const routes = new Map();
   async function call(file, method = 'GET', id = 'note', body, query = '', authenticated = true) {
     if (!routes.has(file)) routes.set(file, load('src/app/api/apps/auth/' + file + '/route.ts', deps, { URL, console }));
