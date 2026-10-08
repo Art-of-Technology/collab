@@ -1,8 +1,11 @@
 # Agent search API
 
 `GET /api/apps/auth/search?query=release+blockers` searches the installation's
-current workspace. The API uses the existing app bearer token. Issue and activity
-search require `issues:read`; Note search requires `context:read`. Searching all
+current workspace by default. System apps can select an accessible workspace with
+`workspace` (slug) or `workspaceId`; a nonempty `workspace` takes precedence.
+The existing auth middleware authorizes these selectors before search validation;
+non-system apps cannot use them. The API uses the existing app bearer token.
+Issue and activity search require `issues:read`; Note search requires `context:read`. Searching all
 types requires both. Existing workspace membership and record policies are checked
 before retrieval and again before returning content.
 
@@ -23,9 +26,12 @@ as semantic. Exact, keyword and fuzzy modes make no embedding or Qdrant requests
 ## Filters and limits
 
 `type` is `all`, `issue`, `note` or `activity`. Optional filters are `projectId`,
-`status` (status ID, current name or legacy value), `assigneeId`, `after` and
-`before` (inclusive ISO timestamps). Dates refer to issue/Note `updatedAt` and
-activity `createdAt`. Status and assignee filter issues and their activity;
+`status`, `assigneeId`, `after` and `before` (inclusive ISO timestamps).
+`status` matches the current project status ID or case-insensitive name. Only when
+that relation is absent does it match the case-sensitive legacy `statusValue`,
+falling back to legacy `status` when `statusValue` is null or empty.
+Dates refer to issue/Note `updatedAt` and activity `createdAt`; recent activity on
+an older issue remains eligible. Status and assignee filter issues and their activity;
 with either filter, an `all` search excludes Notes. Combining these filters with
 `type=note` is rejected.
 
@@ -39,8 +45,10 @@ is capped using UTF-8 bytes as a conservative token upper bound for byte-based
 model tokenizers. `metadata.budget` reports this estimator and truncation. An
 insufficient budget returns `422 budget_too_small` instead of silently losing the
 first result. Titles and excerpts are capped at 300 and 1200 characters; fetch the
-source record for full content. Scopes over 50,000 candidate records return
-`422 scope_too_large`; narrow by project, type or date.
+source record for full content. Scopes over 50,000 candidate records across the
+requested types return `422 scope_too_large`; narrow by project, type or date.
+Dates apply before this limit. For activity, the limit counts matching events,
+not the authorized parent issues checked to find them.
 
 Results contain source `id`, `type`, `projectId`, workspace-relative `url`,
 `updatedAt`, `title`, `excerpt`, `matchType` and `score`. Issues also include their
@@ -86,5 +94,8 @@ Run `npm run test:search` with PostgreSQL binaries (`pg_config`, `initdb`, `pg_c
 installed. The tests create and close their own temporary socket-only database;
 they do not use `DATABASE_URL`. They execute real PostgreSQL queries, real HTTP
 clients against local fixtures, and the authenticated API with executable record
-permission predicates. `npm run test:security` includes the search authorization
-and vector tests alongside existing security regressions.
+permission predicates. The PostgreSQL regressions cover 50,000 IDs per content
+type and activity retrieval across 50,000 authorized parents, including global
+ranking and pagination beyond Prisma's bind-parameter limit.
+`npm run test:security` includes the search authorization and vector tests alongside
+existing security regressions.
