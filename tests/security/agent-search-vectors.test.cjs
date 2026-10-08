@@ -14,12 +14,13 @@ const documents = [
 
 test('search vectors: real HTTP clients verify provenance, freshness and nonzero coverage before ranking', async t => {
   const requests = [];
-  let points = [], size = 3, fail = false, queryVector = [1, 0, 0];
+  let points = [], size = 3, fail = false, hang = false, queryVector = [1, 0, 0];
   const server = createServer(async (request, response) => {
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);
     const body = chunks.length ? JSON.parse(Buffer.concat(chunks)) : null;
     requests.push({ method: request.method, url: request.url, body });
+    if (hang) return;
     response.setHeader('content-type', 'application/json');
     if (fail) { response.writeHead(503); response.end('{}'); return; }
     if (request.url === '/embeddings') {
@@ -49,7 +50,7 @@ test('search vectors: real HTTP clients verify provenance, freshness and nonzero
     updatedAt: date.toISOString(), createdAt: date.toISOString(), embeddingModel: 'fixture-model',
   } });
   const reset = () => {
-    requests.length = 0; fail = false; size = 3; queryVector = [1, 0, 0];
+    requests.length = 0; fail = false; hang = false; size = 3; queryVector = [1, 0, 0];
     points = documents.map((d, i) => point(d, [[1, 0, 0], [0, 1, 0], [0.9, 0.1, 0], [0.8, 0.2, 0]][i]));
   };
 
@@ -108,6 +109,12 @@ test('search vectors: real HTTP clients verify provenance, freshness and nonzero
     const result = await vectors.searchVectors('query', documents);
     assert.equal(result.coverage.reason, 'invalid_query_embedding');
     assert.equal(result.results.length, 0);
+  });
+  await t.test('a stalled provider has a bounded timeout and exposes no invented coverage', { timeout: 8000 }, async () => {
+    reset(); hang = true;
+    const result = await vectors.searchVectors('query', documents);
+    assert.equal(result.coverage.reason, 'provider_unavailable');
+    assert.equal(result.coverage.ready, null);
   });
 });
 
