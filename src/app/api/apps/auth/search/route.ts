@@ -13,7 +13,7 @@ export const GET = withAppAuth(async (request: NextRequest, context) => {
     return NextResponse.json(await searchProjectContent(context, query.data));
   } catch (error) {
     if (error instanceof SearchError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
-    console.error('Agent search failed');
+    console.error('Agent search failed', error);
     return NextResponse.json({ error: 'search_failed', error_description: 'Search is temporarily unavailable' }, { status: 503 });
   }
 }, { requiredScopes: ['issues:read', 'context:read'], scopeMode: 'any' });

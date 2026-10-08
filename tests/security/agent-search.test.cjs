@@ -1,5 +1,19 @@
 const { test, assert, load } = require('./helpers.cjs');
 
+test('unexpected search failures retain server diagnostics and keep the client response generic', async () => {
+  const failure = new Error('synthetic pool exhaustion');
+  const logged = [];
+  const query = load('src/lib/agent-search-query.ts', { zod: require('zod') }, { Buffer });
+  const route = load('src/app/api/apps/auth/search/route.ts', {
+    'next/server': { NextResponse: Response }, '@/lib/apps/auth-middleware': { withAppAuth: handler => handler },
+    '@/lib/agent-search-query': query, '@/lib/agent-search': { searchProjectContent: async () => { throw failure; } },
+  }, { URL, console: { error: (...args) => logged.push(args) } });
+  const response = await route.GET(new Request('https://example.test/api/apps/auth/search?query=release'), {});
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: 'search_failed', error_description: 'Search is temporarily unavailable' });
+  assert.equal(logged[0][1], failure);
+});
+
 // Execute the real permission predicates; reject unsupported fixture operators.
 function matches(row, where) {
   return Object.entries(where).every(([key, value]) => {
