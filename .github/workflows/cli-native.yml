@@ -68,8 +68,9 @@ jobs:
           fi
           curl --fail --silent --show-error --location https://raw.githubusercontent.com/oven-sh/bun/bun-v1.3.13/LICENSE.md -o "stage/collab-$PLATFORM/BUN-LICENSE.md"
           if [ "$RUNNER_OS" = Windows ]; then
+            # PowerShell 7 writes slash-separated ZIP entries required by the installer.
             # shellcheck disable=SC2016 # PowerShell expands its own environment variables.
-            powershell -NoProfile -Command 'Compress-Archive -Path "stage/collab-$env:PLATFORM" -DestinationPath "downloads/collab-$env:PLATFORM.zip"'
+            pwsh -NoProfile -Command 'Compress-Archive -Path "stage/collab-$env:PLATFORM" -DestinationPath "downloads/collab-$env:PLATFORM.zip"'
           else
             tar -czf "downloads/collab-$PLATFORM.tar.gz" -C stage "collab-$PLATFORM"
           fi
