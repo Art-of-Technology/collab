@@ -102,7 +102,6 @@ export default function DocsPage() {
                 Bring your projects, issues, and shared Notes into the tools you already use. One CLI for you and your coding agents.
               </p>
               <div className="mt-6 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                <span className="rounded-full border border-border px-3 py-1">Node.js 22+</span>
                 <span className="rounded-full border border-border px-3 py-1">JSON output</span>
                 <span className="rounded-full border border-border px-3 py-1">No runtime dependencies</span>
               </div>
