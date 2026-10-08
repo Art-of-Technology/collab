@@ -39,7 +39,7 @@ function harness() {
   const access = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: db }, '@/lib/issue-finder': finder });
   const queryModule = load('src/lib/agent-search-query.ts', { zod: require('zod') }, { Buffer });
   const dependencies = { '@/lib/prisma': { prisma: db }, '@/lib/issue-finder': finder, '@/lib/secrets/access': access,
-    '@/lib/oauth-scopes': scopes, '@/lib/html-sanitizer': { stripHtmlToPlainText: text => text.replace(/<[^>]*>/g, '') } };
+    '@/lib/oauth-scopes': scopes, '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts') };
   const service = load('src/lib/agent-project-context.ts', { ...dependencies, zod: require('zod'), './agent-search-query': queryModule }, { Buffer });
   const auth = load('src/lib/apps/auth-middleware.ts', { 'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma: db },
     '@/lib/oauth-scopes': scopes, '@/lib/apps/crypto': { decryptToken: async () => 'test-token' } }, { Buffer, URL, console });

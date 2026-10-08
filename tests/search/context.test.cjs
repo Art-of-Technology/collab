@@ -49,7 +49,7 @@ test('project context uses the real schema and PostgreSQL above the bind limit w
   const query = load('src/lib/agent-search-query.ts', { zod: require('zod') }, { Buffer });
   const service = load('src/lib/agent-project-context.ts', { '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder,
     '@/lib/secrets/access': access, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), zod: require('zod'),
-    '@/lib/html-sanitizer': { stripHtmlToPlainText: text => text.replace(/<[^>]*>/g, '') }, './agent-search-query': query }, { Buffer });
+    '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts'), './agent-search-query': query }, { Buffer });
   const context = { user: { id: 'reader' }, workspace: { id: 'w', slug: 'workspace' }, token: { scopes: ['issues:read', 'context:read'] } };
   const start = performance.now();
   const options = service.contextOptionsSchema.parse({ projectId: 'p', since: '2025-01-01T00:00:00Z', limit: 1 });
