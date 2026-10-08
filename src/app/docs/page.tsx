@@ -113,7 +113,7 @@ export default function DocsPage() {
                 </div>
                 <details className="mt-4">
                   <summary className="cursor-pointer font-medium">Install from a package file</summary>
-                  <TerminalBlock code={'# Package it from a reviewed repository checkout\nnpm pack ./packages/cli\n# Install the .tgz file printed by npm pack\nnpm install --global ./art-of-technology-collab-cli-0.1.0.tgz'} />
+                  <TerminalBlock code={'# Package it from a reviewed repository checkout\nCLI_TARBALL=$(npm pack ./packages/cli --silent)\n# Install the .tgz file produced by npm pack\nnpm install --global "./$CLI_TARBALL"'} />
                 </details>
               </section>
 
