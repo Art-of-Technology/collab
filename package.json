@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run test:security",
     "test:security": "node --test --test-concurrency=1 tests/security/*.test.cjs",
+    "test:search": "node --test --test-concurrency=1 tests/security/agent-search*.test.cjs tests/search/*.test.cjs",
     "prod": "cross-env NODE_ENV=production next start",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",

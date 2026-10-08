@@ -1,0 +1,254 @@
+TAP version 13
+# Subtest: lexical search executes against PostgreSQL: exact, full-text, fuzzy, isolation and bounded query inputs
+    # Subtest: exact keys are case-insensitive and prioritize the identifier
+    ok 1 - exact keys are case-insensitive and prioritize the identifier
+      ---
+      duration_ms: 22.713834
+      type: 'test'
+      ...
+    # Subtest: full-text matches words, phrases and OR while excluding unauthorized IDs
+    ok 2 - full-text matches words, phrases and OR while excluding unauthorized IDs
+      ---
+      duration_ms: 7.551541
+      type: 'test'
+      ...
+    # Subtest: fuzzy handles misspellings that keyword search misses
+    ok 3 - fuzzy handles misspellings that keyword search misses
+      ---
+      duration_ms: 2.203625
+      type: 'test'
+      ...
+    # Subtest: user input remains a value, including SQL punctuation and empty lexemes
+    ok 4 - user input remains a value, including SQL punctuation and empty lexemes
+      ---
+      duration_ms: 4.21
+      type: 'test'
+      ...
+    # Subtest: record local query timings on a 2500-issue corpus without treating them as live CLI latency
+    ok 5 - record local query timings on a 2500-issue corpus without treating them as live CLI latency
+      ---
+      duration_ms: 469.772666
+      type: 'test'
+      ...
+    # Subtest: all lexical modes accept 50000 issue IDs with exact-first global ranking
+    not ok 6 - all lexical modes accept 50000 issue IDs with exact-first global ranking
+      ---
+      duration_ms: 52.2525
+      type: 'test'
+      location: '/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:122:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        
+        Invalid `prisma.$queryRaw()` invocation:
+        
+        
+        Assertion violation on the database: `too many bind variables in prepared statement, expected maximum of 32767, received 50005`
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        ei.handleRequestError (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:7268)
+        ei.handleAndLogRequestError (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:6593)
+        ei.request (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:6300)
+        async a (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:130:9551)
+        async Object.searchLexical (evalmachine.<anonymous>:50:18)
+        async TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:124:24)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:122:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: all lexical modes accept 50000 note IDs with exact-first global ranking
+    not ok 7 - all lexical modes accept 50000 note IDs with exact-first global ranking
+      ---
+      duration_ms: 35.594167
+      type: 'test'
+      location: '/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:122:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        
+        Invalid `prisma.$queryRaw()` invocation:
+        
+        
+        Assertion violation on the database: `too many bind variables in prepared statement, expected maximum of 32767, received 50005`
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        ei.handleRequestError (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:7268)
+        ei.handleAndLogRequestError (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:6593)
+        ei.request (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:6300)
+        async a (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:130:9551)
+        async Object.searchLexical (evalmachine.<anonymous>:50:18)
+        async TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:124:24)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:122:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: all lexical modes accept 50000 activity IDs with exact-first global ranking
+    not ok 8 - all lexical modes accept 50000 activity IDs with exact-first global ranking
+      ---
+      duration_ms: 36.242834
+      type: 'test'
+      location: '/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:122:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        
+        Invalid `prisma.$queryRaw()` invocation:
+        
+        
+        Assertion violation on the database: `too many bind variables in prepared statement, expected maximum of 32767, received 50005`
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        ei.handleRequestError (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:7268)
+        ei.handleAndLogRequestError (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:6593)
+        ei.request (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:6300)
+        async a (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:130:9551)
+        async Object.searchLexical (evalmachine.<anonymous>:50:18)
+        async TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:124:24)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:122:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: combined lexical scopes above the bind limit preserve cross-type ordering
+    not ok 9 - combined lexical scopes above the bind limit preserve cross-type ordering
+      ---
+      duration_ms: 30.260459
+      type: 'test'
+      location: '/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:131:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        
+        Invalid `prisma.$queryRaw()` invocation:
+        
+        
+        Assertion violation on the database: `too many bind variables in prepared statement, expected maximum of 32767, received 45008`
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        ei.handleRequestError (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:7268)
+        ei.handleAndLogRequestError (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:6593)
+        ei.request (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:6300)
+        async a (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:130:9551)
+        async Object.searchLexical (evalmachine.<anonymous>:50:18)
+        async TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:133:20)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:131:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: activity search and hydration accept 50000 authorized parents across projects
+    not ok 10 - activity search and hydration accept 50000 authorized parents across projects
+      ---
+      duration_ms: 1028.623041
+      type: 'test'
+      location: '/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:141:11'
+      failureType: 'testCodeFailure'
+      error: |-
+        
+        Invalid `prisma.issueActivity.findMany()` invocation:
+        
+        
+        Assertion violation on the database: `too many bind variables in prepared statement, expected maximum of 32767, received 50008`
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        ei.handleRequestError (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:7268)
+        ei.handleAndLogRequestError (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:6593)
+        ei.request (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:121:6300)
+        async a (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/node_modules/@prisma/client/runtime/library.js:130:9551)
+        async searchCorpus (evalmachine.<anonymous>:63:79)
+        async Object.searchProjectContent (evalmachine.<anonymous>:106:42)
+        async TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:196:19)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:141:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+      ...
+    1..10
+not ok 1 - lexical search executes against PostgreSQL: exact, full-text, fuzzy, isolation and bounded query inputs
+  ---
+  duration_ms: 4085.370375
+  type: 'test'
+  location: '/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/search/lexical.test.cjs:20:1'
+  failureType: 'subtestsFailed'
+  error: '5 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# {"benchmark":"local_postgres_lexical_only","issueCount":2500,"samples":5,"timings":{"keyword":{"p50Ms":38.6379579999998,"maxMs":59.78108399999974},"fuzzy":{"p50Ms":47.57466599999998,"maxMs":60.27904199999966}},"limits":"Synthetic corpus; excludes auth, HTTP, CLI and providers. Full CLI comparison is a separate acceptance step."}
+# Subtest: agent search: authentic token scopes, workspace membership and validated filters gate retrieval
+ok 2 - agent search: authentic token scopes, workspace membership and validated filters gate retrieval
+  ---
+  duration_ms: 206.332292
+  type: 'test'
+  ...
+# Subtest: agent search: canonical permissions exclude secrets, revoked Notes, orphan and foreign activity
+ok 3 - agent search: canonical permissions exclude secrets, revoked Notes, orphan and foreign activity
+  ---
+  duration_ms: 85.001084
+  type: 'test'
+  ...
+# Subtest: agent search: project-only Notes and explicit shares use the current canonical policy
+ok 4 - agent search: project-only Notes and explicit shares use the current canonical policy
+  ---
+  duration_ms: 79.791875
+  type: 'test'
+  ...
+# Subtest: agent search: project, status, assignee and inclusive dates narrow issues and their activity
+ok 5 - agent search: project, status, assignee and inclusive dates narrow issues and their activity
+  ---
+  duration_ms: 70.913667
+  type: 'test'
+  ...
+# Subtest: agent search: deletion, sharing revocation and parent filter changes are rechecked before output
+ok 6 - agent search: deletion, sharing revocation and parent filter changes are rechecked before output
+  ---
+  duration_ms: 109.298
+  type: 'test'
+  ...
+# Subtest: agent search: workspace revocation during retrieval denies the entire response
+ok 7 - agent search: workspace revocation during retrieval denies the entire response
+  ---
+  duration_ms: 62.200834
+  type: 'test'
+  ...
+# Subtest: agent search: partial semantic coverage is disclosed and changed records lose stale semantic matches
+ok 8 - agent search: partial semantic coverage is disclosed and changed records lose stale semantic matches
+  ---
+  duration_ms: 61.75575
+  type: 'test'
+  ...
+# Subtest: agent search: JSON byte upper bound, pagination and exact-first hybrid ranking are consistent
+ok 9 - agent search: JSON byte upper bound, pagination and exact-first hybrid ranking are consistent
+  ---
+  duration_ms: 76.382625
+  type: 'test'
+  ...
+# Subtest: agent search: both workspace selectors authorize the target through real middleware
+ok 10 - agent search: both workspace selectors authorize the target through real middleware
+  ---
+  duration_ms: 70.577125
+  type: 'test'
+  ...
+# Subtest: agent search: Note expiry is refreshed at hydration without dropping corpus filters
+ok 11 - agent search: Note expiry is refreshed at hydration without dropping corpus filters
+  ---
+  duration_ms: 66.886667
+  type: 'test'
+  ...
+# Subtest: agent search: current status overrides stale legacy fields for issues and activity parents
+ok 12 - agent search: current status overrides stale legacy fields for issues and activity parents
+  ---
+  duration_ms: 74.023417
+  type: 'test'
+  ...
+# Subtest: agent search: dates limit requested records rather than all activity parents
+ok 13 - agent search: dates limit requested records rather than all activity parents
+  ---
+  duration_ms: 2021.912458
+  type: 'test'
+  ...
+1..13
+# tests 23
+# suites 0
+# pass 17
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8163.925458

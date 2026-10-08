@@ -1,0 +1,82 @@
+TAP version 13
+# Subtest: agent search: authentic token scopes, workspace membership and validated filters gate retrieval
+ok 1 - agent search: authentic token scopes, workspace membership and validated filters gate retrieval
+  ---
+  duration_ms: 233.717458
+  type: 'test'
+  ...
+# Subtest: agent search: canonical permissions exclude secrets, revoked Notes, orphan and foreign activity
+ok 2 - agent search: canonical permissions exclude secrets, revoked Notes, orphan and foreign activity
+  ---
+  duration_ms: 103.722959
+  type: 'test'
+  ...
+# Subtest: agent search: project-only Notes and explicit shares use the current canonical policy
+ok 3 - agent search: project-only Notes and explicit shares use the current canonical policy
+  ---
+  duration_ms: 90.743
+  type: 'test'
+  ...
+# Subtest: agent search: project, status, assignee and inclusive dates narrow issues and their activity
+ok 4 - agent search: project, status, assignee and inclusive dates narrow issues and their activity
+  ---
+  duration_ms: 74.650208
+  type: 'test'
+  ...
+# Subtest: agent search: deletion, sharing revocation and parent filter changes are rechecked before output
+ok 5 - agent search: deletion, sharing revocation and parent filter changes are rechecked before output
+  ---
+  duration_ms: 76.702708
+  type: 'test'
+  ...
+# Subtest: agent search: workspace revocation during retrieval denies the entire response
+ok 6 - agent search: workspace revocation during retrieval denies the entire response
+  ---
+  duration_ms: 69.530208
+  type: 'test'
+  ...
+# Subtest: agent search: partial semantic coverage is disclosed and changed records lose stale semantic matches
+ok 7 - agent search: partial semantic coverage is disclosed and changed records lose stale semantic matches
+  ---
+  duration_ms: 70.479958
+  type: 'test'
+  ...
+# Subtest: agent search: JSON byte upper bound, pagination and exact-first hybrid ranking are consistent
+ok 8 - agent search: JSON byte upper bound, pagination and exact-first hybrid ranking are consistent
+  ---
+  duration_ms: 82.704209
+  type: 'test'
+  ...
+# Subtest: agent search: both workspace selectors authorize the target through real middleware
+ok 9 - agent search: both workspace selectors authorize the target through real middleware
+  ---
+  duration_ms: 70.919875
+  type: 'test'
+  ...
+# Subtest: agent search: Note expiry is refreshed at hydration without dropping corpus filters
+ok 10 - agent search: Note expiry is refreshed at hydration without dropping corpus filters
+  ---
+  duration_ms: 77.043042
+  type: 'test'
+  ...
+# Subtest: agent search: current status overrides stale legacy fields for issues and activity parents
+ok 11 - agent search: current status overrides stale legacy fields for issues and activity parents
+  ---
+  duration_ms: 87.116458
+  type: 'test'
+  ...
+# Subtest: agent search: dates limit requested records rather than all activity parents
+ok 12 - agent search: dates limit requested records rather than all activity parents
+  ---
+  duration_ms: 2351.51875
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3796.803417

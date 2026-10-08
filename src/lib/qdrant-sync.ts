@@ -104,6 +104,7 @@ export async function syncIssueToQdrant(issue: {
           payload: {
             type: 'issue',
             source_id: issue.id,
+            embeddingModel: embeddingService?.model || null,
             title: issue.title,
             content: issue.description || '',
             issueKey: issue.issueKey || '',
@@ -160,6 +161,7 @@ export async function syncContextToQdrant(context: {
           payload: {
             type: 'context',
             source_id: context.id,
+            embeddingModel: embeddingService?.model || null,
             title: context.title,
             content: context.content,
             contextType: context.type || 'GENERAL',
@@ -217,6 +219,7 @@ export async function syncIssueActivityToQdrant(activity: {
           payload: {
             type: 'issue_activity',
             source_id: activity.id,
+            embeddingModel: embeddingService?.model || null,
             action: activity.action,
             itemId: activity.itemId,
             fieldName: activity.fieldName || '',
@@ -307,6 +310,7 @@ export async function batchSyncIssuesToQdrant(
       payload: {
         type: 'issue' as const,
         source_id: issue.id,
+        embeddingModel: embeddingService?.model || null,
         title: issue.title,
         content: issue.description || '',
         issueKey: issue.issueKey || '',
@@ -382,6 +386,7 @@ export async function batchSyncContextsToQdrant(
       payload: {
         type: 'context' as const,
         source_id: ctx.id,
+        embeddingModel: embeddingService?.model || null,
         title: ctx.title,
         content: ctx.content,
         contextType: ctx.type || 'GENERAL',
@@ -458,6 +463,7 @@ export async function batchSyncActivitiesToQdrant(
       payload: {
         type: 'issue_activity' as const,
         source_id: act.id,
+        embeddingModel: embeddingService?.model || null,
         action: act.action,
         itemId: act.itemId,
         fieldName: act.fieldName || '',

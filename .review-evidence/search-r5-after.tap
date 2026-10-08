@@ -1,0 +1,150 @@
+TAP version 13
+# Subtest: lexical search executes against PostgreSQL: exact, full-text, fuzzy, isolation and bounded query inputs
+    # Subtest: exact keys are case-insensitive and prioritize the identifier
+    ok 1 - exact keys are case-insensitive and prioritize the identifier
+      ---
+      duration_ms: 18.597583
+      type: 'test'
+      ...
+    # Subtest: full-text matches words, phrases and OR while excluding unauthorized IDs
+    ok 2 - full-text matches words, phrases and OR while excluding unauthorized IDs
+      ---
+      duration_ms: 7.888958
+      type: 'test'
+      ...
+    # Subtest: fuzzy handles misspellings that keyword search misses
+    ok 3 - fuzzy handles misspellings that keyword search misses
+      ---
+      duration_ms: 2.768916
+      type: 'test'
+      ...
+    # Subtest: user input remains a value, including SQL punctuation and empty lexemes
+    ok 4 - user input remains a value, including SQL punctuation and empty lexemes
+      ---
+      duration_ms: 3.4245
+      type: 'test'
+      ...
+    # Subtest: record local query timings on a 2500-issue corpus without treating them as live CLI latency
+    ok 5 - record local query timings on a 2500-issue corpus without treating them as live CLI latency
+      ---
+      duration_ms: 385.019791
+      type: 'test'
+      ...
+    # Subtest: all lexical modes accept 50000 issue IDs with exact-first global ranking
+    ok 6 - all lexical modes accept 50000 issue IDs with exact-first global ranking
+      ---
+      duration_ms: 1421.576042
+      type: 'test'
+      ...
+    # Subtest: all lexical modes accept 50000 note IDs with exact-first global ranking
+    ok 7 - all lexical modes accept 50000 note IDs with exact-first global ranking
+      ---
+      duration_ms: 1691.74975
+      type: 'test'
+      ...
+    # Subtest: all lexical modes accept 50000 activity IDs with exact-first global ranking
+    ok 8 - all lexical modes accept 50000 activity IDs with exact-first global ranking
+      ---
+      duration_ms: 1791.301333
+      type: 'test'
+      ...
+    # Subtest: combined lexical scopes above the bind limit preserve cross-type ordering
+    ok 9 - combined lexical scopes above the bind limit preserve cross-type ordering
+      ---
+      duration_ms: 251.385208
+      type: 'test'
+      ...
+    # Subtest: activity search and hydration accept 50000 authorized parents across projects
+    ok 10 - activity search and hydration accept 50000 authorized parents across projects
+      ---
+      duration_ms: 4162.094459
+      type: 'test'
+      ...
+    1..10
+ok 1 - lexical search executes against PostgreSQL: exact, full-text, fuzzy, isolation and bounded query inputs
+  ---
+  duration_ms: 11317.287583
+  type: 'test'
+  ...
+# {"benchmark":"local_postgres_lexical_only","issueCount":2500,"samples":5,"timings":{"keyword":{"p50Ms":33.581249999999955,"maxMs":35.865957999999864},"fuzzy":{"p50Ms":41.538041999999905,"maxMs":43.80945799999995}},"limits":"Synthetic corpus; excludes auth, HTTP, CLI and providers. Full CLI comparison is a separate acceptance step."}
+# Subtest: agent search: authentic token scopes, workspace membership and validated filters gate retrieval
+ok 2 - agent search: authentic token scopes, workspace membership and validated filters gate retrieval
+  ---
+  duration_ms: 180.623125
+  type: 'test'
+  ...
+# Subtest: agent search: canonical permissions exclude secrets, revoked Notes, orphan and foreign activity
+ok 3 - agent search: canonical permissions exclude secrets, revoked Notes, orphan and foreign activity
+  ---
+  duration_ms: 75.298375
+  type: 'test'
+  ...
+# Subtest: agent search: project-only Notes and explicit shares use the current canonical policy
+ok 4 - agent search: project-only Notes and explicit shares use the current canonical policy
+  ---
+  duration_ms: 65.158042
+  type: 'test'
+  ...
+# Subtest: agent search: project, status, assignee and inclusive dates narrow issues and their activity
+ok 5 - agent search: project, status, assignee and inclusive dates narrow issues and their activity
+  ---
+  duration_ms: 49.67525
+  type: 'test'
+  ...
+# Subtest: agent search: deletion, sharing revocation and parent filter changes are rechecked before output
+ok 6 - agent search: deletion, sharing revocation and parent filter changes are rechecked before output
+  ---
+  duration_ms: 57.342458
+  type: 'test'
+  ...
+# Subtest: agent search: workspace revocation during retrieval denies the entire response
+ok 7 - agent search: workspace revocation during retrieval denies the entire response
+  ---
+  duration_ms: 53.169541
+  type: 'test'
+  ...
+# Subtest: agent search: partial semantic coverage is disclosed and changed records lose stale semantic matches
+ok 8 - agent search: partial semantic coverage is disclosed and changed records lose stale semantic matches
+  ---
+  duration_ms: 49.041375
+  type: 'test'
+  ...
+# Subtest: agent search: JSON byte upper bound, pagination and exact-first hybrid ranking are consistent
+ok 9 - agent search: JSON byte upper bound, pagination and exact-first hybrid ranking are consistent
+  ---
+  duration_ms: 58.527
+  type: 'test'
+  ...
+# Subtest: agent search: both workspace selectors authorize the target through real middleware
+ok 10 - agent search: both workspace selectors authorize the target through real middleware
+  ---
+  duration_ms: 60.229917
+  type: 'test'
+  ...
+# Subtest: agent search: Note expiry is refreshed at hydration without dropping corpus filters
+ok 11 - agent search: Note expiry is refreshed at hydration without dropping corpus filters
+  ---
+  duration_ms: 47.002292
+  type: 'test'
+  ...
+# Subtest: agent search: current status overrides stale legacy fields for issues and activity parents
+ok 12 - agent search: current status overrides stale legacy fields for issues and activity parents
+  ---
+  duration_ms: 52.558708
+  type: 'test'
+  ...
+# Subtest: agent search: dates limit requested records rather than all activity parents
+ok 13 - agent search: dates limit requested records rather than all activity parents
+  ---
+  duration_ms: 9949.219584
+  type: 'test'
+  ...
+1..13
+# tests 23
+# suites 0
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 23083.331458
