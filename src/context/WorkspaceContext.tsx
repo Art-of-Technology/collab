@@ -49,14 +49,14 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
 
   // Extract workspace ID from current URL
   const getWorkspaceIdFromUrl = useCallback((): string | null => {
-    if (!pathname) return null;
+    if (!pathname || pathname === '/docs') return null;
     
     // Match pattern: /{workspaceId}/... 
     const match = pathname.match(/^\/([^\/]+)(?:\/.*)?$/);
     if (match && match[1]) {
       const potentialWorkspaceId = match[1];
       // Exclude known non-workspace routes
-      const nonWorkspaceRoutes = ['welcome', 'workspaces', 'create-workspace', 'workspace-invitation', 'login', 'home', 'terms', 'privacy-policy', 'docs'];
+      const nonWorkspaceRoutes = ['welcome', 'workspaces', 'create-workspace', 'workspace-invitation', 'login', 'home', 'terms', 'privacy-policy'];
       if (!nonWorkspaceRoutes.includes(potentialWorkspaceId)) {
         return potentialWorkspaceId;
       }

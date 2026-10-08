@@ -20,8 +20,12 @@ export function CommandReference() {
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();
   const filtered = entries.filter(([name, spec]) =>
-    [name, ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName)]
-      .join(' ').toLowerCase().includes(query)
+    [
+      `collab ${name}`,
+      ...Object.keys({ ...spec.fields, ...spec.query }).map(field => `--${flagName(field)}`),
+      ...(spec.method === 'DELETE' ? ['--yes'] : []),
+      ...(spec.pagination ? ['--all'] : []),
+    ].join(' ').toLowerCase().includes(query)
   );
 
   return (

@@ -20,7 +20,7 @@ export function WorkspaceLoadingWrapper({ children }: WorkspaceLoadingWrapperPro
   const isCreateWorkspacePage = pathname === '/create-workspace';
   const isWorkspacesListPage = pathname === '/workspaces';
   const isWorkspaceInvitationPage = pathname?.startsWith('/workspace-invitation');
-  const isDocsPage = pathname === '/docs' || pathname?.startsWith('/docs/');
+  const isDocsPage = pathname === '/docs';
 
   // Pages that should not show global loading
   const shouldSkipLoading = isAuthPage || isWelcomePage || isCreateWorkspacePage || isWorkspacesListPage || isWorkspaceInvitationPage || isDocsPage;

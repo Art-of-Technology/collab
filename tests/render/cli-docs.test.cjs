@@ -35,12 +35,33 @@ test('command reference renders the executable CLI inventory and filters through
     for (const option of spec.options) assert.ok(html.includes(`--${option}</code>`), option);
   }
   assert.equal((html.match(/<details /g) || []).length, Object.keys(schema.commands).length);
-  findInput(Reference()).props.onChange({ target: { value: '  NoTeS  ' } });
-  const notes = renderToStaticMarkup(Reference());
-  assert.match(notes, /collab notes create/);
-  assert.doesNotMatch(notes, /collab issues get/);
-  findInput(Reference()).props.onChange({ target: { value: 'due-date' } });
-  assert.match(renderToStaticMarkup(Reference()), /collab issues update/);
+  for (const value of ['  NoTeS  ', 'collab notes']) {
+    findInput(Reference()).props.onChange({ target: { value } });
+    const notes = renderToStaticMarkup(Reference());
+    assert.match(notes, /collab notes create/);
+    assert.doesNotMatch(notes, /collab issues get/);
+  }
+  for (const value of ['due-date', '--due-date']) {
+    findInput(Reference()).props.onChange({ target: { value } });
+    assert.match(renderToStaticMarkup(Reference()), /collab issues update/);
+  }
+  for (const [name, spec] of Object.entries(schema.commands)) {
+    for (const value of [`collab ${name}`, ...spec.options.flatMap(option => [option, `--${option}`])]) {
+      findInput(Reference()).props.onChange({ target: { value } });
+      assert.ok(renderToStaticMarkup(Reference()).includes(`collab ${name}</code>`), `${name}: ${value}`);
+    }
+  }
+  for (const [flag, names] of [
+    ['yes', ['issues delete', 'relations delete', 'worklogs delete']],
+    ['all', ['issues list', 'worklogs list', 'notes list']],
+  ]) {
+    for (const value of [flag, `--${flag}`]) {
+      findInput(Reference()).props.onChange({ target: { value } });
+      const matches = renderToStaticMarkup(Reference());
+      assert.equal((matches.match(/<details /g) || []).length, names.length, value);
+      for (const name of names) assert.ok(matches.includes(`collab ${name}</code>`), `${name}: ${value}`);
+    }
+  }
   findInput(Reference()).props.onChange({ target: { value: 'no-such-command' } });
   assert.match(renderToStaticMarkup(Reference()), /No commands match/);
   findInput(Reference()).props.onChange({ target: { value: 'relations delete' } });
@@ -75,20 +96,74 @@ test('docs render installation, navigable sections, commands, and credential lim
 test('docs stay readable while session or workspace loads without changing workspace loading', () => {
   let pathname = '/docs';
   let status = 'loading';
+  let isLoading = true;
   const { WorkspaceLoadingWrapper: Wrapper } = load('src/components/layout/WorkspaceLoadingWrapper.tsx', {
     'react/jsx-runtime': jsx,
-    '@/context/WorkspaceContext': { useWorkspace: () => ({ isLoading: true }) },
+    '@/context/WorkspaceContext': { useWorkspace: () => ({ isLoading }) },
     'next-auth/react': { useSession: () => ({ status }) },
     'next/navigation': { usePathname: () => pathname },
     '@/components/ui/global-loading': { GlobalLoading: () => jsx.jsx('div', { children: 'Loading workspace' }) },
   });
   for (status of ['loading', 'authenticated', 'unauthenticated']) {
-    for (pathname of ['/docs', '/docs/cli']) {
+    for (isLoading of [true, false]) {
+      pathname = '/docs';
       assert.equal(renderToStaticMarkup(Wrapper({ children: 'Documentation' })), 'Documentation');
+      for (pathname of ['/docs/notes', '/docs/dashboard', '/docs/cli', '/docs-team/dashboard', '/workspace/dashboard']) {
+        const html = renderToStaticMarkup(Wrapper({ children: 'Workspace page' }));
+        if (status === 'loading' || (status === 'authenticated' && isLoading)) {
+          assert.match(html, /Loading workspace/, `${pathname}: ${status}, loading=${isLoading}`);
+        } else {
+          assert.equal(html, 'Workspace page', `${pathname}: ${status}, loading=${isLoading}`);
+        }
+      }
     }
   }
-  status = 'loading';
-  for (pathname of ['/docs-team/dashboard', '/workspace/dashboard']) {
-    assert.match(renderToStaticMarkup(Wrapper({ children: 'Private page' })), /Loading workspace/);
+});
+
+test('workspace URL selection takes priority over saved workspace outside the exact docs page', () => {
+  const docsWorkspace = { id: 'docs-workspace', slug: 'docs' };
+  const savedWorkspace = { id: 'saved-workspace', slug: 'saved' };
+  const teamWorkspace = { id: 'team-workspace', slug: 'docs-team' };
+  let pathname = '/docs';
+  let currentWorkspace = savedWorkspace;
+  const stored = new Map([['currentWorkspaceId', savedWorkspace.id]]);
+  const effects = [];
+  const document = { cookie: '' };
+  const { WorkspaceProvider } = load('src/context/WorkspaceContext.tsx', {
+    react: {
+      createContext: require('react').createContext,
+      useState: () => [currentWorkspace, value => { currentWorkspace = value; }],
+      useCallback: callback => callback,
+      useEffect: callback => effects.push(callback),
+    },
+    'react/jsx-runtime': jsx,
+    'next-auth/react': { useSession: () => ({ data: { user: { id: 'user' } }, status: 'authenticated' }) },
+    'next/navigation': { usePathname: () => pathname, useRouter: () => ({}) },
+    '@/hooks/queries/useWorkspace': { useWorkspaces: () => ({ data: [docsWorkspace, savedWorkspace, teamWorkspace], isLoading: false }) },
+  }, {
+    localStorage: { getItem: key => stored.get(key), setItem: (key, value) => stored.set(key, value) },
+    document,
+    window: { location: { protocol: 'https:' } },
+  });
+  for (const [route, expected] of [
+    ['/docs', savedWorkspace],
+    ['/docs/notes', docsWorkspace],
+    ['/docs/dashboard', docsWorkspace],
+    ['/docs/projects/project/notes', docsWorkspace],
+    ['/docs-workspace/notes', docsWorkspace],
+    ['/docs-team/dashboard', teamWorkspace],
+    ['/saved/notes', savedWorkspace],
+    ['/home', savedWorkspace],
+  ]) {
+    pathname = route;
+    currentWorkspace = savedWorkspace;
+    stored.set('currentWorkspaceId', savedWorkspace.id);
+    effects.length = 0;
+    WorkspaceProvider({ children: 'Workspace page' });
+    for (const effect of effects.splice(0)) effect();
+    const context = WorkspaceProvider({ children: 'Workspace page' }).props.value;
+    assert.equal(context.currentWorkspace, expected, route);
+    assert.equal(stored.get('currentWorkspaceId'), expected.id, route);
+    assert.ok(document.cookie.startsWith(`currentWorkspaceId=${expected.id};`), route);
   }
 });
