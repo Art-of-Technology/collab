@@ -28,7 +28,7 @@ shasum -a 256 -c "collab-$CLI_PLATFORM.tar.gz.sha256" &&
 
 After verification and installation succeed, add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile and open a new terminal. Run `collab --help` to verify the installation.
 
-The macOS downloads are not notarized. If macOS blocks the executable, follow [Apple's trusted-app guidance](https://support.apple.com/en-us/102445) after verifying the download.
+These downloads do not carry a verified publisher signature. The macOS builds are not notarized. If macOS blocks the executable, follow [Apple's trusted-app guidance](https://support.apple.com/en-us/102445) after verifying the download.
 
 ## Install from source
 

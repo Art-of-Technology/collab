@@ -115,7 +115,7 @@ jobs:
 
           Download the archive for your machine and its `.sha256` file. Verify the checksum before extracting. Installation instructions and commands: https://collab.weez.boo/docs#installation
 
-          These binaries are not Apple notarized. Native Windows and Alpine/musl builds are not included. The existing CLI login and credential protections are unchanged.
+          These downloads do not carry a verified publisher signature. The macOS builds are not notarized. Native Windows and Alpine/musl builds are not included. The existing CLI login and credential protections are unchanged.
 
           Each executable passed the CLI integration tests on its matching OS and architecture. Tests use synthetic local servers; they are not production or browser acceptance.
           NOTES
