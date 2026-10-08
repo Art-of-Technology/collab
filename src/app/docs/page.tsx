@@ -12,6 +12,7 @@ const nativeDownloads = [
   { name: 'macOS', chip: 'Intel', platform: 'darwin-x64' },
   { name: 'Linux', chip: 'ARM64', platform: 'linux-arm64' },
   { name: 'Linux', chip: 'Intel / AMD x64', platform: 'linux-x64' },
+  { name: 'Windows', chip: 'Intel / AMD x64', platform: 'windows-x64' },
 ];
 
 export const metadata: Metadata = {
@@ -114,27 +115,31 @@ export default function DocsPage() {
             <div className="mt-12 space-y-14 text-sm leading-7 [&_h2]:mb-4 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:tracking-tight [&_h3]:mb-2 [&_h3]:font-medium [&_section]:scroll-mt-24">
               <section id="installation" className="border-t border-border pt-10">
                 <h2>Install the CLI</h2>
-                <p className="text-muted-foreground">Download Collab CLI {cliPackage.version} for your machine. The native executable includes its runtime, so you do not need to install Node.js, npm, or Bun.</p>
+                <p className="text-muted-foreground">Paste one command into your terminal. The installer detects your machine, verifies the download, installs Collab CLI {cliPackage.version}, and sets up PATH. No Node.js, npm, Bun, or terminal restart needed.</p>
+                <h3 className="mt-6">macOS / Linux</h3>
+                <TerminalBlock code={`bash -o pipefail -c 'curl -fsSL https://collab.weez.boo/install.sh | sh' && . "$HOME/.local/share/collab/env"`} />
+                <p className="text-muted-foreground">For Bash and Zsh on macOS 13+ or Linux with glibc, on Apple Silicon / ARM64 or Intel / AMD x64. Installs to <code>~/.local/bin</code> and configures your shell for future terminals.</p>
+                <h3 className="mt-6">Windows PowerShell</h3>
+                <TerminalBlock code={'irm https://collab.weez.boo/install.ps1 | iex'} />
+                <p className="text-muted-foreground">For Windows x64 with PowerShell 5.1 or later. Installs to <code>%LOCALAPPDATA%\Collab\bin</code> and updates your user PATH and current terminal. Administrator access is not required.</p>
+                <p className="mt-4 text-muted-foreground">After the command finishes, run <code>collab --help</code> right away, or continue below to connect your workspace. Running the same install command again updates the executable and keeps your login.</p>
+                <details className="mt-6 rounded-lg border border-border p-4">
+                  <summary className="cursor-pointer font-medium">Download archives and checksums manually</summary>
                 <div className="my-5 grid gap-3 sm:grid-cols-2">
                   {nativeDownloads.map(({ name, chip, platform }) => (
                     <div key={platform} className="min-w-0 rounded-lg border border-border p-5">
-                      <a href={`${cliRelease}/collab-${platform}.tar.gz`} className="group flex items-center justify-between gap-4 font-medium hover:underline">
+                      <a href={`${cliRelease}/collab-${platform}.${platform === 'windows-x64' ? 'zip' : 'tar.gz'}`} className="group flex items-center justify-between gap-4 font-medium hover:underline">
                         <span>{name}<span className="mt-1 block text-xs font-normal text-muted-foreground">{chip}</span></span>
                         <Download className="h-5 w-5 shrink-0 text-muted-foreground group-hover:text-foreground" aria-hidden="true" />
                       </a>
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                         <code>{platform}</code>
-                        <a href={`${cliRelease}/collab-${platform}.tar.gz.sha256`} aria-label={`${name} ${chip} SHA-256 checksum`} className="underline underline-offset-4 hover:text-foreground">SHA-256 checksum</a>
+                        <a href={`${cliRelease}/collab-${platform}.${platform === 'windows-x64' ? 'zip' : 'tar.gz'}.sha256`} aria-label={`${name} ${chip} SHA-256 checksum`} className="underline underline-offset-4 hover:text-foreground">SHA-256 checksum</a>
                       </div>
                     </div>
                   ))}
                 </div>
-                <p className="text-muted-foreground">macOS 13 or later; Linux with glibc. On Windows, use a Linux download inside WSL. Run <code>uname -m</code> to check your architecture: <code>arm64</code>/<code>aarch64</code> means ARM, and <code>x86_64</code> means Intel/AMD.</p>
-                <h3 className="mt-6">Verify and install</h3>
-                <p className="text-muted-foreground">Download the archive and its checksum above into the same folder. Set <code>CLI_PLATFORM</code> to the label on your download card. On Linux, replace <code>shasum -a 256</code> with <code>sha256sum</code>.</p>
-                <TerminalBlock code={'cd ~/Downloads\nCLI_PLATFORM=darwin-arm64\nshasum -a 256 -c "collab-$CLI_PLATFORM.tar.gz.sha256" &&\n  tar -xzf "collab-$CLI_PLATFORM.tar.gz" &&\n  mkdir -p "$HOME/.local/bin" &&\n  install -m 755 "collab-$CLI_PLATFORM/collab" "$HOME/.local/bin/collab"'} />
-                <p className="text-muted-foreground">After the checksum reports OK and installation succeeds, add the command to your shell’s PATH. Add the export line to your shell profile to keep it in new terminals.</p>
-                <TerminalBlock code={'export PATH="$HOME/.local/bin:$PATH"\ncollab --help'} />
+                </details>
                 <p className="text-xs text-muted-foreground">These downloads do not carry a verified publisher signature. The macOS builds are not notarized. If macOS blocks the executable, follow <a href="https://support.apple.com/en-us/102445" className="underline underline-offset-4">Apple’s guidance for opening a trusted app</a> after verifying the download. <a href={`https://github.com/Art-of-Technology/collab/releases/tag/cli-v${cliPackage.version}`} className="underline underline-offset-4">Release notes and source</a> are on GitHub.</p>
                 <details className="mt-6 rounded-lg border border-border p-4">
                   <summary className="cursor-pointer font-medium">Install from source with Node.js</summary>

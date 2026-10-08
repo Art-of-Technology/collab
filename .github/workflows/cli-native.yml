@@ -2,7 +2,7 @@ name: Collab CLI native downloads
 
 on:
   pull_request:
-    paths: ['packages/cli/**', '.github/workflows/cli-native.yml']
+    paths: ['packages/cli/**', 'public/install.sh', 'public/install.ps1', '.github/workflows/cli-native.yml']
   push:
     tags: ['cli-v*']
 
@@ -13,7 +13,10 @@ jobs:
   build:
     name: Native CLI (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 10
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +33,9 @@ jobs:
           - platform: linux-x64
             runner: ubuntu-24.04
             target: bun-linux-x64-baseline
+          - platform: windows-x64
+            runner: windows-2022
+            target: bun-windows-x64-baseline
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,24 +47,38 @@ jobs:
         with:
           bun-version: '1.3.13'
       - name: Build standalone CLI
-        run: npm run build:native --prefix packages/cli -- --target=${{ matrix.target }}
+        run: |
+          suffix=''
+          if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; fi
+          npm run build:native --prefix packages/cli -- --target=${{ matrix.target }} --outfile="dist/collab$suffix"
       - name: Package download and checksum
         env:
           PLATFORM: ${{ matrix.platform }}
           COPYFILE_DISABLE: '1'
         run: |
           mkdir -p downloads "stage/collab-$PLATFORM"
-          cp packages/cli/dist/collab packages/cli/README.md packages/cli/LICENSE.txt "stage/collab-$PLATFORM/"
+          cp packages/cli/README.md packages/cli/LICENSE.txt "stage/collab-$PLATFORM/"
+          if [ "$RUNNER_OS" = Windows ]; then
+            cp packages/cli/dist/collab.exe "stage/collab-$PLATFORM/"
+          else
+            cp packages/cli/dist/collab "stage/collab-$PLATFORM/"
+          fi
           curl --fail --silent --show-error --location https://raw.githubusercontent.com/oven-sh/bun/bun-v1.3.13/LICENSE.md -o "stage/collab-$PLATFORM/BUN-LICENSE.md"
-          tar -czf "downloads/collab-$PLATFORM.tar.gz" -C stage "collab-$PLATFORM"
+          if [ "$RUNNER_OS" = Windows ]; then
+            # shellcheck disable=SC2016 # PowerShell expands its own environment variables.
+            powershell -NoProfile -Command 'Compress-Archive -Path "stage/collab-$env:PLATFORM" -DestinationPath "downloads/collab-$env:PLATFORM.zip"'
+          else
+            tar -czf "downloads/collab-$PLATFORM.tar.gz" -C stage "collab-$PLATFORM"
+          fi
           node --input-type=module <<'JS'
           import { createHash } from 'node:crypto';
           import { readFileSync, writeFileSync } from 'node:fs';
-          const name = `collab-${process.env.PLATFORM}.tar.gz`;
+          const name = `collab-${process.env.PLATFORM}.${process.platform === 'win32' ? 'zip' : 'tar.gz'}`;
           const hash = createHash('sha256').update(readFileSync(`downloads/${name}`)).digest('hex');
           writeFileSync(`downloads/${name}.sha256`, `${hash}  ${name}\n`);
           JS
       - name: Verify and extract the download
+        if: runner.os != 'Windows'
         working-directory: downloads
         env:
           PLATFORM: ${{ matrix.platform }}
@@ -66,14 +86,27 @@ jobs:
           shasum -a 256 --check "collab-$PLATFORM.tar.gz.sha256"
           tar -xzf "collab-$PLATFORM.tar.gz"
       - name: Test the packaged native executable
+        if: runner.os != 'Windows'
         run: node --test packages/cli/test/cli.test.mjs
         env:
           COLLAB_CLI_EXECUTABLE: ${{ github.workspace }}/downloads/collab-${{ matrix.platform }}/collab
+      - name: Test one-command Unix installation
+        if: runner.os != 'Windows'
+        run: node --test packages/cli/test/installer.test.mjs
+        env:
+          COLLAB_NATIVE_DOWNLOADS: ${{ github.workspace }}/downloads
+      - name: Test one-command Windows installation and installed CLI
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./packages/cli/test/installer.windows.ps1
+        env:
+          COLLAB_NATIVE_DOWNLOADS: ${{ github.workspace }}/downloads
       - uses: actions/upload-artifact@v4
         with:
           name: collab-${{ matrix.platform }}
           path: |
             downloads/*.tar.gz
+            downloads/*.zip
             downloads/*.sha256
           if-no-files-found: error
           retention-days: 14
@@ -102,20 +135,33 @@ jobs:
           const p = require('./packages/cli/package.json');
           if (process.env.GITHUB_REF_NAME !== `cli-v${p.version}`) process.exit(1);
           JS
+          cp public/install.sh public/install.ps1 downloads/
           cd downloads
+          sha256sum install.sh > install.sh.sha256
+          sha256sum install.ps1 > install.ps1.sha256
           for platform in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
             sha256sum --check "collab-$platform.tar.gz.sha256"
           done
+          sha256sum --check collab-windows-x64.zip.sha256
+          sha256sum --check install.sh.sha256 install.ps1.sha256
       - name: Publish CLI release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat > release-notes.md <<'NOTES'
-          Standalone Collab CLI for macOS (Apple Silicon and Intel) and Linux (ARM64 and x64). No Node.js or Bun installation required. Windows users can use the Linux build in WSL.
+          Standalone Collab CLI for macOS (Apple Silicon and Intel) and Linux (ARM64 and x64). No Node.js or Bun installation required. Also includes a native Windows x64 executable.
 
-          Download the archive for your machine and its `.sha256` file. Verify the checksum before extracting. Installation instructions and commands: https://collab.weez.boo/docs#installation
+          One-command installation (macOS/Linux):
+          ```sh
+          bash -o pipefail -c 'curl -fsSL https://collab.weez.boo/install.sh | sh' && . "$HOME/.local/share/collab/env"
+          ```
+          Windows PowerShell:
+          ```powershell
+          irm https://collab.weez.boo/install.ps1 | iex
+          ```
+          The installer verifies SHA-256 and configures PATH immediately and for future terminals. Scripts and archives with SHA-256 sidecars are attached. Instructions: https://collab.weez.boo/docs#installation
 
-          These downloads do not carry a verified publisher signature. The macOS builds are not notarized. Native Windows and Alpine/musl builds are not included. The existing CLI login and credential protections are unchanged.
+          These downloads do not carry a verified publisher signature. The macOS builds are not notarized. Windows ARM64 and Alpine/musl builds are not included. Windows credentials use private owner ACLs; Unix 0700/0600 checks remain enforced.
 
           Each executable passed the CLI integration tests on its matching OS and architecture. Tests use synthetic local servers; they are not production or browser acceptance.
           NOTES
