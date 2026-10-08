@@ -31,9 +31,27 @@ function Install-Collab {
         if (Test-Path -LiteralPath $destination) { [IO.File]::Replace($staged, $destination, [System.Management.Automation.Language.NullString]::Value) }
         else { [IO.File]::Move($staged, $destination) }
         $staged = $null
-        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-        $userPath = (@($bin) + @($userPath -split ';' | Where-Object { $_ -and $_ -ne $bin })) -join ';'
-        [Environment]::SetEnvironmentVariable('Path', $userPath, 'User')
+        $environment = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+        try {
+            $userPath = $environment.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+            $kind = if ('Path' -in $environment.GetValueNames()) { $environment.GetValueKind('Path') } else { [Microsoft.Win32.RegistryValueKind]::ExpandString }
+            $userPath = (@($bin) + @($userPath -split ';' | Where-Object { [Environment]::ExpandEnvironmentVariables($_) -ne $bin })) -join ';'
+            $environment.SetValue('Path', $userPath, $kind)
+        } finally { $environment.Dispose() }
+        if (-not ('Collab.EnvironmentNotification' -as [type])) {
+            Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+namespace Collab {
+    public static class EnvironmentNotification {
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern IntPtr SendMessageTimeout(IntPtr window, uint message, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);
+    }
+}
+'@
+        }
+        $notificationResult = [UIntPtr]::Zero
+        [void][Collab.EnvironmentNotification]::SendMessageTimeout([IntPtr]0xffff, 0x001a, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$notificationResult)
         $env:Path = (@($bin) + @($env:Path -split ';' | Where-Object { $_ -and $_ -ne $bin })) -join ';'
         Write-Host "Collab $version installed. Run collab --help in this terminal."
     } finally {

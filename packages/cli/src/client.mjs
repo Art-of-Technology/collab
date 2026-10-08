@@ -55,7 +55,9 @@ export function store(profile = 'default') {
     prepare();
     const temporary = `${file}.${randomBytes(8).toString('hex')}.tmp`;
     try {
-      const fd = fs.openSync(temporary, 'wx', 0o600);
+      // Set the owner at creation: elevated Windows processes can default to Administrators.
+      if (windows && !windowsAcl(temporary, 'file')) throw new CliError('unsafe_credentials', 'Cannot create a private Windows credential file.');
+      const fd = fs.openSync(temporary, windows ? 'r+' : 'wx', 0o600);
       try {
         check(fs.fstatSync(fd), false, temporary);
         fs.writeFileSync(fd, JSON.stringify(state) + '\n'); fs.fsyncSync(fd);

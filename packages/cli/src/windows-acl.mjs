@@ -8,7 +8,14 @@ try {
   [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
   $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
   $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
-  if ($request.create -and !(Test-Path -LiteralPath $request.path)) {
+  if ('file' -eq $request.create) {
+    $security = [System.Security.AccessControl.FileSecurity]::new()
+    $security.SetAccessRuleProtection($true, $false)
+    $security.SetOwner($me)
+    $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($me, 'FullControl', 'Allow'))
+    $stream = [System.IO.FileStream]::new($request.path, [System.IO.FileMode]::CreateNew, [System.Security.AccessControl.FileSystemRights]::FullControl, [System.IO.FileShare]::None, 4096, [System.IO.FileOptions]::None, $security)
+    $stream.Dispose()
+  } elseif ($request.create -eq $true -and !(Test-Path -LiteralPath $request.path)) {
     $security = [System.Security.AccessControl.DirectorySecurity]::new()
     $security.SetAccessRuleProtection($true, $false)
     $security.SetOwner($me)
