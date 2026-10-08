@@ -1,0 +1,14 @@
+{
+  "startingHead": "f56cee0bb3dd9f97aae0593dc65457b0329791d8",
+  "command": [
+    "node",
+    "--test",
+    "--test-concurrency=1",
+    "tests/search/lexical.test.cjs",
+    "tests/security/agent-search.test.cjs"
+  ],
+  "exitCodes": {
+    "before": 1,
+    "after": 0
+  }
+}

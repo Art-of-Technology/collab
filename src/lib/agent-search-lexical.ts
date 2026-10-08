@@ -9,7 +9,7 @@ function trigrams(text: Prisma.Sql) {
 }
 
 export function lexicalQuery(query: SearchQuery, documents: SearchDocument[]) {
-  const ids = (type: SearchDocument['type']) => Prisma.join(documents.filter(d => d.type === type).map(d => d.id).concat(''));
+  const ids = (type: SearchDocument['type']) => documents.filter(d => d.type === type).map(d => d.id);
   const fuzzy = query.mode === 'fuzzy';
   const exact = query.mode === 'exact';
   // Normalize each document once, then inspect query trigrams instead of expanding every body word.
@@ -24,15 +24,15 @@ export function lexicalQuery(query: SearchQuery, documents: SearchDocument[]) {
   return Prisma.sql`
     WITH documents AS (
       SELECT id, 'issue' AS type, coalesce("issueKey", '') AS identifier, title,
-        coalesce(description, '') AS body FROM "Issue" WHERE id IN (${ids('issue')})
+        coalesce(description, '') AS body FROM "Issue" WHERE id = ANY(${ids('issue')}::text[])
       UNION ALL
       SELECT id, 'note', id, title, regexp_replace(content, '<[^>]*>', ' ', 'g')
-        FROM "Note" WHERE id IN (${ids('note')})
+        FROM "Note" WHERE id = ANY(${ids('note')}::text[])
       UNION ALL
       SELECT a.id, 'activity', a.id, coalesce(i."issueKey", '') || ' ' || a.action || ' ' || coalesce(a."fieldName", ''),
         concat_ws(' ', a.details, a."oldValue", a."newValue")
         FROM "BoardItemActivity" a JOIN "Issue" i ON i.id = a."itemId" AND i."workspaceId" = a."workspaceId"
-        WHERE a.id IN (${ids('activity')})
+        WHERE a.id = ANY(${ids('activity')}::text[])
     ), ${fuzzy ? Prisma.sql`normalized AS MATERIALIZED (SELECT d.*, ${paddedWords(Prisma.sql`d.title`)} AS fuzzy_title,
       ${paddedWords(Prisma.sql`d.body`)} AS fuzzy_body FROM documents d),` : Prisma.empty}
     q AS (SELECT ${query.query}::text AS text, websearch_to_tsquery('simple', ${query.query}) AS terms,

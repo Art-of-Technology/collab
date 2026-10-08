@@ -10,6 +10,7 @@ import { searchLexical } from './agent-search-lexical';
 import { searchVectors } from './agent-search-vectors';
 
 const MAX_SCOPE = 50000;
+const PARENT_BATCH_SIZE = 5000;
 const secretTypes = ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'] as const;
 const dateRange = (query: SearchQuery) => ({ ...(query.after && { gte: new Date(query.after) }), ...(query.before && { lte: new Date(query.before) }) });
 
@@ -45,18 +46,20 @@ export async function searchCorpus(context: AppAuthContext, query: SearchQuery) 
   ]);
   if (issues.length > MAX_SCOPE || notes.length > MAX_SCOPE) throw new SearchError('scope_too_large', 'Narrow the search with a project filter', 422);
   const issueProjects = new Map(activityParents.map(i => [i.id, i.projectId]));
-  const projectIssues = new Map<string, string[]>();
-  for (const parent of activityParents) {
-    const ids = projectIssues.get(parent.projectId) || [];
-    ids.push(parent.id);
-    projectIssues.set(parent.projectId, ids);
-  }
   const activityWhere: Prisma.IssueActivityWhereInput = { workspaceId: context.workspace.id, itemType: 'ISSUE',
-    createdAt: dateRange(query), OR: [...projectIssues].map(([projectId, ids]) => ({
-      itemId: { in: ids }, OR: [{ projectId }, { projectId: null }],
-    })) };
-  const activities = types.includes('activity') && activityParents.length ? await prisma.issueActivity.findMany({ where: activityWhere,
-    select: { id: true, itemId: true, projectId: true, createdAt: true }, take: MAX_SCOPE + 1, orderBy: { id: 'asc' } }) : [];
+    createdAt: dateRange(query) };
+  const activities: Array<{ id: string; itemId: string; projectId: string | null; createdAt: Date }> = [];
+  for (let offset = 0; offset < activityParents.length && activities.length <= MAX_SCOPE; offset += PARENT_BATCH_SIZE) {
+    const projectIssues = new Map<string, string[]>();
+    for (const parent of activityParents.slice(offset, offset + PARENT_BATCH_SIZE)) {
+      const ids = projectIssues.get(parent.projectId) || [];
+      ids.push(parent.id);
+      projectIssues.set(parent.projectId, ids);
+    }
+    activities.push(...await prisma.issueActivity.findMany({ where: { AND: [activityWhere],
+      OR: [...projectIssues].map(([projectId, ids]) => ({ itemId: { in: ids }, OR: [{ projectId }, { projectId: null }] })) },
+      select: { id: true, itemId: true, projectId: true, createdAt: true }, take: MAX_SCOPE + 1 - activities.length, orderBy: { id: 'asc' } }));
+  }
   const documents: SearchDocument[] = [
     ...issues.map(i => ({ ...i, type: 'issue' as const })),
     ...notes.map(n => ({ ...n, type: 'note' as const })),
