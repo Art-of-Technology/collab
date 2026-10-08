@@ -28,7 +28,7 @@ function Install-Collab {
         $staged = Join-Path $bin ([IO.Path]::GetRandomFileName())
         Copy-Item -LiteralPath (Join-Path $work 'collab.exe') -Destination $staged
         $destination = Join-Path $bin 'collab.exe'
-        if (Test-Path -LiteralPath $destination) { [IO.File]::Replace($staged, $destination, $null) }
+        if (Test-Path -LiteralPath $destination) { [IO.File]::Replace($staged, $destination, [System.Management.Automation.Language.NullString]::Value) }
         else { [IO.File]::Move($staged, $destination) }
         $staged = $null
         $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
