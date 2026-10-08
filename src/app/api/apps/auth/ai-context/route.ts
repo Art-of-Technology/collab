@@ -15,6 +15,8 @@ import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
 import { stripHtmlToPlainText as stripHtml } from '@/lib/html-sanitizer';
+import { boundPromptContext, contextOptionsSchema, getProjectContext } from '@/lib/agent-project-context';
+import { SearchError } from '@/lib/agent-search-query';
 
 // Note types that are considered AI context
 const AI_CONTEXT_TYPES = [
@@ -37,6 +39,18 @@ export const GET = withAppAuth(
         );
       }
       const { searchParams } = new URL(request.url);
+      if (searchParams.has('includePipeline') && !['true', 'false'].includes(searchParams.get('includePipeline')!)) {
+        return NextResponse.json({ error: 'invalid_query', error_description: 'includePipeline must be true or false' }, { status: 400 });
+      }
+      const budget = contextOptionsSchema.shape.maxTokens.safeParse(searchParams.get('maxTokens') ?? undefined);
+      if (!budget.success) return NextResponse.json({ error: 'invalid_query', error_description: 'maxTokens must be an integer from 2048 to 64000' }, { status: 400 });
+      if (searchParams.get('includePipeline') === 'true') {
+        const options = contextOptionsSchema.safeParse(Object.fromEntries(
+          ['projectId', 'limit', 'offset', 'maxTokens', 'since'].filter(key => searchParams.has(key)).map(key => [key, searchParams.get(key)])
+        ));
+        if (!options.success) return NextResponse.json({ error: 'invalid_query', error_description: options.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') }, { status: 400 });
+        return NextResponse.json(await getProjectContext(context, options.data));
+      }
       const projectId = searchParams.get('projectId');
       const includeKnowledge = searchParams.get('includeKnowledge') === 'true';
 
@@ -249,8 +263,9 @@ export const GET = withAppAuth(
         response.knowledge = knowledge;
       }
 
-      return NextResponse.json(response);
+      return NextResponse.json(searchParams.has('maxTokens') ? boundPromptContext(response, budget.data) : response);
     } catch (error) {
+      if (error instanceof SearchError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
       console.error('Error fetching AI context:', error);
       return NextResponse.json(
         { error: 'server_error', error_description: 'Internal server error' },
