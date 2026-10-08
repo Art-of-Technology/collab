@@ -17,7 +17,7 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
       - run: npx prisma generate
       - name: Install local PostgreSQL test binaries
         run: sudo apt-get update && sudo apt-get install -y postgresql

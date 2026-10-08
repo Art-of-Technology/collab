@@ -66,7 +66,7 @@ function harness() {
   }, { process: { env: {} } });
   const service = load('src/lib/agent-search.ts', {
     '@/lib/prisma': { prisma: db }, '@/lib/issue-finder': finder, '@/lib/secrets/access': access, '@/lib/oauth-scopes': scopes,
-    '@/lib/html-sanitizer': { stripHtmlToPlainText: text => text.replace(/<[^>]*>/g, '') },
+    '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts'),
     './agent-search-query': queryModule,
     './agent-search-lexical': { searchLexical: async (query, documents) => {
       state.lexicalReads++; state.corpus = documents;
