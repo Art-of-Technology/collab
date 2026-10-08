@@ -49,7 +49,7 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
 
   // Extract workspace ID from current URL
   const getWorkspaceIdFromUrl = useCallback((): string | null => {
-    if (!pathname) return null;
+    if (!pathname || pathname === '/docs') return null;
     
     // Match pattern: /{workspaceId}/... 
     const match = pathname.match(/^\/([^\/]+)(?:\/.*)?$/);
@@ -213,4 +213,4 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       {children}
     </WorkspaceContext.Provider>
   );
-}; 
+};

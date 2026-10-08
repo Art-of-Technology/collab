@@ -66,6 +66,9 @@ export default function LandingPage() {
                     </span>
                 </div>
                 <div className="flex items-center">
+                    <Link href="/docs" className="mr-4 text-sm text-muted-foreground hover:text-foreground">
+                        Docs
+                    </Link>
                     <Link href="/login" className="mr-2 sm:mr-4">
                         <Button variant="secondary" className="px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base">
                             Login
@@ -333,4 +336,3 @@ export default function LandingPage() {
         </div>
     );
 }
-

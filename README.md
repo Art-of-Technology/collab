@@ -21,7 +21,7 @@
 </div>
 
 <!-- TABLE OF CONTENTS -->
-For project, issue and Notes automation, see the [Collab CLI and agent workflow](packages/cli/README.md).
+For project, issue and Notes automation, open `/docs` on your Collab server for the CLI guide and searchable command reference, or read the [CLI package guide](packages/cli/README.md). The developer console's API reference remains at `/dev/docs`.
 
 <details>
   <summary>Table of Contents</summary>

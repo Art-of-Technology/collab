@@ -35,6 +35,11 @@ const navigationItems = [
     icon: Grid3X3,
   },
   {
+    name: "CLI Documentation",
+    href: "/docs",
+    icon: Book,
+  },
+  {
     name: "API Documentation",
     href: "/dev/docs",
     icon: Book,
