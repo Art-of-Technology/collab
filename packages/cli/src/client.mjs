@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { randomBytes } from 'node:crypto';
+import { windowsAcl } from './windows-acl.mjs';
 
 export class CliError extends Error {
   constructor(code, message, exit = 2, details = {}) { super(message); this.code = code; this.exit = exit; this.details = details; }
@@ -19,18 +20,26 @@ export function store(profile = 'default') {
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(profile)) throw new CliError('invalid_profile', 'Profile must contain only letters, digits, underscores or hyphens.');
   const directory = path.resolve(process.env.COLLAB_CONFIG_DIR || path.join(os.homedir(), '.config', 'collab'));
   const file = path.join(directory, `${profile}.json`);
-  function check(stat, isDirectory) {
-    if (!(isDirectory ? stat.isDirectory() : stat.isFile()) || (stat.mode & 0o077) || (process.getuid && stat.uid !== process.getuid())) {
-      throw new CliError('unsafe_credentials', 'CLI state must be owned by you: directory 0700, regular files 0600, no symlinks.');
+  const windows = process.platform === 'win32';
+  function check(stat, isDirectory, target) {
+    const privateAccess = windows ? windowsAcl(target) : !(stat.mode & 0o077) && (!process.getuid || stat.uid === process.getuid());
+    if (!(isDirectory ? stat.isDirectory() : stat.isFile()) || !privateAccess) {
+      throw new CliError('unsafe_credentials', 'CLI state must be private and owned by you, with no symlinks: Unix 0700/0600 or a private Windows ACL.');
     }
   }
-  function prepare() { fs.mkdirSync(directory, { recursive: true, mode: 0o700 }); check(fs.lstatSync(directory), true); }
+  function prepare() {
+    if (windows) {
+      if (!windowsAcl(directory, true)) throw new CliError('unsafe_credentials', 'Cannot create or verify a private Windows credential directory.');
+    } else fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    check(fs.lstatSync(directory), true, directory);
+  }
   function load() {
     try {
-      check(fs.lstatSync(directory), true);
+      check(fs.lstatSync(directory), true, directory);
+      if (windows && fs.lstatSync(file).isSymbolicLink()) throw new CliError('unsafe_credentials', 'CLI state cannot be a link.');
       const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
       try {
-        const stat = fs.fstatSync(fd); check(stat, false);
+        const stat = fs.fstatSync(fd); check(stat, false, file);
         if (stat.size > 65536) throw new Error('size');
         const state = JSON.parse(fs.readFileSync(fd, 'utf8'));
         if (!state || typeof state !== 'object' || Array.isArray(state)) throw new Error('shape');
@@ -45,11 +54,18 @@ export function store(profile = 'default') {
   function save(state) {
     prepare();
     const temporary = `${file}.${randomBytes(8).toString('hex')}.tmp`;
-    const fd = fs.openSync(temporary, 'wx', 0o600);
     try {
-      fs.writeFileSync(fd, JSON.stringify(state) + '\n'); fs.fsyncSync(fd);
-    } finally { fs.closeSync(fd); }
-    try { fs.renameSync(temporary, file); const parent = fs.openSync(directory, 'r'); try { fs.fsyncSync(parent); } finally { fs.closeSync(parent); } }
+      // Set the owner at creation: elevated Windows processes can default to Administrators.
+      if (windows && !windowsAcl(temporary, 'file')) throw new CliError('unsafe_credentials', 'Cannot create a private Windows credential file.');
+      const fd = fs.openSync(temporary, windows ? 'r+' : 'wx', 0o600);
+      try {
+        check(fs.fstatSync(fd), false, temporary);
+        fs.writeFileSync(fd, JSON.stringify(state) + '\n'); fs.fsyncSync(fd);
+      } finally { fs.closeSync(fd); }
+      fs.renameSync(temporary, file);
+      // Windows cannot open directories for fsync; the credential file itself was flushed above.
+      if (!windows) { const parent = fs.openSync(directory, 'r'); try { fs.fsyncSync(parent); } finally { fs.closeSync(parent); } }
+    }
     finally { try { fs.unlinkSync(temporary); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
   }
   async function exclusive(callback) {

@@ -2,31 +2,25 @@
 
 Projects, issues and shared Notes for people and AI agents.
 
-## Native downloads
+## One-command installation
 
-[Download Collab CLI 0.1.0 from GitHub Releases](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.1.0). These standalone executables include the runtime; Node.js, npm and Bun are not required on your machine.
-
-| Machine | Archive |
-| --- | --- |
-| macOS, Apple Silicon | `collab-darwin-arm64.tar.gz` |
-| macOS, Intel | `collab-darwin-x64.tar.gz` |
-| Linux, ARM64 | `collab-linux-arm64.tar.gz` |
-| Linux, Intel/AMD x64 | `collab-linux-x64.tar.gz` |
-
-Requires macOS 13+ or Linux with glibc. Windows users can run the Linux executable inside WSL; native Windows and Alpine/musl packages are not provided. The CLI retains its Unix credential-file protection checks.
-
-Download the archive and matching `.sha256` file into the same folder. Set the platform below to match your archive. On Linux, use `sha256sum` instead of `shasum -a 256`.
+macOS / Linux (Bash or Zsh):
 
 ```sh
-cd ~/Downloads
-CLI_PLATFORM=darwin-arm64
-shasum -a 256 -c "collab-$CLI_PLATFORM.tar.gz.sha256" &&
-  tar -xzf "collab-$CLI_PLATFORM.tar.gz" &&
-  mkdir -p "$HOME/.local/bin" &&
-  install -m 755 "collab-$CLI_PLATFORM/collab" "$HOME/.local/bin/collab"
+ZDOTDIR="${ZDOTDIR:-$HOME}" bash -o pipefail -c 'curl -fsSL https://collab.weez.boo/install.sh | sh' && . "$HOME/.local/share/collab/env"
 ```
 
-After verification and installation succeed, add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile and open a new terminal. Run `collab --help` to verify the installation.
+Windows PowerShell:
+
+```powershell
+irm https://collab.weez.boo/install.ps1 | iex
+```
+
+Run `collab --help` immediately in the same terminal. The installer selects the native executable, checks SHA-256, and updates PATH for this terminal and future ones. No administrator access, Node.js, npm, Bun, or terminal restart required. Run the same command again to update; existing login/configuration is preserved.
+
+Requires macOS 13+ or Linux with glibc (ARM64 or x64), or Windows x64 with PowerShell 5.1+. Alpine/musl and native Windows ARM64 are not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
+
+[CLI 0.1.1 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.1.1) are hosted on GitHub. You can inspect `install.sh` or `install.ps1` there before running them. Archives and SHA-256 sidecars are also available for manual downloads.
 
 These downloads do not carry a verified publisher signature. The macOS builds are not notarized. If macOS blocks the executable, follow [Apple's trusted-app guidance](https://support.apple.com/en-us/102445) after verifying the download.
 
@@ -108,7 +102,7 @@ collab projects create --name 'Platform' --slug platform --issue-prefix PLAT --d
 
 ## Authentication and automation
 
-Profiles are stored at `~/.config/collab/PROFILE.json` (`--profile`, default `default`), owned by the current user, directory 0700 and file 0600. Tokens never appear in status output, request arguments or diagnostics. They are bound to the saved origin; `--url` cannot redirect a stored token to a different server. HTTP is allowed only for loopback development. Authenticated HTTP redirects are refused.
+Profiles are stored at `~/.config/collab/PROFILE.json` (`--profile`, default `default`), owned by the current user, directory 0700 and file 0600 on Unix. Windows uses private owner ACLs (only the current user, SYSTEM and Administrators may have access); unsafe ACLs and reparse points are refused. Tokens never appear in status output, request arguments or diagnostics. They are bound to the saved origin; `--url` cannot redirect a stored token to a different server. HTTP is allowed only for loopback development. Authenticated HTTP redirects are refused.
 
 ```sh
 collab auth status
@@ -162,6 +156,6 @@ Tests launch the actual CLI against local synthetic HTTP servers, including PKCE
 
 With Bun 1.3.13 installed, run `npm run build:native --prefix packages/cli` to produce `packages/cli/dist/collab` for the current machine. The build disables runtime loading of working-directory `.env`, `bunfig.toml`, `tsconfig.json` and `package.json` files. Explicit `COLLAB_*` environment variables still work.
 
-The `Collab CLI native downloads` workflow builds and tests each executable on a matching macOS/Linux architecture. It includes the README and license notices, packages a `.tar.gz` archive, and produces a SHA-256 sidecar. Pull requests only upload CI artifacts. After merge and review, a `cli-v<VERSION>` tag matching this package's version publishes the four archives and checksums to GitHub Releases; it does not trigger the application's `v*` deployment workflows or replace the application's latest release.
+The `Collab CLI native downloads` workflow builds and tests each executable and its one-command installer on a matching macOS/Linux architecture or Windows x64 runner. It includes the README and license notices, packages Unix `.tar.gz` archives and a Windows `.zip` archive, and produces SHA-256 sidecars. Pull requests only upload CI artifacts. After merge and review, a `cli-v<VERSION>` tag matching this package's version publishes the five archives, installer scripts and their checksums to GitHub Releases once all native jobs pass; it does not trigger the application's `v*` deployment workflows or replace the application's latest release.
 
 To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_EXECUTABLE` to its absolute path and run `node --test packages/cli/test/cli.test.mjs` from the repository root. The ordinary Node.js test path remains the default.

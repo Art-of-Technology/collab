@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { commands, flagName, scopes } from '../src/commands.mjs';
 import { CliError, request, session, store } from '../src/client.mjs';
 import { login, refresh } from '../src/auth.mjs';
+import cliPackage from '../package.json' with { type: 'json' };
 
 const booleans = new Set(['help', 'json', 'all', 'yes', 'dry-run', 'read-only']);
 const globals = ['url', 'profile', 'workspace', 'project', 'timeout', 'json'];
@@ -44,7 +45,7 @@ async function boundedInput(file) {
   } finally { clearTimeout(timer); if (file !== '-') stream.destroy(); }
 }
 function help() {
-  return { name: 'collab', version: '0.1.0', output: 'JSON on stdout; errors on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query)].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
+  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query)].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
 }
 async function main() {
   const { words, options } = parse(process.argv.slice(2));

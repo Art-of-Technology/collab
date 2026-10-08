@@ -1,10 +1,10 @@
 name: Collab CLI
 on:
   pull_request:
-    paths: ['packages/cli/**', 'scripts/setup-cli-oauth-client.mjs', '.github/workflows/cli.yml']
+    paths: ['packages/cli/**', 'public/install.sh', 'public/install.ps1', 'scripts/setup-cli-oauth-client.mjs', '.github/workflows/cli.yml']
   push:
     branches: [main]
-    paths: ['packages/cli/**', 'scripts/setup-cli-oauth-client.mjs', '.github/workflows/cli.yml']
+    paths: ['packages/cli/**', 'public/install.sh', 'public/install.ps1', 'scripts/setup-cli-oauth-client.mjs', '.github/workflows/cli.yml']
 permissions:
   contents: read
 jobs:

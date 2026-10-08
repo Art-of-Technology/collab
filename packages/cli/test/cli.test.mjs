@@ -1,19 +1,32 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request } from 'node:http';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, symlinkSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, symlinkSync, statSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { windowsAcl } from '../src/windows-acl.mjs';
 import { commands } from '../src/commands.mjs';
 
 const bin = fileURLToPath(new URL('../bin/collab.mjs', import.meta.url));
 const executable = process.env.COLLAB_CLI_EXECUTABLE;
+const windows = process.platform === 'win32';
+function grantEveryoneRead(file) {
+  const script = `$ErrorActionPreference = 'Stop'; $p = [Console]::In.ReadToEnd(); $acl = Get-Acl -LiteralPath $p; $sid = New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0'); $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'Read', 'Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $p -AclObject $acl`;
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { input: file, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+}
+function writeCredentials(file, contents) {
+  if (windows && !existsSync(file)) assert.equal(windowsAcl(file, 'file'), true, 'create owned private credential fixture');
+  writeFileSync(file, contents, { mode: 0o600 });
+}
 async function fixture(t, handler) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'collab-cli-test-'));
+  const temporary = mkdtempSync(path.join(tmpdir(), 'collab-cli-test-'));
+  const dir = windows ? path.join(temporary, 'private-state') : temporary;
+  if (windows) assert.equal(windowsAcl(dir, true), true, 'create private Windows fixture');
   const calls = [];
   const server = createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -24,7 +37,7 @@ async function fixture(t, handler) {
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const url = `http://127.0.0.1:${server.address().port}`;
-  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); rmSync(dir, { recursive: true, force: true }); });
+  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); rmSync(temporary, { recursive: true, force: true }); });
   function run(args, { input, env = {}, stderrCallback } = {}) {
     const childEnv = { ...process.env };
     for (const key of Object.keys(childEnv)) if (key.startsWith('COLLAB_')) delete childEnv[key];
@@ -33,7 +46,7 @@ async function fixture(t, handler) {
     child.stdout.on('data', data => { stdout += data; });
     child.stderr.on('data', data => { stderr += data; stderrCallback?.(stderr); });
     child.stdin.end(input);
-    const timer = setTimeout(() => child.kill('SIGKILL'), 10000);
+    const timer = setTimeout(() => child.kill('SIGKILL'), windows ? 30000 : 10000);
     return once(child, 'close').then(([code, signal]) => { clearTimeout(timer); return { code, signal, stdout, stderr, data: stdout ? JSON.parse(stdout) : undefined, error: stderr.startsWith('{') ? JSON.parse(stderr) : undefined }; });
   }
   return { run, dir, calls, url };
@@ -68,7 +81,7 @@ test('actual entrypoint scopes filters to explicit workspace and project', async
 
 test('switching workspace cannot carry a saved project from another workspace', async t => {
   const f = await fixture(t);
-  writeFileSync(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.url, accessToken: 'synthetic-token', expiresAt: Date.now() + 60000, workspace: 'old-space', project: 'old-project' }), { mode: 0o600 });
+  writeCredentials(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.url, accessToken: 'synthetic-token', expiresAt: Date.now() + 60000, workspace: 'old-space', project: 'old-project' }));
   const result = await f.run(['issues', 'list', '--workspace', 'new-space'], { env: { COLLAB_TOKEN: '' } });
   assert.equal(result.code, 0);
   const url = new URL(f.calls[0].url, f.url);
@@ -153,18 +166,64 @@ test('redirects never forward bearer credentials', async t => {
 
 test('credential files are private, origins are bound, and tokens never appear in status', async t => {
   const f = await fixture(t), file = path.join(f.dir, 'default.json');
-  writeFileSync(file, JSON.stringify({ origin: 'https://collab.example', accessToken: 'PRIVATE_TOKEN', refreshToken: 'PRIVATE_REFRESH', expiresAt: Date.now() + 60000 }), { mode: 0o600 });
+  writeCredentials(file, JSON.stringify({ origin: 'https://collab.example', accessToken: 'PRIVATE_TOKEN', refreshToken: 'PRIVATE_REFRESH', expiresAt: Date.now() + 60000 }));
   const env = { COLLAB_TOKEN: '' };
   assert.equal((await f.run(['whoami'], { env })).error.error, 'origin_mismatch');
   const status = await f.run(['auth', 'status'], { env }); assert.equal(status.code, 0); assert.ok(!status.stdout.includes('PRIVATE_'));
-  chmodSync(file, 0o644); assert.notEqual((await f.run(['whoami'], { env })).code, 0); assert.equal(f.calls.length, 0);
-  rmSync(file); symlinkSync('/nonexistent', file); assert.notEqual((await f.run(['whoami'], { env })).code, 0);
+  if (windows) grantEveryoneRead(file); else chmodSync(file, 0o644);
+  assert.equal((await f.run(['whoami'], { env })).error.error, 'unsafe_credentials'); assert.equal(f.calls.length, 0);
+  rmSync(file);
+  if (windows) symlinkSync(f.dir, file, 'junction'); else symlinkSync('/nonexistent', file);
+  assert.notEqual((await f.run(['whoami'], { env })).code, 0); assert.equal(f.calls.length, 0);
 });
 
 test('headless token requires an explicit origin and rejects non-loopback HTTP', async t => {
   const f = await fixture(t);
   assert.equal((await f.run(['whoami'], { env: { COLLAB_URL: '' } })).error.error, 'token_origin_required');
   assert.equal((await f.run(['whoami', '--url', 'http://example.com'])).error.error, 'invalid_origin');
+  assert.equal(f.calls.length, 0);
+});
+
+test('Windows credential creation sets the user owner and refuses existing files', { skip: !windows }, async t => {
+  const f = await fixture(t);
+  const file = path.join(f.dir, 'default.json');
+  const contents = JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_SYNTHETIC', expiresAt: Date.now() + 60000 });
+  writeFileSync(file, contents);
+  const script = `$ErrorActionPreference = 'Stop'; $acl = Get-Acl -LiteralPath ([Console]::In.ReadToEnd()); @{ user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value; owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value; sddl = $acl.Sddl } | ConvertTo-Json -Compress`;
+  const inspected = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { input: file, encoding: 'utf8' });
+  assert.equal(inspected.status, 0, inspected.stderr);
+  const acl = JSON.parse(inspected.stdout);
+  t.diagnostic(`Node default credential ownership: ${JSON.stringify(acl)}`);
+  assert.equal(windowsAcl(file), acl.owner === acl.user, 'inherited private ACL does not override the owner requirement');
+  if (acl.owner !== acl.user) {
+    assert.equal((await f.run(['whoami'], { env: { COLLAB_TOKEN: '' } })).error.error, 'unsafe_credentials');
+    assert.equal(f.calls.length, 0);
+  }
+  assert.equal(windowsAcl(file, 'file'), false, 'creation must not repair or replace an existing file');
+  assert.equal(readFileSync(file, 'utf8'), contents);
+  rmSync(file);
+  assert.equal(windowsAcl(file, 'file'), true);
+  assert.equal(windowsAcl(file), true);
+  assert.equal(readFileSync(file, 'utf8'), '');
+  writeFileSync(file, contents);
+  assert.equal((await f.run(['whoami'], { env: { COLLAB_TOKEN: '' } })).code, 0);
+  grantEveryoneRead(file);
+  assert.equal(windowsAcl(file, 'file'), false);
+  assert.equal(windowsAcl(file), false, 'creation never repairs an unsafe existing ACL');
+  assert.equal(readFileSync(file, 'utf8'), contents);
+});
+
+test('unsafe Windows directory ACLs and junctions refuse credentials before dispatch', { skip: !windows }, async t => {
+  const f = await fixture(t);
+  const file = path.join(f.dir, 'default.json');
+  const state = JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_TOKEN', expiresAt: Date.now() + 60000 });
+  writeCredentials(file, state);
+  const junction = path.join(path.dirname(f.dir), 'linked-state');
+  symlinkSync(f.dir, junction, 'junction');
+  assert.equal((await f.run(['whoami'], { env: { COLLAB_TOKEN: '', COLLAB_CONFIG_DIR: junction } })).error.error, 'unsafe_credentials');
+  grantEveryoneRead(f.dir);
+  assert.equal((await f.run(['whoami'], { env: { COLLAB_TOKEN: '' } })).error.error, 'unsafe_credentials');
+  assert.equal(readFileSync(file, 'utf8'), state);
   assert.equal(f.calls.length, 0);
 });
 
@@ -177,7 +236,7 @@ test('explicit refresh verifies identity before saving and sends no refresh toke
     } else res.end(JSON.stringify({ id: 'same-user', workspace: { id: 'workspace-one' } }));
   });
   const file = path.join(f.dir, 'default.json');
-  writeFileSync(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'expired', refreshToken: 'PRIVATE_REFRESH', expiresAt: 0, workspace: 'workspace-one', tokenWorkspace: 'workspace-one', userId: 'same-user' }), { mode: 0o600 });
+  writeCredentials(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'expired', refreshToken: 'PRIVATE_REFRESH', expiresAt: 0, workspace: 'workspace-one', tokenWorkspace: 'workspace-one', userId: 'same-user' }));
   assert.equal((await f.run(['whoami'], { env: { COLLAB_TOKEN: '' } })).error.error, 'token_expired');
   const result = await f.run(['auth', 'refresh'], { env: { COLLAB_TOKEN: '' } });
   assert.equal(result.code, 0); assert.ok(!result.stdout.includes('PRIVATE_')); assert.equal(f.calls.length, 2);
@@ -255,7 +314,7 @@ test('actual login performs PKCE, rejects malformed callbacks and wrong state, v
   const file = path.join(f.dir, 'default.json'), stored = JSON.parse(readFileSync(file));
   assert.equal(stored.accessToken, 'PRIVATE_ACCESS'); assert.equal(stored.refreshToken, 'PRIVATE_REFRESH');
   assert.equal(stored.tokenWorkspace, 'workspace-one'); assert.equal(stored.userId, 'same-user');
-  assert.equal(stored.workspace, 'workspace-one'); assert.equal(stored.origin, f.url); assert.equal(statSync(file).mode & 0o777, 0o600);
+  assert.equal(stored.workspace, 'workspace-one'); assert.equal(stored.origin, f.url); if (windows) assert.equal(windowsAcl(file), true); else assert.equal(statSync(file).mode & 0o777, 0o600);
   assert.equal((await f.run(['auth', 'logout'], { env: { COLLAB_TOKEN: '' } })).data.serverRevocationConfirmed, false);
   assert.deepEqual(JSON.parse(readFileSync(file)), {});
 });
@@ -286,7 +345,7 @@ test('refresh retains a validated workspace and project selection while rotating
     }
   });
   const file = path.join(f.dir, 'default.json'), env = { COLLAB_TOKEN: '' };
-  writeFileSync(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'PRIVATE_ACCESS', refreshToken: 'PRIVATE_REFRESH', expiresAt: Date.now() + 60000, tokenWorkspace: 'workspace-a', userId: 'same-user', workspace: 'workspace-a', project: 'project-a' }), { mode: 0o600 });
+  writeCredentials(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'PRIVATE_ACCESS', refreshToken: 'PRIVATE_REFRESH', expiresAt: Date.now() + 60000, tokenWorkspace: 'workspace-a', userId: 'same-user', workspace: 'workspace-a', project: 'project-a' }));
   for (const args of [['config', 'set', '--workspace', 'workspace-b', '--project', 'project-b'], ['auth', 'refresh'], ['issues', 'list']]) {
     const result = await f.run(args, { env });
     assert.equal(result.code, 0, result.stderr);
@@ -317,7 +376,7 @@ test('refresh rejects invalid local bindings before dispatch and refuses changed
       : identity)));
     const file = path.join(f.dir, 'default.json');
     const original = JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'PRIVATE_ACCESS', refreshToken: 'PRIVATE_REFRESH', tokenWorkspace: 'workspace-a', userId: 'same-user', workspace: 'workspace-b', project: 'project-b', ...change });
-    writeFileSync(file, original, { mode: 0o600 });
+    writeCredentials(file, original);
     const result = await f.run(['auth', 'refresh'], { env: { COLLAB_TOKEN: '' } });
     assert.notEqual(result.code, 0); assert.equal(result.error.error, expected);
     assert.equal(result.stdout, ''); assert.ok(!result.stderr.includes('PRIVATE_'));

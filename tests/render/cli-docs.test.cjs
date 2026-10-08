@@ -87,11 +87,14 @@ test('docs render installation, navigable sections, commands, and credential lim
   assert.match(html, /npm install --global .\/packages\/cli/);
   assert.match(html, /Node.js 22/);
   const { version } = require('../../packages/cli/package.json');
-  for (const platform of ['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']) {
-    const url = `https://github.com/Art-of-Technology/collab/releases/download/cli-v${version}/collab-${platform}.tar.gz`;
+  for (const platform of ['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'windows-x64']) {
+    const url = `https://github.com/Art-of-Technology/collab/releases/download/cli-v${version}/collab-${platform}.${platform === 'windows-x64' ? 'zip' : 'tar.gz'}`;
     assert.ok(html.includes(`href="${url}"`), platform);
     assert.ok(html.includes(`href="${url}.sha256"`), `${platform} checksum`);
   }
+  assert.match(html, /curl -fsSL https:\/\/collab\.weez\.boo\/install\.sh/);
+  assert.match(html, /irm https:\/\/collab\.weez\.boo\/install\.ps1/);
+  assert.match(html, /No Node.js, npm, Bun, or terminal restart needed/);
   assert.match(html, /Logout removes local credentials only/);
   assert.match(html, /collab-cli/);
   assert.match(html, /href="\/dev\/docs"/);
