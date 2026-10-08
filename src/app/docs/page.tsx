@@ -117,7 +117,7 @@ export default function DocsPage() {
                 <h2>Install the CLI</h2>
                 <p className="text-muted-foreground">Paste one command into your terminal. The installer detects your machine, verifies the download, installs Collab CLI {cliPackage.version}, and sets up PATH. No Node.js, npm, Bun, or terminal restart needed.</p>
                 <h3 className="mt-6">macOS / Linux</h3>
-                <TerminalBlock code={`bash -o pipefail -c 'curl -fsSL https://collab.weez.boo/install.sh | sh' && . "$HOME/.local/share/collab/env"`} />
+                <TerminalBlock code={`ZDOTDIR="\${ZDOTDIR:-$HOME}" bash -o pipefail -c 'curl -fsSL https://collab.weez.boo/install.sh | sh' && . "$HOME/.local/share/collab/env"`} />
                 <p className="text-muted-foreground">For Bash and Zsh on macOS 13+ or Linux with glibc, on Apple Silicon / ARM64 or Intel / AMD x64. Installs to <code>~/.local/bin</code> and configures your shell for future terminals.</p>
                 <h3 className="mt-6">Windows PowerShell</h3>
                 <TerminalBlock code={'irm https://collab.weez.boo/install.ps1 | iex'} />

@@ -21,10 +21,23 @@ function Invoke-WebRequest($Uri, [switch]$UseBasicParsing, $OutFile) {
 }
 try {
     $env:LOCALAPPDATA = Join-Path $work 'local app data'
+    $bin = Join-Path $env:LOCALAPPDATA 'Collab\bin'
+    $oldBin = Join-Path $work 'older cli'
+    [void][IO.Directory]::CreateDirectory($oldBin)
+    Set-Content (Join-Path $oldBin 'collab.cmd') '@exit /b 99'
+    $env:Path = "$oldBin;$bin;$oldPath;$bin"
+    [Environment]::SetEnvironmentVariable('Path', "$oldBin;$bin;$oldUserPath;$bin", 'User')
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
     for ($i = 0; $i -lt 2; $i++) {
         irm https://collab.weez.boo/install.ps1 | iex
         $expected = Join-Path $env:LOCALAPPDATA 'Collab\bin\collab.exe'
         if ((Get-Command collab).Source -ne $expected) { throw 'CLI not available in the current terminal' }
+        foreach ($value in @($env:Path, [Environment]::GetEnvironmentVariable('Path', 'User'))) {
+            if (($value -split ';')[0] -ne $bin) { throw 'Install directory must lead PATH' }
+            if (@($value -split ';' | Where-Object { $_ -eq $bin }).Count -ne 1) { throw 'Install directory duplicated in PATH' }
+            if ($oldBin -notin ($value -split ';')) { throw 'Unrelated PATH entry removed' }
+        }
+        if ([Environment]::GetEnvironmentVariable('Path', 'Machine') -ne $machinePath) { throw 'Machine PATH changed' }
         $schema = collab schema | ConvertFrom-Json
         if ($LASTEXITCODE -ne 0 -or $schema.version -ne $script:expectedVersion) { throw 'Installed CLI failed' }
     }

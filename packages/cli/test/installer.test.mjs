@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url))).version;
-const command = `bash -o pipefail -c 'curl -fsSL https://collab.weez.boo/install.sh | sh' && . "$HOME/.local/share/collab/env"`;
+const command = `ZDOTDIR="\${ZDOTDIR:-$HOME}" bash -o pipefail -c 'curl -fsSL https://collab.weez.boo/install.sh | sh' && . "$HOME/.local/share/collab/env"`;
 const supported = process.platform === 'darwin' || process.platform === 'linux';
 
 function fixture(t) {
@@ -42,8 +42,8 @@ else {
   fs.copyFileSync(path.join(${JSON.stringify(downloads)}, name), args[args.indexOf('-o') + 1]);
 }
 `, { mode: 0o755 });
-  const env = { ...process.env, HOME: home, ZDOTDIR: home, PATH: `${tools}:${process.env.PATH}`, COLLAB_CONFIG_DIR: path.join(home, 'untouched-config') };
-  for (const key of ['BASH_ENV', 'ENV', 'COLLAB_TOKEN']) delete env[key];
+  const env = { ...process.env, HOME: home, PATH: `${tools}:${process.env.PATH}`, COLLAB_CONFIG_DIR: path.join(home, 'untouched-config') };
+  for (const key of ['BASH_ENV', 'ENV', 'COLLAB_TOKEN', 'ZDOTDIR']) delete env[key];
   const run = (suffix = '', extra = {}) => spawnSync('bash', ['--noprofile', '--norc', '-c', `${command}${suffix}`], { env: { ...env, ...extra }, encoding: 'utf8', timeout: 30000 });
   return { home, downloads, name, env, run };
 }
@@ -87,4 +87,38 @@ test('a failed installer download fails the one-liner before sourcing any old en
   writeFileSync(path.join(f.home, '.local/share/collab/env'), 'touch "$HOME/should-not-run"');
   assert.notEqual(f.run('', { FAIL_DOWNLOAD: '1' }).status, 0);
   assert.equal(existsSync(path.join(f.home, 'should-not-run')), false);
+});
+
+test('installed CLI wins PATH lookup and repeated sourcing removes duplicate entries', { skip: !supported }, t => {
+  const f = fixture(t);
+  const oldBin = path.join(f.home, 'old bin');
+  const bin = path.join(f.home, '.local/bin');
+  mkdirSync(oldBin);
+  writeFileSync(path.join(oldBin, 'collab'), '#!/bin/sh\nexit 99\n', { mode: 0o755 });
+  const expectedPath = `${bin}:${oldBin}:${f.env.PATH}`;
+  f.env.PATH = `${oldBin}:${bin}:${f.env.PATH}:${bin}`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = f.run(' && collab schema && printf "%s\\n" "$PATH"');
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim().split('\n').at(-1), expectedPath);
+  }
+  const future = spawnSync('bash', ['--noprofile', '--norc', '-c', '. "$HOME/.bashrc" && . "$HOME/.bashrc" && collab schema && printf "%s\\n" "$PATH"'], { env: f.env, encoding: 'utf8' });
+  assert.equal(future.status, 0, future.stderr);
+  assert.equal(future.stdout.trim().split('\n').at(-1), expectedPath);
+});
+
+test('non-exported ZDOTDIR configures a new custom directory and future Zsh terminals', { skip: !supported }, t => {
+  const available = spawnSync('zsh', ['--version']);
+  if (available.error?.code === 'ENOENT') return t.skip('Zsh unavailable; exercised on macOS CI');
+  const f = fixture(t);
+  const custom = path.join(f.home, 'custom zsh');
+  writeFileSync(path.join(f.home, '.zshenv'), 'ZDOTDIR="$HOME/custom zsh"\n');
+  const result = spawnSync('zsh', ['-d', '-c', `${command} && collab schema`], { env: f.env, encoding: 'utf8', timeout: 30000 });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout.slice(result.stdout.indexOf('{'))).version, version);
+  assert.ok(existsSync(path.join(custom, '.zshrc')));
+  assert.equal(existsSync(path.join(f.home, '.zshrc')), false);
+  const future = spawnSync('zsh', ['-d', '-i', '-c', 'collab schema'], { env: f.env, encoding: 'utf8', timeout: 30000 });
+  assert.equal(future.status, 0, future.stderr);
+  assert.equal(JSON.parse(future.stdout).version, version);
 });

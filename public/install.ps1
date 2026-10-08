@@ -32,10 +32,9 @@ function Install-Collab {
         else { [IO.File]::Move($staged, $destination) }
         $staged = $null
         $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-        if ($bin -notin ($userPath -split ';')) {
-            [Environment]::SetEnvironmentVariable('Path', "$bin;$userPath", 'User')
-        }
-        if ($bin -notin ($env:Path -split ';')) { $env:Path = "$bin;$env:Path" }
+        $userPath = (@($bin) + @($userPath -split ';' | Where-Object { $_ -and $_ -ne $bin })) -join ';'
+        [Environment]::SetEnvironmentVariable('Path', $userPath, 'User')
+        $env:Path = (@($bin) + @($env:Path -split ';' | Where-Object { $_ -and $_ -ne $bin })) -join ';'
         Write-Host "Collab $version installed. Run collab --help in this terminal."
     } finally {
         if ($staged -and (Test-Path -LiteralPath $staged)) { Remove-Item -LiteralPath $staged -Force }

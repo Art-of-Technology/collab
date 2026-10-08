@@ -46,10 +46,18 @@ collab_install() (
   mv -f "$staged" "$HOME/.local/bin/collab"
   staged=''
   cat > "$HOME/.local/share/collab/env" <<'ENV'
-case ":$PATH:" in
-  *":$HOME/.local/bin:"*) ;;
-  *) export PATH="$HOME/.local/bin:$PATH" ;;
-esac
+collab_remaining=$PATH
+PATH="$HOME/.local/bin"
+while :; do
+  collab_entry=${collab_remaining%%:*}
+  if [ "$collab_entry" != "$HOME/.local/bin" ]; then PATH="$PATH:$collab_entry"; fi
+  case "$collab_remaining" in
+    *:*) collab_remaining=${collab_remaining#*:} ;;
+    *) break ;;
+  esac
+done
+export PATH
+unset collab_remaining collab_entry
 hash -r 2>/dev/null || true
 ENV
   # shellcheck disable=SC2016 # Expand HOME when the user's shell starts.
@@ -59,6 +67,7 @@ ENV
   elif [ -f "$HOME/.bash_login" ]; then login_profile="$HOME/.bash_login"; fi
   for profile in "$login_profile" "$HOME/.bashrc" "${ZDOTDIR:-$HOME}/.zshrc"; do
     if ! grep -Fqx "$line" "$profile" 2>/dev/null; then
+      mkdir -p "$(dirname "$profile")"
       printf '\n# Collab CLI\n%s\n' "$line" >> "$profile"
     fi
   done

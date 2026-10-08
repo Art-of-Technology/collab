@@ -7,7 +7,7 @@ Projects, issues and shared Notes for people and AI agents.
 macOS / Linux (Bash or Zsh):
 
 ```sh
-bash -o pipefail -c 'curl -fsSL https://collab.weez.boo/install.sh | sh' && . "$HOME/.local/share/collab/env"
+ZDOTDIR="${ZDOTDIR:-$HOME}" bash -o pipefail -c 'curl -fsSL https://collab.weez.boo/install.sh | sh' && . "$HOME/.local/share/collab/env"
 ```
 
 Windows PowerShell:
