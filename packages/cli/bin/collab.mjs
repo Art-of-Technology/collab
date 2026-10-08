@@ -118,6 +118,25 @@ async function main() {
   if (selected.workspace) query.set('workspaceId', selected.workspace);
   for (const [key, type] of Object.entries(spec.query)) if (options[flagName(key)] !== undefined) query.set(key, String(converted(options[flagName(key)], type)));
   if (spec.query.projectId && !query.has('projectId') && selected.project) query.set('projectId', selected.project);
+  for (const [key, value] of Object.entries(spec.defaults || {})) if (!query.has(key)) query.set(key, String(value));
+  for (const key of spec.requiredQuery || []) if (!query.get(key)?.trim()) throw new CliError('required_field', `Missing required --${flagName(key)}.`);
+  for (const [key, constraint] of Object.entries(spec.constraints || {})) if (query.has(key)) {
+    const value = query.get(key);
+    if ((constraint.enum && !constraint.enum.includes(value)) ||
+      (constraint.minimum !== undefined && Number(value) < constraint.minimum) || (constraint.maximum !== undefined && Number(value) > constraint.maximum) ||
+      (constraint.minLength !== undefined && value.trim().length < constraint.minLength) || (constraint.maxLength !== undefined && value.length > constraint.maxLength) ||
+      (constraint.format === 'date-time' && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(value) || !Number.isFinite(Date.parse(value))))) {
+      throw new CliError('invalid_value', `Invalid --${flagName(key)}. See collab schema for supported values and bounds.`);
+    }
+  }
+  if (name === 'search' && query.has('after') && query.has('before') && Date.parse(query.get('after')) > Date.parse(query.get('before'))) throw new CliError('invalid_value', '--after must not follow --before.');
+  if (name === 'context get') {
+    if (!query.has('includePipeline')) query.set('includePipeline', String(query.has('projectId') && query.get('includeKnowledge') !== 'true'));
+    if (query.get('includePipeline') === 'true') {
+      if (!query.has('projectId')) throw new CliError('required_field', 'Project pipeline context requires --project ID.');
+      if (query.get('includeKnowledge') === 'true') throw new CliError('invalid_value', 'Use includeKnowledge with includePipeline=false for the legacy prompt format.');
+    } else if (['limit', 'offset', 'since'].some(key => query.has(key))) throw new CliError('invalid_value', 'limit, offset and since require project pipeline context.');
+  }
   for (const key of ['limit', 'page', 'offset']) if (query.has(key) && (Number(query.get(key)) < (key === 'offset' ? 0 : 1) || (key === 'limit' && Number(query.get(key)) > 100))) throw new CliError('invalid_pagination', 'Use limit 1..100, page >=1 and offset >=0.');
   let endpoint = spec.path; parameters.forEach((key, i) => { endpoint = endpoint.replace(`:${key}`, encodeURIComponent(args[i])); });
   const timeout = options.timeout === undefined ? 30000 : converted(options.timeout, 'integer') * 1000;

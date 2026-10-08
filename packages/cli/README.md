@@ -20,7 +20,7 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), or Windows x64 with PowerShell 5.1+. Alpine/musl and native Windows ARM64 are not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-[CLI 0.1.1 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.1.1) are hosted on GitHub. You can inspect `install.sh` or `install.ps1` there before running them. Archives and SHA-256 sidecars are also available for manual downloads.
+[CLI 0.2.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.2.0) are hosted on GitHub. You can inspect `install.sh` or `install.ps1` there before running them. Archives and SHA-256 sidecars are also available for manual downloads.
 
 These downloads do not carry a verified publisher signature. The macOS builds are not notarized. If macOS blocks the executable, follow [Apple's trusted-app guidance](https://support.apple.com/en-us/102445) after verifying the download.
 
@@ -48,8 +48,8 @@ Collab owns the plan, issue state, acceptance criteria and project context. GitH
 ```sh
 # Use immutable IDs returned by workspaces/projects list.
 collab config set --workspace WORKSPACE_ID --project PROJECT_ID
-collab context get --include-knowledge true
-collab notes list --all
+collab context get
+collab search --query "release blockers"
 collab notes get NOTE_ID
 collab projects statuses PROJECT_ID
 collab issues list --status todo --all
@@ -70,6 +70,32 @@ Only move an issue to done after satisfying its acceptance criteria. Record test
 
 `notes create` uses PROJECT scope when a default/explicit project is supplied; otherwise the API defaults to WORKSPACE. Updating a Note never changes its project because of a CLI context default. Pass `--project-id` explicitly for an intentional move. The API enforces author/share rights, owner-only settings and tag/destination access. This CLI does not expose secrets or personal Notes. Note reads use the existing API's plain-text representation, so read-and-write cycles are not rich-text round trips.
 
+## Search and project context
+
+```sh
+collab search --query 'APP-123'
+collab search --query '"release pipeline" OR deployment' --mode keyword
+collab search --query 'authentcation' --mode fuzzy
+collab search --query 'what prevents shipping?' --mode hybrid
+collab search --query 'login failure' --mode semantic
+collab search --query 'release' --type issue --status in_progress --assignee-id USER_ID --after 2026-10-01T00:00:00Z
+collab context get --project PROJECT_ID --max-tokens 8000
+```
+
+`search` covers readable issues, shared Notes and project activity. Modes are `exact` (ID/key or literal phrase), `keyword` (PostgreSQL full-text), `fuzzy` (word trigrams), `semantic` (verified embeddings) and `hybrid` (default, fused keyword and semantic ranking). Exact identifiers rank first. Filters: `--project`/`--project-id`, `--type all|issue|note|activity`, `--status`, `--assignee-id`, inclusive ISO `--after`/`--before`, `--limit`, `--offset`, `--max-tokens`. Status/assignee filters exclude Notes. Issue/Note dates use updated time; activity dates use created time.
+
+Hybrid reports keyword fallback in `metadata.fallback` when semantic search is unavailable. `metadata.vectorCoverage` reports checked, current and missing/stale vectors; unconfigured provider/index counts are unknown, not zero. Semantic-only requests fail with `semantic_unavailable` rather than presenting lexical results as semantic. Embeddings are used only when their configured model/dimensions, nonzero vector, identity and source timestamp are verified. Partial index coverage is disclosed. No live semantic relevance is implied by installing this CLI.
+
+With a selected project, `context get` returns status counts, assigned owners, blockers, directed dependencies and parents, recent changes and relevant Notes. Dependencies include readable same-workspace neighbors one level deep. Completed endpoints are excluded from active blockers; legacy status completion can be unknown. Notes prioritize AI context, its priority, pins and recent updates. Personal, secret and encrypted Notes are excluded. `--since` defaults to seven days ago and filters recent changes. This reads the canonical database without an index dependency.
+
+Search defaults to 20 results, context to 10 per section; `--limit` accepts 1–50. Follow `pagination.nextOffset` with `--offset` for search, or each context section's own next offset. Context sections may advance differently after budget trimming. `total: null` means unknown, and pages may shift with concurrent edits. `--all` is intentionally unavailable for these bounded commands. A scope above 50,000 readable records returns `scope_too_large`; narrow a search by project, type or dates. Project context supports up to 50,000 issues and relation/neighbor records per query.
+
+`--max-tokens` defaults to 8,000, using whole-response UTF-8 bytes as a conservative token upper bound. The range is 1,024–64,000 for search and 2,048–64,000 for context. Text is excerpted and tail results may be removed; inspect `metadata.budget`. An insufficient minimum budget returns `budget_too_small`. IDs, links, timestamps and search match types remain in the returned JSON. Read a Note by ID for complete instructions.
+
+Without a project, context returns bounded workspace prompts. `--include-pipeline false` or `--include-knowledge true` selects the prior prompt format even with a project. Pipeline context and `--include-knowledge true` cannot be combined. `--since`, `--limit` and `--offset` require pipeline context. Existing login scopes suffice; no new OAuth consent is needed for these reads when the token already has the required scopes.
+
+See [search API behavior](../../docs/agent-search.md) and [project context semantics](../../docs/agent-project-context.md).
+
 ## Commands and inputs
 
 `collab schema` (or `--help`) returns the complete machine-readable command, method, field and query inventory. Output is JSON, including when piped; `--json` is also accepted. No table scraping or interactive confirmation is required.
@@ -77,6 +103,7 @@ Only move an issue to done after satisfying its acceptance criteria. Record test
 | Area | Commands |
 | --- | --- |
 | Identity/context | `whoami`, `workspaces list`, `workspace get/members/stats/activity`, `config show/set` |
+| Retrieval | `search --query TEXT`, `context get --project ID` |
 | Projects | `projects list/get/create/update/statuses/stats/activity` |
 | Issues | `issues list/get/create/update/delete/assign/activity` |
 | Collaboration | `comments list/add`, `relations list/add/delete`, `worklogs list/get/add/update/delete` |

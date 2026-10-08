@@ -7,8 +7,16 @@ const offset = { offset: integer, limit: integer };
 const issueFields = { title: string, description: string, type: string, priority: string, status: string, assigneeId: string, parentId: string, dueDate: string, startDate: string, storyPoints: integer, color: string, labels: array };
 const noteFields = { title: string, content: string, type: string, scope: string, projectId: string, isAiContext: boolean, aiContextPriority: integer, tagIds: array };
 const timeFields = { timeSpent: integer, description: string, loggedAt: string };
+const retrievalBounds = { limit: { minimum: 1, maximum: 50 }, offset: { minimum: 0, maximum: 50000 }, maxTokens: { minimum: 1024, maximum: 64000 } };
 
 export const commands = {
+  'search': command('GET', 'search', {}, { query: string, mode: string, ...projectQuery, type: string, status: string,
+    assigneeId: string, after: string, before: string, ...offset, maxTokens: integer }, {
+    requiredQuery: ['query'], defaults: { mode: 'hybrid', limit: 20, offset: 0, maxTokens: 8000 },
+    constraints: { ...retrievalBounds, query: { minLength: 1, maxLength: 500 },
+      mode: { enum: ['exact', 'keyword', 'semantic', 'hybrid', 'fuzzy'] }, type: { enum: ['all', 'issue', 'note', 'activity'] },
+      after: { format: 'date-time' }, before: { format: 'date-time' } },
+  }),
   'whoami': command('GET', 'user/me'),
   'workspaces list': command('GET', 'user/workspaces'),
   'workspace get': command('GET', 'workspace'),
@@ -48,7 +56,11 @@ export const commands = {
   'notes get': command('GET', 'context/:id'),
   'notes create': command('POST', 'context', noteFields, {}, { required: ['title', 'content'], defaultProject: true }),
   'notes update': command('PUT', 'context/:id', noteFields),
-  'context get': command('GET', 'ai-context', {}, { ...projectQuery, includeKnowledge: boolean }),
+  'context get': command('GET', 'ai-context', {}, { ...projectQuery, includeKnowledge: boolean, includePipeline: boolean,
+    ...offset, maxTokens: integer, since: string }, {
+    defaults: { maxTokens: 8000 }, constraints: { ...retrievalBounds, maxTokens: { minimum: 2048, maximum: 64000 }, since: { format: 'date-time' } },
+    description: 'With a project, return pipeline context. includePipeline=false or includeKnowledge=true selects the legacy prompt format.',
+  }),
   'knowledge list': command('GET', 'context/knowledge', {}, { ...offset, ...projectQuery, q: string, type: string }),
   'knowledge get': command('GET', 'context/knowledge/:id'),
   'reports issues': command('GET', 'reports/issue-summary', {}, { ...projectQuery, period: integer, comparePeriod: boolean }),

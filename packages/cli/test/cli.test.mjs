@@ -79,6 +79,66 @@ test('actual entrypoint scopes filters to explicit workspace and project', async
   assert.equal(call.headers.authorization, 'Bearer synthetic-token');
 });
 
+test('search sends every supported mode and filter, preserves fallback JSON, and exposes bounds offline', async t => {
+  const response = { requestedMode: 'hybrid', mode: 'keyword', results: [{ id: 'issue-one', matchType: 'exact' }],
+    pagination: { nextOffset: null, hasMore: false }, metadata: { fallback: { from: 'hybrid', to: 'keyword', reason: 'not_configured' } } };
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify(response)));
+  for (const mode of ['exact', 'keyword', 'semantic', 'hybrid', 'fuzzy']) {
+    const result = await f.run(['search', '--query', 'APP-42 or login failure', '--mode', mode, '--workspace', 'w', '--project', 'p',
+      '--type', 'issue', '--status', 'todo', '--assignee-id', 'user-one', '--after', '2026-01-01T00:00:00Z', '--before', '2026-02-01T00:00:00Z',
+      '--limit', '5', '--offset', '2', '--max-tokens', '4000']);
+    assert.equal(result.code, 0); assert.deepEqual(result.data, response);
+    const url = new URL(f.calls.at(-1).url, f.url);
+    assert.equal(f.calls.at(-1).method, 'GET'); assert.equal(url.pathname, '/api/apps/auth/search');
+    assert.deepEqual(Object.fromEntries(url.searchParams), { workspaceId: 'w', query: 'APP-42 or login failure', mode, projectId: 'p', type: 'issue',
+      status: 'todo', assigneeId: 'user-one', after: '2026-01-01T00:00:00Z', before: '2026-02-01T00:00:00Z', limit: '5', offset: '2', maxTokens: '4000' });
+  }
+  await f.run(['search', '--query', 'login']);
+  const defaults = new URL(f.calls.at(-1).url, f.url).searchParams;
+  assert.equal(defaults.get('mode'), 'hybrid'); assert.equal(defaults.get('maxTokens'), '8000');
+  const schema = await f.run(['schema']);
+  assert.deepEqual(schema.data.commands.search.requiredQuery, ['query']);
+  assert.deepEqual(schema.data.commands.search.constraints.mode.enum, ['exact', 'keyword', 'semantic', 'hybrid', 'fuzzy']);
+  assert.equal(schema.data.commands.search.constraints.limit.maximum, 50);
+});
+
+test('context selects bounded project pipeline by default and keeps explicit legacy prompt requests', async t => {
+  const f = await fixture(t);
+  for (const [args, pipeline] of [
+    [['context', 'get', '--project', 'p', '--limit', '4', '--offset', '2', '--since', '2026-01-01T00:00:00Z'], 'true'],
+    [['context', 'get', '--project', 'p', '--include-pipeline', 'false'], 'false'],
+    [['context', 'get', '--project', 'p', '--include-knowledge', 'true'], 'false'],
+    [['context', 'get'], 'false'],
+  ]) {
+    assert.equal((await f.run(args)).code, 0);
+    const query = new URL(f.calls.at(-1).url, f.url).searchParams;
+    assert.equal(query.get('includePipeline'), pipeline); assert.equal(query.get('maxTokens'), '8000');
+  }
+});
+
+test('invalid retrieval bounds and modes fail before HTTP dispatch', async t => {
+  const f = await fixture(t);
+  for (const args of [
+    ['search'], ['search', '--query', ' '], ['search', '--query', 'x'.repeat(501)], ['search', '--query', 'x', '--mode', 'vectorish'],
+    ['search', '--query', 'x', '--type', 'secret'], ['search', '--query', 'x', '--limit', '51'], ['search', '--query', 'x', '--offset', '50001'],
+    ['search', '--query', 'x', '--max-tokens', '1000'], ['search', '--query', 'x', '--max-tokens', '64001'],
+    ['search', '--query', 'x', '--after', 'yesterday'], ['search', '--query', 'x', '--after', '2026-02-01T00:00:00Z', '--before', '2026-01-01T00:00:00Z'],
+    ['search', '--query', 'x', '--all'], ['context', 'get', '--include-pipeline', 'true'], ['context', 'get', '--limit', '5'],
+    ['context', 'get', '--project', 'p', '--include-pipeline', 'true', '--include-knowledge', 'true'],
+    ['context', 'get', '--project', 'p', '--max-tokens', '1024'],
+  ]) assert.notEqual((await f.run(args)).code, 0, args.join(' '));
+  assert.equal(f.calls.length, 0);
+});
+
+test('retrieval errors retain safe machine codes without echoing provider or record details', async t => {
+  for (const [code, status] of [['semantic_unavailable', 503], ['scope_too_large', 422], ['budget_too_small', 422]]) {
+    const f = await fixture(t, (_req, res) => { res.writeHead(status); res.end(JSON.stringify({ error: code, error_description: 'PRIVATE_SENTINEL' })); });
+    const result = await f.run(['search', '--query', 'x', '--mode', 'semantic']);
+    assert.equal(result.code, 5); assert.equal(result.error.error, code); assert.equal(result.error.status, status);
+    assert.ok(!result.stderr.includes('PRIVATE_SENTINEL')); assert.equal(f.calls.length, 1);
+  }
+});
+
 test('switching workspace cannot carry a saved project from another workspace', async t => {
   const f = await fixture(t);
   writeCredentials(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.url, accessToken: 'synthetic-token', expiresAt: Date.now() + 60000, workspace: 'old-space', project: 'old-project' }));

@@ -1,6 +1,6 @@
 function Install-Collab {
     $ErrorActionPreference = 'Stop'
-    $version = '0.1.1'
+    $version = '0.2.0'
     $architecture = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
     if ($env:OS -ne 'Windows_NT' -or $architecture -ne 'AMD64') { throw 'This installer requires Windows x64. Use install.sh on macOS/Linux.' }
     $archive = 'collab-windows-x64.zip'

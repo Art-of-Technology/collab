@@ -11,6 +11,7 @@ type Command = {
   fields: Record<string, string>;
   query: Record<string, string>;
   required?: string[];
+  requiredQuery?: string[];
   pagination?: string[];
 };
 
@@ -74,7 +75,7 @@ export function CommandReference() {
                       <div key={field} className="flex min-w-0 flex-wrap items-baseline gap-2">
                         <dt><code className="break-all">--{flagName(field)}</code></dt>
                         <dd className="text-xs text-muted-foreground">
-                          {type}{spec.required?.includes(field) ? ' · required' : ''}
+                          {type}{spec.required?.includes(field) || spec.requiredQuery?.includes(field) ? ' · required' : ''}
                         </dd>
                       </div>
                     ))}
