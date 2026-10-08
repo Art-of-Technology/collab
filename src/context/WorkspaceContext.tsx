@@ -56,7 +56,7 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
     if (match && match[1]) {
       const potentialWorkspaceId = match[1];
       // Exclude known non-workspace routes
-      const nonWorkspaceRoutes = ['welcome', 'workspaces', 'create-workspace', 'workspace-invitation', 'login', 'home', 'terms', 'privacy-policy'];
+      const nonWorkspaceRoutes = ['welcome', 'workspaces', 'create-workspace', 'workspace-invitation', 'login', 'home', 'terms', 'privacy-policy', 'docs'];
       if (!nonWorkspaceRoutes.includes(potentialWorkspaceId)) {
         return potentialWorkspaceId;
       }
@@ -213,4 +213,4 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       {children}
     </WorkspaceContext.Provider>
   );
-}; 
+};
