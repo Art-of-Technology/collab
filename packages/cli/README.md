@@ -1,6 +1,38 @@
 # Collab CLI
 
-Projects, issues and shared Notes for people and AI agents. Node.js 22+, no runtime dependencies.
+Projects, issues and shared Notes for people and AI agents.
+
+## Native downloads
+
+[Download Collab CLI 0.1.0 from GitHub Releases](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.1.0). These standalone executables include the runtime; Node.js, npm and Bun are not required on your machine.
+
+| Machine | Archive |
+| --- | --- |
+| macOS, Apple Silicon | `collab-darwin-arm64.tar.gz` |
+| macOS, Intel | `collab-darwin-x64.tar.gz` |
+| Linux, ARM64 | `collab-linux-arm64.tar.gz` |
+| Linux, Intel/AMD x64 | `collab-linux-x64.tar.gz` |
+
+Requires macOS 13+ or Linux with glibc. Windows users can run the Linux executable inside WSL; native Windows and Alpine/musl packages are not provided. The CLI retains its Unix credential-file protection checks.
+
+Download the archive and matching `.sha256` file into the same folder. Set the platform below to match your archive. On Linux, use `sha256sum` instead of `shasum -a 256`.
+
+```sh
+cd ~/Downloads
+CLI_PLATFORM=darwin-arm64
+shasum -a 256 -c "collab-$CLI_PLATFORM.tar.gz.sha256" &&
+  tar -xzf "collab-$CLI_PLATFORM.tar.gz" &&
+  mkdir -p "$HOME/.local/bin" &&
+  install -m 755 "collab-$CLI_PLATFORM/collab" "$HOME/.local/bin/collab"
+```
+
+After verification and installation succeed, add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile and open a new terminal. Run `collab --help` to verify the installation.
+
+The macOS downloads are not notarized. If macOS blocks the executable, follow [Apple's trusted-app guidance](https://support.apple.com/en-us/102445) after verifying the download.
+
+## Install from source
+
+Node.js 22+ and npm are required for this option; the package has no runtime dependencies.
 
 ```sh
 # From this repository; no npm publication is assumed.
@@ -125,3 +157,11 @@ npm pack ./packages/cli
 ```
 
 Tests launch the actual CLI against local synthetic HTTP servers, including PKCE callbacks, request bodies, pagination, private file handling and refusal/error behavior. They are not production API or browser acceptance. Installation from a reviewed checkout/tarball works independently of npm registry publication. Publishing a package and provisioning production OAuth are separate release actions.
+
+### Build native downloads
+
+With Bun 1.3.13 installed, run `npm run build:native --prefix packages/cli` to produce `packages/cli/dist/collab` for the current machine. The build disables runtime loading of working-directory `.env`, `bunfig.toml`, `tsconfig.json` and `package.json` files. Explicit `COLLAB_*` environment variables still work.
+
+The `Collab CLI native downloads` workflow builds and tests each executable on a matching macOS/Linux architecture. It includes the README and license notices, packages a `.tar.gz` archive, and produces a SHA-256 sidecar. Pull requests only upload CI artifacts. After merge and review, a `cli-v<VERSION>` tag matching this package's version publishes the four archives and checksums to GitHub Releases; it does not trigger the application's `v*` deployment workflows or replace the application's latest release.
+
+To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_EXECUTABLE` to its absolute path and run `node --test packages/cli/test/cli.test.mjs` from the repository root. The ordinary Node.js test path remains the default.
