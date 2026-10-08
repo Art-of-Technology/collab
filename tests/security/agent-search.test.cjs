@@ -33,23 +33,32 @@ function matches(row, where) {
 function harness() {
   const scopes = load('src/lib/oauth-scopes.ts');
   const workspace = { id: 'w', slug: 'team', name: 'Team', ownerId: 'bob', members: [{ userId: 'alice', status: true, role: 'MEMBER' }] };
-  const foreign = { id: 'foreign', ownerId: 'eve', members: [] };
+  const foreign = { id: 'foreign', slug: 'foreign-team', ownerId: 'eve', members: [] };
+  const joined = { id: 'joined', slug: 'joined-team', name: 'Joined', ownerId: 'bob', members: [{ userId: 'alice', status: true }] };
+  const revoked = { id: 'revoked', slug: 'revoked-team', name: 'Revoked', ownerId: 'bob', members: [{ userId: 'alice', status: false }] };
+  const workspaces = [workspace, foreign, joined, revoked];
   const projects = [{ id: 'p', workspaceId: 'w', workspace }, { id: 'p2', workspaceId: 'w', workspace }, { id: 'foreign', workspaceId: 'foreign', workspace: foreign }];
   const rows = { issue: [], note: [], issueActivity: [] };
-  const state = { scopes: ['issues:read', 'context:read'], lexicalReads: 0, beforeHydrate: null, vectorResult: null };
+  const state = { scopes: ['issues:read', 'context:read'], lexicalReads: 0, beforeHydrate: null, vectorResult: null,
+    now: Date.parse('2026-10-08T12:00:00Z'), isSystemApp: true, tokenRevoked: false };
+  class Clock extends Date {
+    constructor(...args) { super(...(args.length ? args : [state.now])); }
+    static now() { return state.now; }
+  }
   const db = {
-    workspace: { findFirst: async ({ where }) => matches(workspace, where) ? workspace : null },
+    workspace: { findFirst: async ({ where }) => workspaces.find(row => matches(row, where)) || null },
+    app: { findUnique: async () => ({ isSystemApp: state.isSystemApp }) },
     project: { findFirst: async ({ where }) => projects.find(p => matches(p, where)) || null },
     user: { findUnique: async () => ({ id: 'alice', email: 'alice@example.test', name: 'Alice' }) },
-    appToken: { findMany: async () => [{ accessToken: 'Y2lwaGVy', userId: 'alice', scopes: state.scopes, tokenExpiresAt: null,
+    appToken: { findMany: async ({ where }) => [{ isRevoked: state.tokenRevoked, accessToken: 'Y2lwaGVy', userId: 'alice', scopes: state.scopes, tokenExpiresAt: null,
       installation: { id: 'installation', appId: 'app', status: 'ACTIVE', workspaceId: 'w', installedById: 'bob', scopes: [], workspace,
-        app: { id: 'app', name: 'App', slug: 'app', status: 'PUBLISHED' } } }] },
+        app: { id: 'app', name: 'App', slug: 'app', status: 'PUBLISHED' } } }].filter(row => matches(row, where)) },
   };
   for (const [type, records] of Object.entries(rows)) db[type] = { findMany: async ({ where, take }) => records.filter(r => matches(r, where)).slice(0, take) };
   const finder = load('src/lib/issue-finder.ts', {
     '@/lib/prisma': { prisma: db }, '@/lib/shared-issue-key-utils': load('src/lib/shared-issue-key-utils.ts'),
   });
-  const access = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: db }, '@/lib/issue-finder': finder });
+  const access = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: db }, '@/lib/issue-finder': finder }, { Date: Clock });
   const queryModule = load('src/lib/agent-search-query.ts', { zod: require('zod') }, { Buffer });
   const noVectors = load('src/lib/agent-search-vectors.ts', {
     '@qdrant/js-client-rest': { QdrantClient: class { constructor() { throw new Error('Unexpected network request'); } } },
@@ -98,7 +107,7 @@ function harness() {
     const response = await route.GET(request, { params: Promise.resolve({}) });
     return { status: response.status, body: await response.json() };
   }
-  return { call, issue, note, activity, state, rows, workspace, foreign, projects, queryModule };
+  return { call, issue, note, activity, state, rows, workspace, foreign, joined, revoked, projects, queryModule };
 }
 
 test('agent search: authentic token scopes, workspace membership and validated filters gate retrieval', async () => {
@@ -219,4 +228,108 @@ test('agent search: JSON byte upper bound, pagination and exact-first hybrid ran
     { id: 'both', type: 'note', score: 100, exactIdentifier: false, matchType: 'keyword' },
   ], [{ id: 'both', type: 'note', score: 0.9, exactIdentifier: false, matchType: 'semantic' }]);
   assert.equal(ranked[0].id, 'exact'); assert.equal(ranked[1].matchType, 'hybrid');
+});
+
+
+test('agent search: both workspace selectors authorize the target through real middleware', async () => {
+  const h = harness(); h.issue('home');
+  const project = { id: 'joined-project', workspaceId: h.joined.id, workspace: h.joined };
+  h.issue('target', { workspaceId: h.joined.id, workspace: h.joined, projectId: project.id, project });
+  for (const selector of ['workspaceId', 'workspace']) {
+    const value = workspace => workspace[selector === 'workspaceId' ? 'id' : 'slug'];
+    for (const [workspace, expected] of [[h.workspace, ['home']], [h.joined, ['target']]]) {
+      const response = await h.call({ [selector]: value(workspace), type: 'issue', mode: 'keyword' });
+      assert.equal(response.status, 200);
+      assert.deepEqual(response.body.results.map(row => row.id), expected);
+      assert.ok(response.body.results.every(row => row.url.startsWith(`/${workspace.slug}/`)));
+    }
+    for (const workspace of [h.foreign, h.revoked]) {
+      const reads = h.state.lexicalReads;
+      const response = await h.call({ [selector]: value(workspace) });
+      assert.equal(response.status, 403);
+      assert.equal(response.body.error, 'workspace_access_denied');
+      assert.equal(h.state.lexicalReads, reads);
+    }
+    assert.equal((await h.call({ [selector]: value(h.joined), unexpected: 'field' })).status, 400);
+    h.state.isSystemApp = false;
+    assert.equal((await h.call({ [selector]: value(h.joined) })).body.error, 'workspace_switch_not_allowed');
+    h.state.isSystemApp = true;
+  }
+  h.joined.members[0].status = false;
+  assert.equal((await h.call({ workspaceId: h.joined.id })).status, 403);
+  assert.equal((await h.call({ workspace: h.joined.slug })).status, 403);
+  h.state.tokenRevoked = true;
+  assert.equal((await h.call({ workspaceId: h.workspace.id })).status, 401);
+});
+
+test('agent search: Note expiry is refreshed at hydration without dropping corpus filters', async () => {
+  const h = harness();
+  const fields = { projectId: 'p', project: h.projects[0], expiresAt: new Date(h.state.now) };
+  h.note('expires-during-search', fields);
+  h.note('author', { ...fields, authorId: 'alice' });
+  h.note('valid', { ...fields, expiresAt: new Date(h.state.now + 10000) });
+  const mutations = [
+    { workspaceId: 'foreign', workspace: h.foreign },
+    { projectId: 'p2', project: h.projects[1] },
+    { scope: 'PERSONAL' }, { isEncrypted: true },
+    ...['ENV_VARS', 'API_KEYS', 'CREDENTIALS'].map(type => ({ type })),
+    { updatedAt: new Date('2020-01-01') }, { isRestricted: true },
+  ];
+  const changing = mutations.map((_, i) => h.note(`changed-${i}`, { ...fields, expiresAt: null }));
+  h.state.beforeHydrate = () => {
+    h.state.now++;
+    changing.forEach((row, i) => Object.assign(row, mutations[i]));
+  };
+  const response = await h.call({ type: 'note', projectId: 'p', after: '2026-10-01T00:00:00Z', mode: 'hybrid' });
+  assert.equal(response.status, 200);
+  assert.ok(h.state.corpus.some(row => row.id === 'expires-during-search'));
+  assert.deepEqual(response.body.results.map(row => row.id), ['author', 'valid']);
+});
+
+test('agent search: current status overrides stale legacy fields for issues and activity parents', async () => {
+  const h = harness();
+  const current = h.issue('current', { statusId: 'done-id', status: 'TODO', statusValue: 'TODO',
+    projectStatus: { id: 'done-id', name: 'DONE', project: h.projects[0] } });
+  h.issue('legacy-value', { statusValue: 'DONE', status: 'TODO' });
+  h.issue('legacy-status', { status: 'TODO' });
+  h.issue('empty-legacy-value', { statusValue: '', status: 'TODO' });
+  for (const row of h.rows.issue) h.activity(`${row.id}-activity`, row.id);
+  for (const type of ['issue', 'activity', 'all']) {
+    const expand = ids => type === 'issue' ? ids : type === 'activity' ? ids.map(id => `${id}-activity`) : [...ids, ...ids.map(id => `${id}-activity`)];
+    for (const [status, expected] of [['TODO', ['legacy-status', 'empty-legacy-value']], ['DONE', ['current', 'legacy-value']], ['done-id', ['current']], ['done', ['current']]]) {
+      const response = await h.call({ status, type, mode: 'keyword' });
+      assert.equal(response.status, 200);
+      assert.deepEqual(response.body.results.map(row => row.id), expand(expected));
+      if (status === 'DONE') assert.ok(response.body.results.filter(row => row.type === 'issue').every(row => row.status === 'DONE'));
+    }
+  }
+  h.state.beforeHydrate = () => { current.projectStatus = { id: 'new-id', name: 'CLOSED', project: h.projects[0] }; current.statusId = 'new-id'; };
+  assert.deepEqual((await h.call({ status: 'done-id' })).body.results, []);
+  h.state.beforeHydrate = null;
+  current.projectStatus = null; current.statusId = null;
+  assert.ok((await h.call({ status: 'TODO' })).body.results.some(row => row.id === current.id));
+});
+
+test('agent search: dates limit requested records rather than all activity parents', async () => {
+  const h = harness();
+  for (let i = 0; i < 50001; i++) h.issue(`old-${i}`, { updatedAt: new Date('2020-01-01') });
+  h.issue('recent');
+  h.activity('recent-on-old', 'old-0');
+  h.activity('old-on-recent', 'recent', { createdAt: new Date('2020-01-01') });
+  h.activity('null-project', 'old-0', { projectId: null });
+  h.activity('foreign-parent', 'foreign');
+  h.issue('foreign', { workspaceId: 'foreign', workspace: h.foreign, projectId: 'foreign', project: h.projects[2] });
+  for (let i = 0; i < 50001; i++) h.activity(`mismatched-${i}`, 'old-0', { projectId: 'p2' });
+  const params = { after: '2026-10-01T00:00:00Z', before: '2026-10-02T00:00:00Z', mode: 'keyword' };
+  for (const [type, expected] of [['issue', ['recent']], ['activity', ['recent-on-old', 'null-project']], ['all', ['recent', 'recent-on-old', 'null-project']]]) {
+    const response = await h.call({ ...params, type });
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.results.map(row => row.id), expected);
+  }
+  assert.equal((await h.call({ type: 'issue', mode: 'keyword' })).body.error, 'scope_too_large');
+  for (const row of h.rows.issue) row.updatedAt = new Date('2030-01-01');
+  h.rows.issue[0].updatedAt = new Date('2026-10-01T12:00:00Z');
+  assert.deepEqual((await h.call({ type: 'issue', before: '2026-10-01T12:00:00Z', mode: 'keyword' })).body.results.map(row => row.id), ['old-0']);
+  for (const row of h.rows.issueActivity) row.projectId = 'p';
+  assert.equal((await h.call({ ...params, type: 'activity' })).body.error, 'scope_too_large');
 });

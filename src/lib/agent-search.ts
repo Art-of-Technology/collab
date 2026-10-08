@@ -24,34 +24,46 @@ export async function searchCorpus(context: AppAuthContext, query: SearchQuery) 
   if (query.projectId && !await prisma.project.findFirst({ where: { id: query.projectId, workspaceId: context.workspace.id }, select: { id: true } })) {
     throw new SearchError('project_not_found', 'Project not found or access denied', 404);
   }
-  const issueWhere: Prisma.IssueWhereInput = { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id,
+  const parentWhere: Prisma.IssueWhereInput = { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id,
     project: { workspaceId: context.workspace.id }, ...(query.projectId && { projectId: query.projectId }),
     ...(query.assigneeId && { assigneeId: query.assigneeId }),
-    ...(query.status && { OR: [{ statusId: query.status }, { status: query.status }, { statusValue: query.status }, { projectStatus: { name: { equals: query.status, mode: 'insensitive' } } }] }) };
-  const noteWhere: Prisma.NoteWhereInput = { AND: [noteAccessWhere(context.user.id),
+    ...(query.status && { OR: [
+      { projectStatus: { OR: [{ id: query.status }, { name: { equals: query.status, mode: 'insensitive' } }] } },
+      { projectStatus: null, OR: [{ statusValue: query.status },
+        { OR: [{ statusValue: null }, { statusValue: '' }], status: query.status }] },
+    ] }) };
+  const issueWhere: Prisma.IssueWhereInput = { AND: [parentWhere], updatedAt: dateRange(query) };
+  const noteWhere: Prisma.NoteWhereInput = { AND: [
     { OR: [{ workspaceId: context.workspace.id }, { workspaceId: null, project: { workspaceId: context.workspace.id } }] },
     { OR: [{ projectId: null }, { project: { workspaceId: context.workspace.id } }] }],
     scope: { in: ['WORKSPACE', 'PROJECT', 'PUBLIC'] },
     type: { notIn: [...secretTypes] }, isEncrypted: false, updatedAt: dateRange(query), ...(query.projectId && { projectId: query.projectId }) };
-  const [issues, notes] = await Promise.all([
-    types.some(t => t !== 'note') ? prisma.issue.findMany({ where: issueWhere, select: { id: true, projectId: true, updatedAt: true }, take: MAX_SCOPE + 1, orderBy: { id: 'asc' } }) : [],
-    types.includes('note') && !query.status && !query.assigneeId ? prisma.note.findMany({ where: noteWhere, select: { id: true, projectId: true, updatedAt: true }, take: MAX_SCOPE + 1, orderBy: { id: 'asc' } }) : [],
+  const [issues, notes, activityParents] = await Promise.all([
+    types.includes('issue') ? prisma.issue.findMany({ where: issueWhere, select: { id: true, projectId: true, updatedAt: true }, take: MAX_SCOPE + 1, orderBy: { id: 'asc' } }) : [],
+    types.includes('note') && !query.status && !query.assigneeId ? prisma.note.findMany({ where: { AND: [noteWhere, noteAccessWhere(context.user.id)] }, select: { id: true, projectId: true, updatedAt: true }, take: MAX_SCOPE + 1, orderBy: { id: 'asc' } }) : [],
+    types.includes('activity') ? prisma.issue.findMany({ where: parentWhere, select: { id: true, projectId: true } }) : [],
   ]);
   if (issues.length > MAX_SCOPE || notes.length > MAX_SCOPE) throw new SearchError('scope_too_large', 'Narrow the search with a project filter', 422);
-  const issueProjects = new Map(issues.map(i => [i.id, i.projectId]));
-  const activityWhere: Prisma.IssueActivityWhereInput = { workspaceId: context.workspace.id, itemType: 'ISSUE', itemId: { in: issues.map(i => i.id) },
-    createdAt: dateRange(query), ...(query.projectId && { OR: [{ projectId: query.projectId }, { projectId: null }] }) };
-  const activities = types.includes('activity') && issues.length ? await prisma.issueActivity.findMany({ where: activityWhere,
+  const issueProjects = new Map(activityParents.map(i => [i.id, i.projectId]));
+  const projectIssues = new Map<string, string[]>();
+  for (const parent of activityParents) {
+    const ids = projectIssues.get(parent.projectId) || [];
+    ids.push(parent.id);
+    projectIssues.set(parent.projectId, ids);
+  }
+  const activityWhere: Prisma.IssueActivityWhereInput = { workspaceId: context.workspace.id, itemType: 'ISSUE',
+    createdAt: dateRange(query), OR: [...projectIssues].map(([projectId, ids]) => ({
+      itemId: { in: ids }, OR: [{ projectId }, { projectId: null }],
+    })) };
+  const activities = types.includes('activity') && activityParents.length ? await prisma.issueActivity.findMany({ where: activityWhere,
     select: { id: true, itemId: true, projectId: true, createdAt: true }, take: MAX_SCOPE + 1, orderBy: { id: 'asc' } }) : [];
   const documents: SearchDocument[] = [
-    ...issues.filter(i => types.includes('issue') && (!query.after || i.updatedAt >= new Date(query.after)) && (!query.before || i.updatedAt <= new Date(query.before)))
-      .map(i => ({ ...i, type: 'issue' as const })),
+    ...issues.map(i => ({ ...i, type: 'issue' as const })),
     ...notes.map(n => ({ ...n, type: 'note' as const })),
-    ...activities.filter(a => !a.projectId || issueProjects.get(a.itemId) === a.projectId)
-      .map(a => ({ id: a.id, type: 'activity' as const, projectId: issueProjects.get(a.itemId)!, updatedAt: a.createdAt })),
+    ...activities.map(a => ({ id: a.id, type: 'activity' as const, projectId: issueProjects.get(a.itemId)!, updatedAt: a.createdAt })),
   ];
   if (activities.length > MAX_SCOPE || documents.length > MAX_SCOPE) throw new SearchError('scope_too_large', 'Narrow the search with project, type or date filters', 422);
-  return { documents, parentWhere: issueWhere, issueWhere: { AND: [issueWhere], updatedAt: dateRange(query) } satisfies Prisma.IssueWhereInput, noteWhere, activityWhere };
+  return { documents, parentWhere, issueWhere, noteWhere, activityWhere };
 }
 
 export type SearchCorpus = Awaited<ReturnType<typeof searchCorpus>>;
@@ -67,7 +79,7 @@ async function hydrate(context: AppAuthContext, corpus: SearchCorpus, selected: 
     ids('issue').length ? prisma.issue.findMany({ where: { AND: [corpus.issueWhere], id: { in: ids('issue') } },
       select: { id: true, title: true, description: true, issueKey: true, status: true, statusValue: true, projectId: true, updatedAt: true,
         projectStatus: { select: { name: true } }, assignee: { select: { id: true, name: true } } } }) : [],
-    ids('note').length ? prisma.note.findMany({ where: { AND: [corpus.noteWhere], id: { in: ids('note') } },
+    ids('note').length ? prisma.note.findMany({ where: { AND: [corpus.noteWhere, noteAccessWhere(context.user.id)], id: { in: ids('note') } },
       select: { id: true, title: true, content: true, projectId: true, updatedAt: true } }) : [],
     ids('activity').length ? prisma.issueActivity.findMany({ where: { AND: [corpus.activityWhere], id: { in: ids('activity') } },
       select: { id: true, action: true, itemId: true, projectId: true, fieldName: true, details: true, oldValue: true, newValue: true, createdAt: true } }) : [],
@@ -80,7 +92,7 @@ async function hydrate(context: AppAuthContext, corpus: SearchCorpus, selected: 
   const excerpt = (text: string | null) => stripHtmlToPlainText(text || '').slice(0, 1200);
   const results: Array<Omit<SearchResult, 'matchType' | 'score'>> = [
     ...issues.map(i => ({ id: i.id, type: 'issue' as const, title: i.title, excerpt: excerpt(i.description), issueKey: i.issueKey,
-      status: i.projectStatus?.name || i.statusValue || i.status, assignee: i.assignee, projectId: i.projectId,
+      status: i.projectStatus?.name ?? (i.statusValue || i.status), assignee: i.assignee, projectId: i.projectId,
       updatedAt: i.updatedAt.toISOString(), url: `${path}/issues/${encodeURIComponent(i.issueKey || i.id)}` })),
     ...notes.map(n => ({ id: n.id, type: 'note' as const, title: n.title, excerpt: excerpt(n.content), projectId: n.projectId,
       updatedAt: n.updatedAt.toISOString(), url: `${path}/notes/${encodeURIComponent(n.id)}` })),

@@ -1,0 +1,8 @@
+{
+  "startingHead": "253eef48ef9d38972c7cf2911ff7bae05269b11e",
+  "command": "node --test --test-concurrency=1 tests/security/agent-search.test.cjs",
+  "exitCodes": {
+    "before": 1,
+    "after": 0
+  }
+}

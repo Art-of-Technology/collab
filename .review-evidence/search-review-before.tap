@@ -1,0 +1,168 @@
+TAP version 13
+# Subtest: agent search: authentic token scopes, workspace membership and validated filters gate retrieval
+ok 1 - agent search: authentic token scopes, workspace membership and validated filters gate retrieval
+  ---
+  duration_ms: 729.525416
+  type: 'test'
+  ...
+# Subtest: agent search: canonical permissions exclude secrets, revoked Notes, orphan and foreign activity
+ok 2 - agent search: canonical permissions exclude secrets, revoked Notes, orphan and foreign activity
+  ---
+  duration_ms: 529.194458
+  type: 'test'
+  ...
+# Subtest: agent search: project-only Notes and explicit shares use the current canonical policy
+ok 3 - agent search: project-only Notes and explicit shares use the current canonical policy
+  ---
+  duration_ms: 245.7015
+  type: 'test'
+  ...
+# Subtest: agent search: project, status, assignee and inclusive dates narrow issues and their activity
+ok 4 - agent search: project, status, assignee and inclusive dates narrow issues and their activity
+  ---
+  duration_ms: 126.893583
+  type: 'test'
+  ...
+# Subtest: agent search: deletion, sharing revocation and parent filter changes are rechecked before output
+ok 5 - agent search: deletion, sharing revocation and parent filter changes are rechecked before output
+  ---
+  duration_ms: 107.853958
+  type: 'test'
+  ...
+# Subtest: agent search: workspace revocation during retrieval denies the entire response
+ok 6 - agent search: workspace revocation during retrieval denies the entire response
+  ---
+  duration_ms: 143.652541
+  type: 'test'
+  ...
+# Subtest: agent search: partial semantic coverage is disclosed and changed records lose stale semantic matches
+ok 7 - agent search: partial semantic coverage is disclosed and changed records lose stale semantic matches
+  ---
+  duration_ms: 159.414167
+  type: 'test'
+  ...
+# Subtest: agent search: JSON byte upper bound, pagination and exact-first hybrid ranking are consistent
+ok 8 - agent search: JSON byte upper bound, pagination and exact-first hybrid ranking are consistent
+  ---
+  duration_ms: 144.79925
+  type: 'test'
+  ...
+# Subtest: agent search: both workspace selectors authorize the target through real middleware
+not ok 9 - agent search: both workspace selectors authorize the target through real middleware
+  ---
+  duration_ms: 144.722292
+  type: 'test'
+  location: '/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/security/agent-search.test.cjs:234:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    400 !== 200
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 200
+  actual: 400
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/security/agent-search.test.cjs:242:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: agent search: Note expiry is refreshed at hydration without dropping corpus filters
+not ok 10 - agent search: Note expiry is refreshed at hydration without dropping corpus filters
+  ---
+  duration_ms: 75.323792
+  type: 'test'
+  location: '/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/security/agent-search.test.cjs:265:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      [
+    +   'expires-during-search',
+        'author',
+        'valid'
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'author'
+    1: 'valid'
+  actual:
+    0: 'expires-during-search'
+    1: 'author'
+    2: 'valid'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/security/agent-search.test.cjs:286:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: agent search: current status overrides stale legacy fields for issues and activity parents
+not ok 11 - agent search: current status overrides stale legacy fields for issues and activity parents
+  ---
+  duration_ms: 68.716084
+  type: 'test'
+  location: '/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/security/agent-search.test.cjs:289:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      [
+    +   'current',
+    +   'legacy-value',
+        'legacy-status',
+        'empty-legacy-value'
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'legacy-status'
+    1: 'empty-legacy-value'
+  actual:
+    0: 'current'
+    1: 'legacy-value'
+    2: 'legacy-status'
+    3: 'empty-legacy-value'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/security/agent-search.test.cjs:302:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: agent search: dates limit requested records rather than all activity parents
+not ok 12 - agent search: dates limit requested records rather than all activity parents
+  ---
+  duration_ms: 235.458417
+  type: 'test'
+  location: '/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/security/agent-search.test.cjs:313:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    422 !== 200
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 200
+  actual: 422
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M4EVH0KMDWSX6V9A1ASCJWXA/tests/security/agent-search.test.cjs:326:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 8
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3292.801667

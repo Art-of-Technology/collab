@@ -4,7 +4,10 @@ import { searchProjectContent } from '@/lib/agent-search';
 import { SearchError, searchQuerySchema } from '@/lib/agent-search-query';
 
 export const GET = withAppAuth(async (request: NextRequest, context) => {
-  const query = searchQuerySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
+  const params = new URL(request.url).searchParams;
+  params.delete('workspace');
+  params.delete('workspaceId');
+  const query = searchQuerySchema.safeParse(Object.fromEntries(params));
   if (!query.success) return NextResponse.json({ error: 'invalid_query', error_description: query.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') }, { status: 400 });
   try {
     return NextResponse.json(await searchProjectContent(context, query.data));
