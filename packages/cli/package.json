@@ -6,7 +6,10 @@
   "bin": { "collab": "bin/collab.mjs" },
   "files": ["bin", "src", "README.md"],
   "engines": { "node": ">=22" },
-  "scripts": { "test": "node --test test/*.test.mjs" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "build:native": "bun build ./bin/collab.mjs --compile --no-compile-autoload-dotenv --no-compile-autoload-bunfig --no-compile-autoload-tsconfig --no-compile-autoload-package-json --outfile dist/collab"
+  },
   "license": "Apache-2.0",
   "repository": { "type": "git", "url": "https://github.com/Art-of-Technology/collab.git", "directory": "packages/cli" }
 }

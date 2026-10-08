@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { commands } from '../src/commands.mjs';
 
 const bin = fileURLToPath(new URL('../bin/collab.mjs', import.meta.url));
+const executable = process.env.COLLAB_CLI_EXECUTABLE;
 async function fixture(t, handler) {
   const dir = mkdtempSync(path.join(tmpdir(), 'collab-cli-test-'));
   const calls = [];
@@ -27,7 +28,7 @@ async function fixture(t, handler) {
   function run(args, { input, env = {}, stderrCallback } = {}) {
     const childEnv = { ...process.env };
     for (const key of Object.keys(childEnv)) if (key.startsWith('COLLAB_')) delete childEnv[key];
-    const child = spawn(process.execPath, [bin, ...args], { env: { ...childEnv, COLLAB_CONFIG_DIR: dir, COLLAB_URL: url, COLLAB_TOKEN: 'synthetic-token', ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(executable || process.execPath, [...(executable ? [] : [bin]), ...args], { cwd: dir, env: { ...childEnv, COLLAB_CONFIG_DIR: dir, COLLAB_URL: url, COLLAB_TOKEN: 'synthetic-token', ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     child.stdout.on('data', data => { stdout += data; });
     child.stderr.on('data', data => { stderr += data; stderrCallback?.(stderr); });
@@ -41,8 +42,20 @@ async function fixture(t, handler) {
 test('schema is offline, machine-readable and includes projects, issues and Notes', async t => {
   const f = await fixture(t);
   const result = await f.run(['schema']);
+  assert.equal(result.data.version, JSON.parse(readFileSync(new URL('../package.json', import.meta.url))).version);
   assert.equal(result.code, 0); assert.ok(result.data.commands['notes update']); assert.ok(result.data.commands['projects create']); assert.ok(result.data.commands['issues create']);
   assert.equal(f.calls.length, 0); assert.equal(Object.keys(result.data.commands).length, Object.keys(commands).length);
+});
+
+test('working-directory runtime configuration cannot inject credentials or preload code', async t => {
+  const f = await fixture(t);
+  writeFileSync(path.join(f.dir, '.env'), 'COLLAB_TOKEN=unexpected-dotenv-token\n');
+  writeFileSync(path.join(f.dir, 'bunfig.toml'), 'preload = ["./preload.js"]\n');
+  writeFileSync(path.join(f.dir, 'preload.js'), 'throw new Error("unexpected preload")');
+  const result = await f.run(['auth', 'status'], { env: { COLLAB_TOKEN: undefined } });
+  assert.equal(result.code, 0);
+  assert.equal(result.data.environmentTokenPresent, false);
+  assert.equal(f.calls.length, 0);
 });
 
 test('actual entrypoint scopes filters to explicit workspace and project', async t => {
