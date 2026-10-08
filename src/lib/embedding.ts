@@ -12,7 +12,8 @@
  */
 
 export interface EmbeddingService {
-  embed(text: string): Promise<number[]>;
+  model: string;
+  embed(text: string, signal?: AbortSignal): Promise<number[]>;
   embedBatch(texts: string[]): Promise<number[][]>;
   dimensions: number;
 }
@@ -30,11 +31,13 @@ export function createEmbeddingService(): EmbeddingService | null {
   }
 
   return {
+    model,
     dimensions: parseInt(process.env.EMBEDDING_DIMENSIONS || '384', 10),
 
-    async embed(text: string): Promise<number[]> {
+    async embed(text: string, signal?: AbortSignal): Promise<number[]> {
       const resp = await fetch(`${apiUrl}/embeddings`, {
         method: 'POST',
+        signal,
         headers: {
           'Content-Type': 'application/json',
           ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),

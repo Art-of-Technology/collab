@@ -1,0 +1,24 @@
+name: Agent search
+on:
+  pull_request:
+    paths: ['src/lib/**', 'src/app/api/apps/auth/**', 'prisma/schema.prisma', 'tests/security/**', 'tests/search/**', 'package.json', 'package-lock.json', '.github/workflows/agent-search.yml']
+  push:
+    branches: [main]
+    paths: ['src/lib/**', 'src/app/api/apps/auth/**', 'prisma/schema.prisma', 'tests/security/**', 'tests/search/**', 'package.json', 'package-lock.json', '.github/workflows/agent-search.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Install local PostgreSQL test binaries
+        run: sudo apt-get update && sudo apt-get install -y postgresql
+      - run: npm run test:search
