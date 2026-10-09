@@ -105,9 +105,21 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
   if (!response.ok) {
     const codes = { 400: 'invalid_request', 401: 'unauthorized', 403: 'forbidden', 404: 'not_found', 409: 'conflict', 429: 'rate_limited' };
     let code = codes[response.status] || 'server_error';
-    try { if (JSON.parse(text).error === 'forge_connected_project') code = 'forge_connected_project'; } catch { /* Never echo remote error bodies. */ }
+    let retrievalMessage;
+    try {
+      const remoteCode = JSON.parse(text).error;
+      if (remoteCode === 'forge_connected_project') code = remoteCode;
+      const messages = {
+        semantic_unavailable: [503, 'Semantic search is unavailable. Use --mode keyword or --mode hybrid for explicit keyword fallback.'],
+        budget_too_small: [422, 'Increase --max-tokens to fit at least one result or context section.'],
+        scope_too_large: [422, 'The readable scope exceeds the supported limit. Narrow search by project, content type or dates.'],
+      };
+      if (!mutation && /^\/api\/apps\/auth\/(search|ai-context)(\?|$)/.test(endpoint) && Object.hasOwn(messages, remoteCode) && messages[remoteCode][0] === response.status) {
+        code = remoteCode; retrievalMessage = messages[remoteCode][1];
+      }
+    } catch { /* Never echo remote error bodies. */ }
     if (mutation && response.status >= 500) code = 'outcome_unknown';
-    throw new CliError(code, code === 'outcome_unknown' ? 'Server failed after dispatch. Inspect Collab before retrying.' : `Collab refused the request (HTTP ${response.status}).`, response.status === 401 ? 3 : response.status === 403 ? 4 : 5, { status: response.status });
+    throw new CliError(code, retrievalMessage || (code === 'outcome_unknown' ? 'Server failed after dispatch. Inspect Collab before retrying.' : `Collab refused the request (HTTP ${response.status}).`), response.status === 401 ? 3 : response.status === 403 ? 4 : 5, { status: response.status });
   }
   if (!text && (response.status === 204 || endpoint === '/api/oauth/revoke')) return { ok: true };
   try {

@@ -25,6 +25,7 @@ const sections = [
   ['installation', 'Installation'],
   ['authentication', 'Authentication'],
   ['capabilities', 'Capabilities'],
+  ['search', 'Search & project context'],
   ['workflow', 'Agent workflow'],
   ['commands', 'Command reference'],
   ['flags', 'Flags & inputs'],
@@ -34,7 +35,7 @@ const sections = [
 
 const capabilities = [
   { icon: ListChecks, title: 'Plan and track work', text: 'Create projects and issues, assign owners, set priorities, and follow progress.', href: '#commands' },
-  { icon: FileText, title: 'Give agents context', text: 'Read shared Notes and knowledge. Keep decisions and runbooks alongside the work.', href: '#workflow' },
+  { icon: FileText, title: 'Find context quickly', text: 'Search issues, Notes and activity. Get project status, blockers and owners in one response.', href: '#search' },
   { icon: GitBranch, title: 'Keep work connected', text: 'Add comments, link dependencies, record time, and read workspace reports.', href: '#commands' },
 ];
 
@@ -180,10 +181,38 @@ export default function DocsPage() {
                 <p className="mt-4 text-muted-foreground">Collab holds the plan, issue state, and project context. Keep code, pull requests, and CI in GitHub, and link them from your Collab issues. The CLI manages shared Notes; personal Notes and secrets are not exposed.</p>
               </section>
 
+              <section id="search">
+                <h2>Find what your agent needs</h2>
+                <p className="text-muted-foreground">Search readable issues, shared Notes and project activity with one command. Exact issue keys take priority. Your selected workspace and project apply automatically.</p>
+                <TerminalBlock code={'collab search --query "APP-123"\ncollab search --query "release pipeline" --mode keyword\ncollab search --query "authentcation" --mode fuzzy\ncollab search --query "what is blocking the release?" --mode hybrid\ncollab search --query "release" --type issue --status in_progress --limit 10 --max-tokens 8000'} />
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full text-left text-sm">
+                    <caption className="sr-only">Search modes</caption>
+                    <thead className="border-b border-border bg-muted/30"><tr><th scope="col" className="p-4">Mode</th><th scope="col" className="p-4">Use it for</th></tr></thead>
+                    <tbody className="divide-y divide-border text-muted-foreground">
+                      {[
+                        ['exact', 'An ID, issue key, or literal phrase.'],
+                        ['keyword', 'Full-text words, quoted phrases, or OR queries.'],
+                        ['fuzzy', 'Misspelled words such as authentcation.'],
+                        ['semantic', 'Meaning-based matches when embeddings are configured and verified.'],
+                        ['hybrid (default)', 'Combined keyword and verified semantic results; explicit keyword fallback if semantic search is unavailable.'],
+                      ].map(([mode, purpose]) => <tr key={mode}><th scope="row" className="p-4 font-mono font-normal text-foreground">{mode}</th><td className="p-4">{purpose}</td></tr>)}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-4 text-muted-foreground">Filter with <code>--project ID</code>, <code>--type issue|note|activity</code>, <code>--status</code>, <code>--assignee-id</code>, and ISO timestamps in <code>--after</code> / <code>--before</code>. Status and assignee filters apply to issues and their activity. Results include IDs, links, timestamps and match types.</p>
+                <p className="mt-3 text-muted-foreground">Check <code>metadata.fallback</code> and <code>metadata.vectorCoverage</code>. Semantic search needs a configured embedding provider and a verified, current index; unavailable or stale coverage is reported. Hybrid can return keyword results without embeddings. Semantic-only requests fail explicitly when that capability is unavailable.</p>
+                <h3 className="mt-6">A project overview in one request</h3>
+                <TerminalBlock code={'collab context get --project PROJECT_ID --max-tokens 8000\ncollab context get --project PROJECT_ID --since 2026-10-01T00:00:00Z --limit 5'} />
+                <p className="text-muted-foreground">Get status counts, assigned owners, blockers, dependencies, parent relationships, recent changes and relevant Notes together. Readable dependencies in other projects are included one level deep. Legacy statuses with no completion definition are labeled unknown. Personal Notes, secrets and revoked content are excluded.</p>
+                <p className="mt-3 text-muted-foreground">Both commands bound the whole JSON response using a conservative UTF-8 byte estimate for <code>--max-tokens</code> (default 8,000). Search returns up to 20 results by default; context returns up to 10 per section, with a maximum of 50. Follow search’s <code>pagination.nextOffset</code>, or each context section’s own value, using <code>--offset</code>. Check truncation metadata; increase the budget if the minimum response cannot fit. Fetch a Note by ID for its complete text.</p>
+                <p className="mt-3 text-muted-foreground">Without a selected project, <code>context get</code> returns bounded workspace prompts. Use <code>--include-pipeline false</code> or <code>--include-knowledge true</code> to request the previous prompt format for a project.</p>
+              </section>
+
               <section id="workflow">
                 <h2>A practical agent workflow</h2>
                 <p className="text-muted-foreground">Read the project context and acceptance criteria first. Use the project’s actual status values, make the intended change, and leave a record of the result.</p>
-                <TerminalBlock code={'collab context get --include-knowledge true\ncollab notes list --all\ncollab projects statuses PROJECT_ID\ncollab issues list --status todo --all\ncollab issues get APP-123\n\ncollab issues update APP-123 --status in_progress\ncollab comments add APP-123 --content-file progress.md\ncollab notes create --title "Reconnect decision" --type DECISION --content-file decision.md'} />
+                <TerminalBlock code={'collab context get --project PROJECT_ID\ncollab search --query "release blockers" --project PROJECT_ID\ncollab projects statuses PROJECT_ID\ncollab issues get APP-123\n\ncollab issues update APP-123 --status in_progress\ncollab comments add APP-123 --content-file progress.md\ncollab notes create --title "Reconnect decision" --type DECISION --content-file decision.md'} />
                 <p className="text-muted-foreground">Create the referenced Markdown files before running commands that read them. Record tests, PR links, deployment status, and remaining work in a comment. Move an issue to done only after its acceptance criteria are met.</p>
                 <p className="mt-3 text-muted-foreground">Notes created with a selected project use project scope. Updates do not move a Note to the default project; pass <code>--project-id</code> only for an intentional move. Note reads return plain text, so reading and writing back is not a rich-text round trip.</p>
               </section>
