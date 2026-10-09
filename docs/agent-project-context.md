@@ -2,6 +2,8 @@
 
 `GET /api/apps/auth/ai-context?projectId=PROJECT_ID&includePipeline=true` returns a project overview in one response. It requires the existing `prompts:read`, `issues:read` and `context:read` scopes and active workspace access. Existing callers that omit `includePipeline` keep the prompt-only response.
 
+Project mode replaces the prompt-only payload; it does not include `systemPrompts`, `mergedContext` or the optional `knowledge` array, and ignores `includeKnowledge`. For supported CLI flags, see the [CLI guide](../packages/cli/README.md).
+
 The response contains:
 
 - `project`: ID, name, description, archive state, updated timestamp and link.
@@ -33,6 +35,6 @@ Project context supports up to 50,000 visible project issues and 50,000 relation
 
 Context reads the canonical database; it does not depend on embeddings or an index. `metadata.snapshotStartedAt` and `generatedAt` bound the retrieval window, not an atomic database snapshot. Workspace membership is checked again before output. Notes obey current sharing and expiry rules, with the existing author expiry exception.
 
-For prompt-only callers, `maxTokens` opts into bounded output while retaining `systemPrompts` and `mergedContext`. Metadata reports the original counts and truncation. Omit it for the previous response behavior. `includePipeline=false` explicitly selects that legacy format.
+For prompt-only callers, `maxTokens` opts into bounded output while retaining `systemPrompts` and `mergedContext`. Metadata reports the original counts and truncation. Omit `maxTokens` for the previous unbounded response behavior. `includePipeline=false` explicitly selects prompt-only mode; `maxTokens` still applies when supplied.
 
 Focused verification includes real middleware/permission tests, output-budget tests and a disposable PostgreSQL test using the full application schema with 40,000 issues. The latter measures local service timing only; it is not production or CLI latency evidence.

@@ -1,11 +1,7 @@
 /**
  * Third-Party App API: AI Context Endpoint
- * GET /api/apps/auth/ai-context - Get AI context including system prompts, tech stack, and coding style
- *
- * This is the primary endpoint for AI agents to get all relevant context for a workspace/project.
- * Returns merged system prompts in priority order along with workspace and project info.
- *
- * Required scopes: prompts:read
+ * GET /api/apps/auth/ai-context
+ * See docs/agent-project-context.md for response modes, scopes and bounds.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,10 +21,6 @@ const AI_CONTEXT_TYPES = [
   NoteType.TECH_STACK,
 ];
 
-/**
- * GET /api/apps/auth/ai-context
- * Get AI context including system prompts, tech stack, and coding style
- */
 export const GET = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
     try {
