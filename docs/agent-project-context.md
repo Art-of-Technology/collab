@@ -23,7 +23,7 @@ Issue and Note cards include source IDs, links and `updatedAt`. Activity uses it
 | `maxTokens` | 8,000 | 2,048–64,000 |
 | `since` | Seven days before the request | ISO timestamp with timezone; applies to recent changes |
 
-Each section has `items` and `pagination` with `offset`, `nextOffset`, `hasMore` and `total`. Totals count the readable records retrieved for each section. Follow each section's own `nextOffset`; a budget may shorten sections differently. Pages reflect current database state and can shift between requests.
+Each section has `items` and `pagination` with `offset`, `nextOffset`, `hasMore` and `total`. Totals count readable candidates at selection time during the retrieval window, not an atomic snapshot at response time. Note content and activity details are fetched and sanitized only for the selected page. Hydration rechecks Note access and expiry and activity-parent access; records deleted or no longer readable are omitted, which can leave a short or empty page. Cursors advance through selected candidate positions, including omitted records. Follow each section's own `nextOffset`; a budget may shorten sections differently. Pages reflect current database state and can shift between requests.
 
 The budget uses UTF-8 bytes of the **whole JSON response** as a conservative token upper bound, not a model-specific tokenizer. Text fields are excerpts with fixed length limits. If necessary, tail items are removed while preserving at least one item from every nonempty section. `metadata.budget` reports the bound, truncation and affected sections. A budget too small for that minimum returns HTTP 422, `budget_too_small`; increase it rather than retrying an unchanged offset.
 

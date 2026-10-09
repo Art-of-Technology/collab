@@ -60,7 +60,7 @@ export async function getProjectContext(context: AppAuthContext, options: Option
     readIds(parentIds, ids => prisma.issue.findMany({ where: { AND: [allowed], id: { in: ids } }, select: issueSelect })),
     readIds(issues.map(i => i.id), ids => prisma.issueActivity.findMany({ where: { workspaceId: context.workspace.id, itemType: 'ISSUE',
       itemId: { in: ids }, OR: [{ projectId: project.id }, { projectId: null }], createdAt: { gte: since } },
-      select: { id: true, itemId: true, action: true, fieldName: true, details: true, createdAt: true },
+      select: { id: true, itemId: true, createdAt: true },
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: MAX_SCOPE + 1 })),
     readIds(issues.map(i => i.id), ids => prisma.issue.findMany({ where: { AND: [allowed], projectId: { not: project.id },
       parentId: { in: ids } }, select: issueSelect, take: MAX_SCOPE + 1, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }] })),
@@ -106,24 +106,22 @@ export async function getProjectContext(context: AppAuthContext, options: Option
       owner.unknownCompletion += Number(!issue.projectStatus); owners.set(owner.id, owner);
     }
   }
-  const notes = await prisma.note.findMany({ where: { AND: [noteAccessWhere(context.user.id),
+  const noteWhere = (): Prisma.NoteWhereInput => ({ AND: [noteAccessWhere(context.user.id),
     { OR: [{ workspaceId: context.workspace.id }, { workspaceId: null, project: { workspaceId: context.workspace.id } }] },
     { OR: [{ projectId: project.id }, { projectId: null }] }],
     scope: { in: ['WORKSPACE', 'PROJECT', 'PUBLIC'] }, type: { notIn: ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'] }, isEncrypted: false,
-  }, select: { id: true, title: true, content: true, type: true, projectId: true, updatedAt: true, isAiContext: true, isPinned: true, authorId: true, expiresAt: true },
+  });
+  const notes = await prisma.note.findMany({ where: noteWhere(), select: { id: true },
   orderBy: [{ isAiContext: 'desc' }, { aiContextPriority: 'desc' }, { isPinned: 'desc' }, { updatedAt: 'desc' }, { id: 'asc' }], take: MAX_SCOPE + 1 });
   if (notes.length > MAX_SCOPE) throw new SearchError('scope_too_large', 'Project context supports up to 50,000 visible Notes', 422);
   // Activity has no Issue FK; verify its parent still exists and is readable before returning history.
   const currentParents = await readIds(activityCandidates.map(a => a.itemId), ids => prisma.issue.findMany({ where: { AND: [allowed], projectId: project.id,
     id: { in: ids } }, select: { id: true } }));
   const currentParentIds = new Set(currentParents.map(i => i.id));
-  if (!await activeWorkspace()) throw new SearchError('workspace_access_denied', 'Workspace access was revoked', 403);
   const changes = [
-    ...issues.filter(i => i.updatedAt >= since).map(i => ({ ...card(i), action: 'ISSUE_UPDATED', excerpt: '' })),
+    ...issues.filter(i => i.updatedAt >= since).map(i => ({ id: i.id, type: 'issue' as const, updatedAt: i.updatedAt.toISOString() })),
     ...activityCandidates.filter(a => currentParentIds.has(a.itemId)).map(a => ({ id: a.id, type: 'activity' as const,
-      issueId: a.itemId, title: plain(issueMap.get(a.itemId)?.title || '', 300), action: a.action,
-      excerpt: plain([a.fieldName, a.details].filter(Boolean).join(': '), 600), projectId: project.id,
-      updatedAt: a.createdAt.toISOString(), url: `${path}/issues/${encodeURIComponent(a.itemId)}` })),
+      updatedAt: a.createdAt.toISOString() })),
   ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || `${a.type}:${a.id}`.localeCompare(`${b.type}:${b.id}`));
   const page = <T,>(items: T[]) => {
     if (items.length > MAX_SCOPE) throw new SearchError('scope_too_large', 'Project context supports up to 50,000 records per section', 422);
@@ -131,6 +129,22 @@ export async function getProjectContext(context: AppAuthContext, options: Option
       pagination: { offset: options.offset, nextOffset: items.length > options.offset + options.limit ? options.offset + options.limit : null,
         hasMore: items.length > options.offset + options.limit, total: items.length } };
   };
+  const notePage = page(notes), changePage = page(changes);
+  const [notePayloads, activityPayloads] = await Promise.all([
+    prisma.note.findMany({ where: { AND: [noteWhere()], id: { in: notePage.items.map(n => n.id) } },
+      select: { id: true, title: true, content: true, type: true, projectId: true, updatedAt: true, isAiContext: true, isPinned: true, authorId: true, expiresAt: true } }),
+    prisma.issueActivity.findMany({ where: { workspaceId: context.workspace.id, itemType: 'ISSUE',
+      id: { in: changePage.items.filter(c => c.type === 'activity').map(c => c.id) },
+      OR: [{ projectId: project.id }, { projectId: null }], createdAt: { gte: since } },
+      select: { id: true, itemId: true, action: true, fieldName: true, details: true, createdAt: true } }),
+  ]);
+  const pageIssues = await readIds([
+    ...changePage.items.filter(c => c.type === 'issue').map(c => c.id), ...activityPayloads.map(a => a.itemId),
+  ], ids => prisma.issue.findMany({ where: { AND: [allowed], projectId: project.id, id: { in: ids } }, select: issueSelect }));
+  const pageIssueMap = new Map(pageIssues.map(i => [i.id, i]));
+  const activityMap = new Map(activityPayloads.map(a => [a.id, a]));
+  if (!await activeWorkspace()) throw new SearchError('workspace_access_denied', 'Workspace access was revoked', 403);
+  const noteMap = new Map(notePayloads.filter(n => n.authorId === context.user.id || !n.expiresAt || n.expiresAt.getTime() >= Date.now()).map(n => [n.id, n]));
   const response = {
     project: { ...project, name: plain(project.name, 300), description: plain(project.description, 600), updatedAt: project.updatedAt.toISOString(),
       url: `${path}/projects/${encodeURIComponent(project.slug)}` },
@@ -141,11 +155,24 @@ export async function getProjectContext(context: AppAuthContext, options: Option
     statuses: page([...byStatus.values()].sort((a, b) => b.count - a.count || (a.name || '').localeCompare(b.name || ''))),
     owners: page([...owners.values()].sort((a, b) => b.issueCount - a.issueCount || a.id.localeCompare(b.id))),
     blockers: page(blockers), dependencies: page(dependencies), parents: page([...hierarchy.values()]),
-    recentChanges: page(changes),
-    notes: page(notes.filter(n => n.authorId === context.user.id || !n.expiresAt || n.expiresAt.getTime() >= Date.now()).map(n => ({
-      id: n.id, type: 'note' as const, noteType: n.type, title: plain(n.title, 300), excerpt: plain(n.content, 600),
-      projectId: n.projectId, isAiContext: n.isAiContext, isPinned: n.isPinned, updatedAt: n.updatedAt.toISOString(), url: `${path}/notes/${encodeURIComponent(n.id)}`,
-    }))),
+    recentChanges: { ...changePage, items: changePage.items.map(c => {
+      if (c.type === 'issue') {
+        const issue = pageIssueMap.get(c.id);
+        return issue ? { ...card(issue), action: 'ISSUE_UPDATED', excerpt: '' } : null;
+      }
+      const activity = activityMap.get(c.id);
+      const parent = activity && pageIssueMap.get(activity.itemId);
+      return activity && parent ? { id: activity.id, type: 'activity' as const, issueId: parent.id,
+        title: plain(parent.title, 300), action: activity.action,
+        excerpt: plain([activity.fieldName, activity.details].filter(Boolean).join(': '), 600), projectId: project.id,
+        updatedAt: activity.createdAt.toISOString(), url: `${path}/issues/${encodeURIComponent(parent.id)}` } : null;
+    }).filter(item => item !== null) },
+    notes: { ...notePage, items: notePage.items.map(candidate => {
+      const n = noteMap.get(candidate.id);
+      return n ? { id: n.id, type: 'note' as const, noteType: n.type, title: plain(n.title, 300), excerpt: plain(n.content, 600),
+        projectId: n.projectId, isAiContext: n.isAiContext, isPinned: n.isPinned, updatedAt: n.updatedAt.toISOString(), url: `${path}/notes/${encodeURIComponent(n.id)}`,
+      } : null;
+    }).filter(item => item !== null) },
     metadata: { generatedAt: new Date().toISOString(), snapshotStartedAt: started.toISOString(), since: since.toISOString(),
       freshness: 'canonical_database', dependencyDepth: 1, legacyCompletion: 'unknown',
       budget: { maxTokens: options.maxTokens, tokenUpperBound: 0, estimator: 'utf8_bytes', truncated: false, truncatedSections: [] as string[] } },
@@ -155,8 +182,12 @@ export async function getProjectContext(context: AppAuthContext, options: Option
   while (response.metadata.budget.tokenUpperBound > options.maxTokens) {
     const name = sections.find(section => response[section].items.length > 1);
     if (!name) throw new SearchError('budget_too_small', 'Increase maxTokens to include the summary and one item from each available section', 422);
-    const section = response[name]; section.items.pop();
-    section.pagination.hasMore = true; section.pagination.nextOffset = options.offset + section.items.length;
+    const section = response[name];
+    const nextIndex = name === 'notes' ? notePage.items.findIndex(n => n.id === response.notes.items.at(-1)!.id)
+      : name === 'recentChanges' ? changePage.items.findIndex(c => c.id === response.recentChanges.items.at(-1)!.id && c.type === response.recentChanges.items.at(-1)!.type)
+        : section.items.length - 1;
+    section.items.pop();
+    section.pagination.hasMore = true; section.pagination.nextOffset = options.offset + nextIndex;
     response.metadata.budget.truncated = true;
     if (!response.metadata.budget.truncatedSections.includes(name)) response.metadata.budget.truncatedSections.push(name);
     response.metadata.budget.tokenUpperBound = responseBytes(response) + 8;

@@ -10,7 +10,11 @@ function harness() {
     { id: 'foreign', name: 'Private', slug: 'private', workspaceId: 'foreign', workspace: foreign, updatedAt: now },
   ];
   const rows = { issue: [], issueRelation: [], issueActivity: [], note: [] };
-  const state = { scopes: ['prompts:read', 'issues:read', 'context:read'], afterNotes: null };
+  const state = { scopes: ['prompts:read', 'issues:read', 'context:read'], afterNotes: null, beforeRead: null, time: Date.now() };
+  class Clock extends Date {
+    constructor(...args) { super(...(args.length ? args : [state.time])); }
+    static now() { return state.time; }
+  }
   function select(row, fields) {
     if (!row || !fields) return row;
     return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value === true ? row[key] : select(row[key], value.select)]));
@@ -24,6 +28,7 @@ function harness() {
         app: { id: 'app', name: 'App', slug: 'app', status: 'PUBLISHED' } } }] },
   };
   for (const [type, records] of Object.entries(rows)) db[type] = { findMany: async ({ where, select: fields, orderBy = [], take }) => {
+    if (state.beforeRead) state.beforeRead(type, fields);
     const found = records.filter(r => matches(r, where)).sort((a, b) => {
       for (const entry of orderBy) for (const [key, direction] of Object.entries(entry)) {
         if (a[key] < b[key]) return direction === 'asc' ? -1 : 1;
@@ -36,11 +41,11 @@ function harness() {
   } };
   const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma: db }, '@/lib/shared-issue-key-utils': load('src/lib/shared-issue-key-utils.ts') });
   const scopes = load('src/lib/oauth-scopes.ts');
-  const access = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: db }, '@/lib/issue-finder': finder });
+  const access = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: db }, '@/lib/issue-finder': finder }, { Date: Clock });
   const queryModule = load('src/lib/agent-search-query.ts', { zod: require('zod') }, { Buffer });
   const dependencies = { '@/lib/prisma': { prisma: db }, '@/lib/issue-finder': finder, '@/lib/secrets/access': access,
     '@/lib/oauth-scopes': scopes, '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts') };
-  const service = load('src/lib/agent-project-context.ts', { ...dependencies, zod: require('zod'), './agent-search-query': queryModule }, { Buffer });
+  const service = load('src/lib/agent-project-context.ts', { ...dependencies, zod: require('zod'), './agent-search-query': queryModule }, { Buffer, Date: Clock });
   const auth = load('src/lib/apps/auth-middleware.ts', { 'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma: db },
     '@/lib/oauth-scopes': scopes, '@/lib/apps/crypto': { decryptToken: async () => 'test-token' } }, { Buffer, URL, console });
   const route = load('src/app/api/apps/auth/ai-context/route.ts', { ...dependencies,
@@ -231,4 +236,105 @@ test('project context bounds final sections and accepts every normal and budget-
       assert.equal(response.body.error, 'scope_too_large');
     }
   });
+});
+
+test('one-item context pages fetch only the selected large Note and activity payloads', async () => {
+  const h = harness();
+  const parent = h.issue('parent', { updatedAt: new Date('2020-01-01') });
+  const reads = { notes: [], activities: [] };
+  for (let i = 0; i < 100; i++) {
+    const id = String(i).padStart(3, '0');
+    Object.defineProperty(h.note(id), 'content', { get() { reads.notes.push(id); return `<p>${'N'.repeat(10000)}</p>`; } });
+    Object.defineProperty(h.activity(id, parent), 'details', { get() { reads.activities.push(id); return `<p>${'A'.repeat(10000)}</p>`; } });
+  }
+  for (const offset of [0, 7, 99, 100]) {
+    reads.notes.length = 0; reads.activities.length = 0;
+    const { status, body } = await h.call({ offset: String(offset), limit: '1', maxTokens: '64000' });
+    assert.equal(status, 200);
+    const expected = offset < 100 ? [String(offset).padStart(3, '0')] : [];
+    assert.deepEqual(reads.notes, expected); assert.deepEqual(reads.activities, expected);
+    for (const section of ['notes', 'recentChanges']) {
+      assert.deepEqual(body[section].items.map(item => item.id), expected);
+      assert.equal(body[section].pagination.total, 100);
+      assert.equal(body[section].pagination.nextOffset, offset < 99 ? offset + 1 : null);
+      assert.ok(body[section].items.every(item => item.excerpt.length <= 600 && !item.excerpt.includes('<p>')));
+    }
+  }
+});
+
+test('Note hydration rechecks deletion, sharing, expiry and sensitive-content exclusions', async t => {
+  for (const change of ['delete', 'restrict', 'unshare', 'expire', 'encrypt', 'secret', 'foreign']) await t.test(change, async () => {
+    const h = harness();
+    const selected = h.note('a', change === 'unshare' ? { isRestricted: true, sharedWith: [{ userId: 'alice' }] } : {});
+    selected.expiresAt = new Date(h.state.time + 1000);
+    h.note('b');
+    let reads = 0;
+    Object.defineProperty(selected, 'content', { get() { reads++; return 'Revoked payload'; } });
+    h.state.afterNotes = () => {
+      h.state.afterNotes = null;
+      if (change === 'delete') h.rows.note.splice(h.rows.note.indexOf(selected), 1);
+      if (change === 'restrict') selected.isRestricted = true;
+      if (change === 'unshare') selected.sharedWith = [];
+      if (change === 'expire') h.state.time += 2000;
+      if (change === 'encrypt') selected.isEncrypted = true;
+      if (change === 'secret') selected.type = 'CREDENTIALS';
+      if (change === 'foreign') { selected.workspaceId = 'foreign'; selected.workspace = h.foreign; }
+    };
+    const { status, body } = await h.call({ limit: '1' });
+    assert.equal(status, 200); assert.equal(reads, 0);
+    assert.deepEqual(body.notes.items, []);
+    assert.deepEqual(body.notes.pagination, { offset: 0, nextOffset: 1, hasMore: true, total: 2 });
+  });
+  const h = harness();
+  h.note('own-expired', { authorId: 'alice', expiresAt: new Date('2020-01-01') });
+  assert.deepEqual((await h.call()).body.notes.items.map(n => n.id), ['own-expired']);
+});
+
+test('activity hydration rechecks the current record and its current parent', async t => {
+  for (const change of ['delete-activity', 'delete-parent', 'move-parent', 'revoke-parent', 'reparent', 'move-activity', 'change-type']) await t.test(change, async () => {
+    const h = harness();
+    const parent = h.issue('parent', { updatedAt: new Date('2020-01-01') });
+    const selected = h.activity('a', parent);
+    h.activity('b', parent);
+    h.state.beforeRead = (type, fields) => {
+      if (type !== 'issueActivity' || !fields.details) return;
+      h.state.beforeRead = null;
+      if (change === 'delete-activity') h.rows.issueActivity.splice(h.rows.issueActivity.indexOf(selected), 1);
+      if (change === 'delete-parent') h.rows.issue.splice(h.rows.issue.indexOf(parent), 1);
+      if (change === 'move-parent') { parent.projectId = 'p2'; parent.project = h.projects[1]; }
+      if (change === 'revoke-parent') { parent.workspaceId = 'foreign'; parent.workspace = h.foreign; }
+      if (change === 'reparent') selected.itemId = 'deleted';
+      if (change === 'move-activity') selected.workspaceId = 'foreign';
+      if (change === 'change-type') selected.itemType = 'TASK';
+    };
+    const { status, body } = await h.call({ limit: '1' });
+    assert.equal(status, 200); assert.deepEqual(body.recentChanges.items, []);
+    assert.deepEqual(body.recentChanges.pagination, { offset: 0, nextOffset: 1, hasMore: true, total: 2 });
+  });
+});
+
+test('budget cursors retain candidate positions when hydration removes Note and activity items', async () => {
+  const h = harness();
+  const parent = h.issue('parent', { updatedAt: new Date('2020-01-01') });
+  for (let i = 0; i < 12; i++) {
+    const id = String(i).padStart(2, '0');
+    h.note(id, { content: 'N'.repeat(1000) }); h.activity(id, parent, { details: 'A'.repeat(1000) });
+  }
+  h.state.beforeRead = (type, fields) => {
+    if (type === 'note' && fields.content) for (const n of h.rows.note) if (['00', '02'].includes(n.id)) n.isRestricted = true;
+    if (type === 'issueActivity' && fields.details) for (const a of h.rows.issueActivity) if (['00', '02'].includes(a.id)) a.itemId = 'deleted';
+  };
+  const { status, body } = await h.call({ limit: '10', maxTokens: '5000' });
+  assert.equal(status, 200); assert.equal(body.metadata.budget.truncated, true);
+  assert.ok(Buffer.byteLength(JSON.stringify(body)) <= body.metadata.budget.tokenUpperBound);
+  assert.ok(body.metadata.budget.tokenUpperBound <= 5000);
+  const candidates = ['01', '03', '04', '05', '06', '07', '08', '09'];
+  for (const section of ['notes', 'recentChanges']) {
+    const page = body[section];
+    assert.ok(page.items.length > 0 && page.items.length < candidates.length);
+    assert.deepEqual(page.items.map(item => item.id), candidates.slice(0, page.items.length));
+    assert.equal(page.pagination.total, 12);
+    assert.equal(page.pagination.nextOffset, Number(candidates[page.items.length]));
+    assert.equal((await h.call({ offset: String(page.pagination.nextOffset), maxTokens: '64000' })).status, 200);
+  }
 });
