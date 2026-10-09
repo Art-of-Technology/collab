@@ -35,6 +35,11 @@ function converted(value, type) {
   if (type === 'array') { try { const data = JSON.parse(value); if (Array.isArray(data) && data.every(v => typeof v === 'string')) return data; } catch { /* Fixed error below. */ } }
   throw new CliError('invalid_value', `Expected ${type}; arrays use JSON and booleans use true or false.`);
 }
+function validDateTime(value) {
+  return /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(value) &&
+    Number.isFinite(Date.parse(value)) &&
+    new Date(value.slice(0, 10)).toISOString().slice(0, 10) === value.slice(0, 10);
+}
 async function boundedInput(file) {
   const stream = file === '-' ? process.stdin : fs.createReadStream(file);
   const chunks = []; let size = 0;
@@ -52,7 +57,10 @@ async function main() {
   if (options.help || !words.length || words[0] === 'help' || words[0] === 'schema') return help();
   const name = commands[words[0]] ? words[0] : words.slice(0, 2).join(' ');
   const stateStore = store(options.profile);
-  for (const key of ['workspace', 'project', 'workspace-id', 'project-id']) if (options[key] !== undefined && !/^[a-zA-Z0-9_-]+$/.test(options[key])) throw new CliError('invalid_identifier', 'Workspace and project selectors must be nonempty IDs.');
+  for (const key of ['workspace', 'project', 'workspace-id', 'project-id']) {
+    if ((name === 'search' || name === 'context get') && ['project', 'project-id'].includes(key) && options[key] !== undefined) options[key] = options[key].trim();
+    if (options[key] !== undefined && !/^[a-zA-Z0-9_-]+$/.test(options[key])) throw new CliError('invalid_identifier', 'Workspace and project selectors must be nonempty IDs.');
+  }
   if (name.startsWith('auth ') || name.startsWith('config ')) {
     const localOptions = name === 'auth login' ? ['url', 'workspace', 'read-only'] : name === 'config set' ? ['workspace', 'project'] : [];
     allowed(options, ['profile', 'json', ...localOptions]);
@@ -121,14 +129,16 @@ async function main() {
   for (const [key, value] of Object.entries(spec.defaults || {})) if (!query.has(key)) query.set(key, String(value));
   for (const key of spec.requiredQuery || []) if (!query.get(key)?.trim()) throw new CliError('required_field', `Missing required --${flagName(key)}.`);
   for (const [key, constraint] of Object.entries(spec.constraints || {})) if (query.has(key)) {
-    const value = query.get(key);
+    const value = constraint.trim ? query.get(key).trim() : query.get(key);
+    query.set(key, value);
     if ((constraint.enum && !constraint.enum.includes(value)) ||
       (constraint.minimum !== undefined && Number(value) < constraint.minimum) || (constraint.maximum !== undefined && Number(value) > constraint.maximum) ||
       (constraint.minLength !== undefined && value.trim().length < constraint.minLength) || (constraint.maxLength !== undefined && value.length > constraint.maxLength) ||
-      (constraint.format === 'date-time' && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(value) || !Number.isFinite(Date.parse(value))))) {
+      (constraint.format === 'date-time' && !validDateTime(value))) {
       throw new CliError('invalid_value', `Invalid --${flagName(key)}. See collab schema for supported values and bounds.`);
     }
   }
+  if (name === 'search' && query.get('type') === 'note' && ['status', 'assigneeId'].some(key => query.has(key))) throw new CliError('invalid_value', '--status and --assignee-id cannot be used with --type note.');
   if (name === 'search' && query.has('after') && query.has('before') && Date.parse(query.get('after')) > Date.parse(query.get('before'))) throw new CliError('invalid_value', '--after must not follow --before.');
   if (name === 'context get') {
     if (!query.has('includePipeline')) query.set('includePipeline', String(query.has('projectId') && query.get('includeKnowledge') !== 'true'));

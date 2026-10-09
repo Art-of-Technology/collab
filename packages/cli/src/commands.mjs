@@ -8,12 +8,16 @@ const issueFields = { title: string, description: string, type: string, priority
 const noteFields = { title: string, content: string, type: string, scope: string, projectId: string, isAiContext: boolean, aiContextPriority: integer, tagIds: array };
 const timeFields = { timeSpent: integer, description: string, loggedAt: string };
 const retrievalBounds = { limit: { minimum: 1, maximum: 50 }, offset: { minimum: 0, maximum: 50000 }, maxTokens: { minimum: 1024, maximum: 64000 } };
+const retrievalIdentifier = { trim: true, minLength: 1, maxLength: 128 };
 
 export const commands = {
   'search': command('GET', 'search', {}, { query: string, mode: string, ...projectQuery, type: string, status: string,
     assigneeId: string, after: string, before: string, ...offset, maxTokens: integer }, {
     requiredQuery: ['query'], defaults: { mode: 'hybrid', limit: 20, offset: 0, maxTokens: 8000 },
-    constraints: { ...retrievalBounds, query: { minLength: 1, maxLength: 500 },
+    defaultDescriptions: { type: 'all (server default)' },
+    description: 'status and assigneeId filter issues and their activity; neither can be used with type=note. after must not follow before.',
+    constraints: { ...retrievalBounds, query: { trim: true, minLength: 1, maxLength: 500 },
+      projectId: retrievalIdentifier, status: retrievalIdentifier, assigneeId: retrievalIdentifier,
       mode: { enum: ['exact', 'keyword', 'semantic', 'hybrid', 'fuzzy'] }, type: { enum: ['all', 'issue', 'note', 'activity'] },
       after: { format: 'date-time' }, before: { format: 'date-time' } },
   }),
@@ -58,7 +62,14 @@ export const commands = {
   'notes update': command('PUT', 'context/:id', noteFields),
   'context get': command('GET', 'ai-context', {}, { ...projectQuery, includeKnowledge: boolean, includePipeline: boolean,
     ...offset, maxTokens: integer, since: string }, {
-    defaults: { maxTokens: 8000 }, constraints: { ...retrievalBounds, maxTokens: { minimum: 2048, maximum: 64000 }, since: { format: 'date-time' } },
+    defaults: { maxTokens: 8000 },
+    defaultDescriptions: {
+      includePipeline: 'true with projectId unless includeKnowledge=true; false otherwise (CLI default)',
+      limit: '10 (server default; includePipeline=true only)',
+      offset: '0 (server default; includePipeline=true only)',
+      since: '7 days before the server request time (server default; includePipeline=true only)',
+    },
+    constraints: { ...retrievalBounds, projectId: retrievalIdentifier, maxTokens: { minimum: 2048, maximum: 64000 }, since: { format: 'date-time' } },
     description: 'With a project, return pipeline context. includePipeline=false or includeKnowledge=true selects the legacy prompt format.',
   }),
   'knowledge list': command('GET', 'context/knowledge', {}, { ...offset, ...projectQuery, q: string, type: string }),

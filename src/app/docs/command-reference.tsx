@@ -13,6 +13,10 @@ type Command = {
   required?: string[];
   requiredQuery?: string[];
   pagination?: string[];
+  description?: string;
+  defaults?: Record<string, string | number | boolean>;
+  defaultDescriptions?: Record<string, string>;
+  constraints?: Record<string, { enum?: string[]; minimum?: number; maximum?: number; minLength?: number; maxLength?: number; trim?: boolean; format?: string }>;
 };
 
 const entries: [string, Command][] = Object.entries(commands);
@@ -63,6 +67,7 @@ export function CommandReference() {
                 <code className="block break-words rounded-md bg-collab-950 p-3 text-collab-50">
                   {['collab', name, ...args, ...(spec.method === 'DELETE' ? ['--yes'] : [])].join(' ')}
                 </code>
+                {spec.description && <p className="text-muted-foreground">{spec.description}</p>}
                 {args.length > 0 && (
                   <p className="text-muted-foreground">
                     ID is the {spec.path.startsWith('issues/') ? 'issue ID or key (such as APP-123)' : 'resource ID'}.
@@ -71,14 +76,30 @@ export function CommandReference() {
                 )}
                 {Object.keys(options).length > 0 ? (
                   <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                    {Object.entries(options).map(([field, type]) => (
-                      <div key={field} className="flex min-w-0 flex-wrap items-baseline gap-2">
-                        <dt><code className="break-all">--{flagName(field)}</code></dt>
-                        <dd className="text-xs text-muted-foreground">
-                          {type}{spec.required?.includes(field) || spec.requiredQuery?.includes(field) ? ' · required' : ''}
-                        </dd>
-                      </div>
-                    ))}
+                    {Object.entries(options).map(([field, type]) => {
+                      const constraint = spec.constraints?.[field];
+                      const details = [
+                        type,
+                        (spec.required?.includes(field) || spec.requiredQuery?.includes(field)) && 'required',
+                        constraint?.enum && `values: ${constraint.enum.join(', ')}`,
+                        constraint?.minimum !== undefined && `minimum: ${constraint.minimum}`,
+                        constraint?.maximum !== undefined && `maximum: ${constraint.maximum}`,
+                        constraint?.minLength !== undefined && `minimum length: ${constraint.minLength}`,
+                        constraint?.maxLength !== undefined && `maximum length: ${constraint.maxLength}`,
+                        constraint?.trim && 'trimmed',
+                        constraint?.format && `format: ${constraint.format}`,
+                        spec.defaults?.[field] !== undefined && `CLI default: ${spec.defaults[field]}`,
+                        spec.defaultDescriptions?.[field] && `default: ${spec.defaultDescriptions[field]}`,
+                      ].filter(Boolean).join(' · ');
+                      return (
+                        <div key={field} className="flex min-w-0 flex-wrap items-baseline gap-2">
+                          <dt><code className="break-all">--{flagName(field)}</code></dt>
+                          <dd className="text-xs text-muted-foreground">
+                            {details}
+                          </dd>
+                        </div>
+                      );
+                    })}
                   </dl>
                 ) : <p className="text-muted-foreground">No command-specific flags. Common request flags still apply.</p>}
                 {spec.pagination && <p className="text-muted-foreground">Supports --all to fetch every page.</p>}

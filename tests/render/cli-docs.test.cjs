@@ -70,6 +70,41 @@ test('command reference renders the executable CLI inventory and filters through
   assert.match(deletion, /issue ID or key/);
 });
 
+test('command reference renders retrieval constraints and dispatched versus conditional defaults', async () => {
+  const Reference = await reference();
+  for (const [name, fields] of [
+    ['search', {
+      query: ['required', 'minimum length: 1', 'maximum length: 500', 'trimmed'],
+      mode: ['values: exact, keyword, semantic, hybrid, fuzzy', 'CLI default: hybrid'],
+      type: ['values: all, issue, note, activity', 'default: all (server default)'],
+      status: ['minimum length: 1', 'maximum length: 128', 'trimmed'],
+      'assignee-id': ['minimum length: 1', 'maximum length: 128', 'trimmed'],
+      'project-id': ['minimum length: 1', 'maximum length: 128', 'trimmed'],
+      after: ['format: date-time'], before: ['format: date-time'],
+      limit: ['minimum: 1', 'maximum: 50', 'CLI default: 20'],
+      offset: ['minimum: 0', 'maximum: 50000', 'CLI default: 0'],
+      'max-tokens': ['minimum: 1024', 'maximum: 64000', 'CLI default: 8000'],
+    }],
+    ['context get', {
+      'project-id': ['minimum length: 1', 'maximum length: 128', 'trimmed'],
+      'include-pipeline': ['true with projectId unless includeKnowledge=true; false otherwise (CLI default)'],
+      limit: ['minimum: 1', 'maximum: 50', 'default: 10 (server default; includePipeline=true only)'],
+      offset: ['minimum: 0', 'maximum: 50000', 'default: 0 (server default; includePipeline=true only)'],
+      since: ['format: date-time', '7 days before the server request time (server default; includePipeline=true only)'],
+      'max-tokens': ['minimum: 2048', 'maximum: 64000', 'CLI default: 8000'],
+    }],
+  ]) {
+    findInput(Reference()).props.onChange({ target: { value: `collab ${name}` } });
+    const html = renderToStaticMarkup(Reference());
+    for (const [flag, values] of Object.entries(fields)) {
+      const renderedField = html.match(new RegExp(`<dt><code[^>]*>--${flag}</code></dt><dd[^>]*>([^<]*)</dd>`))?.[1];
+      assert.ok(renderedField, `${name} --${flag}`);
+      for (const value of values) assert.ok(renderedField.includes(value), `${name} --${flag}: ${value}`);
+    }
+    assert.match(html, name === 'search' ? /neither can be used with type=note/ : /includePipeline=false or includeKnowledge=true/);
+  }
+});
+
 test('docs render installation, navigable sections, commands, and credential limitations', async () => {
   const { CodeBlock } = load('src/components/dev/docs/CodeBlock.tsx', {
     react: require('react'), 'react/jsx-runtime': jsx,

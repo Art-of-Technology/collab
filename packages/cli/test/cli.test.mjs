@@ -100,12 +100,25 @@ test('search sends every supported mode and filter, preserves fallback JSON, and
   assert.deepEqual(schema.data.commands.search.requiredQuery, ['query']);
   assert.deepEqual(schema.data.commands.search.constraints.mode.enum, ['exact', 'keyword', 'semantic', 'hybrid', 'fuzzy']);
   assert.equal(schema.data.commands.search.constraints.limit.maximum, 50);
+  for (const args of [['schema'], ['--help']]) {
+    const { data } = await f.run(args);
+    assert.equal(data.commands.search.defaultDescriptions.type, 'all (server default)');
+    const context = data.commands['context get'];
+    assert.deepEqual(context.defaults, { maxTokens: 8000 });
+    assert.deepEqual(context.defaultDescriptions, {
+      includePipeline: 'true with projectId unless includeKnowledge=true; false otherwise (CLI default)',
+      limit: '10 (server default; includePipeline=true only)',
+      offset: '0 (server default; includePipeline=true only)',
+      since: '7 days before the server request time (server default; includePipeline=true only)',
+    });
+  }
 });
 
 test('context selects bounded project pipeline by default and keeps explicit legacy prompt requests', async t => {
   const f = await fixture(t);
   for (const [args, pipeline] of [
     [['context', 'get', '--project', 'p', '--limit', '4', '--offset', '2', '--since', '2026-01-01T00:00:00Z'], 'true'],
+    [['context', 'get', '--project', 'p'], 'true'],
     [['context', 'get', '--project', 'p', '--include-pipeline', 'false'], 'false'],
     [['context', 'get', '--project', 'p', '--include-knowledge', 'true'], 'false'],
     [['context', 'get'], 'false'],
@@ -113,6 +126,9 @@ test('context selects bounded project pipeline by default and keeps explicit leg
     assert.equal((await f.run(args)).code, 0);
     const query = new URL(f.calls.at(-1).url, f.url).searchParams;
     assert.equal(query.get('includePipeline'), pipeline); assert.equal(query.get('maxTokens'), '8000');
+    for (const field of ['limit', 'offset', 'since']) {
+      assert.equal(query.get(field), args.includes(`--${field}`) ? args[args.indexOf(`--${field}`) + 1] : null);
+    }
   }
 });
 
@@ -128,6 +144,64 @@ test('invalid retrieval bounds and modes fail before HTTP dispatch', async t => 
     ['context', 'get', '--project', 'p', '--max-tokens', '1024'],
   ]) assert.notEqual((await f.run(args)).code, 0, args.join(' '));
   assert.equal(f.calls.length, 0);
+});
+
+test('retrieval identifiers and every date filter reject invalid inputs without HTTP', async t => {
+  const f = await fixture(t);
+  for (const command of [['search', '--query', 'release'], ['context', 'get']]) {
+    for (const flag of ['--project', '--project-id', ...(command[0] === 'search' ? ['--status', '--assignee-id'] : [])]) {
+      for (const value of ['', '   ', 'x'.repeat(129)]) {
+        const result = await f.run([...command, flag, value]);
+        assert.notEqual(result.code, 0, `${command[0]} ${flag}: ${value}`);
+        assert.ok(['invalid_value', 'invalid_identifier'].includes(result.error.error));
+      }
+    }
+    for (const project of ['   ', 'x'.repeat(129)]) {
+      const result = await f.run(command, { env: { COLLAB_PROJECT: project } });
+      assert.equal(result.error.error, 'invalid_value');
+      writeCredentials(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.url, accessToken: 'synthetic-token', project }));
+      assert.equal((await f.run(command, { env: { COLLAB_TOKEN: '' } })).error.error, 'invalid_value');
+    }
+  }
+  for (const [command, flag] of [
+    [['search', '--query', 'release'], '--after'],
+    [['search', '--query', 'release'], '--before'],
+    [['context', 'get', '--project', 'p'], '--since'],
+  ]) {
+    for (const value of ['2026-02-30T00:00:00Z', '2025-02-29T00:00:00Z', '1900-02-29T00:00:00Z',
+      '2026-04-31T00:00:00+01:00', '2026-01-01T24:00:00Z', '2026-01-01T00:60:00Z', '2026-01-01T00:00:60Z']) {
+      assert.equal((await f.run([...command, flag, value])).error.error, 'invalid_value', `${flag}: ${value}`);
+    }
+  }
+  for (const flag of ['--status', '--assignee-id']) {
+    assert.equal((await f.run(['search', '--query', 'release', '--type', 'note', flag, 'todo'])).error.error, 'invalid_value');
+  }
+  assert.equal(f.calls.length, 0);
+});
+
+test('retrieval trims text bounds and accepts valid calendar dates and sibling content types', async t => {
+  const f = await fixture(t);
+  for (const type of ['all', 'issue', 'activity', 'note']) {
+    const args = ['search', '--query', ` ${'x'.repeat(500)} `, '--project-id', ` ${'p'.repeat(128)} `, '--type', type];
+    if (type !== 'note') args.push('--status', ` ${'s'.repeat(128)} `, '--assignee-id', ` ${'a'.repeat(128)} `);
+    assert.equal((await f.run(args)).code, 0);
+    const query = new URL(f.calls.at(-1).url, f.url).searchParams;
+    assert.equal(query.get('query'), 'x'.repeat(500));
+    assert.equal(query.get('projectId'), 'p'.repeat(128));
+    assert.equal(query.get('status'), type === 'note' ? null : 's'.repeat(128));
+    assert.equal(query.get('assigneeId'), type === 'note' ? null : 'a'.repeat(128));
+  }
+  for (const value of ['2000-02-29T23:59:59Z', '2024-02-29T00:00:00.123456+01:00', '2026-01-01T23:00:00-02:00']) {
+    for (const [command, flag, field] of [
+      [['search', '--query', 'release'], '--after', 'after'],
+      [['search', '--query', 'release'], '--before', 'before'],
+      [['context', 'get', '--project', ' p '], '--since', 'since'],
+    ]) {
+      assert.equal((await f.run([...command, flag, value])).code, 0);
+      assert.equal(new URL(f.calls.at(-1).url, f.url).searchParams.get(field), value);
+    }
+  }
+  assert.equal((await f.run(['search', '--query', 'release', '--after', '2026-01-01T01:00:00+01:00', '--before', '2026-01-01T00:00:00Z'])).code, 0);
 });
 
 test('retrieval errors retain safe machine codes without echoing provider or record details', async t => {
