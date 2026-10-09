@@ -7,7 +7,7 @@ The response contains:
 - `project`: ID, name, description, archive state, updated timestamp and link.
 - `summary`: visible issue counts, completed/open/unknown status counts, unassigned and overdue counts.
 - `statuses` and `owners`: status counts and assigned users with issue counts. Owners here are issue assignees, not an invented project-owner field.
-- `blockers` and `dependencies`: directed `BLOCKS` edges with readable source and target issue cards. Blockers exclude edges with a completed endpoint. Legacy statuses without a current status definition have unknown completion.
+- `blockers` and `dependencies`: directed `BLOCKS` edges, including reversed stored `BLOCKED_BY` relations, with readable source and target issue cards. Blockers exclude edges with a completed endpoint. Legacy statuses without a current status definition have unknown completion.
 - `parents`: child-to-parent edges from both `parentId` and `PARENT` relations, deduplicated. Readable cross-project neighbors in the same workspace are included, one level deep.
 - `recentChanges`: recently updated issues and activity, newest first. Activity without a currently readable parent is excluded.
 - `notes`: readable project and workspace Notes, prioritizing AI context, its configured priority, pins, then recent updates. Personal, encrypted, credential, API-key and environment Notes are excluded, even for their author.
@@ -23,11 +23,11 @@ Issue and Note cards include source IDs, links and `updatedAt`. Activity uses it
 | `maxTokens` | 8,000 | 2,048–64,000 |
 | `since` | Seven days before the request | ISO timestamp with timezone; applies to recent changes |
 
-Each section has `items` and `pagination` with `offset`, `nextOffset`, `hasMore` and `total`. `total: null` means the query used bounded lookahead and the full count is unknown. Follow each section's own `nextOffset`; a budget may shorten sections differently. Pages reflect current database state and can shift between requests.
+Each section has `items` and `pagination` with `offset`, `nextOffset`, `hasMore` and `total`. Totals count the readable records retrieved for each section. Follow each section's own `nextOffset`; a budget may shorten sections differently. Pages reflect current database state and can shift between requests.
 
 The budget uses UTF-8 bytes of the **whole JSON response** as a conservative token upper bound, not a model-specific tokenizer. Text fields are excerpts with fixed length limits. If necessary, tail items are removed while preserving at least one item from every nonempty section. `metadata.budget` reports the bound, truncation and affected sections. A budget too small for that minimum returns HTTP 422, `budget_too_small`; increase it rather than retrying an unchanged offset.
 
-Project context supports up to 50,000 visible project issues and 50,000 relation/neighbor records per relation query. Larger scopes return HTTP 422, `scope_too_large`. ID queries are batched below Prisma's bind limit and activity is ordered globally before pagination.
+Project context supports up to 50,000 visible project issues and 50,000 relation/neighbor records per relation query, activity records, readable Notes, and records in each final pageable section (including merged changes and parent edges). Larger scopes return HTTP 422, `scope_too_large`. ID queries are batched below Prisma's bind limit and activity is ordered globally before pagination.
 
 ## Freshness and compatibility
 

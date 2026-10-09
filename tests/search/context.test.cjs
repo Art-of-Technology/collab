@@ -44,6 +44,10 @@ test('project context uses the real schema and PostgreSQL above the bind limit w
     { id: 'latest', itemId: 'issue-39999', action: 'UPDATED', userId: 'reader', workspaceId: 'w', projectId: null, createdAt: new Date('2026-02-01') },
     { id: 'orphan', itemId: 'missing', action: 'UPDATED', userId: 'reader', workspaceId: 'w', projectId: 'p' },
   ] });
+  await prisma.issueRelation.createMany({ data: [
+    { id: 'inverse', sourceIssueId: 'issue-1', targetIssueId: 'child', relationType: 'BLOCKED_BY', createdBy: 'reader' },
+    { id: 'hidden-inverse', sourceIssueId: 'issue-1', targetIssueId: 'hidden', relationType: 'BLOCKED_BY', createdBy: 'reader' },
+  ] });
   const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma }, '@/lib/shared-issue-key-utils': load('src/lib/shared-issue-key-utils.ts') });
   const access = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder });
   const query = load('src/lib/agent-search-query.ts', { zod: require('zod') }, { Buffer });
@@ -59,6 +63,8 @@ test('project context uses the real schema and PostgreSQL above the bind limit w
   assert.equal(first.recentChanges.pagination.nextOffset, 1);
   assert.equal(first.parents.items[0].source.id, 'child');
   assert.equal(first.parents.pagination.total, 1);
+  assert.deepEqual(Array.from(first.dependencies.items, r => [r.type, r.source.id, r.target.id]), [['BLOCKS', 'child', 'issue-1']]);
+  assert.equal(first.blockers.items[0].id, 'inverse');
   const second = await service.getProjectContext(context, { ...options, offset: 1 });
   assert.equal(second.recentChanges.items[0].id, 'early');
   assert.equal(second.recentChanges.pagination.nextOffset, null);

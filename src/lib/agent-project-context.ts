@@ -8,15 +8,16 @@ import { hasScope } from '@/lib/oauth-scopes';
 import { stripHtmlToPlainText } from '@/lib/html-sanitizer';
 import { responseBytes, SearchError } from './agent-search-query';
 
+const MAX_SCOPE = 50000;
+
 export const contextOptionsSchema = z.object({
   projectId: z.string().trim().min(1).max(128),
   limit: z.coerce.number().int().min(1).max(50).default(10),
-  offset: z.coerce.number().int().min(0).max(50000).default(0),
+  offset: z.coerce.number().int().min(0).max(MAX_SCOPE).default(0),
   maxTokens: z.coerce.number().int().min(2048).max(64000).default(8000),
   since: z.string().datetime({ offset: true }).optional(),
 });
 type Options = z.infer<typeof contextOptionsSchema>;
-const MAX_SCOPE = 50000;
 const issueSelect = {
   id: true, issueKey: true, title: true, projectId: true, parentId: true, priority: true,
   status: true, statusValue: true, updatedAt: true, dueDate: true,
@@ -49,11 +50,10 @@ export async function getProjectContext(context: AppAuthContext, options: Option
     orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: MAX_SCOPE + 1 });
   if (issues.length > MAX_SCOPE) throw new SearchError('scope_too_large', 'Project context supports up to 50,000 visible issues', 422);
   const since = options.since ? new Date(options.since) : new Date(started.getTime() - 7 * 86400000);
-  const fetchCount = options.offset + options.limit + 1;
   const parentIds = [...new Set(issues.flatMap(i => i.parentId ? [i.parentId] : []))];
   const [relations, parents, activityCandidates, children] = await Promise.all([
     prisma.issueRelation.findMany({ where: {
-      relationType: { in: ['BLOCKS', 'PARENT'] }, sourceIssue: allowed, targetIssue: allowed,
+      relationType: { in: ['BLOCKS', 'BLOCKED_BY', 'PARENT'] }, sourceIssue: allowed, targetIssue: allowed,
       OR: [{ sourceIssue: { projectId: project.id } }, { targetIssue: { projectId: project.id } }],
     }, select: { id: true, relationType: true, updatedAt: true, sourceIssue: { select: issueSelect }, targetIssue: { select: issueSelect } },
     orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: MAX_SCOPE + 1 }),
@@ -61,12 +61,12 @@ export async function getProjectContext(context: AppAuthContext, options: Option
     readIds(issues.map(i => i.id), ids => prisma.issueActivity.findMany({ where: { workspaceId: context.workspace.id, itemType: 'ISSUE',
       itemId: { in: ids }, OR: [{ projectId: project.id }, { projectId: null }], createdAt: { gte: since } },
       select: { id: true, itemId: true, action: true, fieldName: true, details: true, createdAt: true },
-      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: fetchCount })),
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: MAX_SCOPE + 1 })),
     readIds(issues.map(i => i.id), ids => prisma.issue.findMany({ where: { AND: [allowed], projectId: { not: project.id },
       parentId: { in: ids } }, select: issueSelect, take: MAX_SCOPE + 1, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }] })),
   ]);
+  if (activityCandidates.length > MAX_SCOPE) throw new SearchError('scope_too_large', 'Project context supports up to 50,000 activity records', 422);
   activityCandidates.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || a.id.localeCompare(b.id));
-  activityCandidates.splice(fetchCount);
   children.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() || a.id.localeCompare(b.id));
   if (relations.length > MAX_SCOPE || children.length > MAX_SCOPE) throw new SearchError('scope_too_large', 'Project context supports up to 50,000 visible dependency and parent relations', 422);
   const issueMap = new Map(issues.map(i => [i.id, i]));
@@ -76,8 +76,9 @@ export async function getProjectContext(context: AppAuthContext, options: Option
     projectId: issue.projectId, status: plain(issue.projectStatus?.name || issue.statusValue || issue.status, 128) || null,
     completed: issue.projectStatus?.isFinal ?? null, assignee: issue.assignee ? { id: issue.assignee.id, name: plain(issue.assignee.name, 120) } : null,
     updatedAt: issue.updatedAt.toISOString(), url: `${path}/issues/${encodeURIComponent(issue.issueKey || issue.id)}` });
-  const dependencies = relations.filter(r => r.relationType === 'BLOCKS').map(r => ({ id: r.id, type: 'BLOCKS' as const,
-    source: card(r.sourceIssue), target: card(r.targetIssue), updatedAt: r.updatedAt.toISOString() }));
+  const dependencies = relations.filter(r => r.relationType === 'BLOCKS' || r.relationType === 'BLOCKED_BY').map(r => ({ id: r.id, type: 'BLOCKS' as const,
+    source: card(r.relationType === 'BLOCKED_BY' ? r.targetIssue : r.sourceIssue),
+    target: card(r.relationType === 'BLOCKED_BY' ? r.sourceIssue : r.targetIssue), updatedAt: r.updatedAt.toISOString() }));
   const blockers = dependencies.filter(r => r.source.completed !== true && r.target.completed !== true);
   const parentMap = new Map(parents.map(i => [i.id, i]));
   const hierarchy = new Map<string, { id: string; type: 'PARENT'; source: ReturnType<typeof card>; target: ReturnType<typeof card>; updatedAt: string }>();
@@ -110,7 +111,8 @@ export async function getProjectContext(context: AppAuthContext, options: Option
     { OR: [{ projectId: project.id }, { projectId: null }] }],
     scope: { in: ['WORKSPACE', 'PROJECT', 'PUBLIC'] }, type: { notIn: ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'] }, isEncrypted: false,
   }, select: { id: true, title: true, content: true, type: true, projectId: true, updatedAt: true, isAiContext: true, isPinned: true, authorId: true, expiresAt: true },
-  orderBy: [{ isAiContext: 'desc' }, { aiContextPriority: 'desc' }, { isPinned: 'desc' }, { updatedAt: 'desc' }, { id: 'asc' }], take: fetchCount });
+  orderBy: [{ isAiContext: 'desc' }, { aiContextPriority: 'desc' }, { isPinned: 'desc' }, { updatedAt: 'desc' }, { id: 'asc' }], take: MAX_SCOPE + 1 });
+  if (notes.length > MAX_SCOPE) throw new SearchError('scope_too_large', 'Project context supports up to 50,000 visible Notes', 422);
   // Activity has no Issue FK; verify its parent still exists and is readable before returning history.
   const currentParents = await readIds(activityCandidates.map(a => a.itemId), ids => prisma.issue.findMany({ where: { AND: [allowed], projectId: project.id,
     id: { in: ids } }, select: { id: true } }));
@@ -123,9 +125,12 @@ export async function getProjectContext(context: AppAuthContext, options: Option
       excerpt: plain([a.fieldName, a.details].filter(Boolean).join(': '), 600), projectId: project.id,
       updatedAt: a.createdAt.toISOString(), url: `${path}/issues/${encodeURIComponent(a.itemId)}` })),
   ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || `${a.type}:${a.id}`.localeCompare(`${b.type}:${b.id}`));
-  const page = <T,>(items: T[], unknownTotal = false) => ({ items: items.slice(options.offset, options.offset + options.limit),
-    pagination: { offset: options.offset, nextOffset: items.length > options.offset + options.limit ? options.offset + options.limit : null,
-      hasMore: items.length > options.offset + options.limit, total: unknownTotal ? null : items.length } });
+  const page = <T,>(items: T[]) => {
+    if (items.length > MAX_SCOPE) throw new SearchError('scope_too_large', 'Project context supports up to 50,000 records per section', 422);
+    return { items: items.slice(options.offset, options.offset + options.limit),
+      pagination: { offset: options.offset, nextOffset: items.length > options.offset + options.limit ? options.offset + options.limit : null,
+        hasMore: items.length > options.offset + options.limit, total: items.length } };
+  };
   const response = {
     project: { ...project, name: plain(project.name, 300), description: plain(project.description, 600), updatedAt: project.updatedAt.toISOString(),
       url: `${path}/projects/${encodeURIComponent(project.slug)}` },
@@ -136,11 +141,11 @@ export async function getProjectContext(context: AppAuthContext, options: Option
     statuses: page([...byStatus.values()].sort((a, b) => b.count - a.count || (a.name || '').localeCompare(b.name || ''))),
     owners: page([...owners.values()].sort((a, b) => b.issueCount - a.issueCount || a.id.localeCompare(b.id))),
     blockers: page(blockers), dependencies: page(dependencies), parents: page([...hierarchy.values()]),
-    recentChanges: page(changes, activityCandidates.length === fetchCount),
+    recentChanges: page(changes),
     notes: page(notes.filter(n => n.authorId === context.user.id || !n.expiresAt || n.expiresAt.getTime() >= Date.now()).map(n => ({
       id: n.id, type: 'note' as const, noteType: n.type, title: plain(n.title, 300), excerpt: plain(n.content, 600),
       projectId: n.projectId, isAiContext: n.isAiContext, isPinned: n.isPinned, updatedAt: n.updatedAt.toISOString(), url: `${path}/notes/${encodeURIComponent(n.id)}`,
-    })), notes.length === fetchCount),
+    }))),
     metadata: { generatedAt: new Date().toISOString(), snapshotStartedAt: started.toISOString(), since: since.toISOString(),
       freshness: 'canonical_database', dependencyDepth: 1, legacyCompletion: 'unknown',
       budget: { maxTokens: options.maxTokens, tokenUpperBound: 0, estimator: 'utf8_bytes', truncated: false, truncatedSections: [] as string[] } },

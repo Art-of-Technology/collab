@@ -169,3 +169,66 @@ test('prompt-only callers can opt into a bounded response without losing the fir
   assert.ok(body.metadata.budget.tokenUpperBound <= 5000); assert.equal(body.metadata.budget.truncated, true);
   assert.equal((await h.call({ includePipeline: 'invalid' })).status, 400);
 });
+
+test('project context normalizes both blocker representations across project boundaries and completion states', async () => {
+  for (const representation of ['BLOCKS', 'BLOCKED_BY']) for (const externalSource of [false, true]) {
+    const h = harness();
+    const source = h.issue('source', externalSource ? { projectId: 'p2', project: h.projects[1] } : {});
+    const target = h.issue('target', externalSource ? {} : { projectId: 'p2', project: h.projects[1] });
+    const add = (id, from, to) => h.relation(id, representation === 'BLOCKS' ? from : to, representation === 'BLOCKS' ? to : from, representation);
+    add('active', source, target);
+    const legacy = h.issue('legacy', { projectStatus: null, statusId: null, status: 'closed' });
+    const done = h.issue('done', { projectStatus: { id: 'done', name: 'DONE', isFinal: true, project: h.projects[0] } });
+    add('unknown', legacy, target); add('source-done', done, target); add('target-done', source, done);
+    const hidden = h.issue('hidden', { projectId: 'foreign', project: h.projects[2], workspaceId: 'foreign', workspace: h.foreign });
+    add('hidden-source', hidden, target); add('hidden-target', source, hidden);
+    const { status, body } = await h.call({ maxTokens: '64000' });
+    assert.equal(status, 200);
+    assert.deepEqual(body.blockers.items.map(r => r.id), ['active', 'unknown']);
+    assert.deepEqual(body.dependencies.items.map(r => r.id), ['active', 'source-done', 'target-done', 'unknown']);
+    const active = body.dependencies.items.find(r => r.id === 'active');
+    assert.equal(active.type, 'BLOCKS'); assert.equal(active.source.id, source.id); assert.equal(active.target.id, target.id);
+    assert.equal(body.blockers.items.find(r => r.id === 'unknown').source.completed, null);
+    assert.ok(!JSON.stringify(body).includes('hidden'));
+  }
+});
+
+test('project context bounds final sections and accepts every normal and budget-shortened boundary cursor', async t => {
+  for (const section of ['recentChanges', 'parents', 'notes']) await t.test(section, async () => {
+    const h = harness();
+    const issue = h.issue('issue', { parentId: section === 'parents' ? 'parent' : null });
+    if (section === 'parents') h.issue('parent', { projectId: 'p2', project: h.projects[1] });
+    for (let i = 0; i < (section === 'notes' ? 50000 : 49999); i++) {
+      const id = String(i).padStart(5, '0');
+      if (section === 'notes') h.note(id, { content: 'Context '.repeat(100) });
+      if (section === 'recentChanges') h.activity(id, issue, { details: 'Change '.repeat(100) });
+      if (section === 'parents') {
+        const child = h.issue(id, { projectId: 'p2', project: h.projects[1], parentId: i % 2 ? null : issue.id });
+        if (i % 2) h.relation(id, child, issue, 'PARENT');
+      }
+    }
+    const ordinary = await h.call({ offset: '49990', limit: '5', maxTokens: '64000' });
+    assert.equal(ordinary.status, 200);
+    assert.equal(ordinary.body[section].pagination.nextOffset, 49995);
+    const last = await h.call({ offset: String(ordinary.body[section].pagination.nextOffset), limit: '5', maxTokens: '64000' });
+    assert.equal(last.status, 200);
+    assert.equal(last.body[section].items.length, 5);
+    assert.equal(last.body[section].pagination.nextOffset, null);
+    const shortened = await h.call({ offset: '49990', limit: '10', maxTokens: '3000' });
+    assert.equal(shortened.status, 200);
+    assert.equal(shortened.body.metadata.budget.truncated, true);
+    assert.ok(Buffer.byteLength(JSON.stringify(shortened.body)) <= 3000);
+    const cursor = shortened.body[section].pagination.nextOffset;
+    assert.ok(cursor > 49990 && cursor < 50000);
+    assert.equal(cursor, 49990 + shortened.body[section].items.length);
+    assert.equal((await h.call({ offset: String(cursor), maxTokens: '64000' })).status, 200);
+    if (section === 'notes') h.note('overflow');
+    if (section === 'recentChanges') h.activity('overflow', issue);
+    if (section === 'parents') h.issue('overflow', { projectId: 'p2', project: h.projects[1], parentId: issue.id });
+    for (const offset of ['0', '50000']) {
+      const response = await h.call({ offset, maxTokens: '64000' });
+      assert.equal(response.status, 422);
+      assert.equal(response.body.error, 'scope_too_large');
+    }
+  });
+});
