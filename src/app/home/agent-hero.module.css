@@ -71,7 +71,10 @@
 .steps button[aria-pressed='true'] { color: #d5ddfa; background: #9faafa0b; }
 .steps button[aria-pressed='true']::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 1px; background: #9facf5; }
 .steps button > span { margin-right: .6rem; color: #a1b3e5; font-family: monospace; font-size: .6rem; }
-.hero button:focus-visible, .hero a:focus-visible { outline: 2px solid #c5b2ff; outline-offset: -3px; }
+.hero a:focus-visible { outline: 2px solid #c5b2ff; outline-offset: -3px; }
+@layer base {
+  .hero button:focus-visible { outline: 2px solid #c5b2ff !important; outline-offset: -3px; }
+}
 .caption { border-top: 1px solid #ffffff0c; padding: .8rem 1.25rem; font-size: .65rem; line-height: 1.85; color: #a3acc2; }
 .below { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem 1rem; padding: 1rem .2rem 2rem; font-size: .65rem; line-height: 1.7; color: var(--hero-muted); }
 .benefits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; border-top: 1px solid var(--hero-line); padding-top: 1.8rem; }
