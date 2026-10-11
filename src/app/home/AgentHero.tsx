@@ -63,7 +63,7 @@ export default function AgentHero() {
           <div className={styles.console}>
             <p className={styles.panelLabel}><Terminal aria-hidden="true" size={13} /> Your terminal / your agent</p>
             {steps.map((step, index) => (
-              <div key={step.name} id={`agent-step-${index}`} hidden={active !== index} aria-label={step.label}>
+              <div key={step.name} id={`agent-step-${index}`} hidden={active !== index} role="region" aria-label={step.label}>
                 <div className={styles.command}>
                   <span aria-hidden="true">❯</span>
                   <code data-cli-example={step.name}>{step.command}<span className={styles.cursor} aria-hidden="true" /></code>

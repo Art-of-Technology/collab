@@ -113,6 +113,8 @@ test('actual hero controls select each bounded command and its shared context wi
       assert.equal(selected()[0], buttons[index]);
       const panel = document.getElementById(buttons[index].getAttribute('aria-controls'));
       assert.equal(panel.hidden, false);
+      assert.equal(panel.getAttribute('role'), 'region');
+      assert.equal(panel.getAttribute('aria-label'), buttons[index].textContent.slice(2));
       assert.equal(panel.querySelector('[data-cli-example]').getAttribute('data-cli-example'), name);
       assert.match(panel.textContent, /collab/);
       for (const other of buttons.filter(button => button !== buttons[index])) {
@@ -141,4 +143,27 @@ test('actual hero controls select each bounded command and its shared context wi
       else delete globalThis[name];
     }
   }
+});
+
+
+test('hero CSS compiles through the actual Next PostCSS configuration and preserves scoped focus', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const postcss = require('postcss');
+  const { findConfig } = require('next/dist/lib/find-config');
+  const root = path.resolve(__dirname, '../..');
+  const config = await findConfig(root, 'postcss');
+  const plugins = Object.entries(config.plugins).map(([name, options]) => require(name)(options));
+  const filename = path.join(root, 'src/app/home/agent-hero.module.css');
+  // Exercise the compiler, rather than treating a parseable stylesheet as build proof.
+  const compiled = await postcss(plugins).process(fs.readFileSync(filename, 'utf8'), { from: filename });
+  const focus = [];
+  compiled.root.walkRules(rule => {
+    if (rule.selector === '.hero button:focus-visible') {
+      rule.walkDecls('outline', declaration => focus.push(declaration));
+    }
+  });
+  assert.equal(focus.length, 1);
+  assert.equal(focus[0].important, true, 'the scoped outline survives the existing important reset');
+  assert.notEqual(focus[0].value, 'none');
 });
