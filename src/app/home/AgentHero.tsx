@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { ArrowRight, Circle, FileText, Pause, Play, Terminal } from 'lucide-react';
 import styles from './agent-hero.module.css';
 
@@ -40,12 +41,20 @@ export default function AgentHero() {
   return (
     <section id="agents" aria-labelledby="hero-title" className={styles.hero} data-paused={paused}>
       <div className={styles.intro}>
-        <p className={styles.eyebrow}><span aria-hidden="true" /> The workspace behind your agent</p>
-        <h1 id="hero-title">Project management.<br /><span>Built for your agent.</span></h1>
-        <p className={styles.lede}>One workspace for people. A native CLI for the AI agents working alongside them. Bring projects, issues and decisions into the terminal.</p>
-        <div className={styles.actions}>
-          <Link href="/docs/cli#installation" className={styles.primary}>Install the CLI <ArrowRight aria-hidden="true" size={16} /></Link>
-          <Link href="/docs/cli#workflow" className={styles.secondary}>Explore the workflow <ArrowRight aria-hidden="true" size={16} /></Link>
+        <div>
+          <p className={styles.eyebrow}>Collab / Agent CLI</p>
+          <h1 id="hero-title">Project context.<br />Ready for your agent.</h1>
+        </div>
+        <div className={styles.introCopy}>
+          <p className={styles.lede}>Read issues, find decisions and pull project context into your terminal. Your team and your agent work from the same projects and Notes.</p>
+          <div className={styles.actions}>
+            <Button asChild variant="primary" size="lg" className="h-11 bg-blue-600 hover:bg-blue-700">
+              <Link href="/docs/cli#installation">Install the CLI <ArrowRight aria-hidden="true" /></Link>
+            </Button>
+            <Button asChild variant="ghost" size="lg" className="h-11">
+              <Link href="/docs/cli#workflow">Explore the workflow</Link>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -54,10 +63,10 @@ export default function AgentHero() {
           <span className={styles.windowDots} aria-hidden="true"><i /><i /><i /></span>
           <span>Customer portal</span>
           <span className={styles.example}>Example project</span>
-          <button type="button" onClick={() => setPaused(value => !value)} aria-pressed={paused} className={styles.motion}>
+          <Button variant="outline" size="sm" type="button" onClick={() => setPaused(value => !value)} aria-pressed={paused} className={styles.motion}>
             {paused ? <Play aria-hidden="true" size={12} /> : <Pause aria-hidden="true" size={12} />}
             {paused ? 'Resume motion' : 'Pause motion'}
-          </button>
+          </Button>
         </div>
         <div className={styles.stage}>
           <div className={styles.console}>
@@ -89,7 +98,7 @@ export default function AgentHero() {
           </div>
         </div>
         <div className={styles.steps} role="group" aria-label="Explore the CLI workflow">
-          {steps.map((step, index) => <button type="button" key={step.name} onClick={() => setActive(index)} aria-pressed={active === index} aria-controls={`agent-step-${index}`}><span>0{index + 1}</span>{step.label}</button>)}
+          {steps.map((step, index) => <Button variant="ghost" type="button" key={step.name} onClick={() => setActive(index)} aria-pressed={active === index} aria-controls={`agent-step-${index}`}><span>0{index + 1}</span>{step.label}</Button>)}
         </div>
         <figcaption className={styles.caption}>Illustrative workflow. Sign in and select your workspace first; replace PROJECT_ID with an ID returned by projects list. These commands read data and do not start an autonomous agent.</figcaption>
       </figure>

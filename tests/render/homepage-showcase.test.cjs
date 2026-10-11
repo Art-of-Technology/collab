@@ -3,11 +3,22 @@ const { renderToStaticMarkup } = require('react-dom/server');
 const jsx = require('react/jsx-runtime');
 const React = require('react');
 
+const button = load('src/components/ui/button.tsx', {
+  react: React, 'react/jsx-runtime': jsx,
+  '@radix-ui/react-slot': require('@radix-ui/react-slot'),
+  'class-variance-authority': require('class-variance-authority'),
+  '@/lib/utils': load('src/lib/utils.ts', {
+    clsx: require('clsx'), 'tailwind-merge': require('tailwind-merge'),
+  }),
+});
+const heroStyles = { default: new Proxy({}, { get: (_, key) => String(key) }) };
+
 function hero(link = require('next/link')) {
   return load('src/app/home/AgentHero.tsx', {
     react: React, 'react/jsx-runtime': jsx, 'next/link': link,
     'lucide-react': require('lucide-react'),
-    './agent-hero.module.css': { default: new Proxy({}, { get: (_, key) => String(key) }) },
+    './agent-hero.module.css': heroStyles,
+    '@/components/ui/button': button,
   }).default;
 }
 
@@ -19,7 +30,8 @@ function page() {
     'next/image': require('next/image'),
     'next/font/google': { Lora: () => ({ className: 'font-test' }) },
     'lucide-react': require('lucide-react'),
-    '@/components/ui/button': { Button: 'button' },
+    '@/components/ui/button': button,
+    './agent-hero.module.css': heroStyles,
     './AgentHero': { default: hero() },
   });
   return { html: renderToStaticMarkup(Page()), metadata };
@@ -28,8 +40,8 @@ function page() {
 test('homepage showcases the product and gives visitors working docs and sign-in destinations', () => {
   const { html, metadata } = page();
   assert.match(metadata?.description || '', /projects, issues, Notes/);
-  assert.match(html, /Project management\./);
-  assert.match(html, /Built for your agent\./);
+  assert.match(html, /Project context\./);
+  assert.match(html, /Ready for your agent\./);
   assert.match(html, /Example project/);
   assert.match(html, /Illustrative workflow/);
   const coclaw = html.match(/<details\b[\s\S]*?<\/details>/)?.[0];
@@ -52,6 +64,14 @@ test('homepage showcases the product and gives visitors working docs and sign-in
   assert.ok(html.indexOf('>Install the CLI') < html.indexOf('>Explore the workflow'), 'installation is the primary hero action');
   const ids = [...html.matchAll(/ id="([^"]+)"/g)].map(match => match[1]);
   assert.equal(ids.length, new Set(ids).size);
+  const { createRequire } = require('node:module');
+  const { JSDOM } = createRequire(require.resolve('isomorphic-dompurify'))('jsdom');
+  const document = JSDOM.fragment(html);
+  const install = document.querySelector('#agents a[href="/docs/cli#installation"]');
+  assert.ok(install, 'the shared Button renders installation as a navigable link');
+  assert.equal(install.textContent.trim(), 'Install the CLI');
+  assert.equal(document.querySelector('a button, button a, button button'), null,
+    'shared Button composition must not nest interactive controls');
   for (const [, target] of html.matchAll(/href="#([^"]+)"/g)) assert.ok(ids.includes(target), target);
 });
 
