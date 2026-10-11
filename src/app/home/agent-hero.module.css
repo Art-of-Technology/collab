@@ -67,7 +67,7 @@
   .intro { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; padding: 2.5rem 0 1.75rem; }
   .intro h1 { font-size: clamp(2rem, 7vw, 2.75rem); }
   .lede { font-size: .85rem; }
-  .toolbar { gap: .5rem; padding-inline: .8rem; }
+  .toolbar { flex-wrap: wrap; gap: .5rem; padding-inline: .8rem; }
   .example { display: none; }
   .motion { margin-left: auto; }
   .stage { grid-template-columns: minmax(0, 1fr); }
