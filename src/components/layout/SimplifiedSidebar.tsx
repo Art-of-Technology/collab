@@ -337,7 +337,7 @@ export default function SimplifiedSidebar({
               {installedApps.map((installation: any) => (
                 <Link
                   key={installation.id}
-                  href={`${workspaceBase}/apps/${installation.app.slug}`}
+                  href={installation.app.slug === 'collab-cli' ? '/docs/cli' : `${workspaceBase}/apps/${installation.app.slug}`}
                   className={cn(
                     "flex items-center gap-4 rounded-lg px-2 py-2 text-sm transition-all duration-150",
                     pathname.includes(`/apps/${installation.app.slug}`)

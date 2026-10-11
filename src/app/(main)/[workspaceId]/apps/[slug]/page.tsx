@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from '@/lib/request-session';
 import Image from 'next/image';
 import { authOptions } from '@/lib/auth-options';
@@ -101,6 +101,11 @@ export default async function AppWorkspacePage({ params }: AppPageProps) {
 
   if (!data) {
     notFound();
+  }
+
+  // The native CLI uses its app registration for OAuth, not an embedded UI.
+  if (slug === 'collab-cli') {
+    redirect('/docs/cli');
   }
 
   const { app, installation, workspace, userRole, isInstalled, isSystemApp } = data;
