@@ -33,7 +33,6 @@ export default function LandingPage() {
           <div className="flex flex-wrap items-center gap-5 text-sm">
             <a href="#product" className="hidden py-2 text-collab-400 hover:text-white sm:block">Product</a>
             <a href="#agents" className="hidden py-2 text-collab-400 hover:text-white sm:block">For agents</a>
-            <a href="#coclaw" className="hidden py-2 text-collab-400 hover:text-white sm:block">Coclaw</a>
             <Link href="/docs/cli" className="py-2 text-collab-400 hover:text-white">CLI docs</Link>
             <Link href="/login" className="rounded-lg border border-collab-700 px-4 py-2.5 hover:bg-collab-800">Open Collab</Link>
           </div>
@@ -117,13 +116,6 @@ export default function LandingPage() {
           </figure>
         </section>
 
-        <section id="coclaw" aria-labelledby="coclaw-title" className="mb-20 scroll-mt-8 rounded-2xl border border-collab-700 bg-collab-900 p-6 sm:p-10">
-          <p className="mb-4 text-xs font-medium uppercase tracking-widest text-violet-300">An agent inside Collab</p>
-          <h2 id="coclaw-title" className="text-2xl font-semibold tracking-tight sm:text-3xl">Meet Coclaw.</h2>
-          <p className="mt-5 max-w-3xl text-base leading-8 text-collab-400">Coclaw is Collab’s personal AI agent for tasks, connected messaging channels and persistent memory. Its workspace dashboard brings together provider keys, channel settings, GitHub integration and conversation history.</p>
-          <p className="mt-4 max-w-3xl text-sm leading-7 text-collab-400">The CLI gives your existing coding agent access to project context. Coclaw has its own agent runtime and provider setup; using the CLI does not start Coclaw. Coclaw execution requires an enabled deployment and a configured provider.</p>
-        </section>
-
         <section aria-labelledby="start-title" className="mb-20 rounded-2xl border border-collab-700 bg-collab-900 p-6 sm:p-10">
           <div className="flex flex-col justify-between gap-7 md:flex-row md:items-center">
             <div><h2 id="start-title" className="text-2xl font-semibold tracking-tight sm:text-3xl">Start with one project.</h2><p className="mt-3 max-w-xl text-sm leading-7 text-collab-400">Install the CLI, approve your workspace and read the work already there. Bring your agent when you are ready.</p></div>
@@ -135,6 +127,10 @@ export default function LandingPage() {
             <div><p className="font-medium">03 / Explore</p><Link href="/docs/cli#commands" className="mt-2 inline-flex min-h-11 items-center gap-2 text-violet-300 hover:text-violet-200">Browse the command reference <ArrowRight aria-hidden="true" className="h-4 w-4" /></Link></div>
           </div>
           <p className="mt-7 text-xs leading-6 text-collab-400">Search availability: exact, keyword and fuzzy retrieval are supported; semantic search requires a configured embedding provider and index. Hybrid results report semantic availability rather than silently claiming vector matches.</p>
+          <details className="mt-7 border-t border-collab-700 pt-5 text-sm text-collab-400">
+            <summary className="cursor-pointer py-2 font-medium text-collab-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-400">Do I need Coclaw to use the CLI?</summary>
+            <p className="mt-3 max-w-3xl leading-7">No. Your existing coding agent can use the CLI directly. Coclaw is an optional built-in assistant for tasks, connected messaging channels and persistent memory; using the CLI does not start Coclaw. Coclaw execution requires an enabled deployment and a configured provider.</p>
+          </details>
         </section>
       </main>
       <footer className="border-t border-collab-700">
