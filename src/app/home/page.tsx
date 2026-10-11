@@ -1,338 +1,137 @@
-'use client'
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import Image from 'next/image';
+import { ArrowRight, BookOpen, CheckCircle2, Circle, FileText, GitBranch, ListChecks, Search, ShieldCheck, Terminal } from 'lucide-react';
 
-import { Lora } from 'next/font/google';
+export const metadata: Metadata = {
+  title: 'Collab — Project management for people and AI agents',
+  description: 'Keep projects, issues, Notes and decisions together. Plan in Collab, then give your AI agents the same project context through the native CLI.',
+};
 
-const lora = Lora({
-    subsets: ['latin'],
-    weight: ['400', '700'], // ihtiyacına göre diğer ağırlıkları da ekleyebilirsin
-});
+const workflow = [
+  { name: 'projects list', label: 'Find your project', code: 'collab projects list --json' },
+  { name: 'issues list', label: 'Read the work', code: 'collab issues list --project-id PROJECT_ID --limit 10 --json' },
+  { name: 'search', label: 'Find a decision', code: 'collab search --query "release checklist" --mode keyword --type note --json' },
+  { name: 'context get', label: 'Bring context to your agent', code: 'collab context get --project-id PROJECT_ID --max-tokens 4000 --json' },
+];
 
+const capabilities = [
+  { icon: ListChecks, title: 'Projects with a next step', text: 'Turn a roadmap into issues, owners, priorities and milestones. Keep dependencies and progress alongside the work.' },
+  { icon: FileText, title: 'Notes that stay with the work', text: 'Keep decisions, requirements and handover context in shared Notes. Your team and agents can read and maintain them through the CLI.' },
+  { icon: Search, title: 'Find the detail you need', text: 'Use exact, keyword and fuzzy search across issues, Notes and activity. Filter by project and return a bounded result set.' },
+];
 
-import React from "react";
-import { Button } from "@/components/ui/button";
-import { CheckSquare } from "lucide-react";
-import Link from "next/link";
-import Image from "next/image";
-
-
-const features = [
-    {
-        title: "Task Management",
-        description: "Efficiently manage tasks and projects with our intuitive interface.",
-        imageAlt: "Task management preview",
-    },
-    {
-        title: "Real-time Collaboration",
-        description: "Collaborate with your team in real-time, no matter where you are.",
-        imageAlt: "Real-time collaboration preview",
-    },
-    {
-        title: "Analytics Dashboard",
-        description: "Get insights into your team's performance with our analytics dashboard.",
-        imageAlt: "Analytics dashboard preview",
-    },
-    {
-        title: "Integrations",
-        description: "Seamlessly integrate with your favorite tools and services.",
-        imageAlt: "Integrations preview",
-    },
-    {
-        title: "Notifications",
-        description: "Stay updated with real-time notifications and alerts.",
-        imageAlt: "Notifications preview",
-    },
-    {
-        title: "Feedback System",
-        description: "Gather feedback from your team to improve collaboration.",
-        imageAlt: "Feedback system preview",
-    },
-
-]
+const linkStyle = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-400';
 
 export default function LandingPage() {
-    return (
-        <div className="min-h-screen flex flex-col font-landing overflow-y-auto">
-            <header className="container max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 flex justify-between items-center">
-                <div className="flex items-center">
-                    <span className="text-xl sm:text-2xl font-bold flex items-center">
-                        <Image
-                            unoptimized
-                            src="/logo-text.svg"
-                            alt="Collab"
-                            width={120}
-                            height={27}
-                            className="mr-2 sm:h-10" 
-                        />
-                    </span>
-                </div>
-                <div className="flex items-center">
-                    <Link href="/docs" className="mr-4 text-sm text-muted-foreground hover:text-foreground">
-                        Docs
-                    </Link>
-                    <Link href="/login" className="mr-2 sm:mr-4">
-                        <Button variant="secondary" className="px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-base">
-                            Login
-                        </Button>
-                    </Link>
-                </div>
-            </header>
+  return (
+    <div className="min-h-screen bg-collab-950 text-collab-50 [&_a]:focus-visible:outline [&_a]:focus-visible:outline-2 [&_a]:focus-visible:outline-offset-4 [&_a]:focus-visible:outline-violet-400">
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-collab-800 focus:p-4">Skip to content</a>
+      <header className="border-b border-collab-700">
+        <nav aria-label="Main navigation" className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-5 sm:px-8">
+          <Link href="/home" aria-label="Collab home"><Image unoptimized src="/logo-text.svg" alt="Collab" width={120} height={30} className="h-7 w-auto" /></Link>
+          <div className="flex flex-wrap items-center gap-5 text-sm">
+            <a href="#product" className="hidden py-2 text-collab-400 hover:text-white sm:block">Product</a>
+            <a href="#agents" className="hidden py-2 text-collab-400 hover:text-white sm:block">For agents</a>
+            <Link href="/docs/cli" className="py-2 text-collab-400 hover:text-white">CLI docs</Link>
+            <Link href="/login" className="rounded-lg border border-collab-700 px-4 py-2.5 hover:bg-collab-800">Open Collab</Link>
+          </div>
+        </nav>
+      </header>
 
-            <main className={`flex-1 container max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12 flex flex-col items-center mt-4 sm:mt-8 md:mt-20 ${lora.className}`}>
-                <div className="text-center mx-auto mb-8 sm:mb-12">
-                    <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 leading-tight px-2">
-                        Empowering Collaboration, <br className="hidden sm:block" />
-                        <span className="sm:hidden">One Click at a Time</span>
-                        <span className="hidden sm:inline">One Click at a Time</span>
-                    </h1>
-                    <p className="text-base sm:text-lg text-gray-600 mb-6 sm:mb-8 px-2 max-w-2xl mx-auto leading-relaxed">
-                        Collab is a collaborative platform designed to streamline your workflow and enhance team productivity. Whether you&apos;re managing projects, brainstorming ideas, or tracking tasks, Collab has you covered.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
-                        <Link 
-                            href="/login" 
-                            className="px-6 py-3 bg-green-800 hover:bg-green-900 text-white rounded-md transition-colors text-center font-medium"
-                        >
-                            Get Started
-                        </Link>
-                        <Link 
-                            href="mailto:" 
-                            className="px-6 py-3 border border-gray-300 hover:border-gray-400 rounded-md transition-colors text-center font-medium"
-                        >
-                            Talk to Us
-                        </Link>
-                    </div>
-                    <p className="text-sm text-gray-500 mt-3">No credit card required</p>
-                </div>
+      <main id="main" className="mx-auto max-w-7xl px-5 sm:px-8">
+        <section className="pb-14 pt-16 text-center sm:pb-20 sm:pt-24" aria-labelledby="hero-title">
+          <p className="mb-6 text-xs font-semibold uppercase tracking-[0.18em] text-violet-300">Project management, shared with your agents</p>
+          <h1 id="hero-title" className="mx-auto max-w-4xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-6xl lg:text-7xl">Your team and your agents.<br /><span className="text-collab-400">One place for the work.</span></h1>
+          <p className="mx-auto mt-7 max-w-2xl text-lg leading-8 text-collab-400">Plan projects, track issues and keep the decisions in Notes. Give your AI agents that same context from the terminal, so the next session starts with the work already in view.</p>
+          <div className="mt-9 flex flex-wrap justify-center gap-3">
+            <Link href="/login" className={`${linkStyle} bg-collab-50 text-collab-950 hover:bg-white/90`}>Open your workspace <ArrowRight aria-hidden="true" className="h-4 w-4" /></Link>
+            <Link href="/docs/cli#installation" className={`${linkStyle} border border-collab-600 hover:bg-collab-800`}><Terminal aria-hidden="true" className="h-4 w-4" /> Install the CLI</Link>
+          </div>
+          <p className="mt-4 text-xs text-collab-400">Native downloads for macOS, Linux and Windows. No Node.js required.</p>
+        </section>
 
-                {/* Hero Image Section */}
-                <section className="w-full bg-muted border rounded-lg shadow-md p-4 sm:p-6 mb-8 sm:mb-12 mt-8 sm:mt-20">
-                    <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-6 sm:gap-12">
-                        <div className="w-full md:w-1/2 order-2 md:order-1">
-                            <Image
-                                src="/hero.png"
-                                alt="Collaboration interface"
-                                width={610}
-                                height={915}
-                                className="rounded-lg shadow-lg w-full h-auto"
-                            />
-                        </div>
-                        <div className="w-full md:w-1/2 p-2 sm:p-6 flex flex-col justify-between h-full order-1 md:order-2">
-                            <div>
-                                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4 leading-tight">
-                                    Your new <br />collaboration partner.
-                                </h2>
-                                <p className="text-gray-600 dark:text-gray-300 mb-4 sm:mb-6 text-sm sm:text-base leading-relaxed">
-                                    Ditch the clunky tools and bring your team together on a platform that&apos;s built for real collaboration. Chat, plan, and execute—all in one place, without losing momentum.
-                                </p>
-                            </div>
-                            <ul className="space-y-3 sm:space-y-4 text-gray-700 dark:text-gray-300 mt-4 sm:mt-8">
-                                <li className="flex items-start text-sm sm:text-base">
-                                    <CheckSquare className="text-green-600 dark:text-green-400 mr-2 mt-1 flex-shrink-0 w-4 h-4 sm:w-5 sm:h-5" />
-                                    Real-time messaging, tasks, and file sharing—all under one roof.
-                                </li>
-                                <li className="flex items-start text-sm sm:text-base">
-                                    <CheckSquare className="text-green-600 dark:text-green-400 mr-2 mt-1 flex-shrink-0 w-4 h-4 sm:w-5 sm:h-5" />
-                                    Seamless integration with your favourite tools and workflows.
-                                </li>
-                                <li className="flex items-start text-sm sm:text-base">
-                                    <CheckSquare className="text-green-600 dark:text-green-400 mr-2 mt-1 flex-shrink-0 w-4 h-4 sm:w-5 sm:h-5" />
-                                    Built-in analytics to track progress and team performance.
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                </section>
+        <section id="product" aria-labelledby="product-title" className="scroll-mt-8">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+            <div><p className="mb-2 text-xs font-medium uppercase tracking-widest text-violet-300">Inside Collab</p><h2 id="product-title" className="text-2xl font-semibold tracking-tight sm:text-3xl">The plan, the work, the why.</h2></div>
+            <p className="text-xs text-collab-400">Example project · illustrative data</p>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-collab-700 bg-collab-900 shadow-2xl">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-collab-700 px-5 py-4 sm:px-7">
+              <div className="flex items-center gap-3 text-sm"><ListChecks aria-hidden="true" className="h-4 w-4 text-violet-300" /><span className="text-collab-400">Projects /</span><span>Customer portal</span></div>
+              <span className="rounded-full border border-collab-600 px-3 py-1 text-xs text-collab-400">Release milestone</span>
+            </div>
+            <div className="grid min-w-0 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+              <div className="min-w-0 p-5 sm:p-7">
+                <h3 className="mb-5 text-sm font-medium">Issues</h3>
+                <ul className="space-y-3">
+                  {[
+                    { id: 'PORTAL-24', title: 'Make onboarding clear', state: 'In progress', owner: 'Design', done: false },
+                    { id: 'PORTAL-25', title: 'Document the release checklist', state: 'Done', owner: 'Engineering', done: true },
+                    { id: 'PORTAL-26', title: 'Review account permissions', state: 'To do', owner: 'Product', done: false },
+                  ].map(issue => (
+                    <li key={issue.id} className="flex gap-3 rounded-xl border border-collab-700 bg-collab-800 p-4">
+                      {issue.done ? <CheckCircle2 aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-emerald-300" /> : <Circle aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-violet-300" />}
+                      <div className="min-w-0 flex-1"><p className="text-xs text-collab-400">{issue.id}</p><p className="mt-1 text-sm font-medium">{issue.title}</p><div className="mt-3 flex flex-wrap gap-3 text-xs text-collab-400"><span>{issue.state}</span><span>Owner: {issue.owner}</span></div></div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <aside aria-label="Example project Note" className="min-w-0 border-t border-collab-700 bg-collab-950/40 p-5 sm:p-7 lg:border-l lg:border-t-0">
+                <div className="mb-5 flex items-center gap-2 text-sm"><FileText aria-hidden="true" className="h-4 w-4 text-violet-300" /> Shared Notes</div>
+                <h3 className="text-xl font-semibold">Release checklist</h3>
+                <p className="mt-3 text-sm leading-7 text-collab-400">The decisions behind the milestone, ready for the next person or agent to pick up.</p>
+                <ol className="mt-6 space-y-4 text-sm">
+                  <li className="flex gap-3"><span className="text-violet-300">01</span> Verify the onboarding flow.</li>
+                  <li className="flex gap-3"><span className="text-violet-300">02</span> Review permissions with the project owner.</li>
+                  <li className="flex gap-3"><span className="text-violet-300">03</span> Record the result on the issue.</li>
+                </ol>
+                <div className="mt-7 border-t border-collab-700 pt-5 text-xs leading-6 text-collab-400">A shared place for requirements, decisions and handovers—alongside your issues.</div>
+              </aside>
+            </div>
+          </div>
+          <div className="mt-8 grid gap-8 sm:grid-cols-3">
+            {capabilities.map(({ icon: Icon, title, text }) => <div key={title}><Icon aria-hidden="true" className="mb-4 h-5 w-5 text-violet-300" /><h3 className="mb-2 font-medium">{title}</h3><p className="text-sm leading-7 text-collab-400">{text}</p></div>)}
+          </div>
+        </section>
 
-                <section className="w-full py-12 sm:py-20 px-4 text-foreground mt-12 sm:mt-20">
-                    <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                        <div className="flex-1">
-                            <h2 className="text-3xl sm:text-4xl md:text-5xl font-serif font-semibold leading-tight">
-                                Work better.<br />Together.
-                            </h2>
-                        </div>
-                        <div className="flex flex-col items-start md:items-end w-full md:w-auto">
-                            <Link href="/login" className="px-6 py-3 bg-green-800 hover:bg-green-900 text-white rounded-md transition-colors w-full md:w-auto text-center">
-                                Get Started
-                            </Link>
-                        </div>
-                    </div>
-                </section>
+        <section id="agents" aria-labelledby="agents-title" className="grid scroll-mt-8 items-start gap-10 py-20 sm:py-28 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <div className="min-w-0">
+            <p className="mb-4 text-xs font-medium uppercase tracking-widest text-violet-300">Built for the terminal, too</p>
+            <h2 id="agents-title" className="text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">Give your agent context.<br />Keep your team in the loop.</h2>
+            <p className="mt-5 text-base leading-8 text-collab-400">Use your coding agent with Collab CLI to find the next issue, read the project context and leave a useful handover. JSON responses make the same workflow available to scripts.</p>
+            <ul className="mt-7 space-y-4 text-sm leading-6 text-collab-400">
+              <li className="flex gap-3"><ShieldCheck aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" /> Access follows your approved scopes and workspace permissions.</li>
+              <li className="flex gap-3"><BookOpen aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" /> Read issues and Notes before changing anything. Bound project context with a token budget.</li>
+              <li className="flex gap-3"><GitBranch aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" /> Keep code and pull requests in GitHub; keep planning, decisions and progress in Collab.</li>
+            </ul>
+            <Link href="/docs/cli#workflow" className="mt-7 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-violet-300 hover:text-violet-200">Explore the agent workflow <ArrowRight aria-hidden="true" className="h-4 w-4" /></Link>
+          </div>
+          <figure className="min-w-0 overflow-hidden rounded-2xl border border-collab-600 bg-collab-900 shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-collab-700 px-5 py-4 text-xs text-collab-400"><span className="flex items-center gap-2"><Terminal aria-hidden="true" className="h-4 w-4" /> collab / terminal</span><span>Read-only examples</span></div>
+            <div className="space-y-6 p-5 sm:p-7">
+              {workflow.map(step => <div key={step.name}><p className="mb-2 font-mono text-xs text-collab-400"># {step.label}</p><pre tabIndex={0} aria-label={step.label} className="min-w-0 overflow-x-auto rounded py-1 font-mono text-xs leading-6 text-emerald-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-400 sm:text-sm"><code data-cli-example={step.name}>{step.code}</code></pre></div>)}
+            </div>
+            <figcaption className="border-t border-collab-700 px-5 py-4 text-xs leading-6 text-collab-400">Illustrative workflow. Sign in and select your workspace first; replace PROJECT_ID with an ID returned by projects list. These commands read data and do not start an autonomous agent.</figcaption>
+          </figure>
+        </section>
 
-                {/* Features Section */}
-                <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 w-full relative overflow-hidden"
-                
-                // style={{
-                //     backgroundImage: "url('/features/task.png')",
-                //     backgroundSize: "fit",
-                //     backgroundPosition: "center",
-                //     backgroundRepeat: "no-repeat",
-                // }}
-                >
-                    {features.map((feature, index) => (
-                        <div
-                            key={index}
-                            className="bg-muted backdrop-blur-sm rounded-lg p-6 sm:p-10 shadow-sm hover:shadow-md transition-shadow min-h-[280px] sm:h-96"
-                        >
-                            <h4 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                                {feature.title}
-                            </h4>
-                            <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">
-                                {feature.description}
-                            </p>
-                                {/* {feature.imageSrc && (
-                                <div className="mt-4 flex justify-center">
-                                    <Image
-                                        src={feature.imageSrc}
-                                        alt={feature.imageAlt}
-                                        width={100}
-                                        height={100}
-                                        className="rounded-lg"
-                                    />
-                                </div>
-                            )} */}
-                        </div>
-                    ))}
-                </section>
-
-                {/* What makes Collab different */}
-                <section className="w-full py-12 sm:py-20 px-4 text-foreground mt-12 sm:mt-20">
-                    <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 sm:mb-12">
-                        <div className="flex-1">
-                            <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-semibold leading-tight">
-                                What makes Collab different?
-                            </h2>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-10">
-                        <div>
-                            <h4 className="text-base sm:text-lg font-semibold mb-2">All-in-one Platform</h4>
-                            <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">No more switching between tools. Collab brings your entire workflow together.</p>
-                        </div>
-                        <div>
-                            <h4 className="text-base sm:text-lg font-semibold mb-2">Real-time Everything</h4>
-                            <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">From chat to tasks, changes appear instantly. Stay in sync with your team, always.</p>
-                        </div>
-                        <div>
-                            <h4 className="text-base sm:text-lg font-semibold mb-2">Customisable for Teams</h4>
-                            <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">Whether you&apos;re a startup or an enterprise, Collab fits your structure and scale.</p>
-                        </div>
-                        <div>
-                            <h4 className="text-base sm:text-lg font-semibold mb-2">No Learning Curve</h4>
-                            <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">Familiar, intuitive, and easy to use — your team will love it from day one.</p>
-                        </div>
-                    </div>
-                </section>
-
-                {/* Pricing Section */}
-                <section className="w-full py-12 sm:py-20 px-4 bg-muted dark:bg-background rounded-lg shadow-md mt-12 sm:mt-20">
-                    <div className="max-w-6xl mx-auto text-center mb-8 sm:mb-16">
-                        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">Simple pricing for every team</h2>
-                        <p className="text-gray-600 dark:text-gray-300 text-sm sm:text-base px-4">
-                            Choose the plan that fits your team&apos;s needs. Upgrade any time.
-                        </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 max-w-6xl mx-auto">
-                        {/* Free */}
-                        <div className="bg-white dark:bg-background/40 p-6 sm:p-8 rounded-lg shadow-sm border flex flex-col">
-                            <h3 className="text-lg sm:text-xl font-semibold mb-2">Free</h3>
-                            <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">For individuals or small teams just getting started.</p>
-                            <div className="text-2xl sm:text-3xl font-bold mb-4">£0<span className="text-base font-medium">/mo</span></div>
-                            <ul className="text-sm text-gray-600 dark:text-gray-300 flex-1 space-y-2 mb-6">
-                                <li>✅ Up to 3 users</li>
-                                <li>✅ Task management</li>
-                                <li>✅ Basic integrations</li>
-                            </ul>
-                            <Button className="mt-auto w-full">Get Started</Button>
-                        </div>
-
-                        {/* Pro */}
-                        <div className="bg-white dark:bg-background/40 p-6 sm:p-8 rounded-lg shadow-md border-2 border-green-700 flex flex-col">
-                            <h3 className="text-lg sm:text-xl font-semibold mb-2">Pro</h3>
-                            <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">For growing teams that need more power and collaboration.</p>
-                            <div className="text-2xl sm:text-3xl font-bold mb-4">£29<span className="text-base font-medium">/mo</span></div>
-                            <ul className="text-sm text-gray-600 dark:text-gray-300 flex-1 space-y-2 mb-6">
-                                <li>✅ Up to 25 users</li>
-                                <li>✅ Advanced workflows</li>
-                                <li>✅ Real-time collaboration</li>
-                                <li>✅ Priority support</li>
-                            </ul>
-                            <Button className="mt-auto w-full bg-green-800 hover:bg-green-900 text-white">Start Pro</Button>
-                        </div>
-
-                        {/* Enterprise */}
-                        <div className="bg-white dark:bg-background/40 p-6 sm:p-8 rounded-lg shadow-sm border flex flex-col">
-                            <h3 className="text-lg sm:text-xl font-semibold mb-2">Enterprise</h3>
-                            <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">Customised solutions for large organisations.</p>
-                            <div className="text-2xl sm:text-3xl font-bold mb-4">Contact us</div>
-                            <ul className="text-sm text-gray-600 dark:text-gray-300 flex-1 space-y-2 mb-6">
-                                <li>✅ Unlimited users</li>
-                                <li>✅ Dedicated success manager</li>
-                                <li>✅ Custom integrations & SSO</li>
-                                <li>✅ SLA & advanced analytics</li>
-                            </ul>
-                            <Link href="mailto:sales@collab.com">
-                                <Button variant="outline" className="w-full">Contact Sales</Button>
-                            </Link>
-                        </div>
-                    </div>
-                </section>
-
-                {/* Testimonials Section */}
-                <section className="w-full py-12 sm:py-16 px-4 bg-gray-100 dark:bg-background/50 rounded-lg shadow-sm mt-12 sm:mt-20">
-                    <div className="max-w-4xl mx-auto text-center">
-                        <h3 className="text-xl sm:text-2xl font-semibold mb-4">Trusted by teams around the world</h3>
-                        <p className="text-gray-600 dark:text-gray-300 text-sm mb-6 px-4">
-                            Over <span className="font-semibold">25,000 teams</span> use Collab to manage projects, communicate better, and get things done faster.
-                        </p>
-                        <div className="flex justify-center items-center gap-4 sm:gap-6 flex-wrap">
-                            <Image src="/companies/microsoft.svg" alt="Company 1" width={80} height={16} className="sm:w-[100px] sm:h-[20px]" />
-                            <Image src="/companies/airbnb.svg" alt="Company 2" width={40} height={16} className="sm:w-[50px] sm:h-[20px]" />
-                            <Image src="/companies/coca-cola.svg" alt="Company 3" width={40} height={16} className="sm:w-[50px] sm:h-[20px]" />
-                        </div>
-                    </div>
-                </section>
-
-                {/* Call to Action Section */}
-                <section className="w-full py-12 sm:py-20 px-4 text-center bg-green-900 text-white rounded-lg mt-12 sm:mt-20 mb-12 sm:mb-20">
-                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 px-2">Ready to streamline your workflow?</h2>
-                    <p className="mb-6 text-base sm:text-lg px-4 max-w-2xl mx-auto">Start your journey with Collab today. It&apos;s free and takes less than 2 minutes to get started.</p>
-                    <Link href="/login">
-                        <Button className="bg-white text-green-900 font-semibold hover:bg-gray-100 px-6 py-3 rounded-md">
-                            Get Started
-                        </Button>
-                    </Link>
-                </section>
-            </main>
-            <footer className="bg-muted text-foreground py-8 sm:py-12 mt-8 sm:mt-12">
-                <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-start gap-6 sm:gap-8">
-                    <div className="mb-6 md:mb-0">
-                        <h4 className="text-lg sm:text-xl font-semibold mb-2">Collab</h4>
-                        <p className="text-sm text-gray-400">Empowering Collaboration, One Click at a Time.</p>
-                    </div>
-                    <div className="grid grid-cols-2 sm:flex sm:flex-row gap-8 sm:gap-12 w-full md:w-auto">
-                        <div>
-                            <h5 className="font-semibold mb-2 text-sm sm:text-base">Product</h5>
-                            <ul className="space-y-1 text-sm text-gray-400">
-                                <li><Link href="#" className="hover:text-gray-300 transition-colors">Features</Link></li>
-                                <li><Link href="#" className="hover:text-gray-300 transition-colors">Pricing</Link></li>
-                                <li><Link href="#" className="hover:text-gray-300 transition-colors">Integrations</Link></li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h5 className="font-semibold mb-2 text-sm sm:text-base">Company</h5>
-                            <ul className="space-y-1 text-sm text-gray-400">
-                                <li><Link href="#" className="hover:text-gray-300 transition-colors">About</Link></li>
-                                <li><Link href="#" className="hover:text-gray-300 transition-colors">Careers</Link></li>
-                                <li><Link href="#" className="hover:text-gray-300 transition-colors">Contact</Link></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-                <div className="text-center text-sm text-gray-500 mt-6 sm:mt-8 px-4">
-                    © {new Date().getFullYear()} Collab. All rights reserved.
-                </div>
-            </footer>
-        </div>
-    );
+        <section aria-labelledby="start-title" className="mb-20 rounded-2xl border border-collab-700 bg-collab-900 p-6 sm:p-10">
+          <div className="flex flex-col justify-between gap-7 md:flex-row md:items-center">
+            <div><h2 id="start-title" className="text-2xl font-semibold tracking-tight sm:text-3xl">Start with one project.</h2><p className="mt-3 max-w-xl text-sm leading-7 text-collab-400">Install the CLI, approve your workspace and read the work already there. Bring your agent when you are ready.</p></div>
+            <Link href="/docs/cli#installation" className={`${linkStyle} shrink-0 bg-collab-50 text-collab-950 hover:bg-white/90`}>Get the CLI <ArrowRight aria-hidden="true" className="h-4 w-4" /></Link>
+          </div>
+          <div className="mt-8 grid gap-5 border-t border-collab-700 pt-7 text-sm sm:grid-cols-3">
+            <div><p className="font-medium">01 / Install</p><p className="mt-2 leading-6 text-collab-400">One-command installers for macOS / Linux and Windows PowerShell.</p></div>
+            <div><p className="font-medium">02 / Connect</p><code className="mt-2 block break-words text-xs leading-6 text-collab-400">collab auth login --url https://collab.weez.boo</code></div>
+            <div><p className="font-medium">03 / Explore</p><Link href="/docs/cli#commands" className="mt-2 inline-flex min-h-11 items-center gap-2 text-violet-300 hover:text-violet-200">Browse the command reference <ArrowRight aria-hidden="true" className="h-4 w-4" /></Link></div>
+          </div>
+          <p className="mt-7 text-xs leading-6 text-collab-400">Search availability: exact, keyword and fuzzy retrieval are supported; semantic search requires a configured embedding provider and index. Hybrid results report semantic availability rather than silently claiming vector matches.</p>
+        </section>
+      </main>
+      <footer className="border-t border-collab-700">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-5 px-5 py-7 text-xs text-collab-400 sm:px-8"><p>Collab by Weezboo · Shared work. Shared context.</p><div className="flex flex-wrap gap-6"><Link href="/docs/cli" className="py-2 hover:text-white">CLI documentation</Link><Link href="/login" className="py-2 hover:text-white">Open Collab</Link></div></div>
+      </footer>
+    </div>
+  );
 }
