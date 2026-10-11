@@ -33,6 +33,7 @@ export default function LandingPage() {
           <div className="flex flex-wrap items-center gap-5 text-sm">
             <a href="#product" className="hidden py-2 text-collab-400 hover:text-white sm:block">Product</a>
             <a href="#agents" className="hidden py-2 text-collab-400 hover:text-white sm:block">For agents</a>
+            <a href="#coclaw" className="hidden py-2 text-collab-400 hover:text-white sm:block">Coclaw</a>
             <Link href="/docs/cli" className="py-2 text-collab-400 hover:text-white">CLI docs</Link>
             <Link href="/login" className="rounded-lg border border-collab-700 px-4 py-2.5 hover:bg-collab-800">Open Collab</Link>
           </div>
@@ -114,6 +115,13 @@ export default function LandingPage() {
             </div>
             <figcaption className="border-t border-collab-700 px-5 py-4 text-xs leading-6 text-collab-400">Illustrative workflow. Sign in and select your workspace first; replace PROJECT_ID with an ID returned by projects list. These commands read data and do not start an autonomous agent.</figcaption>
           </figure>
+        </section>
+
+        <section id="coclaw" aria-labelledby="coclaw-title" className="mb-20 scroll-mt-8 rounded-2xl border border-collab-700 bg-collab-900 p-6 sm:p-10">
+          <p className="mb-4 text-xs font-medium uppercase tracking-widest text-violet-300">An agent inside Collab</p>
+          <h2 id="coclaw-title" className="text-2xl font-semibold tracking-tight sm:text-3xl">Meet Coclaw.</h2>
+          <p className="mt-5 max-w-3xl text-base leading-8 text-collab-400">Coclaw is Collab’s personal AI agent for tasks, connected messaging channels and persistent memory. Its workspace dashboard brings together provider keys, channel settings, GitHub integration and conversation history.</p>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-collab-400">The CLI gives your existing coding agent access to project context. Coclaw has its own agent runtime and provider setup; using the CLI does not start Coclaw. Coclaw execution requires an enabled deployment and a configured provider.</p>
         </section>
 
         <section aria-labelledby="start-title" className="mb-20 rounded-2xl border border-collab-700 bg-collab-900 p-6 sm:p-10">

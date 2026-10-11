@@ -21,6 +21,12 @@ test('homepage showcases the product and gives visitors working docs and sign-in
   assert.match(html, /Your team and your agents/);
   assert.match(html, /Example project/);
   assert.match(html, /Illustrative workflow/);
+  const coclaw = html.match(/<section id="coclaw"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(coclaw, 'Coclaw must have a separate rendered section');
+  assert.match(coclaw, /aria-labelledby="coclaw-title"/);
+  assert.match(coclaw, /tasks, connected messaging channels and persistent memory/);
+  assert.match(coclaw, /using the CLI does not start Coclaw/);
+  assert.match(coclaw, /execution requires an enabled deployment and a configured provider/);
   assert.match(html, /href="\/docs\/cli#installation"/);
   assert.match(html, /href="\/docs\/cli#commands"/);
   assert.match(html, /href="\/login"/);
