@@ -118,7 +118,10 @@ test('docs render installation, navigable sections, commands, and credential lim
     './command-reference': { CommandReference: await reference() },
     '../../../packages/cli/package.json': { default: require('../../packages/cli/package.json') },
   });
-  const html = renderToStaticMarkup(Page());
+  const { default: CliPage, metadata } = load('src/app/docs/cli/page.tsx', { '../page': { default: Page, metadata: { title: 'CLI docs' } } });
+  const html = renderToStaticMarkup(CliPage());
+  assert.equal(html, renderToStaticMarkup(Page()), 'both docs routes share the same content');
+  assert.equal(metadata.title, 'CLI docs');
   assert.match(html, /npm install --global .\/packages\/cli/);
   assert.match(html, /Node.js 22/);
   const { version } = require('../../packages/cli/package.json');
@@ -151,9 +154,10 @@ test('docs stay readable while session or workspace loads without changing works
   });
   for (status of ['loading', 'authenticated', 'unauthenticated']) {
     for (isLoading of [true, false]) {
-      pathname = '/docs';
-      assert.equal(renderToStaticMarkup(Wrapper({ children: 'Documentation' })), 'Documentation');
-      for (pathname of ['/docs/notes', '/docs/dashboard', '/docs/cli', '/docs-team/dashboard', '/workspace/dashboard']) {
+      for (pathname of ['/docs', '/docs/cli']) {
+        assert.equal(renderToStaticMarkup(Wrapper({ children: 'Documentation' })), 'Documentation');
+      }
+      for (pathname of ['/docs/notes', '/docs/dashboard', '/docs/cli/notes', '/docs-team/dashboard', '/workspace/dashboard']) {
         const html = renderToStaticMarkup(Wrapper({ children: 'Workspace page' }));
         if (status === 'loading' || (status === 'authenticated' && isLoading)) {
           assert.match(html, /Loading workspace/, `${pathname}: ${status}, loading=${isLoading}`);
@@ -192,6 +196,8 @@ test('workspace URL selection takes priority over saved workspace outside the ex
   });
   for (const [route, expected] of [
     ['/docs', savedWorkspace],
+    ['/docs/cli', savedWorkspace],
+    ['/docs/cli/notes', docsWorkspace],
     ['/docs/notes', docsWorkspace],
     ['/docs/dashboard', docsWorkspace],
     ['/docs/projects/project/notes', docsWorkspace],

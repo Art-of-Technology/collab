@@ -5,7 +5,7 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 ## Platform Modules
 - **App Registry** – Prisma models (`App`, `AppVersion`, `AppOAuthClient`, `AppScope`, `AppInstallation`, `AppWebhook`, `AppWebhookDelivery`) store manifests, versions, credentials, installs and webhook activity.
 - **Developer Console (`/dev/apps`)** – internal UI to generate OAuth credentials, import manifests, review app metadata, publish/unpublish and manage webhooks & analytics per app.
-- **Workspace Surface (`/(main)/[workspaceId]/apps/[slug]`)** – shows install CTA, consent dialog and routes users into the OAuth flow.
+- **Workspace Surface (`/(main)/[workspaceId]/apps/[slug]`)** – shows install CTA, consent dialog, OAuth flow and post-install actions for web apps. For native CLI navigation, see the [CLI documentation entrypoint](../../README.md).
 - **OAuth Service (`/api/oauth/*`)** – implements Authorization Code + PKCE, token issuance/refresh, token introspection and installation acknowledgements.
 - **Webhook Pipeline** – optional per-installation webhooks with secret generation, retry logic and delivery analytics.
 
@@ -307,7 +307,7 @@ allowlist and does not authorize deployment.
   - **Webhooks tab**: webhook manager for testing and monitoring deliveries
   - **Analytics tab**: installation metrics and webhook delivery stats
   - **Danger Zone**: delete app button (only if no active installations)
-- `/[workspaceId]/apps/[slug]` – workspace surface showing install CTA, consent dialog, and post-install actions.
+- `/[workspaceId]/apps/[slug]` – see [Workspace Surface](#platform-modules).
 
 ## Flow Comparison
 
