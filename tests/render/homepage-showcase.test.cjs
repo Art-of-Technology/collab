@@ -75,6 +75,14 @@ test('actual hero controls select each bounded command and its shared context wi
   // Reuse the DOM implementation already locked under isomorphic-dompurify.
   const { createRequire } = require('node:module');
   const { JSDOM } = createRequire(require.resolve('isomorphic-dompurify'))('jsdom');
+  const assertAccessStatement = document => {
+    const statement = [...document.querySelectorAll('p')].find(element =>
+      element.textContent === 'Access follows your approved scopes and workspace permissions.');
+    assert.ok(statement, 'the complete access statement is rendered');
+    assert.equal(statement.closest('[hidden], [aria-hidden="true"], details'), null,
+      'the access statement stays outside hidden panels and disclosures');
+  };
+  assertAccessStatement(JSDOM.fragment(page().html));
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'https://example.test' });
   const names = ['window', 'document', 'HTMLElement', 'IS_REACT_ACT_ENVIRONMENT', 'fetch'];
   const saved = names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]);
@@ -88,6 +96,7 @@ test('actual hero controls select each bounded command and its shared context wi
     const Hero = hero({ default: 'a' });
     await React.act(async () => root.render(React.createElement(Hero)));
     const document = dom.window.document;
+    assertAccessStatement(document);
     const buttons = [...document.querySelectorAll('[aria-controls]')];
     assert.equal(buttons.length, 4);
     const selected = () => buttons.filter(button => button.getAttribute('aria-pressed') === 'true');
@@ -111,15 +120,18 @@ test('actual hero controls select each bounded command and its shared context wi
       }
       assert.equal(document.querySelector('.stepNote').textContent, note);
       assert.equal(document.querySelectorAll('[data-highlighted="true"]').length, highlighted);
+      assertAccessStatement(document);
     }
     const pause = document.querySelector('.motion');
     await React.act(async () => pause.click());
     assert.equal(pause.textContent, 'Resume motion');
     assert.equal(pause.getAttribute('aria-pressed'), 'true');
     assert.equal(document.getElementById('agents').dataset.paused, 'true');
+    assertAccessStatement(document);
     await React.act(async () => pause.click());
     assert.equal(pause.textContent, 'Pause motion');
     assert.equal(document.getElementById('agents').dataset.paused, 'false');
+    assertAccessStatement(document);
     assert.equal(requests, 0);
   } finally {
     await React.act(async () => root.unmount());

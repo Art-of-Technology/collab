@@ -93,6 +93,7 @@ export default function AgentHero() {
         </div>
         <figcaption className={styles.caption}>Illustrative workflow. Sign in and select your workspace first; replace PROJECT_ID with an ID returned by projects list. These commands read data and do not start an autonomous agent.</figcaption>
       </figure>
+      <p className="mt-4 text-xs leading-6 text-collab-400">Access follows your approved scopes and workspace permissions.</p>
       <div className={styles.below}><span>Shared issues. Shared decisions. A clearer starting point.</span><span>Native on macOS, Linux &amp; Windows. No Node.js required.</span></div>
       <div className={styles.benefits}>
         <div><p>STRUCTURED FOR TOOLS</p><h2>JSON your agent can use.</h2><span>Read projects, issues and Notes from scripts and your terminal workflow.</span></div>
