@@ -1,6 +1,15 @@
 const { assert, test, load } = require('../security/helpers.cjs');
 const { renderToStaticMarkup } = require('react-dom/server');
 const jsx = require('react/jsx-runtime');
+const React = require('react');
+
+function hero(link = require('next/link')) {
+  return load('src/app/home/AgentHero.tsx', {
+    react: React, 'react/jsx-runtime': jsx, 'next/link': link,
+    'lucide-react': require('lucide-react'),
+    './agent-hero.module.css': { default: new Proxy({}, { get: (_, key) => String(key) }) },
+  }).default;
+}
 
 function page() {
   const { default: Page, metadata } = load('src/app/home/page.tsx', {
@@ -11,6 +20,7 @@ function page() {
     'next/font/google': { Lora: () => ({ className: 'font-test' }) },
     'lucide-react': require('lucide-react'),
     '@/components/ui/button': { Button: 'button' },
+    './AgentHero': { default: hero() },
   });
   return { html: renderToStaticMarkup(Page()), metadata };
 }
@@ -18,7 +28,8 @@ function page() {
 test('homepage showcases the product and gives visitors working docs and sign-in destinations', () => {
   const { html, metadata } = page();
   assert.match(metadata?.description || '', /projects, issues, Notes/);
-  assert.match(html, /Your team and your agents/);
+  assert.match(html, /Project management\./);
+  assert.match(html, /Built for your agent\./);
   assert.match(html, /Example project/);
   assert.match(html, /Illustrative workflow/);
   const coclaw = html.match(/<details\b[\s\S]*?<\/details>/)?.[0];
@@ -36,7 +47,9 @@ test('homepage showcases the product and gives visitors working docs and sign-in
   assert.match(html, /href="\/docs\/cli#commands"/);
   assert.match(html, /href="\/login"/);
   assert.doesNotMatch(html, /25,000 teams|£29|mailto:|\/companies\//);
-  assert.doesNotMatch(html, /<button\b/, 'static preview must not offer nonfunctional buttons');
+  assert.match(html, /aria-label="Explore the CLI workflow"/);
+  assert.ok(html.indexOf('id="hero-title"') < html.indexOf('id="product-title"'), 'agent workflow leads the product detail');
+  assert.ok(html.indexOf('>Install the CLI') < html.indexOf('>Explore the workflow'), 'installation is the primary hero action');
   const ids = [...html.matchAll(/ id="([^"]+)"/g)].map(match => match[1]);
   assert.equal(ids.length, new Set(ids).size);
   for (const [, target] of html.matchAll(/href="#([^"]+)"/g)) assert.ok(ids.includes(target), target);
@@ -55,4 +68,102 @@ test('rendered terminal examples use supported CLI command flags and preserve th
   }
   assert.match(html, /semantic search requires a configured embedding provider and index/);
   assert.match(html, /workspace permissions/);
+});
+
+
+test('actual hero controls select each bounded command and its shared context without a network request', async () => {
+  // Reuse the DOM implementation already locked under isomorphic-dompurify.
+  const { createRequire } = require('node:module');
+  const { JSDOM } = createRequire(require.resolve('isomorphic-dompurify'))('jsdom');
+  const assertAccessStatement = document => {
+    const statement = [...document.querySelectorAll('p')].find(element =>
+      element.textContent === 'Access follows your approved scopes and workspace permissions.');
+    assert.ok(statement, 'the complete access statement is rendered');
+    assert.equal(statement.closest('[hidden], [aria-hidden="true"], details'), null,
+      'the access statement stays outside hidden panels and disclosures');
+  };
+  assertAccessStatement(JSDOM.fragment(page().html));
+  const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'https://example.test' });
+  const names = ['window', 'document', 'HTMLElement', 'IS_REACT_ACT_ENVIRONMENT', 'fetch'];
+  const saved = names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]);
+  let requests = 0;
+  const refuseNetwork = () => { requests++; throw new Error('Hero demo must not dispatch requests'); };
+  Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true, fetch: refuseNetwork });
+  dom.window.fetch = refuseNetwork;
+  const { createRoot } = require('react-dom/client');
+  const root = createRoot(dom.window.document.getElementById('root'));
+  try {
+    const Hero = hero({ default: 'a' });
+    await React.act(async () => root.render(React.createElement(Hero)));
+    const document = dom.window.document;
+    assertAccessStatement(document);
+    const buttons = [...document.querySelectorAll('[aria-controls]')];
+    assert.equal(buttons.length, 4);
+    const selected = () => buttons.filter(button => button.getAttribute('aria-pressed') === 'true');
+    assert.equal(selected()[0].textContent, '04Bring the context');
+    const expected = [
+      ['projects list', 'Start with the project your team already uses.', 0],
+      ['issues list', 'The issue is shared context, not a second task list.', 1],
+      ['search', 'Read the why before changing the what.', 1],
+      ['context get', 'Give your existing agent the context to begin.', 2],
+    ];
+    for (const [index, [name, note, highlighted]] of expected.entries()) {
+      await React.act(async () => buttons[index].click());
+      assert.equal(selected().length, 1);
+      assert.equal(selected()[0], buttons[index]);
+      const panel = document.getElementById(buttons[index].getAttribute('aria-controls'));
+      assert.equal(panel.hidden, false);
+      assert.equal(panel.getAttribute('role'), 'region');
+      assert.equal(panel.getAttribute('aria-label'), buttons[index].textContent.slice(2));
+      assert.equal(panel.querySelector('[data-cli-example]').getAttribute('data-cli-example'), name);
+      assert.match(panel.textContent, /collab/);
+      for (const other of buttons.filter(button => button !== buttons[index])) {
+        assert.equal(document.getElementById(other.getAttribute('aria-controls')).hidden, true);
+      }
+      assert.equal(document.querySelector('.stepNote').textContent, note);
+      assert.equal(document.querySelectorAll('[data-highlighted="true"]').length, highlighted);
+      assertAccessStatement(document);
+    }
+    const pause = document.querySelector('.motion');
+    await React.act(async () => pause.click());
+    assert.equal(pause.textContent, 'Resume motion');
+    assert.equal(pause.getAttribute('aria-pressed'), 'true');
+    assert.equal(document.getElementById('agents').dataset.paused, 'true');
+    assertAccessStatement(document);
+    await React.act(async () => pause.click());
+    assert.equal(pause.textContent, 'Pause motion');
+    assert.equal(document.getElementById('agents').dataset.paused, 'false');
+    assertAccessStatement(document);
+    assert.equal(requests, 0);
+  } finally {
+    await React.act(async () => root.unmount());
+    dom.window.close();
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  }
+});
+
+
+test('hero CSS compiles through the actual Next PostCSS configuration and preserves scoped focus', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const postcss = require('postcss');
+  const { findConfig } = require('next/dist/lib/find-config');
+  const root = path.resolve(__dirname, '../..');
+  const config = await findConfig(root, 'postcss');
+  const plugins = Object.entries(config.plugins).map(([name, options]) => require(name)(options));
+  const filename = path.join(root, 'src/app/home/agent-hero.module.css');
+  // Exercise the compiler, rather than treating a parseable stylesheet as build proof.
+  const compiled = await postcss(plugins).process(fs.readFileSync(filename, 'utf8'), { from: filename });
+  const focus = [];
+  compiled.root.walkRules(rule => {
+    if (rule.selector === '.hero button:focus-visible') {
+      rule.walkDecls('outline', declaration => focus.push(declaration));
+    }
+  });
+  assert.equal(focus.length, 1);
+  assert.equal(focus[0].important, true, 'the scoped outline survives the existing important reset');
+  assert.notEqual(focus[0].value, 'none');
 });

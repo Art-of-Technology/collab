@@ -1,19 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, BookOpen, CheckCircle2, Circle, FileText, GitBranch, ListChecks, Search, ShieldCheck, Terminal } from 'lucide-react';
+import AgentHero from './AgentHero';
+import { ArrowRight, CheckCircle2, Circle, FileText, ListChecks, Search } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Collab — Project management for people and AI agents',
   description: 'Keep projects, issues, Notes and decisions together. Plan in Collab, then give your AI agents the same project context through the native CLI.',
 };
-
-const workflow = [
-  { name: 'projects list', label: 'Find your project', code: 'collab projects list --json' },
-  { name: 'issues list', label: 'Read the work', code: 'collab issues list --project-id PROJECT_ID --limit 10 --json' },
-  { name: 'search', label: 'Find a decision', code: 'collab search --query "release checklist" --mode keyword --type note --json' },
-  { name: 'context get', label: 'Bring context to your agent', code: 'collab context get --project-id PROJECT_ID --max-tokens 4000 --json' },
-];
 
 const capabilities = [
   { icon: ListChecks, title: 'Projects with a next step', text: 'Turn a roadmap into issues, owners, priorities and milestones. Keep dependencies and progress alongside the work.' },
@@ -40,16 +34,7 @@ export default function LandingPage() {
       </header>
 
       <main id="main" className="mx-auto max-w-7xl px-5 sm:px-8">
-        <section className="pb-14 pt-16 text-center sm:pb-20 sm:pt-24" aria-labelledby="hero-title">
-          <p className="mb-6 text-xs font-semibold uppercase tracking-[0.18em] text-violet-300">Project management, shared with your agents</p>
-          <h1 id="hero-title" className="mx-auto max-w-4xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-6xl lg:text-7xl">Your team and your agents.<br /><span className="text-collab-400">One place for the work.</span></h1>
-          <p className="mx-auto mt-7 max-w-2xl text-lg leading-8 text-collab-400">Plan projects, track issues and keep the decisions in Notes. Give your AI agents that same context from the terminal, so the next session starts with the work already in view.</p>
-          <div className="mt-9 flex flex-wrap justify-center gap-3">
-            <Link href="/login" className={`${linkStyle} bg-collab-50 text-collab-950 hover:bg-white/90`}>Open your workspace <ArrowRight aria-hidden="true" className="h-4 w-4" /></Link>
-            <Link href="/docs/cli#installation" className={`${linkStyle} border border-collab-600 hover:bg-collab-800`}><Terminal aria-hidden="true" className="h-4 w-4" /> Install the CLI</Link>
-          </div>
-          <p className="mt-4 text-xs text-collab-400">Native downloads for macOS, Linux and Windows. No Node.js required.</p>
-        </section>
+        <AgentHero />
 
         <section id="product" aria-labelledby="product-title" className="scroll-mt-8">
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -95,28 +80,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="agents" aria-labelledby="agents-title" className="grid scroll-mt-8 items-start gap-10 py-20 sm:py-28 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-          <div className="min-w-0">
-            <p className="mb-4 text-xs font-medium uppercase tracking-widest text-violet-300">Built for the terminal, too</p>
-            <h2 id="agents-title" className="text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">Give your agent context.<br />Keep your team in the loop.</h2>
-            <p className="mt-5 text-base leading-8 text-collab-400">Use your coding agent with Collab CLI to find the next issue, read the project context and leave a useful handover. JSON responses make the same workflow available to scripts.</p>
-            <ul className="mt-7 space-y-4 text-sm leading-6 text-collab-400">
-              <li className="flex gap-3"><ShieldCheck aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" /> Access follows your approved scopes and workspace permissions.</li>
-              <li className="flex gap-3"><BookOpen aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" /> Read issues and Notes before changing anything. Bound project context with a token budget.</li>
-              <li className="flex gap-3"><GitBranch aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" /> Keep code and pull requests in GitHub; keep planning, decisions and progress in Collab.</li>
-            </ul>
-            <Link href="/docs/cli#workflow" className="mt-7 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-violet-300 hover:text-violet-200">Explore the agent workflow <ArrowRight aria-hidden="true" className="h-4 w-4" /></Link>
-          </div>
-          <figure className="min-w-0 overflow-hidden rounded-2xl border border-collab-600 bg-collab-900 shadow-2xl">
-            <div className="flex items-center justify-between gap-3 border-b border-collab-700 px-5 py-4 text-xs text-collab-400"><span className="flex items-center gap-2"><Terminal aria-hidden="true" className="h-4 w-4" /> collab / terminal</span><span>Read-only examples</span></div>
-            <div className="space-y-6 p-5 sm:p-7">
-              {workflow.map(step => <div key={step.name}><p className="mb-2 font-mono text-xs text-collab-400"># {step.label}</p><pre tabIndex={0} aria-label={step.label} className="min-w-0 overflow-x-auto rounded py-1 font-mono text-xs leading-6 text-emerald-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-400 sm:text-sm"><code data-cli-example={step.name}>{step.code}</code></pre></div>)}
-            </div>
-            <figcaption className="border-t border-collab-700 px-5 py-4 text-xs leading-6 text-collab-400">Illustrative workflow. Sign in and select your workspace first; replace PROJECT_ID with an ID returned by projects list. These commands read data and do not start an autonomous agent.</figcaption>
-          </figure>
-        </section>
-
-        <section aria-labelledby="start-title" className="mb-20 rounded-2xl border border-collab-700 bg-collab-900 p-6 sm:p-10">
+        <section aria-labelledby="start-title" className="mb-20 mt-20 rounded-2xl border border-collab-700 bg-collab-900 p-6 sm:p-10">
           <div className="flex flex-col justify-between gap-7 md:flex-row md:items-center">
             <div><h2 id="start-title" className="text-2xl font-semibold tracking-tight sm:text-3xl">Start with one project.</h2><p className="mt-3 max-w-xl text-sm leading-7 text-collab-400">Install the CLI, approve your workspace and read the work already there. Bring your agent when you are ready.</p></div>
             <Link href="/docs/cli#installation" className={`${linkStyle} shrink-0 bg-collab-50 text-collab-950 hover:bg-white/90`}>Get the CLI <ArrowRight aria-hidden="true" className="h-4 w-4" /></Link>
