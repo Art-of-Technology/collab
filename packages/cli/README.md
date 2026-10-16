@@ -131,6 +131,8 @@ collab projects create --name 'Platform' --slug platform --issue-prefix PLAT --d
 
 ## Authentication and automation
 
+Each CLI login creates an independent server grant: logging in on another machine or profile does not invalidate earlier logins. Refreshing or revoking one grant leaves the others and their scopes unchanged. This requires the server's independent-login fix; the existing CLI 0.2.1 release remains compatible. Tokens overwritten by earlier logins cannot be recovered: after the server fix is deployed, run `collab auth login` again on affected machines. `collab auth status` reports local saved credentials and expiry, so `storedLogin: true` and `expired: false` do not prove the server still accepts the token.
+
 Profiles are stored at `~/.config/collab/PROFILE.json` (`--profile`, default `default`), owned by the current user, directory 0700 and file 0600 on Unix. Windows uses private owner ACLs (only the current user, SYSTEM and Administrators may have access); unsafe ACLs and reparse points are refused. Tokens never appear in status output, request arguments or diagnostics. They are bound to the saved origin; `--url` cannot redirect a stored token to a different server. HTTP is allowed only for loopback development. Authenticated HTTP redirects are refused.
 
 ```sh
@@ -143,7 +145,7 @@ Refresh is explicit to avoid concurrent processes rotating the same token. It ve
 
 Use `collab auth login --read-only` for an agent that only needs to inspect projects, issues and Notes. The browser consent lists the requested read permissions; write commands will be denied by the server.
 
-**Logout removes local credentials only.** The current server revocation endpoint does not revoke system-app tokens, so the CLI does not pretend otherwise. Ask the deployment administrator to revoke the CLI token if it must stop working elsewhere. A new login for the same app/user/workspace replaces that user's previous CLI token; use a separate authorized agent account for independently managed credentials. Existing MCP tokens are separate.
+**Logout removes local credentials only.** The current server revocation endpoint does not revoke system-app tokens, so the CLI does not pretend otherwise. Ask the deployment administrator to revoke the CLI token if it must stop working elsewhere. Existing MCP tokens are separate.
 
 For headless use, inject an existing Collab OAuth bearer token through your credential manager as `COLLAB_TOKEN`, together with an explicit `COLLAB_URL`. Use `COLLAB_WORKSPACE`/`COLLAB_PROJECT` or per-command flags for context. Do not put tokens in command arguments, repository files, Notes or issue comments. Maestro ID/access tokens are not Collab API tokens.
 

@@ -228,8 +228,9 @@ async function handleAuthorizationCodeGrant(
   // Parse scopes
   const scopes = authCode.scope?.split(' ').filter(Boolean) || [];
 
-  // Check if token already exists for this app+workspace+user
-  const existingToken = await prisma.appToken.findFirst({
+  // CLI grants belong to independent machines/profiles. Replacing a prior grant
+  // would invalidate that machine's access and refresh tokens on every login.
+  const existingToken = oauthClient.clientId === 'collab-cli' ? null : await prisma.appToken.findFirst({
     where: {
       appId: oauthClient.app.id,
       workspaceId: workspace.id,
