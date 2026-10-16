@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { commentHtml } from "@/lib/comment-html";
 import { formatDistanceToNow } from "date-fns";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { RichTextRenderer } from "@/components/RichEditor";
@@ -27,7 +28,8 @@ export function CommentItem({
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [repliesCollapsed, setRepliesCollapsed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState(comment.content);
+  const renderedContent = useMemo(() => commentHtml(comment.content, comment.html), [comment.content, comment.html]);
+  const [editContent, setEditContent] = useState(renderedContent);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   
   const { toast } = useToast();
@@ -69,7 +71,7 @@ export function CommentItem({
 
   const handleEdit = () => {
     setIsEditing(true);
-    setEditContent(comment.content);
+    setEditContent(renderedContent);
   };
 
   const handleEditSave = async () => {
@@ -105,7 +107,7 @@ export function CommentItem({
 
   const handleEditCancel = () => {
     setIsEditing(false);
-    setEditContent(comment.content);
+    setEditContent(renderedContent);
   };
 
   const handleDelete = () => {
@@ -189,7 +191,7 @@ export function CommentItem({
               </div>
             ) : (
               <RichTextRenderer
-                content={comment.html || comment.content}
+                content={renderedContent}
                 className="text-collab-400 text-xs leading-relaxed"
               />
             )}

@@ -103,7 +103,7 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
     extensions: [
       StarterKit.configure({
         heading: {
-          levels: [1, 2, 3],
+          levels: [1, 2, 3, 4, 5, 6],
         },
         codeBlock: false,
       }),
