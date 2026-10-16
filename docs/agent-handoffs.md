@@ -15,7 +15,7 @@ All routes are under `/api/apps/auth/agents` and use the existing OAuth bearer t
 | `GET /handoffs/ID?agent=NAME` | Retrieve an authorized handoff and current context commands | `issues:read` |
 | `PATCH /handoffs/ID` | Apply `{agent, action, content?}` | `issues:read`; work actions also require `issues:write` |
 
-Agent names use lowercase letters, digits, hyphens and underscores (1–64 characters). Named recipients must be registered. Handoff content is bounded to 16,000 characters; request bodies to 64 KiB. A caller-supplied UUID `requestId` makes sequential retries return the original request and rejects changed payloads. Concurrent duplicate creation returns 409; retry with the same UUID. A returned context command does not grant its required scopes: project Notes still need `context:read`.
+Agent names start with a lowercase letter or digit and use lowercase letters, digits, hyphens and underscores (1–64 characters). Named recipients must be registered. Handoff content is bounded to 16,000 characters; request bodies to 64 KiB. A caller-supplied UUID `requestId` makes sequential retries return the original request and rejects changed payloads. Concurrent duplicate creation returns 409; retry with the same UUID. Returned context commands bind `--workspace` to the authorized handoff workspace. They do not grant their required scopes: project Notes still need `context:read`.
 
 Actions:
 
@@ -26,7 +26,7 @@ Actions:
 - `release` requires a reason, opens the request again, and clears delivery receipts so subscribers see it again.
 - `complete` requires a result and closes the request. It does not change the issue's status.
 
-`state=claimed` recovers this agent's unfinished claims, including those it previously marked seen. Polling never acknowledges work automatically. The initial inbox is deliberately bounded; process and mark entries seen before asking for the next batch.
+`state=claimed` recovers this agent's unfinished claims, including those it previously marked seen. Only `unseen` (the default) and `claimed` are supported. Polling never acknowledges work automatically. Both modes return the oldest matching entries with `hasMore` and the same limit. For `unseen`, mark entries seen to advance; requests claimed or completed by another agent can still appear until marked seen. For `claimed`, complete, release or pass work onward to advance; marking it seen does not remove it from this mode.
 
 To pass work onward, send a new request with `afterId` referencing a request currently claimed by the sender on the same issue. The previous request is completed and the next one created in one transaction. This preserves a linked chain without an ownership gap caused by two separate writes.
 

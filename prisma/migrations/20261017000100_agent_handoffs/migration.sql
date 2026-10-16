@@ -89,4 +89,3 @@ ALTER TABLE "AgentReceipt" ADD CONSTRAINT "AgentReceipt_handoffId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "AgentReceipt" ADD CONSTRAINT "AgentReceipt_agentId_fkey" FOREIGN KEY ("agentId") REFERENCES "AgentRegistration"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
