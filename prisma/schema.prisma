@@ -8,6 +8,7 @@ datasource db {
 }
 
 model User {
+  agentRegistrations     AgentRegistration[]
   id                     String                  @id @default(cuid())
   name                   String?
   email                  String?                 @unique
@@ -374,6 +375,8 @@ model FeatureRequestComment {
 }
 
 model Workspace {
+  agentRegistrations  AgentRegistration[]
+  agentHandoffs       AgentHandoff[]
   id                  String                @id @default(cuid())
   name                String
   slug                String                @unique
@@ -535,6 +538,7 @@ model ForgeExecutionAttempt {
 }
 
 model Issue {
+  agentHandoffs AgentHandoff[]
   id          String    @id @default(cuid())
   title       String
   description String?
@@ -2770,4 +2774,65 @@ model CoclawChannelMessage {
   @@index([userId, status])
   @@index([conversationId])
   @@index([createdAt])
+}
+
+// External agents use the existing user's workspace and issue permissions.
+model AgentRegistration {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  name        String
+  labelIds    String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sent        AgentHandoff[] @relation("AgentSender")
+  claimed     AgentHandoff[] @relation("AgentClaimant")
+  receipts    AgentReceipt[]
+
+  @@unique([workspaceId, name])
+  @@index([userId, workspaceId])
+}
+
+model AgentHandoff {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  issueId        String
+  sourceKey      String
+  kind           String   @default("handoff")
+  content        String
+  recipientNames String[] @default([])
+  labelIds       String[] @default([])
+  requestAck     Boolean  @default(false)
+  senderId       String?
+  claimedById    String?
+  status         String   @default("open")
+  afterId        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issue          Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  sender         AgentRegistration? @relation("AgentSender", fields: [senderId], references: [id], onDelete: SetNull)
+  claimedBy      AgentRegistration? @relation("AgentClaimant", fields: [claimedById], references: [id], onDelete: SetNull)
+  after          AgentHandoff? @relation("HandoffChain", fields: [afterId], references: [id], onDelete: SetNull)
+  next           AgentHandoff[] @relation("HandoffChain")
+  receipts       AgentReceipt[]
+
+  @@unique([workspaceId, sourceKey])
+  @@index([workspaceId, createdAt, id])
+  @@index([issueId])
+  @@index([claimedById, status])
+}
+
+model AgentReceipt {
+  handoffId String
+  agentId   String
+  seenAt    DateTime?
+  ackAt     DateTime?
+  handoff   AgentHandoff @relation(fields: [handoffId], references: [id], onDelete: Cascade)
+  agent     AgentRegistration @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@id([handoffId, agentId])
+  @@index([agentId])
 }

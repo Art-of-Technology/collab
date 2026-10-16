@@ -1,0 +1,24 @@
+name: Agent handoffs
+on:
+  pull_request:
+    paths: ['src/lib/agent-handoff*', 'src/lib/issue-finder.ts', 'src/lib/apps/auth-middleware.ts', 'src/lib/oauth-scopes.ts', 'src/app/api/apps/auth/agents/**', 'prisma/**', 'tests/agents/**', 'tests/security/helpers.cjs', 'package.json', 'package-lock.json', '.github/workflows/agent-handoffs.yml']
+  push:
+    branches: [main]
+    paths: ['src/lib/agent-handoff*', 'src/lib/issue-finder.ts', 'src/lib/apps/auth-middleware.ts', 'src/lib/oauth-scopes.ts', 'src/app/api/apps/auth/agents/**', 'prisma/**', 'tests/agents/**', 'tests/security/helpers.cjs', 'package.json', 'package-lock.json', '.github/workflows/agent-handoffs.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npx prisma generate
+      - name: Install local PostgreSQL test binaries
+        run: sudo apt-get update && sudo apt-get install -y postgresql
+      - run: node --test --test-concurrency=1 tests/agents/*.test.cjs
