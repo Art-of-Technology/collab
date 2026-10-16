@@ -25,7 +25,7 @@ test('RichEditor schema round-trips all heading levels and existing Markdown str
     '@tiptap/react': { useEditor: value => { options = value; throw stop; } },
     '@/context/WorkspaceContext': { useWorkspace: () => ({}) },
     '@/hooks/use-toast': { useToast: () => ({}) },
-    '@/lib/utils': {}, '@/components/ui/button': {}, '@/components/ui/tooltip': {},
+    '@/lib/utils': load('src/lib/utils.ts', { clsx: require('clsx'), 'tailwind-merge': require('tailwind-merge') }), '@/components/ui/button': {}, '@/components/ui/tooltip': {},
     'lucide-react': {}, './components': {}, './hooks': {}, './utils': {},
     '@/utils/html-normalizer': {},
     lowlight: await import('lowlight'),
