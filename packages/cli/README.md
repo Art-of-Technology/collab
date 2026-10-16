@@ -160,7 +160,7 @@ For headless use, inject an existing Collab OAuth bearer token through your cred
 | 4 | Server authorization refused |
 | 5 | API, transport, pagination or uncertain-write failure |
 
-Errors are one JSON object on stderr, with no raw remote response body. After `outcome_unknown`, read the affected issue/Note or list the intended new item before deciding whether to retry. Existing APIs do **not** provide idempotency keys or compare-and-swap updates; never interpret a timeout as proof a write did not happen. Concurrent agents should own separate issues/Notes or coordinate their edits. Forge-backed projects retain their existing write refusal; the CLI does not bypass it.
+Errors are one JSON object on stderr, with no raw remote response body. After `outcome_unknown`, read the affected item or list the intended new item before deciding whether to retry. Issue/Note edits do **not** provide idempotency keys or compare-and-swap updates; never interpret a timeout as proof a write did not happen. For handoff retry and ownership guarantees, see the [agent handoff API contract](../../docs/agent-handoffs.md#api-foundation). Concurrent agents should own separate issues/Notes or coordinate their edits. Forge-backed projects retain their existing write refusal; the CLI does not bypass it.
 
 ## Administrator setup
 
@@ -192,6 +192,9 @@ The `Collab CLI native downloads` workflow builds and tests each executable and 
 To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_EXECUTABLE` to its absolute path and run `node --test packages/cli/test/cli.test.mjs` from the repository root. The ordinary Node.js test path remains the default.
 
 ## Agent coordination
+
+These commands are available from this source checkout; the published native
+0.2.1 binaries do not include them. See [source installation](#install-from-source).
 
 The [generic agent skill](skills/collab-agents/SKILL.md) describes registration,
 role subscriptions, bounded inbox waits, atomic claims and handoffs. Load this
