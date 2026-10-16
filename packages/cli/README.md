@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), or Windows x64 with PowerShell 5.1+. Alpine/musl and native Windows ARM64 are not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-[CLI 0.2.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.2.0) are hosted on GitHub. You can inspect `install.sh` or `install.ps1` there before running them. Archives and SHA-256 sidecars are also available for manual downloads.
+[CLI 0.2.1 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.2.1) are hosted on GitHub. You can inspect `install.sh` or `install.ps1` there before running them. Archives and SHA-256 sidecars are also available for manual downloads.
+
+Version 0.2.1 fixes Windows login failing with `unsafe_credentials` after browser approval. Run the installer again to update; existing credentials are preserved. The native runtime includes the Windows subprocess timeout fix, and credential ownership/ACL checks remain enforced.
 
 These downloads do not carry a verified publisher signature. The macOS builds are not notarized. If macOS blocks the executable, follow [Apple's trusted-app guidance](https://support.apple.com/en-us/102445) after verifying the download.
 
@@ -181,7 +183,7 @@ Tests launch the actual CLI against local synthetic HTTP servers, including PKCE
 
 ### Build native downloads
 
-With Bun 1.3.13 installed, run `npm run build:native --prefix packages/cli` to produce `packages/cli/dist/collab` for the current machine. The build disables runtime loading of working-directory `.env`, `bunfig.toml`, `tsconfig.json` and `package.json` files. Explicit `COLLAB_*` environment variables still work.
+With Bun 1.4.3 installed, run `npm run build:native --prefix packages/cli` to produce `packages/cli/dist/collab` for the current machine. The build disables runtime loading of working-directory `.env`, `bunfig.toml`, `tsconfig.json` and `package.json` files. Explicit `COLLAB_*` environment variables still work.
 
 The `Collab CLI native downloads` workflow builds and tests each executable and its one-command installer on a matching macOS/Linux architecture or Windows x64 runner. It includes the README and license notices, packages Unix `.tar.gz` archives and a Windows `.zip` archive, and produces SHA-256 sidecars. Pull requests only upload CI artifacts. After merge and review, a `cli-v<VERSION>` tag matching this package's version publishes the five archives, installer scripts and their checksums to GitHub Releases once all native jobs pass; it does not trigger the application's `v*` deployment workflows or replace the application's latest release.
 
