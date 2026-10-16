@@ -400,7 +400,7 @@ test('timed-out mutation reports uncertain outcome after exactly one dispatch', 
   assert.equal(result.error.error, 'outcome_unknown'); assert.equal(result.stdout, ''); assert.equal(f.calls.length, 1);
 });
 
-test('actual login performs PKCE, rejects malformed callbacks and wrong state, verifies identity, stores private credentials', async t => {
+test('actual login survives browser approval delay, verifies PKCE and identity, and stores private credentials', async t => {
   let authorization, verifier;
   const f = await fixture(t, (req, res, body) => {
     if (req.url === '/api/oauth/mcp/token') {
@@ -417,6 +417,9 @@ test('actual login performs PKCE, rejects malformed callbacks and wrong state, v
     authorization = new URL(match[0]);
     assert.deepEqual(authorization.searchParams.get('scope').split(' '), ['user:read', 'workspace:read', 'workspace:write', 'projects:read', 'projects:write', 'issues:read', 'issues:write', 'context:read', 'context:write', 'prompts:read', 'knowledge:read']);
     callback = (async () => {
+      // Human approval can leave Bun's Windows spawnSync loop idle beyond the
+      // 10-second ACL timeout (oven-sh/bun#33932). Instant callbacks missed this.
+      if (windows) await new Promise(resolve => setTimeout(resolve, 11000));
       const redirect = new URL(authorization.searchParams.get('redirect_uri'));
       const malformed = await new Promise((resolve, reject) => {
         const req = request({ hostname: redirect.hostname, port: redirect.port, path: 'http://[SYNTHETIC_PRIVATE_SENTINEL', agent: false }, res => {
