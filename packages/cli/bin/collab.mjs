@@ -165,10 +165,17 @@ async function main() {
   };
   if (spec.wait) {
     const deadline = Date.now() + waitSeconds * 1000;
+    let last;
     for (;;) {
-      const result = await send(Math.max(1, Math.min(timeout, deadline - Date.now())));
+      const window = deadline - Date.now();
+      if (last && window < 1000) {
+        await delay(Math.max(0, window));
+        return { ...last, timedOut: true };
+      }
+      const result = await send(Math.min(timeout, Math.max(1000, window)));
       if (!Array.isArray(result?.items)) throw new CliError('invalid_response', 'Expected inbox items.', 5);
       if (result.items.length) return result;
+      last = result;
       const remaining = deadline - Date.now();
       if (remaining <= 0) return { ...result, timedOut: true };
       await delay(Math.min(1000, remaining));

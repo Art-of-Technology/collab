@@ -61,6 +61,16 @@ test('agent commands stop on permission or claim conflict errors without retry',
   assert.notEqual((await denied.run(['inbox', 'wait', '--agent', 'reviewer', '--wait-seconds', '2'])).code, 0);
   assert.equal(denied.calls.length, 1);
 });
+
+test('inbox wait does not turn an empty final window into a transport failure', async t => {
+  const f = await fixture(t, (_req, res) => new Promise(resolve => setTimeout(() => {
+    res.end('{"items":[],"hasMore":false}'); resolve();
+  }, 750)));
+  const result = await f.run(['inbox', 'wait', '--agent', 'reviewer', '--wait-seconds', '2']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.data.timedOut, true);
+  assert.equal(f.calls.length, 1, 'do not dispatch a second request with less than a second remaining');
+});
 function grantEveryoneRead(file) {
   const script = `$ErrorActionPreference = 'Stop'; $p = [Console]::In.ReadToEnd(); $acl = Get-Acl -LiteralPath $p; $sid = New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0'); $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'Read', 'Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $p -AclObject $acl`;
   const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { input: file, encoding: 'utf8' });
