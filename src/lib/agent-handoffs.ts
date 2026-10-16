@@ -18,7 +18,7 @@ export const actionSchema = z.object({ agent: name, action: z.enum(['seen', 'ack
   content: text.optional(),
 }).strict().refine(v => !['progress', 'release', 'complete'].includes(v.action) || Boolean(v.content), 'This action requires content');
 export const inboxSchema = z.object({ agent: name, limit: z.coerce.number().int().min(1).max(50).default(20),
-  state: z.enum(['unseen', 'claimed', 'all']).default('unseen'),
+  state: z.enum(['unseen', 'claimed']).default('unseen'),
 }).strict();
 
 export class HandoffError extends Error {
@@ -112,8 +112,8 @@ export async function agentInbox(context: AppAuthContext, query: z.infer<typeof 
   const agent = await ownedAgent(prisma, context, query.agent);
   const items = await prisma.agentHandoff.findMany({ where: { workspaceId: context.workspace.id, issue: issueScope(context),
     AND: [{ OR: [{ recipientNames: { has: agent.name } }, { labelIds: { hasSome: agent.labelIds } }, { claimedById: agent.id }] }],
-    ...(query.state === 'unseen' && { receipts: { none: { agentId: agent.id, seenAt: { not: null } } } }),
-    ...(query.state === 'claimed' && { claimedById: agent.id, status: 'claimed' }),
+    ...(query.state === 'claimed' ? { claimedById: agent.id, status: 'claimed' }
+      : { receipts: { none: { agentId: agent.id, seenAt: { not: null } } } }),
   }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: query.limit + 1,
   include: { issue: { select: { id: true, issueKey: true, title: true, projectId: true } },
     claimedBy: { select: { name: true } }, sender: { select: { name: true } } } });
@@ -124,8 +124,8 @@ export async function getHandoff(context: AppAuthContext, agentName: string, id:
   const agent = await ownedAgent(prisma, context, agentName);
   const handoff = await visibleHandoff(prisma, context, agent, id);
   return { handoff, context: { issue: handoff.issue, commands: [
-    `collab issues get ${handoff.issue.id}`, `collab comments list ${handoff.issue.id}`,
-    `collab issues activity ${handoff.issue.id}`, `collab context get --project ${handoff.issue.projectId}`,
+    `collab issues get ${handoff.issue.id} --workspace ${context.workspace.id}`, `collab comments list ${handoff.issue.id} --workspace ${context.workspace.id}`,
+    `collab issues activity ${handoff.issue.id} --workspace ${context.workspace.id}`, `collab context get --project ${handoff.issue.projectId} --workspace ${context.workspace.id}`,
   ] } };
 }
 

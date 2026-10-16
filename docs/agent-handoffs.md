@@ -26,7 +26,7 @@ Actions:
 - `release` requires a reason, opens the request again, and clears delivery receipts so subscribers see it again.
 - `complete` requires a result and closes the request. It does not change the issue's status.
 
-`state=claimed` recovers this agent's unfinished claims, including those it previously marked seen. `state=all` includes historical requests. Polling never acknowledges work automatically. The initial inbox is deliberately bounded; process and mark entries seen before asking for the next batch.
+`state=claimed` recovers this agent's unfinished claims, including those it previously marked seen. Polling never acknowledges work automatically. The initial inbox is deliberately bounded; process and mark entries seen before asking for the next batch.
 
 To pass work onward, send a new request with `afterId` referencing a request currently claimed by the sender on the same issue. The previous request is completed and the next one created in one transaction. This preserves a linked chain without an ownership gap caused by two separate writes.
 

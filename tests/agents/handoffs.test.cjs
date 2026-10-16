@@ -85,15 +85,20 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     assert.equal(await prisma.issueActivity.count({ where: { action: 'AGENT_CLAIM' } }), 1);
   });
   await t.test('seen and ACK are independent from ownership; scopes and revoked membership stay enforced', async () => {
+    assert.equal(service.inboxSchema.safeParse({ agent: 'worker-b', state: 'all' }).success, false);
+    assert.equal((await inbox(bob, 'worker-b')).items[0].id, handoff.id);
+    await prisma.workspaceMember.updateMany({ where: { userId: 'bob' }, data: { status: false } });
+    assert.equal((await inbox(bob, 'worker-b')).items.length, 0);
+    assert.equal((await inbox(bob, 'worker-b', 'claimed')).items.length, 0);
+    await assert.rejects(service.getHandoff(bob, 'worker-b', handoff.id), e => e.code === 'handoff_not_found');
+    await prisma.workspaceMember.updateMany({ where: { userId: 'bob' }, data: { status: true } });
     await act(loser, handoff, loserName, 'seen');
     assert.equal((await inbox(loser, loserName)).items.length, 0);
     await Promise.all([act(winner, handoff, winnerName, 'ack'), act(winner, handoff, winnerName, 'ack')]);
     assert.equal(await prisma.issueActivity.count({ where: { action: 'AGENT_ACKNOWLEDGED' } }), 1);
+    assert.equal((await inbox(winner, winnerName)).items.length, 0);
+    assert.equal((await inbox(winner, winnerName, 'claimed')).items[0].id, handoff.id);
     await assert.rejects(act(context(winner.user.id, 'w', ['issues:read']), handoff, winnerName, 'progress', 'No write scope'), e => e.code === 'insufficient_scope');
-    await prisma.workspaceMember.updateMany({ where: { userId: 'bob' }, data: { status: false } });
-    assert.equal((await inbox(bob, 'worker-b', 'all')).items.length, 0);
-    await assert.rejects(service.getHandoff(bob, 'worker-b', handoff.id), e => e.code === 'handoff_not_found');
-    await prisma.workspaceMember.updateMany({ where: { userId: 'bob' }, data: { status: true } });
   });
   await t.test('release reopens delivery and handoff chains retain ordered named-agent history', async () => {
     await act(winner, handoff, winnerName, 'progress', 'Implementation done; tests next');
@@ -110,6 +115,11 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     assert.equal(JSON.parse(timeline.at(-1).details).agent.name, winnerName);
     const result = await service.getHandoff(winner, winnerName, next.id);
     assert.equal(result.context.issue.projectId, 'p-w');
-    assert.equal(result.context.commands.length, 4);
+    assert.deepEqual(Array.from(result.context.commands), [
+      'collab issues get i-w --workspace w',
+      'collab comments list i-w --workspace w',
+      'collab issues activity i-w --workspace w',
+      'collab context get --project p-w --workspace w',
+    ]);
   });
 });
