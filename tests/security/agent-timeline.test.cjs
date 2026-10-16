@@ -20,9 +20,12 @@ test('agent timeline identifies each agent and the work transition', () => {
   }
   const activity = { action: 'AGENT_PASSED', details: { agent: { name: 'builder-a' }, toAgents: ['reviewer-b'], toLabels: ['role-id'], content: '<script>unsafe</script>\nEvidence retained' }, user: { name: 'Owner' }, createdAt: new Date() };
   assert.equal(helpers.getActionText(activity), 'builder-a passed the work on to reviewer-b, role subscribers');
-  const html = renderToStaticMarkup(React.createElement(ActivityItem, { activity }));
-  assert.match(html, /Handoff details/);
-  assert.match(html, /&lt;script&gt;/);
-  assert.doesNotMatch(html, /<script>/);
+  for (const tag of ['script', 'SCRIPT', 'ScRiPt', 'script type="text/javascript"']) {
+    activity.details.content = `<${tag}>unsafe</script>\nEvidence retained`;
+    const html = renderToStaticMarkup(React.createElement(ActivityItem, { activity }));
+    assert.match(html, /Handoff details/);
+    assert.match(html, /&lt;script\b/i);
+    assert.doesNotMatch(html, /<script\b/i);
+  }
   assert.equal(helpers.getActionText({ action: 'CREATED', user: { name: 'Cem' } }), 'Cem created this issue');
 });
