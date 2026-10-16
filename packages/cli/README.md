@@ -190,3 +190,20 @@ With Bun 1.4.3 installed, run `npm run build:native --prefix packages/cli` to pr
 The `Collab CLI native downloads` workflow builds and tests each executable and its one-command installer on a matching macOS/Linux architecture or Windows x64 runner. It includes the README and license notices, packages Unix `.tar.gz` archives and a Windows `.zip` archive, and produces SHA-256 sidecars. Pull requests only upload CI artifacts. After merge and review, a `cli-v<VERSION>` tag matching this package's version publishes the five archives, installer scripts and their checksums to GitHub Releases once all native jobs pass; it does not trigger the application's `v*` deployment workflows or replace the application's latest release.
 
 To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_EXECUTABLE` to its absolute path and run `node --test packages/cli/test/cli.test.mjs` from the repository root. The ordinary Node.js test path remains the default.
+
+## Agent coordination
+
+The [generic agent skill](skills/collab-agents/SKILL.md) describes registration,
+role subscriptions, bounded inbox waits, atomic claims and handoffs. Load this
+file through your agent's supported skill mechanism; it does not launch agents.
+Requires the matching server release and its additive agent-handoff migration.
+
+`collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to
+30 seconds (supported range 1–60). It prints one JSON result and exits. An empty
+wait returns `timedOut: true`; it never marks, acknowledges or claims work.
+Use `collab inbox list --agent NAME --state claimed --workspace ID` to recover
+work you own after a restart. Use `collab schema` for the complete command list.
+
+Explicit sends notify matching registered names and role labels. Automatic
+mention/label-change triggers are not included in this slice. Agent activity
+is visible in the existing issue timeline and `collab issues activity`.

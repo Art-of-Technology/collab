@@ -31,6 +31,12 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
         </div>
 
         {/* Change details for field updates */}
+        {activity.action.startsWith('AGENT_') && typeof activity.details?.content === 'string' && activity.details.content && (
+          <details className="mt-1 text-xs text-collab-400">
+            <summary className="cursor-pointer">Handoff details</summary>
+            <p className="mt-2 whitespace-pre-wrap break-words">{activity.details.content}</p>
+          </details>
+        )}
         {showChangeDetails && (
           <ActivityChangeDetails activity={activity} />
         )}

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { setTimeout as delay } from 'node:timers/promises';
 import { commands, flagName, scopes } from '../src/commands.mjs';
 import { CliError, request, session, store } from '../src/client.mjs';
 import { login, refresh } from '../src/auth.mjs';
@@ -50,7 +51,7 @@ async function boundedInput(file) {
   } finally { clearTimeout(timer); if (file !== '-') stream.destroy(); }
 }
 function help() {
-  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query)].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
+  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : [])].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
 }
 async function main() {
   const { words, options } = parse(process.argv.slice(2));
@@ -88,7 +89,7 @@ async function main() {
   const args = words.slice(name.split(' ').length);
   const parameters = [...spec.path.matchAll(/:(\w+)/g)].map(m => m[1]);
   if (args.length !== parameters.length || args.some(a => !/^[a-zA-Z0-9_-]+$/.test(a))) throw new CliError('invalid_identifier', `Expected ${parameters.length} ID/key argument(s); only letters, digits, underscores and hyphens allowed.`);
-  allowed(options, [...globals, ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), 'input', 'content-file', 'description-file', 'yes', 'dry-run', 'all']);
+  allowed(options, [...globals, ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), 'input', 'content-file', 'description-file', 'yes', 'dry-run', 'all']);
   if (options.all && !spec.pagination) throw new CliError('unsupported_pagination', '--all is supported only for issues, notes and worklogs lists.');
   if (spec.method === 'DELETE' && !options.yes) throw new CliError('confirmation_required', 'Deletion requires --yes.');
   const body = {};
@@ -151,14 +152,29 @@ async function main() {
   let endpoint = spec.path; parameters.forEach((key, i) => { endpoint = endpoint.replace(`:${key}`, encodeURIComponent(args[i])); });
   const timeout = options.timeout === undefined ? 30000 : converted(options.timeout, 'integer') * 1000;
   if (timeout < 1000 || timeout > 120000) throw new CliError('invalid_timeout', 'Timeout must be 1..120 seconds.');
+  const waitSeconds = spec.wait ? converted(options['wait-seconds'] ?? '30', 'integer') : 0;
+  if (spec.wait && (waitSeconds < 1 || waitSeconds > 60)) throw new CliError('invalid_timeout', 'Wait must be 1..60 seconds.');
+  if (spec.action) body.action = spec.action;
   const payload = Object.keys(spec.fields).length ? body : undefined;
   const apiPath = () => `/api/apps/auth/${endpoint}${query.size ? `?${query}` : ''}`;
   if (options['dry-run']) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), body: payload };
-  const send = async () => {
-    const result = await request(selected.base, apiPath(), { token: selected.token, method: spec.method, body: payload, timeout });
+  const send = async (requestTimeout = timeout) => {
+    const result = await request(selected.base, apiPath(), { token: selected.token, method: spec.method, body: payload, timeout: requestTimeout });
     if (name === 'notes get' && ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'].includes(result?.type)) throw new CliError('unsupported_note_type', 'Secret document output is not available through this CLI.', 4);
     return result;
   };
+  if (spec.wait) {
+    const deadline = Date.now() + waitSeconds * 1000;
+    for (;;) {
+      const result = await send(Math.max(1, Math.min(timeout, deadline - Date.now())));
+      if (!Array.isArray(result?.items)) throw new CliError('invalid_response', 'Expected inbox items.', 5);
+      if (result.items.length) return result;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return { ...result, timedOut: true };
+      await delay(Math.min(1000, remaining));
+      if (Date.now() >= deadline) return { ...result, timedOut: true };
+    }
+  }
   if (!options.all) return send();
   const [key, mode] = spec.pagination; const collected = []; const seen = new Set();
   for (let i = 0; i < 100; i++) {
