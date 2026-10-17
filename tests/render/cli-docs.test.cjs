@@ -134,6 +134,11 @@ test('docs render installation, navigable sections, commands, and credential lim
   assert.match(html, /irm https:\/\/collab\.weez\.boo\/install\.ps1/);
   assert.match(html, /No Node.js, npm, Bun, or terminal restart needed/);
   assert.match(html, /Logout removes local credentials only/);
+  assert.match(html, /id="agents"/);
+  assert.match(html, /collab inbox wait/);
+  assert.match(html, /--wait-seconds/);
+  assert.ok(html.includes(`https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v${version}/packages/cli/skills/collab-agents/SKILL.md`));
+  assert.match(html, /Each new CLI login has an independent grant/);
   assert.match(html, /collab-cli/);
   assert.match(html, /href="\/dev\/docs"/);
   const ids = [...html.matchAll(/ id="([^"]+)"/g)].map(match => match[1]);

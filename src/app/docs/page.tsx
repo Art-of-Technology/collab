@@ -27,6 +27,7 @@ const sections = [
   ['capabilities', 'Capabilities'],
   ['search', 'Search & project context'],
   ['workflow', 'Agent workflow'],
+  ['agents', 'Agent collaboration'],
   ['commands', 'Command reference'],
   ['flags', 'Flags & inputs'],
   ['automation', 'Automation'],
@@ -217,6 +218,17 @@ export default function DocsPage() {
                 <p className="mt-3 text-muted-foreground">Notes created with a selected project use project scope. Updates do not move a Note to the default project; pass <code>--project-id</code> only for an intentional move. Note reads return plain text, so reading and writing back is not a rich-text round trip.</p>
               </section>
 
+              <section id="agents">
+                <h2>Agent collaboration</h2>
+                <p className="text-muted-foreground">CLI 0.3.0 lets running agents send explicit handoffs, wait for their inbox, claim work and record progress. All matching recipients can read a handoff; only one can claim it. Use a unique name for each agent.</p>
+                <p className="mt-3 text-muted-foreground">Load the <a href={`https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v${cliPackage.version}/packages/cli/skills/collab-agents/SKILL.md`} className="underline underline-offset-4">generic Collab agent skill</a> through your agent’s supported skill mechanism. It covers idle waits, checks while busy, context recovery and useful handoffs.</p>
+                <TerminalBlock code={'collab agents register --name builder-a --workspace WORKSPACE_ID\ncollab agents register --name reviewer-b --workspace WORKSPACE_ID\ncollab handoffs send --agent builder-a --issue APP-123 --to-agents \'["reviewer-b"]\' --content-file handoff.md --workspace WORKSPACE_ID\ncollab inbox wait --agent reviewer-b --wait-seconds 30 --workspace WORKSPACE_ID\ncollab handoffs get HANDOFF_ID --agent reviewer-b --workspace WORKSPACE_ID\ncollab handoffs claim HANDOFF_ID --agent reviewer-b --workspace WORKSPACE_ID'} />
+                <p className="text-muted-foreground">Replace HANDOFF_ID with the returned ID. Write the objective, completed work, evidence links, constraints and next steps in <code>handoff.md</code>. For role subscriptions, resolve IDs with <code>collab labels list</code>, register with <code>--label-ids</code>, and send with <code>--to-labels</code>. Both flags accept a JSON array of label IDs.</p>
+                <TerminalBlock code={'collab handoffs progress HANDOFF_ID --agent reviewer-b --content "Review started" --workspace WORKSPACE_ID\ncollab handoffs complete HANDOFF_ID --agent reviewer-b --content-file result.md --workspace WORKSPACE_ID\ncollab handoffs seen HANDOFF_ID --agent reviewer-b --workspace WORKSPACE_ID\ncollab issues activity APP-123 --workspace WORKSPACE_ID'} />
+                <p className="text-muted-foreground">Use <code>handoffs send --after-id HANDOFF_ID</code> to finish your current handoff and pass work onward atomically. Completion closes the handoff, not the issue. ACK is optional and does not claim work. Recover unfinished ownership with <code>inbox list --state claimed</code>.</p>
+                <p className="mt-3 text-muted-foreground">The issue timeline shows who picked up, progressed, passed and completed work. The workspace Agent inbox shows your agents’ unseen and claimed queues without changing them. This release supports explicit handoffs; automatic mention/label-change triggers and launching agents are not included. It requires the matching server release and agent-handoff migration.</p>
+              </section>
+
               <section id="commands">
                 <h2>Command reference</h2>
                 <p className="mb-5 text-muted-foreground">Browse the API commands below, or run <code>collab schema</code> for the full machine-readable inventory. Boolean field values are <code>true</code> or <code>false</code>; arrays use JSON.</p>
@@ -265,7 +277,7 @@ export default function DocsPage() {
                 <p className="text-muted-foreground">Use environment variables or per-command flags for headless context; <code>config set</code> refuses while COLLAB_TOKEN is set. Maestro tokens are not Collab API tokens. Never put tokens in command arguments, repository files, Notes, or comments.</p>
                 <h3 className="mt-6">Profiles and token lifetime</h3>
                 <p className="text-muted-foreground">Profiles live at <code className="break-all">~/.config/collab/PROFILE.json</code>; see the <a href="https://github.com/Art-of-Technology/collab/blob/main/packages/cli/README.md#authentication-and-automation" className="underline underline-offset-4">credential protection requirements</a>. <code>COLLAB_CONFIG_DIR</code> overrides that directory. Refresh explicitly with <code>collab auth refresh</code>; coordinate refreshes when processes share a profile.</p>
-                <p className="mt-3 text-muted-foreground"><strong className="font-medium text-foreground">Logout removes local credentials only.</strong> Ask your administrator to revoke a token that must stop working elsewhere. A new login for the same app, user, and workspace replaces that user’s previous CLI token. Use a separate authorized account for an independently managed agent.</p>
+                <p className="mt-3 text-muted-foreground"><strong className="font-medium text-foreground">Logout removes local credentials only.</strong> Ask your administrator to revoke a token that must stop working elsewhere. Each new CLI login has an independent grant: signing in on another machine does not replace your existing login. Give each running agent a unique registered name. Local auth status does not prove the server accepts the token; verify with <code>collab whoami</code>.</p>
               </section>
 
               <section id="troubleshooting">

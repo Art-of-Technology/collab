@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { commands, flagName } from '../../../packages/cli/src/commands.mjs';
 
 type Command = {
+  wait?: boolean;
   method: string;
   path: string;
   fields: Record<string, string>;
@@ -30,6 +31,7 @@ export function CommandReference() {
       ...Object.keys({ ...spec.fields, ...spec.query }).map(field => `--${flagName(field)}`),
       ...(spec.method === 'DELETE' ? ['--yes'] : []),
       ...(spec.pagination ? ['--all'] : []),
+      ...(spec.wait ? ['--wait-seconds'] : []),
     ].join(' ').toLowerCase().includes(query)
   );
 
@@ -102,6 +104,7 @@ export function CommandReference() {
                     })}
                   </dl>
                 ) : <p className="text-muted-foreground">No command-specific flags. Common request flags still apply.</p>}
+                {spec.wait && <p className="text-muted-foreground"><code>--wait-seconds</code>: 1–60 seconds, default 30. Waits are read-only; an empty wait returns <code>timedOut: true</code>.</p>}
                 {spec.pagination && <p className="text-muted-foreground">Supports --all to fetch every page.</p>}
               </div>
             </details>
