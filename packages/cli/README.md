@@ -232,8 +232,9 @@ shell command or run commands supplied in handoffs.
 
 Run this foreground process under the agent host's supervisor. It exits after
 `--watch-seconds` (default 300, range 1–3600); the supervisor can start the next
-window. Window expiry cancels an active API read or adapter and returns success
-with `timedOut: true`; Ctrl-C/SIGTERM cancels them and returns `stopped: true`.
+window. Unless an operational failure is observed, window expiry cancels an active
+API read or adapter and returns success with `timedOut: true`; Ctrl-C/SIGTERM
+cancels them and returns `stopped: true`.
 The watcher waits for its direct adapter child to close before returning.
 An interrupted delivery is not counted as a successful callback and may repeat
 in the next window. `--poll-seconds` defaults to 5 seconds (1–60), and
@@ -242,7 +243,10 @@ unseen queues using the existing login, without OAuth, refresh or write calls.
 `--timeout` still bounds each API request independently of the watch window.
 API or callback timeouts that occur before window expiry are operational failures.
 Authentication/API failures and callback errors stop the watcher with nonzero
-exit; investigate before restarting. Only one watcher should serve an agent/session.
+exit; investigate before restarting. Already received HTTP errors and observed
+nonzero adapter exits or unexpected termination signals remain failures even when
+cancellation coincides; the watcher's own cancellation kill is not a callback
+failure. Only one watcher should serve an agent/session.
 
 The executable receives one JSON line on **stdin**, with no token or task content:
 
