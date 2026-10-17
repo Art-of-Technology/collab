@@ -102,8 +102,10 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
     }
     text = Buffer.concat(chunks).toString('utf8');
   } catch {
-    if (signal?.aborted && requestSignal?.reason === signal.reason) throw signal.reason;
-    throw new CliError(mutation ? 'outcome_unknown' : 'transport_failed', mutation ? 'Request completion is unknown. Inspect Collab before retrying; no retry was made.' : 'Request failed or exceeded its time/size limit. No retry was made.', 5);
+    if (!response || response.ok) {
+      if (signal?.aborted && requestSignal?.reason === signal.reason) throw signal.reason;
+      throw new CliError(mutation ? 'outcome_unknown' : 'transport_failed', mutation ? 'Request completion is unknown. Inspect Collab before retrying; no retry was made.' : 'Request failed or exceeded its time/size limit. No retry was made.', 5);
+    }
   }
   if (!response.ok) {
     const codes = { 400: 'invalid_request', 401: 'unauthorized', 403: 'forbidden', 404: 'not_found', 409: 'conflict', 429: 'rate_limited' };

@@ -21,6 +21,7 @@ export function deliverWake(callback, args, event, timeout, signal) {
     child.on('close', code => {
       clearTimeout(timer);
       signal?.removeEventListener('abort', cancel);
+      if (code !== null && code !== 0) error = failure;
       if (error || code !== 0) reject(error || failure);
       else resolve();
     });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request } from 'node:http';
-import { spawn, spawnSync } from 'node:child_process';
+import { ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, symlinkSync, statSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { windowsAcl } from '../src/windows-acl.mjs';
 import { commands } from '../src/commands.mjs';
+import { watchInbox } from '../src/inbox-watch.mjs';
 
 const bin = fileURLToPath(new URL('../bin/collab.mjs', import.meta.url));
 const executable = process.env.COLLAB_CLI_EXECUTABLE;
@@ -142,6 +143,61 @@ test('inbox watch distinguishes window expiry from API timeouts in both queues a
   }
 });
 
+test('inbox watch preserves received HTTP refusals when cancellation interrupts either queue body', async t => {
+  for (const state of ['claimed', 'unseen']) for (const stop of [false, ...(!windows ? [true] : [])]) {
+    await t.test(`${state}, ${stop ? 'stop signal' : 'window expiry'}`, async t => {
+      let child;
+      const f = await fixture(t, (req, res) => {
+        if (new URL(req.url, 'http://localhost').searchParams.get('state') !== state) res.end('{"items":[],"hasMore":false}');
+        else {
+          res.writeHead(401);
+          res.write('{"error":"PRIVATE_SENTINEL"');
+          if (stop) {
+            const timer = setTimeout(() => child.kill('SIGTERM'), 100);
+            t.after(() => clearTimeout(timer));
+          }
+        }
+      });
+      const result = await f.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath,
+        '--watch-seconds', stop ? '30' : '1', '--timeout', '120'], { childCallback: value => { child = value; } });
+      assert.equal(result.code, 3, result.stderr);
+      assert.equal(result.error.error, 'unauthorized');
+      assert.equal(result.error.status, 401);
+      assert.equal(result.stdout, '');
+      assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+      assert.equal(f.calls.length, state === 'claimed' ? 1 : 2);
+      assert.ok(f.calls.every(call => call.method === 'GET'));
+      assert.equal(existsSync(path.join(f.dir, 'default.json')), false);
+    });
+  }
+});
+
+test('adapter failure wins over cancellation between natural exit and closure', async t => {
+  for (const cancelAt of ['exit', 'close']) {
+    await t.test(cancelAt, async t => {
+      const controller = new AbortController();
+      const emit = ChildProcess.prototype.emit;
+      let closed = false;
+      t.mock.method(ChildProcess.prototype, 'emit', function(event, ...args) {
+        if (event === cancelAt) {
+          assert.equal(args[0], 7);
+          controller.abort();
+        }
+        if (event === 'close') closed = true;
+        return emit.call(this, event, ...args);
+      });
+      await assert.rejects(watchInbox({
+        read: async () => ({ items: [{ id: 'work', status: 'open' }], hasMore: false }),
+        callback: process.execPath, callbackArgs: ['-e', 'process.stdin.resume();process.stdin.on("end",()=>process.exit(7))'],
+        agent: 'worker', workspaceId: 'w', origin: 'http://localhost', durationMs: 10000, intervalMs: 1000,
+        callbackTimeoutMs: 5000, signal: controller.signal,
+      }), { code: 'wake_callback_failed' });
+      assert.equal(controller.signal.aborted, true);
+      assert.equal(closed, true, 'failure is returned only after the real child closes');
+    });
+  }
+});
+
 test('inbox watch stop signals cancel both queue reads and response bodies', { skip: windows }, async t => {
   for (const state of ['claimed', 'unseen']) for (const bodyStarted of [false, true]) for (const signal of ['SIGINT', 'SIGTERM']) {
     await t.test(`${signal}, ${state}, ${bodyStarted ? 'body' : 'headers'}`, async t => {
@@ -223,6 +279,20 @@ test('non-watch reads retain operational timeouts before headers and during resp
     assert.equal(result.stdout, '');
     assert.equal(f.calls.length, 1);
     assert.equal(f.calls[0].headers.authorization, 'Bearer synthetic-token');
+  }
+});
+
+test('interrupted error bodies retain sanitized status and mutation semantics', async t => {
+  for (const mutation of [false, true]) for (const status of [401, 500]) {
+    const f = await fixture(t, (_req, res) => { res.writeHead(status); res.write('{"error":"PRIVATE_SENTINEL"'); });
+    const result = await f.run([...(mutation ? ['issues', 'update', 'AGENT-1', '--status', 'done'] : ['whoami']), '--timeout', '1']);
+    assert.equal(result.code, status === 401 ? 3 : 5, result.stderr);
+    assert.equal(result.error.error, status === 401 ? 'unauthorized' : mutation ? 'outcome_unknown' : 'server_error');
+    assert.equal(result.error.status, status);
+    assert.equal(result.stdout, '');
+    assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.calls[0].method, mutation ? 'PATCH' : 'GET');
   }
 });
 
