@@ -6,6 +6,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Home,
+  Inbox,
   Eye,
   Plus,
   FileText,
@@ -100,6 +101,7 @@ export default function SimplifiedSidebar({
   const { unreadCoclawCount } = useMention();
 
   const mainNav = [
+    { name: "Agent inbox", href: `${workspaceBase}/agent-inbox`, icon: Inbox, current: pathname.includes("/agent-inbox"), badge: 0 },
     { name: "Home", href: `${workspaceBase}/dashboard`, icon: Home, current: pathname.includes("/dashboard"), badge: 0 },
     { name: "Timeline", href: `${workspaceBase}/timeline`, icon: MessageSquare, current: pathname.includes("/timeline"), badge: 0 },
     { name: "Context", href: `${workspaceBase}/notes`, icon: FileText, current: pathname.includes("/notes"), badge: 0 },
