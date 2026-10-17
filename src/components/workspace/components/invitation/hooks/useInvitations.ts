@@ -88,7 +88,6 @@ export function useInviteMember(workspaceId: string) {
   });
 }
 
-// Hook to cancel an invitation
 export function useResendInvitation(workspaceId: string) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
