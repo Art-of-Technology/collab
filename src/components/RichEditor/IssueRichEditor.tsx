@@ -30,6 +30,12 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import DOMPurify from 'isomorphic-dompurify';
+import Table from '@tiptap/extension-table';
+import type { AnyExtension } from '@tiptap/core';
+import TableRow from '@tiptap/extension-table-row';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
+import { commentHtml } from '@/lib/comment-html';
 import { cn } from '@/lib/utils';
 import { useIssueActivities } from '@/components/issue/sections/activity/hooks/useIssueActivities';
 import { CustomAvatar } from '@/components/ui/custom-avatar';
@@ -137,13 +143,14 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   issueId,
 }, ref) => {
   const editorRef = useRef<RichEditorRef>(null);
+  const formattedValue = useMemo(() => commentHtml(value), [value]);
 
   // Expose the editor ref to parent component
   React.useImperativeHandle(ref, () => ({
     focus: () => editorRef.current?.focus(),
     getHTML: () => editorRef.current?.getHTML() || '',
     getText: () => editorRef.current?.getText() || '',
-    setContent: (content: string) => editorRef.current?.setContent(content),
+    setContent: (content: string) => editorRef.current?.setContent(commentHtml(content)),
     insertText: (text: string) => editorRef.current?.insertText(text),
     clear: () => editorRef.current?.clear(),
     getEditor: () => editorRef.current?.getEditor(),
@@ -186,19 +193,19 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
     try {
       if (typeof snapshot === 'string') {
         const trimmed = snapshot.trim();
-        if (trimmed.startsWith('<')) return trimmed;
+        if (trimmed.startsWith('<')) return commentHtml(trimmed);
         try {
           const asJson = JSON.parse(trimmed);
           // If consumers still pass JSON doc, render fallback to simple text
           return `<div>${DOMPurify.sanitize(JSON.stringify(asJson))}</div>`;
         } catch {
-          return `<p>${DOMPurify.sanitize(trimmed)}</p>`;
+          return commentHtml(trimmed);
         }
       }
       if (snapshot && typeof snapshot === 'object') {
         // If object, try to use displayNewValue/newValue if present
         const html = snapshot.displayNewValue || snapshot.newValue || snapshot.description;
-        if (typeof html === 'string') return html;
+        if (typeof html === 'string') return commentHtml(html);
       }
       return '<p>(unable to render)</p>';
     } catch {
@@ -683,7 +690,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   }, [isCollaborationEnabled, hasCollabDocumentId, collabDocumentId]);
 
   // Build extensions array
-  const additionalExtensions = [];
+  const additionalExtensions: AnyExtension[] = [Table, TableRow, TableCell, TableHeader];
 
   if (enableSlashCommands) {
     additionalExtensions.push(
@@ -762,7 +769,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
         autofocus={true}
         key={collabDocumentId ? `collab-${collabDocumentId}` : `nocollab-${issueId || 'editor'}`}
         ref={editorRef}
-        value={value}
+        value={formattedValue}
         onChange={onChange}
         placeholder={placeholder}
         className={className}
