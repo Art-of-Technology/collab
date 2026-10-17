@@ -224,9 +224,12 @@ async function main() {
   throw new CliError('pagination_limit', 'Page limit reached. Narrow the filters; no partial success was emitted.', 5);
 }
 
-try { process.stdout.write(JSON.stringify(await main()) + '\n'); }
-catch (error) {
-  const safe = error instanceof CliError ? error : new CliError('local_error', 'Command could not complete. Local or remote error details were omitted.', 1);
-  process.stderr.write(JSON.stringify({ error: safe.code, message: safe.message, ...safe.details }) + '\n');
-  process.exitCode = safe.exit;
+async function run() {
+  try { process.stdout.write(JSON.stringify(await main()) + '\n'); }
+  catch (error) {
+    const safe = error instanceof CliError ? error : new CliError('local_error', 'Command could not complete. Local or remote error details were omitted.', 1);
+    process.stderr.write(JSON.stringify({ error: safe.code, message: safe.message, ...safe.details }) + '\n');
+    process.exitCode = safe.exit;
+  }
 }
+void run();
