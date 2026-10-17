@@ -46,6 +46,13 @@ import { IssueActivitySection } from "./activity";
 <IssueActivitySection issueId={issueId} limit={50} />
 ```
 
+For description history, pass `descriptionOnly: true` to `useIssueActivities`.
+It sends `descriptionOnly=true` to `GET /api/issues/{issueId}/activities`, which
+filters description updates before applying `limit`. An optional `action` filter
+further narrows those results; ordinary activity requests remain unfiltered by
+description. Filtering before the limit prevents unrelated activity from hiding
+description versions.
+
 ## Design System
 
 - **Colors**: Subtle grays (`#c9d1d9`, `#7d8590`, `#666`) for text hierarchy

@@ -102,6 +102,11 @@ function CustomForm() {
 
 ## 🎯 Key Features
 
+For description formatting and version restoration, see
+[Issue descriptions](../../../README.md#issue-descriptions). Issue-description
+callers opt in with `isIssueDescription` on `IssueRichEditor`; the default is
+`false` because Notes also uses the component.
+
 ### Issue Types
 Supports all unified issue types with appropriate icons and colors:
 - 🎯 **Epic** - Purple, Target icon
@@ -274,7 +279,6 @@ import { IssueDetailContent } from "@/components/issue";
 - [ ] Real-time collaboration
 - [ ] Keyboard shortcuts
 - [ ] Drag-and-drop support
-- [ ] Rich text editing
 - [ ] File attachments
 - [ ] Issue relationships (blocks, relates to)
 - [ ] Custom fields support
@@ -289,4 +293,4 @@ When adding new features:
 3. Add proper TypeScript types
 4. Include loading and error states
 5. Write comprehensive tests
-6. Update this documentation 
+6. Update this documentation
