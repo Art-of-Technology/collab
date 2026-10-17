@@ -26,17 +26,19 @@ export async function sendEmail({
       body: JSON.stringify({ from, to: [to], subject, html, text: text ?? html.replace(/<[^>]*>/g, '') }),
       signal: AbortSignal.timeout(10_000),
     });
-    const result = await response.json().catch(() => null);
-    if (!response.ok || typeof result?.id !== 'string' || !result.id) {
+    if (!response.ok) {
       console.error('Resend email request failed', { status: response.status });
       return { success: false, error: 'The email service did not accept the message. Please retry from workspace invitations.' };
     }
-    return { success: true, messageId: result.id as string };
+    const result = await response.json();
+    if (typeof result?.id === 'string' && result.id.trim()) {
+      return { success: true, messageId: result.id };
+    }
   } catch {
     // A timeout can happen after acceptance; never resend automatically.
-    console.error('Resend email request could not be confirmed');
-    return { success: false, error: 'Email delivery could not be confirmed. Check the recipient inbox before retrying.' };
   }
+  console.error('Resend email request could not be confirmed');
+  return { success: false, error: 'Email delivery could not be confirmed. Check the recipient inbox before retrying.' };
 }
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character => ({

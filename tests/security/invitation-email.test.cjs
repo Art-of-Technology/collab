@@ -1,11 +1,11 @@
-const { assert, test, load } = require('./helpers.cjs');
+const { assert, test, load, readFileSync, resolve } = require('./helpers.cjs');
+const yaml = require('js-yaml');
 
 function fixture({ env = {}, response = new Response(JSON.stringify({ id: 'email-1' }), { status: 200 }), failure } = {}) {
   const calls = [];
   const logs = [];
   const api = load('src/lib/email.ts', {
     'server-only': {},
-    nodemailer: { default: { createTransport: () => ({ sendMail: async () => ({ messageId: 'old-smtp' }) }) } },
   }, {
     process: { env: { RESEND_API_KEY: 'test-resend-key', NEXT_PUBLIC_APP_URL: 'https://collab.example.test', ...env } },
     URL, AbortSignal,
@@ -40,17 +40,52 @@ test('missing credentials refuse delivery without contacting any provider', asyn
   assert.equal(typeof result.error, 'string');
 });
 
-test('provider rejection, malformed response and timeout never report success or leak provider details', async () => {
+test('Swarm service forwards the Resend key and leaves the default sender to the library', async () => {
+  const config = yaml.load(readFileSync(resolve(__dirname, '../../docker-compose.swarm.yml'), 'utf8'));
+  const environment = Object.fromEntries(config.services.collab.environment.map(entry => {
+    const separator = entry.indexOf('=');
+    return [entry.slice(0, separator), entry.slice(separator + 1)];
+  }));
+  assert.equal(environment.RESEND_API_KEY, '${RESEND_API_KEY}');
+  assert.equal(environment.EMAIL_FROM, '${EMAIL_FROM}');
+  const f = fixture({ env: { EMAIL_FROM: '' } });
+  const result = await f.sendEmail({ to: 'recipient@example.test', subject: 'Invite', html: '<p>Invite</p>' });
+  assert.equal(result.success, true);
+  assert.equal(JSON.parse(f.calls[0][1].body).from, 'Collab <collab@weezboo.com>');
+});
+
+test('unsuccessful headers report rejection without leaking provider details or retrying', async () => {
   for (const options of [
     { response: new Response(JSON.stringify({ message: 'private provider detail' }), { status: 403 }) },
     { response: new Response('not JSON', { status: 502 }) },
-    { response: new Response('{}', { status: 200 }) },
-    { failure: new Error('private provider detail') },
+    { response: new Response(JSON.stringify({ id: 'email-1' }), { status: 429 }) },
   ]) {
     const f = fixture(options);
     const result = await f.sendEmail({ to: 'recipient@example.test', subject: 'Invite', html: '<p>Invite</p>' });
     assert.equal(result.success, false);
-    assert.equal(typeof result.error, 'string');
+    assert.match(result.error, /did not accept/);
+    assert.doesNotMatch(JSON.stringify([result, f.logs]), /private provider detail|test-resend-key/);
+    assert.equal(f.calls.length, 1, 'no automatic resend after rejection');
+  }
+});
+
+test('interrupted and malformed successful responses remain uncertain without retrying', async () => {
+  for (const options of [
+    ...[new Error('private provider detail'), new DOMException('private provider detail', 'TimeoutError')].map(error => ({
+      response: new Response(new ReadableStream({ start(controller) { controller.error(error); } }), { status: 200 }),
+    })),
+    { response: new Response('private provider detail', { status: 200 }) },
+    { response: new Response(null, { status: 204 }) },
+    { response: new Response('{}', { status: 200 }) },
+    { response: new Response('null', { status: 200 }) },
+    ...[null, 123, {}, [], '', ' \t '].map(id => ({ response: new Response(JSON.stringify({ id }), { status: 200 }) })),
+    { failure: new Error('private provider detail') },
+    { failure: new DOMException('private provider detail', 'TimeoutError') },
+  ]) {
+    const f = fixture(options);
+    const result = await f.sendEmail({ to: 'recipient@example.test', subject: 'Invite', html: '<p>Invite</p>' });
+    assert.equal(result.success, false);
+    assert.equal(result.error, 'Email delivery could not be confirmed. Check the recipient inbox before retrying.');
     assert.doesNotMatch(JSON.stringify([result, f.logs]), /private provider detail|test-resend-key/);
     assert.equal(f.calls.length, 1, 'no automatic resend after an uncertain result');
   }
@@ -67,9 +102,15 @@ test('invitation uses a canonical acceptance link and escapes names in HTML', as
   assert.match(body.text, /https:\/\/collab.example.test\/workspace-invitation\/token%2Fwith%3Fcharacters/);
 });
 
-test('invitation endpoint preserves access checks and reports rejected delivery with a usable pending link', async () => {
-  for (const permitted of [false, true]) {
-    const f = fixture({ response: new Response('{"message":"private provider detail"}', { status: 403 }) });
+test('invitation endpoint preserves access checks and pending links for rejected or uncertain delivery', async () => {
+  for (const [permitted, providerResponse] of [
+    [false, new Response('{"id":"email-1"}', { status: 200 })],
+    [true, new Response('{"message":"private provider detail"}', { status: 403 })],
+    [true, new Response(new ReadableStream({ start(controller) { controller.error(new Error('private provider detail')); } }), { status: 200 })],
+    [true, new Response('private provider detail', { status: 200 })],
+    [true, new Response('{}', { status: 200 })],
+  ]) {
+    const f = fixture({ response: providerResponse });
     const writes = [];
     const { POST } = load('src/app/api/workspaces/[workspaceId]/invitations/route.ts', {
       'next/server': { NextResponse: { json: (body, init) => new Response(JSON.stringify(body), init) } },
@@ -95,7 +136,29 @@ test('invitation endpoint preserves access checks and reports rejected delivery 
       assert.equal(result.status, 'pending');
       assert.equal(result.token, 'invitation-token');
       assert.equal(typeof result.emailDetails.error, 'string');
+      if (providerResponse.ok) assert.match(result.emailDetails.error, /could not be confirmed/);
       assert.doesNotMatch(JSON.stringify(result), /private provider detail|test-resend-key/);
     }
+  }
+});
+
+test('create and resend notifications preserve uncertain delivery without triggering another request', () => {
+  const notifications = [];
+  const calls = [];
+  const hooks = load('src/components/workspace/components/invitation/hooks/useInvitations.ts', {
+    '@tanstack/react-query': { useQueryClient: () => ({ invalidateQueries() {} }), useMutation: options => options },
+    '@/hooks/use-toast': { useToast: () => ({ toast: notification => notifications.push(notification) }) },
+  }, { fetch: (...args) => calls.push(args) });
+  const error = 'Email delivery could not be confirmed. Check the recipient inbox before retrying.';
+  for (const [name, recipient] of [
+    ['useInviteMember', 'recipient@example.test'],
+    ['useResendInvitation', { email: 'recipient@example.test' }],
+  ]) {
+    hooks[name]('workspace').onSuccess({ emailSent: false, emailDetails: { error } }, recipient);
+    const notification = notifications.at(-1);
+    assert.match(notification.title, /email unconfirmed/);
+    assert.ok(notification.description.includes(error));
+    assert.doesNotMatch(notification.description, /couldn't send|email not sent/);
+    assert.equal(calls.length, 0);
   }
 });
