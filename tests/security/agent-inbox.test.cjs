@@ -7,15 +7,9 @@ const { JSDOM } = require('jsdom');
 const { commentHtml } = load('src/lib/comment-html.ts', {
   'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked'),
 });
-const { RichTextRenderer } = load('src/components/RichEditor/RichTextRenderer.tsx', {
-  react: { ...React, default: React }, 'react/jsx-runtime': require('react/jsx-runtime'),
-  '@/lib/utils': load('src/lib/utils.ts', { clsx: require('clsx'), 'tailwind-merge': require('tailwind-merge') }),
-  '@/context/WorkspaceContext': { useWorkspace: () => ({ currentWorkspace: { id: 'ws', slug: 'team' } }) },
-});
 const { AgentInboxView } = load('src/components/agents/AgentInboxView.tsx', {
   'react/jsx-runtime': require('react/jsx-runtime'),
   '@/lib/comment-html': { commentHtml },
-  '@/components/RichEditor/RichTextRenderer': { RichTextRenderer },
   'next/link': { default: ({ children, ...props }) => React.createElement('a', props, children) },
   '@/components/ui/button': { Button: ({ children }) => React.createElement('span', null, children) },
 });
@@ -84,4 +78,41 @@ test('inbox handoff details render Markdown structures and sanitize untrusted HT
   assert.equal(details.querySelector('a')?.getAttribute('href'), 'https://example.com/contract');
   assert.equal(details.querySelector('pre code')?.textContent.trim(), '{"eventName":"generation.succeeded"}');
   assert.equal(details.querySelectorAll('script,[onerror],[href^="javascript:"]').length, 0);
+});
+
+test('inbox SVG data images remain static images in every agent and queue view', () => {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.domain)</script></svg>';
+  const src = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  const contents = [`![Diagram](${src})`, `<img src="${src}" alt="Diagram" onclick="alert(1)" onload="alert(1)">`];
+  for (const selected of [undefined, 'worker-a']) {
+    for (const state of ['unseen', 'claimed']) {
+      const html = renderToStaticMarkup(React.createElement(AgentInboxView, {
+        workspace: { id: 'ws', slug: 'team' }, agents: [{ name: 'worker-a' }], selected, state, inbox: {
+          hasMore: false, items: contents.map((content, index) => ({
+            id: `handoff-${index}`, issue: { id: 'issue', issueKey: 'COF-45', title: 'Diagram' },
+            content, recipientNames: ['worker-a'], labelIds: [], status: state === 'claimed' ? 'claimed' : 'open',
+            createdAt: new Date('2026-10-17T00:00:00Z'),
+          })),
+        },
+      }));
+      const dom = new JSDOM(html);
+      try {
+        const details = dom.window.document.querySelectorAll('article details');
+        assert.equal(details.length, contents.length);
+        for (const detail of details) {
+          const images = detail.querySelectorAll('img');
+          assert.equal(images.length, 1);
+          assert.equal(images[0].getAttribute('src'), src);
+          assert.equal(images[0].getAttribute('alt'), 'Diagram');
+          assert.equal(images[0].closest('a,button,[role="button"]'), null);
+          assert.equal(detail.querySelectorAll('a,script,svg,iframe,object,embed').length, 0);
+          for (const element of detail.querySelectorAll('*')) {
+            assert.ok(element.getAttributeNames().every(name => !/^on/i.test(name)));
+          }
+        }
+      } finally {
+        dom.window.close();
+      }
+    }
+  }
 });
