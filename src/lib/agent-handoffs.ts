@@ -109,16 +109,40 @@ export async function sendHandoff(context: AppAuthContext, input: z.infer<typeof
   });
 }
 
-export async function agentInbox(context: InboxContext, query: z.infer<typeof inboxSchema>) {
-  const agent = await ownedAgent(prisma, context, query.agent);
-  const items = await prisma.agentHandoff.findMany({ where: { workspaceId: context.workspace.id, issue: issueScope(context),
-    AND: [{ OR: [{ recipientNames: { has: agent.name } }, { labelIds: { hasSome: agent.labelIds } }, { claimedById: agent.id }] }],
-    ...(query.state === 'claimed' ? { claimedById: agent.id, status: 'claimed' }
+function inboxMatch(agent: Agent, state: 'unseen' | 'claimed'): Prisma.AgentHandoffWhereInput {
+  return {
+    OR: [{ recipientNames: { has: agent.name } }, { labelIds: { hasSome: agent.labelIds } }, { claimedById: agent.id }],
+    ...(state === 'claimed' ? { claimedById: agent.id, status: 'claimed' }
       : { receipts: { none: { agentId: agent.id, seenAt: { not: null } } } }),
-  }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: query.limit + 1,
+  };
+}
+
+async function readInbox(context: InboxContext, matches: Prisma.AgentHandoffWhereInput[], limit: number) {
+  const items = await prisma.agentHandoff.findMany({ where: { workspaceId: context.workspace.id,
+    issue: issueScope(context), OR: matches,
+  }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: limit + 1,
   include: { issue: { select: { id: true, issueKey: true, title: true, projectId: true } },
     claimedBy: { select: { name: true } }, sender: { select: { name: true } } } });
-  return { items: items.slice(0, query.limit), hasMore: items.length > query.limit, agent: agent.name };
+  return { items: items.slice(0, limit), hasMore: items.length > limit };
+}
+
+export async function agentInbox(context: InboxContext, query: z.infer<typeof inboxSchema>) {
+  const agent = await ownedAgent(prisma, context, query.agent);
+  return { ...await readInbox(context, [inboxMatch(agent, query.state)], query.limit), agent: agent.name };
+}
+
+/** Read-only workspace monitoring; CLI ownership and mutation rules stay unchanged. */
+export async function workspaceAgentInbox(context: InboxContext, query: { agent?: string; state: 'unseen' | 'claimed'; limit: number }) {
+  const agents = await prisma.agentRegistration.findMany({ where: { workspaceId: context.workspace.id },
+    select: { id: true, name: true, userId: true, labelIds: true }, orderBy: { name: 'asc' } });
+  const selected = query.agent ? agents.filter(agent => agent.name === query.agent) : agents;
+  if (query.agent && selected.length === 0) throw new HandoffError('agent_not_found', 'Agent not found in this workspace', 404);
+  // Both the viewer and the recipient must still be allowed to read the issue.
+  // One OR query returns each handoff once, even when multiple agents receive it.
+  const inbox = await readInbox(context, selected.map(agent => ({
+    ...inboxMatch(agent, query.state), issue: issueScope({ ...context, user: { id: agent.userId } }),
+  })), Math.min(50, Math.max(1, query.limit)));
+  return { ...inbox, agents: agents.map(agent => ({ name: agent.name })) };
 }
 
 export async function getHandoff(context: AppAuthContext, agentName: string, id: string) {

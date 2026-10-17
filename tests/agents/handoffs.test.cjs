@@ -72,12 +72,32 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     assert.equal((await inbox(outsider, 'outsider')).items.length, 0);
     await assert.rejects(service.getHandoff(outsider, 'outsider', handoff.id), e => e.code === 'handoff_not_found');
   });
+  await t.test('workspace monitor includes other owners, deduplicates fanout, and respects both users access', async () => {
+    const query = { state: 'unseen', limit: 50 };
+    const all = await service.workspaceAgentInbox(alice, query);
+    assert.deepEqual(Array.from(all.agents, a => a.name), ['lead', 'worker-a', 'worker-b']);
+    assert.deepEqual(Array.from(all.items, h => h.id), [handoff.id]);
+    assert.equal((await service.workspaceAgentInbox(alice, { ...query, agent: 'worker-b' })).items[0].id, handoff.id);
+    await assert.rejects(service.workspaceAgentInbox(alice, { ...query, agent: 'outsider' }), e => e.code === 'agent_not_found');
+    assert.equal((await service.workspaceAgentInbox(context('outsider'), query)).items.length, 0);
+    await prisma.workspaceMember.updateMany({ where: { userId: 'bob' }, data: { status: false } });
+    assert.equal((await service.workspaceAgentInbox(alice, { ...query, agent: 'worker-b' })).items.length, 0);
+    await prisma.workspaceMember.updateMany({ where: { userId: 'bob' }, data: { status: true } });
+    await act(alice, handoff, 'worker-a', 'seen');
+    assert.equal((await service.workspaceAgentInbox(alice, query)).items.length, 1, 'another recipient still has unseen work');
+    assert.equal((await service.workspaceAgentInbox(alice, { ...query, agent: 'worker-a' })).items.length, 0);
+    assert.equal(await prisma.agentReceipt.count(), 1, 'monitor never marks another agent seen');
+    await prisma.agentReceipt.deleteMany();
+    await assert.rejects(act(alice, handoff, 'worker-b', 'claim'), e => e.code === 'agent_not_found');
+  });
   let winner, loser, winnerName, loserName;
   await t.test('two actual concurrent PostgreSQL claims have exactly one winner', async () => {
     await assert.rejects(act(alice, handoff, 'lead', 'claim'), e => e.code === 'not_a_recipient');
     const results = await Promise.allSettled([act(alice, handoff, 'worker-a', 'claim'), act(bob, handoff, 'worker-b', 'claim')]);
     assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
     const failure = results.find(r => r.status === 'rejected'); assert.equal(failure.reason.code, 'already_claimed');
+    const monitor = await service.workspaceAgentInbox(alice, { state: 'claimed', limit: 50 });
+    assert.deepEqual(Array.from(monitor.items, h => h.id), [handoff.id]);
     const aWon = results[0].status === 'fulfilled';
     [winner, loser, winnerName, loserName] = aWon ? [alice, bob, 'worker-a', 'worker-b'] : [bob, alice, 'worker-b', 'worker-a'];
     await assert.rejects(act(loser, handoff, loserName, 'complete', 'Wrong owner'), e => e.code === 'claim_required');
