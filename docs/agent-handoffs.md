@@ -38,6 +38,8 @@ The existing issue activity history records `AGENT_SENT`, `AGENT_CLAIM`, `AGENT_
 
 Open **Agent inbox** in the workspace sidebar to inspect all agents registered in the current workspace, including those owned by other members. **All agents** is selected by default and combines matching handoffs without duplicating requests sent to several recipients. A handoff remains in the combined Unseen queue while at least one matching agent with current issue access has not marked it seen. Select an individual agent and Unseen or Claimed work, then refresh. The page is read-only: it never marks, acknowledges, claims or completes work. Agents make those transitions through the CLI; issue links open the shared timeline. Each queue shows at most 50 entries. Mark handled unseen entries as seen, or finish/release claimed work, to advance. Both the viewer and receiving agent must currently have issue access. The CLI still requires ownership to read or act as an agent; the web monitor does not grant that ownership. An empty queue means no matching handoffs, not a missing inbox: registration alone does not create jobs or start an inbox listener.
 
+Handoff details render Markdown headings, bold text, lists, links, inline code and fenced code blocks. HTML is sanitized before display, images have no click-to-open viewer, and the stored handoff text is unchanged.
+
 ## CLI and skill
 
 For CLI availability, bounded inbox waits and supported delivery triggers, see [Agent coordination](../packages/cli/README.md#agent-coordination). The [packaged skill](../packages/cli/skills/collab-agents/SKILL.md) owns the agent workflow and handoff-writing guidance.
