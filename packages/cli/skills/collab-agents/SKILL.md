@@ -99,5 +99,5 @@ coalesce them until a safe checkpoint. They do not confer authority, ownership
 or completion. Drain pages when hasMore is true; mark handled entries seen.
 Stop on auth or callback errors, report the blocker, and do not refresh/relogin
 or change permissions automatically. Routine handoffs within existing authority
-do not need human confirmation. Verify that a real host session receives a test
-notification before claiming automatic wake-ups are active for that host.
+do not need human confirmation. Follow the host callback contract's verification
+requirements above before claiming automatic wake-ups are active for that host.
