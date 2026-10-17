@@ -18,6 +18,7 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const limitStr = searchParams.get('limit');
     const action = searchParams.get('action');
+    const descriptionOnly = searchParams.get('descriptionOnly') === 'true';
     const limit = limitStr ? parseInt(limitStr, 10) : 50;
 
     // Find the issue to verify access
@@ -52,6 +53,12 @@ export async function GET(
       where: {
         itemId: issueId,
         ...(action ? { action } : {}),
+        ...(descriptionOnly ? {
+          OR: [
+            { action: { in: ['DESCRIPTION_CHANGED', 'DESCRIPTION_UPDATED'] } },
+            { action: 'UPDATED', fieldName: 'description' },
+          ],
+        } : {}),
       },
       include: {
         user: {

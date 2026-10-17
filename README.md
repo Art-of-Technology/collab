@@ -286,6 +286,21 @@ Collab is designed to streamline internal communication and work tracking by off
   [project memory guide](docs/forge-project-memory.md) for drafting, approval
   and connection requirements.
 
+### Issue descriptions
+
+Issue descriptions loaded from the CLI or API render Markdown headings, lists,
+links, code blocks and tables in the rich editor, including when an external
+update arrives. Existing rich HTML, mentions and code remain supported; content
+is sanitized before rendering. Opening or previewing a description leaves its
+stored value unchanged; editing saves rich-editor HTML. Notes keep their existing
+editor behavior.
+
+Use **History** in the description toolbar to preview a version, then choose
+**Revert to this version** to restore it, including an empty description. History
+includes web, CLI and legacy description updates, with Markdown and table support
+in previews and restored content. It retrieves the latest 100 description updates,
+so newer unrelated activity does not displace them.
+
 ### Project overview
 
 Open `/{workspace}/dashboard`, choose a project and select **Show project**.

@@ -13,6 +13,11 @@ import { X, ArrowLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import DOMPurify from 'isomorphic-dompurify';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
+import { commentHtml } from '@/lib/comment-html';
 import { useToast } from '@/hooks/use-toast';
 import { useIssueActivities } from '@/components/issue/sections/activity/hooks/useIssueActivities';
 import { CustomAvatar } from '@/components/ui/custom-avatar';
@@ -40,15 +45,15 @@ export function EditorHistoryModal({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
-  // Activities (DESCRIPTION_UPDATED) via hook
   const { activities, loading: activitiesLoading, error: activitiesError } = useIssueActivities({
     issueId: issueId || '',
     limit: 100,
-    action: 'DESCRIPTION_UPDATED' as any,
+    descriptionOnly: true,
   });
 
   const htmlFromSnapshot = useCallback((snapshot: any) => {
     try {
+      if (snapshot === null) return '';
       if (typeof snapshot === 'string') {
         const trimmed = snapshot.trim();
         if (trimmed.startsWith('<')) return trimmed;
@@ -57,12 +62,12 @@ export function EditorHistoryModal({
           // If consumers still pass JSON doc, render fallback to simple text
           return `<div>${DOMPurify.sanitize(JSON.stringify(asJson))}</div>`;
         } catch {
-          return `<p>${DOMPurify.sanitize(trimmed)}</p>`;
+          return trimmed;
         }
       }
       if (snapshot && typeof snapshot === 'object') {
         // If object, try to use displayNewValue/newValue if present
-        const html = snapshot.displayNewValue || snapshot.newValue || snapshot.description;
+        const html = snapshot.displayNewValue ?? snapshot.newValue ?? snapshot.description;
         if (typeof html === 'string') return html;
       }
       return '<p>(unable to render)</p>';
@@ -75,8 +80,7 @@ export function EditorHistoryModal({
     setPreviewError(null);
     setPreviewLoading(true);
     try {
-      const content = entry?.content ?? entry?.details?.displayNewValue ?? entry?.details?.newValue;
-      const html = DOMPurify.sanitize(htmlFromSnapshot(content));
+      const html = commentHtml(htmlFromSnapshot(entry.content));
       setHistoryPreview({ id: String(entry.id), html, meta: entry });
     } catch (e: any) {
       setPreviewError(e?.message || 'Failed to load history entry');
@@ -167,6 +171,7 @@ export function EditorHistoryModal({
                   ) : (
                     <RichEditor
                       value={historyPreview.html}
+                      additionalExtensions={[Table, TableRow, TableCell, TableHeader]}
                       onChange={undefined}
                       placeholder={""}
                       className="w-full max-w-[24rem]"
@@ -233,7 +238,7 @@ export function EditorHistoryModal({
                         setSelectedEntryId(a.id);
                         openHistoryPreview({
                           id: a.id,
-                          content: a.details?.displayNewValue || a.details?.newValue || a.newValue,
+                          content: a.details?.displayNewValue ?? a.details?.newValue ?? a.newValue,
                           user: a.user,
                           actor: a.user?.name,
                           ts: new Date(a.createdAt).getTime(),
