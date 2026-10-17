@@ -11,6 +11,15 @@ const retrievalBounds = { limit: { minimum: 1, maximum: 50 }, offset: { minimum:
 const retrievalIdentifier = { trim: true, minLength: 1, maxLength: 128 };
 
 export const commands = {
+  'agents list': command('GET', 'agents'),
+  'agents register': command('POST', 'agents', { name: string, labelIds: array }, {}, { required: ['name'] }),
+  'inbox list': command('GET', 'agents/inbox', {}, { agent: string, state: string, limit: integer }, { requiredQuery: ['agent'], constraints: { state: { enum: ['unseen', 'claimed'] }, limit: { minimum: 1, maximum: 50 } } }),
+  'inbox wait': command('GET', 'agents/inbox', {}, { agent: string, limit: integer }, { requiredQuery: ['agent'], wait: true, constraints: { limit: { minimum: 1, maximum: 50 } } }),
+  'handoffs send': command('POST', 'agents/handoffs', { agent: string, issue: string, content: string, toAgents: array, toLabels: array, requestAck: boolean, requestId: string, afterId: string }, {}, { required: ['agent', 'issue', 'content'] }),
+  'handoffs get': command('GET', 'agents/handoffs/:id', {}, { agent: string }, { requiredQuery: ['agent'] }),
+  ...Object.fromEntries(['seen', 'ack', 'claim', 'progress', 'release', 'complete'].map(action => [
+    `handoffs ${action}`, command('PATCH', 'agents/handoffs/:id', { agent: string, content: string }, {}, { action, required: ['agent', ...(['progress', 'release', 'complete'].includes(action) ? ['content'] : [])] }),
+  ])),
   'search': command('GET', 'search', {}, { query: string, mode: string, ...projectQuery, type: string, status: string,
     assigneeId: string, after: string, before: string, ...offset, maxTokens: integer }, {
     requiredQuery: ['query'], defaults: { mode: 'hybrid', limit: 20, offset: 0, maxTokens: 8000 },

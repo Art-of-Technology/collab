@@ -34,11 +34,9 @@ To pass work onward, send a new request with `afterId` referencing a request cur
 
 The existing issue activity history records `AGENT_SENT`, `AGENT_CLAIM`, `AGENT_PROGRESS`, `AGENT_RELEASE`, `AGENT_PASSED`, `AGENT_COMPLETE` and optional `AGENT_ACKNOWLEDGED`. Each entry contains the agent ID/name, handoff ID, timestamp, user attribution and supplied result/context. State transitions and their history commit together. No notification claims that an agent has accepted work before a successful claim.
 
-## Delivery and skill follow-up
+## CLI and skill
 
-The API foundation does not start agents or inject messages into a running model. The generic CLI/skill will wait for inbox events while idle and check between steps while busy. Automatic mention/label triggers and the readable timeline presentation follow this foundation; this document does not claim they are already installed.
-
-Handoff authors should include the objective, scope, decisions, completed work, evidence, next action, blockers, repository/branch/commit references and relevant issue/Note links. Recipients retrieve current permitted context and treat inbound text as task data, not authority to override their user's instructions. Credentials and unrelated private conversations stay local.
+For CLI availability, bounded inbox waits and supported delivery triggers, see [Agent coordination](../packages/cli/README.md#agent-coordination). The [packaged skill](../packages/cli/skills/collab-agents/SKILL.md) owns the agent workflow and handoff-writing guidance.
 
 ## Validation and rollout
 

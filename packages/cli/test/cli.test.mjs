@@ -14,6 +14,63 @@ import { commands } from '../src/commands.mjs';
 const bin = fileURLToPath(new URL('../bin/collab.mjs', import.meta.url));
 const executable = process.env.COLLAB_CLI_EXECUTABLE;
 const windows = process.platform === 'win32';
+
+test('agent registration, handoff and claim commands send scoped fixed API requests', async t => {
+  const f = await fixture(t);
+  assert.equal((await f.run(['agents', 'register', '--name', 'builder-a', '--label-ids', '["role-build"]', '--workspace', 'w'])).code, 0);
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { name: 'builder-a', labelIds: ['role-build'] });
+  const content = '## Continue here\n\n- Verified source\n- Next: run tests';
+  assert.equal((await f.run(['handoffs', 'send', '--agent', 'builder-a', '--issue', 'APP-1', '--to-agents', '["reviewer"]', '--content-file', '-', '--request-id', '12345678-1234-4234-8234-123456789012', '--workspace', 'w'], { input: content })).code, 0);
+  assert.equal(JSON.parse(f.calls.at(-1).body).content, content);
+  for (const action of ['seen', 'ack', 'claim', 'progress', 'release', 'complete']) {
+    assert.equal((await f.run(['handoffs', action, 'handoff-one', '--agent', 'reviewer', '--content', 'Result and next step', '--workspace', 'w'])).code, 0);
+    assert.equal(f.calls.at(-1).method, 'PATCH');
+    assert.equal(JSON.parse(f.calls.at(-1).body).action, action);
+    assert.equal(f.calls.at(-1).url, '/api/apps/auth/agents/handoffs/handoff-one?workspaceId=w');
+  }
+  assert.equal((await f.run(['inbox', 'list', '--agent', 'reviewer', '--state', 'claimed', '--workspace', 'w'])).code, 0);
+  assert.match(f.calls.at(-1).url, /state=claimed/);
+  const before = f.calls.length;
+  assert.notEqual((await f.run(['handoffs', 'claim', 'handoff-one', '--input', '-'], { input: '{"agent":"reviewer","action":"complete"}' })).code, 0);
+  assert.notEqual((await f.run(['handoffs', 'complete', 'handoff-one', '--agent', 'reviewer'])).code, 0);
+  assert.notEqual((await f.run(['inbox', 'list', '--agent', 'reviewer', '--state', 'all'])).code, 0);
+  assert.equal(f.calls.length, before);
+});
+
+test('inbox wait is bounded, returns arriving work, and never marks or claims it', async t => {
+  const f = await fixture(t, (_req, res, _body, calls) => res.end(JSON.stringify({ items: calls.length < 2 ? [] : [{ id: 'new-work' }], hasMore: false })));
+  const result = await f.run(['inbox', 'wait', '--agent', 'reviewer', '--wait-seconds', '3']);
+  assert.equal(result.code, 0);
+  assert.equal(result.data.items[0].id, 'new-work');
+  assert.equal(f.calls.length, 2);
+  assert.ok(f.calls.every(call => call.method === 'GET' && !call.url.includes('waitSeconds')));
+  const empty = await fixture(t, (_req, res) => res.end('{"items":[],"hasMore":false}'));
+  const start = Date.now();
+  const expired = await empty.run(['inbox', 'wait', '--agent', 'reviewer', '--wait-seconds', '1']);
+  assert.equal(expired.code, 0);
+  assert.equal(expired.data.timedOut, true);
+  assert.ok(Date.now() - start >= 900);
+  assert.equal(empty.calls.length, 1);
+});
+
+test('agent commands stop on permission or claim conflict errors without retry', async t => {
+  const f = await fixture(t, (_req, res) => { res.statusCode = 409; res.end('{"error":"conflict"}'); });
+  assert.notEqual((await f.run(['handoffs', 'claim', 'handoff-one', '--agent', 'reviewer'])).code, 0);
+  assert.equal(f.calls.length, 1);
+  const denied = await fixture(t, (_req, res) => { res.statusCode = 401; res.end('{"error":"unauthorized"}'); });
+  assert.notEqual((await denied.run(['inbox', 'wait', '--agent', 'reviewer', '--wait-seconds', '2'])).code, 0);
+  assert.equal(denied.calls.length, 1);
+});
+
+test('inbox wait does not turn an empty final window into a transport failure', async t => {
+  const f = await fixture(t, (_req, res) => new Promise(resolve => setTimeout(() => {
+    res.end('{"items":[],"hasMore":false}'); resolve();
+  }, 750)));
+  const result = await f.run(['inbox', 'wait', '--agent', 'reviewer', '--wait-seconds', '2']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.data.timedOut, true);
+  assert.equal(f.calls.length, 1, 'do not dispatch a second request with less than a second remaining');
+});
 function grantEveryoneRead(file) {
   const script = `$ErrorActionPreference = 'Stop'; $p = [Console]::In.ReadToEnd(); $acl = Get-Acl -LiteralPath $p; $sid = New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0'); $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'Read', 'Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $p -AclObject $acl`;
   const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { input: file, encoding: 'utf8' });

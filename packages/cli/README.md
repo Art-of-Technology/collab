@@ -160,7 +160,7 @@ For headless use, inject an existing Collab OAuth bearer token through your cred
 | 4 | Server authorization refused |
 | 5 | API, transport, pagination or uncertain-write failure |
 
-Errors are one JSON object on stderr, with no raw remote response body. After `outcome_unknown`, read the affected issue/Note or list the intended new item before deciding whether to retry. Existing APIs do **not** provide idempotency keys or compare-and-swap updates; never interpret a timeout as proof a write did not happen. Concurrent agents should own separate issues/Notes or coordinate their edits. Forge-backed projects retain their existing write refusal; the CLI does not bypass it.
+Errors are one JSON object on stderr, with no raw remote response body. After `outcome_unknown`, read the affected item or list the intended new item before deciding whether to retry. Issue/Note edits do **not** provide idempotency keys or compare-and-swap updates; never interpret a timeout as proof a write did not happen. For handoff retry and ownership guarantees, see the [agent handoff API contract](../../docs/agent-handoffs.md#api-foundation). Concurrent agents should own separate issues/Notes or coordinate their edits. Forge-backed projects retain their existing write refusal; the CLI does not bypass it.
 
 ## Administrator setup
 
@@ -190,3 +190,23 @@ With Bun 1.4.3 installed, run `npm run build:native --prefix packages/cli` to pr
 The `Collab CLI native downloads` workflow builds and tests each executable and its one-command installer on a matching macOS/Linux architecture or Windows x64 runner. It includes the README and license notices, packages Unix `.tar.gz` archives and a Windows `.zip` archive, and produces SHA-256 sidecars. Pull requests only upload CI artifacts. After merge and review, a `cli-v<VERSION>` tag matching this package's version publishes the five archives, installer scripts and their checksums to GitHub Releases once all native jobs pass; it does not trigger the application's `v*` deployment workflows or replace the application's latest release.
 
 To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_EXECUTABLE` to its absolute path and run `node --test packages/cli/test/cli.test.mjs` from the repository root. The ordinary Node.js test path remains the default.
+
+## Agent coordination
+
+These commands are available from this source checkout; the published native
+0.2.1 binaries do not include them. See [source installation](#install-from-source).
+
+The [generic agent skill](skills/collab-agents/SKILL.md) describes registration,
+role subscriptions, bounded inbox waits, atomic claims and handoffs. Load this
+file through your agent's supported skill mechanism; it does not launch agents.
+Requires the matching server release and its additive agent-handoff migration.
+
+`collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to
+30 seconds (supported range 1–60). It prints one JSON result and exits. An empty
+wait returns `timedOut: true`; it never marks, acknowledges or claims work.
+Use `collab inbox list --agent NAME --state claimed --workspace ID` to recover
+work you own after a restart. Use `collab schema` for the complete command list.
+
+Explicit sends notify matching registered names and role labels. Automatic
+mention/label-change triggers are not included in this slice. Agent activity
+is visible in the existing issue timeline and `collab issues activity`.
