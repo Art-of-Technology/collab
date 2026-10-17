@@ -113,14 +113,12 @@ try {
     Copy-Item -LiteralPath (Join-Path $env:COLLAB_NATIVE_DOWNLOADS "$archive.sha256") -Destination (Join-Path $downloads "$archive.sha256")
     irm https://collab.weez.boo/install.ps1 | iex
     if ($environment.GetValueKind('Path') -ne [Microsoft.Win32.RegistryValueKind]::String -or $environment.GetValue('Path') -cne $expectedRaw) { throw 'REG_SZ PATH was changed' }
-    # Exercise Node's file creation as well as the compiled Bun executable.
-    node --test (Join-Path $root 'packages/cli/test/cli.test.mjs')
-    if ($LASTEXITCODE -ne 0) { throw 'Node Windows CLI integration tests failed' }
     # Run the full authentication and API suite against the installed executable.
+    Write-Host "INSTALLED NATIVE ($Platform): full CLI/auth/ACL suite against $expected"
     $env:COLLAB_CLI_EXECUTABLE = $expected
     node --test (Join-Path $root 'packages/cli/test/cli.test.mjs')
     if ($LASTEXITCODE -ne 0) { throw 'Installed Windows CLI integration tests failed' }
-    Write-Host 'PASS: PowerShell one-command installation, immediate PATH, repeat install, checksum refusal, full CLI suite'
+    Write-Host 'PASS: PowerShell one-command installation, immediate PATH, repeat install, checksum refusal, full installed-native CLI/auth/ACL suite'
 } finally {
     $env:PROCESSOR_ARCHITECTURE = $oldArchitecture
     $env:PROCESSOR_ARCHITEW6432 = $oldWowArchitecture

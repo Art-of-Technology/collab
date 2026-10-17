@@ -197,6 +197,8 @@ For Windows x86, use a Windows build host with Bun, Node.js and npm configured a
 
 The `Collab CLI native downloads` workflow builds and tests each executable and its one-command installer on a matching macOS/Linux architecture or Windows x64/ARM64 runner. Windows x86 runs under WoW64 with 32-bit PowerShell in CI, not on a physical 32-bit Windows OS. It includes the README and license notices, packages Unix `.tar.gz` archives and Windows `.zip` archives, and produces SHA-256 sidecars. Pull requests only upload CI artifacts. After merge and review, a `cli-v<VERSION>` tag matching this package's version publishes the seven archives, installer scripts and their checksums to GitHub Releases once all native jobs pass; it does not trigger the application's `v*` deployment workflows or replace the application's latest release.
 
+Windows source-Node CLI/auth/ACL coverage runs once, in the x64 job, to avoid repeating it before native acceptance within each job's 15-minute limit. Every Windows architecture (x64, x86 and ARM64) still runs the complete CLI/auth/ACL suite against its installed native executable, plus installer selection, PATH persistence, repeat installation, checksum refusal and PE architecture checks. Logs label source-Node and installed-native coverage separately; all Windows jobs, including complete ARM64 native acceptance, must pass before merge or publication.
+
 To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_EXECUTABLE` to its absolute path and run `node --test packages/cli/test/cli.test.mjs` from the repository root. The ordinary Node.js test path remains the default.
 
 ## Agent coordination
