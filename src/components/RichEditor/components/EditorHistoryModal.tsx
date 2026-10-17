@@ -45,14 +45,11 @@ export function EditorHistoryModal({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
-  const { activities: issueActivities, loading: activitiesLoading, error: activitiesError } = useIssueActivities({
+  const { activities, loading: activitiesLoading, error: activitiesError } = useIssueActivities({
     issueId: issueId || '',
     limit: 100,
+    descriptionOnly: true,
   });
-  const activities = issueActivities.filter(activity =>
-    activity.action === 'DESCRIPTION_UPDATED' ||
-    (activity.action === 'UPDATED' && activity.fieldName === 'description')
-  );
 
   const htmlFromSnapshot = useCallback((snapshot: any) => {
     try {

@@ -8,6 +8,7 @@ interface UseIssueActivitiesOptions {
   issueId: string;
   limit?: number;
   action?: ActivityAction;
+  descriptionOnly?: boolean;
 }
 
 interface UseIssueActivitiesReturn {
@@ -20,7 +21,8 @@ interface UseIssueActivitiesReturn {
 export function useIssueActivities({ 
   issueId, 
   limit = 50,
-  action
+  action,
+  descriptionOnly = false
 }: UseIssueActivitiesOptions): UseIssueActivitiesReturn {
   const [activities, setActivities] = useState<IssueActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +38,9 @@ export function useIssueActivities({
       url.searchParams.set('limit', String(limit));
       if (action) {
         url.searchParams.set('action', action);
+      }
+      if (descriptionOnly) {
+        url.searchParams.set('descriptionOnly', 'true');
       }
       const response = await fetch(url.toString());
 
@@ -61,7 +66,7 @@ export function useIssueActivities({
     if (issueId) {
       fetchActivities();
     }
-  }, [issueId, limit]);
+  }, [issueId, limit, action, descriptionOnly]);
 
   return {
     activities,

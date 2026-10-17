@@ -1,4 +1,4 @@
-const { assert, test, load } = require('./helpers.cjs');
+const { assert, test, load, matches } = require('./helpers.cjs');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const { JSDOM } = require('jsdom');
@@ -11,7 +11,30 @@ const { MentionExtension } = load('src/components/RichEditor/extensions/mention-
   '@tiptap/core': require('@tiptap/core'),
 });
 
-function dependencies(RichEditor, activities = []) {
+function activityApi(activities, {
+  session = { user: { id: 'reader' } },
+  issue = { id: 'issue', workspaceId: 'workspace' },
+  member = { userId: 'reader', workspaceId: 'workspace' },
+} = {}) {
+  const rows = activities.map(row => ({ itemId: 'issue', ...row,
+    createdAt: new Date(row.createdAt), details: row.details ? JSON.stringify(row.details) : null,
+  }));
+  const { GET } = load('src/app/api/issues/[issueId]/activities/route.ts', {
+    'next/server': { NextResponse: Response },
+    '@/lib/auth': { getAuthSession: async () => session },
+    '@/lib/prisma': { prisma: {
+      issue: { findUnique: async ({ where }) => issue?.id === where.id ? issue : null },
+      workspaceMember: { findUnique: async ({ where: { userId_workspaceId: key } }) =>
+        member?.userId === key.userId && member?.workspaceId === key.workspaceId ? member : null },
+      issueActivity: { findMany: async ({ where, orderBy, take }) => rows.filter(row => matches(row, where))
+        .sort((a, b) => orderBy.createdAt === 'desc' ? b.createdAt - a.createdAt : a.createdAt - b.createdAt)
+        .slice(0, take) },
+    } },
+  }, { URL, console });
+  return url => GET(new Request(url), { params: Promise.resolve({ issueId: new URL(url).pathname.split('/')[3] }) });
+}
+
+function dependencies(RichEditor, activities = [], globals = {}) {
   const empty = () => null;
   const ui = ({ children }) => React.createElement('div', null, children);
   const deps = {
@@ -28,9 +51,10 @@ function dependencies(RichEditor, activities = []) {
     '@/components/ui/scroll-area': { ScrollArea: ui },
     'isomorphic-dompurify': { default: require('isomorphic-dompurify') },
     '@/lib/comment-html': { commentHtml }, '@/lib/utils': { cn: () => '' },
-    '@/components/issue/sections/activity/hooks/useIssueActivities': {
-      useIssueActivities: ({ action }) => ({ activities: activities.filter(a => !action || a.action === action) }),
-    },
+    '@/components/issue/sections/activity/hooks/useIssueActivities': load('src/components/issue/sections/activity/hooks/useIssueActivities.ts', {
+      react: React,
+      '../utils/activityHelpers': load('src/components/issue/sections/activity/utils/activityHelpers.ts'),
+    }, { window: globals.window, URL, fetch: activityApi(activities), console }),
     '@/components/ui/custom-avatar': { CustomAvatar: empty }, 'date-fns': require('date-fns'),
     '@/hooks/use-toast': { useToast: () => ({ toast: empty }) }, '@/lib/featureFlags': { IS_COLLABORATIVE_EDITING_ENABLED: false },
   };
@@ -57,7 +81,7 @@ function renderDescription(value, isIssueDescription = true) {
 }
 
 async function withEditor(run, { activities = [], isIssueDescription, value = '## Stored' } = {}) {
-  const dom = new JSDOM('<div id="root"></div>');
+  const dom = new JSDOM('<div id="root"></div>', { url: 'https://fixture.invalid' });
   const names = ['window', 'document', 'IS_REACT_ACT_ENVIRONMENT'];
   const original = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
   for (const [name, value] of Object.entries({ window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true })) {
@@ -73,8 +97,8 @@ async function withEditor(run, { activities = [], isIssueDescription, value = '#
     React.useImperativeHandle(childRef, () => ({ setContent: editor.commands.setContent, getEditor: () => editor }), []);
     return null;
   });
-  const deps = dependencies(RichEditor, activities);
   const globals = { window: dom.window, document: dom.window.document, setTimeout, clearTimeout };
+  const deps = dependencies(RichEditor, activities, globals);
   const { IssueRichEditor } = load('src/components/RichEditor/IssueRichEditor.tsx', deps, globals);
   const { EditorHistoryModal } = load('src/components/RichEditor/components/EditorHistoryModal.tsx', deps, globals);
   const props = { value, isIssueDescription, onChange: html => state.changes.push(html), ref };
@@ -105,6 +129,19 @@ async function withEditor(run, { activities = [], isIssueDescription, value = '#
 
 function activity(id, fields) {
   return { id, action: 'DESCRIPTION_UPDATED', createdAt: '2026-10-17T12:00:00Z', user: { id, name: id }, ...fields };
+}
+
+async function webDescription(value) {
+  let saved;
+  const { compareObjects, trackFieldChanges } = load('src/lib/board-item-activity-service.ts', {
+    '@/lib/prisma': { prisma: { issueActivity: { create: async ({ data }) => { saved = data; return data; } } } },
+  });
+  await trackFieldChanges({ itemType: 'ISSUE', itemId: 'issue', userId: 'web-user', workspaceId: 'workspace',
+    changes: compareObjects({ description: 'Old description' }, { description: value }, ['description']),
+  });
+  assert.equal(saved.action, 'DESCRIPTION_CHANGED');
+  assert.equal(saved.newValue, value);
+  return activity('Web', saved);
 }
 
 const markdown = '## Handoff\n\n**Ready** for [review](https://example.com)\n\n- First\n- Second\n\n```sh\ncollab issues get CLB-1\n```\n\n| Agent | State |\n| --- | --- |\n| Navy | Done |';
@@ -167,8 +204,9 @@ test('Notes opt out of Markdown conversion and table support for initial, extern
   });
 });
 
-test('reachable history includes current and legacy descriptions and restores formatted tables', async () => {
+test('history restores web, CLI and legacy descriptions despite over 100 newer unrelated activities', async () => {
   const entries = [
+    await webDescription(commentHtml(markdown)),
     activity('CLI', { action: 'UPDATED', fieldName: 'description', newValue: markdown }),
     activity('Legacy display', { details: { displayNewValue: markdown, newValue: 'older' } }),
     activity('Legacy details', { details: { newValue: markdown } }),
@@ -188,9 +226,41 @@ test('reachable history includes current and legacy descriptions and restores fo
     assert.equal(state.closed, entries.length);
     assert.deepEqual(state.changes, []);
   }, { isIssueDescription: true, activities: [...entries,
-    activity('Title', { action: 'UPDATED', fieldName: 'title', newValue: markdown }),
-    activity('Created', { action: 'CREATED', fieldName: 'description', newValue: markdown }),
+    ...Array.from({ length: 120 }, (_, i) => activity(`Title ${i}`, {
+      action: i % 2 ? 'UPDATED' : 'TITLE_CHANGED', fieldName: 'title', newValue: 'New title', createdAt: '2026-10-18T12:00:00Z',
+    })),
+    activity('Created', { action: 'CREATED', fieldName: 'description', newValue: markdown, createdAt: '2026-10-18T12:00:00Z' }),
+    activity('Foreign issue', { action: 'DESCRIPTION_CHANGED', itemId: 'other-issue', newValue: markdown, createdAt: '2026-10-18T12:00:00Z' }),
   ] });
+});
+
+test('description activity API applies its scope before the limit and retains ordinary query behavior', async () => {
+  const descriptions = Array.from({ length: 105 }, (_, i) => activity(`Description ${i}`, {
+    action: ['DESCRIPTION_CHANGED', 'DESCRIPTION_UPDATED', 'UPDATED'][i % 3],
+    ...(i % 3 === 2 ? { fieldName: 'description' } : {}), newValue: markdown,
+    createdAt: new Date(Date.UTC(2026, 9, 17, 12, 0, 105 - i)).toISOString(),
+  }));
+  const title = activity('Title', { action: 'UPDATED', fieldName: 'title', createdAt: '2026-10-18T12:00:00Z' });
+  const api = activityApi([title, ...descriptions]);
+  const query = async params => {
+    const response = await api(`https://fixture.invalid/api/issues/issue/activities?${params}`);
+    assert.equal(response.status, 200);
+    return (await response.json()).map(row => row.id);
+  };
+  assert.deepEqual(await query('descriptionOnly=true&limit=100'), descriptions.slice(0, 100).map(row => row.id));
+  assert.deepEqual(await query(''), [title, ...descriptions].slice(0, 50).map(row => row.id));
+  assert.deepEqual(await query('descriptionOnly=false&limit=1'), [title.id]);
+  assert.deepEqual(await query('action=DESCRIPTION_UPDATED&limit=2'), descriptions.filter(row => row.action === 'DESCRIPTION_UPDATED').slice(0, 2).map(row => row.id));
+  assert.deepEqual(await query('action=UPDATED&descriptionOnly=true&limit=2'), descriptions.filter(row => row.action === 'UPDATED').slice(0, 2).map(row => row.id));
+});
+
+test('description activity queries preserve session, issue and workspace access checks', async () => {
+  for (const [access, status] of [[{ session: null }, 401], [{ issue: null }, 404], [{ member: null }, 403]]) {
+    const api = activityApi([activity('Private', { newValue: markdown })], access);
+    const response = await api('https://fixture.invalid/api/issues/issue/activities?descriptionOnly=true&limit=100');
+    assert.equal(response.status, status);
+    assert.equal(typeof (await response.json()).error, 'string');
+  }
 });
 
 test('history sanitizes previews and both restore interfaces while preserving rich content', async () => {
