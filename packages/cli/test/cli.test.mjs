@@ -173,14 +173,18 @@ test('inbox watch preserves received HTTP refusals when cancellation interrupts 
 });
 
 test('adapter failure wins over cancellation between natural exit and closure', async t => {
-  for (const cancelAt of ['exit', 'close']) {
-    await t.test(cancelAt, async t => {
+  for (const { code, exitSignal, action } of [
+    { code: 7, exitSignal: null, action: 'process.exit(7)' },
+    { code: null, exitSignal: 'SIGTERM', action: 'process.kill(process.pid, "SIGTERM")' },
+  ]) for (const cancelAt of ['exit', 'close']) {
+    await t.test(`${exitSignal || code}, ${cancelAt}`, { skip: windows && exitSignal !== null }, async t => {
       const controller = new AbortController();
       const emit = ChildProcess.prototype.emit;
       let closed = false;
       t.mock.method(ChildProcess.prototype, 'emit', function(event, ...args) {
         if (event === cancelAt) {
-          assert.equal(args[0], 7);
+          assert.equal(args[0], code);
+          assert.equal(args[1], exitSignal);
           controller.abort();
         }
         if (event === 'close') closed = true;
@@ -188,7 +192,7 @@ test('adapter failure wins over cancellation between natural exit and closure', 
       });
       await assert.rejects(watchInbox({
         read: async () => ({ items: [{ id: 'work', status: 'open' }], hasMore: false }),
-        callback: process.execPath, callbackArgs: ['-e', 'process.stdin.resume();process.stdin.on("end",()=>process.exit(7))'],
+        callback: process.execPath, callbackArgs: ['-e', `process.stdin.resume();process.stdin.on("end",()=>${action})`],
         agent: 'worker', workspaceId: 'w', origin: 'http://localhost', durationMs: 10000, intervalMs: 1000,
         callbackTimeoutMs: 5000, signal: controller.signal,
       }), { code: 'wake_callback_failed' });

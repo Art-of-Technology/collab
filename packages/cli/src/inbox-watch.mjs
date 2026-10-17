@@ -18,10 +18,10 @@ export function deliverWake(callback, args, event, timeout, signal) {
     signal?.addEventListener('abort', cancel, { once: true });
     child.on('error', () => { error ||= failure; });
     child.stdin.on('error', () => { error ||= failure; });
-    child.on('close', code => {
+    child.on('close', (code, exitSignal) => {
       clearTimeout(timer);
       signal?.removeEventListener('abort', cancel);
-      if (code !== null && code !== 0) error = failure;
+      if ((code !== null && code !== 0) || (exitSignal && (exitSignal !== 'SIGKILL' || !child.killed))) error = failure;
       if (error || code !== 0) reject(error || failure);
       else resolve();
     });
