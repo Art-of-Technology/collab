@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { commentHtml } from '@/lib/comment-html';
 import type { workspaceAgentInbox } from '@/lib/agent-handoffs';
 
 type Props = {
@@ -48,7 +49,10 @@ export function AgentInboxView({ workspace, agents, selected, state, inbox }: Pr
         <p className="text-sm text-muted-foreground">From {item.sender?.name || 'System'}{item.claimedBy ? ` · Claimed by ${item.claimedBy.name}` : ''}{item.requestAck ? ' · ACK requested' : ''}</p>
         <p className="text-sm text-muted-foreground">To {item.recipientNames.length ? item.recipientNames.join(", ") : "label subscribers"}{item.labelIds.length > 0 && item.recipientNames.length > 0 ? " and label subscribers" : ""}</p>
         <details><summary className="cursor-pointer text-sm">Handoff details</summary>
-          <p className="mt-3 whitespace-pre-wrap break-words text-sm">{item.content}</p>
+          <div
+            className="prose prose-sm dark:prose-invert mt-3 min-w-0 max-w-none break-words text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-a:text-primary prose-code:text-foreground prose-pre:bg-muted prose-pre:text-foreground prose-ul:text-foreground prose-ol:text-foreground [overflow-wrap:anywhere] [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
+            dangerouslySetInnerHTML={{ __html: commentHtml(item.content) }}
+          />
           <p className="mt-3 break-all font-mono text-xs text-muted-foreground">{item.id}</p>
         </details>
         <time className="block text-xs text-muted-foreground" dateTime={item.createdAt.toISOString()}>{item.createdAt.toISOString()}</time>
