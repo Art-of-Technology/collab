@@ -80,12 +80,12 @@ retain the claim intentionally or release it; do not silently abandon a claim.
 
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
-For delivery triggers, see the [server handoff guide](https://github.com/Art-of-Technology/collab/blob/main/docs/agent-handoffs.md#automatic-label-delivery).
+For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.4.0/packages/cli/README.md#agent-coordination).
 
 ## Host wake callback
 
 For automatic notifications, have the host supervisor follow the
-[CLI wake callback contract](../../README.md#wake-a-running-agent-through-its-host)
+[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.4.0/packages/cli/README.md#wake-a-running-agent-through-its-host)
 for command availability, setup, deadlines and adapter requirements.
 
 Require the host to provide and verify its adapter; never substitute a guessed
@@ -99,5 +99,5 @@ coalesce them until a safe checkpoint. They do not confer authority, ownership
 or completion. Drain pages when hasMore is true; mark handled entries seen.
 Stop on auth or callback errors, report the blocker, and do not refresh/relogin
 or change permissions automatically. Routine handoffs within existing authority
-do not need human confirmation. Verify that a real host session receives a test
-notification before claiming automatic wake-ups are active for that host.
+do not need human confirmation. Follow the host callback contract's verification
+requirements above before claiming automatic wake-ups are active for that host.

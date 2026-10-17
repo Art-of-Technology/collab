@@ -20,7 +20,7 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), or Windows x64 with PowerShell 5.1+. Alpine/musl and native Windows ARM64 are not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-[CLI 0.3.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.3.0) are hosted on GitHub. You can inspect `install.sh` or `install.ps1` there before running them. Archives and SHA-256 sidecars are also available for manual downloads.
+[CLI 0.4.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.4.0) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
 
 Version 0.2.1 fixes Windows login failing with `unsafe_credentials` after browser approval. Run the installer again to update; existing credentials are preserved. The native runtime includes the Windows subprocess timeout fix, and credential ownership/ACL checks remain enforced.
 
@@ -176,6 +176,10 @@ The apply operation transactionally creates only the dedicated `collab-cli` syst
 
 ## Validation and release
 
+CLI 0.4.0 includes the reviewed and merged automatic label-handoff and host-callback implementations. The final tag must contain both implementations.
+
+Merge release source to `main` before publishing `cli-v0.4.0`; the native workflow requires the tagged commit to be an ancestor of `main`. The release owner must verify all 14 public GitHub release assets (five archives, two tagged installer scripts and their SHA-256 sidecars) before the sole app deployment owner deploys.
+
 ```sh
 npm test --prefix packages/cli
 npm pack ./packages/cli
@@ -193,12 +197,12 @@ To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_
 
 ## Agent coordination
 
-Registration, inbox list/wait and handoff commands are included in CLI 0.3.0. Run the one-command installer again to update; existing credentials are preserved. Version 0.2.1 does not include them. For `inbox watch` availability, see [Wake a running agent through its host](#wake-a-running-agent-through-its-host).
+These commands are included in CLI 0.4.0. Run the one-command installer again to update; existing credentials are preserved. Version 0.2.1 does not include them.
 
 The [generic agent skill](skills/collab-agents/SKILL.md) describes registration,
 role subscriptions, bounded inbox waits, atomic claims and handoffs. Load this
 file through your agent's supported skill mechanism; it does not launch agents.
-Native users can download the [versioned SKILL.md](https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v0.3.0/packages/cli/skills/collab-agents/SKILL.md).
+Native users can download the [versioned SKILL.md](https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v0.4.0/packages/cli/skills/collab-agents/SKILL.md).
 Requires the matching server release and its additive agent-handoff migration.
 
 `collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to
@@ -212,10 +216,8 @@ Agent activity is visible in the existing issue timeline and `collab issues acti
 
 ### Wake a running agent through its host
 
-`inbox watch` is a source-stage addition: use a reviewed checkout via
-[source installation](#install-from-source). The published CLI 0.3.0 native
-downloads do not include it; native publication is a separate release after the
-reviewed merge. Source-stage checks do not establish live host delivery.
+`inbox watch` is included in CLI 0.4.0. Installing it does not establish live
+host delivery; each host must supply and verify its adapter.
 
 The skill supplies coordination instructions; it cannot interrupt a model. A host
 adapter can receive automatic wake requests with `inbox watch`:
@@ -264,8 +266,9 @@ adapter is trusted local code running as your user, not a sandbox.
 Notifications are coalesced for identical queues, with a reminder every minute
 while work remains. Restarting can repeat them; `deliveryId` is stable for the
 same queue snapshot, and handoff IDs are the work identity. Callbacks are wake
-requests, **not proof the model resumed**. Each host must verify its adapter once
-with a test handoff. Collab never starts a stopped agent.
+requests, **not proof the model resumed**. Each host must verify delivery into a
+real agent session and the model's response with a test handoff before calling that
+host connected. Collab never starts a stopped agent.
 
 Receiving an event must cause the agent to recover claimed work, drain unseen
 entries, and claim before acting. Delivery never marks work seen or claims it.
