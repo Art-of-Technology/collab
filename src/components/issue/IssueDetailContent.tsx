@@ -1244,6 +1244,7 @@ export function IssueDetailContent({
               <div className="w-full relative">
 
                 <IssueRichEditor
+                  isIssueDescription
                   ref={editorRef}
                   value={description}
                   onChange={handleDescriptionChange}

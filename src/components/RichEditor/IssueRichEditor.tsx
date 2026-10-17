@@ -52,6 +52,7 @@ interface IssueRichEditorProps {
   maxHeight?: string;
   collabDocumentId?: string;
   issueId?: string;
+  isIssueDescription?: boolean;
 
   // Feature flags
   enableSlashCommands?: boolean;
@@ -141,20 +142,21 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   onKeyDown,
   collabDocumentId,
   issueId,
+  isIssueDescription = false,
 }, ref) => {
   const editorRef = useRef<RichEditorRef>(null);
-  const formattedValue = useMemo(() => commentHtml(value), [value]);
+  const formattedValue = useMemo(() => isIssueDescription ? commentHtml(value) : value, [value, isIssueDescription]);
 
   // Expose the editor ref to parent component
   React.useImperativeHandle(ref, () => ({
     focus: () => editorRef.current?.focus(),
     getHTML: () => editorRef.current?.getHTML() || '',
     getText: () => editorRef.current?.getText() || '',
-    setContent: (content: string) => editorRef.current?.setContent(commentHtml(content)),
+    setContent: (content: string) => editorRef.current?.setContent(isIssueDescription ? commentHtml(content) : content),
     insertText: (text: string) => editorRef.current?.insertText(text),
     clear: () => editorRef.current?.clear(),
     getEditor: () => editorRef.current?.getEditor(),
-  }), []);
+  }), [isIssueDescription]);
   const containerRef = useRef<HTMLDivElement>(null);
   const hocuspocusManagerRef = useRef<HocuspocusManager | null>(null);
   const [collabReady, setCollabReady] = useState(0);
@@ -193,19 +195,19 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
     try {
       if (typeof snapshot === 'string') {
         const trimmed = snapshot.trim();
-        if (trimmed.startsWith('<')) return commentHtml(trimmed);
+        if (trimmed.startsWith('<')) return trimmed;
         try {
           const asJson = JSON.parse(trimmed);
           // If consumers still pass JSON doc, render fallback to simple text
           return `<div>${DOMPurify.sanitize(JSON.stringify(asJson))}</div>`;
         } catch {
-          return commentHtml(trimmed);
+          return `<p>${DOMPurify.sanitize(trimmed)}</p>`;
         }
       }
       if (snapshot && typeof snapshot === 'object') {
         // If object, try to use displayNewValue/newValue if present
         const html = snapshot.displayNewValue || snapshot.newValue || snapshot.description;
-        if (typeof html === 'string') return commentHtml(html);
+        if (typeof html === 'string') return html;
       }
       return '<p>(unable to render)</p>';
     } catch {
@@ -690,7 +692,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   }, [isCollaborationEnabled, hasCollabDocumentId, collabDocumentId]);
 
   // Build extensions array
-  const additionalExtensions: AnyExtension[] = [Table, TableRow, TableCell, TableHeader];
+  const additionalExtensions: AnyExtension[] = isIssueDescription ? [Table, TableRow, TableCell, TableHeader] : [];
 
   if (enableSlashCommands) {
     additionalExtensions.push(

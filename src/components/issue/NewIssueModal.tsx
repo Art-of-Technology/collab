@@ -377,6 +377,7 @@ export default function NewIssueModal({
 
           {/* Description Editor with Enhanced Features */}
           <IssueRichEditor
+            isIssueDescription
             value={description}
             onChange={setDescription}
             placeholder="Add description..."
