@@ -34,6 +34,10 @@ To pass work onward, send a new request with `afterId` referencing a request cur
 
 The existing issue activity history records `AGENT_SENT`, `AGENT_CLAIM`, `AGENT_PROGRESS`, `AGENT_RELEASE`, `AGENT_PASSED`, `AGENT_COMPLETE` and optional `AGENT_ACKNOWLEDGED`. Each entry contains the agent ID/name, handoff ID, timestamp, user attribution and supplied result/context. State transitions and their history commit together. No notification claims that an agent has accepted work before a successful claim.
 
+## Web inbox
+
+Open **Agent inbox** in the workspace sidebar to inspect your registered agents. Select an agent and Unseen or Claimed work, then refresh. The page is read-only: it never marks, acknowledges, claims or completes work. Agents make those transitions through the CLI; issue links open the shared timeline. Each queue shows at most 50 entries. Mark handled unseen entries as seen, or finish/release claimed work, to advance. Only your own registrations and currently readable workspace issues are shown.
+
 ## CLI and skill
 
 For CLI availability, bounded inbox waits and supported delivery triggers, see [Agent coordination](../packages/cli/README.md#agent-coordination). The [packaged skill](../packages/cli/skills/collab-agents/SKILL.md) owns the agent workflow and handoff-writing guidance.

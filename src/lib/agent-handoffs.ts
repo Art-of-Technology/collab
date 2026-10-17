@@ -25,12 +25,13 @@ export class HandoffError extends Error {
   constructor(public code: string, message: string, public status = 400) { super(message); }
 }
 type DB = Prisma.TransactionClient | typeof prisma;
+type InboxContext = { user: { id: string }; workspace: { id: string } };
 type Agent = { id: string; name: string; userId: string; labelIds: string[] };
-function issueScope(context: AppAuthContext): Prisma.IssueWhereInput {
+function issueScope(context: InboxContext): Prisma.IssueWhereInput {
   return { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id,
     project: { workspaceId: context.workspace.id } };
 }
-async function ownedAgent(db: DB, context: AppAuthContext, agent: string) {
+async function ownedAgent(db: DB, context: InboxContext, agent: string) {
   const row = await db.agentRegistration.findFirst({ where: { workspaceId: context.workspace.id, userId: context.user.id, name: agent } });
   if (!row) throw new HandoffError('agent_not_found', 'Register this agent with your own login first', 404);
   return row;
@@ -108,7 +109,7 @@ export async function sendHandoff(context: AppAuthContext, input: z.infer<typeof
   });
 }
 
-export async function agentInbox(context: AppAuthContext, query: z.infer<typeof inboxSchema>) {
+export async function agentInbox(context: InboxContext, query: z.infer<typeof inboxSchema>) {
   const agent = await ownedAgent(prisma, context, query.agent);
   const items = await prisma.agentHandoff.findMany({ where: { workspaceId: context.workspace.id, issue: issueScope(context),
     AND: [{ OR: [{ recipientNames: { has: agent.name } }, { labelIds: { hasSome: agent.labelIds } }, { claimedById: agent.id }] }],
