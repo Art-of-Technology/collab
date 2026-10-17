@@ -9,7 +9,6 @@ import { login, refresh } from '../src/auth.mjs';
 import cliPackage from '../package.json' with { type: 'json' };
 
 const booleans = new Set(['help', 'json', 'all', 'yes', 'dry-run', 'read-only']);
-const watchOptions = ['callback', 'callback-args', 'watch-seconds', 'poll-seconds', 'callback-timeout'];
 const globals = ['url', 'profile', 'workspace', 'project', 'timeout', 'json'];
 function parse(argv) {
   const words = [], options = Object.create(null);
@@ -54,7 +53,7 @@ async function boundedInput(file) {
   } finally { clearTimeout(timer); if (file !== '-') stream.destroy(); }
 }
 function help() {
-  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...(spec.watch ? watchOptions : [])].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
+  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
 }
 async function main() {
   const { words, options } = parse(process.argv.slice(2));
@@ -92,7 +91,7 @@ async function main() {
   const args = words.slice(name.split(' ').length);
   const parameters = [...spec.path.matchAll(/:(\w+)/g)].map(m => m[1]);
   if (args.length !== parameters.length || args.some(a => !/^[a-zA-Z0-9_-]+$/.test(a))) throw new CliError('invalid_identifier', `Expected ${parameters.length} ID/key argument(s); only letters, digits, underscores and hyphens allowed.`);
-  allowed(options, [...globals, ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...(spec.watch ? watchOptions : []), 'input', 'content-file', 'description-file', 'yes', 'dry-run', 'all']);
+  allowed(options, [...globals, ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...Object.keys(spec.localOptions || {}).map(flagName), 'input', 'content-file', 'description-file', 'yes', 'dry-run', 'all']);
   if (options.all && !spec.pagination) throw new CliError('unsupported_pagination', '--all is supported only for issues, notes and worklogs lists.');
   if (spec.method === 'DELETE' && !options.yes) throw new CliError('confirmation_required', 'Deletion requires --yes.');
   const body = {};

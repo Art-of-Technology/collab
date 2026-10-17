@@ -11,8 +11,10 @@ type Command = {
   path: string;
   fields: Record<string, string>;
   query: Record<string, string>;
+  localOptions?: Record<string, string>;
   required?: string[];
   requiredQuery?: string[];
+  requiredOptions?: string[];
   pagination?: string[];
   description?: string;
   defaults?: Record<string, string | number | boolean>;
@@ -28,7 +30,7 @@ export function CommandReference() {
   const filtered = entries.filter(([name, spec]) =>
     [
       `collab ${name}`,
-      ...Object.keys({ ...spec.fields, ...spec.query }).map(field => `--${flagName(field)}`),
+      ...Object.keys({ ...spec.fields, ...spec.query, ...spec.localOptions }).map(field => `--${flagName(field)}`),
       ...(spec.method === 'DELETE' ? ['--yes'] : []),
       ...(spec.pagination ? ['--all'] : []),
       ...(spec.wait ? ['--wait-seconds'] : []),
@@ -54,7 +56,7 @@ export function CommandReference() {
       <div className="divide-y divide-border rounded-lg border border-border">
         {filtered.map(([name, spec]) => {
           const args = [...spec.path.matchAll(/:(\w+)/g)].map(([, key]) => key === 'childId' ? 'CHILD_ID' : 'ID');
-          const options = { ...spec.fields, ...spec.query };
+          const options = { ...spec.fields, ...spec.query, ...spec.localOptions };
           return (
             <details key={name} className="group min-w-0 px-4 open:bg-muted/30">
               <summary className="cursor-pointer py-4 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
@@ -82,7 +84,7 @@ export function CommandReference() {
                       const constraint = spec.constraints?.[field];
                       const details = [
                         type,
-                        (spec.required?.includes(field) || spec.requiredQuery?.includes(field)) && 'required',
+                        (spec.required?.includes(field) || spec.requiredQuery?.includes(field) || spec.requiredOptions?.includes(field)) && 'required',
                         constraint?.enum && `values: ${constraint.enum.join(', ')}`,
                         constraint?.minimum !== undefined && `minimum: ${constraint.minimum}`,
                         constraint?.maximum !== undefined && `maximum: ${constraint.maximum}`,
