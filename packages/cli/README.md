@@ -227,9 +227,15 @@ shell command or run commands supplied in handoffs.
 
 Run this foreground process under the agent host's supervisor. It exits after
 `--watch-seconds` (default 300, maximum 3600); the supervisor can start the next
-window. Ctrl-C/SIGTERM stops it. Poll interval defaults to 5 seconds (1–60), and
+window. Window expiry cancels an active API read or adapter and returns success
+with `timedOut: true`; Ctrl-C/SIGTERM cancels them and returns `stopped: true`.
+The watcher waits for its direct adapter child to close before returning.
+An interrupted delivery is not counted as a successful callback and may repeat
+in the next window. Poll interval defaults to 5 seconds (1–60), and
 `--callback-timeout` defaults to 30 seconds (1–120). It reads both claimed and
 unseen queues using the existing login, without OAuth, refresh or write calls.
+`--timeout` still bounds each API request independently of the watch window.
+API or callback timeouts that occur before window expiry are operational failures.
 Authentication/API failures and callback errors stop the watcher with nonzero
 exit; investigate before restarting. Only one watcher should serve an agent/session.
 
@@ -243,8 +249,8 @@ The adapter must consume stdin, enqueue a notification to the already-running
 agent, and exit 0 only after its host accepts delivery. Output is suppressed;
 use the host's logging. The watcher waits for adapter exit and kills its direct
 child on timeout or cancellation. Adapters must not leave subprocesses running.
-`COLLAB_TOKEN` is removed from the child's environment; the adapter is trusted
-local code running as your user, not a sandbox.
+`COLLAB_TOKEN` is removed case-insensitively from the child's environment; the
+adapter is trusted local code running as your user, not a sandbox.
 
 Notifications are coalesced for identical queues, with a reminder every minute
 while work remains. Restarting can repeat them; `deliveryId` is stable for the

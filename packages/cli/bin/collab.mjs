@@ -177,9 +177,9 @@ async function main() {
     try {
       return await watchInbox({ callback: options.callback, callbackArgs, agent: options.agent, workspaceId: selected.workspace,
         origin: selected.base, durationMs: duration * 1000, intervalMs: interval * 1000, callbackTimeoutMs: callbackTimeout * 1000,
-        signal: controller.signal, read: (state, remaining) => {
+        signal: controller.signal, read: (state, signal) => {
           const q = new URLSearchParams(query); q.set('state', state); q.set('limit', '50');
-          return request(selected.base, `/api/apps/auth/agents/inbox?${q}`, { token: selected.token, timeout: Math.min(timeout, remaining) });
+          return request(selected.base, `/api/apps/auth/agents/inbox?${q}`, { token: selected.token, timeout, signal });
         } });
     } finally { process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop); }
   }

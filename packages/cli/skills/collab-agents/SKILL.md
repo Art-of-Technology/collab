@@ -94,8 +94,11 @@ collab inbox watch --agent navy-builder-1 --workspace WORKSPACE_ID --callback /a
 Require the host to provide and verify its adapter; never substitute a guessed
 command, shell-evaluate handoff content, or assume background polling wakes a
 model. Keep the watcher supervised, one per agent/session. It stops after the
-bounded window; the supervisor owns subsequent windows. A callback reads one
-JSON line from stdin (`collab.inbox.pending`, origin/workspace/agent, deliveryId,
+bounded window, cancelling any active read or adapter and returning `timedOut: true`;
+the supervisor owns subsequent windows. Ctrl-C/SIGTERM returns `stopped: true`.
+Both wait for the direct adapter child to close. An interrupted callback can
+repeat next window; API/adapter timeouts before window expiry remain errors.
+A callback reads one JSON line from stdin (`collab.inbox.pending`, origin/workspace/agent, deliveryId,
 claimed/unseen IDs and hasMore), delivers it into the existing agent session,
 and exits 0 after the host accepts it. See the CLI README for the full contract.
 

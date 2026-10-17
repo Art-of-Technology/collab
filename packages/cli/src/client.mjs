@@ -80,16 +80,18 @@ export function store(profile = 'default') {
   return { load, exclusive };
 }
 
-export async function request(base, endpoint, { token, method = 'GET', body, timeout = 30000, form = false } = {}) {
+export async function request(base, endpoint, { token, method = 'GET', body, timeout = 30000, form = false, signal } = {}) {
   if (!endpoint.startsWith('/') || endpoint.startsWith('//')) throw new CliError('invalid_path', 'Invalid API path.');
   const headers = { accept: 'application/json' };
   if (token) headers.authorization = `Bearer ${token}`;
   if (body !== undefined) headers['content-type'] = form ? 'application/x-www-form-urlencoded' : 'application/json';
   const mutation = method !== 'GET';
-  let response, text;
+  let response, text, requestSignal;
   try {
+    const timeoutSignal = AbortSignal.timeout(timeout);
+    requestSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
     response = await fetch(new URL(endpoint, origin(base)), {
-      method, headers, redirect: 'error', signal: AbortSignal.timeout(timeout),
+      method, headers, redirect: 'error', signal: requestSignal,
       ...(body !== undefined ? { body: form ? new URLSearchParams(body).toString() : JSON.stringify(body) } : {}),
     });
     const chunks = []; let size = 0;
@@ -100,6 +102,7 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
     }
     text = Buffer.concat(chunks).toString('utf8');
   } catch {
+    if (signal?.aborted && requestSignal?.reason === signal.reason) throw signal.reason;
     throw new CliError(mutation ? 'outcome_unknown' : 'transport_failed', mutation ? 'Request completion is unknown. Inspect Collab before retrying; no retry was made.' : 'Request failed or exceeded its time/size limit. No retry was made.', 5);
   }
   if (!response.ok) {
