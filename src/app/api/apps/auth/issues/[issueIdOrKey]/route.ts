@@ -334,53 +334,53 @@ export const PATCH = withAppAuth(
           where: { id: existingIssue.id }, select: { labels: { select: { id: true } } },
         });
         const changed = await tx.issue.update({
-        where: { id: existingIssue.id },
-        data: {
-          ...update,
-          ...labelsUpdate,
-        },
-        include: {
-          project: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              issuePrefix: true,
+          where: { id: existingIssue.id },
+          data: {
+            ...update,
+            ...labelsUpdate,
+          },
+          include: {
+            project: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                issuePrefix: true,
+              },
+            },
+            assignee: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+            reporter: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
+            },
+            labels: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+              },
+            },
+            projectStatus: {
+              select: {
+                id: true,
+                name: true,
+                displayName: true,
+                color: true,
+              },
             },
           },
-          assignee: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
-          reporter: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
-          labels: {
-            select: {
-              id: true,
-              name: true,
-              color: true,
-            },
-          },
-          projectStatus: {
-            select: {
-              id: true,
-              name: true,
-              displayName: true,
-              color: true,
-            },
-          },
-        },
-      });
+        });
 
         if (before) await enqueueLabelHandoff(tx, context.user.id, changed, before.labels.map(label => label.id));
         return changed;
