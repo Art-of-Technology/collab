@@ -23,7 +23,7 @@ $config = @{
 & $runtime --experimental-sea-config (Join-Path $dist 'sea.json')
 if ($LASTEXITCODE -ne 0) { throw 'SEA generation failed' }
 Copy-Item -LiteralPath $runtime -Destination (Join-Path $dist 'collab.exe')
-npm ci --ignore-scripts --prefix $PSScriptRoot
+npm.cmd ci --ignore-scripts --prefix $PSScriptRoot
 if ($LASTEXITCODE -ne 0) { throw 'Build tools installation failed' }
 node (Join-Path $PSScriptRoot 'node_modules/postject/dist/cli.js') (Join-Path $dist 'collab.exe') NODE_SEA_BLOB (Join-Path $dist 'collab.blob') --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
 if ($LASTEXITCODE -ne 0) { throw 'SEA injection failed' }
