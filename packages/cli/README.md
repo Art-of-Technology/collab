@@ -178,6 +178,8 @@ The apply operation transactionally creates only the dedicated `collab-cli` syst
 
 CLI 0.4.0 may be merged and tagged only after both the automatic label-handoff and host-callback implementation PRs are reviewed and merged. The final tag must contain both implementations.
 
+Merging this patch to `main` is a source-only step for the app; deployment remains on hold. After that merge, the release owner must publish `cli-v0.4.0` from a commit on `main` containing both implementations, then verify the actual GitHub release archives, tagged installer scripts and SHA-256 checksums before the sole app deployment owner deploys.
+
 ```sh
 npm test --prefix packages/cli
 npm pack ./packages/cli
