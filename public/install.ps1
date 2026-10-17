@@ -1,8 +1,8 @@
 function Install-Collab {
     $ErrorActionPreference = 'Stop'
     $version = '0.4.2'
-    $architecture = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
     if ($env:OS -ne 'Windows_NT') { throw 'This installer requires Windows. Use install.sh on macOS/Linux.' }
+    $architecture = Get-ItemPropertyValue -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' -Name PROCESSOR_ARCHITECTURE
     $platform = switch ($architecture) {
         'AMD64' { 'windows-x64' }
         'x86' { 'windows-x86' }

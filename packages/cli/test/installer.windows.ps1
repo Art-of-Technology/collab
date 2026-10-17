@@ -33,19 +33,27 @@ function Invoke-WebRequest($Uri, [switch]$UseBasicParsing, $OutFile) {
     if ($name -notin @($archive, "$archive.sha256")) { throw 'Unexpected archive' }
     Copy-Item -LiteralPath (Join-Path $downloads $name) -Destination $OutFile
 }
+function Get-ItemPropertyValue($LiteralPath, $Name) {
+    if ($LiteralPath -ne 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' -or $Name -ne 'PROCESSOR_ARCHITECTURE') { throw 'Unexpected registry query' }
+    if ($script:selectionOnly) { return $script:nativeArchitecture }
+    if ($Platform -eq 'windows-x86') { return 'x86' }
+    Microsoft.PowerShell.Management\Get-ItemPropertyValue -LiteralPath $LiteralPath -Name $Name
+}
 try {
     # Verify OS architecture wins over the process architecture before any download.
     $script:selectionOnly = $true
     foreach ($case in @(
-        @{ process = 'x86'; wow = ''; expected = 'windows-x86' },
-        @{ process = 'AMD64'; wow = ''; expected = 'windows-x64' },
-        @{ process = 'x86'; wow = 'AMD64'; expected = 'windows-x64' },
-        @{ process = 'ARM64'; wow = ''; expected = 'windows-arm64' },
-        @{ process = 'x86'; wow = 'ARM64'; expected = 'windows-arm64' },
-        @{ process = 'unknown'; wow = ''; expected = $null }
+        @{ process = 'x86'; wow = ''; native = 'x86'; expected = 'windows-x86' },
+        @{ process = 'AMD64'; wow = ''; native = 'AMD64'; expected = 'windows-x64' },
+        @{ process = 'x86'; wow = 'AMD64'; native = 'AMD64'; expected = 'windows-x64' },
+        @{ process = 'ARM64'; wow = ''; native = 'ARM64'; expected = 'windows-arm64' },
+        @{ process = 'x86'; wow = 'ARM64'; native = 'ARM64'; expected = 'windows-arm64' },
+        @{ process = 'AMD64'; wow = ''; native = 'ARM64'; expected = 'windows-arm64' },
+        @{ process = 'unknown'; wow = ''; native = 'unknown'; expected = $null }
     )) {
         $env:PROCESSOR_ARCHITECTURE = $case.process
         $env:PROCESSOR_ARCHITEW6432 = $case.wow
+        $script:nativeArchitecture = $case.native
         $script:selectedURL = $null
         $message = ''
         try { irm https://collab.weez.boo/install.ps1 | iex } catch { $message = $_.Exception.Message }
