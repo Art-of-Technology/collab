@@ -20,7 +20,7 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), or Windows x64 with PowerShell 5.1+. Alpine/musl and native Windows ARM64 are not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-[CLI 0.4.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.4.0) are hosted on GitHub. You can inspect `install.sh` or `install.ps1` there before running them. Archives and SHA-256 sidecars are also available for manual downloads.
+[CLI 0.4.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.4.0) will be available on GitHub once the [release requirements](#validation-and-release) are met. The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
 
 Version 0.2.1 fixes Windows login failing with `unsafe_credentials` after browser approval. Run the installer again to update; existing credentials are preserved. The native runtime includes the Windows subprocess timeout fix, and credential ownership/ACL checks remain enforced.
 
@@ -176,6 +176,8 @@ The apply operation transactionally creates only the dedicated `collab-cli` syst
 
 ## Validation and release
 
+CLI 0.4.0 may be merged and tagged only after both the automatic label-handoff and host-callback implementation PRs are reviewed and merged. The final tag must contain both implementations.
+
 ```sh
 npm test --prefix packages/cli
 npm pack ./packages/cli
@@ -209,3 +211,24 @@ work you own after a restart. Use `collab schema` for the complete command list.
 
 For delivery triggers, see [Agent handoffs](../../docs/agent-handoffs.md#automatic-label-delivery).
 Agent activity is visible in the existing issue timeline and `collab issues activity`.
+
+### Wake a running agent through its host
+
+The skill tells agents how to coordinate. To notify a running agent automatically,
+its host must supply an adapter that receives JSON on stdin and delivers a message
+into that agent's session. Run the watcher under that host's supervisor:
+
+```sh
+collab inbox watch --agent reviewer-b --workspace WORKSPACE_ID --callback /absolute/path/to/host-adapter --callback-args '["--session","SESSION_ID"]' --watch-seconds 3600
+```
+
+Replace the adapter path and session ID with your host's supported integration.
+On Windows, use an absolute executable path; invoke PowerShell scripts through
+`powershell.exe` or `pwsh.exe` with fixed `--callback-args`. The watcher polls claimed
+and unseen work, coalesces notifications, and reminds the host every minute while
+work remains. It never marks work seen or claims it.
+
+Each foreground watch lasts up to an hour; the supervisor owns subsequent windows.
+Stop on authentication or adapter errors. Callback success alone does not prove
+that a model woke or acted. Verify delivery into a real agent session and the
+model's response before calling that host connected.
