@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { ArrowRight, BookOpen, Download, FileText, GitBranch, ListChecks, Terminal } from 'lucide-react';
 import { CodeBlock } from '@/components/dev/docs/CodeBlock';
 import { CommandReference } from './command-reference';
+import { Installation } from './installation';
 import cliPackage from '../../../packages/cli/package.json';
 
 const cliRelease = `https://github.com/Art-of-Technology/collab/releases/download/cli-v${cliPackage.version}`;
@@ -12,7 +13,8 @@ const nativeDownloads = [
   { name: 'macOS', chip: 'Intel', platform: 'darwin-x64' },
   { name: 'Linux', chip: 'ARM64', platform: 'linux-arm64' },
   { name: 'Linux', chip: 'Intel / AMD x64', platform: 'linux-x64' },
-  { name: 'Windows', chip: 'Intel / AMD x64', platform: 'windows-x64' },
+  { name: 'Windows', chip: 'Intel / AMD x64 (64-bit)', platform: 'windows-x64' },
+  { name: 'Windows', chip: 'x86 (32-bit)', platform: 'windows-x86' },
 ];
 
 export const metadata: Metadata = {
@@ -106,7 +108,7 @@ export default function DocsPage() {
               </p>
               <div className="mt-6 flex flex-wrap gap-2 text-xs text-muted-foreground">
                 <span className="rounded-full border border-border px-3 py-1">JSON output</span>
-                <span className="rounded-full border border-border px-3 py-1">No runtime dependencies</span>
+                <span className="rounded-full border border-border px-3 py-1">No separate runtime install</span>
               </div>
               <div className="mt-8 flex flex-wrap items-center gap-5 text-sm">
                 <a href="#installation" className="inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2.5 font-medium text-background hover:opacity-90">Install the CLI <ArrowRight className="h-4 w-4" aria-hidden="true" /></a>
@@ -118,25 +120,19 @@ export default function DocsPage() {
               <section id="installation" className="border-t border-border pt-10">
                 <h2>Install the CLI</h2>
                 <p className="text-muted-foreground">Paste one command into your terminal. The installer detects your machine, verifies the download, installs Collab CLI {cliPackage.version}, and sets up PATH. No Node.js, npm, Bun, or terminal restart needed.</p>
-                <h3 className="mt-6">macOS / Linux</h3>
-                <TerminalBlock code={`ZDOTDIR="\${ZDOTDIR:-$HOME}" bash -o pipefail -c 'curl -fsSL https://collab.weez.boo/install.sh | sh' && . "$HOME/.local/share/collab/env"`} />
-                <p className="text-muted-foreground">For Bash and Zsh on macOS 13+ or Linux with glibc, on Apple Silicon / ARM64 or Intel / AMD x64. Installs to <code>~/.local/bin</code> and configures your shell for future terminals.</p>
-                <h3 className="mt-6">Windows PowerShell</h3>
-                <TerminalBlock code={'irm https://collab.weez.boo/install.ps1 | iex'} />
-                <p className="text-muted-foreground">For Windows x64 with PowerShell 5.1 or later. Installs to <code>%LOCALAPPDATA%\Collab\bin</code> and updates your user PATH and current terminal. Administrator access is not required.</p>
-                <p className="mt-4 text-muted-foreground">After the command finishes, run <code>collab --help</code> right away, or continue below to connect your workspace. Running the same install command again updates the executable and keeps your login.</p>
+                <Installation version={cliPackage.version} />
                 <details className="mt-6 rounded-lg border border-border p-4">
                   <summary className="cursor-pointer font-medium">Download archives and checksums manually</summary>
                 <div className="my-5 grid gap-3 sm:grid-cols-2">
                   {nativeDownloads.map(({ name, chip, platform }) => (
-                    <div key={platform} className="min-w-0 rounded-lg border border-border p-5">
-                      <a href={`${cliRelease}/collab-${platform}.${platform === 'windows-x64' ? 'zip' : 'tar.gz'}`} className="group flex items-center justify-between gap-4 font-medium hover:underline">
+                    <div key={platform} className="min-w-0 rounded-lg border border-border p-3">
+                      <a href={`${cliRelease}/collab-${platform}.${platform.startsWith('windows-') ? 'zip' : 'tar.gz'}`} className="group flex items-center justify-between gap-4 font-medium hover:underline">
                         <span>{name}<span className="mt-1 block text-xs font-normal text-muted-foreground">{chip}</span></span>
                         <Download className="h-5 w-5 shrink-0 text-muted-foreground group-hover:text-foreground" aria-hidden="true" />
                       </a>
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                         <code>{platform}</code>
-                        <a href={`${cliRelease}/collab-${platform}.${platform === 'windows-x64' ? 'zip' : 'tar.gz'}.sha256`} aria-label={`${name} ${chip} SHA-256 checksum`} className="underline underline-offset-4 hover:text-foreground">SHA-256 checksum</a>
+                        <a href={`${cliRelease}/collab-${platform}.${platform.startsWith('windows-') ? 'zip' : 'tar.gz'}.sha256`} aria-label={`${name} ${chip} SHA-256 checksum`} className="underline underline-offset-4 hover:text-foreground">SHA-256 checksum</a>
                       </div>
                     </div>
                   ))}

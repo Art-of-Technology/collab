@@ -1,9 +1,14 @@
 function Install-Collab {
     $ErrorActionPreference = 'Stop'
-    $version = '0.4.0'
+    $version = '0.4.1'
     $architecture = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
-    if ($env:OS -ne 'Windows_NT' -or $architecture -ne 'AMD64') { throw 'This installer requires Windows x64. Use install.sh on macOS/Linux.' }
-    $archive = 'collab-windows-x64.zip'
+    if ($env:OS -ne 'Windows_NT') { throw 'This installer requires Windows. Use install.sh on macOS/Linux.' }
+    $platform = switch ($architecture) {
+        'AMD64' { 'windows-x64' }
+        'x86' { 'windows-x86' }
+        default { throw "Unsupported Windows architecture: $architecture. Supported: x64 and x86 (32-bit)." }
+    }
+    $archive = "collab-$platform.zip"
     $base = "https://github.com/Art-of-Technology/collab/releases/download/cli-v$version"
     $work = Join-Path ([IO.Path]::GetTempPath()) ([IO.Path]::GetRandomFileName())
     $bin = Join-Path $env:LOCALAPPDATA 'Collab\bin'
@@ -13,12 +18,12 @@ function Install-Collab {
         Invoke-WebRequest "$base/$archive" -UseBasicParsing -OutFile (Join-Path $work $archive)
         Invoke-WebRequest "$base/$archive.sha256" -UseBasicParsing -OutFile (Join-Path $work "$archive.sha256")
         $checksum = [IO.File]::ReadAllText((Join-Path $work "$archive.sha256")).Trim()
-        if ($checksum -notmatch '^([0-9a-fA-F]{64})  collab-windows-x64\.zip$') { throw 'Invalid checksum file.' }
+        if ($checksum -notmatch ('^([0-9a-fA-F]{64})  ' + [regex]::Escape($archive) + '$')) { throw 'Invalid checksum file.' }
         if ((Get-FileHash (Join-Path $work $archive) -Algorithm SHA256).Hash -ne $Matches[1]) { throw 'Checksum mismatch. Nothing installed.' }
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         $zip = [IO.Compression.ZipFile]::OpenRead((Join-Path $work $archive))
         try {
-            $entry = $zip.GetEntry('collab-windows-x64/collab.exe')
+            $entry = $zip.GetEntry("collab-$platform/collab.exe")
             if (!$entry) { throw 'Executable missing from archive.' }
             [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, (Join-Path $work 'collab.exe'))
         } finally { $zip.Dispose() }

@@ -36,6 +36,8 @@ jobs:
           - platform: windows-x64
             runner: windows-2022
             target: bun-windows-x64-baseline
+          - platform: windows-x86
+            runner: windows-2022
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,6 +49,7 @@ jobs:
         with:
           bun-version: '1.4.3'
       - name: Build standalone CLI
+        if: matrix.platform != 'windows-x86'
         env:
           # Bun moves extracted targets from the checkout into its cache; keep both on the same drive.
           BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun-cache
@@ -54,6 +57,10 @@ jobs:
           suffix=''
           if [ "$RUNNER_OS" = Windows ]; then suffix='.exe'; fi
           npm run build:native --prefix packages/cli -- --target=${{ matrix.target }} --outfile="dist/collab$suffix"
+      - name: Build standalone Windows x86 CLI
+        if: matrix.platform == 'windows-x86'
+        shell: powershell
+        run: ./packages/cli/build-tools/build-windows-x86.ps1
       - name: Package download and checksum
         env:
           PLATFORM: ${{ matrix.platform }}
@@ -66,7 +73,11 @@ jobs:
           else
             cp packages/cli/dist/collab "stage/collab-$PLATFORM/"
           fi
-          curl --fail --silent --show-error --location https://raw.githubusercontent.com/oven-sh/bun/bun-v1.4.3/LICENSE.md -o "stage/collab-$PLATFORM/BUN-LICENSE.md"
+          if [ "$PLATFORM" = windows-x86 ]; then
+            cp packages/cli/dist/NODE-LICENSE.txt "stage/collab-$PLATFORM/"
+          else
+            curl --fail --silent --show-error --location https://raw.githubusercontent.com/oven-sh/bun/bun-v1.4.3/LICENSE.md -o "stage/collab-$PLATFORM/BUN-LICENSE.md"
+          fi
           if [ "$RUNNER_OS" = Windows ]; then
             # PowerShell 7 writes slash-separated ZIP entries required by the installer.
             # shellcheck disable=SC2016 # PowerShell expands its own environment variables.
@@ -102,7 +113,7 @@ jobs:
       - name: Test one-command Windows installation and installed CLI
         if: runner.os == 'Windows'
         shell: powershell
-        run: ./packages/cli/test/installer.windows.ps1
+        run: ./packages/cli/test/installer.windows.ps1 -Platform ${{ matrix.platform }}
         env:
           COLLAB_NATIVE_DOWNLOADS: ${{ github.workspace }}/downloads
       - uses: actions/upload-artifact@v4
@@ -146,14 +157,14 @@ jobs:
           for platform in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
             sha256sum --check "collab-$platform.tar.gz.sha256"
           done
-          sha256sum --check collab-windows-x64.zip.sha256
+          sha256sum --check collab-windows-x64.zip.sha256 collab-windows-x86.zip.sha256
           sha256sum --check install.sh.sha256 install.ps1.sha256
       - name: Publish CLI release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat > release-notes.md <<'NOTES'
-          Standalone Collab CLI for macOS (Apple Silicon and Intel) and Linux (ARM64 and x64). No Node.js or Bun installation required. Also includes a native Windows x64 executable.
+          Standalone Collab CLI for macOS (Apple Silicon and Intel) and Linux (ARM64 and x64). No Node.js or Bun installation required. Also includes a native Windows x64 and x86 (32-bit) executables. The x86 executable bundles Node.js 22; no separate runtime installation is required.
 
           One-command installation (macOS/Linux):
           ```sh
@@ -167,6 +178,6 @@ jobs:
 
           These downloads do not carry a verified publisher signature. The macOS builds are not notarized. Windows ARM64 and Alpine/musl builds are not included. Windows credentials use private owner ACLs; Unix 0700/0600 checks remain enforced.
 
-          Each executable passed the CLI integration tests on its matching OS and architecture. Tests use synthetic local servers; they are not production or browser acceptance.
+          Each executable passed the CLI integration tests on its matching OS. Windows x86 is tested under WoW64 on Windows Server 2022, including the 32-bit PowerShell installation path; this is not acceptance on a physical 32-bit Windows machine. Tests use synthetic local servers; they are not production or browser acceptance.
           NOTES
           gh release create "$GITHUB_REF_NAME" downloads/* --verify-tag --latest=false --title "Collab CLI ${GITHUB_REF_NAME#cli-v}" --notes-file release-notes.md

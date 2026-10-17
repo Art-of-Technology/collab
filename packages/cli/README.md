@@ -18,9 +18,11 @@ irm https://collab.weez.boo/install.ps1 | iex
 
 Run `collab --help` immediately in the same terminal. The installer selects the native executable, checks SHA-256, and updates PATH for this terminal and future ones. No administrator access, Node.js, npm, Bun, or terminal restart required. Run the same command again to update; existing login/configuration is preserved.
 
-Requires macOS 13+ or Linux with glibc (ARM64 or x64), or Windows x64 with PowerShell 5.1+. Alpine/musl and native Windows ARM64 are not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
+Requires macOS 13+ or Linux with glibc (ARM64 or x64), or Windows 10+ x64 / x86 (32-bit) with PowerShell 5.1+. Alpine/musl and native Windows ARM64 are not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-[CLI 0.4.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.4.0) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
+[CLI 0.4.1 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.4.1) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
+
+Version 0.4.1 adds a standalone Windows x86 (32-bit) download. The PowerShell installer selects the OS architecture, including when run from 32-bit PowerShell on a 64-bit OS. Windows ARM64 remains unsupported.
 
 Version 0.2.1 fixes Windows login failing with `unsafe_credentials` after browser approval. Run the installer again to update; existing credentials are preserved. The native runtime includes the Windows subprocess timeout fix, and credential ownership/ACL checks remain enforced.
 
@@ -176,9 +178,9 @@ The apply operation transactionally creates only the dedicated `collab-cli` syst
 
 ## Validation and release
 
-CLI 0.4.0 includes the reviewed and merged automatic label-handoff and host-callback implementations. The final tag must contain both implementations.
+CLI 0.4.1 includes the reviewed and merged automatic label-handoff and host-callback implementations. The final tag must contain both implementations.
 
-Merge release source to `main` before publishing `cli-v0.4.0`; the native workflow requires the tagged commit to be an ancestor of `main`. The release owner must verify all 14 public GitHub release assets (five archives, two tagged installer scripts and their SHA-256 sidecars) before the sole app deployment owner deploys.
+Merge release source to `main` before publishing `cli-v0.4.1`; the native workflow requires the tagged commit to be an ancestor of `main`. The release owner must verify all 16 public GitHub release assets (six archives, two tagged installer scripts and their SHA-256 sidecars) before the sole app deployment owner deploys.
 
 ```sh
 npm test --prefix packages/cli
@@ -189,20 +191,22 @@ Tests launch the actual CLI against local synthetic HTTP servers, including PKCE
 
 ### Build native downloads
 
-With Bun 1.4.3 installed, run `npm run build:native --prefix packages/cli` to produce `packages/cli/dist/collab` for the current machine. The build disables runtime loading of working-directory `.env`, `bunfig.toml`, `tsconfig.json` and `package.json` files. Explicit `COLLAB_*` environment variables still work.
+On supported 64-bit platforms, with Bun 1.4.3 installed, run `npm run build:native --prefix packages/cli` to produce `packages/cli/dist/collab` for the current machine. The Bun build disables runtime loading of working-directory `.env`, `bunfig.toml`, `tsconfig.json` and `package.json` files. Explicit `COLLAB_*` environment variables still work.
 
-The `Collab CLI native downloads` workflow builds and tests each executable and its one-command installer on a matching macOS/Linux architecture or Windows x64 runner. It includes the README and license notices, packages Unix `.tar.gz` archives and a Windows `.zip` archive, and produces SHA-256 sidecars. Pull requests only upload CI artifacts. After merge and review, a `cli-v<VERSION>` tag matching this package's version publishes the five archives, installer scripts and their checksums to GitHub Releases once all native jobs pass; it does not trigger the application's `v*` deployment workflows or replace the application's latest release.
+For Windows x86, use a Windows build host with Bun, Node.js and npm configured as in the [native workflow](../../.github/workflows/cli-native.yml). From the repository root, run `powershell -NoProfile -File ./packages/cli/build-tools/build-windows-x86.ps1` to produce `packages/cli/dist/collab.exe`. The [x86 build script](build-tools/build-windows-x86.ps1) pins and verifies the bundled Node.js runtime and installs the locked postject dependency to create a single executable; end users need no separate runtime.
+
+The `Collab CLI native downloads` workflow builds and tests each executable and its one-command installer on a matching macOS/Linux architecture or Windows x64 runner. Windows x86 runs under WoW64 with 32-bit PowerShell in CI, not on a physical 32-bit Windows OS. It includes the README and license notices, packages Unix `.tar.gz` archives and Windows `.zip` archives, and produces SHA-256 sidecars. Pull requests only upload CI artifacts. After merge and review, a `cli-v<VERSION>` tag matching this package's version publishes the six archives, installer scripts and their checksums to GitHub Releases once all native jobs pass; it does not trigger the application's `v*` deployment workflows or replace the application's latest release.
 
 To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_EXECUTABLE` to its absolute path and run `node --test packages/cli/test/cli.test.mjs` from the repository root. The ordinary Node.js test path remains the default.
 
 ## Agent coordination
 
-These commands are included in CLI 0.4.0. Run the one-command installer again to update; existing credentials are preserved. Version 0.2.1 does not include them.
+These commands are included in CLI 0.4.1. Run the one-command installer again to update; existing credentials are preserved. Version 0.2.1 does not include them.
 
 The [generic agent skill](skills/collab-agents/SKILL.md) describes registration,
 role subscriptions, bounded inbox waits, atomic claims and handoffs. Load this
 file through your agent's supported skill mechanism; it does not launch agents.
-Native users can download the [versioned SKILL.md](https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v0.4.0/packages/cli/skills/collab-agents/SKILL.md).
+Native users can download the [versioned SKILL.md](https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v0.4.1/packages/cli/skills/collab-agents/SKILL.md).
 Requires the matching server release and its additive agent-handoff migration.
 
 `collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to
@@ -216,7 +220,7 @@ Agent activity is visible in the existing issue timeline and `collab issues acti
 
 ### Wake a running agent through its host
 
-`inbox watch` is included in CLI 0.4.0. Installing it does not establish live
+`inbox watch` is included in CLI 0.4.1. Installing it does not establish live
 host delivery; each host must supply and verify its adapter.
 
 The skill supplies coordination instructions; it cannot interrupt a model. A host
