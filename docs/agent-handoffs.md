@@ -32,7 +32,7 @@ To pass work onward, send a new request with `afterId` referencing a request cur
 
 ## Timeline
 
-The existing issue activity history records `AGENT_SENT`, `AGENT_CLAIM`, `AGENT_PROGRESS`, `AGENT_RELEASE`, `AGENT_PASSED`, `AGENT_COMPLETE` and optional `AGENT_ACKNOWLEDGED`. Each entry contains the agent ID/name, handoff ID, timestamp, user attribution and supplied result/context. State transitions and their history commit together. No notification claims that an agent has accepted work before a successful claim.
+Agent-authored timeline entries record `AGENT_SENT`, `AGENT_CLAIM`, `AGENT_PROGRESS`, `AGENT_RELEASE`, `AGENT_PASSED`, `AGENT_COMPLETE` and optional `AGENT_ACKNOWLEDGED`. Each contains the agent ID/name, handoff ID, timestamp, user attribution and supplied result/context. State transitions and their history commit together. No notification claims that an agent has accepted work before a successful claim. For entries created by issue edits, see [Automatic label delivery](#automatic-label-delivery).
 
 ## Web inbox
 
@@ -42,10 +42,18 @@ Handoff details render Markdown headings, bold text, lists, links, inline code a
 
 ## CLI and skill
 
-For CLI availability, bounded inbox waits and supported delivery triggers, see [Agent coordination](../packages/cli/README.md#agent-coordination). The [packaged skill](../packages/cli/skills/collab-agents/SKILL.md) owns the agent workflow and handoff-writing guidance.
+For CLI availability and bounded inbox waits, see [Agent coordination](../packages/cli/README.md#agent-coordination). The [packaged skill](../packages/cli/skills/collab-agents/SKILL.md) owns the agent workflow and handoff-writing guidance.
+
+## Automatic label delivery
+
+Adding one or more subscribed labels in a single issue edit creates one durable `label_added` handoff for those newly added labels. This includes labels supplied during issue creation through the web or CLI API. All matching role subscribers can see it subject to current issue access; exactly one can claim it. Registration opts an agent into automatic delivery for its label IDs. Ordinary labels with no subscribers create no handoff. Issue labels must belong to the issue workspace; a foreign-workspace label aborts the whole write.
+
+The issue edit, handoff and `AGENT_LABEL_ADDED` timeline entry commit in one transaction. The entry identifies the user who edited the issue and includes the handoff ID, routed label IDs and generated context; it has no sending agent. An unchanged save does not notify again. Concurrent updates either serialize or return a conflict; reload before retrying. Removing a label does not cancel existing handoffs or revoke a claim. Removing then re-adding it creates a new handoff, so read the timeline before starting duplicate work. Label renames, mentions and historical issue backfills are not triggers.
+
+Delivery persists while agents are offline. Inbox retrieval and claims still require the agent owner's current issue access. Inbox creation itself does not wake a model: the host must run an inbox adapter using the [bounded CLI wait](../packages/cli/README.md#agent-coordination). A generic CLI callback watcher is not included. No additional schema migration is required beyond the existing agent-handoff tables.
 
 ## Validation and rollout
 
-`node --test tests/agents/handoffs.test.cjs` starts a socket-only disposable PostgreSQL instance, applies the additive migration to existing fixture data, exercises concurrent claims and ACKs, and checks scope/tenant isolation and the named-agent timeline. It requires local PostgreSQL binaries and the generated Prisma client; it never uses the application's `DATABASE_URL`.
+`node --test tests/agents/handoffs.test.cjs` starts a socket-only disposable PostgreSQL instance, applies the additive migration to existing fixture data, exercises concurrent claims and ACKs, and checks scope/tenant isolation and the named-agent timeline. Label-delivery coverage includes rollback, unchanged and concurrent edits, removal/re-addition, unsubscribed labels, and creation through the transaction helper; it also exercises the web mutation helper and CLI update route. It requires local PostgreSQL binaries and the generated Prisma client; it never uses the application's `DATABASE_URL`.
 
 Deployment requires the additive `20261017000100_agent_handoffs` migration before exposing these routes. It creates three new tables and their indexes/foreign keys; it does not rewrite existing records. Application rollout and any production migration remain with the designated application owner. No production acceptance is implied by source tests.

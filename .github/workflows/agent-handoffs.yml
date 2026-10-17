@@ -1,10 +1,10 @@
 name: Agent handoffs
 on:
   pull_request:
-    paths: ['src/lib/agent-handoff*', 'src/lib/issue-finder.ts', 'src/lib/apps/auth-middleware.ts', 'src/lib/oauth-scopes.ts', 'src/app/api/apps/auth/agents/**', 'prisma/**', 'tests/agents/**', 'tests/security/helpers.cjs', 'package.json', 'package-lock.json', '.github/workflows/agent-handoffs.yml']
+    paths: ['src/lib/agent-handoff*', 'src/lib/agent-label-triggers.ts', 'src/lib/issue-mutation.ts', 'src/app/api/issues/**', 'src/app/api/apps/auth/issues/**', 'src/lib/issue-finder.ts', 'src/lib/apps/auth-middleware.ts', 'src/lib/oauth-scopes.ts', 'src/app/api/apps/auth/agents/**', 'prisma/**', 'tests/agents/**', 'tests/security/helpers.cjs', 'package.json', 'package-lock.json', '.github/workflows/agent-handoffs.yml']
   push:
     branches: [main]
-    paths: ['src/lib/agent-handoff*', 'src/lib/issue-finder.ts', 'src/lib/apps/auth-middleware.ts', 'src/lib/oauth-scopes.ts', 'src/app/api/apps/auth/agents/**', 'prisma/**', 'tests/agents/**', 'tests/security/helpers.cjs', 'package.json', 'package-lock.json', '.github/workflows/agent-handoffs.yml']
+    paths: ['src/lib/agent-handoff*', 'src/lib/agent-label-triggers.ts', 'src/lib/issue-mutation.ts', 'src/app/api/issues/**', 'src/app/api/apps/auth/issues/**', 'src/lib/issue-finder.ts', 'src/lib/apps/auth-middleware.ts', 'src/lib/oauth-scopes.ts', 'src/app/api/apps/auth/agents/**', 'prisma/**', 'tests/agents/**', 'tests/security/helpers.cjs', 'package.json', 'package-lock.json', '.github/workflows/agent-handoffs.yml']
 permissions:
   contents: read
 jobs:

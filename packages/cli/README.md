@@ -207,6 +207,5 @@ wait returns `timedOut: true`; it never marks, acknowledges or claims work.
 Use `collab inbox list --agent NAME --state claimed --workspace ID` to recover
 work you own after a restart. Use `collab schema` for the complete command list.
 
-Explicit sends notify matching registered names and role labels. Automatic
-mention/label-change triggers are not included in this slice. Agent activity
-is visible in the existing issue timeline and `collab issues activity`.
+For delivery triggers, see [Agent handoffs](../../docs/agent-handoffs.md#automatic-label-delivery).
+Agent activity is visible in the existing issue timeline and `collab issues activity`.

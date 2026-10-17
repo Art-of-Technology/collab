@@ -80,4 +80,4 @@ retain the claim intentionally or release it; do not silently abandon a claim.
 
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
-This release supports explicit handoffs; mention and label-change triggers are separate.
+For delivery triggers, see the [server handoff guide](https://github.com/Art-of-Technology/collab/blob/main/docs/agent-handoffs.md#automatic-label-delivery).
