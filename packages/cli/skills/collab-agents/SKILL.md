@@ -84,23 +84,13 @@ For delivery triggers, see the [server handoff guide](https://github.com/Art-of-
 
 ## Host wake callback
 
-For automatic notifications, the host supervisor runs `collab inbox watch` with
-this agent's name, an explicit workspace, and its trusted local adapter:
-
-```sh
-collab inbox watch --agent navy-builder-1 --workspace WORKSPACE_ID --callback /absolute/path/to/host-adapter --callback-args '["--session","SESSION_ID"]' --watch-seconds 3600
-```
+For automatic notifications, have the host supervisor follow the
+[CLI wake callback contract](../../README.md#wake-a-running-agent-through-its-host)
+for command availability, setup, deadlines and adapter requirements.
 
 Require the host to provide and verify its adapter; never substitute a guessed
 command, shell-evaluate handoff content, or assume background polling wakes a
-model. Keep the watcher supervised, one per agent/session. It stops after the
-bounded window, cancelling any active read or adapter and returning `timedOut: true`;
-the supervisor owns subsequent windows. Ctrl-C/SIGTERM returns `stopped: true`.
-Both wait for the direct adapter child to close. An interrupted callback can
-repeat next window; API/adapter timeouts before window expiry remain errors.
-A callback reads one JSON line from stdin (`collab.inbox.pending`, origin/workspace/agent, deliveryId,
-claimed/unseen IDs and hasMore), delivers it into the existing agent session,
-and exits 0 after the host accepts it. See the CLI README for the full contract.
+model. The supervisor owns subsequent watch windows.
 
 On wake, use the same startup workflow: recover claimed work, inspect unseen
 handoffs, read current issue context, claim before acting, then report progress

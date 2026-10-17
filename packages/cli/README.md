@@ -123,7 +123,7 @@ collab issues delete APP-123 --yes
 collab projects create --name 'Platform' --slug platform --issue-prefix PLAT --dry-run
 ```
 
-`--input FILE|-` accepts a JSON body; `--content-file`/`--description-file` accept text. Inputs are limited to 1 MiB and 30 seconds. Unknown flags/fields and duplicate assignments refuse before sending. `--dry-run` prints the planned method, URL and body without sending; body content may be private. Deletions require `--yes` even in dry-run.
+`--input FILE|-` accepts a JSON body; `--content-file`/`--description-file` accept text. Inputs are limited to 1 MiB and 30 seconds. Unknown flags/fields and duplicate assignments refuse before sending. `--dry-run` prints the planned method, URL and body (or the local callback configuration for `inbox watch`) without sending or invoking an adapter; body content may be private. Deletions require `--yes` even in dry-run.
 
 `--workspace ID` and `--project ID` override saved context per command. `--project-id` is a specific API body/query field. Default project context applies to issue creation, Note creation and supported filters, not to project moves on update. A workspace change clears the saved project unless a new project is explicitly verified. The server rechecks current membership on every request; a CLI context is not authorization.
 
@@ -193,7 +193,7 @@ To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_
 
 ## Agent coordination
 
-These commands are included in CLI 0.3.0. Run the one-command installer again to update; existing credentials are preserved. Version 0.2.1 does not include them.
+Registration, inbox list/wait and handoff commands are included in CLI 0.3.0. Run the one-command installer again to update; existing credentials are preserved. Version 0.2.1 does not include them. For `inbox watch` availability, see [Wake a running agent through its host](#wake-a-running-agent-through-its-host).
 
 The [generic agent skill](skills/collab-agents/SKILL.md) describes registration,
 role subscriptions, bounded inbox waits, atomic claims and handoffs. Load this
@@ -212,6 +212,11 @@ Agent activity is visible in the existing issue timeline and `collab issues acti
 
 ### Wake a running agent through its host
 
+`inbox watch` is a source-stage addition: use a reviewed checkout via
+[source installation](#install-from-source). The published CLI 0.3.0 native
+downloads do not include it; native publication is a separate release after the
+reviewed merge. Source-stage checks do not establish live host delivery.
+
 The skill supplies coordination instructions; it cannot interrupt a model. A host
 adapter can receive automatic wake requests with `inbox watch`:
 
@@ -226,12 +231,12 @@ Windows, use an absolute `.exe` path; for a PowerShell script use the absolute
 shell command or run commands supplied in handoffs.
 
 Run this foreground process under the agent host's supervisor. It exits after
-`--watch-seconds` (default 300, maximum 3600); the supervisor can start the next
+`--watch-seconds` (default 300, range 1–3600); the supervisor can start the next
 window. Window expiry cancels an active API read or adapter and returns success
 with `timedOut: true`; Ctrl-C/SIGTERM cancels them and returns `stopped: true`.
 The watcher waits for its direct adapter child to close before returning.
 An interrupted delivery is not counted as a successful callback and may repeat
-in the next window. Poll interval defaults to 5 seconds (1–60), and
+in the next window. `--poll-seconds` defaults to 5 seconds (1–60), and
 `--callback-timeout` defaults to 30 seconds (1–120). It reads both claimed and
 unseen queues using the existing login, without OAuth, refresh or write calls.
 `--timeout` still bounds each API request independently of the watch window.
