@@ -8,7 +8,7 @@ import { CodeBlock } from '@/components/dev/docs/CodeBlock';
 
 const unixCommand = `ZDOTDIR="\${ZDOTDIR:-$HOME}" bash -o pipefail -c 'curl -fsSL https://collab.weez.boo/install.sh | sh' && . "$HOME/.local/share/collab/env"`;
 const platforms = [
-  { id: 'windows', label: 'Windows', shell: 'PowerShell', command: 'irm https://collab.weez.boo/install.ps1 | iex', support: 'Windows 10 or later · x64 or x86 (32-bit) · PowerShell 5.1+', location: '%LOCALAPPDATA%\\Collab\\bin' },
+  { id: 'windows', label: 'Windows', shell: 'PowerShell', command: 'irm https://collab.weez.boo/install.ps1 | iex', support: 'Windows 10+ (x64 / x86), Windows 11+ (ARM64) · PowerShell 5.1+', location: '%LOCALAPPDATA%\\Collab\\bin' },
   { id: 'macos', label: 'macOS', shell: 'Bash or Zsh', command: unixCommand, support: 'macOS 13 or later · Apple Silicon or Intel', location: '~/.local/bin' },
   { id: 'linux', label: 'Linux', shell: 'Bash or Zsh', command: unixCommand, support: 'Linux with glibc · ARM64 or x64', location: '~/.local/bin' },
 ];
@@ -47,7 +47,7 @@ export function Installation({ version }: { version: string }) {
       <p className="rounded-lg bg-muted/30 px-4 py-3 text-xs text-muted-foreground"><strong className="font-medium text-foreground">Already installed?</strong> Run the same install command to update. Your saved login is preserved. No administrator access or terminal restart needed.</p>
       <details className="text-xs text-muted-foreground">
         <summary className="cursor-pointer py-2 font-medium text-foreground">Which Windows download do I need?</summary>
-        <p className="mt-2">The installer chooses automatically. For manual downloads, open Settings → System → About → System type. Choose x86 for a 32-bit operating system and x64 for a 64-bit Intel/AMD operating system. A 32-bit PowerShell window on 64-bit Windows still installs x64. Windows ARM64 is not included in this release.</p>
+        <p className="mt-2">The installer chooses automatically. For manual downloads, open Settings → System → About → System type. Choose x86 for a 32-bit operating system and x64 for a 64-bit Intel/AMD operating system. Choose ARM64 for an ARM-based processor on Windows 11 or later. A 32-bit PowerShell window on 64-bit Windows still installs the matching x64 or ARM64 executable.</p>
       </details>
     </div>
   );

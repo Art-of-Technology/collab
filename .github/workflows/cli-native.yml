@@ -36,6 +36,9 @@ jobs:
           - platform: windows-x64
             runner: windows-2022
             target: bun-windows-x64-baseline
+          - platform: windows-arm64
+            runner: windows-11-arm
+            target: bun-windows-arm64
           - platform: windows-x86
             runner: windows-2022
     steps:
@@ -110,6 +113,13 @@ jobs:
         run: node --test packages/cli/test/installer.test.mjs
         env:
           COLLAB_NATIVE_DOWNLOADS: ${{ github.workspace }}/downloads
+      - name: Test source Node CLI on Windows (x64 only)
+        if: matrix.platform == 'windows-x64'
+        shell: powershell
+        run: |
+          Write-Host 'SOURCE NODE: full Windows CLI/auth/ACL suite once on x64; installed-native coverage runs on every Windows architecture.'
+          node --test packages/cli/test/cli.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Node Windows CLI integration tests failed' }
       - name: Test one-command Windows installation and installed CLI
         if: runner.os == 'Windows'
         shell: powershell
@@ -157,14 +167,14 @@ jobs:
           for platform in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
             sha256sum --check "collab-$platform.tar.gz.sha256"
           done
-          sha256sum --check collab-windows-x64.zip.sha256 collab-windows-x86.zip.sha256
+          sha256sum --check collab-windows-x64.zip.sha256 collab-windows-x86.zip.sha256 collab-windows-arm64.zip.sha256
           sha256sum --check install.sh.sha256 install.ps1.sha256
       - name: Publish CLI release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat > release-notes.md <<'NOTES'
-          Standalone Collab CLI for macOS (Apple Silicon and Intel) and Linux (ARM64 and x64). No Node.js or Bun installation required. Also includes a native Windows x64 and x86 (32-bit) executables. The x86 executable bundles Node.js 22; no separate runtime installation is required.
+          Standalone Collab CLI for macOS (Apple Silicon and Intel) and Linux (ARM64 and x64). No Node.js or Bun installation required. Also includes native Windows x64, x86 (32-bit), and ARM64 executables. The x86 executable bundles Node.js 22; no separate runtime installation is required.
 
           One-command installation (macOS/Linux):
           ```sh
@@ -176,8 +186,8 @@ jobs:
           ```
           The installer verifies SHA-256 and configures PATH immediately and for future terminals. Scripts and archives with SHA-256 sidecars are attached. Instructions: https://collab.weez.boo/docs#installation
 
-          These downloads do not carry a verified publisher signature. The macOS builds are not notarized. Windows ARM64 and Alpine/musl builds are not included. Windows credentials use private owner ACLs; Unix 0700/0600 checks remain enforced.
+          These downloads do not carry a verified publisher signature. The macOS builds are not notarized. Alpine/musl builds are not included. Windows ARM64 requires Windows 11 or later. Windows credentials use private owner ACLs; Unix 0700/0600 checks remain enforced.
 
-          Each executable passed the CLI integration tests on its matching OS. Windows x86 is tested under WoW64 on Windows Server 2022, including the 32-bit PowerShell installation path; this is not acceptance on a physical 32-bit Windows machine. Tests use synthetic local servers; they are not production or browser acceptance.
+          Each executable passed the CLI integration tests on its matching OS. Windows ARM64 is tested on a native Windows 11 ARM64 runner. Windows x86 is tested under WoW64 on Windows Server 2022, including the 32-bit PowerShell installation path; this is not acceptance on a physical 32-bit Windows machine. Tests use synthetic local servers; they are not production or browser acceptance.
           NOTES
           gh release create "$GITHUB_REF_NAME" downloads/* --verify-tag --latest=false --title "Collab CLI ${GITHUB_REF_NAME#cli-v}" --notes-file release-notes.md

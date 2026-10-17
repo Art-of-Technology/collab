@@ -1,4 +1,4 @@
-param([ValidateSet('windows-x64', 'windows-x86')][string]$Platform = 'windows-x64')
+param([ValidateSet('windows-x64', 'windows-x86', 'windows-arm64')][string]$Platform = 'windows-x64')
 # Run x86 acceptance in 32-bit PowerShell on the WoW64 CI host.
 if ($Platform -eq 'windows-x86' -and [Environment]::Is64BitProcess) {
     & "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -File $PSCommandPath -Platform $Platform
@@ -33,18 +33,27 @@ function Invoke-WebRequest($Uri, [switch]$UseBasicParsing, $OutFile) {
     if ($name -notin @($archive, "$archive.sha256")) { throw 'Unexpected archive' }
     Copy-Item -LiteralPath (Join-Path $downloads $name) -Destination $OutFile
 }
+function Get-ItemPropertyValue($LiteralPath, $Name) {
+    if ($LiteralPath -ne 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' -or $Name -ne 'PROCESSOR_ARCHITECTURE') { throw 'Unexpected registry query' }
+    if ($script:selectionOnly) { return $script:nativeArchitecture }
+    if ($Platform -eq 'windows-x86') { return 'x86' }
+    Microsoft.PowerShell.Management\Get-ItemPropertyValue -LiteralPath $LiteralPath -Name $Name
+}
 try {
     # Verify OS architecture wins over the process architecture before any download.
     $script:selectionOnly = $true
     foreach ($case in @(
-        @{ process = 'x86'; wow = ''; expected = 'windows-x86' },
-        @{ process = 'AMD64'; wow = ''; expected = 'windows-x64' },
-        @{ process = 'x86'; wow = 'AMD64'; expected = 'windows-x64' },
-        @{ process = 'ARM64'; wow = ''; expected = $null },
-        @{ process = 'x86'; wow = 'ARM64'; expected = $null }
+        @{ process = 'x86'; wow = ''; native = 'x86'; expected = 'windows-x86' },
+        @{ process = 'AMD64'; wow = ''; native = 'AMD64'; expected = 'windows-x64' },
+        @{ process = 'x86'; wow = 'AMD64'; native = 'AMD64'; expected = 'windows-x64' },
+        @{ process = 'ARM64'; wow = ''; native = 'ARM64'; expected = 'windows-arm64' },
+        @{ process = 'x86'; wow = 'ARM64'; native = 'ARM64'; expected = 'windows-arm64' },
+        @{ process = 'AMD64'; wow = ''; native = 'ARM64'; expected = 'windows-arm64' },
+        @{ process = 'unknown'; wow = ''; native = 'unknown'; expected = $null }
     )) {
         $env:PROCESSOR_ARCHITECTURE = $case.process
         $env:PROCESSOR_ARCHITEW6432 = $case.wow
+        $script:nativeArchitecture = $case.native
         $script:selectedURL = $null
         $message = ''
         try { irm https://collab.weez.boo/install.ps1 | iex } catch { $message = $_.Exception.Message }
@@ -86,11 +95,10 @@ try {
         $schema = collab schema | ConvertFrom-Json
         if ($LASTEXITCODE -ne 0 -or $schema.version -ne $script:expectedVersion) { throw 'Installed CLI failed' }
     }
-    if ($Platform -eq 'windows-x86') {
-        $bytes = [IO.File]::ReadAllBytes($expected)
-        $pe = [BitConverter]::ToInt32($bytes, 0x3c)
-        if ([BitConverter]::ToUInt16($bytes, $pe + 4) -ne 0x14c) { throw 'Installed executable is not x86' }
-    }
+    $bytes = [IO.File]::ReadAllBytes($expected)
+    $pe = [BitConverter]::ToInt32($bytes, 0x3c)
+    $machineType = @{ 'windows-x86' = 0x14c; 'windows-x64' = 0x8664; 'windows-arm64' = 0xaa64 }
+    if ([BitConverter]::ToUInt16($bytes, $pe + 4) -ne $machineType[$Platform]) { throw "Installed executable architecture does not match $Platform" }
     $bin = Split-Path $expected
     $persistedPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     if (@($persistedPath -split ';' | Where-Object { $_ -eq $bin }).Count -ne 1) { throw 'User PATH missing or duplicated' }
@@ -105,14 +113,12 @@ try {
     Copy-Item -LiteralPath (Join-Path $env:COLLAB_NATIVE_DOWNLOADS "$archive.sha256") -Destination (Join-Path $downloads "$archive.sha256")
     irm https://collab.weez.boo/install.ps1 | iex
     if ($environment.GetValueKind('Path') -ne [Microsoft.Win32.RegistryValueKind]::String -or $environment.GetValue('Path') -cne $expectedRaw) { throw 'REG_SZ PATH was changed' }
-    # Exercise Node's file creation as well as the compiled Bun executable.
-    node --test (Join-Path $root 'packages/cli/test/cli.test.mjs')
-    if ($LASTEXITCODE -ne 0) { throw 'Node Windows CLI integration tests failed' }
     # Run the full authentication and API suite against the installed executable.
+    Write-Host "INSTALLED NATIVE ($Platform): full CLI/auth/ACL suite against $expected"
     $env:COLLAB_CLI_EXECUTABLE = $expected
     node --test (Join-Path $root 'packages/cli/test/cli.test.mjs')
     if ($LASTEXITCODE -ne 0) { throw 'Installed Windows CLI integration tests failed' }
-    Write-Host 'PASS: PowerShell one-command installation, immediate PATH, repeat install, checksum refusal, full CLI suite'
+    Write-Host 'PASS: PowerShell one-command installation, immediate PATH, repeat install, checksum refusal, full installed-native CLI/auth/ACL suite'
 } finally {
     $env:PROCESSOR_ARCHITECTURE = $oldArchitecture
     $env:PROCESSOR_ARCHITEW6432 = $oldWowArchitecture
