@@ -32,6 +32,20 @@ test('shared email sender uses Resend and the authorized Collab address', async 
   assert.ok(options.signal instanceof AbortSignal);
 });
 
+test('shared email sender only includes caller-supplied plain text', async () => {
+  const html = '<scr<script>ipt>alert(1)</scr</script>ipt>';
+  for (const text of [undefined, '', 'Ready']) {
+    const f = fixture();
+    const result = await f.sendEmail({ to: 'recipient@example.test', subject: 'Notification', html, text });
+    assert.equal(result.success, true);
+    assert.equal(f.calls.length, 1);
+    const body = JSON.parse(f.calls[0][1].body);
+    assert.equal(body.html, html);
+    assert.equal(Object.hasOwn(body, 'text'), text !== undefined);
+    assert.equal(body.text, text);
+  }
+});
+
 test('missing credentials refuse delivery without contacting any provider', async () => {
   const f = fixture({ env: { RESEND_API_KEY: '' } });
   const result = await f.sendEmail({ to: 'recipient@example.test', subject: 'Invite', html: '<p>Invite</p>' });
@@ -92,14 +106,17 @@ test('interrupted and malformed successful responses remain uncertain without re
 });
 
 test('invitation uses a canonical acceptance link and escapes names in HTML', async () => {
-  const f = fixture();
-  await f.sendWorkspaceInvitationEmail({ to: 'recipient@example.test', inviterName: '<img src=x onerror=evil()>', workspaceName: 'Team <script>bad()</script>', invitationToken: 'token/with?characters' });
-  assert.equal(f.calls.length, 1);
-  const body = JSON.parse(f.calls[0][1].body);
-  assert.match(body.html, /https:\/\/collab.example.test\/workspace-invitation\/token%2Fwith%3Fcharacters/);
-  assert.doesNotMatch(body.html, /<script>|<img/);
-  assert.match(body.html, /&lt;img/);
-  assert.match(body.text, /https:\/\/collab.example.test\/workspace-invitation\/token%2Fwith%3Fcharacters/);
+  for (const [scriptTag, imageTag] of [['script', 'img'], ['SCRIPT', 'IMG'], ['ScRiPt', 'ImG']]) {
+    const f = fixture();
+    await f.sendWorkspaceInvitationEmail({ to: 'recipient@example.test', inviterName: `<${imageTag} src=x onerror=evil()>`, workspaceName: `Team <${scriptTag}>bad()</${scriptTag}>`, invitationToken: 'token/with?characters' });
+    assert.equal(f.calls.length, 1);
+    const body = JSON.parse(f.calls[0][1].body);
+    assert.match(body.html, /https:\/\/collab.example.test\/workspace-invitation\/token%2Fwith%3Fcharacters/);
+    assert.doesNotMatch(body.html, /<(?:script|img)\b/i);
+    assert.ok(body.html.includes(`&lt;${imageTag} src=x onerror=evil()&gt;`));
+    assert.ok(body.html.includes(`Team &lt;${scriptTag}&gt;bad()&lt;/${scriptTag}&gt;`));
+    assert.match(body.text, /https:\/\/collab.example.test\/workspace-invitation\/token%2Fwith%3Fcharacters/);
+  }
 });
 
 test('invitation endpoint preserves access checks and pending links for rejected or uncertain delivery', async () => {

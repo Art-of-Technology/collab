@@ -23,7 +23,7 @@ export async function sendEmail({
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject, html, text: text ?? html.replace(/<[^>]*>/g, '') }),
+      body: JSON.stringify({ from, to: [to], subject, html, text }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) {
