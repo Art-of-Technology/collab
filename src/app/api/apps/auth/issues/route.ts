@@ -1,3 +1,4 @@
+import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
 import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 /**
  * Third-Party App API: Issues Endpoints
@@ -399,6 +400,8 @@ export const POST = withAppAuth(
           }
         });
 
+      if (issueData.labels?.length) await enqueueLabelHandoff(tx, context.user.id, created, []);
+
         // Update the counter for next issue
         const updatedCounters = { ...counters, TASK: nextNum + 1 };
         await tx.project.update({
@@ -451,6 +454,7 @@ export const POST = withAppAuth(
       return NextResponse.json(newIssue, { status: 201 });
 
     } catch (error) {
+    if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
       if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
         return NextResponse.json(

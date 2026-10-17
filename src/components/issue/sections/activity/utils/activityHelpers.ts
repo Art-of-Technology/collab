@@ -51,6 +51,7 @@ export const getActionText = (activity: IssueActivity, itemType: string = 'issue
     return `${activity.details.agent.name} ${agentActions[activity.action]}${names.length ? ` to ${names.join(', ')}` : ''}`;
   }
   const userName = activity.user.name || 'Unknown User';
+  if (activity.action === 'AGENT_LABEL_ADDED') return `${userName} added labels and notified role subscribers`;
   const actionName = getActionDisplayName(activity.action).toLowerCase();
   
   // Handle aggregated view activities

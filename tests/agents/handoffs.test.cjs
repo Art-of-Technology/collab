@@ -142,4 +142,76 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
       'collab context get --project p-w --workspace w',
     ]);
   });
+  await t.test('label triggers are atomic, deduplicated on retry, scoped and claimable', async () => {
+    const { enqueueLabelHandoff, InvalidIssueLabels } = load('src/lib/agent-label-triggers.ts', { 'node:crypto': require('node:crypto') });
+    await prisma.issue.create({ data: { id: 'label-issue', workspaceId: 'w', projectId: 'p-w', title: 'Label trigger', issueKey: 'w-2' } });
+    const change = (labels, fail = false) => prisma.$transaction(async tx => {
+      const before = await tx.issue.findUniqueOrThrow({ where: { id: 'label-issue' }, include: { labels: true } });
+      const issue = await tx.issue.update({ where: { id: before.id }, data: { labels: { set: labels.map(id => ({ id })) } }, include: { labels: true } });
+      const event = await enqueueLabelHandoff(tx, 'alice', issue, before.labels.map(label => label.id));
+      if (fail) throw new Error('abort issue edit');
+      return event;
+    }, { isolationLevel: 'Serializable' });
+    await assert.rejects(change(['label-w'], true), /abort issue edit/);
+    assert.equal(await prisma.agentHandoff.count({ where: { issueId: 'label-issue' } }), 0);
+    assert.equal((await prisma.issue.findUnique({ where: { id: 'label-issue' }, include: { labels: true } })).labels.length, 0);
+    await assert.rejects(change(['label-foreign']), e => e instanceof InvalidIssueLabels);
+    const concurrent = await Promise.allSettled([change(['label-w']), change(['label-w'])]);
+    assert.ok(concurrent.some(r => r.status === 'fulfilled'));
+    for (const r of concurrent.filter(r => r.status === 'rejected')) assert.equal(r.reason.code, 'P2034');
+    await change(['label-w']); // retry after a conflict or an identical save
+    const events = await prisma.agentHandoff.findMany({ where: { issueId: 'label-issue' } });
+    assert.equal(events.length, 1);
+    const event = events[0];
+    assert.equal(event.kind, 'label_added');
+    assert.equal((await inbox(alice, 'worker-a')).items.some(h => h.id === event.id), true);
+    assert.equal((await inbox(bob, 'worker-b')).items.some(h => h.id === event.id), true);
+    assert.equal((await inbox(outsider, 'outsider')).items.some(h => h.id === event.id), false);
+    const claims = await Promise.allSettled([act(alice, event, 'worker-a', 'claim'), act(bob, event, 'worker-b', 'claim')]);
+    assert.equal(claims.filter(r => r.status === 'fulfilled').length, 1);
+    assert.equal(claims.find(r => r.status === 'rejected').reason.code, 'already_claimed');
+    await change([]);
+    assert.equal((await prisma.agentHandoff.findUnique({ where: { id: event.id } })).status, 'claimed');
+    await change(['label-w']);
+    assert.equal(await prisma.agentHandoff.count({ where: { issueId: 'label-issue' } }), 2);
+    assert.equal(await prisma.issueActivity.count({ where: { itemId: 'label-issue', action: 'AGENT_LABEL_ADDED' } }), 2);
+    await prisma.taskLabel.create({ data: { id: 'unsubscribed', workspaceId: 'w', name: 'ordinary', color: '#123456' } });
+    await change(['label-w', 'unsubscribed']);
+    assert.equal(await prisma.agentHandoff.count({ where: { issueId: 'label-issue' } }), 2);
+    // Creating an issue with a subscribed label uses the same transaction helper.
+    await prisma.$transaction(async tx => {
+      const issue = await tx.issue.create({ data: { id: 'label-created', workspaceId: 'w', projectId: 'p-w', title: 'New issue', labels: { connect: { id: 'label-w' } } }, include: { labels: true } });
+      await enqueueLabelHandoff(tx, 'alice', issue, []);
+    });
+    assert.equal(await prisma.agentHandoff.count({ where: { issueId: 'label-created' } }), 1);
+  });
+
+  await t.test('web mutation and CLI HTTP route commit label handoffs and reject foreign labels', async () => {
+    const triggers = load('src/lib/agent-label-triggers.ts', { 'node:crypto': require('node:crypto') });
+    const deps = { zod: require('zod'), '@prisma/client': require('@prisma/client'), '@/lib/prisma': { prisma },
+      '@/lib/agent-label-triggers': triggers, '@/lib/issue-finder': finder,
+      '@/lib/permissions': { Permission: {}, canActOnOwnContent: () => true,
+        checkUserPermissions: async () => ({ undefined: { hasPermission: true } }) },
+      '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
+      '@/lib/forge/legacy-write-guard': { assertLegacyProjectWriteAllowed: async () => {}, assertLegacyIssueWriteAllowed: async () => {}, ForgeProjectWriteError: class extends Error {} },
+      '@/lib/apps/auth-middleware': { withAppAuth: fn => fn },
+      '@/lib/event-bus': { emitIssueUpdated: async () => {} }, 'next/server': { NextResponse: Response },
+    };
+    const { updateIssue } = load('src/lib/issue-mutation.ts', deps);
+    const { PATCH } = load('src/app/api/apps/auth/issues/[issueIdOrKey]/route.ts', deps, { console });
+    await prisma.issue.create({ data: { id: 'route-labels', workspaceId: 'w', projectId: 'p-w', title: 'Routes', issueKey: 'w-3' } });
+    const result = await updateIssue('alice', 'route-labels', { labels: ['label-w'] }, 'w');
+    assert.equal(result.error, undefined);
+    assert.equal(await prisma.agentHandoff.count({ where: { issueId: 'route-labels' } }), 1);
+    const patch = labels => PATCH(new Request('https://example.test', { method: 'PATCH', body: JSON.stringify({ labels }) }), alice, { params: Promise.resolve({ issueIdOrKey: 'route-labels' }) });
+    assert.equal((await patch(['label-w'])).status, 200);
+    assert.equal(await prisma.agentHandoff.count({ where: { issueId: 'route-labels' } }), 1);
+    assert.equal((await patch(['label-foreign'])).status, 400);
+    assert.deepEqual((await prisma.issue.findUnique({ where: { id: 'route-labels' }, include: { labels: true } })).labels.map(l => l.id), ['label-w']);
+    assert.equal((await patch([])).status, 200);
+    assert.equal((await patch(['label-w'])).status, 200);
+    assert.equal(await prisma.agentHandoff.count({ where: { issueId: 'route-labels' } }), 2);
+    assert.equal((await updateIssue('outsider', 'route-labels', { labels: [] }, 'w')).status, 404);
+  });
+
 });

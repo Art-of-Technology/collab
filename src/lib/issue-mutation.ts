@@ -1,5 +1,6 @@
 import { ForgeProjectWriteError, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { z } from 'zod';
+import { enqueueLabelHandoff } from '@/lib/agent-label-triggers';
 import { IssueType, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { checkUserPermissions, canActOnOwnContent, Permission } from '@/lib/permissions';
@@ -91,7 +92,7 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
           projectId: existingIssue.projectId, updatedAt: existingIssue.updatedAt,
           ...issueReadAccessWhere(userId)
         },
-        select: { id: true }
+        select: { id: true, labels: { select: { id: true } } }
       });
       if (!current) return { error: 'Issue changed; reload and retry', status: 409 };
 
@@ -181,6 +182,7 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
         },
         include: getStandardIssueInclude(userId)
       });
+      if (labelIds) await enqueueLabelHandoff(tx, userId, issue, current.labels.map(label => label.id));
       if (assigneeChanged && issue.assigneeId) {
         await tx.issueAssignee.upsert({
           where: { issueId_userId: { issueId: existingIssue.id, userId: issue.assigneeId } },

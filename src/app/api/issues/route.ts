@@ -1,3 +1,4 @@
+import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
 import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
@@ -330,6 +331,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      if (labels.length) await enqueueLabelHandoff(tx, session.user.id, newIssue, []);
+
       // Update the TASK counter to be one more than what we used (all types use TASK counter now)
       const updatedNext = { ...(currentProject.nextIssueNumbers as any) };
       updatedNext.TASK = nextNum + 1;
@@ -477,6 +480,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ issue: created }, { status: 201 });
   } catch (error) {
+    if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
     if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error('[ISSUES_POST]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

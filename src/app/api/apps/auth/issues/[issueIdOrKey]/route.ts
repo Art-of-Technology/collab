@@ -8,6 +8,8 @@ import { ForgeProjectWriteError, assertLegacyIssueDeleteAllowed, assertLegacyIss
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
+import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 import { emitIssueUpdated, emitIssueDeleted } from '@/lib/event-bus';
@@ -327,7 +329,11 @@ export const PATCH = withAppAuth(
       }
 
       // Update issue
-      const updatedIssue = await prisma.issue.update({
+      const updatedIssue = await prisma.$transaction(async tx => {
+        const before = updateData.labels === undefined ? null : await tx.issue.findUniqueOrThrow({
+          where: { id: existingIssue.id }, select: { labels: { select: { id: true } } },
+        });
+        const changed = await tx.issue.update({
         where: { id: existingIssue.id },
         data: {
           ...update,
@@ -376,6 +382,10 @@ export const PATCH = withAppAuth(
         },
       });
 
+        if (before) await enqueueLabelHandoff(tx, context.user.id, changed, before.labels.map(label => label.id));
+        return changed;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
       // Create activity records
       for (const change of changes) {
         await prisma.issueActivity.create({
@@ -408,6 +418,10 @@ export const PATCH = withAppAuth(
 
       return NextResponse.json(updatedIssue);
     } catch (error) {
+      if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+        return NextResponse.json({ error: 'issue_conflict', error_description: 'Issue changed; reload and retry' }, { status: 409 });
+      }
       if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
         return NextResponse.json(

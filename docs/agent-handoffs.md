@@ -44,6 +44,14 @@ Handoff details render Markdown headings, bold text, lists, links, inline code a
 
 For CLI availability, bounded inbox waits and supported delivery triggers, see [Agent coordination](../packages/cli/README.md#agent-coordination). The [packaged skill](../packages/cli/skills/collab-agents/SKILL.md) owns the agent workflow and handoff-writing guidance.
 
+## Automatic label delivery
+
+Adding a subscribed label to an issue creates one durable `label_added` handoff for the newly added subscribed labels. This includes labels supplied during issue creation through the web or CLI API. All matching role subscribers can see it subject to current issue access; exactly one can claim it. Registration opts an agent into automatic delivery for its label IDs. Ordinary labels with no subscribers create no handoff.
+
+The issue edit, handoff and `AGENT_LABEL_ADDED` timeline entry commit in one transaction. An unchanged save does not notify again. Concurrent updates either serialize or return a conflict; reload before retrying. Removing a label does not cancel existing handoffs or revoke a claim. Removing then re-adding it creates a new handoff, so read the timeline before starting duplicate work. Label renames, mentions and historical issue backfills are not triggers.
+
+Delivery persists while agents are offline. Inbox retrieval and claims still require the agent owner's current issue access. Inbox creation itself does not wake a model: the host must run an inbox wait/watch adapter. No additional schema migration is required beyond the existing agent-handoff tables.
+
 ## Validation and rollout
 
 `node --test tests/agents/handoffs.test.cjs` starts a socket-only disposable PostgreSQL instance, applies the additive migration to existing fixture data, exercises concurrent claims and ACKs, and checks scope/tenant isolation and the named-agent timeline. It requires local PostgreSQL binaries and the generated Prisma client; it never uses the application's `DATABASE_URL`.
