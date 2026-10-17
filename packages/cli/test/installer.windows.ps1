@@ -1,4 +1,4 @@
-param([ValidateSet('windows-x64', 'windows-x86')][string]$Platform = 'windows-x64')
+param([ValidateSet('windows-x64', 'windows-x86', 'windows-arm64')][string]$Platform = 'windows-x64')
 # Run x86 acceptance in 32-bit PowerShell on the WoW64 CI host.
 if ($Platform -eq 'windows-x86' -and [Environment]::Is64BitProcess) {
     & "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -File $PSCommandPath -Platform $Platform
@@ -40,8 +40,9 @@ try {
         @{ process = 'x86'; wow = ''; expected = 'windows-x86' },
         @{ process = 'AMD64'; wow = ''; expected = 'windows-x64' },
         @{ process = 'x86'; wow = 'AMD64'; expected = 'windows-x64' },
-        @{ process = 'ARM64'; wow = ''; expected = $null },
-        @{ process = 'x86'; wow = 'ARM64'; expected = $null }
+        @{ process = 'ARM64'; wow = ''; expected = 'windows-arm64' },
+        @{ process = 'x86'; wow = 'ARM64'; expected = 'windows-arm64' },
+        @{ process = 'unknown'; wow = ''; expected = $null }
     )) {
         $env:PROCESSOR_ARCHITECTURE = $case.process
         $env:PROCESSOR_ARCHITEW6432 = $case.wow
@@ -86,11 +87,10 @@ try {
         $schema = collab schema | ConvertFrom-Json
         if ($LASTEXITCODE -ne 0 -or $schema.version -ne $script:expectedVersion) { throw 'Installed CLI failed' }
     }
-    if ($Platform -eq 'windows-x86') {
-        $bytes = [IO.File]::ReadAllBytes($expected)
-        $pe = [BitConverter]::ToInt32($bytes, 0x3c)
-        if ([BitConverter]::ToUInt16($bytes, $pe + 4) -ne 0x14c) { throw 'Installed executable is not x86' }
-    }
+    $bytes = [IO.File]::ReadAllBytes($expected)
+    $pe = [BitConverter]::ToInt32($bytes, 0x3c)
+    $machineType = @{ 'windows-x86' = 0x14c; 'windows-x64' = 0x8664; 'windows-arm64' = 0xaa64 }
+    if ([BitConverter]::ToUInt16($bytes, $pe + 4) -ne $machineType[$Platform]) { throw "Installed executable architecture does not match $Platform" }
     $bin = Split-Path $expected
     $persistedPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     if (@($persistedPath -split ';' | Where-Object { $_ -eq $bin }).Count -ne 1) { throw 'User PATH missing or duplicated' }

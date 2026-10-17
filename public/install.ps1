@@ -1,12 +1,13 @@
 function Install-Collab {
     $ErrorActionPreference = 'Stop'
-    $version = '0.4.1'
+    $version = '0.4.2'
     $architecture = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
     if ($env:OS -ne 'Windows_NT') { throw 'This installer requires Windows. Use install.sh on macOS/Linux.' }
     $platform = switch ($architecture) {
         'AMD64' { 'windows-x64' }
         'x86' { 'windows-x86' }
-        default { throw "Unsupported Windows architecture: $architecture. Supported: x64 and x86 (32-bit)." }
+        'ARM64' { 'windows-arm64' }
+        default { throw "Unsupported Windows architecture: $architecture. Supported: x64, x86 (32-bit), and ARM64." }
     }
     $archive = "collab-$platform.zip"
     $base = "https://github.com/Art-of-Technology/collab/releases/download/cli-v$version"

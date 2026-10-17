@@ -15,6 +15,7 @@ const nativeDownloads = [
   { name: 'Linux', chip: 'Intel / AMD x64', platform: 'linux-x64' },
   { name: 'Windows', chip: 'Intel / AMD x64 (64-bit)', platform: 'windows-x64' },
   { name: 'Windows', chip: 'x86 (32-bit)', platform: 'windows-x86' },
+  { name: 'Windows', chip: 'ARM64', platform: 'windows-arm64' },
 ];
 
 export const metadata: Metadata = {
