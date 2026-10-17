@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import path from 'node:path';
+import { watchInbox } from '../src/inbox-watch.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { commands, flagName, scopes } from '../src/commands.mjs';
 import { CliError, request, session, store } from '../src/client.mjs';
@@ -7,6 +9,7 @@ import { login, refresh } from '../src/auth.mjs';
 import cliPackage from '../package.json' with { type: 'json' };
 
 const booleans = new Set(['help', 'json', 'all', 'yes', 'dry-run', 'read-only']);
+const watchOptions = ['callback', 'callback-args', 'watch-seconds', 'poll-seconds', 'callback-timeout'];
 const globals = ['url', 'profile', 'workspace', 'project', 'timeout', 'json'];
 function parse(argv) {
   const words = [], options = Object.create(null);
@@ -51,7 +54,7 @@ async function boundedInput(file) {
   } finally { clearTimeout(timer); if (file !== '-') stream.destroy(); }
 }
 function help() {
-  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : [])].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
+  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...(spec.watch ? watchOptions : [])].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
 }
 async function main() {
   const { words, options } = parse(process.argv.slice(2));
@@ -89,7 +92,7 @@ async function main() {
   const args = words.slice(name.split(' ').length);
   const parameters = [...spec.path.matchAll(/:(\w+)/g)].map(m => m[1]);
   if (args.length !== parameters.length || args.some(a => !/^[a-zA-Z0-9_-]+$/.test(a))) throw new CliError('invalid_identifier', `Expected ${parameters.length} ID/key argument(s); only letters, digits, underscores and hyphens allowed.`);
-  allowed(options, [...globals, ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), 'input', 'content-file', 'description-file', 'yes', 'dry-run', 'all']);
+  allowed(options, [...globals, ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...(spec.watch ? watchOptions : []), 'input', 'content-file', 'description-file', 'yes', 'dry-run', 'all']);
   if (options.all && !spec.pagination) throw new CliError('unsupported_pagination', '--all is supported only for issues, notes and worklogs lists.');
   if (spec.method === 'DELETE' && !options.yes) throw new CliError('confirmation_required', 'Deletion requires --yes.');
   const body = {};
@@ -157,6 +160,29 @@ async function main() {
   if (spec.action) body.action = spec.action;
   const payload = Object.keys(spec.fields).length ? body : undefined;
   const apiPath = () => `/api/apps/auth/${endpoint}${query.size ? `?${query}` : ''}`;
+  if (spec.watch) {
+    if (!options.callback || !path.isAbsolute(options.callback)) throw new CliError('invalid_callback', 'Supply --callback with an absolute executable path. Use --callback-args for a JSON array of fixed arguments.');
+    if (!options.workspace) throw new CliError('required_field', 'Watcher requires explicit --workspace ID.');
+    if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(options.agent)) throw new CliError('invalid_value', 'Invalid agent name.');
+    const callbackArgs = converted(options['callback-args'] ?? '[]', 'array');
+    if (callbackArgs.length > 32 || callbackArgs.some(arg => arg.length > 4096 || arg.includes('\0'))) throw new CliError('invalid_callback', 'Callback arguments exceed supported bounds.');
+    const duration = converted(options['watch-seconds'] ?? '300', 'integer');
+    const interval = converted(options['poll-seconds'] ?? '5', 'integer');
+    const callbackTimeout = converted(options['callback-timeout'] ?? '30', 'integer');
+    if (duration < 1 || duration > 3600 || interval < 1 || interval > 60 || callbackTimeout < 1 || callbackTimeout > 120) throw new CliError('invalid_timeout', 'Watch 1..3600 seconds, poll 1..60 seconds, callback timeout 1..120 seconds.');
+    if (options['dry-run']) return { dryRun: true, callback: options.callback, callbackArgs, agent: options.agent, workspaceId: selected.workspace, duration, interval, callbackTimeout };
+    const controller = new AbortController();
+    const stop = () => controller.abort();
+    process.once('SIGINT', stop); process.once('SIGTERM', stop);
+    try {
+      return await watchInbox({ callback: options.callback, callbackArgs, agent: options.agent, workspaceId: selected.workspace,
+        origin: selected.base, durationMs: duration * 1000, intervalMs: interval * 1000, callbackTimeoutMs: callbackTimeout * 1000,
+        signal: controller.signal, read: (state, remaining) => {
+          const q = new URLSearchParams(query); q.set('state', state); q.set('limit', '50');
+          return request(selected.base, `/api/apps/auth/agents/inbox?${q}`, { token: selected.token, timeout: Math.min(timeout, remaining) });
+        } });
+    } finally { process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop); }
+  }
   if (options['dry-run']) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), body: payload };
   const send = async (requestTimeout = timeout) => {
     const result = await request(selected.base, apiPath(), { token: selected.token, method: spec.method, body: payload, timeout: requestTimeout });

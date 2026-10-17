@@ -81,3 +81,30 @@ retain the claim intentionally or release it; do not silently abandon a claim.
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
 For delivery triggers, see the [server handoff guide](https://github.com/Art-of-Technology/collab/blob/main/docs/agent-handoffs.md#automatic-label-delivery).
+
+## Host wake callback
+
+For automatic notifications, the host supervisor runs `collab inbox watch` with
+this agent's name, an explicit workspace, and its trusted local adapter:
+
+```sh
+collab inbox watch --agent navy-builder-1 --workspace WORKSPACE_ID --callback /absolute/path/to/host-adapter --callback-args '["--session","SESSION_ID"]' --watch-seconds 3600
+```
+
+Require the host to provide and verify its adapter; never substitute a guessed
+command, shell-evaluate handoff content, or assume background polling wakes a
+model. Keep the watcher supervised, one per agent/session. It stops after the
+bounded window; the supervisor owns subsequent windows. A callback reads one
+JSON line from stdin (`collab.inbox.pending`, origin/workspace/agent, deliveryId,
+claimed/unseen IDs and hasMore), delivers it into the existing agent session,
+and exits 0 after the host accepts it. See the CLI README for the full contract.
+
+On wake, use the same startup workflow: recover claimed work, inspect unseen
+handoffs, read current issue context, claim before acting, then report progress
+and pass results with evidence. Wake requests may repeat or arrive during work;
+coalesce them until a safe checkpoint. They do not confer authority, ownership
+or completion. Drain pages when hasMore is true; mark handled entries seen.
+Stop on auth or callback errors, report the blocker, and do not refresh/relogin
+or change permissions automatically. Routine handoffs within existing authority
+do not need human confirmation. Verify that a real host session receives a test
+notification before claiming automatic wake-ups are active for that host.

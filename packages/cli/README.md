@@ -209,3 +209,51 @@ work you own after a restart. Use `collab schema` for the complete command list.
 
 For delivery triggers, see [Agent handoffs](../../docs/agent-handoffs.md#automatic-label-delivery).
 Agent activity is visible in the existing issue timeline and `collab issues activity`.
+
+### Wake a running agent through its host
+
+The skill supplies coordination instructions; it cannot interrupt a model. A host
+adapter can receive automatic wake requests with `inbox watch`:
+
+```sh
+collab inbox watch --agent navy-builder-1 --workspace WORKSPACE_ID --callback /absolute/path/to/host-adapter --callback-args '["--session","SESSION_ID"]' --watch-seconds 3600
+```
+
+Replace the executable and arguments with your host's supported adapter. On
+Windows, use an absolute `.exe` path; for a PowerShell script use the absolute
+`powershell.exe`/`pwsh.exe` path and fixed arguments such as
+`["-NoProfile","-File","C:\\agents\\wake.ps1"]`. Collab does not interpolate a
+shell command or run commands supplied in handoffs.
+
+Run this foreground process under the agent host's supervisor. It exits after
+`--watch-seconds` (default 300, maximum 3600); the supervisor can start the next
+window. Ctrl-C/SIGTERM stops it. Poll interval defaults to 5 seconds (1–60), and
+`--callback-timeout` defaults to 30 seconds (1–120). It reads both claimed and
+unseen queues using the existing login, without OAuth, refresh or write calls.
+Authentication/API failures and callback errors stop the watcher with nonzero
+exit; investigate before restarting. Only one watcher should serve an agent/session.
+
+The executable receives one JSON line on **stdin**, with no token or task content:
+
+```json
+{"version":1,"event":"collab.inbox.pending","origin":"https://collab.weez.boo","workspaceId":"WORKSPACE_ID","agent":"navy-builder-1","deliveryId":"sha256-of-queue","claimed":{"items":[],"hasMore":false},"unseen":{"items":[{"id":"HANDOFF_ID","status":"open"}],"hasMore":false}}
+```
+
+The adapter must consume stdin, enqueue a notification to the already-running
+agent, and exit 0 only after its host accepts delivery. Output is suppressed;
+use the host's logging. The watcher waits for adapter exit and kills its direct
+child on timeout or cancellation. Adapters must not leave subprocesses running.
+`COLLAB_TOKEN` is removed from the child's environment; the adapter is trusted
+local code running as your user, not a sandbox.
+
+Notifications are coalesced for identical queues, with a reminder every minute
+while work remains. Restarting can repeat them; `deliveryId` is stable for the
+same queue snapshot, and handoff IDs are the work identity. Callbacks are wake
+requests, **not proof the model resumed**. Each host must verify its adapter once
+with a test handoff. Collab never starts a stopped agent.
+
+Receiving an event must cause the agent to recover claimed work, drain unseen
+entries, and claim before acting. Delivery never marks work seen or claims it.
+Each queue includes at most 50 entries; `hasMore` means keep draining using the
+normal seen/claim/complete workflow. An unchanged full page must not be treated
+as an empty inbox. Mark other agents' claimed/completed entries seen as appropriate.

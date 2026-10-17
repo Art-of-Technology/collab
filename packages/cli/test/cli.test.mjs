@@ -71,6 +71,49 @@ test('inbox wait does not turn an empty final window into a transport failure', 
   assert.equal(result.data.timedOut, true);
   assert.equal(f.calls.length, 1, 'do not dispatch a second request with less than a second remaining');
 });
+
+test('inbox watch invokes a fixed adapter with bounded JSON, coalesces queues and never mutates', async t => {
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ items: [{ id: 'handoff-one', status: 'open', content: '$(touch SHOULD_NOT_EXIST)' }], hasMore: true })));
+  const output = path.join(f.dir, 'wake events.jsonl');
+  const adapter = path.join(f.dir, 'adapter with spaces.cjs');
+  writeFileSync(adapter, `const fs = require('node:fs'); let input = ''; process.stdin.on('data', b => input += b); process.stdin.on('end', () => { if (process.env.COLLAB_TOKEN) process.exit(7); fs.appendFileSync(process.argv[2], input); });`);
+  const result = await f.run(['inbox', 'watch', '--agent', 'reviewer', '--workspace', 'w', '--callback', process.execPath,
+    '--callback-args', JSON.stringify([adapter, output]), '--watch-seconds', '2', '--poll-seconds', '1']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.data.callbacks, 1);
+  assert.equal(result.data.timedOut, true);
+  const events = readFileSync(output, 'utf8').trim().split('\n').map(JSON.parse);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].event, 'collab.inbox.pending');
+  assert.equal(events[0].agent, 'reviewer');
+  assert.equal(events[0].workspaceId, 'w');
+  assert.equal(events[0].unseen.hasMore, true);
+  assert.deepEqual(events[0].unseen.items, [{ id: 'handoff-one', status: 'open' }]);
+  assert.equal(JSON.stringify(events).includes('touch'), false, 'remote content is not a callback argument or payload');
+  assert.ok(f.calls.length >= 4);
+  assert.ok(f.calls.every(c => c.method === 'GET'));
+  assert.ok(f.calls.some(c => c.url.includes('state=claimed')));
+  assert.ok(f.calls.every(c => c.url.includes('workspaceId=w')));
+});
+
+test('watch stops on adapter failure, timeout or authentication refusal without writes/retries', async t => {
+  const f = await fixture(t, (_req, res) => res.end('{"items":[{"id":"work","status":"open"}],"hasMore":false}'));
+  const args = ['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath, '--watch-seconds', '3'];
+  const failed = await f.run([...args, '--callback-args', JSON.stringify(['-e', 'process.stdin.resume();process.stdin.on("end",()=>process.exit(7))'])]);
+  assert.equal(failed.error.error, 'wake_callback_failed');
+  assert.equal(f.calls.length, 2);
+  const timed = await f.run([...args, '--callback-timeout', '1', '--callback-args', JSON.stringify(['-e', 'process.stdin.resume();setInterval(()=>{},1000)'])]);
+  assert.equal(timed.error.error, 'wake_callback_failed');
+  assert.equal(f.calls.length, 4);
+  const denied = await fixture(t, (_req, res) => { res.statusCode = 401; res.end('{}'); });
+  assert.notEqual((await denied.run(args)).code, 0);
+  assert.equal(denied.calls.length, 1);
+  const before = f.calls.length;
+  assert.notEqual((await f.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', 'relative-file'])).code, 0);
+  assert.notEqual((await f.run([...args, '--callback-args', '[1]'])).code, 0);
+  assert.equal(f.calls.length, before);
+});
+
 function grantEveryoneRead(file) {
   const script = `$ErrorActionPreference = 'Stop'; $p = [Console]::In.ReadToEnd(); $acl = Get-Acl -LiteralPath $p; $sid = New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0'); $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'Read', 'Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $p -AclObject $acl`;
   const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { input: file, encoding: 'utf8' });
