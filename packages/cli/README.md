@@ -20,7 +20,7 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), or Windows x64 with PowerShell 5.1+. Alpine/musl and native Windows ARM64 are not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-[CLI 0.3.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.3.0) are hosted on GitHub. You can inspect `install.sh` or `install.ps1` there before running them. Archives and SHA-256 sidecars are also available for manual downloads.
+[CLI 0.4.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.4.0) are hosted on GitHub. You can inspect `install.sh` or `install.ps1` there before running them. Archives and SHA-256 sidecars are also available for manual downloads.
 
 Version 0.2.1 fixes Windows login failing with `unsafe_credentials` after browser approval. Run the installer again to update; existing credentials are preserved. The native runtime includes the Windows subprocess timeout fix, and credential ownership/ACL checks remain enforced.
 
@@ -193,12 +193,12 @@ To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_
 
 ## Agent coordination
 
-These commands are included in CLI 0.3.0. Run the one-command installer again to update; existing credentials are preserved. Version 0.2.1 does not include them.
+These commands are included in CLI 0.4.0. Run the one-command installer again to update; existing credentials are preserved. Version 0.2.1 does not include them.
 
 The [generic agent skill](skills/collab-agents/SKILL.md) describes registration,
 role subscriptions, bounded inbox waits, atomic claims and handoffs. Load this
 file through your agent's supported skill mechanism; it does not launch agents.
-Native users can download the [versioned SKILL.md](https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v0.3.0/packages/cli/skills/collab-agents/SKILL.md).
+Native users can download the [versioned SKILL.md](https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v0.4.0/packages/cli/skills/collab-agents/SKILL.md).
 Requires the matching server release and its additive agent-handoff migration.
 
 `collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to
