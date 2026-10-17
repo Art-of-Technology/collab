@@ -142,15 +142,15 @@ Collab is designed to streamline internal communication and work tracking by off
    OPENAPI_KEY="sk-your-openai-api-key-here"  # Required for AI text improvement and board generation
    ```
 
-   #### Email Configuration (SMTP)
+   #### Email Configuration (Resend)
    ```bash
-   EMAIL_FROM="Collab Team <noreply@yourapp.com>"
-   EMAIL_HOST="smtp.example.com"  # Your SMTP server
-   EMAIL_PORT="587"  # SMTP port (587 for TLS, 465 for SSL)
-   EMAIL_USER="your-smtp-username"
-   EMAIL_PASSWORD="your-smtp-password"
-   EMAIL_SECURE="false"  # Set to "true" for port 465, "false" for other ports
+   RESEND_API_KEY="re-your-server-only-api-key"
+   EMAIL_FROM="Collab <collab@weezboo.com>"
+   NEXT_PUBLIC_APP_URL="https://collab.weez.boo"
    ```
+   Verify `weezboo.com` for sending in the same Resend account. Invitations use the shared transactional email sender and include the configured application’s acceptance link. SMTP settings are no longer used for invitations.
+
+   Provider rejection, missing configuration, or unconfirmed delivery is reported as `emailSent: false`; the pending invitation and copyable link remain available. A provider message ID means accepted for delivery, not proof of inbox receipt. Requests time out after 10 seconds and are never automatically retried. Timeouts, interrupted or malformed successful responses, and missing message IDs leave delivery unconfirmed. Check the recipient inbox before manually resending: resending replaces the pending invitation and invalidates its previous link.
 
    #### App Store & OAuth (for third-party apps)
    ```bash
@@ -200,14 +200,7 @@ Collab is designed to streamline internal communication and work tracking by off
    4. Copy the key (starts with `sk-`)
 
    #### Email Provider Setup
-   For development, you can use:
-   - [Mailtrap](https://mailtrap.io/) - Email testing service
-   - [Ethereal Email](https://ethereal.email/) - Fake SMTP service
-   
-   For production, consider:
-   - [SendGrid](https://sendgrid.com/)
-   - [Mailgun](https://www.mailgun.com/)
-   - [Amazon SES](https://aws.amazon.com/ses/)
+   See [Email Configuration (Resend)](#email-configuration-resend).
 
    #### Database Setup
    For development:

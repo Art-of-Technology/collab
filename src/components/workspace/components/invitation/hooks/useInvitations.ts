@@ -65,8 +65,8 @@ export function useInviteMember(workspaceId: string) {
       if (data.emailSent === false) {
         const errorDetail = data.emailDetails?.error ? `: ${data.emailDetails.error}` : '';
         toast({
-          title: "Invitation created, but email not sent",
-          description: `The invitation was created successfully, but we couldn't send the email${errorDetail}. The user can still join using the invitation link from your workspace settings.`,
+          title: "Invitation created; email unconfirmed",
+          description: `The invitation was created successfully, but email delivery could not be confirmed${errorDetail}. The user can still join using the invitation link from your workspace settings.`,
           variant: "destructive",
         });
       } else {
@@ -88,7 +88,6 @@ export function useInviteMember(workspaceId: string) {
   });
 }
 
-// Hook to cancel an invitation
 export function useResendInvitation(workspaceId: string) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -136,8 +135,8 @@ export function useResendInvitation(workspaceId: string) {
       if (data.emailSent === false) {
         const errorDetail = data.emailDetails?.error ? `: ${data.emailDetails.error}` : '';
         toast({
-          title: "Invitation resent, but email not sent",
-          description: `The invitation was created successfully, but we couldn't send the email${errorDetail}. The user can still join using the invitation link from your workspace settings.`,
+          title: "Invitation resent; email unconfirmed",
+          description: `The invitation was created successfully, but email delivery could not be confirmed${errorDetail}. The user can still join using the invitation link from your workspace settings.`,
           variant: "destructive",
         });
       } else {

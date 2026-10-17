@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer';
 
 /**
  * This script generates test SMTP credentials using Ethereal.email
- * You can use these credentials for testing email functionality in development
+ * For application email setup, see README.md#email-configuration-resend.
  * 
  * Run with: npx ts-node scripts/generate-test-email.ts
  */
@@ -31,4 +31,4 @@ async function generateTestCredentials() {
   }
 }
 
-generateTestCredentials(); 
+generateTestCredentials();
