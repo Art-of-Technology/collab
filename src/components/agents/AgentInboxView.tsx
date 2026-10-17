@@ -51,7 +51,7 @@ export function AgentInboxView({ workspace, agents, selected, state, inbox }: Pr
         </details>
         <time className="block text-xs text-muted-foreground" dateTime={item.createdAt.toISOString()}>{item.createdAt.toISOString()}</time>
       </article>)}</div>
-      {inbox?.hasMore && <p className="text-sm text-muted-foreground">Showing the oldest 50 handoffs. Have the agent mark handled items as seen, then refresh to see the next items.</p>}
+      {inbox?.hasMore && <p className="text-sm text-muted-foreground">Showing the oldest 50 handoffs. {state === 'claimed' ? 'Have the agent complete, release, or pass work onward' : 'Have the agent mark handled items as seen'}, then refresh to see the next items.</p>}
     </>}
   </main>;
 }
