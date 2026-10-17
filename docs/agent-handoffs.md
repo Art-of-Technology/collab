@@ -50,7 +50,7 @@ Adding one or more subscribed labels in a single issue edit creates one durable 
 
 The issue edit, handoff and `AGENT_LABEL_ADDED` timeline entry commit in one transaction. The entry identifies the user who edited the issue and includes the handoff ID, routed label IDs and generated context; it has no sending agent. An unchanged save does not notify again. Concurrent updates either serialize or return a conflict; reload before retrying. Removing a label does not cancel existing handoffs or revoke a claim. Removing then re-adding it creates a new handoff, so read the timeline before starting duplicate work. Label renames, mentions and historical issue backfills are not triggers.
 
-Delivery persists while agents are offline. Inbox retrieval and claims still require the agent owner's current issue access. Inbox creation itself does not wake a model: the host must run an inbox adapter using the [bounded CLI wait](../packages/cli/README.md#agent-coordination). A generic CLI callback watcher is not included. No additional schema migration is required beyond the existing agent-handoff tables.
+Delivery persists while agents are offline. Inbox retrieval and claims still require the agent owner's current issue access. Inbox creation itself does not wake a model: the host must provide and verify an adapter. For watcher availability and setup, see the [CLI wake callback contract](../packages/cli/README.md#wake-a-running-agent-through-its-host). No additional schema migration is required beyond the existing agent-handoff tables.
 
 ## Validation and rollout
 

@@ -14,6 +14,12 @@ export const commands = {
   'agents list': command('GET', 'agents'),
   'agents register': command('POST', 'agents', { name: string, labelIds: array }, {}, { required: ['name'] }),
   'inbox list': command('GET', 'agents/inbox', {}, { agent: string, state: string, limit: integer }, { requiredQuery: ['agent'], constraints: { state: { enum: ['unseen', 'claimed'] }, limit: { minimum: 1, maximum: 50 } } }),
+  'inbox watch': command('GET', 'agents/inbox', {}, { agent: string }, {
+    requiredQuery: ['agent'], watch: true,
+    localOptions: { callback: string, callbackArgs: array, watchSeconds: integer, pollSeconds: integer, callbackTimeout: integer },
+    requiredOptions: ['callback'],
+    description: 'Foreground bounded watcher; invokes a trusted local executable with JSON stdin for pending claimed/unseen work. Requires an explicit --workspace ID. No auto-claim or seen.',
+  }),
   'inbox wait': command('GET', 'agents/inbox', {}, { agent: string, limit: integer }, { requiredQuery: ['agent'], wait: true, constraints: { limit: { minimum: 1, maximum: 50 } } }),
   'handoffs send': command('POST', 'agents/handoffs', { agent: string, issue: string, content: string, toAgents: array, toLabels: array, requestAck: boolean, requestId: string, afterId: string }, {}, { required: ['agent', 'issue', 'content'] }),
   'handoffs get': command('GET', 'agents/handoffs/:id', {}, { agent: string }, { requiredQuery: ['agent'] }),

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request } from 'node:http';
-import { spawn, spawnSync } from 'node:child_process';
+import { ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, symlinkSync, statSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { windowsAcl } from '../src/windows-acl.mjs';
 import { commands } from '../src/commands.mjs';
+import { watchInbox } from '../src/inbox-watch.mjs';
 
 const bin = fileURLToPath(new URL('../bin/collab.mjs', import.meta.url));
 const executable = process.env.COLLAB_CLI_EXECUTABLE;
@@ -71,6 +72,234 @@ test('inbox wait does not turn an empty final window into a transport failure', 
   assert.equal(result.data.timedOut, true);
   assert.equal(f.calls.length, 1, 'do not dispatch a second request with less than a second remaining');
 });
+
+test('inbox watch invokes a fixed adapter with bounded JSON, coalesces queues and never mutates', async t => {
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ items: [{ id: 'handoff-one', status: 'open', content: '$(touch SHOULD_NOT_EXIST)' }], hasMore: true })));
+  const output = path.join(f.dir, 'wake events.jsonl');
+  const adapter = path.join(f.dir, 'adapter with spaces.cjs');
+  writeFileSync(adapter, `const fs = require('node:fs'); let input = ''; process.stdin.on('data', b => input += b); process.stdin.on('end', () => { if (Object.keys(process.env).some(key => key.toUpperCase() === 'COLLAB_TOKEN')) process.exit(7); fs.appendFileSync(process.argv[2], input); });`);
+  const result = await f.run(['inbox', 'watch', '--agent', 'reviewer', '--workspace', 'w', '--callback', process.execPath,
+    '--callback-args', JSON.stringify([adapter, output]), '--watch-seconds', '2', '--poll-seconds', '1'],
+    { env: { COLLAB_TOKEN: windows ? undefined : 'synthetic-token', Collab_Token: 'synthetic-token', collab_token: 'synthetic-token' } });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.data.callbacks, 1);
+  assert.equal(result.data.timedOut, true);
+  const events = readFileSync(output, 'utf8').trim().split('\n').map(JSON.parse);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].event, 'collab.inbox.pending');
+  assert.equal(events[0].agent, 'reviewer');
+  assert.equal(events[0].workspaceId, 'w');
+  assert.equal(events[0].unseen.hasMore, true);
+  assert.deepEqual(events[0].unseen.items, [{ id: 'handoff-one', status: 'open' }]);
+  assert.equal(JSON.stringify(events).includes('touch'), false, 'remote content is not a callback argument or payload');
+  assert.ok(f.calls.length >= 4);
+  assert.ok(f.calls.every(c => c.method === 'GET'));
+  assert.ok(f.calls.every(c => c.headers.authorization === 'Bearer synthetic-token'));
+  assert.ok(f.calls.some(c => c.url.includes('state=claimed')));
+  assert.ok(f.calls.every(c => c.url.includes('workspaceId=w')));
+});
+
+test('watch stops on adapter failure, timeout or authentication refusal without writes/retries', async t => {
+  const f = await fixture(t, (_req, res) => res.end('{"items":[{"id":"work","status":"open"}],"hasMore":false}'));
+  const args = ['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath, '--watch-seconds', '3'];
+  const failed = await f.run([...args, '--callback-args', JSON.stringify(['-e', 'process.stdin.resume();process.stdin.on("end",()=>process.exit(7))'])]);
+  assert.equal(failed.error.error, 'wake_callback_failed');
+  assert.equal(f.calls.length, 2);
+  const timed = await f.run([...args, '--callback-timeout', '1', '--callback-args', JSON.stringify(['-e', 'process.stdin.resume();setInterval(()=>{},1000)'])]);
+  assert.equal(timed.error.error, 'wake_callback_failed');
+  assert.equal(f.calls.length, 4);
+  const denied = await fixture(t, (_req, res) => { res.statusCode = 401; res.end('{}'); });
+  assert.notEqual((await denied.run(args)).code, 0);
+  assert.equal(denied.calls.length, 1);
+  const before = f.calls.length;
+  assert.notEqual((await f.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', 'relative-file'])).code, 0);
+  assert.notEqual((await f.run([...args, '--callback-args', '[1]'])).code, 0);
+  assert.equal(f.calls.length, before);
+});
+
+test('inbox watch distinguishes window expiry from API timeouts in both queues and response phases', async t => {
+  for (const state of ['claimed', 'unseen']) for (const bodyStarted of [false, true]) for (const expires of [true, false]) {
+    await t.test(`${state}, ${bodyStarted ? 'body' : 'headers'}, ${expires ? 'window expiry' : 'API timeout'}`, async t => {
+      const f = await fixture(t, (req, res) => {
+        if (new URL(req.url, 'http://localhost').searchParams.get('state') !== state) res.end('{"items":[],"hasMore":false}');
+        else if (bodyStarted) res.write('{"items":');
+      });
+      const start = Date.now();
+      const result = await f.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath,
+        '--watch-seconds', expires ? '1' : '5', '--timeout', expires ? '120' : '1']);
+      if (expires) {
+        assert.equal(result.code, 0, result.stderr);
+        assert.deepEqual(result.data, { agent: 'worker', workspaceId: 'w', callbacks: 0, stopped: false, timedOut: true });
+      } else {
+        assert.equal(result.code, 5, result.stderr);
+        assert.equal(result.error.error, 'transport_failed');
+        assert.equal(result.stdout, '');
+      }
+      assert.ok(Date.now() - start < 3000, 'the first deadline must stop the read');
+      assert.equal(f.calls.length, state === 'claimed' ? 1 : 2);
+      assert.ok(f.calls.every(call => call.method === 'GET' && call.headers.authorization === 'Bearer synthetic-token'));
+      assert.equal(existsSync(path.join(f.dir, 'default.json')), false);
+    });
+  }
+});
+
+test('inbox watch preserves received HTTP refusals when cancellation interrupts either queue body', async t => {
+  for (const state of ['claimed', 'unseen']) for (const stop of [false, ...(!windows ? [true] : [])]) {
+    await t.test(`${state}, ${stop ? 'stop signal' : 'window expiry'}`, async t => {
+      let child;
+      const f = await fixture(t, (req, res) => {
+        if (new URL(req.url, 'http://localhost').searchParams.get('state') !== state) res.end('{"items":[],"hasMore":false}');
+        else {
+          res.writeHead(401);
+          res.write('{"error":"PRIVATE_SENTINEL"');
+          if (stop) {
+            const timer = setTimeout(() => child.kill('SIGTERM'), 100);
+            t.after(() => clearTimeout(timer));
+          }
+        }
+      });
+      const result = await f.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath,
+        '--watch-seconds', stop ? '30' : '1', '--timeout', '120'], { childCallback: value => { child = value; } });
+      assert.equal(result.code, 3, result.stderr);
+      assert.equal(result.error.error, 'unauthorized');
+      assert.equal(result.error.status, 401);
+      assert.equal(result.stdout, '');
+      assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+      assert.equal(f.calls.length, state === 'claimed' ? 1 : 2);
+      assert.ok(f.calls.every(call => call.method === 'GET'));
+      assert.equal(existsSync(path.join(f.dir, 'default.json')), false);
+    });
+  }
+});
+
+test('adapter failure wins over cancellation between natural exit and closure', async t => {
+  for (const { code, exitSignal, action } of [
+    { code: 7, exitSignal: null, action: 'process.exit(7)' },
+    { code: null, exitSignal: 'SIGTERM', action: 'process.kill(process.pid, "SIGTERM")' },
+  ]) for (const cancelAt of ['exit', 'close']) {
+    await t.test(`${exitSignal || code}, ${cancelAt}`, { skip: windows && exitSignal !== null }, async t => {
+      const controller = new AbortController();
+      const emit = ChildProcess.prototype.emit;
+      let closed = false;
+      t.mock.method(ChildProcess.prototype, 'emit', function(event, ...args) {
+        if (event === cancelAt) {
+          assert.equal(args[0], code);
+          assert.equal(args[1], exitSignal);
+          controller.abort();
+        }
+        if (event === 'close') closed = true;
+        return emit.call(this, event, ...args);
+      });
+      await assert.rejects(watchInbox({
+        read: async () => ({ items: [{ id: 'work', status: 'open' }], hasMore: false }),
+        callback: process.execPath, callbackArgs: ['-e', `process.stdin.resume();process.stdin.on("end",()=>${action})`],
+        agent: 'worker', workspaceId: 'w', origin: 'http://localhost', durationMs: 10000, intervalMs: 1000,
+        callbackTimeoutMs: 5000, signal: controller.signal,
+      }), { code: 'wake_callback_failed' });
+      assert.equal(controller.signal.aborted, true);
+      assert.equal(closed, true, 'failure is returned only after the real child closes');
+    });
+  }
+});
+
+test('inbox watch stop signals cancel both queue reads and response bodies', { skip: windows }, async t => {
+  for (const state of ['claimed', 'unseen']) for (const bodyStarted of [false, true]) for (const signal of ['SIGINT', 'SIGTERM']) {
+    await t.test(`${signal}, ${state}, ${bodyStarted ? 'body' : 'headers'}`, async t => {
+      let child;
+      const f = await fixture(t, (req, res) => {
+        if (new URL(req.url, 'http://localhost').searchParams.get('state') !== state) res.end('{"items":[],"hasMore":false}');
+        else {
+          if (bodyStarted) res.write('{"items":');
+          const timer = setTimeout(() => child.kill(signal), 50);
+          t.after(() => clearTimeout(timer));
+        }
+      });
+      const start = Date.now();
+      const result = await f.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath,
+        '--watch-seconds', '30', '--timeout', '120'], { childCallback: value => { child = value; } });
+      assert.equal(result.code, 0, result.stderr);
+      assert.deepEqual(result.data, { agent: 'worker', workspaceId: 'w', callbacks: 0, stopped: true, timedOut: false });
+      assert.ok(Date.now() - start < 3000, 'stop must not wait for the API or watch timeout');
+      assert.equal(f.calls.length, state === 'claimed' ? 1 : 2);
+      assert.ok(f.calls.every(call => call.method === 'GET'));
+    });
+  }
+});
+
+test('inbox watch window expiry closes a healthy adapter without reporting callback failure', async t => {
+  const f = await fixture(t, (_req, res) => new Promise(resolve => setTimeout(() => {
+    res.end('{"items":[{"id":"work","status":"open"}],"hasMore":false}'); resolve();
+  }, 700)));
+  const pidFile = path.join(f.dir, 'adapter.pid'), completed = path.join(f.dir, 'completed');
+  const adapter = path.join(f.dir, 'adapter.cjs');
+  writeFileSync(adapter, `const fs = require('node:fs'); process.stdin.resume(); process.stdin.on('end', () => { fs.writeFileSync(process.argv[2], String(process.pid)); setTimeout(() => fs.writeFileSync(process.argv[3], 'done'), 1200); });`);
+  const start = Date.now();
+  const result = await f.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath,
+    '--callback-args', JSON.stringify([adapter, pidFile, completed]), '--watch-seconds', '2']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.data, { agent: 'worker', workspaceId: 'w', callbacks: 0, stopped: false, timedOut: true });
+  assert.ok(Date.now() - start < 3500);
+  const pid = Number(readFileSync(pidFile, 'utf8'));
+  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' }, 'direct child must be closed before watch returns');
+  assert.equal(existsSync(completed), false);
+  assert.equal(f.calls.length, 2);
+  assert.ok(f.calls.every(call => call.method === 'GET'));
+});
+
+test('inbox watch stop signals close an active adapter before returning', { skip: windows }, async t => {
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    const f = await fixture(t, (_req, res) => res.end('{"items":[{"id":"work","status":"open"}],"hasMore":false}'));
+    const pidFile = path.join(f.dir, 'adapter.pid'), adapter = path.join(f.dir, 'adapter.cjs');
+    writeFileSync(adapter, `const fs = require('node:fs'); process.stdin.resume(); process.stdin.on('end', () => { fs.writeFileSync(process.argv[2], String(process.pid)); process.kill(process.ppid, process.argv[3]); setInterval(() => {}, 1000); });`);
+    const start = Date.now();
+    const result = await f.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath,
+      '--callback-args', JSON.stringify([adapter, pidFile, signal]), '--watch-seconds', '30', '--callback-timeout', '120']);
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(result.data, { agent: 'worker', workspaceId: 'w', callbacks: 0, stopped: true, timedOut: false });
+    assert.ok(Date.now() - start < 3000);
+    const pid = Number(readFileSync(pidFile, 'utf8'));
+    assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+    assert.equal(f.calls.length, 2);
+    assert.ok(f.calls.every(call => call.method === 'GET'));
+  }
+});
+
+test('inbox watch expires normally while sleeping on an empty inbox', async t => {
+  const f = await fixture(t, (_req, res) => res.end('{"items":[],"hasMore":false}'));
+  const result = await f.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath,
+    '--watch-seconds', '1', '--poll-seconds', '60']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.data, { agent: 'worker', workspaceId: 'w', callbacks: 0, stopped: false, timedOut: true });
+  assert.equal(f.calls.length, 2);
+  assert.ok(f.calls.every(call => call.method === 'GET'));
+});
+
+test('non-watch reads retain operational timeouts before headers and during response bodies', async t => {
+  for (const bodyStarted of [false, true]) {
+    const f = await fixture(t, (_req, res) => { if (bodyStarted) res.write('{"id":'); });
+    const result = await f.run(['whoami', '--timeout', '1']);
+    assert.equal(result.code, 5, result.stderr);
+    assert.equal(result.error.error, 'transport_failed');
+    assert.equal(result.stdout, '');
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.calls[0].headers.authorization, 'Bearer synthetic-token');
+  }
+});
+
+test('interrupted error bodies retain sanitized status and mutation semantics', async t => {
+  for (const mutation of [false, true]) for (const status of [401, 500]) {
+    const f = await fixture(t, (_req, res) => { res.writeHead(status); res.write('{"error":"PRIVATE_SENTINEL"'); });
+    const result = await f.run([...(mutation ? ['issues', 'update', 'AGENT-1', '--status', 'done'] : ['whoami']), '--timeout', '1']);
+    assert.equal(result.code, status === 401 ? 3 : 5, result.stderr);
+    assert.equal(result.error.error, status === 401 ? 'unauthorized' : mutation ? 'outcome_unknown' : 'server_error');
+    assert.equal(result.error.status, status);
+    assert.equal(result.stdout, '');
+    assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.calls[0].method, mutation ? 'PATCH' : 'GET');
+  }
+});
+
 function grantEveryoneRead(file) {
   const script = `$ErrorActionPreference = 'Stop'; $p = [Console]::In.ReadToEnd(); $acl = Get-Acl -LiteralPath $p; $sid = New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0'); $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'Read', 'Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $p -AclObject $acl`;
   const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { input: file, encoding: 'utf8' });
@@ -95,15 +324,18 @@ async function fixture(t, handler) {
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const url = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); rmSync(temporary, { recursive: true, force: true }); });
-  function run(args, { input, env = {}, stderrCallback } = {}) {
+  function run(args, { input, env = {}, stderrCallback, childCallback } = {}) {
     const childEnv = { ...process.env };
-    for (const key of Object.keys(childEnv)) if (key.startsWith('COLLAB_')) delete childEnv[key];
-    const child = spawn(executable || process.execPath, [...(executable ? [] : [bin]), ...args], { cwd: dir, env: { ...childEnv, COLLAB_CONFIG_DIR: dir, COLLAB_URL: url, COLLAB_TOKEN: 'synthetic-token', ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
+    for (const key of Object.keys(childEnv)) if (key.toUpperCase().startsWith('COLLAB_')) delete childEnv[key];
+    Object.assign(childEnv, { COLLAB_CONFIG_DIR: dir, COLLAB_URL: url, COLLAB_TOKEN: 'synthetic-token', ...env });
+    for (const key of Object.keys(childEnv)) if (childEnv[key] === undefined) delete childEnv[key];
+    const child = spawn(executable || process.execPath, [...(executable ? [] : [bin]), ...args], { cwd: dir, env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     child.stdout.on('data', data => { stdout += data; });
     child.stderr.on('data', data => { stderr += data; stderrCallback?.(stderr); });
     child.stdin.end(input);
     const timer = setTimeout(() => child.kill('SIGKILL'), windows ? 30000 : 10000);
+    childCallback?.(child);
     return once(child, 'close').then(([code, signal]) => { clearTimeout(timer); return { code, signal, stdout, stderr, data: stdout ? JSON.parse(stdout) : undefined, error: stderr.startsWith('{') ? JSON.parse(stderr) : undefined }; });
   }
   return { run, dir, calls, url };

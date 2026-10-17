@@ -259,7 +259,6 @@ export default function DocsPage() {
                         ['--url URL', 'Choose a server for login or a token supplied through the environment. Stored tokens stay bound to their original server.'],
                         ['--input FILE / --input -', 'Read a JSON body from a file or stdin. Use API field names such as assigneeId.'],
                         ['--content-file / --description-file', 'Read text from a file or stdin (-). Maximum input: 1 MiB, within 30 seconds.'],
-                        ['--dry-run', 'Preview the method, URL, and body without sending the API request. The output may contain private content.'],
                         ['--yes', 'Required for deletion, including deletion previews.'],
                         ['--all', 'Fetch every page of issues, Notes, or work logs, up to 100 pages / 10,000 items.'],
                         ['--timeout SECONDS', 'Set an API request timeout from 1 to 120 seconds (default: 30).'],
@@ -268,6 +267,7 @@ export default function DocsPage() {
                     </tbody>
                   </table>
                 </div>
+                <p className="mt-3 text-muted-foreground">For <code>--dry-run</code> behavior and privacy limits, see <a href="https://github.com/Art-of-Technology/collab/blob/main/packages/cli/README.md#commands-and-inputs" className="underline underline-offset-4">Commands and inputs</a> in the CLI package guide.</p>
                 <TerminalBlock code={'collab issues create --title "Handle reconnects" --type TASK --description-file acceptance.md\ncollab projects create --name Platform --slug platform --issue-prefix PLAT --dry-run\nprintf \'%s\' \'{"assigneeId":null}\' | collab issues update APP-123 --input -\ncollab issues delete APP-123 --yes'} />
                 <p className="text-muted-foreground">Named flags use kebab-case (<code>--due-date</code>); JSON bodies use API field names (<code>dueDate</code>). Unknown fields, flags, and duplicate assignments are refused. Null can clear a field only where the server allows it. A required project ID for issue creation can come from your saved context or <code>--project</code>.</p>
               </section>

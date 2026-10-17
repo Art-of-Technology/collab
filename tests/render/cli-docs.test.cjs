@@ -58,8 +58,9 @@ test('command reference renders the executable CLI inventory and filters through
     for (const value of [flag, `--${flag}`]) {
       findInput(Reference()).props.onChange({ target: { value } });
       const matches = renderToStaticMarkup(Reference());
-      assert.equal((matches.match(/<details /g) || []).length, names.length, value);
-      for (const name of names) assert.ok(matches.includes(`collab ${name}</code>`), `${name}: ${value}`);
+      const expected = value === 'all' ? [...names, 'inbox watch'] : names;
+      assert.equal((matches.match(/<details /g) || []).length, expected.length, value);
+      for (const name of expected) assert.ok(matches.includes(`collab ${name}</code>`), `${name}: ${value}`);
     }
   }
   findInput(Reference()).props.onChange({ target: { value: 'no-such-command' } });
@@ -68,6 +69,24 @@ test('command reference renders the executable CLI inventory and filters through
   const deletion = renderToStaticMarkup(Reference());
   assert.match(deletion, /ID CHILD_ID --yes/);
   assert.match(deletion, /issue ID or key/);
+});
+
+test('watcher options are discoverable in CLI schema and web search with a required callback', async () => {
+  const Reference = await reference();
+  const schema = JSON.parse(execFileSync(process.execPath, [resolve('packages/cli/bin/collab.mjs'), 'schema'], { encoding: 'utf8' }));
+  const watch = schema.commands['inbox watch'];
+  const options = { callback: 'string', callbackArgs: 'array', watchSeconds: 'integer', pollSeconds: 'integer', callbackTimeout: 'integer' };
+  assert.deepEqual(watch.localOptions, options);
+  assert.deepEqual(watch.requiredOptions, ['callback']);
+  for (const flag of ['callback', 'callback-args', 'watch-seconds', 'poll-seconds', 'callback-timeout']) {
+    assert.ok(watch.options.includes(flag), flag);
+    findInput(Reference()).props.onChange({ target: { value: `--${flag}` } });
+    const html = renderToStaticMarkup(Reference());
+    assert.equal((html.match(/<details /g) || []).length, 1, flag);
+    assert.match(html, /collab inbox watch<\/code>/);
+    assert.match(html, /<dt><code[^>]*>--callback<\/code><\/dt><dd[^>]*>string · required<\/dd>/);
+    assert.ok(html.includes(`--${flag}</code>`), flag);
+  }
 });
 
 test('command reference renders retrieval constraints and dispatched versus conditional defaults', async () => {
