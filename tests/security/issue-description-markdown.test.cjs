@@ -190,10 +190,10 @@ test('issue external updates and imperative restore convert without saving until
   }, { isIssueDescription: true });
 });
 
-test('Notes opt out of Markdown conversion and table support for initial, external and imperative input', async () => {
+test('Notes preserve literal Markdown for initial, external and imperative input', async () => {
   await withEditor(async ({ state, ref, render }) => {
     assert.equal(state.editor.value, '## Stored');
-    assert.equal(parseEditor(state.editor).schema.nodes.table, undefined);
+    assert.ok(parseEditor(state.editor).schema.nodes.table);
     await render({ value: markdown });
     assert.equal(state.editor.value, markdown);
     await React.act(async () => ref.current.setContent(markdown));
@@ -202,6 +202,33 @@ test('Notes opt out of Markdown conversion and table support for initial, extern
     state.editor.onChange('<p>## Edited note</p>');
     assert.deepEqual(state.changes, ['<p>## Edited note</p>']);
   });
+});
+
+test('Note HTML tables retain separate headers, cells, links and merged cells across load, edit and reload', async () => {
+  const html = '<h2>Recommended topology</h2><table><thead><tr><th>Layer</th><th>Proposed design</th><th>Failure addressed</th></tr></thead><tbody><tr><td>Entry point</td><td><a href="https://example.com">Managed load balancer</a></td><td>One target fails</td></tr><tr><td colspan="2"><strong>Database</strong></td><td>One host fails</td></tr></tbody></table>';
+  function check(output) {
+    assert.equal(output.querySelectorAll('table').length, 1);
+    assert.equal(output.querySelectorAll('tr').length, 3);
+    assert.deepEqual([...output.querySelectorAll('th')].map(cell => cell.textContent), ['Layer', 'Proposed design', 'Failure addressed']);
+    assert.deepEqual([...output.querySelectorAll('td')].map(cell => cell.textContent), ['Entry point', 'Managed load balancer', 'One target fails', 'Database', 'One host fails']);
+    assert.equal(output.querySelector('td[colspan="2"] strong')?.textContent, 'Database');
+    assert.equal(output.querySelector('a')?.getAttribute('href'), 'https://example.com');
+  }
+  await withEditor(async ({ state, ref, render }) => {
+    check(parseEditor(state.editor).output);
+    await render({ value: '<p>Other note</p>' });
+    await render({ value: html });
+    check(parseEditor(state.editor).output);
+    await React.act(async () => ref.current.setContent(html));
+    check(parseEditor({ ...state.editor, value: state.restored.at(-1) }).output);
+    assert.deepEqual(state.changes, [], 'loading/restoring a table must not save it');
+    const edited = parseEditor(state.editor).output;
+    edited.querySelector('h2').textContent = 'Updated topology';
+    state.editor.onChange(edited.innerHTML);
+    await render({ value: state.changes.at(-1) });
+    check(parseEditor(state.editor).output);
+    assert.equal(parseEditor(state.editor).output.querySelector('h2').textContent, 'Updated topology');
+  }, { value: html });
 });
 
 test('history restores web, CLI and legacy descriptions despite over 100 newer unrelated activities', async () => {
