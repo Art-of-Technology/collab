@@ -165,7 +165,8 @@ test('serialized preview cards and plain links survive Done, reopening and sanit
   });
   const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') });
   const schema = getSchema([require('@tiptap/starter-kit').default, LinkPreviewExtension]);
-  const urls = ['https://example.com/handoff', '/weezboo/notes/handoff'];
+  const urls = ['https://example.com/handoff', '/weezboo/notes/handoff',
+    'https://example.com/handoff?text="quoted"&tag=<note>&literal=&quot;#résumé'];
   const nodes = [true, false].flatMap(showPreview => urls.map(url => schema.nodes.linkPreview.create({
     url, showPreview, preview: { title: '<img src=x onerror="bad()">', url, type: 'external' },
   })));

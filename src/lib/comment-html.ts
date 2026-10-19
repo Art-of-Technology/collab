@@ -8,10 +8,8 @@ export function commentHtml(content: string, html?: string | null): string {
   for (const preview of rendered.querySelectorAll('div[data-type="link-preview"][data-url]')) {
     const url = preview.getAttribute('data-url');
     if (!url) continue;
-    const link = rendered.ownerDocument.createElement('a');
-    link.setAttribute('href', url);
-    link.textContent = url;
-    preview.replaceChildren(link);
+    const escapedUrl = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    preview.replaceChildren(DOMPurify.sanitize(`<a href="${escapedUrl}">${escapedUrl}</a>`, { RETURN_DOM_FRAGMENT: true }));
   }
   return DOMPurify.sanitize(rendered.innerHTML);
 }
