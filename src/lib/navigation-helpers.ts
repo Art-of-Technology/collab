@@ -11,21 +11,12 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
  */
 export async function generateBackNavigationUrl(
   workspaceId: string, 
-  issue: { projectId: string } | null,
+  issue: { projectId: string; project?: { slug?: string } } | null,
   viewSlug?: string | null
 ): Promise<string> {
   try {
     // Get workspace slug instead of using ID
-    const workspaceSlug = await getWorkspaceSlug(workspaceId);
-    
-    if (!workspaceSlug) {
-      console.warn('Could not resolve workspace slug, falling back to ID');
-      // Fallback to using the ID if slug resolution fails
-      if (viewSlug) {
-        return `/${workspaceId}/views/${viewSlug}`;
-      }
-      return `/${workspaceId}/views`;
-    }
+    const workspaceSlug = await getWorkspaceSlug(workspaceId) || workspaceId;
 
     // If we have viewSlug, use it with the workspace slug
     if (viewSlug) {
@@ -66,8 +57,10 @@ export async function generateBackNavigationUrl(
         console.error('Error fetching default view:', error);
       }
       
-      // Fallback to views page if no default view found
-      return `/${workspaceSlug}/views`;
+      // Keep project context if its default view is unavailable.
+      return issue.project?.slug
+        ? `/${workspaceSlug}/projects/${issue.project.slug}`
+        : `/${workspaceSlug}/views`;
     }
 
     // Final fallback to views list

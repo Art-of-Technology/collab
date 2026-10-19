@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,8 @@ import PageHeader, { pageHeaderButtonStyles } from "@/components/layout/PageHead
 import { useSession } from "next-auth/react";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { IssueTabs } from "./sections/IssueTabs";
+import { RichTextRenderer } from "@/components/RichEditor/RichTextRenderer";
+import { commentHtml } from "@/lib/comment-html";
 import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
 import { IssueCommentsSection } from "./sections/IssueCommentsSection";
 import { EditorMiniToolbar } from "@/components/RichEditor/components/EditorMiniToolbar";
@@ -98,6 +100,9 @@ export function IssueDetailContent({
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [editingDescription, setEditingDescription] = useState(false);
+  const renderedDescription = useMemo(() => commentHtml(description), [description]);
+  useEffect(() => setEditingDescription(false), [issue?.id]);
   // Autosave state
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("saved");
   const [lastSavedDescription, setLastSavedDescription] = useState("");
@@ -1187,7 +1192,7 @@ export function IssueDetailContent({
                 {/* Autosave status indicator and Editor Controls */}
                 <div className="flex items-center gap-2 sm:gap-4 text-xs text-collab-400">
                   {/* Autosave Status */}
-                  <div className="flex items-center gap-2 border-r border-collab-700 pr-2 sm:pr-4">
+                  {editingDescription && <div className="flex items-center gap-2 border-r border-collab-700 pr-2 sm:pr-4">
                     {autosaveStatus === "idle" && (
                       <>
                         <span className="hidden sm:inline text-collab-400">Autosave is active</span>
@@ -1224,9 +1229,18 @@ export function IssueDetailContent({
                         </Button>
                       </>
                     )}
-                  </div>
+                  </div>}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={editingDescription && (description !== lastSavedDescription || autosaveStatus === "saving" || autosaveStatus === "error")}
+                    onClick={() => setEditingDescription(!editingDescription)}
+                  >
+                    {editingDescription ? <Check className="mr-2 h-4 w-4" /> : <PenLine className="mr-2 h-4 w-4" />}
+                    {editingDescription ? "Done" : "Edit description"}
+                  </Button>
                   {/* Editor Mini Toolbar */}
-                  {collabDocumentId && (
+                  {editingDescription && collabDocumentId && (
                     <EditorMiniToolbar
                       editorRef={editorRef}
                       onHistoryClick={handleHistoryClick}
@@ -1243,7 +1257,7 @@ export function IssueDetailContent({
               {/* Seamless Description Editor - Full Width */}
               <div className="w-full relative">
 
-                <IssueRichEditor
+                {editingDescription ? <IssueRichEditor
                   isIssueDescription
                   ref={editorRef}
                   value={description}
@@ -1257,7 +1271,13 @@ export function IssueDetailContent({
                   minHeight="400px"
                   maxHeight="none"
                   issueId={issue.id}
-                />
+                /> : (
+                  <div className="min-h-[200px] break-words overflow-x-auto">
+                    {description ? <RichTextRenderer content={renderedDescription} /> : (
+                      <p className="text-sm text-collab-400">No description yet.</p>
+                    )}
+                  </div>
+                )}
               </div>
 
 
