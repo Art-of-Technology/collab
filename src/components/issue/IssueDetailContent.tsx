@@ -1251,7 +1251,6 @@ export function IssueDetailContent({
           {/* Main Content - Full Width Experience */}
           <div className={cn("flex-1", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
             <div className="space-y-6 pb-8">
-              {/* Seamless Description Editor - Full Width */}
               <div className="w-full relative">
 
                 {editingDescription ? <IssueRichEditor
@@ -1340,4 +1339,4 @@ export function IssueDetailContent({
       </div>
     </div>
   );
-} 
+}
