@@ -707,9 +707,6 @@ export function IssueDetailContent({
     if (!issue?.issueKey && !issue?.id) return;
 
     try {
-      // Store project info before deletion
-      const projectId = issue.projectId;
-      
       await deleteIssueMutation.mutateAsync(issue.issueKey || issue.id);
 
       toast({
@@ -723,7 +720,7 @@ export function IssueDetailContent({
           // Use the navigation helper to get the proper URL (resolves default view)
           const backUrl = await generateBackNavigationUrl(
             workspaceId, 
-            projectId ? { projectId } : null, 
+            issue,
             viewSlug
           );
           router.push(backUrl);

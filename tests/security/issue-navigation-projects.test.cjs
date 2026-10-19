@@ -51,12 +51,14 @@ async function mounted(file, overrides, props, run) {
   });
   const timers = new Set();
   const globals = { console, window: dom.window, document: dom.window.document,
+    Blob, URL, atob,
     requestAnimationFrame: fn => fn(),
     setTimeout: (fn, delay) => { const timer = setTimeout(fn, delay); timers.add(timer); return timer; }, clearTimeout,
     fetch: async () => Response.json({ labels: [], isFollowing: false }),
   };
+  deps['@/components/RichEditor/RichTextRenderer'] = load('src/components/RichEditor/RichTextRenderer.tsx', deps, globals);
   const module = load(file, deps, globals);
-  const Component = module.default || module.IssueDetailContent;
+  const Component = module.default || module.IssueDetailContent || module.RichTextRenderer;
   const { createRoot } = require('react-dom/client');
   const root = createRoot(dom.window.document.getElementById('root'));
   const render = async updates => { Object.assign(props, updates); await React.act(async () => root.render(React.createElement(Component, props))); };
@@ -108,7 +110,6 @@ test('issue description links remain navigable until explicit editing and switch
     '@/hooks/queries/useIssues': { useDeleteIssue: () => ({}), useUpdateIssue: () => ({}), issueKeys: {} },
     '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
     '@/lib/comment-html': { commentHtml },
-    '@/components/RichEditor/RichTextRenderer': { RichTextRenderer: ({ content }) => React.createElement('div', { dangerouslySetInnerHTML: { __html: content } }) },
     '@/components/RichEditor/IssueRichEditor': { IssueRichEditor: React.forwardRef((props, ref) => { React.useImperativeHandle(ref, () => ({ getEditor: () => null })); return React.createElement('div', { contentEditable: true, suppressContentEditableWarning: true }, props.value); }) },
   }, { issue }, async ({ document, window, click, render }) => {
     assert.equal(!!document.querySelector('[contenteditable="true"]'), false);
@@ -124,5 +125,102 @@ test('issue description links remain navigable until explicit editing and switch
     await click('Done'); assert.equal(!!document.querySelector('[contenteditable="true"]'), false);
     await click('Edit description'); await render({ issue: { ...issue, id: 'second', description: 'Other' } });
     assert.equal(!!document.querySelector('[contenteditable="true"]'), false);
+  });
+});
+
+test('embedded image clicks never open top-level documents while links and mentions still work', async () => {
+  const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') });
+  const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.domain)</script></svg>').toString('base64');
+  const sources = [`data:image/svg+xml;base64,${svg}`, `data:text/html;base64,${Buffer.from('<script>alert(1)</script>').toString('base64')}`,
+    `data:image/png;base64,${svg}`, 'data:image/png;base64,%%%bad',
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGZYAAAAASUVORK5CYII=',
+    'https://example.com/image.svg'];
+  const content = commentHtml(sources.map(src => `<img src="${src}">`).join('') +
+    '<a href="https://example.com/handoff"><img src="https://example.com/thumb.png"></a>' +
+    '<span data-type="mention" data-user-id="alice">Alice</span><span data-type="issue-mention" data-issue-key="BW-31">BW-31</span>');
+  await mounted('src/components/RichEditor/RichTextRenderer.tsx', {}, { content }, async ({ document, window }) => {
+    const opened = [];
+    window.open = (...args) => { opened.push(args[0]); return null; };
+    const images = [...document.querySelectorAll('img')];
+    assert.equal(images.length, sources.length + 1);
+    for (const img of images.slice(0, -1)) await React.act(async () => img.click());
+    assert.deepEqual(opened, []);
+    let prevented;
+    document.addEventListener('click', event => { prevented = event.defaultPrevented; event.preventDefault(); }, { once: true });
+    await React.act(async () => images.at(-1).click());
+    assert.equal(prevented, false);
+    assert.deepEqual(opened, []);
+    for (const mention of document.querySelectorAll('span')) await React.act(async () => mention.click());
+    assert.deepEqual(opened, ['/weezboo/profile/alice', '/weezboo/issues/BW-31']);
+  });
+});
+
+test('serialized preview cards and plain links survive Done, reopening and sanitization', async () => {
+  const { getSchema } = require('@tiptap/core');
+  const { DOMParser, DOMSerializer } = require('@tiptap/pm/model');
+  const { LinkPreviewExtension } = load('src/components/RichEditor/extensions/link-preview-extension.tsx', {
+    '@tiptap/core': require('@tiptap/core'), '@tiptap/react': require('@tiptap/react'),
+    '@tiptap/pm/state': require('@tiptap/pm/state'), '../components/LinkPreviewCard': {},
+    react: { ...React, default: React }, 'react-dom/client': { default: require('react-dom/client') },
+  });
+  const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') });
+  const schema = getSchema([require('@tiptap/starter-kit').default, LinkPreviewExtension]);
+  const urls = ['https://example.com/handoff', '/weezboo/notes/handoff'];
+  const nodes = [true, false].flatMap(showPreview => urls.map(url => schema.nodes.linkPreview.create({
+    url, showPreview, preview: { title: '<img src=x onerror="bad()">', url, type: 'external' },
+  })));
+  const dom = new JSDOM();
+  const output = dom.window.document.createElement('div');
+  output.append(DOMSerializer.fromSchema(schema).serializeFragment(schema.nodes.doc.create(null, nodes).content, { document: dom.window.document }));
+  const saved = output.innerHTML;
+  for (const formatted of [commentHtml(saved), commentHtml('', saved)]) {
+    output.innerHTML = formatted;
+    assert.deepEqual([...output.querySelectorAll('a')].map(a => a.getAttribute('href')), [...urls, ...urls]);
+    assert.deepEqual([...output.querySelectorAll('a')].map(a => a.textContent), [...urls, ...urls]);
+    assert.ok(DOMParser.fromSchema(schema).parse(output).eq(schema.nodes.doc.create(null, nodes)));
+    assert.equal(output.querySelector('img,script,[onerror]'), null);
+  }
+  for (const url of ['javascript:alert(1)', 'data:text/html,<script>bad()</script>', 'https://example.com/" onclick="bad()']) {
+    const preview = dom.window.document.createElement('div');
+    preview.dataset.type = 'link-preview'; preview.dataset.url = url;
+    output.innerHTML = commentHtml(preview.outerHTML);
+    assert.equal(output.querySelector('a').textContent, url);
+    assert.equal(output.querySelector('[onclick],script'), null);
+    if (!url.startsWith('https:')) assert.equal(output.querySelector('a').hasAttribute('href'), false);
+  }
+  dom.window.close();
+  const issue = { id: 'issue', issueKey: 'BW-31', title: 'Buildwake', projectId: 'buildwake', description: saved, createdAt: new Date(), labels: [], comments: [] };
+  await mounted('src/components/issue/IssueDetailContent.tsx', {
+    'next-auth/react': { useSession: () => ({ data: { user: { id: 'user' } } }) },
+    '@tanstack/react-query': { useQueryClient: () => ({}) },
+    '@/hooks/queries/useIssues': { useDeleteIssue: () => ({}), useUpdateIssue: () => ({}), issueKeys: {} },
+    '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value }, '@/lib/comment-html': { commentHtml },
+    '@/components/RichEditor/IssueRichEditor': { IssueRichEditor: React.forwardRef((props, ref) => { React.useImperativeHandle(ref, () => ({ getEditor: () => null })); return React.createElement('div', { contentEditable: true, suppressContentEditableWarning: true }, props.value); }) },
+  }, { issue }, async ({ document, click, render }) => {
+    const assertLinks = () => assert.deepEqual([...document.querySelectorAll('[data-type="link-preview"] a')].map(a => a.getAttribute('href')), [...urls, ...urls]);
+    assertLinks();
+    await click('Edit description'); await click('Done'); assertLinks();
+    await render({ issue: { ...issue, id: 'reopened' } }); assertLinks();
+  });
+});
+
+test('Back and post-delete navigation both retain the project when its default is inaccessible', async () => {
+  const nav = navigation(null, new Response(null, { status: 404 }));
+  const pushed = [], deleted = [];
+  const issue = { id: 'issue', issueKey: 'BW-31', title: 'Buildwake', projectId: 'buildwake', project: { name: 'Buildwake', slug: 'buildwake' }, description: '', createdAt: new Date(), labels: [], comments: [] };
+  await mounted('src/components/issue/IssueDetailContent.tsx', {
+    'next-auth/react': { useSession: () => ({ data: { user: { id: 'user' } } }) },
+    '@tanstack/react-query': { useQueryClient: () => ({}) },
+    'next/navigation': { useRouter: () => ({ push: url => pushed.push(url) }) },
+    '@/hooks/queries/useIssues': { useDeleteIssue: () => ({ mutateAsync: async key => deleted.push(key) }), useUpdateIssue: () => ({}), issueKeys: {} },
+    '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
+    '@/lib/comment-html': { commentHtml: value => value }, '@/lib/navigation-helpers': nav,
+    '@/components/layout/PageHeader': { default: ({ title, actions }) => React.createElement('div', null, title, actions), pageHeaderButtonStyles: {} },
+    '@/components/ui/confirm-dialog': { ConfirmDialog: ({ open, onConfirm, confirmText }) => open ? React.createElement('button', { onClick: onConfirm }, confirmText) : null },
+  }, { issue, workspaceId: 'workspace-id' }, async ({ click }) => {
+    await click('Back to Buildwake: Default');
+    await click('Delete'); await click('Delete Issue');
+    assert.deepEqual(deleted, ['BW-31']);
+    assert.deepEqual(pushed, ['/workspace-id/projects/buildwake', '/workspace-id/projects/buildwake']);
   });
 });
