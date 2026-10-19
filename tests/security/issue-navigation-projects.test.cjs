@@ -57,8 +57,8 @@ async function mounted(file, overrides, props, run) {
     fetch: async () => Response.json({ labels: [], isFollowing: false }),
   };
   deps['@/components/RichEditor/RichTextRenderer'] = load('src/components/RichEditor/RichTextRenderer.tsx', deps, globals);
-  const module = load(file, deps, globals);
-  const Component = module.default || module.IssueDetailContent || module.RichTextRenderer;
+  const loadedModule = load(file, deps, globals);
+  const Component = loadedModule.default || loadedModule.IssueDetailContent || loadedModule.RichTextRenderer;
   const { createRoot } = require('react-dom/client');
   const root = createRoot(dom.window.document.getElementById('root'));
   const render = async updates => { Object.assign(props, updates); await React.act(async () => root.render(React.createElement(Component, props))); };
