@@ -291,7 +291,7 @@ without a click-to-open viewer, including in issue comments.
 Choose **Edit description** to make changes. Changes autosave as rich-editor HTML;
 **Done** becomes available once the current content is saved and returns to read
 mode. Opening or previewing a description leaves its stored value unchanged.
-Opening another issue starts in read mode. Notes keep their existing editor behavior.
+Opening another issue starts in read mode.
 
 While editing, use **History** in the description toolbar to preview a version, then choose
 **Revert to this version** to restore it, including an empty description. History
@@ -304,6 +304,19 @@ context. Without one, they look up the project's currently accessible default
 view, even when the workspace slug lookup returns no slug. If that view is
 unavailable, they return to the project when its slug is known, otherwise to
 **Views**. In an issue modal, **Back** closes the modal.
+
+### Notes
+
+The Notes rich-text editor preserves HTML tables with distinct headers and cells,
+spacing and borders, and horizontal scrolling for wide tables. Links and cells
+spanning multiple columns (`colspan`) are retained through editing, saving and
+reloading. Stored Markdown remains literal text. Loading or restoring content into
+the editor does not save it automatically. Stored documents are not rewritten,
+and tables already saved as flattened text are not reconstructed.
+
+The [editor regression checks](tests/security/issue-description-markdown.test.cjs)
+cover table structure and simulated save/reload. Browser layout and persisted
+application save/reload remain unverified.
 
 ### Project overview
 

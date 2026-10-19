@@ -692,7 +692,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   }, [isCollaborationEnabled, hasCollabDocumentId, collabDocumentId]);
 
   // Build extensions array
-  const additionalExtensions: AnyExtension[] = isIssueDescription ? [Table, TableRow, TableCell, TableHeader] : [];
+  const additionalExtensions: AnyExtension[] = [Table, TableRow, TableCell, TableHeader];
 
   if (enableSlashCommands) {
     additionalExtensions.push(

@@ -1047,6 +1047,28 @@ export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
             line-height: 1.5;
           }
 
+          .${editorId} .ProseMirror table {
+            display: block;
+            max-width: 100%;
+            overflow-x: auto;
+            border-collapse: collapse;
+            margin: 1rem 0;
+          }
+
+          .${editorId} .ProseMirror th,
+          .${editorId} .ProseMirror td {
+            min-width: 8rem;
+            border: 1px solid hsl(var(--border));
+            padding: 0.5rem 0.75rem;
+            text-align: left;
+            vertical-align: top;
+          }
+
+          .${editorId} .ProseMirror th {
+            font-weight: 600;
+            background: hsl(var(--muted));
+          }
+
           .${editorId} .ProseMirror-selectednode > div,
           .${editorId} .ProseMirror-selectednode > img {
             border: 1px solid #22c55e;
