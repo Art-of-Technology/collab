@@ -281,20 +281,38 @@ Collab is designed to streamline internal communication and work tracking by off
 
 ### Issue descriptions
 
-Issue descriptions loaded from the CLI or API render Markdown headings, lists,
-links, code blocks and tables in the rich editor, including when an external
-update arrives. Existing rich HTML, mentions and code remain supported; content
-is sanitized before rendering. Opening or previewing a description leaves its
-stored value unchanged; editing saves rich-editor HTML. Notes keep their existing
-editor behavior.
+Issue descriptions open in read mode, so following a link does not enter editing.
+Markdown headings, lists, links, code blocks and tables from the CLI or API render
+alongside existing rich HTML, including when an external update arrives. Content
+is sanitized before rendering; mentions remain interactive. Saved preview cards
+and plain-link previews appear as URL links in read mode. Images remain inline
+without a click-to-open viewer, including in issue comments.
 
-Use **History** in the description toolbar to preview a version, then choose
+Choose **Edit description** to make changes. Changes autosave as rich-editor HTML;
+**Done** becomes available once the current content is saved and returns to read
+mode. Opening or previewing a description leaves its stored value unchanged.
+Opening another issue starts in read mode. Notes keep their existing editor behavior.
+
+While editing, use **History** in the description toolbar to preview a version, then choose
 **Revert to this version** to restore it, including an empty description. History
 includes web, CLI and legacy description updates, with Markdown and table support
 in previews and restored content. It retrieves the latest 100 description updates,
 so newer unrelated activity does not displace them.
 
+On an issue page, **Back** and navigation after deletion retain an explicit view
+context. Without one, they look up the project's currently accessible default
+view, even when the workspace slug lookup returns no slug. If that view is
+unavailable, they return to the project when its slug is known, otherwise to
+**Views**. In an issue modal, **Back** closes the modal.
+
 ### Project overview
+
+The sidebar **Projects** section can be collapsed with its chevron. When expanded,
+it shows up to five accessible, non-archived projects in the current workspace,
+most recently modified first. **Search projects** matches names and issue prefixes
+across all accessible, non-archived projects before limiting the results to five.
+The **Projects** label opens the full list, and **Create project** remains available
+even when the section is collapsed.
 
 Open `/{workspace}/dashboard`, choose a project and select **Show project**.
 The GET selector uses `?project=<project-id>` and reloads only that project's

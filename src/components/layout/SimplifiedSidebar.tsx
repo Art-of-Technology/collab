@@ -22,6 +22,7 @@ import {
   Bot,
 } from "lucide-react";
 import { signOutCurrentSession } from "@/lib/sign-out";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -64,7 +65,7 @@ export default function SimplifiedSidebar({
   const { currentAgent } = useAIAgents();
   const workspaceBase = currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}` : "";
 
-  const { data: projects = [] } = useProjects({
+  const { data: projects = [], isPending: projectsLoading, isError: projectsError } = useProjects({
     workspaceId: currentWorkspace?.id,
     includeStats: true,
   });
@@ -79,9 +80,16 @@ export default function SimplifiedSidebar({
   const [showCreateViewModal, setShowCreateViewModal] = useState(false);
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
 
-  const starredProjects = useMemo(() => {
-    return projects.filter((p: any) => p.isFavorite && !p.isArchived).slice(0, 6);
-  }, [projects]);
+  const [projectsExpanded, setProjectsExpanded] = useState(true);
+  const [projectSearch, setProjectSearch] = useState("");
+  const recentProjects = useMemo(() => {
+    const query = projectSearch.trim().toLocaleLowerCase();
+    return projects
+      .filter(project => !project.isArchived &&
+        `${project.name} ${project.issuePrefix || ""}`.toLocaleLowerCase().includes(query))
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 5);
+  }, [projects, projectSearch]);
 
   const starredViews = useMemo(() => {
     return views.filter((v: any) => v.isFavorite).slice(0, 6);
@@ -242,46 +250,43 @@ export default function SimplifiedSidebar({
 
         {/* Projects Section */}
         <div>
-          <Link
-            href={`${workspaceBase}/projects`}
-            className={cn(
-              "flex items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium transition-all duration-150 group",
-              pathname.startsWith(`${workspaceBase}/projects`)
-                ? "bg-collab-800 text-white"
-                : "text-collab-400 hover:text-white hover:bg-collab-800"
-            )}
-          >
-            <FolderKanban className={cn("h-4 w-4", pathname.startsWith(`${workspaceBase}/projects`) ? "text-white" : "text-collab-500")} />
-            <span>Projects</span>
-            <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowCreateProjectModal(true); }}
-              className="ml-auto p-1 hover:bg-collab-700 rounded transition-colors opacity-0 group-hover:opacity-100"
+          <div className="flex items-center rounded-lg text-collab-400 hover:bg-collab-800">
+            <Link
+              href={`${workspaceBase}/projects`}
+              className={cn("flex min-w-0 flex-1 items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium hover:text-white",
+                pathname.startsWith(`${workspaceBase}/projects`) && "bg-collab-800 text-white")}
             >
-              <Plus className="h-3.5 w-3.5 text-collab-500" />
-            </button>
-          </Link>
-
-          {/* Starred Projects */}
-          {starredProjects.length > 0 && (
-            <div className="mt-1 space-y-0.5 ml-6 pl-3 border-l border-collab-700">
-              {starredProjects.map((project: any) => (
-                <Link
-                  key={project.id}
-                  href={`${workspaceBase}/projects/${project.slug}`}
-                  className={cn(
-                    "flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-all duration-150",
-                    pathname.includes(`/projects/${project.slug}`)
-                      ? "text-white bg-collab-800"
-                      : "text-collab-400 hover:text-white hover:bg-collab-900"
-                  )}
-                >
-                  <div
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: project.color || "#6366f1" }}
-                  />
+              <FolderKanban className="h-4 w-4" />
+              <span>Projects</span>
+            </Link>
+            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Create project"
+              onClick={() => setShowCreateProjectModal(true)}>
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Toggle recent projects"
+              aria-expanded={projectsExpanded} aria-controls="sidebar-recent-projects"
+              onClick={() => setProjectsExpanded(!projectsExpanded)}>
+              <ChevronDown className={cn("h-4 w-4 transition-transform", !projectsExpanded && "-rotate-90")} />
+            </Button>
+          </div>
+          {projectsExpanded && (
+            <div id="sidebar-recent-projects" className="mt-1 ml-6 space-y-1 border-l border-collab-700 pl-3">
+              <Input type="search" aria-label="Search projects" placeholder="Search projects…"
+                value={projectSearch} onChange={event => setProjectSearch(event.target.value)}
+                className="h-8 text-xs" />
+              <p className="px-2 py-1 text-[10px] text-collab-500">Recently updated</p>
+              {recentProjects.map(project => (
+                <Link key={project.id} href={`${workspaceBase}/projects/${project.slug}`}
+                  className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors",
+                    pathname === `${workspaceBase}/projects/${project.slug}`
+                      ? "text-white bg-collab-800" : "text-collab-400 hover:text-white hover:bg-collab-900")}>
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: project.color || "#6366f1" }} />
                   <span className="truncate">{project.name}</span>
                 </Link>
               ))}
+              {recentProjects.length === 0 && <p className="px-2 py-1 text-xs text-collab-500">
+                {projectsLoading ? "Loading projects…" : projectsError ? "Could not load projects." : projectSearch ? "No matching projects." : "No projects yet."}
+              </p>}
             </div>
           )}
         </div>

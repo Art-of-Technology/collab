@@ -354,7 +354,9 @@ The shared issue row used in legacy dashboard components and AI chat:
 </Link>
 ```
 
-### Nested Items (Starred Projects/Views)
+### Nested Items
+
+For project selection and ordering, see [Project overview](README.md#project-overview).
 
 ```tsx
 <div className="mt-1 space-y-0.5 ml-6 pl-3 border-l border-collab-700">

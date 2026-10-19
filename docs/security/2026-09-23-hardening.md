@@ -1112,7 +1112,7 @@ remain activation requirements. No runtime, provider or database operation ran.
 
 ## View access and session subjects
 
-Seven View API modules use one workspace-and-visibility predicate. Reads require
+View API reads use one workspace-and-visibility predicate. Reads require
 workspace ownership or active membership, plus view ownership, WORKSPACE
 visibility or explicit SHARED recipient access. Active workspace members and
 workspace owners retain edit access to WORKSPACE views; PERSONAL/SHARED edits
@@ -1120,8 +1120,19 @@ and deletion of any view remain view-owner-only, with workspace access required.
 `/api/views/[viewId]` resolves a slug with a required `workspaceId` query parameter;
 the workspace routes and favorite/follow/issue-position subroutes use view IDs.
 The workspace DELETE route rejects default views; the global slug DELETE route
-has no default-view guard. Five session-consuming modules use the shared adapter
-and resolve the current database user by session ID rather than mutable email.
+has no default-view guard. Session-consuming modules use the shared adapter
+and bind access to the stable session user ID rather than mutable email.
+
+`GET /api/projects/[projectId]/default-view` requires a stable session user ID
+through the shared session adapter and current project-workspace access through
+`issueAccessWhere`. It selects only a default view containing that project in the
+same workspace and applies `viewReadAccessWhere`. Missing identity returns 401;
+an inaccessible or missing project or default view returns 404 without view
+metadata. Success returns only `id`, `slug` and `name`. The navigation helper
+requests this endpoint with `cache: 'no-store'` and does not retain a default-view
+cache across calls. See the
+[default-view access fixture](../../tests/security/project-default-view-access.test.cjs)
+for the modeled session, visibility and revocation cases.
 
 Supplied project/workspace references require current actor access; recipients
 and replacement owners must actively belong to the view workspace or own it.
