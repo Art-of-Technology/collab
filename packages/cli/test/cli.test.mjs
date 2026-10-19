@@ -643,15 +643,21 @@ test('Windows credential creation sets the user owner and refuses existing files
   assert.equal(readFileSync(file, 'utf8'), contents);
 });
 
-test('Windows credential checks accept private state when the CLI is started from PowerShell 7', { skip: !windows }, async t => {
+test('Windows credential state can be created and read when the CLI is started from PowerShell 7', { skip: !windows }, async t => {
   // pwsh prepends its own core modules to PSModulePath, and child processes inherit that value.
   const pwsh = spawnSync('pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '[Console]::Out.Write($env:PSModulePath)'], { encoding: 'utf8' });
   if (pwsh.status !== 0) return t.skip('PowerShell 7 is not installed');
   const f = await fixture(t);
-  writeCredentials(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_TOKEN', expiresAt: Date.now() + 60000 }));
   const env = { COLLAB_TOKEN: '' };
   for (const key of Object.keys(process.env)) if (key.toUpperCase() === 'PSMODULEPATH') env[key] = undefined;
   env.PSModulePath = pwsh.stdout;
+  // Logout saves state like login does, creating the private directory and credential file, without a server.
+  const created = path.join(f.dir, 'created-state');
+  const saved = await f.run(['auth', 'logout'], { env: { ...env, COLLAB_CONFIG_DIR: created } });
+  assert.equal(saved.code, 0, saved.stderr);
+  assert.equal(windowsAcl(created), true);
+  assert.equal(windowsAcl(path.join(created, 'default.json')), true);
+  writeCredentials(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_TOKEN', expiresAt: Date.now() + 60000 }));
   const result = await f.run(['whoami'], { env });
   assert.equal(result.code, 0, result.stderr);
   assert.equal(f.calls.length, 1);
