@@ -180,13 +180,19 @@ test('serialized preview cards and plain links survive Done, reopening and sanit
     assert.ok(DOMParser.fromSchema(schema).parse(output).eq(schema.nodes.doc.create(null, nodes)));
     assert.equal(output.querySelector('img,script,[onerror]'), null);
   }
-  for (const url of ['javascript:alert(1)', 'data:text/html,<script>bad()</script>', 'https://example.com/" onclick="bad()']) {
+  for (const [url, expectVisibleText] of [
+    ['javascript:alert(1)', true],
+    ['data:text/html;base64,PHNjcmlwdD5iYWQoKTwvc2NyaXB0Pg==', true],
+    // Sanitization may remove metadata containing executable markup entirely.
+    ['data:text/html,<script>bad()</script>', false],
+    ['https://example.com/" onclick="bad()', true],
+  ]) {
     const preview = dom.window.document.createElement('div');
     preview.dataset.type = 'link-preview'; preview.dataset.url = url;
     output.innerHTML = commentHtml(preview.outerHTML);
-    assert.equal(output.querySelector('a').textContent, url);
-    assert.equal(output.querySelector('[onclick],script'), null);
-    if (!url.startsWith('https:')) assert.equal(output.querySelector('a').hasAttribute('href'), false);
+    if (expectVisibleText) assert.equal(output.querySelector('a')?.textContent, url);
+    assert.equal(output.querySelector('[onclick],[onerror],script'), null);
+    if (!url.startsWith('https:')) assert.equal(output.querySelector('[href]'), null);
   }
   dom.window.close();
   const issue = { id: 'issue', issueKey: 'BW-31', title: 'Buildwake', projectId: 'buildwake', description: saved, createdAt: new Date(), labels: [], comments: [] };
