@@ -53,6 +53,7 @@ interface IssueRichEditorProps {
   collabDocumentId?: string;
   issueId?: string;
   isIssueDescription?: boolean;
+  renderMarkdown?: boolean;
 
   // Feature flags
   enableSlashCommands?: boolean;
@@ -143,20 +144,22 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   collabDocumentId,
   issueId,
   isIssueDescription = false,
+  renderMarkdown = false,
 }, ref) => {
   const editorRef = useRef<RichEditorRef>(null);
-  const formattedValue = useMemo(() => isIssueDescription ? commentHtml(value) : value, [value, isIssueDescription]);
+  const parseMarkdown = isIssueDescription || renderMarkdown;
+  const formattedValue = useMemo(() => parseMarkdown ? commentHtml(value) : value, [value, parseMarkdown]);
 
   // Expose the editor ref to parent component
   React.useImperativeHandle(ref, () => ({
     focus: () => editorRef.current?.focus(),
     getHTML: () => editorRef.current?.getHTML() || '',
     getText: () => editorRef.current?.getText() || '',
-    setContent: (content: string) => editorRef.current?.setContent(isIssueDescription ? commentHtml(content) : content),
+    setContent: (content: string) => editorRef.current?.setContent(parseMarkdown ? commentHtml(content) : content),
     insertText: (text: string) => editorRef.current?.insertText(text),
     clear: () => editorRef.current?.clear(),
     getEditor: () => editorRef.current?.getEditor(),
-  }), [isIssueDescription]);
+  }), [parseMarkdown]);
   const containerRef = useRef<HTMLDivElement>(null);
   const hocuspocusManagerRef = useRef<HocuspocusManager | null>(null);
   const [collabReady, setCollabReady] = useState(0);

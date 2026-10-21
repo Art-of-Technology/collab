@@ -681,6 +681,7 @@ export function NoteFormEditor({
                                     <FormItem>
                                         <FormControl>
                                             <IssueRichEditor
+                                                renderMarkdown
                                                 value={field.value}
                                                 onChange={field.onChange}
                                                 placeholder="Start writing, or press '/' for commands..."
