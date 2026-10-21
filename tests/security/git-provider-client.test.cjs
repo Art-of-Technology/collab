@@ -26,6 +26,7 @@ function data(provider, baseUrl) {
 const cases = [
   ['github', 'https://github.com', 'https://api.github.com'],
   ['github', configurations[0].baseUrl, configurations[0].baseUrl + '/api/v3'],
+  ['forgejo', 'https://codeberg.org', 'https://codeberg.org/api/v1'],
   ['forgejo', configurations[1].baseUrl, configurations[1].baseUrl + '/api/v1'],
   ['gitlab', 'https://gitlab.com', 'https://gitlab.com/api/v4'],
   ['gitlab', configurations[2].baseUrl, configurations[2].baseUrl + '/api/v4'],

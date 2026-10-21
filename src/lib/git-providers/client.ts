@@ -11,6 +11,7 @@ export class ProviderError extends Error {}
 
 const cloud: Instance[] = [
   { provider: 'github', baseUrl: 'https://github.com', label: 'GitHub' },
+  { provider: 'forgejo', baseUrl: 'https://codeberg.org', label: 'Codeberg (Forgejo)' },
   { provider: 'gitlab', baseUrl: 'https://gitlab.com', label: 'GitLab.com' },
   { provider: 'bitbucket', baseUrl: 'https://bitbucket.org', label: 'Bitbucket Cloud' },
 ];

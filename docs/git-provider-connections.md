@@ -8,7 +8,7 @@ GitHub OAuth, webhook, versioning and release connections are unchanged.
 
 ## Instances
 
-GitHub.com, GitLab.com and Bitbucket Cloud are built in. An operator registers
+GitHub.com, Codeberg (hosted Forgejo), GitLab.com and Bitbucket Cloud are built in. An operator registers
 other hosted or self-managed instances with `GIT_PROVIDER_INSTANCES`, a JSON array:
 
 ```json
@@ -79,6 +79,7 @@ in this document or acceptance logs.
 Primary API references:
 
 - [GitHub Enterprise REST authentication](https://docs.github.com/en/enterprise-server@3.22/rest/authentication/authenticating-to-the-rest-api)
+- [Codeberg and Forgejo](https://docs.codeberg.org/getting-started/what-is-codeberg/)
 - [Forgejo API usage](https://forgejo.org/docs/latest/user/api/usage/)
 - [GitLab REST authentication](https://docs.gitlab.com/api/rest/authentication/)
 - [GitLab commits](https://docs.gitlab.com/api/commits/) and [merge requests](https://docs.gitlab.com/api/merge_requests/)
