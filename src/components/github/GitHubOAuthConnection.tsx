@@ -65,6 +65,15 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
   const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
+    const url = new URL(window.location.href);
+    const error = url.searchParams.get('github_error');
+    if (error) toast.error(error);
+    if (error || url.searchParams.has('github_connected')) {
+      url.searchParams.delete('github_error');
+      url.searchParams.delete('github_connected');
+      url.searchParams.delete('github_user');
+      window.history.replaceState(window.history.state, '', url);
+    }
     checkGitHubConnection();
   }, []);
 
@@ -165,23 +174,8 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
       
       const { authUrl } = await response.json();
       
-      // Open in popup window
-      const popup = window.open(
-        authUrl,
-        'github-oauth',
-        'width=600,height=700,scrollbars=yes,resizable=yes'
-      );
-
-      // Listen for popup close
-      const checkClosed = setInterval(() => {
-        if (popup?.closed) {
-          clearInterval(checkClosed);
-          // Check if connection was successful
-          setTimeout(() => {
-            checkGitHubConnection();
-          }, 1000);
-        }
-      }, 1000);
+      // Same-tab authorization works with popup blockers and refreshes on return.
+      window.location.assign(authUrl);
     } catch (error) {
       console.error('Error starting GitHub OAuth:', error);
       toast.error('Failed to start GitHub connection');
