@@ -56,9 +56,11 @@ history. A refresh refuses a different repository at a reused path.
 
 Migration `20261021223000_git_provider_connections` adds `GitConnection` and
 `GitConnectionActivity` tables. It does not change or delete existing repository,
-commit or pull request rows. Apply the migration through the normal release path
-before deploying the new UI/API; retain the usual database backup and migration
-checks. An application rollback may leave these additive tables in place. Do not
+commit or pull request rows. Production has no Prisma migration ledger; do not
+blindly run `prisma migrate deploy`. Through the existing application release
+path, freshly verify the target database identity and schema, take a backup,
+then apply only the exact additive SQL in this migration before deploying the
+new UI/API. An application rollback may leave these additive tables in place. Do not
 drop them if connections have been created, because that would delete history.
 
 ## Limits and acceptance
@@ -75,6 +77,12 @@ acceptance. Record a tested instance version and the allowed/denied connect,
 activity, refresh, reconnect and disconnect results for each hosting variant
 before claiming that variant has passed live acceptance. Never put credentials
 in this document or acceptance logs.
+
+The approved sandbox Forgejo adapter read passed. Deployment evidence reports
+HTTP 403 from the application container to the Forgejo public version endpoint;
+Network Doctor consultation is pending. This does not establish production
+provider acceptance. Keep credentials private and resolve reachability through
+the existing infrastructure owner before claiming runtime acceptance.
 
 Primary API references:
 

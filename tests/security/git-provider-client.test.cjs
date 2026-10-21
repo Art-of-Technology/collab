@@ -11,7 +11,7 @@ function fixture(config = {}) {
   const calls = [], responses = [];
   const client = load('src/lib/git-providers/client.ts', { 'server-only': {}, zod: z }, {
     URL, Buffer, AbortSignal, process: { env: { GIT_PROVIDER_INSTANCES: JSON.stringify(config.instances || configurations) } },
-    fetch: async (url, options) => { calls.push({ url, options }); if (config.error) throw Error('secret-body-token'); return responses.shift() || Response.json({}); },
+    fetch: async (url, options) => { calls.push({ url, options }); if (config.error) throw Error('secret-body-token'); return config.respond ? config.respond(new URL(url)) : responses.shift() || Response.json({}); },
   });
   return { client, calls, responses, credentials: { token: 'private-token' } };
 }
@@ -102,3 +102,20 @@ test('empty GitHub and Forgejo repositories remain connectable without hiding au
     await assert.rejects(f.client.getActivity(instance, f.credentials, 'team/repo'), /denied access/);
   }
 });
+
+for (const [provider, baseUrl] of cases.filter(([provider]) => ['github', 'forgejo'].includes(provider))) {
+  test(`${provider} ${baseUrl}: recently merged oldest PR survives the listing limit`, async () => {
+    const d = data(provider, baseUrl);
+    const pulls = Array.from({ length: 21 }, (_, index) => ({ ...d.pr, number: index + 1, updated_at: index === 0 ? stamp : '2026-10-20T12:00:00Z' }));
+    const f = fixture({ respond: url => {
+      if (url.pathname.endsWith('/commits')) return Response.json([]);
+      const expectedSort = provider === 'forgejo' ? 'recentupdate' : 'updated';
+      const sorted = url.searchParams.get('sort') === expectedSort ? pulls : [...pulls].reverse();
+      return Response.json(sorted.slice(0, Number(url.searchParams.get(provider === 'forgejo' ? 'limit' : 'per_page'))));
+    } });
+    const activity = await f.client.getActivity(f.client.resolveInstance(provider, baseUrl), f.credentials, d.path);
+    assert.equal(activity.length, 20);
+    assert.equal(activity[0].id, '1');
+    assert.equal(activity[0].state, 'merged');
+  });
+}

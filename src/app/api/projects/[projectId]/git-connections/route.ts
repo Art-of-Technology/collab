@@ -56,7 +56,8 @@ export async function POST(request: NextRequest, context: Context) {
       if (!connection) return respond({ error: 'Connection not found' }, 404);
       if (connection.connectedById !== scope.actor.id && scope.project.workspace.ownerId !== scope.actor.id) return respond({ error: 'Only the connection owner or workspace owner can manage this connection.' }, 403);
       if (body.action === 'disconnect') {
-        await prisma.gitConnection.update({ where: { id: connection.id }, data: { credentials: null, isActive: false } });
+        const updated = await prisma.gitConnection.updateMany({ where: { id: connection.id, updatedAt: connection.updatedAt, connectedById: connection.connectedById }, data: { credentials: null, isActive: false } });
+        if (updated.count !== 1) return respond({ error: 'Connection changed during disconnect. Please reload.' }, 409);
         return respond({ disconnected: true });
       }
       if (!connection.isActive || !connection.credentials) return respond({ error: 'Reconnect this repository before refreshing.' }, 400);
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest, context: Context) {
       const activity = await getActivity(instance, credentials, repository.path);
       await prisma.$transaction(async tx => {
         // A concurrent disconnect/reconnect must not resurrect or overwrite that connection.
-        const updated = await tx.gitConnection.updateMany({ where: { id: connection.id, isActive: true, updatedAt: connection.updatedAt }, data: { syncedAt: new Date() } });
+        const updated = await tx.gitConnection.updateMany({ where: { id: connection.id, isActive: true, updatedAt: connection.updatedAt, connectedById: connection.connectedById }, data: { syncedAt: new Date() } });
         if (updated.count !== 1) throw new ProviderError('Connection changed during refresh. Please reload.');
         for (const row of activity) await tx.gitConnectionActivity.upsert({
           where: { connectionId_kind_externalId: { connectionId: connection.id, kind: row.kind, externalId: row.id } },
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest, context: Context) {
     const encrypted = EncryptionService.encrypt(body.credentials);
     await prisma.$transaction(async tx => {
       const connection = existing
-        ? await tx.gitConnection.update({ where: { id: existing.id, updatedAt: existing.updatedAt }, data: { credentials: encrypted, connectedById: scope.actor.id, isActive: true, syncedAt: new Date(), repositoryPath: repository.path, name: repository.name, url: repository.url } })
+        ? await tx.gitConnection.update({ where: { id: existing.id, updatedAt: existing.updatedAt, connectedById: existing.connectedById }, data: { credentials: encrypted, connectedById: scope.actor.id, isActive: true, syncedAt: new Date(), repositoryPath: repository.path, name: repository.name, url: repository.url } })
         : await tx.gitConnection.create({ data: { ...identity, connectedById: scope.actor.id, credentials: encrypted, repositoryPath: repository.path, name: repository.name, url: repository.url, syncedAt: new Date() } });
       for (const row of activity) await tx.gitConnectionActivity.upsert({
         where: { connectionId_kind_externalId: { connectionId: connection.id, kind: row.kind, externalId: row.id } },

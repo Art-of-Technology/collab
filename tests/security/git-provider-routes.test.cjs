@@ -1,16 +1,23 @@
-const { assert, test, load } = require('./helpers.cjs');
+const { assert, test, load, matches } = require('./helpers.cjs');
 const z = require('zod');
 function fixture(options = {}) {
   const calls = [], writes = [];
   const saved = { id: 'connection', projectId: 'project', provider: 'forgejo', baseUrl: 'https://forge.test', externalId: 'repo-1', repositoryPath: 'team/repo', connectedById: options.foreignOwner ? 'other' : 'alice', credentials: 'encrypted', isActive: !options.disconnected, updatedAt: new Date(0) };
+  const stored = { ...saved };
+  const mutate = args => {
+    if (options.replacement) Object.assign(stored, options.replacement);
+    if (!matches(stored, args.where)) return false;
+    Object.assign(stored, args.data);
+    return true;
+  };
   const activity = [{ id: 'sha', kind: 'commit', title: 'Work', url: 'https://forge.test/team/repo/commit/sha', date: '2026-10-21T10:00:00Z' }];
   const project = { id: 'project', workspace: { ownerId: options.workspaceOwner ? 'alice' : 'owner' } };
   const connectionStore = {
     findMany: async args => { calls.push(['read', args]); return [{ ...saved, credentials: undefined, activity }]; },
     findFirst: async ({ where }) => where.projectId === 'project' && where.id === 'connection' ? saved : null,
     findUnique: async () => options.existing ? saved : null,
-    update: async args => { writes.push(['update', args]); return saved; },
-    updateMany: async args => { writes.push(['updateMany', args]); return { count: options.concurrentChange ? 0 : 1 }; },
+    update: async args => { writes.push(['update', args]); if (!mutate(args)) throw Error('Record changed'); return stored; },
+    updateMany: async args => { writes.push(['updateMany', args]); return { count: options.concurrentChange ? 0 : Number(mutate(args)) }; },
     create: async args => { writes.push(['create', args]); return saved; },
   };
   const prisma = {
@@ -36,7 +43,7 @@ function fixture(options = {}) {
   const route = load('src/app/api/projects/[projectId]/git-connections/route.ts', deps, { URL, Date });
   const request = body => ({ url: 'https://collab.test/api/projects/project/git-connections', headers: new Headers({ origin: options.foreignOrigin ? 'https://evil.test' : 'https://collab.test' }), json: async () => body });
   const context = { params: Promise.resolve({ projectId: options.otherProject ? 'foreign' : 'project' }) };
-  return { calls, writes, saved, post: body => route.POST(request(body), context), get: () => route.GET(request({}), context) };
+  return { calls, writes, saved, stored, post: body => route.POST(request(body), context), get: () => route.GET(request({}), context) };
 }
 const connect = { action: 'connect', provider: 'forgejo', baseUrl: 'https://forge.test', repositoryPath: 'team/repo', credentials: { token: 'secret' } };
 test('anonymous, foreign project and foreign origin cannot use provider credentials', async () => {
@@ -83,4 +90,23 @@ test('refresh checks concurrent changes before writing activity', async () => {
 test('workspace owner may disconnect and ordinary refresh retains activity', async () => {
   const owner = fixture({ foreignOwner: true, workspaceOwner: true }); assert.equal((await owner.post({ action: 'disconnect', id: 'connection' })).status, 200);
   const f = fixture(); assert.equal((await f.post({ action: 'refresh', id: 'connection' })).status, 200); assert.equal(f.writes.filter(([kind]) => kind === 'activity').length, 1);
+});
+
+test('stale disconnect, refresh and reconnect preserve replacement credentials and ownership', async () => {
+  for (const replacement of [
+    { credentials: 'replacement', updatedAt: new Date(1) },
+    { credentials: 'replacement', connectedById: 'owner' },
+    { credentials: 'replacement', connectedById: 'owner', updatedAt: new Date(1) },
+  ]) {
+    for (const body of [{ action: 'disconnect', id: 'connection' }, { action: 'refresh', id: 'connection' }, connect]) {
+      const f = fixture({ existing: true, replacement });
+      const response = await f.post(body);
+      assert.ok(response.status >= 400);
+      if (body.action === 'disconnect') assert.equal(response.status, 409);
+      assert.equal(f.stored.credentials, 'replacement');
+      assert.equal(f.stored.connectedById, replacement.connectedById || 'alice');
+      assert.equal(f.stored.isActive, true);
+      assert.equal(f.writes.some(([kind]) => kind === 'activity'), false);
+    }
+  }
 });
