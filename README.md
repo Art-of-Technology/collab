@@ -360,6 +360,13 @@ components remain available separately.
 
 ### Integration availability
 
+GitHub repository authorization uses the current tab. After project access is
+validated, authorization returns to the project's GitHub settings, where
+cancellation and provider errors appear or successful authorization exposes
+repository selection. No popup permission or manual popup closure is required.
+See the [OAuth browser-state contract](docs/security/2026-09-23-hardening.md#github-oauth-browser-state)
+for validation failures and return destinations.
+
 For GitHub account and repository disconnect behavior, repository details and
 configuration access, see the
 [GitHub lifecycle access contract](docs/security/2026-09-23-hardening.md#github-repository-lifecycle-access).
@@ -468,8 +475,3 @@ Distributed under the Apache License 2.0 - see the [LICENSE](./LICENSE.txt) file
 [issues-url]: https://github.com/Art-of-Technology/collab/issues
 [license-shield]: https://img.shields.io/github/license/Art-of-Technology/collab.svg?style=for-the-badge
 [license-url]: https://github.com/Art-of-Technology/collab/blob/main/LICENSE.txt
-
-GitHub repository authorization uses the current tab and returns to the project's
-GitHub settings. Authorization cancellation and provider failures appear there;
-no popup permission or manual popup closure is required. Existing repository
-connections and OAuth state checks are preserved.
