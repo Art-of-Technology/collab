@@ -123,7 +123,7 @@ async function settingsFixture(query, connected = false) {
       await new Promise(resolve => setImmediate(resolve));
     }
   }
-  function nodes(node = tree) {
+  function nodes(node) {
     if (Array.isArray(node)) return node.flatMap(nodes);
     if (!node || typeof node !== 'object') return [];
     return [node, ...nodes(node.props?.children)];
@@ -131,7 +131,7 @@ async function settingsFixture(query, connected = false) {
   const text = node => Array.isArray(node) ? node.map(text).join('') : node && typeof node === 'object' ? text(node.props?.children) : typeof node === 'string' ? node : '';
   await settle();
   return { errors, requests, window, text: () => text(tree), async select(label) {
-    const button = nodes().find(node => node.type === 'button' && text(node) === label);
+    const button = nodes(tree).find(node => node.type === 'button' && text(node) === label);
     assert.ok(button, 'settings tab exists: ' + label);
     button.props.onClick(); await settle();
   } };
