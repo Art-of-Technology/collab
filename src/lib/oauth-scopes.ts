@@ -343,10 +343,8 @@ export function isValidRemoteAgentRedirect(redirectUri: string): boolean {
 
 /**
  * Validate redirect URI against allowed URIs, with special handling for system apps.
- * System apps (like MCP) are allowed to use:
- * - Any localhost callback URL with dynamic ports (for CLI tools like Claude Code)
- * - Custom protocol schemes (for desktop apps like Cursor, VS Code)
- * - Remote HTTPS callback URLs ending with /callback (for AI agents)
+ * Only validated HTTP loopback callbacks may bypass exact registration for system apps.
+ * Remote HTTPS and custom-scheme callbacks still require an exact registered match.
  *
  * @param redirectUri - The redirect URI to validate
  * @param allowedUris - Array of allowed redirect URIs
@@ -363,7 +361,7 @@ export function isAllowedRedirectUri(
     return true;
   }
 
-  // For system apps, allow flexible redirect URIs
+  // Only system apps may use unregistered loopback callback ports
   if (isSystemApp) {
     // Allow localhost callbacks with dynamic ports (Claude Code, CLI tools)
     if (isValidLocalhostRedirect(redirectUri)) {

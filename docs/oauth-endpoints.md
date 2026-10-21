@@ -41,59 +41,38 @@ The platform supports three OAuth 2.0 client authentication methods:
 
 **URL:** `GET /api/oauth/authorize`
 
-Initiates the OAuth authorization flow for third-party applications.
+Opens the Collab consent screen; navigation never issues a code. The system-app endpoint `GET /api/oauth/mcp/authorize` uses the same consent flow.
 
 **Parameters:**
 - `client_id` (required): Your app's client ID
-- `redirect_uri` (required): Callback URL for your app
+- `redirect_uri` (required): An exactly registered callback URL. System apps additionally support dynamic HTTP loopback ports on `localhost` or `127.0.0.1` at `/callback`, without credentials or a fragment. Remote HTTPS and custom-scheme callbacks must be registered exactly.
 - `response_type` (required): Must be `code`
-- `scope` (optional): Space-separated list of requested scopes (default: `read`)
-- `state` (optional): CSRF protection token
-- `workspace_id` (optional): Immutable workspace ID; see [workspace access at code issuance](#workspace-access-at-code-issuance)
-- `code_challenge` (required for public clients): PKCE code challenge
-- `code_challenge_method` (required for public clients): Must be `S256`
+- `scope` (optional): Space-separated requested scopes; omission uses the current app grant, intersected with the installation grant for non-system apps. Unsupported or excessive scopes are rejected, not silently trimmed.
+- `state` (optional): Client-generated CSRF protection token
+- `workspace_id`: Immutable workspace ID; required when preparing or approving consent. The consent screen allows explicit selection when navigation omits it.
+- `installation_id` (optional): A pending or active installation belonging to this app and workspace; required installation lookup is skipped for system apps.
+- `code_challenge` (required for public clients and the MCP endpoint): Base64url-encoded SHA-256 PKCE challenge (43 characters)
+- `code_challenge_method` (required with a challenge): Must be `S256`
 
-**Example:**
-```
-GET /api/oauth/authorize?client_id=your_client_id&redirect_uri=https://yourapp.com/callback&response_type=code&scope=read%20write&state=random_string
-```
+See the [PKCE example](#example-pkce-implementation) for an authorization URL.
 
-**Response:**
-- Redirects to login if the session does not resolve to a current database user
-- Shows consent screen (if implemented)
-- Redirects to `redirect_uri` with an authorization code on success; workspace denials return JSON errors as described below
+#### Explicit approval
+
+The signed-in consent screen prepares the selected request with a GET to the authorization endpoint using `x-collab-consent: prepare`. The server validates the client, callback, workspace, installation and scopes, then returns a `consent_token` and canonical request details. This pending approval expires after five minutes and cannot be exchanged for an access token.
+
+After the user clicks Authorize, the screen sends JSON to the same endpoint with `approve: true`, the `consent_token`, and the prepared OAuth parameters. POST requires an `Origin` matching the Collab origin. Approval is bound to the current user, client, workspace, installation, callback, scopes, state and PKCE challenge; changing these requires a new preparation. Successful approval consumes the pending record once, issues a ten-minute authorization code, and returns `{ "redirect": "<callback URL with code and state>" }` for browser navigation.
+
+Deny returns `error=access_denied` and the prepared state only to the successfully server-prepared callback. Invalid or unprepared requests return home. Restart a login already in progress during this update; existing saved CLI logins remain supported, and separate devices retain independent grants.
 
 #### Workspace access at code issuance
 
-Both `GET /api/oauth/authorize` and `GET /api/oauth/mcp/authorize` resolve the
-current database user and require workspace ownership or an active membership
-(`status: true`). Owners do not need a membership row. Explicit `workspace_id`
-values must match an immutable workspace ID exactly; slugs are not aliases, and
-a denied explicit workspace never falls back to another workspace.
+Preparation and approval require an explicit immutable workspace ID and current ownership or active membership (`status: true`). Owners do not need a membership row. Slugs are not aliases and no automatic workspace fallback occurs. Missing IDs return HTTP 400 `invalid_request`; unknown or inaccessible IDs return HTTP 403 `access_denied`.
 
-For a non-system app, omitting `workspace_id` on the regular endpoint selects an
-accessible workspace, including one the user owns without a membership row. If
-none is accessible, it returns HTTP 403 `access_denied`. System apps using the
-regular endpoint without a workspace are sent to `/auth/mcp` for selection.
+Before persisting a code, both routes recheck the exact workspace ID using `postWorkspaceAccessWhere(actor.id)` on the same transaction handle that consumes consent and creates the code. A denial writes no code. This catches revocation before that lookup; it does not guarantee protection against concurrent revocation after it or establish database snapshot isolation. Exchange and refresh also require current workspace access.
 
-The regular endpoint returns HTTP 403 `access_denied` for a missing or
-inaccessible explicit workspace. The MCP endpoint requires `workspace_id`
-(omission returns HTTP 400 `invalid_request`); an unknown ID returns HTTP 404
-`invalid_request`, while an existing inaccessible workspace returns HTTP 403
-`access_denied`.
+#### Current permission ceiling
 
-Before persisting a code, both routes recheck the exact workspace ID using
-`postWorkspaceAccessWhere(actor.id)` on the same transaction handle that creates
-the code. The ID is a separate filter; the helper's optional slug-capable
-argument is not used. A denial at this lookup returns HTTP 403 `access_denied`
-with no code write. This catches revocation before the transaction lookup; it
-does not guarantee protection against concurrent revocation after that lookup
-or establish database snapshot isolation. Token exchange and later access
-checks remain separate policies.
-
-Regular `POST /api/oauth/authorize` continues to return a forwarding URL for
-approved consent; it does not issue a code. Client, redirect URI, PKCE, scope,
-installation, state, nonce and callback handling are unchanged.
+Code exchange, refresh, API authentication and introspection limit scopes to the current app registration and, for installed apps, the installation grant. Code exchange rejects grants exceeding that ceiling. Refresh persists the reduced grant and rejects an empty effective grant. API authentication and introspection never expand an empty token grant from installation permissions. Introspection reports the effective scopes, rather than obsolete stored permissions.
 
 ### 2. Token Endpoint
 
@@ -154,9 +133,9 @@ curl -X POST /api/oauth/token \
 {
   "access_token": "collab_at_xyz_abc123",
   "token_type": "Bearer",
-  "expires_in": 3600,
+  "expires_in": 31536000,
   "refresh_token": "collab_rt_xyz_def456",
-  "scope": "read write"
+  "scope": "issues:read issues:write"
 }
 ```
 
@@ -258,7 +237,7 @@ curl -X POST /api/oauth/introspect \
 ```json
 {
   "active": true,
-  "scope": "read write",
+  "scope": "issues:read issues:write",
   "client_id": "your_client_id",
   "token_type": "Bearer",
   "exp": 1640995200,
@@ -335,35 +314,7 @@ curl -X POST /api/oauth/revoke \
 
 ## Supported Scopes
 
-The platform supports the following OAuth scopes:
-
-### Basic Scopes
-- `read` - Read access to basic information
-- `write` - Write access to basic information
-
-### Resource-Specific Scopes
-- `issues:read` - Read access to issues
-- `issues:write` - Create and modify issues
-- `posts:read` - Read access to posts
-- `posts:write` - Create and modify posts
-- `tasks:read` - Read access to tasks
-- `tasks:write` - Create and modify tasks
-- `comments:read` - Read access to comments
-- `comments:write` - Create and modify comments
-- `milestones:read` - Read access to milestones
-- `milestones:write` - Create and modify milestones
-
-### User & Workspace Scopes
-- `user:read` - Read access to user information
-- `user:write` - Modify user information
-- `profile:read` - Read access to user profiles
-- `profile:write` - Modify user profiles
-- `workspace:read` - Read access to workspace information
-- `workspace:write` - Modify workspace settings
-- `leave:read` - Read access to leave requests
-- `leave:write` - Create and modify leave requests
-
-**Default Scope:** If no scope is specified, `read` is granted by default.
+The authoritative scope registry is `SUPPORTED_SCOPES` in [oauth-scopes.ts](../src/lib/oauth-scopes.ts). For example, `issues:read` permits reading issues and `issues:write` permits modifying them. Generic `read`/`write` and unlisted resource scopes are not supported. Requested scopes must also satisfy the [current permission ceiling](#current-permission-ceiling); omission follows the [authorization parameters](#1-authorization-endpoint).
 
 ## JWT Assertion Requirements
 
@@ -447,6 +398,7 @@ const authUrl = `https://yourcollab.com/api/oauth/authorize?` +
   `client_id=${clientId}&` +
   `redirect_uri=${encodeURIComponent(redirectUri)}&` +
   `response_type=code&` +
+  `workspace_id=${encodeURIComponent(workspaceId)}&` +
   `code_challenge=${codeChallenge}&` +
   `code_challenge_method=S256&` +
   `state=${state}`;
@@ -587,7 +539,7 @@ The complete OAuth 2.0 authorization flow consists of the following steps:
 
 1. **Authorization Request**: Third-party app redirects user to `/api/oauth/authorize`
 2. **User Authentication**: User logs in if not already authenticated
-3. **User Consent**: User grants permissions to the app (implicit or explicit)
+3. **User Consent**: The user explicitly approves the server-prepared request; see [explicit approval](#explicit-approval)
 4. **Authorization Code**: Platform redirects back to app with temporary authorization code
 5. **Token Exchange**: App exchanges authorization code for access/refresh tokens via `/api/oauth/token`
 6. **API Access**: App uses access token to make authenticated API requests
@@ -618,9 +570,10 @@ const authUrl = `https://yourcollab.com/api/oauth/authorize?` +
   `client_id=${clientId}&` +
   `redirect_uri=${encodeURIComponent(redirectUri)}&` +
   `response_type=code&` +
+  `workspace_id=${encodeURIComponent(workspaceId)}&` +
   `code_challenge=${codeChallenge}&` +
   `code_challenge_method=S256&` +
-  `scope=read%20write&` +
+  `scope=issues%3Aread%20issues%3Awrite&` +
   `state=${state}`;
 window.location.href = authUrl;
 
@@ -659,7 +612,8 @@ const authUrl = `https://yourcollab.com/api/oauth/authorize?` +
   `client_id=${clientId}&` +
   `redirect_uri=${encodeURIComponent(redirectUri)}&` +
   `response_type=code&` +
-  `scope=read%20write&` +
+  `workspace_id=${encodeURIComponent(workspaceId)}&` +
+  `scope=issues%3Aread%20issues%3Awrite&` +
   `state=${state}`;
 window.location.href = authUrl;
 
@@ -874,7 +828,7 @@ if (tokenInfo.active) {
 ## Notes
 
 - Authorization codes expire after 10 minutes
-- Access tokens expire after 1 hour (3600 seconds)
+- Use the token response’s `expires_in` for renewal scheduling; the current token endpoints issue one-year access tokens (31536000 seconds). Current access and permission checks still apply before expiry.
 - Refresh tokens have longer expiration (configurable)
 - All tokens are encrypted at rest
 - The system supports multiple concurrent tokens per installation

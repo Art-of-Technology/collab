@@ -267,8 +267,7 @@ For app-token access and post response restrictions, see the served
 [posts](../../public/docs/third-party-api.md#posts) reference.
 
 Comment read coverage also remains in `tests/security/comment-access.test.cjs`.
-Coclaw memory requires active workspace access and applies the shared Notes
-predicate to both its content query and total count, including filtered searches.
+For Coclaw memory and channel endpoints, see the [retirement notice](../../README.md#oauth-approval-and-retired-coclaw-integration).
 
 Two focused handler regressions passed with
 `node --test --test-name-pattern='disclosure:' tests/security/access-boundaries.test.cjs`.
@@ -282,13 +281,12 @@ No live database or broader validation gates were run in this review round.
 Conversation list, creation, detail and archival require current workspace
 ownership or active membership; detail and archival also require conversation
 ownership. When admitted by the [core-first execution boundary](#core-first-execution-boundary),
-both chat stream branches (Anthropic/MCP and Coclaw) enforce workspace
+the Anthropic/MCP chat stream enforces workspace
 access before credential resolution, provider calls or conversation/message
 writes. When supplied, `conversationId` must identify the caller's conversation
 in that workspace. Omitting it does not bypass workspace access.
 
-Coclaw channel message reads and writes use app authentication and bind the URL
-user and message workspace to the authenticated token context.
+Coclaw chat requests follow the [retirement notice](../../README.md#oauth-approval-and-retired-coclaw-integration) after authentication and the production execution gate.
 
 ## User-bound app Notes and leave-policy follow-up
 
@@ -1541,7 +1539,7 @@ Focused evidence executes actual proxy/session/logout code with Next request/res
 
 ### Notes tag access and issue previews
 
-Tag lists retain their author/requested-workspace selection, intersected with current owner/active-member workspace access or the caller's own personal tags. Counts include only currently readable notes. Tag creation checks the destination and uses a scoped workspace connection; an empty workspace value creates a personal tag. Historical unauthorized tag links are filtered from Notes collections, detail/pin responses, app context/knowledge list and detail responses, universal search, project summaries and Coclaw memory; tag-based note search uses the same predicate.
+Tag lists retain their author/requested-workspace selection, intersected with current owner/active-member workspace access or the caller's own personal tags. Counts include only currently readable notes. Tag creation checks the destination and uses a scoped workspace connection; an empty workspace value creates a personal tag. Historical unauthorized tag links are filtered from Notes collections, detail/pin responses, app context/knowledge list and detail responses, universal search and project summaries; tag-based note search uses the same predicate.
 
 Note creation and editing validate tag IDs before encryption or version writes. Attachments accept the caller's personal tags or tags in the note's effective destination: direct workspace first, otherwise the final project's workspace. Scoped connect/set selectors retain that boundary at the write. Empty selections, personal tags, project-only notes and legitimate project changes remain supported. Issue link previews now use the shared issue/project/status read predicate while retaining workspace slug/ID matching, metadata shapes and external previews without fetching.
 
@@ -1551,8 +1549,8 @@ Focused actual-handler execution uses modeled Prisma: before the app-route exten
 
 ## Core-first execution boundary
 
-Production local Coclaw execution is refused at the shared `LocalCoclawManager.getOrCreateInstance` entry before cached-instance reuse, manager database/configuration work or process spawn. This covers explicit instance creation, status polling's automatic restart and Coclaw chat provisioning. Development mode and explicitly configured remote-manager selection remain unchanged; startup and shutdown imports still work. The focused actual-module regression is `tests/security/coclaw-production-boundary.test.cjs`.
+Production local Coclaw execution is refused at the shared `LocalCoclawManager.getOrCreateInstance` entry before cached-instance reuse, manager database/configuration work or process spawn. The manager remains in source, but its former API provisioning and polling entry points are retired; see the [retirement notice](../../README.md#oauth-approval-and-retired-coclaw-integration). The focused actual-module regression is `tests/security/coclaw-production-boundary.test.cjs`.
 
-The authenticated `/api/ai/chat/stream` entry returns 503 in production unless `COLLAB_AGENT_EXECUTION` is exactly `enabled`. Anonymous requests still return 401. This default-off refusal precedes body parsing, persistence, agent selection, token provisioning, MCP discovery and provider dispatch for both Coclaw and non-Coclaw chat. The same focused fixture checks refusal, zero downstream calls and input-validation controls for explicit opt-in/development; it does not exercise a live provider.
+The authenticated `/api/ai/chat/stream` entry returns 503 in production unless `COLLAB_AGENT_EXECUTION` is exactly `enabled`. Anonymous requests still return 401. This default-off refusal precedes body parsing, persistence, agent selection, token provisioning, MCP discovery and provider dispatch for all chat requests. The same focused fixture checks refusal, zero downstream calls and input-validation controls for explicit opt-in/development; it does not exercise a live provider.
 
-Initial core cutover requires `NODE_ENV=production`, `COLLAB_AGENT_EXECUTION` unset or disabled, absent `COCLAW_MANAGER_URL` and `COCLAW_MANAGER_TOKEN`, Ready worker OFF (`COLLAB_READY_WORKER` must not equal `enabled`), and no existing active executor. Later agent opt-in or remote-manager configuration requires separate deployment approval; local production spawning remains prohibited even with chat opt-in. Ordinary model-only requests, explicit UI action dispatch, caller-side credential resolution in other Coclaw routes and cancellation of an existing provider run remain separate boundaries. No runtime or deployment acceptance follows from these source regressions.
+Initial core cutover requires `NODE_ENV=production`, `COLLAB_AGENT_EXECUTION` unset or disabled, absent `COCLAW_MANAGER_URL` and `COCLAW_MANAGER_TOKEN`, Ready worker OFF (`COLLAB_READY_WORKER` must not equal `enabled`), and no existing active executor. Later agent opt-in requires separate deployment approval; it does not restore retired Coclaw routes. Ordinary model-only requests, explicit UI action dispatch and cancellation of an existing provider run remain separate boundaries. No runtime or deployment acceptance follows from these source regressions.
