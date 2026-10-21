@@ -12,7 +12,6 @@ import { noteTagAccessWhere, noteTagConnections } from '@/lib/note-tag-access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
-import { stripHtmlToPlainText as stripHtml } from '@/lib/html-sanitizer';
 import { z } from 'zod';
 import { emitContextUpdated } from '@/lib/event-bus';
 
@@ -117,7 +116,7 @@ export const GET = withAppAuth(
       return NextResponse.json({
         id: note.id,
         title: note.title,
-        content: stripHtml(note.content),
+        content: note.content,
         type: note.type,
         scope: note.scope,
         isAiContext: note.isAiContext,
@@ -331,7 +330,7 @@ export const PUT = withAppAuth(
       return NextResponse.json({
         id: updatedNote.id,
         title: updatedNote.title,
-        content: stripHtml(updatedNote.content),
+        content: updatedNote.content,
         type: updatedNote.type,
         scope: updatedNote.scope,
         isAiContext: updatedNote.isAiContext,

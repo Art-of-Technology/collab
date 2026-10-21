@@ -63,7 +63,7 @@ function appNotesHarness() {
   const deps = {
     'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma: db }, '@prisma/client': client,
     '@/lib/apps/auth-middleware': auth, '@/lib/issue-finder': finder, '@/lib/secrets/access': access,
-    '@/lib/html-sanitizer': { stripHtmlToPlainText: value => value }, zod: require('zod'),
+    '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts'), zod: require('zod'),
     '@/lib/event-bus': { emitContextUpdated: async () => {}, emitContextCreated: async () => {} },
     '@/lib/secrets/crypto': { ...secrets,
       decryptRawContent: (...args) => { state.decryptions++; return secrets.decryptRawContent(...args); },
@@ -223,7 +223,7 @@ test('app-notes: leave policy reads require active membership while preserving o
   }, { console });
   const get = id => GET({}, { params: Promise.resolve({ policyId: id }) });
   assert.equal((await get('joined')).status, 401);
-  session = { user: { email: 'alice@example.test' } };
+  session = { user: { id: 'alice', email: 'alice@example.test' } };
   for (const id of ['foreign', 'revoked']) {
     const response = await get(id); assert.equal(response.status, 403);
     assert.deepEqual(await response.json(), { error: 'Access denied to workspace' });
@@ -234,5 +234,27 @@ test('app-notes: leave policy reads require active membership while preserving o
     assert.deepEqual(await response.json(), id === 'own'
       ? { id, workspaceId: id, name: 'Annual leave', _count: { leaveRequests: 2 } }
       : { id, name: 'Annual leave' });
+  }
+});
+
+
+test('app-notes: create, get and update preserve complete Markdown and HTML content', async () => {
+  const h = appNotesHarness();
+  const markdown = '# Buildwake\n\n## Plan\n\n- First\n- Second\n\n[Handoff](https://example.test/doc)\n\n```js\nconst valid = a < b;\n```\n\n| Agent | State |\n| --- | --- |\n| Navy | Ready |';
+  const html = '<h1>Buildwake</h1><p>First &amp; second</p><table><tr><th>Agent</th><th>State</th></tr><tr><td>Navy</td><td>Ready</td></tr></table>';
+  for (const content of [markdown, html, '']) {
+    const created = await h.call('context', 'POST', '', { title: 'Round trip', content, scope: 'WORKSPACE' });
+    assert.equal(created.status, 201);
+    const body = await created.json();
+    assert.equal(body.content, content);
+    const fetched = await (await h.call('context/[id]', 'GET', body.id)).json();
+    assert.equal(fetched.content, content, 'CLI read must preserve content for a later edit');
+    const edited = fetched.content + '\n\nNext step';
+    const updated = await h.call('context/[id]', 'PUT', body.id, { content: edited });
+    assert.equal(updated.status, 200);
+    assert.equal((await updated.json()).content, edited);
+    assert.equal((await (await h.call('context/[id]', 'GET', body.id)).json()).content, edited);
+    // This fixture uses a fixed create id, so clear it between independent round trips.
+    h.rows.length = 0;
   }
 });

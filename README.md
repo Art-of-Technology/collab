@@ -310,9 +310,15 @@ unavailable, they return to the project when its slug is known, otherwise to
 The Notes rich-text editor preserves HTML tables with distinct headers and cells,
 spacing and borders, and horizontal scrolling for wide tables. Links and cells
 spanning multiple columns (`colspan`) are retained through editing, saving and
-reloading. Stored Markdown remains literal text. Loading or restoring content into
-the editor does not save it automatically. Stored documents are not rewritten,
-and tables already saved as flattened text are not reconstructed.
+reloading. Markdown headings, lists, links, code and tables are rendered through
+the same sanitized conversion used for issue descriptions. Loading or restoring
+content into the editor does not save it automatically. Stored documents are not rewritten,
+and content already saved as flattened text is not reconstructed.
+
+`collab notes get` and the note update response return the full stored `content`
+(Markdown or HTML), preserving line breaks, indentation, entities and tables for
+read/edit/write round trips. Clients rendering HTML must sanitize it; list excerpts
+remain plain text. Existing access checks and secret redaction still apply.
 
 The [editor regression checks](tests/security/issue-description-markdown.test.cjs)
 cover table structure and simulated save/reload. Browser layout and persisted

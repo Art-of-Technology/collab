@@ -80,7 +80,7 @@ function renderDescription(value, isIssueDescription = true) {
   return parseEditor(props);
 }
 
-async function withEditor(run, { activities = [], isIssueDescription, value = '## Stored' } = {}) {
+async function withEditor(run, { activities = [], isIssueDescription, renderMarkdown, value = '## Stored' } = {}) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'https://fixture.invalid' });
   const names = ['window', 'document', 'IS_REACT_ACT_ENVIRONMENT'];
   const original = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
@@ -101,7 +101,7 @@ async function withEditor(run, { activities = [], isIssueDescription, value = '#
   const deps = dependencies(RichEditor, activities, globals);
   const { IssueRichEditor } = load('src/components/RichEditor/IssueRichEditor.tsx', deps, globals);
   const { EditorHistoryModal } = load('src/components/RichEditor/components/EditorHistoryModal.tsx', deps, globals);
-  const props = { value, isIssueDescription, onChange: html => state.changes.push(html), ref };
+  const props = { value, isIssueDescription, renderMarkdown, onChange: html => state.changes.push(html), ref };
   const render = async (updates = {}) => {
     Object.assign(props, updates);
     await React.act(async () => root.render(React.createElement(React.Fragment, null,
@@ -190,18 +190,35 @@ test('issue external updates and imperative restore convert without saving until
   }, { isIssueDescription: true });
 });
 
-test('Notes preserve literal Markdown for initial, external and imperative input', async () => {
+test('Notes render Markdown on load, external updates and restore without autosaving', async () => {
   await withEditor(async ({ state, ref, render }) => {
-    assert.equal(state.editor.value, '## Stored');
-    assert.ok(parseEditor(state.editor).schema.nodes.table);
+    assert.equal(parseEditor(state.editor).output.querySelector('h2')?.textContent, 'Stored');
     await render({ value: markdown });
-    assert.equal(state.editor.value, markdown);
+    assertMarkdown(parseEditor(state.editor).output);
     await React.act(async () => ref.current.setContent(markdown));
-    assert.equal(state.restored.at(-1), markdown);
+    assertMarkdown(parseEditor({ ...state.editor, value: state.restored.at(-1) }).output);
     assert.deepEqual(state.changes, []);
-    state.editor.onChange('<p>## Edited note</p>');
-    assert.deepEqual(state.changes, ['<p>## Edited note</p>']);
-  });
+    const edited = parseEditor(state.editor).output;
+    edited.querySelector('h2').textContent = 'Updated handoff';
+    state.editor.onChange(edited.innerHTML);
+    await render({ value: state.changes.at(-1) });
+    assert.equal(parseEditor(state.editor).output.querySelector('h2')?.textContent, 'Updated handoff');
+    assert.equal(parseEditor(state.editor).output.querySelectorAll('td').length, 2);
+  }, { renderMarkdown: true });
+});
+
+test('Notes sanitize unsafe Markdown and preserve rich HTML and literal code', () => {
+  let props;
+  let changes = 0;
+  const { IssueRichEditor } = load('src/components/RichEditor/IssueRichEditor.tsx', dependencies(input => { props = input; return null; }));
+  for (const value of [richHtml, markdown + '\n\n<img src=x onerror="alert(1)"><script>alert(1)</script>\n\n[bad](javascript:alert%281%29)']) {
+    renderToStaticMarkup(React.createElement(IssueRichEditor, { value, renderMarkdown: true, onChange: () => { changes++; } }));
+    const { output, source } = parseEditor(props);
+    if (value === richHtml) assertRichHtml(output);
+    else assertMarkdown(output);
+    assert.equal(new JSDOM(source).window.document.querySelectorAll('script,[onerror],[href^="javascript:"]').length, 0);
+  }
+  assert.equal(changes, 0);
 });
 
 test('Note HTML tables retain separate headers, cells, links and merged cells across load, edit and reload', async () => {
@@ -228,7 +245,7 @@ test('Note HTML tables retain separate headers, cells, links and merged cells ac
     await render({ value: state.changes.at(-1) });
     check(parseEditor(state.editor).output);
     assert.equal(parseEditor(state.editor).output.querySelector('h2').textContent, 'Updated topology');
-  }, { value: html });
+  }, { value: html, renderMarkdown: true });
 });
 
 test('history restores web, CLI and legacy descriptions despite over 100 newer unrelated activities', async () => {
