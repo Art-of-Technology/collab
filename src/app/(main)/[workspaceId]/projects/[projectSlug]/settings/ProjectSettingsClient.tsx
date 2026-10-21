@@ -51,6 +51,7 @@ import {
   validateStatusDisplayName,
 } from "@/constants/project-statuses";
 import { isValidNewIssuePrefix } from "@/lib/shared-issue-key-utils";
+import { GitConnections } from "@/components/git-providers/GitConnections";
 import { GitHubOAuthConnection } from "@/components/github/GitHubOAuthConnection";
 
 interface ProjectSettingsClientProps {
@@ -64,7 +65,7 @@ type SettingsTab = "general" | "statuses" | "github" | "danger";
 const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "general", label: "General", icon: <FileText className="h-4 w-4" /> },
   { id: "statuses", label: "Statuses", icon: <Circle className="h-4 w-4" /> },
-  { id: "github", label: "GitHub", icon: <Github className="h-4 w-4" /> },
+  { id: "github", label: "Git providers", icon: <Github className="h-4 w-4" /> },
   { id: "danger", label: "Danger Zone", icon: <AlertTriangle className="h-4 w-4" /> },
 ];
 
@@ -780,6 +781,7 @@ export default function ProjectSettingsClient({
                   </div>
                 </>
               )}
+              <GitConnections projectId={project.id} />
             </div>
           )}
 

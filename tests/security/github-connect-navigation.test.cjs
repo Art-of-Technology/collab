@@ -11,6 +11,7 @@ function fixture({ ok = true, error, callbackError } = {}) {
   const deps = {
     react: { useState: value => [value, () => {}], useEffect: effect => effects.push(effect) },
     'react/jsx-runtime': { jsx, jsxs: jsx },
+    '@/components/git-providers/GitConnections': { GitConnections: () => 'Git provider connections' },
     '@/components/ui/button': { Button: 'button' }, '@/components/ui/input': { Input: 'input' },
     'lucide-react': {}, sonner: { toast: { error: value => errors.push(value) } }, '@/lib/utils': { cn: () => '' },
   };
@@ -80,6 +81,7 @@ async function settingsFixture(query, connected = false) {
     react, 'react/jsx-runtime': { jsx, jsxs: jsx },
     'next/navigation': { useRouter: () => ({}), useSearchParams: () => new URL(window.location.href).searchParams },
     'next/link': { default: 'a' },
+    '@/components/git-providers/GitConnections': { GitConnections: () => 'Git provider connections' },
     '@/components/ui/button': { Button: 'button' }, '@/components/ui/input': { Input: 'input' },
     '@/components/ui/label': { Label: 'label' }, '@/components/ui/textarea': { Textarea: 'textarea' },
     '@/components/ui/alert-dialog': {}, 'lucide-react': {},
@@ -152,14 +154,16 @@ for (const message of ['GitHub authorization was not completed', 'No authorizati
 test('settings return page exposes repository selection after authorization and permits tab changes', async () => {
   const f = await settingsFixture('?tab=github&github_connected=true&github_user=octocat', true);
   assert.match(f.text(), /Select Repository/);
+  assert.match(f.text(), /Git provider connections/);
   assert.match(f.text(), /@octocat/);
   assert.deepEqual(f.errors, []);
   assert.equal(new URL(f.window.location.href).searchParams.has('github_connected'), false);
   assert.equal(new URL(f.window.location.href).searchParams.has('github_user'), false);
   await f.select('General');
   assert.doesNotMatch(f.text(), /Select Repository/);
-  await f.select('GitHub');
+  await f.select('Git providers');
   assert.match(f.text(), /Select Repository/);
+  assert.match(f.text(), /Git provider connections/);
 });
 
 for (const query of ['', '?tab=unknown']) {
@@ -167,7 +171,7 @@ for (const query of ['', '?tab=unknown']) {
     const f = await settingsFixture(query);
     assert.deepEqual(f.requests, []);
     assert.doesNotMatch(f.text(), /Connect your GitHub account/);
-    await f.select('GitHub');
+    await f.select('Git providers');
     assert.match(f.text(), /Connect your GitHub account/);
     assert.ok(f.requests.includes('/api/github/oauth/repositories'));
   });
