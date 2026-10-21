@@ -64,21 +64,8 @@ Start while signed in to Collab and complete authorization in the same browser.
 See the [GitHub OAuth browser-state contract](docs/security/2026-09-23-hardening.md#github-oauth-browser-state)
 for project access, cookie requirements, expiry and replay limits.
 
-```
-User clicks "Connect with GitHub"
-    ↓
-Opens GitHub OAuth popup
-    ↓
-User authorizes application
-    ↓
-GitHub redirects to callback
-    ↓
-Store access token in database
-    ↓
-Fetch user's repositories
-    ↓
-Display repository selector
-```
+For authorization navigation and the return to repository selection, see
+[Integration availability](README.md#integration-availability).
 
 ### **Repository Connection**
 ```

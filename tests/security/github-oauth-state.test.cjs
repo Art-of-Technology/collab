@@ -97,3 +97,17 @@ for (const failure of ['lookupError', 'sessionError']) {
     assert.deepEqual(f.logs, [['Error getting current user'], ['Error getting current user']]);
   });
 }
+
+test('project consent denial and provider failure return to accessible project settings', async () => {
+  for (const options of [{}, { providerError: true }]) {
+    const f = fixture(options);
+    const query = options.providerError ? 'code=valid' : 'error=access_denied';
+    const response = await f.callback(query + '&state=' + f.nonce, f.envelope({ projectId: 'p1' }));
+    const url = new URL(response.url);
+    assert.equal(url.pathname, '/workspace/projects/project/settings');
+    assert.equal(url.searchParams.get('tab'), 'github');
+    assert.ok(url.searchParams.get('github_error'));
+    assert.equal(f.effects.some(e => e[0] === 'write'), false);
+    cleared(response);
+  }
+});
