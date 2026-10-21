@@ -12,7 +12,6 @@ export type {
 } from './types';
 
 export { cleoAgent } from './cleo';
-export { coclawAgent } from './coclaw';
 
 export {
   getAllAgents,

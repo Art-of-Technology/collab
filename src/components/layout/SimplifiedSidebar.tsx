@@ -19,7 +19,6 @@ import {
   MessageSquare,
   FolderKanban,
   ChevronDown,
-  Bot,
 } from "lucide-react";
 import { signOutCurrentSession } from "@/lib/sign-out";
 import { Input } from "@/components/ui/input";
@@ -45,7 +44,6 @@ import WorkspaceSelector from "@/components/workspace/WorkspaceSelector";
 import CreateViewModal from "@/components/modals/CreateViewModal";
 import CreateProjectModal from "@/components/modals/CreateProjectModal";
 import NotificationPopover from "@/components/layout/sidebar/NotificationPopover";
-import { useMention } from "@/context/MentionContext";
 
 
 interface SimplifiedSidebarProps {
@@ -106,7 +104,6 @@ export default function SimplifiedSidebar({
   };
 
   const agentColor = currentAgent?.color || '#2563eb';
-  const { unreadCoclawCount } = useMention();
 
   const mainNav = [
     { name: "Agent inbox", href: `${workspaceBase}/agent-inbox`, icon: Inbox, current: pathname.includes("/agent-inbox"), badge: 0 },
@@ -114,7 +111,6 @@ export default function SimplifiedSidebar({
     { name: "Timeline", href: `${workspaceBase}/timeline`, icon: MessageSquare, current: pathname.includes("/timeline"), badge: 0 },
     { name: "Context", href: `${workspaceBase}/notes`, icon: FileText, current: pathname.includes("/notes"), badge: 0 },
     { name: "Feature Requests", href: `${workspaceBase}/features`, icon: Lightbulb, current: pathname.includes("/features"), badge: 0 },
-    { name: "Coclaw", href: `${workspaceBase}/coclaw`, icon: Bot, current: pathname.includes("/coclaw"), badge: unreadCoclawCount },
   ];
 
   // ── Collapsed State ──

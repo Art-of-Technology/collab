@@ -64,6 +64,7 @@ export function ConsentDialog({
   workspaceSlug, 
   workspaceName 
 }: ConsentDialogProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [understood, setUnderstood] = useState(false);
@@ -106,12 +107,13 @@ export function ConsentDialog({
           redirect_uri: appData.oauthClient.redirectUris[0],
           scope: scopes.join(' '),
           response_type: 'code',
+          endpoint: 'regular',
           state: crypto.randomUUID(), // Generate random state for security
           installation_id: installResult.installationId,
           workspace_id: workspaceId
         });
 
-        window.location.href = `/api/oauth/authorize?${oauthParams.toString()}`;
+        router.push(`/auth/mcp?${oauthParams.toString()}`);
       } else {
         throw new Error('Installation failed');
       }

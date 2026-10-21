@@ -101,67 +101,13 @@ test('review: favorite PATCH preserves concurrent visibility and explicit scope 
   assert.equal(Object.hasOwn(payloads[0], 'scope'), false);
 });
 
-test('disclosure: Coclaw memory enforces active access and Notes result/count parity', async () => {
-  let session = { user: { id: 'alice' } };
-  let reads = 0;
-  let counts = 0;
-  const workspace = workspaces.find(row => row.id === 'joined');
-  const rows = [
-    { id: 'private', scope: 'PERSONAL' },
-    { id: 'restricted', isRestricted: true },
-    { id: 'expired', expiresAt: new Date(0) },
-    { id: 'visible' },
-    { id: 'shared', isRestricted: true, isAiContext: true, sharedWith: [{ userId: 'alice', permission: 'VIEW' }] },
-    { id: 'shared-personal', type: 'NOTE', scope: 'PERSONAL', isAiContext: true, sharedWith: [{ userId: 'alice', permission: 'EDIT' }] },
-    { id: 'owned-expired', authorId: 'alice', expiresAt: new Date(0), isAiContext: true },
-    { id: 'ordinary', type: 'NOTE' },
-    { id: 'foreign', workspaceId: 'foreign', workspace: workspaces.find(row => row.id === 'foreign') },
-  ].map(row => ({ ...note, workspace, isEncrypted: false, type: 'ARCHITECTURE', isAiContext: false,
-    aiContextPriority: 1, title: 'Memory ' + row.id, content: 'needle ' + row.id + ' '.repeat(510) + 'end',
-    tags: [], createdAt: new Date('2026-09-23T00:00:00Z'), updatedAt: new Date('2026-09-23T00:00:00Z'), ...row }));
-  const access = load('src/lib/secrets/access.ts', {
-    '@/lib/prisma': { prisma }, '@prisma/client': enums, '@/lib/issue-finder': { userHasWorkspaceAccess },
-  });
-  const { GET } = load('src/app/api/workspaces/[workspaceId]/coclaw/memory/route.ts', {
-    'next/server': { NextResponse: Response }, '@/lib/auth': { getAuthSession: async () => session },
-    '@/lib/issue-finder': { userHasWorkspaceAccess }, '@/lib/secrets/access': access,
-    '@/lib/prisma': { prisma: { ...prisma, note: {
-      findMany: async ({ where, take }) => { reads++; return rows.filter(row => matches(row, where)).slice(0, take); },
-      count: async ({ where }) => { counts++; return rows.filter(row => matches(row, where)).length; },
-    } } },
-  }, { console });
-  const get = (workspaceId, query = '') => GET({ nextUrl: new URL('https://example.test/memory?' + query) }, {
-    params: Promise.resolve({ workspaceId }),
-  });
-  session = null;
-  assert.equal((await get('joined')).status, 401);
-  session = { user: { id: 'alice' } };
-  for (const id of ['foreign', 'revoked', 'missing']) assert.equal((await get(id)).status, 404, id);
-  assert.equal(reads, 0); assert.equal(counts, 0);
-  const visibleIds = ['visible', 'shared', 'shared-personal', 'owned-expired'];
-  for (const category of ['all', 'architecture', 'ai-context']) {
-    for (const search of ['', 'needle', 'shared', 'absent']) {
-      const expected = rows.filter(row => visibleIds.includes(row.id) &&
-        (category !== 'architecture' || row.type === 'ARCHITECTURE') &&
-        (category !== 'ai-context' || row.isAiContext) &&
-        (!search || row.title.includes(search) || row.content.includes(search)));
-      for (const limit of [1, 50]) {
-        const response = await get('joined', new URLSearchParams({ category, search, limit: String(limit) }));
-        assert.equal(response.status, 200);
-        const body = await response.json();
-        assert.equal(body.total, expected.length, `${category}/${search}/${limit}`);
-        assert.deepEqual(body.memories.map(row => row.id), expected.slice(0, limit).map(row => row.id));
-        for (const memory of body.memories) {
-          const row = expected.find(row => row.id === memory.id);
-          assert.equal(memory.fullContent, row.content);
-          assert.equal(memory.content, row.content.substring(0, 500));
-          assert.equal(memory.createdAt, row.createdAt.toISOString());
-        }
-      }
-    }
+test('retired Coclaw memory never exposes Notes or metadata for any workspace', async () => {
+  const deps = { 'next/server': { NextResponse: Response } };
+  const retired = load('src/lib/coclaw-retired.ts', deps);
+  const { GET } = load('src/app/api/workspaces/[workspaceId]/coclaw/memory/route.ts', { '@/lib/coclaw-retired': retired });
+  for (const workspaceId of ['joined', 'own', 'foreign', 'revoked', 'missing']) {
+    const response = await GET({}, { params: Promise.resolve({ workspaceId }) });
+    assert.equal(response.status, 410);
+    assert.equal((await response.json()).error, 'coclaw_retired');
   }
-  const ownerResponse = await get('own');
-  assert.equal(ownerResponse.status, 200);
-  assert.deepEqual(await ownerResponse.json(), { memories: [], total: 0 });
-  assert.equal(reads, 25); assert.equal(counts, 25);
 });

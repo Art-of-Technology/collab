@@ -65,8 +65,8 @@ function harness() {
     project: { findFirst: async ({ where }) => projects.find(p => matches(p, where)) || null },
     user: { findUnique: async () => ({ id: 'alice', email: 'alice@example.test', name: 'Alice' }) },
     appToken: { findMany: async ({ where }) => [{ isRevoked: state.tokenRevoked, accessToken: 'Y2lwaGVy', userId: 'alice', scopes: state.scopes, tokenExpiresAt: null,
-      installation: { id: 'installation', appId: 'app', status: 'ACTIVE', workspaceId: 'w', installedById: 'bob', scopes: [], workspace,
-        app: { id: 'app', name: 'App', slug: 'app', status: 'PUBLISHED' } } }].filter(row => matches(row, where)) },
+      installation: { id: 'installation', appId: 'app', status: 'ACTIVE', workspaceId: 'w', installedById: 'bob', scopes: ['issues:read', 'context:read'], workspace,
+        app: { id: 'app', name: 'App', slug: 'app', status: 'PUBLISHED', scopes: ['issues:read', 'context:read'].map(scope => ({ scope })) } } }].filter(row => matches(row, where)) },
   };
   for (const [type, records] of Object.entries(rows)) db[type] = { findMany: async ({ where, take }) => records.filter(r => matches(r, where)).slice(0, take) };
   const finder = load('src/lib/issue-finder.ts', {

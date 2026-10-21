@@ -211,11 +211,11 @@ For `mfe_remote` app types, the `mfe` configuration object is required:
    - Verifies the user is an OWNER/ADMIN in the workspace.
    - Confirms the app is `PUBLISHED` and passes `validateAppManifestSecurity`.
    - Creates a `PENDING` installation with requested scopes and logs the attempt (`logAppInstallAttempt`).
-3. The client fetches `/api/apps/:slug` to resolve OAuth metadata and redirects to `/api/oauth/authorize` with PKCE support (`code_challenge` optional, `S256` enforced when present).
-4. The authorization endpoint applies the [workspace access contract](../oauth-endpoints.md#workspace-access-at-code-issuance), checks installation status and trims requested scopes to the approved set before issuing a one-time code (10 min expiry) stored in `AppOAuthAuthorizationCode`.
+3. The client fetches `/api/apps/:slug` to resolve OAuth metadata and opens `/auth/mcp?endpoint=regular` for consent.
+4. Authorization follows the [OAuth consent and workspace contract](../oauth-endpoints.md#explicit-approval); see that reference for client PKCE requirements and scope validation.
 5. The app exchanges the code via `POST /api/oauth/token` (Authorization Code or Refresh Token grant). Access/refresh tokens are random opaque values, encrypted using AES-256-GCM (`encryptToken`) and persisted on the installation.
 6. Once the partner app receives tokens it should call `POST /api/apps/installations/:id/ack` with the Bearer access token so we can log `logAppInstallSuccess` and mark the install as completed.
-7. Introspection is available through `POST /api/oauth/introspect` for apps to validate long-lived tokens. Tokens expire hourly; refresh tokens are required for renewal and are validated by decrypting and comparing stored values.
+7. Introspection is available through `POST /api/oauth/introspect` for apps to validate long-lived tokens. See the [token reference](../oauth-endpoints.md#2-token-endpoint) for expiration and renewal; refresh tokens are validated by decrypting and comparing stored values.
 8. Uninstallation happens via `POST /api/apps/:slug/uninstall`, setting the installation status to `REMOVED`, clearing webhooks and emitting an `app.uninstalled` event.
 
 ### Developer & OAuth Endpoints
@@ -233,7 +233,7 @@ For `mfe_remote` app types, the `mfe` configuration object is required:
 | POST | `/api/apps/[slug]/installations` | Create `PENDING` installation for a workspace admin. |
 | POST | `/api/apps/installations/[id]/ack` | Partner acknowledgement after OAuth token exchange. |
 | POST | `/api/apps/[slug]/uninstall` | Mark installation as `REMOVED` and clean webhook records. |
-| GET | `/api/oauth/authorize` | OAuth authorization endpoint (supports PKCE & workspace scoping). |
+| GET/POST | `/api/oauth/authorize` | [OAuth consent and approval](../oauth-endpoints.md#explicit-approval). |
 | POST | `/api/oauth/token` | Exchange authorization code or refresh token for access tokens. |
 | POST | `/api/oauth/introspect` | Validate token state and metadata per RFC 7662. |
 | **Webhooks** | | |

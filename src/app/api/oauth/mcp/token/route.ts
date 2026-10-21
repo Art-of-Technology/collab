@@ -1,3 +1,5 @@
+import { effectiveAppScopes, isAllowedRedirectUri, normalizeScopes } from '@/lib/oauth-scopes';
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes, createHash } from 'crypto';
 import { encryptToken, decryptToken } from '@/lib/apps/crypto';
@@ -51,13 +53,14 @@ export async function POST(request: NextRequest) {
             slug: true,
             name: true,
             status: true,
-            isSystemApp: true
+            isSystemApp: true,
+            scopes: true
           }
         }
       }
     });
 
-    if (!oauthClient || !oauthClient.app.isSystemApp) {
+    if (!oauthClient || !oauthClient.app.isSystemApp || oauthClient.clientType !== 'public') {
       return NextResponse.json(
         {
           error: 'invalid_client',
@@ -124,7 +127,7 @@ async function handleAuthorizationCodeGrant(
     where: { code }
   });
 
-  if (!authCode) {
+  if (!authCode || authCode.used || authCode.nonce !== 'consent_approved') {
     return NextResponse.json(
       {
         error: 'invalid_grant',
@@ -168,6 +171,15 @@ async function handleAuthorizationCodeGrant(
     );
   }
 
+  if (!isAllowedRedirectUri(redirect_uri, oauthClient.redirectUris, true) ||
+      !authCode.code_challenge || authCode.code_challenge_method !== 'S256') {
+    return NextResponse.json({ error: 'invalid_grant' }, { status: 400 });
+  }
+  const scopes = effectiveAppScopes(authCode.scope, oauthClient.app.scopes);
+  if (!scopes.length || scopes.length !== normalizeScopes(authCode.scope).length) {
+    return NextResponse.json({ error: 'invalid_scope' }, { status: 400 });
+  }
+
   // Verify PKCE if code challenge was provided
   if (authCode.code_challenge) {
     if (!code_verifier) {
@@ -197,11 +209,12 @@ async function handleAuthorizationCodeGrant(
   }
 
   // Delete the authorization code (single use)
-  await prisma.appOAuthAuthorizationCode.delete({ where: { code } });
+  const consumed = await prisma.appOAuthAuthorizationCode.deleteMany({ where: { code, used: false, nonce: 'consent_approved' } });
+  if (consumed.count !== 1) return NextResponse.json({ error: 'invalid_grant' }, { status: 400 });
 
   // Get workspace info
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: authCode.workspaceId },
+  const workspace = await prisma.workspace.findFirst({
+    where: { id: authCode.workspaceId, ...postWorkspaceAccessWhere(authCode.userId) },
     select: { id: true, name: true, slug: true }
   });
 
@@ -225,8 +238,6 @@ async function handleAuthorizationCodeGrant(
   const encryptedAccessToken = await encryptToken(accessToken);
   const encryptedRefreshToken = await encryptToken(refreshToken);
 
-  // Parse scopes
-  const scopes = authCode.scope?.split(' ').filter(Boolean) || [];
 
   // CLI grants belong to independent machines/profiles. Replacing a prior grant
   // would invalidate that machine's access and refresh tokens on every login.
@@ -343,6 +354,12 @@ async function handleRefreshTokenGrant(
     );
   }
 
+  const scopes = effectiveAppScopes(matchedToken.scopes, oauthClient.app.scopes);
+  const access = matchedToken.userId && matchedToken.workspaceId && await prisma.workspace.findFirst({
+    where: { id: matchedToken.workspaceId, ...postWorkspaceAccessWhere(matchedToken.userId) }, select: { id: true },
+  });
+  if (!scopes.length || !access) return NextResponse.json({ error: 'invalid_grant' }, { status: 400 });
+
   // Generate new access token
   const newAccessToken = generateAccessToken();
   const expiresIn = 365 * 24 * 3600; // 1 year
@@ -357,6 +374,7 @@ async function handleRefreshTokenGrant(
     data: {
       accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
       tokenExpiresAt: expiresAt,
+      scopes,
       updatedAt: new Date()
     }
   });
@@ -366,7 +384,7 @@ async function handleRefreshTokenGrant(
     access_token: newAccessToken,
     token_type: 'Bearer',
     expires_in: expiresIn,
-    scope: matchedToken.scopes.join(' '),
+    scope: scopes.join(' '),
     workspace_id: matchedToken.workspace?.id,
     workspace_name: matchedToken.workspace?.name
   });

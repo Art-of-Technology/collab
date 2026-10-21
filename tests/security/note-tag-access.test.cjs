@@ -150,7 +150,6 @@ const projections = [
   ['src/app/api/notes/[id]/pin/route.ts', 'POST', '', b => [b.note]],
   ['src/app/api/search/route.ts', 'GET', '?workspace=joined&q=needle', b => b.filter(v => v.type === 'note').map(v => v.metadata.note)],
   ['src/app/api/projects/[projectId]/summary/route.ts', 'GET', '', b => b.notes],
-  ['src/app/api/workspaces/[workspaceId]/coclaw/memory/route.ts', 'GET', '', b => b.memories],
 ];
 for (const [file, method, query, extract] of projections) test(`historical unauthorized tag links are filtered in ${file}${query}`, async () => {
   const f = fixture(), url = 'https://example.test/api' + query;

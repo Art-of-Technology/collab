@@ -2,11 +2,11 @@ const { assert, test, load, matches } = require('./helpers.cjs');
 const crypto = require('node:crypto');
 
 function fixture(clientId = 'collab-cli') {
-  const app = { id: 'app', name: 'Collab CLI', slug: 'collab-cli', status: 'PUBLISHED', isSystemApp: true };
+  const app = { id: 'app', name: 'Collab CLI', slug: 'collab-cli', status: 'PUBLISHED', isSystemApp: true, scopes: [{ scope: 'issues:read' }, { scope: 'issues:write' }] };
   const workspace = { id: 'workspace', name: 'Workspace', slug: 'workspace', ownerId: 'alice', members: [] };
   const rows = [], codes = new Map();
   const prisma = {
-    appOAuthClient: { findUnique: async ({ where }) => where.clientId === clientId ? { clientId, app } : null },
+    appOAuthClient: { findUnique: async ({ where }) => where.clientId === clientId ? { clientId, clientType: 'public', redirectUris: [], app } : null },
     workspace: {
       findUnique: async ({ where }) => matches(workspace, where) ? workspace : null,
       findFirst: async ({ where }) => matches(workspace, where) ? workspace : null,
@@ -14,6 +14,7 @@ function fixture(clientId = 'collab-cli') {
     appOAuthAuthorizationCode: {
       findUnique: async ({ where }) => codes.get(where.code),
       delete: async ({ where }) => codes.delete(where.code),
+      deleteMany: async ({ where }) => ({ count: codes.get(where.code)?.used === false && codes.delete(where.code) ? 1 : 0 }),
     },
     appToken: {
       findFirst: async ({ where }) => rows.find(row => matches(row, where)),
@@ -37,7 +38,7 @@ function fixture(clientId = 'collab-cli') {
   const exchange = body => POST({ headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ client_id: clientId, ...body }) });
   const grant = (code, scope = 'issues:read') => {
     const verifier = `verifier-${code}`;
-    codes.set(code, { code, clientId, userId: 'alice', workspaceId: workspace.id, redirectUri: 'http://127.0.0.1:8080/callback', scope, expiresAt: new Date(Date.now() + 60000), code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url') });
+    codes.set(code, { code, clientId, used: false, nonce: 'consent_approved', code_challenge_method: 'S256', userId: 'alice', workspaceId: workspace.id, redirectUri: 'http://127.0.0.1:8080/callback', scope, expiresAt: new Date(Date.now() + 60000), code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url') });
     return { grant_type: 'authorization_code', code, redirect_uri: 'http://127.0.0.1:8080/callback', code_verifier: verifier };
   };
   const login = async (code, scope) => { const response = await exchange(grant(code, scope)); assert.equal(response.status, 200); return response.body; };

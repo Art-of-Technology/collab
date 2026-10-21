@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { effectiveAppScopes } from '@/lib/oauth-scopes';
 import { decryptToken } from '@/lib/apps/crypto';
 import { authenticateOAuthClient } from '@/lib/oauth-client-auth';
 
@@ -153,7 +154,8 @@ async function findTokenInInstallations(
           include: {
             app: {
               include: {
-                oauthClient: true
+                oauthClient: true,
+                scopes: true
               }
             },
             workspace: {
@@ -168,7 +170,8 @@ async function findTokenInInstallations(
         // Include direct relations for system app tokens
         app: {
           include: {
-            oauthClient: true
+            oauthClient: true,
+            scopes: true
           }
         },
         workspace: {
@@ -233,7 +236,7 @@ async function findTokenInInstallations(
               found: true,
               info: {
                 active: true,
-                scope: appToken.scopes.join(' '),
+                scope: effectiveAppScopes(appToken.scopes, appToken.app.scopes).join(' '),
                 client_id: appToken.app.oauthClient?.clientId,
                 token_type: tokenType === 'access' ? 'Bearer' : 'refresh_token',
                 exp: expiresAt,
@@ -258,8 +261,7 @@ async function findTokenInInstallations(
               continue;
             }
 
-            // Use scopes from token if available, otherwise from installation
-            const scopes = appToken.scopes.length > 0 ? appToken.scopes : installation.scopes;
+            const scopes = effectiveAppScopes(appToken.scopes, installation.app.scopes, installation.scopes);
 
             return {
               found: true,

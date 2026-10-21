@@ -74,10 +74,6 @@ These use upserts — safe to run multiple times.
 ```bash
 # Seed AI agents (Cleo, Alex, Nova)
 npx tsx prisma/scripts/seed-ai-agents.ts
-
-# Seed Coclaw system app + OAuth client
-# ⚠️  SAVE THE OUTPUT — it prints OAuth credentials you'll need
-npx tsx prisma/scripts/seed-coclaw-app.ts
 ```
 
 ---
@@ -116,14 +112,15 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ```bash
 # Create PR: uat → main
-gh pr create --base main --head uat --title "Production deploy: AI native + Knowledge System + Coclaw"
+gh pr create --base main --head uat --title "Production deploy: AI native + Knowledge System"
 ```
 
 After merge, CI/CD deploys automatically.
 
-### New Infrastructure (if deploying Coclaw):
-- GitHub Secrets needed: `COCLAW_REPO_TOKEN`, `COCLAW_ENV_PROD`
-- Coclaw Manager requires `SYS_ADMIN` capability (bubblewrap sandbox)
+### Infrastructure
+
+See the [Coclaw retirement notice](../README.md#oauth-approval-and-retired-coclaw-integration); its former provisioning steps no longer apply.
+
 - Qdrant vector DB container
 
 ---
@@ -195,7 +192,6 @@ old version will work fine (it just won't use the new tables).
 | Notes data loss during migration | **Critical** | Script migrates `isPublic` → `scope` before dropping column |
 | Next.js 15→16 breaking changes | Medium | Tested on UAT |
 | Missing env var (`SECRETS_MASTER_KEY`) | Low | Secrets vault won't work but app still runs |
-| Coclaw infra not ready | Low | Coclaw features gracefully degrade |
 
 ---
 
@@ -205,7 +201,6 @@ old version will work fine (it just won't use the new tables).
 |------|---------|
 | `scripts/production-deploy.sql` | Main migration script (run this) |
 | `prisma/scripts/seed-ai-agents.ts` | Seed AI agent records |
-| `prisma/scripts/seed-coclaw-app.ts` | Seed Coclaw app + OAuth |
 | `scripts/backfill-status-activity-fks.ts` | Backfill status FKs on activities |
 | `scripts/fix-notes-scope.ts` | Optional: bulk convert note scopes |
 | `scripts/migrate-notes-knowledge-system.ts` | Optional: full knowledge system migration |

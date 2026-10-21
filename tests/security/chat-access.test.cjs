@@ -1,8 +1,8 @@
 const { assert, test, resolve, load, matches, workspaces, prisma } = require('./helpers.cjs');
 
 
-test('chat admission enforces conversation owner and workspace before either stream', async t => {
-  for (const slug of ['cleo', 'coclaw']) await t.test(`${slug} stream admission`, async t => {
+test('Cleo chat admission enforces conversation owner and workspace', async t => {
+  for (const slug of ['cleo']) await t.test(`${slug} stream admission`, async t => {
     const activity = [];
     const writes = [];
     let user = { id: 'alice', name: 'Alice' };
@@ -19,6 +19,7 @@ test('chat admission enforces conversation owner and workspace before either str
     const chooseAgent = async () => { activity.push('agent'); return agent; };
     const { POST } = load('src/app/api/ai/chat/stream/route.ts', {
       'next/server': { NextResponse: Response },
+      '@/lib/coclaw-retired': load('src/lib/coclaw-retired.ts', { 'next/server': { NextResponse: Response } }),
       '@/lib/session': { getCurrentUser: async () => user },
       '@/lib/prisma': { prisma: {
         workspace: { findFirst: async ({ where }) => spaces.find(row => matches(row, where)) ?? null },
@@ -150,6 +151,7 @@ test('chat siblings protect conversation history and queued messages', async t =
   };
   const deps = {
     '@/lib/prisma': { prisma: db }, 'next/server': { NextResponse: Response },
+      '@/lib/coclaw-retired': load('src/lib/coclaw-retired.ts', { 'next/server': { NextResponse: Response } }),
     '@/lib/session': { getCurrentUser: async () => user }, '@/lib/auth': { getAuthSession: async () => user && { user } },
     '@/lib/apps/crypto': { decryptToken: async () => 'valid-token' }, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'),
   };
@@ -180,7 +182,9 @@ test('chat siblings protect conversation history and queued messages', async t =
       reset(); if (state === 'anonymous') user = null;
       const id = state === 'anonymous' ? 'joined' : state; tokenWorkspace = id;
       const response = await invoke(id); const body = await response.text();
-      if (['own', 'joined'].includes(state)) assert.ok([200, 201].includes(response.status), body);
+      if (name.startsWith('queue') || name.startsWith('coclaw')) {
+        assert.equal(response.status, 410); assert.equal(reads, 0); assert.equal(writes.length, 0);
+      } else if (['own', 'joined'].includes(state)) assert.ok([200, 201].includes(response.status), body);
       else {
         assert.ok([401, 403, 404].includes(response.status), body);
         assert.doesNotMatch(body, /Private/); assert.equal(reads, 0); assert.equal(writes.length, 0);
@@ -196,18 +200,18 @@ test('chat siblings protect conversation history and queued messages', async t =
   await t.test('queue token stays bound to its user and workspace', async () => {
     reset();
     for (const id of ['own', 'foreign']) {
-      assert.equal((await queued.GET(request('GET', id), { params: Promise.resolve({ userId: 'alice' }) })).status, 403);
-      assert.equal((await queued.POST(request('POST', id, { workspace_id: id, content: 'New' }), { params: Promise.resolve({ userId: 'alice' }) })).status, 403);
+      assert.equal((await queued.GET(request('GET', id), { params: Promise.resolve({ userId: 'alice' }) })).status, 410);
+      assert.equal((await queued.POST(request('POST', id, { workspace_id: id, content: 'New' }), { params: Promise.resolve({ userId: 'alice' }) })).status, 410);
     }
-    assert.equal((await queued.GET(request('GET', 'joined'), { params: Promise.resolve({ userId: 'bob' }) })).status, 401);
+    assert.equal((await queued.GET(request('GET', 'joined'), { params: Promise.resolve({ userId: 'bob' }) })).status, 410);
     assert.equal(reads, 0); assert.equal(writes.length, 0);
   });
   await t.test('queue acknowledgement rechecks active access and exact token workspace', async () => {
     for (const state of ['revoked', 'foreign', 'own', 'joined']) {
       reset(); tokenWorkspace = state;
       const response = await queued.PATCH(request('PATCH', state, { message_id: 'message', status: 'DELIVERED' }), { params: Promise.resolve({ userId: 'alice' }) });
-      assert.equal(response.status, state === 'joined' ? 200 : state === 'own' ? 404 : 401);
-      assert.equal(writes.length, state === 'joined' ? 1 : 0);
+      assert.equal(response.status, 410);
+      assert.equal(writes.length, 0);
     }
   });
 });

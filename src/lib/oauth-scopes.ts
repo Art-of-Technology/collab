@@ -287,7 +287,7 @@ export function isValidLocalhostRedirect(redirectUri: string): boolean {
                          parseInt(url.port, 10) <= 65535;
     const hasCallbackPath = url.pathname === '/callback';
 
-    return isLocalhost && hasValidPort && hasCallbackPath;
+    return isLocalhost && hasValidPort && hasCallbackPath && !url.username && !url.password && !url.hash;
   } catch {
     return false;
   }
@@ -343,10 +343,8 @@ export function isValidRemoteAgentRedirect(redirectUri: string): boolean {
 
 /**
  * Validate redirect URI against allowed URIs, with special handling for system apps.
- * System apps (like MCP) are allowed to use:
- * - Any localhost callback URL with dynamic ports (for CLI tools like Claude Code)
- * - Custom protocol schemes (for desktop apps like Cursor, VS Code)
- * - Remote HTTPS callback URLs ending with /callback (for AI agents)
+ * Only validated HTTP loopback callbacks may bypass exact registration for system apps.
+ * Remote HTTPS and custom-scheme callbacks still require an exact registered match.
  *
  * @param redirectUri - The redirect URI to validate
  * @param allowedUris - Array of allowed redirect URIs
@@ -363,21 +361,23 @@ export function isAllowedRedirectUri(
     return true;
   }
 
-  // For system apps, allow flexible redirect URIs
+  // Only system apps may use unregistered loopback callback ports
   if (isSystemApp) {
     // Allow localhost callbacks with dynamic ports (Claude Code, CLI tools)
     if (isValidLocalhostRedirect(redirectUri)) {
       return true;
     }
-    // Allow custom protocol schemes (Cursor, VS Code, other desktop apps)
-    if (isValidCustomProtocolRedirect(redirectUri)) {
-      return true;
-    }
-    // Allow remote HTTPS callbacks for AI agents
-    if (isValidRemoteAgentRedirect(redirectUri)) {
-      return true;
-    }
+
   }
 
   return false;
+}
+
+/** Current app grants are a ceiling, including for tokens issued before scope enforcement. */
+export function effectiveAppScopes(
+  granted: string | string[], appScopes: { scope: string }[], installationScopes?: string[],
+): string[] {
+  const ceiling = (appScopes || []).map(entry => entry.scope);
+  const effective = filterGrantedScopes(granted, ceiling);
+  return installationScopes === undefined ? effective : filterGrantedScopes(effective, installationScopes);
 }

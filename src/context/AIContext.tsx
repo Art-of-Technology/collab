@@ -182,7 +182,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
 
   // Agent state (multi-agent)
   const [availableAgents, setAvailableAgents] = useState<ClientAgent[]>([]);
-  const [selectedAgentSlug, setSelectedAgentSlugRaw] = useState<string>('coclaw');
+  const [selectedAgentSlug, setSelectedAgentSlugRaw] = useState<string>('cleo');
   const [agent, setAgent] = useState<ClientAgent | null>(null);
 
   // Chat state
@@ -203,7 +203,7 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Coclaw agent status
-  const [agentStatus, setAgentStatus] = useState<CoclawAgentStatus | null>(null);
+  const agentStatus: CoclawAgentStatus | null = null;
 
   // Suggestions
   const [quickActions, setQuickActions] = useState<QuickAction[]>([]);
@@ -212,7 +212,6 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
   const contextRef = useRef<AIContextType | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const historyLoadedRef = useRef<Set<string>>(new Set());
 
   // ── Load agents ──
@@ -367,51 +366,6 @@ export function AIProvider({ children }: { children: React.ReactNode }) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentWorkspace?.id]);
-
-  // ── Coclaw status polling (always-on) ──
-  // Polls even when Coclaw is not the selected agent so that:
-  // 1. Auto-respawn keeps the instance warm on any page load
-  // 2. Notification badges stay current
-  // 3. Agent status is immediately available when switching to Coclaw
-  // Uses 15s interval when Coclaw is active, 60s when another agent is selected.
-  useEffect(() => {
-    if (!currentWorkspace?.id) {
-      setAgentStatus(null);
-      if (statusPollRef.current) {
-        clearInterval(statusPollRef.current);
-        statusPollRef.current = null;
-      }
-      return;
-    }
-
-    const fetchStatus = async () => {
-      try {
-        const res = await fetch(
-          `/api/workspaces/${currentWorkspace.id}/coclaw/status`,
-        );
-        if (res.ok) {
-          const data: CoclawAgentStatus = await res.json();
-          setAgentStatus(data);
-        }
-      } catch {
-        // Silently fail — status is best-effort
-      }
-    };
-
-    // Initial fetch
-    fetchStatus();
-
-    // Active: 15s poll. Background: 60s poll (keeps auto-respawn + TTL alive).
-    const interval = selectedAgentSlug === 'coclaw' ? 15_000 : 60_000;
-    statusPollRef.current = setInterval(fetchStatus, interval);
-
-    return () => {
-      if (statusPollRef.current) {
-        clearInterval(statusPollRef.current);
-        statusPollRef.current = null;
-      }
-    };
-  }, [selectedAgentSlug, currentWorkspace?.id]);
 
   // ── Build context ──
   useEffect(() => {
