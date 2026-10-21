@@ -32,7 +32,7 @@ export async function authorize(request: NextRequest, systemOnly = false) {
         }
       }
     }
-    
+
     // Extract OAuth parameters
     const clientId = searchParams.get('client_id');
     const redirectUri = searchParams.get('redirect_uri');
@@ -54,7 +54,7 @@ export async function authorize(request: NextRequest, systemOnly = false) {
     // Validate required parameters
     if (!clientId || !redirectUri || !responseType) {
       return NextResponse.json(
-        { 
+        {
           error: 'invalid_request',
           error_description: 'Missing required parameters: client_id, redirect_uri, response_type'
         },
@@ -326,4 +326,3 @@ export async function authorize(request: NextRequest, systemOnly = false) {
     );
   }
 }
-
