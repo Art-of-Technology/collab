@@ -112,10 +112,14 @@ for (const kind of ['regular', 'mcp']) {
     }
   });
 }
-test('preparation requires an explicitly selected accessible workspace', async () => {
-  const f = fixture('regular', 'revoked', { fallback: true });
-  assert.equal((await f.invoke({ workspace_id: null })).status, 400); assert.equal(f.writes.length, 0);
-});
+for (const kind of ['regular', 'mcp']) {
+  test(`${kind}: preparation and approval require an explicit workspace even with an accessible fallback`, async () => {
+    const f = fixture(kind, 'member', { fallback: true });
+    assert.equal((await f.prepare({ workspace_id: null })).status, 400);
+    assert.equal((await f.approve('invented', { workspace_id: null })).status, 400);
+    assert.equal(f.queries.length, 0); assert.equal(f.pending.length, 0); assert.equal(f.writes.length, 0);
+  });
+}
 test('regular installation and scope guards remain mandatory', async () => {
   const f = fixture('regular', 'member', { noInstallation: true }); assert.equal((await f.invoke()).status, 403); assert.equal(f.writes.length, 0);
   const invalid = fixture('regular'); assert.equal((await invalid.invoke({ scope: 'unsupported' })).status, 400); assert.equal(invalid.writes.length, 0);
@@ -129,7 +133,10 @@ for (const kind of ['regular', 'mcp']) {
   });
   test(`${kind}: explicit approval is bound, single-use and cannot be forged cross-origin`, async () => {
     const f = fixture(kind); const prepared = await f.prepare();
-    assert.equal(prepared.status, 200); assert.equal(f.pending[0].used, true); assert.equal(f.writes.length, 0);
+    assert.equal(prepared.status, 200);
+    assert.equal(prepared.body.redirect_uri, 'https://client.example.test/callback');
+    assert.equal(prepared.body.state, 'state');
+    assert.equal(f.pending[0].used, true); assert.equal(f.writes.length, 0);
     const token = prepared.body.consent_token;
     for (const override of [{ state: 'other' }, { redirect_uri: 'https://attacker.test/callback' }, { scope: 'secrets:read' }, { code_challenge: 'b'.repeat(43) }, { workspace_id: 'foreign' }]) {
       const response = await f.approve(token, override); assert.ok(response.status >= 400); assert.equal(f.writes.length, 0);

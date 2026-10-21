@@ -71,3 +71,37 @@ test('scope ceiling is enforced on already-issued tokens through actual authenti
   assert.equal((await auth.authenticateAppRequest(request, { requiredScopes: ['secrets:read'] })).success, false);
   assert.equal((await auth.authenticateAppRequest(request, { requiredScopes: ['issues:read'] })).success, true);
 });
+
+for (const installed of [false, true]) {
+  for (const tokenType of ['access_token', 'refresh_token']) {
+    test(`introspection ${installed ? 'installed' : 'system'} ${tokenType}: current ceilings never expand token grants`, async () => {
+      for (const [granted, appGrants, installationGrants, expected] of [
+        [['issues:read', 'issues:write'], ['issues:read'], ['issues:read', 'issues:write'], 'issues:read'],
+        [['issues:read', 'issues:write'], ['issues:read', 'issues:write'], ['issues:read'], installed ? 'issues:read' : 'issues:read issues:write'],
+        [[], ['issues:read'], ['issues:read'], ''],
+        [['issues:read'], [], ['issues:read'], ''],
+      ]) {
+        const app = { id: 'app', slug: 'app', scopes: appGrants.map(scope => ({ scope })), oauthClient: { clientId: 'client' } };
+        const workspace = { id: 'workspace', slug: 'workspace' };
+        const row = { appId: 'app', app, workspace, userId: 'alice', scopes: granted,
+          accessToken: Buffer.from('access').toString('base64'), refreshToken: Buffer.from('refresh').toString('base64'),
+          tokenExpiresAt: new Date(Date.now() + 60000),
+          installation: installed ? { id: 'install', appId: 'app', app, workspace, scopes: installationGrants } : null };
+        const handler = load('src/app/api/oauth/introspect/route.ts', {
+          'next/server': next, '@/lib/oauth-scopes': scopes,
+          '@/lib/apps/crypto': { decryptToken: async value => String(value) },
+          '@/lib/oauth-client-auth': { authenticateOAuthClient: async () => ({ valid: true, oauthClient: { app: { id: 'app' } } }) },
+          '@/lib/prisma': { prisma: { appToken: { findMany: async ({ include }) => {
+            assert.equal(include.app.include.scopes, true);
+            assert.equal(include.installation.include.app.include.scopes, true);
+            return [row];
+          } } } },
+        }, globals);
+        const response = await handler.POST({ headers: new Headers({ 'content-type': 'application/x-www-form-urlencoded' }),
+          formData: async () => new Map(Object.entries({ client_id: 'client', token: tokenType === 'access_token' ? 'access' : 'refresh', token_type_hint: tokenType })) });
+        assert.equal(response.status, 200); assert.equal(response.body.active, true);
+        assert.equal(response.body.scope, expected); assert.equal(response.body.workspace_id, 'workspace');
+      }
+    });
+  }
+}

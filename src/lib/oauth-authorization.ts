@@ -172,41 +172,19 @@ export async function authorize(request: NextRequest, systemOnly = false) {
       return NextResponse.json({ error: 'invalid_request', error_description: 'Select a workspace' }, { status: 400 });
     }
 
-    // Verify workspace access if workspace_id is provided
-    let targetWorkspaceId = workspaceId;
-    if (workspaceId) {
-      const workspace = await prisma.workspace.findFirst({
-        where: { id: workspaceId, ...postWorkspaceAccessWhere(actor.id) },
-        select: { id: true }
-      });
+    const workspace = await prisma.workspace.findFirst({
+      where: { id: workspaceId, ...postWorkspaceAccessWhere(actor.id) },
+      select: { id: true }
+    });
 
-      if (!workspace) {
-        return NextResponse.json(
-          {
-            error: 'access_denied',
-            error_description: 'User does not have access to the specified workspace'
-          },
-          { status: 403 }
-        );
-      }
-    } else {
-      // For non-system apps without an explicit workspace, use an accessible workspace.
-      const userWorkspace = await prisma.workspace.findFirst({
-        where: postWorkspaceAccessWhere(actor.id),
-        select: { id: true }
-      });
-
-      if (!userWorkspace) {
-        return NextResponse.json(
-          {
-            error: 'access_denied',
-            error_description: 'User is not a member of any workspace'
-          },
-          { status: 403 }
-        );
-      }
-
-      targetWorkspaceId = userWorkspace.id;
+    if (!workspace) {
+      return NextResponse.json(
+        {
+          error: 'access_denied',
+          error_description: 'User does not have access to the specified workspace'
+        },
+        { status: 403 }
+      );
     }
 
     // Check if app is a system app - system apps don't require installation
@@ -222,7 +200,7 @@ export async function authorize(request: NextRequest, systemOnly = false) {
           where: {
             id: installationId,
             appId: oauthClient.app.id,
-            workspaceId: targetWorkspaceId!,
+            workspaceId,
             status: { in: ['PENDING', 'ACTIVE'] } // Allow both PENDING and ACTIVE during OAuth flow
           }
         });
@@ -231,7 +209,7 @@ export async function authorize(request: NextRequest, systemOnly = false) {
         installation = await prisma.appInstallation.findFirst({
           where: {
             appId: oauthClient.app.id,
-            workspaceId: targetWorkspaceId!,
+            workspaceId,
             status: { in: ['PENDING', 'ACTIVE'] } // Allow both statuses
           }
         });
@@ -269,7 +247,7 @@ export async function authorize(request: NextRequest, systemOnly = false) {
       return NextResponse.json({ error: 'invalid_scope', error_description: 'Requested scopes exceed the app or installation grant' }, { status: 400 });
     }
     const binding = {
-      clientId, userId: actor.id, workspaceId: targetWorkspaceId!,
+      clientId, userId: actor.id, workspaceId,
       installationId: isSystemApp ? null : installation!.id,
       redirectUri, scope: scopesToString(grantedScopes), state,
       code_challenge, code_challenge_method,
@@ -282,7 +260,7 @@ export async function authorize(request: NextRequest, systemOnly = false) {
         expiresAt: new Date(Date.now() + 5 * 60 * 1000),
       } });
       return NextResponse.json({ consent_token: consentToken, appName: oauthClient.app.name,
-        scope: binding.scope, workspace_id: binding.workspaceId, redirect_uri: redirectUri,
+        scope: binding.scope, workspace_id: binding.workspaceId, redirect_uri: binding.redirectUri, state: binding.state,
       }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
@@ -293,7 +271,7 @@ export async function authorize(request: NextRequest, systemOnly = false) {
     // Store authorization code
     const issued = await prisma.$transaction(async (tx) => {
       const currentAccess = await tx.workspace.findFirst({
-        where: { id: targetWorkspaceId!, ...postWorkspaceAccessWhere(actor.id) },
+        where: { id: workspaceId, ...postWorkspaceAccessWhere(actor.id) },
         select: { id: true }
       });
       if (!currentAccess) return false;
@@ -316,7 +294,7 @@ export async function authorize(request: NextRequest, systemOnly = false) {
     }
 
     // Log authorization for audit trail
-    console.log(`OAuth authorization granted: app=${oauthClient.app.slug}, user=${actor.id}, workspace=${targetWorkspaceId}, installation=${isSystemApp ? 'system_app' : installation!.id}, scopes=${scopesToString(grantedScopes)}`);
+    console.log(`OAuth authorization granted: app=${oauthClient.app.slug}, user=${actor.id}, workspace=${workspaceId}, installation=${isSystemApp ? 'system_app' : installation!.id}, scopes=${scopesToString(grantedScopes)}`);
 
     // Redirect back to app with authorization code
     const callbackUrl = new URL(redirectUri);
@@ -325,7 +303,7 @@ export async function authorize(request: NextRequest, systemOnly = false) {
       callbackUrl.searchParams.set('state', state);
     }
     // Include workspace_id in callback for third-party apps
-    callbackUrl.searchParams.set('workspace_id', targetWorkspaceId!);
+    callbackUrl.searchParams.set('workspace_id', workspaceId);
     // Only include installation_id for non-system apps
     if (!isSystemApp && installation) {
       callbackUrl.searchParams.set('installation_id', installation.id);

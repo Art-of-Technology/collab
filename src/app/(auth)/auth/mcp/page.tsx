@@ -43,7 +43,7 @@ export default function MCPAuthPage() {
   const preselectedWorkspaceId = searchParams.get('workspace_id');
   const endpoint = searchParams.get('endpoint') === 'regular' ? '/api/oauth/authorize' : '/api/oauth/mcp/authorize';
   const installationId = searchParams.get('installation_id');
-  const [prepared, setPrepared] = useState<{ consent_token: string; appName: string; scope: string; params: Record<string, string> } | null>(null);
+  const [prepared, setPrepared] = useState<{ consent_token: string; appName: string; scope: string; redirect_uri: string; state: string | null; params: Record<string, string> } | null>(null);
 
   // Fetch user's workspaces
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function MCPAuthPage() {
       if (!response.ok) throw new Error(data.error_description || 'Cannot authorize this request');
       if (!controller.signal.aborted) {
         setError(null);
-        setPrepared({ ...data, params: { ...params, scope: data.scope } });
+        setPrepared({ ...data, params: { ...params, scope: data.scope, redirect_uri: data.redirect_uri } });
       }
     }).catch(err => { if (!controller.signal.aborted) setError(err.message); });
     return () => controller.abort();
@@ -124,7 +124,15 @@ export default function MCPAuthPage() {
   }
 
   function handleDeny() {
-    router.push('/');
+    if (!prepared) {
+      router.push('/');
+      return;
+    }
+    const callback = new URL(prepared.redirect_uri);
+    callback.searchParams.set('error', 'access_denied');
+    callback.searchParams.delete('state');
+    if (prepared.state) callback.searchParams.set('state', prepared.state);
+    window.location.href = callback.toString();
   }
 
   async function handleSignIn() {
@@ -286,7 +294,7 @@ export default function MCPAuthPage() {
               </div>
             </div>
 
-            {prepared && <p className="break-all text-xs text-gray-400">Return to: {redirectUri}</p>}
+            {prepared && <p className="break-all text-xs text-gray-400">Return to: {prepared.redirect_uri}</p>}
             {/* Signed in as */}
             <div className="text-center text-sm text-gray-500">
               Signed in as <span className="text-gray-300">{session?.user?.email}</span>
