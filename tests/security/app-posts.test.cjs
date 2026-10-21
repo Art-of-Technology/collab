@@ -29,10 +29,10 @@ test('app post handlers enforce live membership and preserve token and operation
     appToken: { findMany: async () => {
       if (token.isRevoked) return [];
       const workspace = spaces.find(w => w.id === token.workspaceId);
-      const app = { id: 'app', name: 'App', slug: 'app', status: token.appStatus || 'PUBLISHED', isSystemApp: token.isSystemApp };
+      const app = { id: 'app', name: 'App', slug: 'app', status: token.appStatus || 'PUBLISHED', isSystemApp: token.isSystemApp, scopes: [{ scope: 'posts:read' }, { scope: 'posts:write' }] };
       return [{ accessToken: 'Y2lwaGVy', userId: actor, scopes: token.scopes, tokenExpiresAt: token.expiresAt,
         app, workspace, installation: token.isSystemApp ? null : { id: 'installation', workspace, workspaceId: workspace.id,
-          app, appId: 'app', status: token.status, installedById: actor, scopes: [] } }];
+          app, appId: 'app', status: token.status, installedById: actor, scopes: ['posts:read', 'posts:write'] } }];
     } },
     post: {
       findFirst: async spec => project(posts.find(p => matches(p, spec.where)), spec),
@@ -102,8 +102,8 @@ test('app post creation uses the token user rather than the installer and reject
   let writes = [];
   const db = {
     appToken: { findMany: async () => [{ accessToken: 'Y2lwaGVy', userId: 'token-user', scopes: ['posts:write'], tokenExpiresAt: null,
-      installation: { id: 'install', appId: 'app', workspaceId: workspace.id, installedById: 'installer', scopes: [], status: 'ACTIVE', workspace,
-        app: { id: 'app', slug: 'app', name: 'App', status: 'PUBLISHED' } } }] },
+      installation: { id: 'install', appId: 'app', workspaceId: workspace.id, installedById: 'installer', scopes: ['posts:read', 'posts:write'], status: 'ACTIVE', workspace,
+        app: { id: 'app', slug: 'app', name: 'App', status: 'PUBLISHED', scopes: [{ scope: 'posts:write' }] } } }] },
     user: { findUnique: async ({ where }) => ({ id: where.id, name: 'Token user', email: null }) },
     workspace: { findFirst: async ({ where }) => matches(workspace, where) ? workspace : null },
     post: { create: async ({ data }) => { writes.push(data); return { ...data, id: 'post', author: { id: data.authorId }, _count: { comments: 0, reactions: 0, bookmarks: 0 } }; } },

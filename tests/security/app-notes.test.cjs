@@ -23,8 +23,8 @@ function appNotesHarness() {
     user: { findUnique: async () => ({ id: 'alice', email: 'alice@example.test', name: 'Alice' }) },
     appToken: { findMany: async () => [{ accessToken: 'Y2lwaGVy', userId: 'alice', scopes: state.scopes,
       tokenExpiresAt: state.expiresAt, installation: { id: 'installation', appId: 'app', status: 'ACTIVE',
-        workspaceId: 'joined', installedById: 'installer', scopes: [], workspace,
-        app: { id: 'app', name: 'App', slug: 'app', status: 'PUBLISHED' } } }] },
+        workspaceId: 'joined', installedById: 'installer', scopes: ['context:read', 'context:write', 'knowledge:read', 'prompts:read', 'secrets:read'], workspace,
+        app: { id: 'app', name: 'App', slug: 'app', status: 'PUBLISHED', scopes: ['context:read', 'context:write', 'knowledge:read', 'prompts:read', 'secrets:read'].map(scope => ({ scope })) } } }] },
     project: {
       findFirst: async ({ where }) => matches(project, where) ? project : null,
       findUnique: async ({ where }) => where.id === project.id ? project : null,

@@ -1,3 +1,5 @@
+import { effectiveAppScopes } from '@/lib/oauth-scopes';
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
 import { validateClientAssertion, getTokenEndpointUrl } from '@/lib/apps/jwt-assertion';
@@ -78,7 +80,8 @@ export async function POST(request: NextRequest) {
             slug: true,
             name: true,
             status: true,
-            isSystemApp: true
+            isSystemApp: true,
+            scopes: true
           }
         }
       }
@@ -241,6 +244,7 @@ async function handleAuthorizationCodeGrant(
       // Regular apps - store tokens associated with the app installation
       const installation = await prisma.appInstallation.findFirst({
         where: {
+          id: authCodeData.installationId,
           appId: oauthClient.app.id,
           workspaceId: authCodeData.workspaceId,
           status: { in: ['PENDING', 'ACTIVE'] } // Allow both PENDING and ACTIVE installations
@@ -386,6 +390,7 @@ async function handleRefreshTokenGrant(
         data: {
           accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
           tokenExpiresAt: expiresAt,
+          scopes: normalizeScopes(tokenData.scope),
           updatedAt: new Date()
         }
       });
@@ -425,6 +430,7 @@ async function validateAuthorizationCode(
   valid: boolean;
   error?: string;
   workspaceId?: string;
+  installationId?: string;
   userId?: string;
   scope?: string;
 }> {
@@ -448,7 +454,7 @@ async function validateAuthorizationCode(
     }
 
     // Verify code hasn't been used
-    if (authCode.used) {
+    if (authCode.used || authCode.nonce !== 'consent_approved') {
       return { valid: false, error: 'Authorization code already used' };
     }
 
@@ -461,6 +467,21 @@ async function validateAuthorizationCode(
     if (authCode.clientId !== oauthClient.clientId) {
       return { valid: false, error: 'Client ID mismatch' };
     }
+
+    if (oauthClient.clientType === 'public' && (!authCode.code_challenge || authCode.code_challenge_method !== 'S256')) {
+      return { valid: false, error: 'Public clients require S256 PKCE' };
+    }
+    const scope = effectiveAppScopes(authCode.scope, oauthClient.app.scopes,
+      oauthClient.app.isSystemApp ? undefined : authCode.installation?.scopes ?? []);
+    if (!scope.length || scope.length !== normalizeScopes(authCode.scope).length) return { valid: false, error: 'Scope exceeds current grant' };
+    if (!oauthClient.app.isSystemApp && (!authCode.installation || authCode.installation.appId !== oauthClient.app.id ||
+        authCode.installation.workspaceId !== authCode.workspaceId || !['ACTIVE', 'PENDING'].includes(authCode.installation.status))) {
+      return { valid: false, error: 'Invalid installation' };
+    }
+    const access = await prisma.workspace.findFirst({ where: {
+      id: authCode.workspaceId, ...postWorkspaceAccessWhere(authCode.userId),
+    }, select: { id: true } });
+    if (!access) return { valid: false, error: 'Workspace access denied' };
 
     // Verify PKCE code challenge if present
     if (authCode.code_challenge && authCode.code_challenge_method) {
@@ -487,20 +508,23 @@ async function validateAuthorizationCode(
     }
 
     // Mark code as used (one-time use only)
-    await prisma.appOAuthAuthorizationCode.update({
-      where: { id: authCode.id },
+    const consumed = await prisma.appOAuthAuthorizationCode.updateMany({
+      where: { id: authCode.id, used: false, nonce: 'consent_approved' },
       data: { 
         used: true, 
         usedAt: new Date() 
       }
     });
 
+    if (consumed.count !== 1) return { valid: false, error: 'Authorization code already used' };
+
     // Normalize scope handling - convert any format to consistent string
-    const scopeString = scopesToString(normalizeScopes(authCode.scope));
+    const scopeString = scopesToString(scope);
 
     return {
       valid: true,
       workspaceId: authCode.workspaceId,
+      installationId: authCode.installationId ?? undefined,
       userId: authCode.userId,
       scope: scopeString
     };
@@ -561,7 +585,10 @@ async function validateRefreshToken(
         createdAt: true,
         updatedAt: true,
         installationId: true,
-        appId: true
+        appId: true,
+        userId: true,
+        workspaceId: true,
+        installation: true
       }
     });
 
@@ -590,6 +617,15 @@ async function validateRefreshToken(
             continue; // Try next token
           }
 
+          const scopes = effectiveAppScopes(token.scopes, oauthClient.app.scopes,
+            oauthClient.app.isSystemApp ? undefined : token.installation?.scopes ?? []);
+          const workspaceId = token.installation?.workspaceId ?? token.workspaceId;
+          const userId = token.userId ?? token.installation?.installedById;
+          const access = userId && workspaceId && await prisma.workspace.findFirst({
+            where: { id: workspaceId, ...postWorkspaceAccessWhere(userId) }, select: { id: true },
+          });
+          if (!scopes.length || !access) return { valid: false, error: 'Grant no longer available' };
+
           // Log successful refresh token validation for audit
           console.log(`Refresh token validated for token ${token.id}, app ${oauthClient.app.slug}`);
 
@@ -597,7 +633,7 @@ async function validateRefreshToken(
             valid: true,
             tokenId: token.id,
             installationId: token.installationId ?? undefined,
-            scope: scopesToString(token.scopes)
+            scope: scopesToString(scopes)
           };
         }
       } catch (decryptionError) {

@@ -3,7 +3,6 @@
  * Import from root layout or middleware to boot background services.
  */
 import { registerQdrantListeners } from '@/lib/qdrant-event-listeners';
-import { registerCoclawListeners } from '@/lib/coclaw/coclaw-event-listeners';
 import { prisma } from '@/lib/prisma';
 import { getAllCodeAgents } from '@/lib/ai/agents/registry';
 
@@ -12,11 +11,6 @@ const init = globalThis as any;
 if (!init.__qdrantListenersRegistered) {
   registerQdrantListeners();
   init.__qdrantListenersRegistered = true;
-}
-
-if (!init.__coclawListenersRegistered) {
-  registerCoclawListeners();
-  init.__coclawListenersRegistered = true;
 }
 
 // Seed code-defined AI agents into the DB (upsert — idempotent)

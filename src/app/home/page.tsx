@@ -92,8 +92,8 @@ export default function LandingPage() {
           </div>
           <p className="mt-7 text-xs leading-6 text-collab-400">Search availability: exact, keyword and fuzzy retrieval are supported; semantic search requires a configured embedding provider and index. Hybrid results report semantic availability rather than silently claiming vector matches.</p>
           <details className="mt-7 border-t border-collab-700 pt-5 text-sm text-collab-400">
-            <summary className="cursor-pointer py-2 font-medium text-collab-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-400">Do I need Coclaw to use the CLI?</summary>
-            <p className="mt-3 max-w-3xl leading-7">No. Your existing coding agent can use the CLI directly. Coclaw is an optional built-in assistant for tasks, connected messaging channels and persistent memory; using the CLI does not start Coclaw. Coclaw execution requires an enabled deployment and a configured provider.</p>
+            <summary className="cursor-pointer py-2 font-medium text-collab-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-400">Can my existing agent use Collab?</summary>
+            <p className="mt-3 max-w-3xl leading-7">Yes. Your existing coding agent can use the CLI directly to read project context, claim work and pass tasks through agent inboxes.</p>
           </details>
         </section>
       </main>

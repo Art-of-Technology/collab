@@ -42,6 +42,7 @@ test('production agent chat defaults to authenticated unavailable before MCP or 
   const env = { NODE_ENV: 'production' };
   const { POST } = load('src/app/api/ai/chat/stream/route.ts', {
     'next/server': { NextResponse: Response },
+      '@/lib/coclaw-retired': load('src/lib/coclaw-retired.ts', { 'next/server': { NextResponse: Response } }),
     '@/lib/session': { getCurrentUser: async () => user },
     '@/lib/post-access': { postWorkspaceAccessWhere: refuse('access query') },
     '@/lib/prisma': { prisma: new Proxy({}, { get: refuse('database') }) },
@@ -69,6 +70,7 @@ test('production agent chat defaults to authenticated unavailable before MCP or 
   user = { id: 'user' };
   env.COLLAB_AGENT_EXECUTION = 'enabled';
   assert.equal((await POST({ json: async () => ({}) })).status, 400);
+  assert.equal((await POST({ json: async () => ({ agentSlug: 'coclaw', message: 'Do work', context: { workspace: { id: 'w' } } }) })).status, 410);
   delete env.COLLAB_AGENT_EXECUTION;
   env.NODE_ENV = 'development';
   assert.equal((await POST({ json: async () => ({}) })).status, 400);

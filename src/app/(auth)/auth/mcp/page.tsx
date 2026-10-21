@@ -37,16 +37,13 @@ export default function MCPAuthPage() {
   const clientId = searchParams.get('client_id');
   const redirectUri = searchParams.get('redirect_uri');
   const state = searchParams.get('state');
-  const scope = searchParams.get('scope') || 'user:read workspace:read issues:read issues:write';
+  const scope = searchParams.get('scope') || '';
   const codeChallenge = searchParams.get('code_challenge');
   const codeChallengeMethod = searchParams.get('code_challenge_method');
   const preselectedWorkspaceId = searchParams.get('workspace_id');
-
-  // Validate redirect URI - allow localhost, custom protocols (cursor://, vscode://, etc.), and remote HTTPS agent callbacks
-  const isValidRedirectUri = redirectUri?.startsWith('http://127.0.0.1:') ||
-                             redirectUri?.startsWith('http://localhost:') ||
-                             (redirectUri && !redirectUri.startsWith('http://') && !redirectUri.startsWith('https://')) ||
-                             (redirectUri?.startsWith('https://') && redirectUri.endsWith('/callback'));
+  const endpoint = searchParams.get('endpoint') === 'regular' ? '/api/oauth/authorize' : '/api/oauth/mcp/authorize';
+  const installationId = searchParams.get('installation_id');
+  const [prepared, setPrepared] = useState<{ consent_token: string; appName: string; scope: string; params: Record<string, string> } | null>(null);
 
   // Fetch user's workspaces
   useEffect(() => {
@@ -85,26 +82,41 @@ export default function MCPAuthPage() {
     }
   }
 
-  async function handleAuthorize() {
-    if (!selectedWorkspace || !clientId || !redirectUri) return;
+  // Only the server's validated request is displayed and approved. Changing any
+  // field invalidates the pending approval and requires a new user click.
+  useEffect(() => {
+    setPrepared(null);
+    if (!selectedWorkspace || !clientId || !redirectUri || status !== 'authenticated') return;
+    const controller = new AbortController();
+    const params: Record<string, string> = { client_id: clientId, redirect_uri: redirectUri,
+      response_type: 'code', scope, workspace_id: selectedWorkspace.id };
+    if (state) params.state = state;
+    if (installationId) params.installation_id = installationId;
+    if (codeChallenge) params.code_challenge = codeChallenge;
+    if (codeChallengeMethod) params.code_challenge_method = codeChallengeMethod;
+    fetch(`${endpoint}?${new URLSearchParams(params)}`, {
+      headers: { 'x-collab-consent': 'prepare' }, cache: 'no-store', signal: controller.signal,
+    }).then(async response => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error_description || 'Cannot authorize this request');
+      if (!controller.signal.aborted) {
+        setError(null);
+        setPrepared({ ...data, params: { ...params, scope: data.scope } });
+      }
+    }).catch(err => { if (!controller.signal.aborted) setError(err.message); });
+    return () => controller.abort();
+  }, [selectedWorkspace, clientId, redirectUri, status, scope, state, installationId, codeChallenge, codeChallengeMethod, endpoint]);
 
+  async function handleAuthorize() {
+    if (!prepared) return;
     setIsAuthorizing(true);
     setError(null);
-
     try {
-      // Call the authorize API endpoint
-      const authorizeUrl = new URL('/api/oauth/mcp/authorize', window.location.origin);
-      authorizeUrl.searchParams.set('client_id', clientId);
-      authorizeUrl.searchParams.set('redirect_uri', redirectUri);
-      authorizeUrl.searchParams.set('response_type', 'code');
-      authorizeUrl.searchParams.set('scope', scope);
-      authorizeUrl.searchParams.set('workspace_id', selectedWorkspace.id);
-      if (state) authorizeUrl.searchParams.set('state', state);
-      if (codeChallenge) authorizeUrl.searchParams.set('code_challenge', codeChallenge);
-      if (codeChallengeMethod) authorizeUrl.searchParams.set('code_challenge_method', codeChallengeMethod);
-
-      // Redirect to authorize endpoint which will handle the code generation
-      window.location.href = authorizeUrl.toString();
+      const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...prepared.params, consent_token: prepared.consent_token, approve: true }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error_description || 'Authorization failed');
+      window.location.href = data.redirect;
     } catch (err: any) {
       setError(err.message || 'Authorization failed');
       setIsAuthorizing(false);
@@ -112,17 +124,7 @@ export default function MCPAuthPage() {
   }
 
   function handleDeny() {
-    if (!redirectUri || !state) {
-      router.push('/');
-      return;
-    }
-
-    const callbackUrl = new URL(redirectUri);
-    callbackUrl.searchParams.set('error', 'access_denied');
-    callbackUrl.searchParams.set('error_description', 'User denied authorization');
-    if (state) callbackUrl.searchParams.set('state', state);
-
-    window.location.href = callbackUrl.toString();
+    router.push('/');
   }
 
   async function handleSignIn() {
@@ -204,24 +206,6 @@ export default function MCPAuthPage() {
     );
   }
 
-  if (!isValidRedirectUri) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-collab-950">
-        <Card className="bg-collab-900 border-collab-700 max-w-md">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center">
-              <XCircle className="w-6 h-6 text-red-500" />
-            </div>
-            <CardTitle className="text-white">Invalid Redirect URI</CardTitle>
-            <CardDescription className="text-gray-400">
-              For security, MCP authorization only supports localhost callbacks.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
-
   // Main authorization UI
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-collab-950">
@@ -237,7 +221,7 @@ export default function MCPAuthPage() {
             <div className="mx-auto mb-4 w-12 h-12 bg-collab-700 rounded-xl flex items-center justify-center">
               <Terminal className="w-6 h-6 text-green-500" />
             </div>
-            <CardTitle className="text-white">Authorize {clientId === 'collab-cli' ? 'Collab CLI' : 'Collab MCP'}</CardTitle>
+            <CardTitle className="text-white">Authorize {prepared?.appName || (clientId === 'collab-cli' ? 'Collab CLI' : 'application')}</CardTitle>
             <CardDescription className="text-gray-400">
               Connect your AI assistant to Collab
             </CardDescription>
@@ -293,7 +277,7 @@ export default function MCPAuthPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-300">Permissions requested</label>
               <div className="p-3 bg-collab-700 rounded-lg space-y-2">
-                {normalizeScopes(scope).map(getScopeDescription).map(permission => (
+                {normalizeScopes(prepared?.scope || scope).map(getScopeDescription).map(permission => (
                   <div key={permission} className="flex items-center gap-2 text-sm text-gray-300">
                     <CheckCircle2 className="w-4 h-4 text-green-500" />
                     <span>{permission}</span>
@@ -302,6 +286,7 @@ export default function MCPAuthPage() {
               </div>
             </div>
 
+            {prepared && <p className="break-all text-xs text-gray-400">Return to: {redirectUri}</p>}
             {/* Signed in as */}
             <div className="text-center text-sm text-gray-500">
               Signed in as <span className="text-gray-300">{session?.user?.email}</span>
@@ -319,7 +304,7 @@ export default function MCPAuthPage() {
               </Button>
               <Button
                 onClick={handleAuthorize}
-                disabled={!selectedWorkspace || isAuthorizing}
+                disabled={!prepared || isAuthorizing}
                 className="flex-1 bg-green-500 hover:bg-green-500/90 text-black font-medium"
               >
                 {isAuthorizing ? (

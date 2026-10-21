@@ -1,11 +1,9 @@
 import type { AgentDefinition } from './types';
 import { cleoAgent } from './cleo';
-import { coclawAgent } from './coclaw';
 
-// Code-defined agents — Cleo (direct Anthropic) + Coclaw (per-user gateway proxy)
+// Code-defined agents — Cleo (direct Anthropic)
 const CODE_AGENTS: Record<string, AgentDefinition> = {
   cleo: cleoAgent,
-  coclaw: coclawAgent,
 };
 
 // In-memory cache for DB-backed agents
@@ -18,7 +16,7 @@ function isCacheValid(): boolean {
 }
 
 /**
- * Get all available agents (Cleo + Coclaw).
+ * Get all available agents (Cleo).
  * DB agent support is preserved but not active yet — will be enabled later.
  */
 export async function getAllAgents(_prisma?: any): Promise<AgentDefinition[]> {

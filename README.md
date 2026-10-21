@@ -468,3 +468,11 @@ Distributed under the Apache License 2.0 - see the [LICENSE](./LICENSE.txt) file
 [issues-url]: https://github.com/Art-of-Technology/collab/issues
 [license-shield]: https://img.shields.io/github/license/Art-of-Technology/collab.svg?style=for-the-badge
 [license-url]: https://github.com/Art-of-Technology/collab/blob/main/LICENSE.txt
+
+### OAuth approval and retired Coclaw integration
+
+OAuth authorization always opens a consent screen. Code issuance requires a same-origin, explicit approval bound to the signed-in user, selected workspace, app, permissions, callback and PKCE challenge. Approval is single-use and expires after five minutes. Public clients use S256 PKCE. Remote HTTPS and custom-scheme callbacks must be registered exactly; system clients may still use dynamic HTTP loopback ports at `/callback`. Restart a login that was already in progress during this update; existing saved CLI logins remain supported.
+
+App permissions are capped by the current app registration and, for installed apps, the installation grant. Token refresh cannot retain permissions removed from that ceiling. CLI logins on separate devices remain independent.
+
+Coclaw is retired: its menu, settings, background polling, startup integration and chat proxy are removed. Its APIs, including the raw GitHub credential export used by Coclaw, return HTTP 410 without reading stored credentials or conversations. Historical database records remain intact. External agents still use Collab CLI, agent inboxes, handoffs and label watchers. Ordinary project GitHub connections are separate and remain supported.

@@ -1,3 +1,4 @@
+import { effectiveAppScopes } from '@/lib/oauth-scopes';
 import { postWorkspaceAccessWhere } from "@/lib/post-access";
 /**
  * OAuth Authentication Middleware for Third-Party App API Access
@@ -267,7 +268,8 @@ async function findInstallationByAccessToken(token: string) {
                 slug: true,
                 name: true,
                 status: true,
-                isSystemApp: true
+                isSystemApp: true,
+                scopes: true
               }
             },
             workspace: {
@@ -286,7 +288,8 @@ async function findInstallationByAccessToken(token: string) {
             slug: true,
             name: true,
             status: true,
-            isSystemApp: true
+            isSystemApp: true,
+                scopes: true
           }
         },
         workspace: {
@@ -325,7 +328,7 @@ async function findInstallationByAccessToken(token: string) {
               workspaceId: appToken.workspace.id,
               installedById: appToken.userId || 'system',
               status: 'ACTIVE',
-              scopes: appToken.scopes,
+              scopes: effectiveAppScopes(appToken.scopes, appToken.app.scopes),
               tokenExpiresAt: appToken.tokenExpiresAt,
               app: appToken.app,
               workspace: appToken.workspace,
@@ -360,8 +363,8 @@ async function findInstallationByAccessToken(token: string) {
 
             return {
               ...installation,
-              // Use scopes from the token if available, fallback to installation scopes
-              scopes: appToken.scopes.length > 0 ? appToken.scopes : installation.scopes,
+              // A token can never gain permissions from a wider installation or app.
+              scopes: effectiveAppScopes(appToken.scopes, installation.app.scopes, installation.scopes),
               tokenExpiresAt: appToken.tokenExpiresAt,
               installedBy: tokenUser, // Now returns the token's user, not the installer
               isSystemAppToken: false

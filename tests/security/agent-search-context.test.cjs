@@ -24,8 +24,8 @@ function harness() {
     project: { findFirst: async ({ where, select: fields }) => select(projects.find(p => matches(p, where)) || null, fields) },
     user: { findUnique: async () => ({ id: 'alice', name: 'Alice', email: 'alice@example.test' }) },
     appToken: { findMany: async () => [{ accessToken: 'Y2lwaGVy', userId: 'alice', scopes: state.scopes, tokenExpiresAt: null,
-      installation: { id: 'installation', appId: 'app', status: 'ACTIVE', workspaceId: 'w', installedById: 'bob', scopes: [], workspace,
-        app: { id: 'app', name: 'App', slug: 'app', status: 'PUBLISHED' } } }] },
+      installation: { id: 'installation', appId: 'app', status: 'ACTIVE', workspaceId: 'w', installedById: 'bob', scopes: ['prompts:read', 'issues:read', 'context:read'], workspace,
+        app: { id: 'app', name: 'App', slug: 'app', status: 'PUBLISHED', scopes: ['prompts:read', 'issues:read', 'context:read'].map(scope => ({ scope })) } } }] },
   };
   for (const [type, records] of Object.entries(rows)) db[type] = { findMany: async ({ where, select: fields, orderBy = [], take }) => {
     if (state.beforeRead) state.beforeRead(type, fields);

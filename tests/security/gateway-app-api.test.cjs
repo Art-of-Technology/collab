@@ -27,26 +27,30 @@ for (const kind of ['developer', 'admin', 'app-owner', 'oauth-consent']) {
       },
       user: { count: async () => { calls.push(['user-count']); return 1; },
         findUnique: async ({ where }) => ({ ...(where.id === user.id ? user : legacyUser), createdAt: new Date(), updatedAt: new Date() }) },
-      workspace: { count: async () => { calls.push(['workspace-count']); return 2; } },
+      workspace: { count: async () => { calls.push(['workspace-count']); return 2; }, findFirst: async () => ({ id: 'workspace' }) },
+      appOAuthAuthorizationCode: { create: async ({ data }) => data },
       appInstallation: { count: async () => { calls.push(['install-count']); return 4; } },
-      appOAuthClient: { updateMany: async arg => { calls.push(['write', arg]); return { count: arg.where.app.userId === 'mapped' ? 1 : 0 }; } },
+      appOAuthClient: { findUnique: async () => ({ clientType: 'public', redirectUris: ['https://client.example.test/callback'], app: { id: 'app', name: 'App', isSystemApp: true, status: 'PUBLISHED', scopes: [{ scope: 'issues:read' }] } }), updateMany: async arg => { calls.push(['write', arg]); return { count: arg.where.app.userId === 'mapped' ? 1 : 0 }; } },
     };
     const adapter = load('src/lib/request-session.ts', { 'server-only': {}, './gateway-identity': identity,
       'next-auth': nextAuth, 'next/headers': { headers: async () => headers }, '@/lib/prisma': { prisma } }, { process: env });
     const response = { json: (body, init) => ({ status: init?.status ?? 200, body }) };
     const paths = { developer: 'dev/api-key', admin: 'admin/stats', 'app-owner': 'apps/by-id/[id]/mark-api-key-revealed', 'oauth-consent': 'oauth/authorize' };
     const liveSession = load('src/lib/session.ts', { '@/lib/request-session': adapter, '@/lib/auth-options': { authOptions: options }, '@/lib/prisma': { prisma } }, { console: { error() {} } });
-    const handler = load(`src/app/api/${paths[kind]}/route.ts`, {
+    const dependencies = {
       '@/lib/session': liveSession, '@/lib/apps/ownership': load('src/lib/apps/ownership.ts'),
       '@/lib/request-session': adapter, 'next-auth': nextAuth, '@/lib/auth-options': { authOptions: options },
       '@/lib/prisma': { prisma }, 'next/server': { NextResponse: response },
       'next/navigation': { redirect() { throw new Error('Unexpected redirect'); } },
-      '@/lib/apps/crypto': {}, '@/lib/oauth-scopes': {},
-    }, { process: env, URL, console: { error() {} } });
+      '@/lib/apps/crypto': { generateAuthorizationCode: () => 'pending-proof' }, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts', {}, { URL }),
+    };
+    const globals = { process: env, URL, URLSearchParams, console: { error() {} } };
+    dependencies['@/lib/oauth-authorization'] = load('src/lib/oauth-authorization.ts', dependencies, globals);
+    const handler = load(`src/app/api/${paths[kind]}/route.ts`, dependencies, globals);
     const invoke = () => kind === 'app-owner'
       ? handler.POST({}, { params: Promise.resolve({ id: 'app' }) })
       : kind === 'oauth-consent'
-        ? handler.POST({ url: 'https://collab.example.test/api/oauth/authorize', json: async () => ({ approve: false, redirect_uri: 'https://client.example.test/callback', state: 'state-1' }) })
+        ? handler.GET({ method: 'GET', headers: new Headers({ 'x-collab-consent': 'prepare' }), url: 'https://collab.example.test/api/oauth/authorize?' + new URLSearchParams({ client_id: 'client', redirect_uri: 'https://client.example.test/callback', response_type: 'code', workspace_id: 'workspace', scope: 'issues:read', code_challenge: 'a'.repeat(43), code_challenge_method: 'S256' }) })
         : handler.GET();
     const initial = await invoke();
     assert.equal(initial.status, 200); assert.equal(legacyCalls, 0); assert.equal(mappedReads, 1);
@@ -63,15 +67,13 @@ for (const kind of ['developer', 'admin', 'app-owner', 'oauth-consent']) {
       user.id = 'foreign'; calls.length = 0;
       assert.equal((await invoke()).status, 404); assert.equal(calls.length, 1); user.id = 'mapped';
     } else {
-      const url = new URL(initial.body.redirect);
-      assert.equal(url.origin, 'https://client.example.test'); assert.equal(url.searchParams.get('error'), 'access_denied');
-      assert.equal(url.searchParams.get('state'), 'state-1'); assert.equal(calls.length, 0);
+      assert.equal(initial.body.consent_token, 'pending-proof'); assert.equal(initial.body.scope, 'issues:read'); assert.equal(calls.length, 0);
     }
     for (const failure of ['missing', 'revoked', 'invalid', 'database']) {
       headers = failure === 'missing' ? new Headers({ cookie: 'legacy=present' }) : claims();
       live = failure !== 'revoked'; broken = failure === 'database';
       env.env.COLLAB_AUTH_MODE = failure === 'invalid' ? 'invalid' : 'gateway'; calls.length = 0;
-      assert.equal((await invoke()).status, broken && kind !== 'app-owner' ? 500 : 401, failure);
+      assert.equal((await invoke()).status, broken && !['app-owner', 'oauth-consent'].includes(kind) ? 500 : 401, failure);
       assert.equal(calls.length, 0); assert.equal(legacyCalls, 0);
     }
     broken = false; live = true;

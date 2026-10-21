@@ -287,7 +287,7 @@ export function isValidLocalhostRedirect(redirectUri: string): boolean {
                          parseInt(url.port, 10) <= 65535;
     const hasCallbackPath = url.pathname === '/callback';
 
-    return isLocalhost && hasValidPort && hasCallbackPath;
+    return isLocalhost && hasValidPort && hasCallbackPath && !url.username && !url.password && !url.hash;
   } catch {
     return false;
   }
@@ -369,15 +369,17 @@ export function isAllowedRedirectUri(
     if (isValidLocalhostRedirect(redirectUri)) {
       return true;
     }
-    // Allow custom protocol schemes (Cursor, VS Code, other desktop apps)
-    if (isValidCustomProtocolRedirect(redirectUri)) {
-      return true;
-    }
-    // Allow remote HTTPS callbacks for AI agents
-    if (isValidRemoteAgentRedirect(redirectUri)) {
-      return true;
-    }
+
   }
 
   return false;
+}
+
+/** Current app grants are a ceiling, including for tokens issued before scope enforcement. */
+export function effectiveAppScopes(
+  granted: string | string[], appScopes: { scope: string }[], installationScopes?: string[],
+): string[] {
+  const ceiling = (appScopes || []).map(entry => entry.scope);
+  const effective = filterGrantedScopes(granted, ceiling);
+  return installationScopes === undefined ? effective : filterGrantedScopes(effective, installationScopes);
 }
