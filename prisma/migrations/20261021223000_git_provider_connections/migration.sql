@@ -52,4 +52,3 @@ ALTER TABLE "GitConnection" ADD CONSTRAINT "GitConnection_connectedById_fkey" FO
 
 -- AddForeignKey
 ALTER TABLE "GitConnectionActivity" ADD CONSTRAINT "GitConnectionActivity_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "GitConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-

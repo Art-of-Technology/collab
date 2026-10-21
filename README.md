@@ -360,8 +360,12 @@ components remain available separately.
 
 ### Integration availability
 
+Open **Project Settings → Git providers** to browse or enter a repository path
+and connect using an access token. See [Git provider connections](docs/git-provider-connections.md)
+for supported servers, credentials, refresh, reconnect and retained history.
+
 GitHub repository authorization uses the current tab. After project access is
-validated, authorization returns to the project's GitHub settings, where
+validated, authorization returns to the project's Git providers tab, where
 cancellation and provider errors appear or successful authorization exposes
 repository selection. No popup permission or manual popup closure is required.
 See the [OAuth browser-state contract](docs/security/2026-09-23-hardening.md#github-oauth-browser-state)

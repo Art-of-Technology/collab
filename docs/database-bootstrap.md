@@ -7,6 +7,12 @@ PostgreSQL database from the current schema and explicitly baselines that
 history. It does not repair historical shadow-database replay, upgrade an
 existing installation or authorize production changes.
 
+The Git provider schema and migration are not covered by the retained bootstrap
+contract. Bootstrap from this checkout will refuse drift until that contract is
+regenerated and requalified through the reviewed bootstrap process. Do not update
+its pins merely to bypass the guard. For existing-installation deployment of this
+change, see [Git provider database and deployment](git-provider-connections.md#database-and-deployment).
+
 Run from the reviewed source checkout with locked dependencies (Prisma 6.19.3),
 Node and the native PostgreSQL `psql` client installed. Use a separately admitted operator environment; bootstrap is never an app-startup action. Keep the
 app and `COLLAB_READY_WORKER` disabled throughout bootstrap and verification.
