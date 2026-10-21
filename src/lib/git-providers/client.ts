@@ -139,7 +139,7 @@ export async function getActivity(i: Instance, credentials: Credentials, path: s
   const base = repositoryEndpoint(i, path);
   const isLab = i.provider === 'gitlab', isCloud = i.provider === 'bitbucket', isDC = i.provider === 'bitbucket-dc';
   const commitQuery = isLab ? '/repository/commits?per_page=20' : isCloud ? '/commits?pagelen=20' : isDC ? '/commits?limit=20' : '/commits?limit=20&per_page=20';
-  const pullQuery = isLab ? '/merge_requests?scope=all&state=all&per_page=20&order_by=updated_at' : isCloud ? '/pullrequests?pagelen=20&sort=-updated_on&state=OPEN&state=MERGED&state=DECLINED' : isDC ? '/pull-requests?state=ALL&limit=20&order=NEWEST' : i.provider === 'forgejo' ? '/pulls?state=all&sort=recentupdate&limit=20' : '/pulls?state=all&sort=updated&per_page=20';
+  const pullQuery = isLab ? '/merge_requests?scope=all&state=all&per_page=20&order_by=updated_at' : isCloud ? '/pullrequests?pagelen=20&sort=-updated_on&state=OPEN&state=MERGED&state=DECLINED' : isDC ? '/pull-requests?state=ALL&limit=20&order=NEWEST' : i.provider === 'forgejo' ? '/pulls?state=all&sort=recentupdate&limit=20' : '/pulls?state=all&sort=updated&direction=desc&per_page=20';
   const [commitsRaw, pullsRaw] = await Promise.all([request(i, credentials, base + commitQuery, i.provider === 'github' || i.provider === 'forgejo'), request(i, credentials, base + pullQuery)]);
   const rows = (raw: unknown) => isCloud || isDC ? z.object({ values: z.array(z.unknown()).max(100) }).parse(raw).values : z.array(z.unknown()).max(100).parse(raw);
   const commits: GitActivity[] = rows(commitsRaw).map(raw => {

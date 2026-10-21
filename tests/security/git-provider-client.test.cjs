@@ -110,7 +110,8 @@ for (const [provider, baseUrl] of cases.filter(([provider]) => ['github', 'forge
     const f = fixture({ respond: url => {
       if (url.pathname.endsWith('/commits')) return Response.json([]);
       const expectedSort = provider === 'forgejo' ? 'recentupdate' : 'updated';
-      const sorted = url.searchParams.get('sort') === expectedSort ? pulls : [...pulls].reverse();
+      const newestFirst = url.searchParams.get('sort') === expectedSort && (provider === 'forgejo' || url.searchParams.get('direction') === 'desc');
+      const sorted = newestFirst ? pulls : [...pulls].reverse();
       return Response.json(sorted.slice(0, Number(url.searchParams.get(provider === 'forgejo' ? 'limit' : 'per_page'))));
     } });
     const activity = await f.client.getActivity(f.client.resolveInstance(provider, baseUrl), f.credentials, d.path);

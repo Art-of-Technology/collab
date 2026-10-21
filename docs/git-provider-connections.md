@@ -78,11 +78,13 @@ activity, refresh, reconnect and disconnect results for each hosting variant
 before claiming that variant has passed live acceptance. Never put credentials
 in this document or acceptance logs.
 
-The approved sandbox Forgejo adapter read passed. Deployment evidence reports
-HTTP 403 from the application container to the Forgejo public version endpoint;
-Network Doctor consultation is pending. This does not establish production
-provider acceptance. Keep credentials private and resolve reachability through
-the existing infrastructure owner before claiming runtime acceptance.
+The approved sandbox Forgejo adapter read passed, including a repeat against the
+published adapter. A bounded authenticated repository read from the current
+application container also passed with exact repository identity, strict TLS and
+redirects refused. The earlier anonymous version-endpoint HTTP 403 did not prove
+a network failure. The infrastructure consultation is closed; no network change
+is needed for that approved path. These reads do not establish full deployed
+provider lifecycle acceptance or authorize additional private origins.
 
 Primary API references:
 
