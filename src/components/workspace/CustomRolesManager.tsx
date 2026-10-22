@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useCustomRoles, useCreateCustomRole, useUpdateCustomRole, useDeleteCustomRole } from '@/hooks/queries/useCustomRoles';
 
-import { Permission, getPermissionDisplayName } from '@/lib/permissions';
+import { Permission, getPermissionDisplayName } from '@/lib/permission-types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {

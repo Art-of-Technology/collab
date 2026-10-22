@@ -8,6 +8,10 @@ const ts = require('typescript');
 
 function load(file, dependencies = {}, globals = {}) {
   dependencies = { ...dependencies };
+  if (file === 'src/lib/permissions.ts') {
+    dependencies['server-only'] = {};
+    dependencies['./permission-types'] = load('src/lib/permission-types.ts');
+  }
   const exports = {};
   const source = readFileSync(resolve(process.env.SECURITY_TEST_ROOT || resolve(__dirname, '../../'), file), 'utf8');
   const { outputText } = ts.transpileModule(source, {

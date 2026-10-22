@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, UserCog, Users, Crown, Shield, Sparkles } from 'lucide-react';
-import { WorkspaceRole, getRoleDisplayName } from '@/lib/permissions';
+import { WorkspaceRole, getRoleDisplayName } from '@/lib/permission-types';
 import { useCustomRoles } from '@/hooks/queries/useCustomRoles';
 
 interface WorkspaceMember {

@@ -1,7 +1,7 @@
 import { useWorkspace } from "@/context/WorkspaceContext";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useCurrentUser } from "@/hooks/queries/useUser";
-import { Permission } from "@/lib/permissions";
+import { Permission } from "@/lib/permission-types";
 
 type WorkspacePermissions = {
   isWorkspaceAdmin: boolean;
