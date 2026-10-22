@@ -1,3 +1,4 @@
+import { allocateIssueKey } from '@/lib/issue-key-allocation';
 import { ForgeProjectWriteError, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
@@ -175,7 +176,7 @@ export async function POST(req: Request) {
         // Get project details for issue key generation
         const project = await prisma.project.findFirst({
           where: { id: projectId, workspaceId: workspace.id },
-          select: { id: true, issuePrefix: true, _count: { select: { issues: true } } },
+          select: { id: true },
         });
 
         if (!project) {
@@ -187,30 +188,29 @@ export async function POST(req: Request) {
 
         await assertLegacyProjectWriteAllowed(project.id);
 
-        // Create the issue
-        const issueNumber = project._count.issues + 1;
-        const issueKey = `${project.issuePrefix}-${issueNumber}`;
-
-        const issue = await prisma.issue.create({
-          data: {
-            title: params.title,
-            description: params.description || '',
-            type: params.type || 'TASK',
-            priority: params.priority || 'medium',
-            status: 'backlog',
-            issueKey,
-            projectId,
-            workspaceId: workspace.id,
-            reporterId: currentUser.id,
-            assigneeId: params.assigneeId,
-          },
-          select: {
-            id: true,
-            title: true,
-            issueKey: true,
-            status: true,
-            priority: true,
-          },
+        const issue = await prisma.$transaction(async (tx) => {
+          const issueKey = await allocateIssueKey(tx, project.id);
+          return tx.issue.create({
+            data: {
+              title: params.title,
+              description: params.description || '',
+              type: params.type || 'TASK',
+              priority: params.priority || 'medium',
+              status: 'backlog',
+              issueKey,
+              projectId,
+              workspaceId: workspace.id,
+              reporterId: currentUser.id,
+              assigneeId: params.assigneeId,
+            },
+            select: {
+              id: true,
+              title: true,
+              issueKey: true,
+              status: true,
+              priority: true,
+            },
+          });
         });
 
         return NextResponse.json({
