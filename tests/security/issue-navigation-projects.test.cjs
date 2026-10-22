@@ -103,7 +103,7 @@ test('Projects expands, searches all projects, shows five most recently updated,
 
 test('issue description links remain navigable until explicit editing and switching issues returns to read mode', async () => {
   const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') });
-  const issue = { id: 'issue', issueKey: 'BW-31', title: 'Buildwake', projectId: 'buildwake', project: { name: 'Buildwake' }, description: '[Buildwake handoff](https://example.com/handoff)\n\n<script>bad()</script>', createdAt: new Date(), labels: [], comments: [] };
+  const issue = { id: 'issue', issueKey: 'BW-31', title: 'Buildwake', workspaceId: 'workspace-id', projectId: 'buildwake', project: { name: 'Buildwake' }, description: '[Buildwake handoff](https://example.com/handoff)\n\n<script>bad()</script>', createdAt: new Date(), labels: [], comments: [] };
   await mounted('src/components/issue/IssueDetailContent.tsx', {
     'next-auth/react': { useSession: () => ({ data: { user: { id: 'user' } } }) },
     '@tanstack/react-query': { useQueryClient: () => ({}) },
@@ -196,7 +196,7 @@ test('serialized preview cards and plain links survive Done, reopening and sanit
     if (!url.startsWith('https:')) assert.equal(output.querySelector('[href]'), null);
   }
   dom.window.close();
-  const issue = { id: 'issue', issueKey: 'BW-31', title: 'Buildwake', projectId: 'buildwake', description: saved, createdAt: new Date(), labels: [], comments: [] };
+  const issue = { id: 'issue', issueKey: 'BW-31', title: 'Buildwake', workspaceId: 'workspace-id', projectId: 'buildwake', description: saved, createdAt: new Date(), labels: [], comments: [] };
   await mounted('src/components/issue/IssueDetailContent.tsx', {
     'next-auth/react': { useSession: () => ({ data: { user: { id: 'user' } } }) },
     '@tanstack/react-query': { useQueryClient: () => ({}) },
@@ -214,7 +214,7 @@ test('serialized preview cards and plain links survive Done, reopening and sanit
 test('Back and post-delete navigation both retain the project when its default is inaccessible', async () => {
   const nav = navigation(null, new Response(null, { status: 404 }));
   const pushed = [], deleted = [];
-  const issue = { id: 'issue', issueKey: 'BW-31', title: 'Buildwake', projectId: 'buildwake', project: { name: 'Buildwake', slug: 'buildwake' }, description: '', createdAt: new Date(), labels: [], comments: [] };
+  const issue = { id: 'issue', issueKey: 'BW-31', title: 'Buildwake', workspaceId: 'workspace-id', projectId: 'buildwake', project: { name: 'Buildwake', slug: 'buildwake' }, description: '', createdAt: new Date(), labels: [], comments: [] };
   await mounted('src/components/issue/IssueDetailContent.tsx', {
     'next-auth/react': { useSession: () => ({ data: { user: { id: 'user' } } }) },
     '@tanstack/react-query': { useQueryClient: () => ({}) },
@@ -223,11 +223,11 @@ test('Back and post-delete navigation both retain the project when its default i
     '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
     '@/lib/comment-html': { commentHtml: value => value }, '@/lib/navigation-helpers': nav,
     '@/components/layout/PageHeader': { default: ({ title, actions }) => React.createElement('div', null, title, actions), pageHeaderButtonStyles: {} },
-    '@/components/ui/confirm-dialog': { ConfirmDialog: ({ open, onConfirm, confirmText }) => open ? React.createElement('button', { onClick: onConfirm }, confirmText) : null },
+    '@/components/ui/confirm-dialog': { ConfirmDialog: ({ open, onConfirm, confirmText }) => open ? React.createElement('button', { onClick: onConfirm, 'aria-label': `Confirm ${confirmText}` }, confirmText) : null },
   }, { issue, workspaceId: 'workspace-id' }, async ({ click }) => {
     await click('Back to Buildwake: Default');
-    await click('Delete'); await click('Delete Issue');
-    assert.deepEqual(deleted, ['BW-31']);
+    await click('Move to Trash'); await click('Confirm Move to Trash');
+    assert.deepEqual(JSON.parse(JSON.stringify(deleted)), [{ id: 'issue', issueKey: 'BW-31', workspaceId: 'workspace-id', projectId: 'buildwake' }]);
     assert.deepEqual(pushed, ['/workspace-id/projects/buildwake', '/workspace-id/projects/buildwake']);
   });
 });

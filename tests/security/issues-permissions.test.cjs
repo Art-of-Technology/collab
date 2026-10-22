@@ -19,7 +19,7 @@ test('shared issue mutation blocks AI and PUT bypasses with real access and fiel
     project: { findFirst: async ({ where }) => {
       const project = { id: 'project', workspaceId: 'joined', issuePrefix: 'P', _count: { issues: 1 } };
       return matches(project, where) ? project : null;
-    } },
+    }, update: async ({ data }) => { assert.equal(data.nextIssueNumbers.TASK, 2); return {}; } },
     projectStatus: { findMany: async ({ where }) => [
       { id: 'todo', projectId: 'project', name: 'todo', displayName: 'To Do', isActive: true },
       { id: 'progress', projectId: 'project', name: 'in_progress', displayName: 'In Progress', isActive: true },
@@ -27,8 +27,10 @@ test('shared issue mutation blocks AI and PUT bypasses with real access and fiel
     taskLabel: { count: async () => 0 },
     issueAssignee: { upsert: async () => { writes++; } },
     issueFollower: { findMany: async () => [] }, projectFollower: { findMany: async () => [] },
+    $queryRaw: async (_query, ...values) => values.length === 1
+      ? [{ issuePrefix: 'P', nextIssueNumbers: { TASK: 1 } }] : [{ exists: false }],
     $transaction: async (fn, options) => {
-      assert.equal(options.isolationLevel, 'Serializable');
+      assert.equal(options?.isolationLevel, grants.includes('CREATE_TASK') ? undefined : 'Serializable');
       if (conflict) throw new (require('@prisma/client').Prisma.PrismaClientKnownRequestError)('conflict', { code: 'P2034', clientVersion: 'test' });
       return fn(db);
     },

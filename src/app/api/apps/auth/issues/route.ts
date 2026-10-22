@@ -1,3 +1,4 @@
+import { allocateIssueKey } from '@/lib/issue-key-allocation';
 import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
 import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 /**
@@ -249,44 +250,7 @@ export const POST = withAppAuth(
       if (issueData.parentId) await assertLegacyIssueWriteAllowed(issueData.parentId);
 
       const newIssue = await prisma.$transaction(async (tx) => {
-        // Get project with current nextIssueNumbers counter
-        const projectWithCounter = await tx.project.findUnique({
-          where: { id: issueData.projectId },
-          select: { nextIssueNumbers: true, issuePrefix: true }
-        });
-
-        if (!projectWithCounter) {
-          throw new Error('Project not found');
-        }
-
-        // Get next issue number from counter (or fallback to count-based)
-        const counters = (projectWithCounter.nextIssueNumbers as Record<string, number>) || {};
-        let nextNum = counters.TASK || 1;
-        const keyPrefix = projectWithCounter.issuePrefix;
-
-        // Try to find a unique issue key (handle any gaps or existing keys)
-        let issueKey: string;
-        let attempts = 0;
-        const maxAttempts = 100;
-
-        do {
-          issueKey = `${keyPrefix}-${nextNum}`;
-
-          const existingIssue = await tx.issue.findFirst({
-            where: {
-              projectId: issueData.projectId,
-              issueKey
-            }
-          });
-
-          if (!existingIssue) break;
-          nextNum++;
-          attempts++;
-        } while (attempts < maxAttempts);
-
-        if (attempts >= maxAttempts) {
-          throw new Error('Could not generate unique issue key');
-        }
+        const issueKey = await allocateIssueKey(tx, issueData.projectId);
 
         // Find the ProjectStatus for the given status and project
         let statusId: string | null = null;
@@ -401,13 +365,6 @@ export const POST = withAppAuth(
         });
 
         if (issueData.labels?.length) await enqueueLabelHandoff(tx, context.user.id, created, []);
-
-        // Update the counter for next issue
-        const updatedCounters = { ...counters, TASK: nextNum + 1 };
-        await tx.project.update({
-          where: { id: issueData.projectId },
-          data: { nextIssueNumbers: updatedCounters }
-        });
 
         // Create IssueAssignee record if issue is assigned to someone
         if (issueData.assigneeId) {

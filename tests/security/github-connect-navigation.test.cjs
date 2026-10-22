@@ -13,6 +13,7 @@ function fixture({ ok = true, error, callbackError } = {}) {
     '@tanstack/react-query': { useQueryClient: () => ({ invalidateQueries: async () => {} }) },
     react: { useState: value => [stateSlot++ === 0 ? false : value, () => {}], useEffect: effect => effects.push(effect) },
     'react/jsx-runtime': { jsx, jsxs: jsx },
+    '@/components/issues/IssueTrash': { IssueTrash: () => 'Issue Trash' },
     '@/components/git-providers/GitConnections': { GitConnections: () => 'Git provider connections' },
     '@/components/ui/button': { Button: 'button' }, '@/components/ui/input': { Input: 'input' },
     'lucide-react': {}, sonner: { toast: { error: value => errors.push(value) } }, '@/lib/utils': { cn: () => '' },
@@ -84,6 +85,7 @@ async function settingsFixture(query, connected = false, responseStatus, reposit
     react, 'react/jsx-runtime': { jsx, jsxs: jsx },
     'next/navigation': { useRouter: () => ({}), useSearchParams: () => new URL(window.location.href).searchParams },
     'next/link': { default: 'a' },
+    '@/components/issues/IssueTrash': { IssueTrash: () => 'Issue Trash' },
     '@/components/git-providers/GitConnections': { GitConnections: () => 'Git provider connections' },
     '@/components/ui/button': { Button: 'button' }, '@/components/ui/input': { Input: 'input' },
     '@/components/ui/label': { Label: 'label' }, '@/components/ui/textarea': { Textarea: 'textarea' },
@@ -199,4 +201,13 @@ test('connecting a repository invalidates its cached project overview', async ()
   await f.select('Connect');
   assert.deepEqual(JSON.parse(JSON.stringify(f.invalidated)), [{ queryKey: ['projectSummary', 'project-1'] }]);
   assert.ok(f.requests.includes('/api/github/oauth/connect'));
+});
+
+
+test('project settings exposes the Trash tab and direct Trash link', async () => {
+  const direct = await settingsFixture('?tab=trash');
+  assert.match(direct.text(), /Issue Trash/);
+  const general = await settingsFixture('');
+  await general.select('Trash');
+  assert.match(general.text(), /Issue Trash/);
 });

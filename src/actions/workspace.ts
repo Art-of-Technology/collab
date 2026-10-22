@@ -1,5 +1,7 @@
 'use server';
 
+import { assertNoRetainedIssues } from '@/lib/issue-trash';
+
 import { assertLegacyWorkspaceDeleteAllowed } from '@/lib/forge/legacy-write-guard';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
@@ -410,6 +412,7 @@ export async function deleteWorkspace(workspaceId: string) {
   }
   
   await assertLegacyWorkspaceDeleteAllowed(workspaceId);
+  await assertNoRetainedIssues({ OR: [{ workspaceId }, { project: { workspaceId } }] });
 
   // Delete the workspace
   await prisma.workspace.delete({

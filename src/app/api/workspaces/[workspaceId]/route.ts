@@ -1,3 +1,5 @@
+import { assertNoRetainedIssues, IssueTrashError } from '@/lib/issue-trash';
+import { Prisma } from '@prisma/client';
 import { assertLegacyWorkspaceDeleteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
@@ -219,6 +221,7 @@ export async function DELETE(
     }
 
     await assertLegacyWorkspaceDeleteAllowed(workspaceId);
+    await assertNoRetainedIssues({ OR: [{ workspaceId }, { project: { workspaceId } }] });
 
     // Delete workspace and all related data
     await prisma.workspace.delete({
@@ -227,6 +230,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof IssueTrashError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') return NextResponse.json({ error: 'Workspace still contains protected records; reload and retry' }, { status: 409 });
     if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error('Error deleting workspace:', error);
     return NextResponse.json(

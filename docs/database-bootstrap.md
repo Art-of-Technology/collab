@@ -7,11 +7,13 @@ PostgreSQL database from the current schema and explicitly baselines that
 history. It does not repair historical shadow-database replay, upgrade an
 existing installation or authorize production changes.
 
-The Git provider schema and migration are not covered by the retained bootstrap
-contract. Bootstrap from this checkout will refuse drift until that contract is
-regenerated and requalified through the reviewed bootstrap process. Do not update
-its pins merely to bypass the guard. For existing-installation deployment of this
-change, see [Git provider database and deployment](git-provider-connections.md#database-and-deployment).
+The contract includes agent handoffs, Git provider connections and issue Trash.
+Their tables, indexes and foreign keys are fully represented by the current Prisma
+schema; they require no additional bootstrap SQL supplements. This does not
+qualify upgrades of an existing installation. In particular, do not use bootstrap
+or baseline commands on a populated database without a migration ledger. Apply
+only its separately reviewed upgrade SQL after a fresh backup. For Git provider
+upgrades, see [Git provider database and deployment](git-provider-connections.md#database-and-deployment).
 
 Run from the reviewed source checkout with locked dependencies (Prisma 6.19.3),
 Node and the native PostgreSQL `psql` client installed. Use a separately admitted operator environment; bootstrap is never an app-startup action. Keep the
@@ -54,7 +56,7 @@ Version functions/triggers. No reset is used.
 
 After schema creation, native `prisma migrate resolve --applied` records each
 retained historical migration. These are baselines, not claims that historical
-data transformations were executed on the empty database. `prisma/bootstrap-contract.json` pins the current schema SHA256, exact twelve
+data transformations were executed on the empty database. `prisma/bootstrap-contract.json` pins the current schema SHA256, exact fifteen
 migration names/bytes and Prisma 6.19.3. Schema changes, changed/added/removed
 migrations and CLI upgrades refuse before generation or connection and require
 reviewed requalification. Run only from the admitted immutable source bundle;
@@ -115,29 +117,28 @@ after a real COMMIT. It never selects an existing application database.
 
 ## Current source qualification and restore boundary
 
-The September 27 source recipe binds the actual twelve migrations on merged
-main, not the retained thirteen-migration branch union. It includes Ready and
-Version provenance without importing the separate historical notification
-strategy. No historical migration is rewritten, deleted or marked executed by
-these local checks.
+The October 22 contract binds all fifteen migrations through
+`20261022190000_issue_trash`, including the earlier agent-handoff and Git-provider
+migrations. It retains the exact Ready and Version provenance supplements.
+Historical migrations are unchanged. Fresh schema generation installs the Trash
+columns, durable audit table and restrictive Issue project/workspace foreign
+keys directly; it does not replay the Trash migration's ALTER statements.
 
 `node --test tests/security/bootstrap-recipe.test.cjs` executes the actual CLI
 with process doubles. It checks exact emitted supplement bytes, one guarded
-transaction followed by twelve ordered native baseline commands, target/env
+transaction followed by fifteen ordered native baseline commands, target/env
 handling, drift refusal and no retry after simulated failures. These doubles do
 not execute PostgreSQL or prove transaction, catalog or trigger behavior.
-The retained native fixture is adapted to twelve baselines and six catalog pairs;
-it remains unexecuted for this integration. Historical native receipts do not
-qualify the new combined schema.
+The native fixture verifies exact baseline names/checksums, a complete model
+diff, all six Version catalog pairs, the new modeled tables, nullable Trash
+columns, restrictive parent foreign keys and audit indexes. It also verifies
+that the audit table has no foreign keys that could cascade away its snapshots.
+It retains the status/no-op deploy, populated/custom-schema refusal and lost
+COMMIT acknowledgment checks. A passing disposable local fixture qualifies this
+bootstrap recipe; it is not a production migration or restore receipt.
 
-A separate source-only capture runs the existing Prisma 6.19.3 engine's
-`migrate diff --from-empty --to-schema-datamodel ... --script`; `psql` is
-intercepted before execution, returning a deliberate nonzero result so no
-baseline command runs. The generated DDL and source-derived expected catalog
-are pinned in the owner handoff. They are not a deployed catalog receipt.
-Root/ND must bind the final source/schema/bootstrap/contract/generated-DDL
-hashes to the admitted operator toolchain and verify actual constraints,
-indexes, enabled trigger/function definitions, baseline status/no-op deploy,
-empty-target refusal, uncertain-result recovery and restore behavior. No
-migration execution, native fixture, infrastructure allocation, credentials,
-worker activation or gateway cutover is authorized by this source change.
+Before bootstrap on another target, the operator must bind the exact reviewed
+source and toolchain to that separately admitted empty database and repeat the
+catalog, baseline and recovery checks above. Existing installations require
+their own backup and upgrade plan; no production migration, worker activation
+or gateway cutover is implied by these local checks.

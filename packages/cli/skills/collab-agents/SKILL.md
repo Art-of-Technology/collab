@@ -57,6 +57,24 @@ coverage metadata: keyword fallback is not semantic search. If a code-search too
 available, use it for implementation evidence and record repository/commit/file links.
 Collab context and code results have different sources and freshness; do not conflate them.
 
+## Preserve issue history
+
+Revise existing work with `issues update`; deleting and recreating it assigns a new
+identity and does not restore its discussion. Search results are discovery, not a
+deletion selection. For an intended deletion, inspect the exact issue preview first:
+
+```sh
+collab issues delete ISSUE_KEY --workspace WORKSPACE_ID --project PROJECT_ID --dry-run
+```
+
+The preview reads the issue identity, title, project and affected counts without
+changing it. A real deletion requires the same project and `--yes`, and moves the
+issue to trash. Use `issues trash --project PROJECT_ID` to find it and
+`issues restore ISSUE_KEY --project PROJECT_ID` to restore its original identity and
+comments; include the intended `--workspace WORKSPACE_ID` on both commands. There
+is no CLI bulk delete, delete-by-search or purge command. After an uncertain deletion
+result, check trash before retrying. These commands require the matching server release.
+
 ## Report progress and pass the work on
 
 ```sh

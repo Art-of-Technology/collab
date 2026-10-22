@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 export interface CreateIssueData {
   title: string;
@@ -236,28 +236,38 @@ export function useUpdateIssue() {
   });
 }
 
-// Hook for deleting issues
+export async function invalidateIssueTrashQueries(queryClient: QueryClient, workspaceId: string, projectId: string) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: issueKeys.byWorkspace(workspaceId) }),
+    queryClient.invalidateQueries({ queryKey: issueKeys.byProject(projectId) }),
+    queryClient.invalidateQueries({ queryKey: ['additional-issues', workspaceId] }),
+    queryClient.invalidateQueries({ queryKey: ['issueTrash', workspaceId, projectId] }),
+    queryClient.invalidateQueries({ queryKey: ['projectSummary', projectId] }),
+    queryClient.invalidateQueries({ queryKey: ['projects', { workspaceId }] }),
+    queryClient.invalidateQueries({ queryKey: ['views', { workspaceId }] }),
+    queryClient.invalidateQueries({ predicate: query => query.queryKey[0] === 'assignedIssues' && query.queryKey[2] === workspaceId }),
+    // Project detail keys use URL slugs; cached data identifies the affected project.
+    queryClient.invalidateQueries({ predicate: query => query.queryKey[0] === 'project' && (query.state.data as { id?: string } | undefined)?.id === projectId }),
+  ]);
+}
+
+// Hook for moving issues to Trash.
 export function useDeleteIssue() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (issueId: string): Promise<void> => {
-      const response = await fetch(`/api/issues/${issueId}`, {
-        method: 'DELETE',
-      });
-
+    mutationFn: async ({ id, workspaceId, projectId }: { id: string; issueKey?: string | null; workspaceId: string; projectId: string }): Promise<void> => {
+      const params = new URLSearchParams({ workspaceId, projectId });
+      const response = await fetch(`/api/issues/${encodeURIComponent(id)}?${params}`, { method: 'DELETE' });
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to delete issue');
+        throw new Error(error.error || error.message || 'Failed to move issue to Trash');
       }
     },
-    onSuccess: (_, issueId) => {
-      // Remove from cache
-      queryClient.removeQueries({ queryKey: issueKeys.detail(issueId) });
-      
-      // Invalidate lists
-      queryClient.invalidateQueries({ queryKey: issueKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: issueKeys.all });
+    onSuccess: async (_, { id, issueKey, workspaceId, projectId }) => {
+      queryClient.removeQueries({ queryKey: issueKeys.detail(id) });
+      if (issueKey) queryClient.removeQueries({ queryKey: issueKeys.detail(issueKey) });
+      await invalidateIssueTrashQueries(queryClient, workspaceId, projectId);
     },
   });
 }

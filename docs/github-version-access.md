@@ -4,7 +4,12 @@ The repository version and release list routes require a current actor and repos
 workspace ownership or active membership. Missing actors receive 401; missing or
 inaccessible repositories receive 404. Their final reads repeat repository access.
 Versions must retain valid provenance and every linked issue must satisfy the shared
-issue/project/status access predicate. Parent and child version projections apply the
+issue/project/status access predicate and be outside Trash. A trashed linked issue hides
+the whole version and its stored summaries/changelogs from version lists, releases,
+project summaries and version.json; filtering nested issue rows alone is insufficient.
+Trash preserves authored version content and provenance links. Restore makes the
+version eligible again only if all other access and invalidation checks still pass.
+Parent and child version projections apply the
 same checks. Successful responses set `Cache-Control: no-store`. Integer limits are
 bounded to 1–100; omitted or non-integer limits default to 50 versions or 20 releases.
 

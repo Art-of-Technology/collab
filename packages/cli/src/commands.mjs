@@ -53,7 +53,12 @@ export const commands = {
   'issues get': command('GET', 'issues/:id'),
   'issues create': command('POST', 'issues', { ...issueFields, projectId: string }, {}, { required: ['title', 'projectId'], defaultProject: true }),
   'issues update': command('PATCH', 'issues/:id', { ...issueFields, progress: integer, timeEstimateMinutes: integer }),
-  'issues delete': command('DELETE', 'issues/:id'),
+  'issues delete': command('DELETE', 'issues/:id', {}, projectQuery, {
+    requiredQuery: ['projectId'], deletePreview: true,
+    description: 'Move one issue to trash after reading its identity and affected counts. Requires project context and --yes; --dry-run reads only the preview without --yes.',
+  }),
+  'issues trash': command('GET', 'issues/trash', {}, projectQuery, { requiredQuery: ['projectId'] }),
+  'issues restore': command('POST', 'issues/:id/restore', {}, projectQuery, { requiredQuery: ['projectId'] }),
   'issues assign': command('POST', 'issues/:id/assign', { assigneeId: string, role: string, unassign: boolean }),
   'issues activity': command('GET', 'issues/:id/activity', {}, { limit: integer, action: string }),
   'comments list': command('GET', 'issues/:id/comments', {}, { flat: boolean }),

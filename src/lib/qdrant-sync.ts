@@ -532,7 +532,24 @@ export async function searchQdrant(
     with_payload: true,
   });
 
-  return results;
+  // Vector payloads can outlive their source. Recheck current issue visibility.
+  const { prisma } = await import('./prisma');
+  const issueIds = results.flatMap(result => result.payload?.type === 'issue' && typeof result.payload.source_id === 'string' ? [result.payload.source_id] : []);
+  const activityIds = results.flatMap(result => result.payload?.type === 'issue_activity' && typeof result.payload.source_id === 'string' ? [result.payload.source_id] : []);
+  const activities = activityIds.length ? await prisma.issueActivity.findMany({
+    where: { id: { in: activityIds }, workspaceId: options.workspaceId, itemType: 'ISSUE' },
+    select: { id: true, itemId: true },
+  }) : [];
+  const issues = await prisma.issue.findMany({
+    where: { id: { in: [...issueIds, ...activities.map(activity => activity.itemId)] }, workspaceId: options.workspaceId,
+      ...(options.projectId ? { projectId: options.projectId } : {}) },
+    select: { id: true },
+  });
+  const visibleIds = new Set(issues.map(issue => issue.id));
+  const visibleActivities = new Set(activities.filter(activity => visibleIds.has(activity.itemId)).map(activity => activity.id));
+  return results.filter(result => result.payload?.type === 'issue'
+    ? visibleIds.has(String(result.payload.source_id))
+    : result.payload?.type === 'issue_activity' ? visibleActivities.has(String(result.payload.source_id)) : true);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { prisma, issueTrashPrisma } from '@/lib/prisma';
 import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 import { generateInternalStatusName } from '@/constants/project-statuses';
@@ -197,7 +197,7 @@ export async function PATCH(
     }
 
     // Update project in a transaction
-    const updatedProject = await prisma.$transaction(async (tx) => {
+    const updatedProject = await issueTrashPrisma.$transaction(async (tx) => {
       const existingStatuses = statuses === undefined ? [] : await tx.projectStatus.findMany({
         where: { projectId: currentProject.id },
         include: { _count: { select: { issues: true } } }
@@ -255,7 +255,7 @@ export async function PATCH(
             orderBy: { order: 'asc' }
           },
           _count: {
-            select: { issues: { where: issueReadAccessWhere(userId) } }
+            select: { issues: { where: { ...issueReadAccessWhere(userId), deletedAt: null } } }
           }
         }
       });

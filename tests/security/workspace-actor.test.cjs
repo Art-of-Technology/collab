@@ -9,9 +9,11 @@ function fixture(sessionUser = { id: 'alice', email: 'bob@example.test' }) {
     ] })),
   ];
   const calls = { users: [], reads: [], writes: [] };
+  const retainedIssues = [];
   const project = (row, spec) => !row ? null : { ...row, members: row.members.filter(member =>
     !spec.include?.members?.where || matches(member, spec.include.members.where)) };
   const db = {
+    issue: { count: async ({ where }) => retainedIssues.filter(issue => matches(issue, where)).length },
     user: { findUnique: async ({ where }) => { calls.users.push(where); return users.find(row => matches(row, where)) ?? null; } },
     workspace: {
       findUnique: async spec => { calls.reads.push(spec); return project(spaces.find(row => matches(row, spec.where)), spec); },

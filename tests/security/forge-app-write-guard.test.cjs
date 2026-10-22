@@ -5,8 +5,8 @@ const zod = require('zod');
 // Handler/guard composition only; OAuth middleware has its own existing checks.
 test('app handlers deny bound issue writes before mutation while allowing unconnected assignment', async () => {
   const issues = [
-    { id: 'c000000000000000000000001', issueKey: 'B-1', workspaceId: 'workspace', projectId: 'c000000000000000000000003', assigneeId: null },
-    { id: 'c000000000000000000000002', issueKey: 'L-1', workspaceId: 'workspace', projectId: 'c000000000000000000000004', assigneeId: null },
+    { id: 'c000000000000000000000001', issueKey: 'B-1', workspaceId: 'workspace', projectId: 'c000000000000000000000003', assigneeId: null, deletedAt: null },
+    { id: 'c000000000000000000000002', issueKey: 'L-1', workspaceId: 'workspace', projectId: 'c000000000000000000000004', assigneeId: null, deletedAt: null },
   ];
   let writes = 0, bindingReads = 0;
   const mutate = async () => { writes++; return {}; };
@@ -14,12 +14,16 @@ test('app handlers deny bound issue writes before mutation while allowing unconn
     issue: { findFirst: async ({ where }) => issues.find(row => matches(row, where)), findMany: async ({ where }) => issues.filter(row => matches(row, where)), update: mutate, delete: mutate },
     project: { findFirst: async ({ where }) => [{ id: 'c000000000000000000000003', workspaceId: 'workspace' }, { id: 'c000000000000000000000004', workspaceId: 'workspace' }].find(row => matches(row, where)) },
     issueActivity: { create: mutate }, issueAssignee: { deleteMany: mutate },
-    $transaction: async () => { writes++; throw new Error('Unexpected transaction'); },
+    $transaction: async operation => operation(db),
+    workspace: { findFirst: async ({ where }) => {
+      const workspace = { id: 'workspace', slug: 'workspace', name: 'Workspace', ownerId: 'actor', members: [] };
+      return matches(workspace, where) ? workspace : null;
+    } },
     issueComment: { create: mutate },
     workLog: { findFirst: async ({ where }) => ({ ...where, timeSpent: 5 }), update: mutate, delete: mutate },
     issueRelation: { findUnique: async () => ({ id: 'relation', sourceIssueId: issues[1].id, targetIssueId: issues[0].id }), delete: mutate },
   };
-  const guard = load('src/lib/forge/legacy-write-guard.ts', { 'server-only': {}, '@/lib/prisma': { prisma: db }, './reader': { readForgeBindings: async () => { bindingReads++; return [{ projectId: 'c000000000000000000000003', workspaceId: 'workspace' }]; } } });
+  const guard = load('src/lib/forge/legacy-write-guard.ts', { 'server-only': {}, '@/lib/prisma': { prisma: db, issueTrashPrisma: db }, './reader': { readForgeBindings: async () => { bindingReads++; return [{ projectId: 'c000000000000000000000003', workspaceId: 'workspace' }]; } } });
   const deps = { 'next/server': { NextResponse }, zod, '@/lib/prisma': { prisma: db }, '@/lib/forge/legacy-write-guard': guard,
     '@/lib/apps/auth-middleware': { withAppAuth: handler => handler }, '@/lib/event-bus': {} };
   const base = 'src/app/api/apps/auth/issues/[issueIdOrKey]/';
@@ -28,12 +32,12 @@ test('app handlers deny bound issue writes before mutation while allowing unconn
     [load(base + 'comments/route.ts', deps), 'POST', { content: 'Comment' }],
     [load(base + 'work-logs/route.ts', deps), 'POST', { timeSpent: 5 }],
     [load(base + 'route.ts', deps), 'PATCH', { title: 'Changed' }],
-    [load(base + 'route.ts', deps), 'DELETE', undefined],
+    [load(base + 'route.ts', deps, { URL }), 'DELETE', undefined],
     [load(base + 'work-logs/[workLogId]/route.ts', deps), 'PATCH', { timeSpent: 10 }],
     [load(base + 'work-logs/[workLogId]/route.ts', deps), 'DELETE', undefined],
     [load(base + 'relations/[relationId]/route.ts', deps), 'DELETE', undefined],
   ];
-  const call = (route, method, body, id, workspaceId = 'workspace') => route[method](new Request('https://example.test', { method, ...(body ? { body: JSON.stringify(body) } : {}) }), { workspace: { id: workspaceId }, user: { id: 'actor' } }, { params: Promise.resolve({ issueIdOrKey: id, workLogId: 'log', relationId: 'relation' }) });
+  const call = (route, method, body, id, workspaceId = 'workspace') => route[method](new Request(`https://example.test?projectId=${issues.find(issue => issue.id === id)?.projectId || 'unused'}`, { method, ...(body ? { body: JSON.stringify(body) } : {}) }), { workspace: { id: workspaceId }, user: { id: 'actor' }, app: { id: 'app' }, installation: { id: 'installation' } }, { params: Promise.resolve({ issueIdOrKey: id, workLogId: 'log', relationId: 'relation' }) });
   for (const [route, method, body] of routes) {
     assert.equal((await call(route, method, body, 'c000000000000000000000001')).status, 409);
     assert.equal(writes, 0);

@@ -570,6 +570,10 @@ model Issue {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
+  // Trash retains the original issue and its dependent records.
+  deletedAt   DateTime?
+  deletedById String?
+
   // Lifecycle tracking
   firstStartedAt DateTime? // When first moved to In Progress
   lastProgressAt DateTime? // Last time had activity
@@ -590,8 +594,8 @@ model Issue {
   // Relationships
   assignee  User?     @relation("AssignedIssues", fields: [assigneeId], references: [id])
   reporter  User?     @relation("ReportedIssues", fields: [reporterId], references: [id])
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
 
   // New status relationship
   projectStatus ProjectStatus? @relation("IssueStatus", fields: [statusId], references: [id])
@@ -627,6 +631,8 @@ model Issue {
   workLogs             WorkLog[]
 
   @@unique([issueKey, projectId])
+  @@index([projectId, deletedAt])
+  @@index([workspaceId, deletedAt])
   @@index([projectId])
   @@index([workspaceId])
   @@index([assigneeId])
@@ -822,6 +828,25 @@ model TaskLabel {
 
   @@unique([name, workspaceId])
   @@index([workspaceId])
+}
+
+// Plain identity snapshots deliberately survive issue, user and workspace purges.
+model IssueDeletionAudit {
+  id             String   @id @default(cuid())
+  issueId        String
+  issueKey       String?
+  title          String
+  workspaceId    String
+  projectId      String
+  action         String
+  actorId        String
+  client         String
+  appId          String?
+  installationId String?
+  createdAt      DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([issueId, createdAt])
 }
 
 model IssueActivity {

@@ -336,7 +336,11 @@ async function fixture(t, handler) {
     child.stdin.end(input);
     const timer = setTimeout(() => child.kill('SIGKILL'), windows ? 30000 : 10000);
     childCallback?.(child);
-    return once(child, 'close').then(([code, signal]) => { clearTimeout(timer); return { code, signal, stdout, stderr, data: stdout ? JSON.parse(stdout) : undefined, error: stderr.startsWith('{') ? JSON.parse(stderr) : undefined }; });
+    return once(child, 'close').then(([code, signal]) => {
+      clearTimeout(timer);
+      const diagnostics = stderr.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line));
+      return { code, signal, stdout, stderr, diagnostics, data: stdout ? JSON.parse(stdout) : undefined, error: diagnostics.find(record => record.error) };
+    });
   }
   return { run, dir, calls, url };
 }
@@ -557,11 +561,124 @@ test('invalid input, unsupported flags, empty identifiers and destructive omissi
   assert.equal(f.calls.length, 0);
 });
 
-test('delete is explicit and dry-run never sends a request', async t => {
+test('other delete commands remain explicit and their dry-run never sends a request', async t => {
   const f = await fixture(t);
-  const result = await f.run(['issues', 'delete', 'AGENT-1', '--yes', '--dry-run']);
+  const result = await f.run(['relations', 'delete', 'AGENT-1', 'relation-one', '--yes', '--dry-run']);
   assert.equal(result.code, 0); assert.equal(result.data.method, 'DELETE'); assert.equal(f.calls.length, 0);
   assert.equal((await f.run(['relations', 'delete', 'AGENT-1', 'relation-one', '--yes'])).code, 0); assert.equal(f.calls[0].method, 'DELETE');
+});
+
+const issueDeletePreview = {
+  id: 'issue-one', issueKey: 'HP-1', title: 'Keep the discussion', projectId: 'project-one',
+  counts: { issues: 1, comments: 16, relations: 2, workLogs: 3 },
+};
+
+test('issue trash operations require project scope and refuse bulk, filters and purge before dispatch', async t => {
+  const f = await fixture(t);
+  for (const args of [
+    ['issues', 'delete', 'HP-1', '--yes'],
+    ['issues', 'delete', 'HP-1', '--dry-run'],
+    ['issues', 'trash'], ['issues', 'restore', 'HP-1'],
+    ['issues', 'delete', 'HP-1', '--project', 'project-one'],
+    ['issues', 'delete', '--yes', '--project', 'project-one'],
+    ['issues', 'delete', 'HP-1', 'HP-2', '--yes', '--project', 'project-one'],
+    ['issues', 'delete', 'HP-1', '--yes', '--project', 'project-one', '--all'],
+    ['issues', 'delete', 'HP-1', '--yes', '--project', 'project-one', '--search', 'old'],
+    ['issues', 'delete', 'HP-1', '--yes', '--project', 'project-one', '--filter', 'old'],
+    ['issues', 'delete', 'HP-1', '--yes', '--project', 'project-one', '--project-id', 'project-two'],
+    ['issues', 'restore', 'HP-1', 'HP-2', '--project', 'project-one'],
+    ['issues', 'restore', 'HP-1', '--project', 'project-one', '--all'],
+    ['issues', 'purge', 'HP-1', '--yes', '--project', 'project-one'],
+    ['issues', 'delete', 'HP-1', '--yes', '--project', 'project-one', '--purge'],
+  ]) assert.notEqual((await f.run(args)).code, 0, args.join(' '));
+  assert.equal(f.calls.length, 0);
+});
+
+test('issue deletion dry-run reads the exact preview without yes and never mutates', async t => {
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify(issueDeletePreview)));
+  const result = await f.run(['issues', 'delete', 'HP-1', '--workspace', 'workspace-one', '--project', 'project-one', '--dry-run']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.data.preview, issueDeletePreview);
+  assert.equal(result.data.dryRun, true);
+  assert.equal(result.data.method, 'DELETE');
+  assert.equal(result.data.url, `${f.url}/api/apps/auth/issues/issue-one?workspaceId=workspace-one&projectId=project-one`);
+  assert.deepEqual(f.calls.map(({ method, url }) => ({ method, url })), [
+    { method: 'GET', url: '/api/apps/auth/issues/HP-1/delete-preview?workspaceId=workspace-one&projectId=project-one' },
+  ]);
+  assert.equal(result.stderr, '');
+});
+
+test('issue deletion previews first, binds the resolved ID and displays identity and counts', async t => {
+  const f = await fixture(t, (req, res) => res.end(JSON.stringify(req.method === 'GET' ? issueDeletePreview : { trashed: true, id: 'issue-one' })));
+  const result = await f.run(['issues', 'delete', 'HP-1', '--workspace', 'workspace-one', '--project-id', 'project-one', '--yes']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.diagnostics, [{ deletePreview: issueDeletePreview }]);
+  assert.deepEqual(result.data, { trashed: true, id: 'issue-one' });
+  assert.deepEqual(f.calls.map(({ method, url }) => ({ method, url })), [
+    { method: 'GET', url: '/api/apps/auth/issues/HP-1/delete-preview?workspaceId=workspace-one&projectId=project-one' },
+    { method: 'DELETE', url: '/api/apps/auth/issues/issue-one?workspaceId=workspace-one&projectId=project-one' },
+  ]);
+  assert.ok(f.calls.every(call => call.body === ''));
+});
+
+test('issue deletion accepts verified profile project context', async t => {
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify(issueDeletePreview)));
+  writeCredentials(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.url, accessToken: 'synthetic-profile-token', expiresAt: Date.now() + 60000, workspace: 'workspace-one', project: 'project-one' }));
+  const result = await f.run(['issues', 'delete', 'issue-one', '--dry-run'], { env: { COLLAB_TOKEN: undefined } });
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.data.preview, issueDeletePreview);
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].url, '/api/apps/auth/issues/issue-one/delete-preview?workspaceId=workspace-one&projectId=project-one');
+  assert.equal(f.calls[0].headers.authorization, 'Bearer synthetic-profile-token');
+});
+
+test('issue deletion refuses mismatched scope, identity and malformed previews without mutation', async t => {
+  for (const preview of [
+    { ...issueDeletePreview, projectId: 'project-two' },
+    { ...issueDeletePreview, id: 'issue-two', issueKey: 'HP-2' },
+    { ...issueDeletePreview, title: null },
+    { ...issueDeletePreview, counts: { ...issueDeletePreview.counts, issues: 2 } },
+    { ...issueDeletePreview, counts: { ...issueDeletePreview.counts, comments: -1 } },
+    { ...issueDeletePreview, counts: { issues: 1 } },
+  ]) {
+    const f = await fixture(t, (_req, res) => res.end(JSON.stringify(preview)));
+    const result = await f.run(['issues', 'delete', 'HP-1', '--project', 'project-one', '--yes']);
+    assert.notEqual(result.code, 0);
+    assert.equal(result.error.error, 'invalid_preview');
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.calls[0].method, 'GET');
+    assert.equal(result.diagnostics.length, 1);
+  }
+});
+
+test('issue deletion stops on denied preview and does not retry uncertain mutation', async t => {
+  const denied = await fixture(t, (_req, res) => { res.statusCode = 404; res.end(JSON.stringify({ error: 'not_found' })); });
+  const refused = await denied.run(['issues', 'delete', 'HP-1', '--project', 'project-one', '--yes']);
+  assert.equal(refused.error.error, 'not_found');
+  assert.deepEqual(denied.calls.map(call => call.method), ['GET']);
+  const failed = await fixture(t, (req, res) => {
+    if (req.method === 'GET') res.end(JSON.stringify(issueDeletePreview));
+    else { res.statusCode = 500; res.end(JSON.stringify({ error: 'server_error' })); }
+  });
+  const unknown = await failed.run(['issues', 'delete', 'HP-1', '--project', 'project-one', '--yes']);
+  assert.equal(unknown.error.error, 'outcome_unknown');
+  assert.deepEqual(unknown.diagnostics[0], { deletePreview: issueDeletePreview });
+  assert.deepEqual(failed.calls.map(call => call.method), ['GET', 'DELETE']);
+});
+
+test('issue trash and restore commands use required project scope and expose no purge', async t => {
+  const f = await fixture(t);
+  const schema = (await f.run(['schema'])).data;
+  for (const name of ['issues delete', 'issues trash', 'issues restore']) assert.deepEqual(schema.commands[name].requiredQuery, ['projectId']);
+  assert.equal(schema.commands['issues trash'].method, 'GET');
+  assert.equal(schema.commands['issues restore'].method, 'POST');
+  assert.equal(schema.commands['issues purge'], undefined);
+  assert.equal((await f.run(['issues', 'trash', '--workspace', 'workspace-one', '--project', 'project-one'])).code, 0);
+  assert.equal((await f.run(['issues', 'restore', 'HP-1', '--workspace', 'workspace-one', '--project-id', 'project-one'])).code, 0);
+  assert.deepEqual(f.calls.map(({ method, url }) => ({ method, url })), [
+    { method: 'GET', url: '/api/apps/auth/issues/trash?workspaceId=workspace-one&projectId=project-one' },
+    { method: 'POST', url: '/api/apps/auth/issues/HP-1/restore?workspaceId=workspace-one&projectId=project-one' },
+  ]);
 });
 
 test('authorization failures are preserved, redacted, and never retried', async t => {

@@ -20,9 +20,11 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-[CLI 0.4.2 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.4.2) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
+[CLI 0.5.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.5.0) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
 
-Version 0.4.2 adds native Windows ARM64 alongside the Windows x86 (32-bit) download introduced in 0.4.1. The PowerShell installer selects the OS architecture, including when run from 32-bit PowerShell on a 64-bit OS. ARM64 packages are built and tested on native Windows 11 ARM64 runners.
+Version 0.5.0 adds project-scoped issue deletion previews, Trash and Restore. Issue deletion requires a selected project; update the CLI before using deletion against the Trash-enabled server. Existing credentials are preserved when updating.
+
+Version 0.4.2 added native Windows ARM64 alongside the Windows x86 (32-bit) download introduced in 0.4.1. The PowerShell installer selects the OS architecture, including when run from 32-bit PowerShell on a 64-bit OS. ARM64 packages are built and tested on native Windows 11 ARM64 runners.
 
 Version 0.2.1 fixes Windows login failing with `unsafe_credentials` after browser approval. Run the installer again to update; existing credentials are preserved. The native runtime includes the Windows subprocess timeout fix, and credential ownership/ACL checks remain enforced.
 
@@ -109,7 +111,7 @@ See [search API behavior](../../docs/agent-search.md) and [project context seman
 | Identity/context | `whoami`, `workspaces list`, `workspace get/members/stats/activity`, `config show/set` |
 | Retrieval | `search --query TEXT`, `context get --project ID` |
 | Projects | `projects list/get/create/update/statuses/stats/activity` |
-| Issues | `issues list/get/create/update/delete/assign/activity` |
+| Issues | `issues list/get/create/update/delete/trash/restore/assign/activity` |
 | Collaboration | `comments list/add`, `relations list/add/delete`, `worklogs list/get/add/update/delete` |
 | Organization | `labels list/create`, `views list/get`, `members search` |
 | Notes/context | `notes list/get/create/update`, `context get`, `knowledge list/get` |
@@ -121,13 +123,20 @@ IDs follow the command (`issues get APP-123`; `worklogs update APP-123 LOG_ID`).
 collab issues update APP-123 --input change.json
 printf '%s' '{"assigneeId":null}' | collab issues update APP-123 --input -
 collab notes create --title 'Runbook' --content-file runbook.md --type RUNBOOK
-collab issues delete APP-123 --yes
+collab issues delete APP-123 --project PROJECT_ID --dry-run
+collab issues delete APP-123 --project PROJECT_ID --yes
+collab issues trash --project PROJECT_ID
+collab issues restore APP-123 --project PROJECT_ID
 collab projects create --name 'Platform' --slug platform --issue-prefix PLAT --dry-run
 ```
 
-`--input FILE|-` accepts a JSON body; `--content-file`/`--description-file` accept text. Inputs are limited to 1 MiB and 30 seconds. Unknown flags/fields and duplicate assignments refuse before sending. `--dry-run` prints the planned method, URL and body (or the local callback configuration for `inbox watch`) without sending or invoking an adapter; body content may be private. Deletions require `--yes` even in dry-run.
+`--input FILE|-` accepts a JSON body; `--content-file`/`--description-file` accept text. Inputs are limited to 1 MiB and 30 seconds. Unknown flags/fields and duplicate assignments refuse before sending. `--dry-run` normally prints the planned method, URL and body (or the local callback configuration for `inbox watch`) without sending or invoking an adapter; body content may be private.
 
-`--workspace ID` and `--project ID` override saved context per command. `--project-id` is a specific API body/query field. Default project context applies to issue creation, Note creation and supported filters, not to project moves on update. A workspace change clears the saved project unless a new project is explicitly verified. The server rechecks current membership on every request; a CLI context is not authorization.
+Issue deletion moves one issue to trash, preserving its ID, key and comments for restoration. It requires a project selected with `--project`, `--project-id` or saved context. `issues delete ID --dry-run` makes one read-only preview request and prints the exact ID, key, title, project and affected issue/comment/relation/worklog counts; it does not require `--yes`. A real deletion still requires `--yes`, checks a fresh preview, prints it as a `deletePreview` JSON record on stderr, then deletes by the resolved immutable ID within that project. The final API result remains one JSON object on stdout. Failed or mismatched previews prevent deletion. Other deletion commands still require `--yes` even in dry-run.
+
+`issues trash` lists trashed issues in the selected project; `issues restore ID` restores the original issue. These commands require the matching server release. The CLI has no bulk deletion, delete-by-search, or permanent purge command. Use `issues update` to revise existing work instead of deleting and recreating it: recreation assigns a new issue ID/key and does not restore the original discussion.
+
+`--workspace ID` and `--project ID` override saved context per command. `--project-id` is a specific API body/query field. Default project context applies to issue creation, Note creation, supported filters and issue trash operations, not to project moves on update. Conflicting explicit `--project` and `--project-id` values are refused for issue trash operations. A workspace change clears the saved project unless a new project is explicitly verified. The server rechecks current membership on every request; a CLI context is not authorization.
 
 `--all` fetches issue, Note or worklog lists to completion (maximum 100 pages/10,000 items), deduplicating stable IDs. Pagination is not a consistent snapshot under concurrent edits. Other list APIs retain their documented pagination/filter parameters from `collab schema`.
 
@@ -162,7 +171,7 @@ For headless use, inject an existing Collab OAuth bearer token through your cred
 | 4 | Server authorization refused |
 | 5 | API, transport, pagination or uncertain-write failure |
 
-Errors are one JSON object on stderr, with no raw remote response body. After `outcome_unknown`, read the affected item or list the intended new item before deciding whether to retry. Issue/Note edits do **not** provide idempotency keys or compare-and-swap updates; never interpret a timeout as proof a write did not happen. For handoff retry and ownership guarantees, see the [agent handoff API contract](../../docs/agent-handoffs.md#api-foundation). Concurrent agents should own separate issues/Notes or coordinate their edits. Forge-backed projects retain their existing write refusal; the CLI does not bypass it.
+Errors are JSON records on stderr, with no raw remote error response body. An issue deletion error after preview follows the `deletePreview` record on a separate line. After `outcome_unknown`, read the affected item or check `issues trash` before deciding whether to retry. Issue/Note edits do **not** provide idempotency keys or compare-and-swap updates; never interpret a timeout as proof a write did not happen. For handoff retry and ownership guarantees, see the [agent handoff API contract](../../docs/agent-handoffs.md#api-foundation). Concurrent agents should own separate issues/Notes or coordinate their edits. Forge-backed projects retain their existing write refusal; the CLI does not bypass it.
 
 ## Administrator setup
 
@@ -180,7 +189,7 @@ The apply operation transactionally creates only the dedicated `collab-cli` syst
 
 CLI 0.4.2 includes the reviewed and merged automatic label-handoff and host-callback implementations. The final tag must contain both implementations.
 
-Merge release source to `main` before publishing `cli-v0.4.2`; the native workflow requires the tagged commit to be an ancestor of `main`. The release owner must verify all 18 public GitHub release assets (seven archives, two tagged installer scripts and their SHA-256 sidecars) before the sole app deployment owner deploys.
+Merge release source to `main` before publishing `cli-v0.5.0`; the native workflow requires the tagged commit to be an ancestor of `main`. The release owner must verify all 18 public GitHub release assets (seven archives, two tagged installer scripts and their SHA-256 sidecars) before the sole app deployment owner deploys.
 
 ```sh
 npm test --prefix packages/cli
@@ -208,7 +217,7 @@ These commands are included in CLI 0.4.2. Run the one-command installer again to
 The [generic agent skill](skills/collab-agents/SKILL.md) describes registration,
 role subscriptions, bounded inbox waits, atomic claims and handoffs. Load this
 file through your agent's supported skill mechanism; it does not launch agents.
-Native users can download the [versioned SKILL.md](https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v0.4.2/packages/cli/skills/collab-agents/SKILL.md).
+Native users can download the [versioned SKILL.md](https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v0.5.0/packages/cli/skills/collab-agents/SKILL.md).
 Requires the matching server release and its additive agent-handoff migration.
 
 `collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to

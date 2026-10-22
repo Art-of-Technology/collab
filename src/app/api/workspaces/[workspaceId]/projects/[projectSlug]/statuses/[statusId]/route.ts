@@ -2,7 +2,7 @@ import { ForgeProjectWriteError, assertLegacyProjectWriteAllowed } from '@/lib/f
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authConfig } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { prisma, issueTrashPrisma } from '@/lib/prisma';
 import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 
@@ -96,7 +96,7 @@ export async function DELETE(
     await assertLegacyProjectWriteAllowed(project.id);
 
     // Perform the deletion in a transaction
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await issueTrashPrisma.$transaction(async (tx) => {
       // Recheck source and target at transaction entry before touching issues.
       const source = await tx.projectStatus.findFirst({
         where: { id: statusId, projectId: project.id, isDefault: false, project: issueAccessWhere(userId) }
@@ -106,7 +106,7 @@ export async function DELETE(
         where: { id: targetStatusId, projectId: project.id, project: issueAccessWhere(userId) }
       })) return null;
 
-      const movableWhere = { workspaceId, projectId: project.id, statusId, ...issueReadAccessWhere(userId) };
+      const movableWhere = { deletedAt: null, workspaceId, projectId: project.id, statusId, ...issueReadAccessWhere(userId) };
       // The FK clears every attached issue, including malformed cross-project links.
       const attached = await tx.issue.count({ where: { statusId } });
       const movable = await tx.issue.count({ where: movableWhere });

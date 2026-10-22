@@ -6,6 +6,6 @@ export function versionAccessWhere(userId: string) {
   return {
     repository: repositoryAccessWhere(userId),
     issueAccessInvalidated: false,
-    issues: { every: { issue: issueReadAccessWhere(userId) } },
+    issues: { every: { issue: { ...issueReadAccessWhere(userId), deletedAt: null } } },
   } satisfies Prisma.VersionWhereInput;
 }

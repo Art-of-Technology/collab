@@ -57,8 +57,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
+    const visibleIssues = await prisma.issue.findMany({ where: { workspaceId }, select: { id: true } });
+    const visibleActivityWhere = { itemId: { in: visibleIssues.map(issue => issue.id) } };
+
     // Build activity filter
     const activityWhere: any = {
+      ...visibleActivityWhere,
       workspaceId,
       action: { in: MEANINGFUL_ACTIONS },
     };
@@ -262,6 +266,7 @@ export async function GET(request: NextRequest) {
     const [todayActivityCount, weekActivityCount] = await Promise.all([
       prisma.issueActivity.count({
         where: {
+          ...visibleActivityWhere,
           workspaceId,
           action: { in: MEANINGFUL_ACTIONS },
           createdAt: { gte: todayStart },
@@ -269,6 +274,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.issueActivity.count({
         where: {
+          ...visibleActivityWhere,
           workspaceId,
           action: { in: MEANINGFUL_ACTIONS },
           createdAt: {

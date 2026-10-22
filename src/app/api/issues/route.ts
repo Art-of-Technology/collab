@@ -1,3 +1,4 @@
+import { allocateIssueKey } from '@/lib/issue-key-allocation';
 import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
 import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed, assertLegacyProjectWriteAllowed } from '@/lib/forge/legacy-write-guard';
 import { NextRequest, NextResponse } from "next/server";
@@ -216,51 +217,7 @@ export async function POST(request: NextRequest) {
     if (parentId) await assertLegacyIssueWriteAllowed(parentId);
 
     const created = await prisma.$transaction(async (tx) => {
-      // Get the latest project data with current counters
-      const currentProject = await tx.project.findUnique({
-        where: { id: projectId },
-        select: { nextIssueNumbers: true, issuePrefix: true }
-      });
-
-      if (!currentProject) {
-        throw new Error("Project not found in transaction");
-      }
-
-      // Use TASK counter value for all issue types, but generate keys without type letters
-      let nextNum: number;
-      if (typeof currentProject.nextIssueNumbers === 'object' && currentProject.nextIssueNumbers !== null) {
-        const counters = currentProject.nextIssueNumbers as any;
-        nextNum = counters.TASK || 1;
-      } else {
-        nextNum = 1;
-      }
-
-      let issueKey: string;
-      let attempts = 0;
-      const maxAttempts = 100; // Prevent infinite loop
-
-      do {
-        issueKey = `${currentProject.issuePrefix}-${nextNum}`;
-        
-        // Check if this key already exists
-        const existingIssue = await tx.issue.findFirst({
-          where: {
-            projectId,
-            issueKey
-          }
-        });
-
-        if (!existingIssue) {
-          break; // Found a unique key
-        }
-
-        nextNum++;
-        attempts++;
-      } while (attempts < maxAttempts);
-
-      if (attempts >= maxAttempts) {
-        throw new Error("Could not generate unique issue key");
-      }
+      const issueKey = await allocateIssueKey(tx, projectId);
 
       // Find the ProjectStatus for the given status and project
       let statusId = null;
@@ -332,14 +289,6 @@ export async function POST(request: NextRequest) {
       });
 
       if (labels.length) await enqueueLabelHandoff(tx, session.user.id, newIssue, []);
-
-      // Update the TASK counter to be one more than what we used (all types use TASK counter now)
-      const updatedNext = { ...(currentProject.nextIssueNumbers as any) };
-      updatedNext.TASK = nextNum + 1;
-      await tx.project.update({
-        where: { id: projectId },
-        data: { nextIssueNumbers: updatedNext as any },
-      });
 
       // Create IssueAssignee record if issue is assigned to someone
       if (assigneeId) {

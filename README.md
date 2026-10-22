@@ -305,6 +305,9 @@ view, even when the workspace slug lookup returns no slug. If that view is
 unavailable, they return to the project when its slug is known, otherwise to
 **Views**. In an issue modal, **Back** closes the modal.
 
+For moving issues to Trash, restoring them and administrator permanent deletion,
+see [Issue Trash and Restore](docs/issue-trash.md).
+
 ### Notes
 
 The Notes rich-text editor preserves HTML tables with distinct headers and cells,

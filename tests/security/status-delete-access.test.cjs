@@ -1,4 +1,6 @@
 const { assert, test, load, matches } = require('./helpers.cjs');
+const { Prisma } = require('@prisma/client');
+const rewrite = load('src/lib/issue-visibility.ts').issueVisibilityExtension(Prisma.dmmf.datamodel.models).query.$allModels.$allOperations;
 const base = 'src/app/api/workspaces/[workspaceId]/projects/[projectSlug]/statuses/[statusId]/';
 function fixture() {
   const state = { subject: 'actor', mapping: true, legacy: 0, writes: [] };
@@ -8,7 +10,7 @@ function fixture() {
   const source = { id: 'source', projectId: project.id, project, isDefault: false };
   const target = { id: 'target', projectId: project.id, project, isDefault: false };
   state.statuses = [source, target];
-  const issue = (id, statusId = source.id) => ({ id, workspaceId: workspace.id, workspace, projectId: project.id, project, statusId, projectStatus: statusId === source.id ? source : target });
+  const issue = (id, statusId = source.id) => ({ id, workspaceId: workspace.id, workspace, projectId: project.id, project, deletedAt: null, statusId, projectStatus: statusId === source.id ? source : target });
   state.issues = [issue('first'), issue('already-target', target.id)];
   const match = (row, where) => { const { issues, ...rest } = where; return matches(row, rest) && (!issues?.none || !state.issues.some(i => i.statusId === row.id && matches(i, issues.none))); };
   const prisma = {
@@ -25,11 +27,15 @@ function fixture() {
     },
     $transaction: async fn => { if (state.beforeTx) state.beforeTx(); return fn(prisma); },
   };
+  const visible = Object.fromEntries(Object.entries(prisma).filter(([name]) => !name.startsWith('$')).map(([name, methods]) =>
+    [name, Object.fromEntries(Object.entries(methods).map(([operation, query]) =>
+      [operation, args => rewrite({ model: name[0].toUpperCase() + name.slice(1), operation, args, query })]))]));
+  visible.$transaction = async fn => { if (state.beforeTx) state.beforeTx(); return fn(visible); };
   const env = { env: { COLLAB_AUTH_MODE: 'nextauth', COLLAB_GATEWAY_ISSUER: 'https://identity.example.test' } }, config = {};
   const legacy = { getServerSession: async c => { assert.equal(c, config); state.legacy++; return { user: { id: state.subject, email: 'old@weezboo.com' } }; } };
   const globals = { process: env, Buffer, TextDecoder, URL, console: { error() {}, log() {} } };
   const adapter = load('src/lib/request-session.ts', { 'server-only': {}, 'next-auth': legacy, '@/lib/prisma': { prisma }, './gateway-identity': load('src/lib/gateway-identity.ts', { 'node:crypto': require('node:crypto') }, globals), 'next/headers': { headers: () => new Headers({ 'x-collab-issuer': Buffer.from(env.env.COLLAB_GATEWAY_ISSUER).toString('base64url'), 'x-collab-subject': Buffer.from('actor').toString('base64url'), 'x-collab-email': Buffer.from('actor@weezboo.com').toString('base64url'), 'x-collab-email-verified': 'true' }) } }, globals);
-  const deps = { '@/lib/prisma': { prisma }, '@/lib/request-session': adapter, 'next-auth/next': legacy, '@/lib/auth': { authConfig: config }, '@/lib/slug-resolvers': { resolveWorkspaceSlug: async v => ['space', 'workspace'].includes(v) ? 'workspace' : null }, 'next/server': { NextResponse: Response } };
+  const deps = { '@/lib/prisma': { prisma: visible, issueTrashPrisma: prisma }, '@/lib/request-session': adapter, 'next-auth/next': legacy, '@/lib/auth': { authConfig: config }, '@/lib/slug-resolvers': { resolveWorkspaceSlug: async v => ['space', 'workspace'].includes(v) ? 'workspace' : null }, 'next/server': { NextResponse: Response } };
   const get = load(base + 'issues-count/route.ts', deps, globals).GET, del = load(base + 'route.ts', deps, globals).DELETE;
   return { state, workspace, hidden, project, source, target, issue, env, invoke: (method, body = {}, params = {}) => (method === 'GET' ? get : del)(new Request('https://example.test', { method, ...(method !== 'GET' ? { body: JSON.stringify(body) } : {}) }), { params: Promise.resolve({ workspaceId: 'space', projectSlug: 'project', statusId: 'source', ...params }) }) };
 }
@@ -46,3 +52,17 @@ test('unused status can be deleted without target', async () => { const f = fixt
 test('default status and foreign or identical targets are denied without writes', async () => { for (const choice of ['default', 'missing', 'same', 'foreign']) { const f = fixture(); if (choice === 'default') f.source.isDefault = true; if (choice === 'foreign') f.target.projectId = 'foreign'; const r = await f.invoke('DELETE', { targetStatusId: choice === 'missing' ? 'missing' : choice === 'same' ? 'source' : 'target' }); assert.equal(r.status, 400); assert.deepEqual(f.state.writes, []); } });
 test('operator, array, null and blank target input fails before any write', async () => { for (const body of [null, [], { targetStatusId: {} }, { targetStatusId: [] }, { targetStatusId: '' }, { targetStatusId: null }]) { const f = fixture(); const r = await f.invoke('DELETE', body); assert.equal(r.status, 400); assert.deepEqual(f.state.writes, []); } });
 test('transaction-entry membership revocation, moved source and default change have zero writes', async () => { for (const change of ['member', 'project', 'default']) { const f = fixture(); f.state.beforeTx = () => { if (change === 'member') f.workspace.members[0].status = false; else if (change === 'project') f.source.projectId = 'foreign'; else f.source.isDefault = true; }; assert.equal((await f.invoke('DELETE', { targetStatusId: 'target' })).status, 409); assert.deepEqual(f.state.writes, []); } });
+
+test('retained status links block deletion with and without a replacement while display counts hide trash', async () => {
+  for (const body of [{}, { targetStatusId: 'target' }]) {
+    const f = fixture();
+    f.state.issues[0].deletedAt = new Date();
+    const before = structuredClone(f.state.issues);
+    assert.deepEqual(await (await f.invoke('GET')).json(), { count: 0 });
+    assert.equal((await f.invoke('DELETE', body)).status, 409);
+    assert.deepEqual(f.state.writes, []);
+    assert.deepEqual(f.state.issues, before);
+    f.state.issues[0].deletedAt = null;
+    assert.equal((await f.invoke('DELETE', { targetStatusId: 'target' })).status, 200);
+  }
+});

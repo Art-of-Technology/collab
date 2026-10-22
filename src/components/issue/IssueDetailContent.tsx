@@ -707,11 +707,11 @@ export function IssueDetailContent({
     if (!issue?.issueKey && !issue?.id) return;
 
     try {
-      await deleteIssueMutation.mutateAsync(issue.issueKey || issue.id);
+      await deleteIssueMutation.mutateAsync({ id: issue.id, issueKey: issue.issueKey, workspaceId: issue.workspaceId, projectId: issue.projectId });
 
       toast({
-        title: "Issue deleted",
-        description: "The issue has been deleted successfully",
+        title: "Issue moved to Trash",
+        description: "Restore it from project settings → Trash. Its comments and history are retained.",
       });
 
       // Navigate to the project's default view or fallback
@@ -736,7 +736,7 @@ export function IssueDetailContent({
       console.error('Failed to delete issue:', error);
       toast({
         title: "Error",
-        description: "Failed to delete issue. Please try again.",
+        description: "Failed to move issue to Trash. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -991,6 +991,7 @@ export function IssueDetailContent({
               variant="ghost"
               size="sm"
               onClick={handleDeleteIssue}
+              aria-label="Move issue to Trash"
               disabled={deleteIssueMutation.isPending}
               className="h-6 px-1 md:px-2 text-red-400 hover:text-red-300 text-xs border border-collab-700 hover:border-collab-600 bg-collab-900 hover:bg-collab-800 flex items-center justify-center"
             >
@@ -999,7 +1000,7 @@ export function IssueDetailContent({
               ) : (
                 <Trash2 className="h-3 w-3 md:mr-1" />
               )}
-              <span data-text className="hidden md:inline ml-1">Delete</span>
+              <span data-text className="hidden md:inline ml-1">Move to Trash</span>
             </Button>
           </div>
         }
@@ -1316,10 +1317,10 @@ export function IssueDetailContent({
         <ConfirmDialog
           open={showDeleteDialog}
           onOpenChange={setShowDeleteDialog}
-          title="Delete Issue"
-          description="Are you sure you want to delete this issue? This action cannot be undone."
+          title="Move issue to Trash?"
+          description="You can restore this issue from project settings → Trash with its original key, comments and history."
           variant="danger"
-          confirmText="Delete Issue"
+          confirmText="Move to Trash"
           isLoading={deleteIssueMutation.isPending}
           onConfirm={handleDeleteConfirm}
           metadata={issue ? {

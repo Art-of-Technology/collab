@@ -7,7 +7,7 @@ function fixture(absent = false, releases = false) {
   const repositoryAccess = load('src/lib/github/access.ts', { '@/lib/post-access': load('src/lib/post-access.ts') });
   const issueAccess = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma: {} } });
   const access = load('src/lib/github/version-access.ts', { './access': repositoryAccess, '@/lib/issue-finder': issueAccess });
-  const ownIssue = { workspace: workspaces[0], project: { workspace: workspaces[0] }, statusId: null };
+  const ownIssue = { workspace: workspaces[0], project: { workspace: workspaces[0] }, statusId: null, deletedAt: null };
   const versions = [
     { id: 'safe', repositoryId: 'own', repository: repos[0], issueAccessInvalidated: false, issues: [{ issue: ownIssue }] },
     { id: 'invalidated', repositoryId: 'own', repository: repos[0], issueAccessInvalidated: true, issues: [] },

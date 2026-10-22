@@ -108,6 +108,12 @@ export const GET = withAppAuth(
         if (activityEndDate) activityWhere.createdAt.lte = activityEndDate;
       }
 
+      // Activity has no Issue FK; also exclude trash from historical summary counts.
+      const visibleIssues = await prisma.issue.findMany({
+        where: { workspaceId: context.workspace.id }, select: { id: true },
+      });
+      activityWhere.itemId = { in: visibleIssues.map(issue => issue.id) };
+
       // Find matching activities
       const matchingActivities = await prisma.issueActivity.findMany({
         where: activityWhere,
