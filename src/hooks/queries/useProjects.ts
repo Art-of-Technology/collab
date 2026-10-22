@@ -353,6 +353,10 @@ export interface ProjectSummary {
     repositoryName: string | null;
     activities: GitHubActivity[];
   };
+  repositories: {
+    connections: { id: string; provider: string; name: string }[];
+    activities: GitHubActivity[];
+  };
   featureRequests: FeatureRequestSummary[];
   notes: NoteSummary[];
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +15,7 @@ interface Connection {
 }
 
 export function GitConnections({ projectId }: { projectId: string }) {
+  const queryClient = useQueryClient();
   const [instances, setInstances] = useState<Instance[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [instanceKey, setInstanceKey] = useState('');
@@ -51,6 +53,7 @@ export function GitConnections({ projectId }: { projectId: string }) {
     const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Could not complete the Git request.');
+    if (body.action !== 'list') await queryClient.invalidateQueries({ queryKey: ['projectSummary', projectId] });
     return data;
   }
   async function browse(page = 1) {

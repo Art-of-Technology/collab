@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -54,6 +55,9 @@ interface GitHubOAuthConnectionProps {
 }
 
 export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }: GitHubOAuthConnectionProps) {
+  const queryClient = useQueryClient();
+  const [checkingConnection, setCheckingConnection] = useState(true);
+  const [connectionError, setConnectionError] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [githubUser, setGithubUser] = useState<string | null>(null);
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
@@ -88,36 +92,29 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
   }, [repositories, searchTerm]);
 
   const checkGitHubConnection = async () => {
+    setCheckingConnection(true);
+    setConnectionError('');
     try {
-      console.log('Checking GitHub connection...');
-      const response = await fetch('/api/github/oauth/repositories');
-      console.log('GitHub connection check response:', response.status, response.statusText);
-      
+      const response = await fetch('/api/github/oauth/repositories', { cache: 'no-store' });
       if (response.ok) {
         const data = await response.json();
-        console.log('GitHub connected, user:', data.githubUser);
         setIsConnected(true);
         setGithubUser(data.githubUser);
         setRepositories(data.repositories || []);
         setHasMore(data.hasMore || false);
-      } else {
-        // GitHub not connected or token expired
-        console.log('GitHub not connected, resetting state');
+      } else if (response.status === 400 || response.status === 401) {
         setIsConnected(false);
         setGithubUser(null);
         setRepositories([]);
         setFilteredRepos([]);
         setHasMore(false);
+      } else {
+        throw new Error('Could not check your GitHub connection. Try again.');
       }
-    } catch (error) {
-      console.error('Error checking GitHub connection:', error);
-      // On error, assume not connected
-      console.log('GitHub connection error, resetting state');
-      setIsConnected(false);
-      setGithubUser(null);
-      setRepositories([]);
-      setFilteredRepos([]);
-      setHasMore(false);
+    } catch {
+      setConnectionError('Could not check your GitHub connection. Try again.');
+    } finally {
+      setCheckingConnection(false);
     }
   };
 
@@ -245,6 +242,7 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
         )
       );
 
+      await queryClient.invalidateQueries({ queryKey: ['projectSummary', projectId] });
       onSuccess?.();
       
     } catch (error) {
@@ -287,6 +285,16 @@ export function GitHubOAuthConnection({ projectId, onSuccess, compact = false }:
       toast.error(error instanceof Error ? error.message : 'Failed to disconnect GitHub account');
     }
   };
+
+  if (checkingConnection) {
+    return <p role="status" className="text-sm text-collab-400 p-4">Checking GitHub connection…</p>;
+  }
+  if (connectionError) {
+    return <div role="alert" className="p-4 space-y-3 text-sm text-collab-400">
+      <p>{connectionError}</p>
+      <Button variant="outline" onClick={checkGitHubConnection}>Retry</Button>
+    </div>;
+  }
 
   if (!isConnected) {
     // Compact mode - just a button (used inside ProjectSettingsClient)

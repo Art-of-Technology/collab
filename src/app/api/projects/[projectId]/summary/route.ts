@@ -288,7 +288,7 @@ export async function GET(
     // Get GitHub repository and activity
     const repository = await prisma.repository.findFirst({
       where: { projectId, project: projectWhere },
-      select: { id: true, fullName: true }
+      select: { id: true, fullName: true, isActive: true }
     });
 
     let githubActivity: any[] = [];
@@ -383,6 +383,33 @@ export async function GET(
       );
       githubActivity = githubActivity.slice(0, 10);
     }
+
+    const gitConnections = await prisma.gitConnection.findMany({
+      where: { projectId, project: projectWhere, isActive: true },
+      select: {
+        id: true, provider: true, repositoryPath: true,
+        activity: {
+          orderBy: { date: 'desc' }, take: 5,
+          select: { id: true, kind: true, title: true, date: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    const connectedRepositories = [
+      ...(repository?.isActive ? [{ id: repository.id, provider: 'github', name: repository.fullName }] : []),
+      ...gitConnections.map(connection => ({ id: connection.id, provider: connection.provider, name: connection.repositoryPath })),
+    ];
+    const repositoryActivity = [
+      ...(repository?.isActive ? githubActivity : []),
+      ...gitConnections.flatMap(connection => connection.activity.map(activity => ({
+        id: `git-${activity.id}`,
+        type: activity.kind,
+        title: activity.kind === 'commit' ? 'commit' : 'pull / merge request',
+        description: activity.title,
+        timestamp: activity.date.toISOString(),
+        author: { name: connection.repositoryPath },
+      }))),
+    ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 10);
 
     // Get feature requests
     const featureRequests = await prisma.featureRequest.findMany({
@@ -537,6 +564,10 @@ export async function GET(
         connected: !!repository,
         repositoryName: repository?.fullName || null,
         activities: githubActivity
+      },
+      repositories: {
+        connections: connectedRepositories,
+        activities: repositoryActivity,
       },
       // Feature requests widget data
       featureRequests: formattedFeatureRequests,

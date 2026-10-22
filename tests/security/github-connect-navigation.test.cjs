@@ -8,8 +8,10 @@ function fixture({ ok = true, error, callbackError } = {}) {
     history: { state: null, replaceState: (_, __, url) => events.push(['replace', String(url)]) },
     open: () => { events.push(['popup']); return null; },
   };
+  let stateSlot = 0;
   const deps = {
-    react: { useState: value => [value, () => {}], useEffect: effect => effects.push(effect) },
+    '@tanstack/react-query': { useQueryClient: () => ({ invalidateQueries: async () => {} }) },
+    react: { useState: value => [stateSlot++ === 0 ? false : value, () => {}], useEffect: effect => effects.push(effect) },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     '@/components/git-providers/GitConnections': { GitConnections: () => 'Git provider connections' },
     '@/components/ui/button': { Button: 'button' }, '@/components/ui/input': { Input: 'input' },
@@ -57,8 +59,8 @@ test('returned consent failure is visible and removed from URL without removing 
   assert.equal(new URL(replaced[1]).searchParams.has('github_error'), false);
 });
 
-async function settingsFixture(query, connected = false) {
-  const errors = [], requests = [], instances = new Map();
+async function settingsFixture(query, connected = false, responseStatus, repositories = []) {
+  const errors = [], requests = [], invalidated = [], instances = new Map();
   let current, cursor, pending = [], tree;
   const jsx = (type, props) => ({ type, props });
   const window = {
@@ -78,6 +80,7 @@ async function settingsFixture(query, connected = false) {
     },
   };
   const deps = {
+    '@tanstack/react-query': { useQueryClient: () => ({ invalidateQueries: async key => invalidated.push(key) }) },
     react, 'react/jsx-runtime': { jsx, jsxs: jsx },
     'next/navigation': { useRouter: () => ({}), useSearchParams: () => new URL(window.location.href).searchParams },
     'next/link': { default: 'a' },
@@ -90,14 +93,14 @@ async function settingsFixture(query, connected = false) {
     '@/hooks/queries/useProjects': { useProject: () => ({ data: project, isLoading: false, refetch() {} }) },
     '@/constants/project-statuses': { DEFAULT_PROJECT_STATUSES: [] },
     '@/lib/shared-issue-key-utils': {}, '@/lib/utils': { cn: () => '' },
-    sonner: { toast: { error: value => errors.push(value) } },
+    sonner: { toast: { error: value => errors.push(value), success() {} } },
   };
   const project = { id: 'project-1', name: 'Project', repository: null, statuses: [] };
   const globals = {
     window, URL, console: { log() {}, error() {} },
     fetch: async url => {
       requests.push(url);
-      return { ok: connected, json: async () => ({ githubUser: 'octocat', repositories: [], hasMore: false }) };
+      return { ok: connected, status: responseStatus ?? (connected ? 200 : 400), json: async () => ({ githubUser: 'octocat', repositories, hasMore: false }) };
     },
   };
   deps['@/components/github/GitHubOAuthConnection'] = load('src/components/github/GitHubOAuthConnection.tsx', deps, globals);
@@ -132,10 +135,10 @@ async function settingsFixture(query, connected = false) {
   }
   const text = node => Array.isArray(node) ? node.map(text).join('') : node && typeof node === 'object' ? text(node.props?.children) : typeof node === 'string' ? node : '';
   await settle();
-  return { errors, requests, window, text: () => text(tree), async select(label) {
+  return { errors, requests, invalidated, window, text: () => text(tree), async select(label) {
     const button = nodes(tree).find(node => node.type === 'button' && text(node) === label);
     assert.ok(button, 'settings tab exists: ' + label);
-    button.props.onClick(); await settle();
+    await button.props.onClick(); await settle();
   } };
 }
 
@@ -176,3 +179,24 @@ for (const query of ['', '?tab=unknown']) {
     assert.ok(f.requests.includes('/api/github/oauth/repositories'));
   });
 }
+
+
+for (const status of [429, 500]) {
+  test('settings reports unavailable connection status without claiming disconnected: ' + status, async () => {
+    const f = await settingsFixture('?tab=github', false, status);
+    assert.match(f.text(), /Could not check your GitHub connection/);
+    assert.doesNotMatch(f.text(), /Connect your GitHub account/);
+    const reads = f.requests.length;
+    await f.select('Retry');
+    assert.ok(f.requests.length > reads);
+  });
+}
+
+
+test('connecting a repository invalidates its cached project overview', async () => {
+  const repo = { id: 1, name: 'buildwake', full_name: 'org/buildwake', owner: { login: 'org' }, permissions: { admin: true }, isConnected: false, updated_at: '2026-10-22', default_branch: 'main' };
+  const f = await settingsFixture('?tab=github', true, 200, [repo]);
+  await f.select('Connect');
+  assert.deepEqual(JSON.parse(JSON.stringify(f.invalidated)), [{ queryKey: ['projectSummary', 'project-1'] }]);
+  assert.ok(f.requests.includes('/api/github/oauth/connect'));
+});
