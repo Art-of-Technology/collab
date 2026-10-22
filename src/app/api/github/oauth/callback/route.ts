@@ -34,6 +34,10 @@ export async function GET(request: NextRequest) {
       redirectUrl.searchParams.set('github_error', 'Project access changed');
       return finish();
     }
+    if (project) {
+      redirectUrl.pathname = `/${project.workspace.slug}/projects/${project.slug}/settings`;
+      redirectUrl.searchParams.set('tab', 'github');
+    }
     if (searchParams.has('error')) {
       redirectUrl.searchParams.set('github_error', 'GitHub authorization was not completed');
       return finish();
@@ -51,10 +55,6 @@ export async function GET(request: NextRequest) {
     });
     redirectUrl.searchParams.set('github_connected', 'true');
     redirectUrl.searchParams.set('github_user', githubUser.login);
-    if (project) {
-      redirectUrl.pathname = `/${project.workspace.slug}/projects/${project.slug}/settings`;
-      redirectUrl.searchParams.set('tab', 'github');
-    }
     return finish();
   } catch {
     redirectUrl.searchParams.set('github_error', 'OAuth authentication failed');

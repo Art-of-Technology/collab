@@ -755,9 +755,11 @@ cookie to 2,048 characters and the nonce to 64 lowercase hexadecimal characters.
 The callback rejects missing, duplicate, mismatched, tampered, expired or malformed
 state before provider exchange or credential writes. It trusts project metadata
 only from the sealed cookie and rechecks project access before provider effects.
-Missing/deleted actors redirect to login; other denials return a generic error to
-`/projects`. Authorized project success retains its settings redirect and GitHub
-tab; personal success remains on `/projects`. Callback responses clear the cookie
+Missing/deleted actors redirect to login. Invalid state and revoked project
+access return a generic error to `/projects`. Once project access is validated,
+the callback returns to that project's settings with `tab=github` for success,
+consent denial, missing code and subsequent provider or persistence failures.
+Personal flows remain on `/projects`. Callback responses clear the cookie
 on the same path and are `no-store`; authorization URLs and state are not logged,
 and raw provider/decryption errors are not returned in redirects. Shared
 encryption/decryption and live-user session failures log only fixed messages.
