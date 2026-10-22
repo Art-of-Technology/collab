@@ -50,7 +50,7 @@ NEXTAUTH_URL=https://your-collab-domain.com
 
 1. Deploy your application with the new environment variables
 2. Go to any project settings page
-3. Navigate to the "GitHub Integration" section
+3. Open the "Git providers" tab and use its GitHub OAuth section
 4. Click **"Connect with GitHub"**
 5. Authorize the application
 6. Select a repository from the list

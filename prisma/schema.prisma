@@ -8,6 +8,7 @@ datasource db {
 }
 
 model User {
+  gitConnections GitConnection[]
   agentRegistrations     AgentRegistration[]
   id                     String                  @id @default(cuid())
   name                   String?
@@ -468,6 +469,7 @@ model WorkspaceInvitation {
 }
 
 model Project {
+  gitConnections GitConnection[]
   id               String   @id @default(cuid())
   name             String
   slug             String
@@ -2835,4 +2837,41 @@ model AgentReceipt {
 
   @@id([handoffId, agentId])
   @@index([agentId])
+}
+
+// Provider connections are separate from legacy GitHub automation and retain history on disconnect.
+model GitConnection {
+  id String @id @default(cuid())
+  projectId String
+  connectedById String?
+  provider String
+  baseUrl String
+  externalId String
+  repositoryPath String
+  name String
+  url String
+  credentials String?
+  isActive Boolean @default(true)
+  syncedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  connectedBy User? @relation(fields: [connectedById], references: [id], onDelete: SetNull)
+  activity GitConnectionActivity[]
+  @@unique([projectId, provider, baseUrl, externalId])
+  @@index([projectId])
+}
+
+model GitConnectionActivity {
+  id String @id @default(cuid())
+  connectionId String
+  externalId String
+  kind String
+  title String
+  url String
+  date DateTime
+  state String?
+  connection GitConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  @@unique([connectionId, kind, externalId])
+  @@index([connectionId, date])
 }
