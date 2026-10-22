@@ -25,7 +25,7 @@ test('lexical search executes against PostgreSQL: exact, full-text, fuzzy, isola
   const url = `postgresql://${encodeURIComponent(userInfo().username)}@localhost/postgres?host=${encodeURIComponent(directory)}`;
   prisma = new PrismaClient({ datasources: { db: { url } } });
   for (const statement of [
-    'CREATE TABLE "Issue" (id text PRIMARY KEY, "issueKey" text, title text, description text, "workspaceId" text)',
+    'CREATE TABLE "Issue" (id text PRIMARY KEY, "issueKey" text, title text, description text, "workspaceId" text, "deletedAt" timestamp(3))',
     'CREATE TABLE "Note" (id text PRIMARY KEY, title text, content text)',
     'CREATE TABLE "BoardItemActivity" (id text PRIMARY KEY, "itemId" text, "workspaceId" text, action text, "fieldName" text, details text, "oldValue" text, "newValue" text)',
   ]) await prisma.$executeRawUnsafe(statement);
@@ -34,10 +34,12 @@ test('lexical search executes against PostgreSQL: exact, full-text, fuzzy, isola
   for (const column of columns) {
     const model = Prisma.dmmf.datamodel.models.find(m => (m.dbName || m.name) === column.table_name);
     const field = model?.fields.find(f => (f.dbName || f.name) === column.column_name);
-    assert.equal(field?.type, 'String', `Reduced fixture must match generated schema: ${column.table_name}.${column.column_name}`);
-    assert.equal(column.data_type, 'text');
+    const deletionTime = column.table_name === 'Issue' && column.column_name === 'deletedAt';
+    assert.equal(field?.type, deletionTime ? 'DateTime' : 'String', `Reduced fixture must match generated schema: ${column.table_name}.${column.column_name}`);
+    assert.equal(column.data_type, deletionTime ? 'timestamp without time zone' : 'text');
+    if (deletionTime) assert.equal(field.isRequired, false);
   }
-  await prisma.$executeRaw`INSERT INTO "Issue" VALUES
+  await prisma.$executeRaw`INSERT INTO "Issue" (id, "issueKey", title, description, "workspaceId") VALUES
     ('login', 'APP-42', 'Authentication failure', 'Users cannot log in after password reset', 'w'),
     ('deploy', 'APP-43', 'Deployment pipeline stalled', 'Build awaits approval from release owner', 'w'),
     ('quoted', 'APP-44', 'The deployment pipeline needs authentication', 'Related work', 'w'),
@@ -81,8 +83,27 @@ test('lexical search executes against PostgreSQL: exact, full-text, fuzzy, isola
     assert.deepEqual(ids(await search('!!!', 'keyword')), []);
     assert.equal((await prisma.$queryRaw`SELECT count(*)::int AS n FROM "Issue"`)[0].n, 4);
   });
+  await t.test('Trash excludes issues and their activity in every lexical mode; Restore returns both', async () => {
+    for (const mode of ['exact', 'keyword', 'semantic', 'hybrid', 'fuzzy']) {
+      const visible = ids(await search('deployment', mode));
+      assert.ok(visible.includes('deploy'));
+      assert.ok(visible.includes('activity'));
+      try {
+        await prisma.$executeRaw`UPDATE "Issue" SET "deletedAt" = CURRENT_TIMESTAMP WHERE id = 'deploy'`;
+        const trashed = ids(await search('deployment', mode));
+        assert.equal(trashed.includes('deploy'), false);
+        assert.equal(trashed.includes('activity'), false);
+        assert.ok(trashed.includes('quoted'));
+        assert.deepEqual(ids(await search('APP-43', mode)), []);
+        assert.deepEqual(ids(await search('activity', mode)), []);
+      } finally {
+        await prisma.$executeRaw`UPDATE "Issue" SET "deletedAt" = NULL WHERE id = 'deploy'`;
+      }
+      assert.deepEqual(ids(await search('deployment', mode)), visible);
+    }
+  });
   await t.test('record local query timings on a 2500-issue corpus without treating them as live CLI latency', async () => {
-    await prisma.$executeRaw`INSERT INTO "Issue"
+    await prisma.$executeRaw`INSERT INTO "Issue" (id, "issueKey", title, description, "workspaceId")
       SELECT 'fixture-' || n, 'SAMPLE-' || n, 'Routine task ' || n,
         'A routine project task with an owner and progress update.', 'w'
       FROM generate_series(1, 2497) AS n`;
@@ -103,7 +124,7 @@ test('lexical search executes against PostgreSQL: exact, full-text, fuzzy, isola
     t.diagnostic(JSON.stringify({ benchmark: 'local_postgres_lexical_only', issueCount: 2500, samples: 5, timings,
       limits: 'Synthetic corpus; excludes auth, HTTP, CLI and providers. Full CLI comparison is a separate acceptance step.' }));
   });
-  await prisma.$executeRaw`INSERT INTO "Issue"
+  await prisma.$executeRaw`INSERT INTO "Issue" (id, "issueKey", title, description, "workspaceId")
     SELECT CASE WHEN n = 50000 THEN 'needle' ELSE 'large-issue-' || n END, 'LARGE-' || n,
       CASE WHEN n = 1 THEN 'needle' ELSE 'Routine task' END, '', 'lexical-w'
     FROM generate_series(1, 50000) AS n`;
