@@ -6,18 +6,13 @@ Open **Project settings → Trash** to restore an issue. There is no automatic e
 
 App and agent tokens can move issues to Trash and restore them with `issues:write`; they cannot permanently delete issues. Preview and Trash listing require `issues:read`. The browser keeps its issue deletion permissions for moving and restoring issues, and additionally checks workspace administrator status for permanent deletion.
 
-## CLI 0.5.0
+Status removal (including Settings saves) refuses while a trashed issue still uses that status, even when its displayed issue count is zero. Restore the issue before reassigning its status. A parent cannot move to another project while a retained child would be left behind.
 
-```sh
-collab issues delete CLB-123 --workspace WORKSPACE_ID --project PROJECT_ID --dry-run
-collab issues delete CLB-123 --workspace WORKSPACE_ID --project PROJECT_ID --yes
-collab issues trash --workspace WORKSPACE_ID --project PROJECT_ID
-collab issues restore CLB-123 --workspace WORKSPACE_ID --project PROJECT_ID
-```
+For stored version and release visibility during Trash/Restore, see [Version and release list access](github-version-access.md).
 
-The preview resolves the exact ID, key, title, project and affected counts before deletion. Real deletion prints that preview to stderr and sends the resolved immutable ID. A dry run only reads the preview. A selected profile project is also accepted; conflicting explicit project selectors are rejected. Search/filter-based bulk deletion and CLI permanent deletion are unavailable.
+## CLI and app API
 
-The app-auth DELETE endpoint now requires `projectId`. Older CLI versions that do not send it must be upgraded. This deliberately fails closed without deleting anything. Updating the installer preserves existing credentials.
+See the [CLI commands and inputs](../packages/cli/README.md#commands-and-inputs) for project-scoped previews, Trash, Restore and compatibility requirements, and the [app API reference](../public/docs/third-party-api.md#issue-trash-and-restore) for endpoint parameters and scopes.
 
 ## Deployment and data preservation
 

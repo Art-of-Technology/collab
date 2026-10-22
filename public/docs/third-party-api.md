@@ -278,11 +278,20 @@ PATCH /api/apps/auth/issues/{issueId}
 ```
 **Required scopes:** `issues:write`
 
-#### Delete Issue
-```http
-DELETE /api/apps/auth/issues/{issueId}
-```
-**Required scopes:** `issues:write`
+#### Issue Trash and Restore
+
+All endpoints below require the selected project's `projectId` query parameter and current workspace access. `{issueIdOrKey}` accepts an ID or issue key within that project.
+
+| Method | Path | Required scope |
+| --- | --- | --- |
+| GET | `/api/apps/auth/issues/{issueIdOrKey}/delete-preview?projectId=PROJECT_ID` | `issues:read` |
+| DELETE | `/api/apps/auth/issues/{issueIdOrKey}?projectId=PROJECT_ID` | `issues:write` |
+| GET | `/api/apps/auth/issues/trash?projectId=PROJECT_ID` | `issues:read` |
+| POST | `/api/apps/auth/issues/{issueIdOrKey}/restore?projectId=PROJECT_ID` | `issues:write` |
+
+Preview returns `id`, `issueKey`, `title`, `projectId` and `counts` (`issues`, `comments`, `relations`, `workLogs`). DELETE moves the issue to Trash and returns `message` plus `deletedIssue` (`id`, `issueKey`, `title`). Listing returns `issues` and `canPurge: false`; restore returns the original `id`, `issueKey` and `title`. Missing project scope fails closed. App tokens have no permanent-deletion endpoint.
+
+For retention, browser permissions and permanent deletion, see [Issue Trash and Restore](https://github.com/Art-of-Technology/collab/blob/main/docs/issue-trash.md).
 
 ### Tasks
 

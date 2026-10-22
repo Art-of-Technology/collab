@@ -229,11 +229,9 @@ PATCH /api/apps/auth/issues/{issueId}
 ```
 **Required scopes:** `issues:write`
 
-#### Delete Issue
-```http
-DELETE /api/apps/auth/issues/{issueId}
-```
-**Required scopes:** `issues:write`
+#### Issue Trash and Restore
+
+See the authoritative [app API Trash and Restore reference](../public/docs/third-party-api.md#issue-trash-and-restore) for deletion, preview, listing and restoration contracts.
 
 ### Tasks
 
