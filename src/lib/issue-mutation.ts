@@ -122,11 +122,17 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
       }) !== new Set(labelIds).size) {
         return { error: 'Invalid issue labels', status: 400 };
       }
+      if (moving && (await tx.$queryRaw<{ id: string }[]>`
+        SELECT "id" FROM "Issue"
+        WHERE "parentId" = ${existingIssue.id} AND "projectId" <> ${projectId}
+        LIMIT 1
+      `).length) {
+        return { error: 'Project move has incompatible relations', status: 400 };
+      }
       if (moving && await tx.issue.findFirst({
         where: {
           id: existingIssue.id,
           OR: [
-            { children: { some: { projectId: { not: projectId } } } },
             ...(!labelIds ? [{ labels: { some: { workspaceId: { not: existingIssue.workspaceId } } } }] : []),
             { branches: { some: { repository: { projectId: { not: projectId } } } } },
             { commits: { some: { repository: { projectId: { not: projectId } } } } },

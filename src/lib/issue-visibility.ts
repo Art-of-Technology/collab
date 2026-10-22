@@ -49,8 +49,7 @@ export function issueVisibilityExtension(models: readonly Model[]) {
         for (const op of ['some', 'none', 'every']) {
           if (!value[op]) continue;
           const predicate = where(field.type, value[op]);
-          // Deleted rows do not participate in either existential or universal filters.
-          result[name][op] = guard
+          result[name][op] = guard && !(model === 'Version' && name === 'issues' && op === 'every')
             ? op === 'every' ? { OR: [{ NOT: guard }, predicate] } : and(predicate, guard)
             : predicate;
         }
