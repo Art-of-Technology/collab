@@ -1,4 +1,6 @@
 const { assert, test, load, matches } = require('./helpers.cjs');
+const { Prisma } = require('@prisma/client');
+const rewrite = load('src/lib/issue-visibility.ts').issueVisibilityExtension(Prisma.dmmf.datamodel.models).query.$allModels.$allOperations;
 const root = 'src/app/api/workspaces/[workspaceId]/projects/';
 const clone = value => JSON.parse(JSON.stringify(value));
 
@@ -9,7 +11,7 @@ function fixture() {
   const project = { id: 'project', workspaceId: workspace.id, workspace, slug: 'project', name: 'Project', description: '', issuePrefix: 'PRO', color: '#fff', isArchived: false, createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-02'), repository: { id: 'repo', fullName: 'org/repo', webhookSecret: 'fixture-webhook', accessToken: 'fixture-token' } };
   const status = (id, extra = {}) => ({ id, projectId: project.id, project, name: id, displayName: id, color: '#fff', order: 0, isDefault: false, isFinal: false, ...extra });
   state.statuses = [status('backlog', { isDefault: true }), status('done', { isFinal: true }), status('unused')];
-  const issue = (id, extra = {}) => ({ id, workspace, workspaceId: workspace.id, project, projectId: project.id, statusId: 'done', projectStatus: state.statuses[1], startDate: new Date('2026-01-01'), dueDate: new Date('2026-01-02'), ...extra });
+  const issue = (id, extra = {}) => ({ id, deletedAt: null, workspace, workspaceId: workspace.id, project, projectId: project.id, statusId: 'done', projectStatus: state.statuses[1], startDate: new Date('2026-01-01'), dueDate: new Date('2026-01-02'), ...extra });
   state.issues = [issue('visible'), issue('hidden-project', { project: { workspace: hidden } }), issue('hidden-status', { projectStatus: { project: { workspace: hidden } }, startDate: new Date('1999-01-01'), dueDate: new Date('2099-01-01') })];
   function pick(row, args = {}) {
     if (!row) return null;
@@ -36,7 +38,7 @@ function fixture() {
       create: async a => { state.writes.push(['createProject', clone(a.data)]); return pick({ ...project, ...a.data, id: 'new-project' }, a); },
     },
     projectStatus: {
-      findMany: async a => state.statuses.filter(s => matches(s, a.where)).map(s => ({ ...pick(s), _count: { issues: state.issues.filter(i => i.statusId === s.id).length } })),
+      findMany: async a => state.statuses.filter(s => matches(s, a.where)).map(s => ({ ...pick(s), _count: { issues: state.issues.filter(i => i.statusId === s.id && matches(i, a.include?._count?.select?.issues?.where || {})).length } })),
       update: async a => { const s = state.statuses.find(s => matches(s, a.where)); if (!s) throw Error('missing'); state.writes.push(['updateStatus', s.id]); Object.assign(s, a.data); return pick(s); },
       deleteMany: async ({ where }) => { const removed = state.statuses.filter(s => matches(s, where)); state.writes.push(['deleteStatuses', removed.map(s => s.id)]); state.statuses = state.statuses.filter(s => !removed.includes(s)); for (const i of state.issues) if (removed.some(s => s.id === i.statusId)) i.statusId = null; return { count: removed.length }; },
       create: async ({ data }) => { const s = { ...data, id: 'new-' + state.statuses.length }; state.writes.push(['createStatus', s.id]); state.statuses.push(s); return s; },
@@ -46,11 +48,15 @@ function fixture() {
     view: { findFirst: async () => null, create: async ({ data }) => { state.writes.push(['view', clone(data)]); return data; } },
     $transaction: async fn => fn(prisma),
   };
+  const visible = Object.fromEntries(Object.entries(prisma).filter(([name]) => !name.startsWith('$')).map(([name, methods]) =>
+    [name, Object.fromEntries(Object.entries(methods).map(([operation, query]) =>
+      [operation, args => rewrite({ model: name[0].toUpperCase() + name.slice(1), operation, args, query })]))]));
+  visible.$transaction = async fn => fn(visible);
   const env = { env: { COLLAB_AUTH_MODE: 'nextauth', COLLAB_GATEWAY_ISSUER: 'https://identity.example.test' } }, config = {};
   const nextAuth = { getServerSession: async c => { assert.equal(c, config); state.legacy++; return { user: { id: state.subject, email: 'old@example.test' } }; } };
   const globals = { process: env, Buffer, TextDecoder, URL, console: { error() {} } };
   const adapter = load('src/lib/request-session.ts', { 'server-only': {}, './gateway-identity': load('src/lib/gateway-identity.ts', { 'node:crypto': require('node:crypto') }, globals), 'next-auth': nextAuth, '@/lib/prisma': { prisma }, 'next/headers': { headers: () => new Headers({ 'x-collab-issuer': Buffer.from(env.env.COLLAB_GATEWAY_ISSUER).toString('base64url'), 'x-collab-subject': Buffer.from('actor').toString('base64url'), 'x-collab-email': Buffer.from('actor@weezboo.com').toString('base64url'), 'x-collab-email-verified': 'true' }) } }, globals);
-  const deps = { '@/lib/prisma': { prisma }, '@/lib/request-session': adapter, 'next-auth/next': nextAuth, '@/lib/auth': { authConfig: config }, '@/lib/slug-resolvers': { resolveWorkspaceSlug: async v => ['workspace', 'space'].includes(v) ? 'workspace' : null }, '@/constants/project-statuses': load('src/constants/project-statuses.ts'), '@/lib/utils': { generateUniqueViewSlug: async () => 'default-view' }, 'next/server': { NextResponse: Response } };
+  const deps = { '@/lib/prisma': { prisma: visible, issueTrashPrisma: prisma }, '@/lib/request-session': adapter, 'next-auth/next': nextAuth, '@/lib/auth': { authConfig: config }, '@/lib/slug-resolvers': { resolveWorkspaceSlug: async v => ['workspace', 'space'].includes(v) ? 'workspace' : null }, '@/constants/project-statuses': load('src/constants/project-statuses.ts'), '@/lib/utils': { generateUniqueViewSlug: async () => 'default-view' }, 'next/server': { NextResponse: Response } };
   const handlers = Object.fromEntries([['list', 'route.ts'], ['detail', '[projectSlug]/route.ts'], ['gantt', 'gantt/route.ts']].map(([key, path]) => [key, load(root + path, deps, globals)]));
   return { state, workspace, project, env, statuses: () => state.statuses.map(s => ({ id: s.id, name: s.displayName, color: s.color, isDefault: s.isDefault })), invoke: (route, method, body, params = {}) => handlers[route][method](new Request('https://example.test', { method, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) }), { params: Promise.resolve({ workspaceId: 'space', projectSlug: 'project', ...params }) }) };
 }
@@ -72,3 +78,29 @@ test('foreign status ID is only a new-row hint and never updates another project
 test('duplicate IDs and colliding internal names reject before writes', async () => { for (const collision of ['id', 'name']) { const f = fixture(); const statuses = f.statuses(); statuses.push(collision === 'id' ? { ...statuses[0] } : { id: 'new', name: 'Done', color: '#fff' }); assert.equal((await f.invoke('detail', 'PATCH', { statuses })).status, collision === 'id' ? 400 : 409); assert.deepEqual(f.state.writes, []); } });
 test('Gantt no-visible-issue fallback retains thirty-day no-data behavior', async () => { const f = fixture(); f.state.issues = f.state.issues.slice(1); const r = await f.invoke('gantt', 'GET'); assert.equal(r.status, 200); const p = (await r.json()).projects[0]; assert.equal(p.issueCount, 0); assert.equal(p.health, 'no_data'); assert.equal(p.progress, 0); assert.equal(p.dueDate, '2026-01-31T00:00:00.000Z'); });
 for (const [r, m, b] of calls) test(`${r} ${m} gateway mapping and revocation without legacy fallback`, async () => { const f = fixture(); f.env.env.COLLAB_AUTH_MODE = 'gateway'; assert.equal((await f.invoke(r, m, b)).status, m === 'POST' ? 201 : 200); assert.equal(f.state.legacy, 0); f.state.mapping = false; f.state.writes = []; assert.equal((await f.invoke(r, m, b)).status, 401); assert.equal(f.state.legacy, 0); assert.deepEqual(f.state.writes, []); });
+
+test('settings cannot remove a status used only by Trash and keeps display counts filtered', async () => {
+  const f = fixture();
+  f.state.issues = [f.state.issues[0]];
+  f.state.issues[0].deletedAt = new Date();
+  const before = f.state.issues[0].statusId;
+  const get = await f.invoke('detail', 'GET');
+  assert.equal(get.status, 200);
+  assert.equal((await get.json()).project.issueCount, 0);
+  const rejected = await f.invoke('detail', 'PATCH', {
+    name: 'Changed', statuses: f.statuses().filter(s => s.id !== 'done'),
+  });
+  assert.equal(rejected.status, 409);
+  assert.deepEqual(f.state.writes, []);
+  assert.equal(f.state.issues[0].statusId, before);
+  assert.equal(f.project.name, 'Project');
+  const saved = await f.invoke('detail', 'PATCH', {
+    name: 'Changed', statuses: f.statuses().filter(s => s.id !== 'unused'),
+  });
+  assert.equal(saved.status, 200);
+  assert.equal((await saved.json()).project.issueCount, 0);
+  assert.equal(f.state.issues[0].statusId, before);
+  f.state.issues[0].deletedAt = null;
+  assert.equal((await (await f.invoke('detail', 'GET')).json()).project.issueCount, 1);
+  assert.equal(f.state.issues[0].statusId, before);
+});
