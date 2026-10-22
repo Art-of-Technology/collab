@@ -36,24 +36,13 @@ export const GET = withAppAuth(
         where.userId = userId;
       }
 
-      // If filtering by project, we need to find issues in that project first
-      let issueIds: string[] | undefined;
-      if (projectId) {
-        const projectIssues = await prisma.issue.findMany({
-          where: { projectId },
-          select: { id: true },
-        });
-        issueIds = projectIssues.map(i => i.id);
-        if (issueIds.length === 0) {
-          // No issues in this project
-          return NextResponse.json({
-            activities: [],
-            pagination: { page, limit, total: 0, pages: 0 },
-            filters: { action, userId, projectId, limit },
-          });
-        }
-        where.itemId = { in: issueIds };
-      }
+      // Activity rows have no Issue FK: scope them to currently visible issues.
+      const visibleIssues = await prisma.issue.findMany({
+        where: { workspaceId: context.workspace.id, ...(projectId ? { projectId } : {}) },
+        select: { id: true },
+      });
+      where.itemType = 'ISSUE';
+      where.itemId = { in: visibleIssues.map(issue => issue.id) };
 
       const [activities, total] = await Promise.all([
         prisma.issueActivity.findMany({

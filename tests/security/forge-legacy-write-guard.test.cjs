@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
 const ts = require('typescript');
+const { matches } = require('./helpers.cjs');
 
 function load(relative, dependencies) {
   const file = path.resolve(__dirname, '../../', relative);
@@ -20,8 +21,8 @@ function load(relative, dependencies) {
 function fixture() {
   let bindings = [{ projectId: 'forge', workspaceId: 'workspace' }], writes = 0;
   const issues = [
-    { id: 'bound', projectId: 'forge', workspaceId: 'workspace', workspace: { ownerId: 'actor', members: [] } },
-    { id: 'legacy', projectId: 'ordinary', workspaceId: 'workspace', workspace: { ownerId: 'actor', members: [] } },
+    { id: 'bound', projectId: 'forge', workspaceId: 'workspace', workspace: { ownerId: 'actor', members: [] }, deletedAt: null, deletedById: null, updatedAt: new Date('2026-10-22T10:00:00Z') },
+    { id: 'legacy', projectId: 'ordinary', workspaceId: 'workspace', workspace: { ownerId: 'actor', members: [] }, deletedAt: null, deletedById: null, updatedAt: new Date('2026-10-22T10:00:00Z') },
   ];
   const projects = [{ id: 'forge', workspaceId: 'workspace' }, { id: 'ordinary', workspaceId: 'workspace' }];
   const relations = [];
@@ -40,8 +41,10 @@ function fixture() {
             return matchesIssue(issues.find(candidate => candidate.id === relation[`${endpoint}Id`]), condition);
           }));
       }
-      assert.ok(['id', 'projectId', 'workspaceId'].includes(key), `Unsupported issue predicate: ${key}`);
-      return typeof value === 'object' ? value.in.includes(issue[key]) : issue[key] === value;
+      assert.ok(['id', 'issueKey', 'projectId', 'workspaceId', 'deletedAt', 'updatedAt'].includes(key), `Unsupported issue predicate: ${key}`);
+      if (value === null) return issue[key] === null;
+      if (value instanceof Date) return issue[key]?.getTime() === value.getTime();
+      return typeof value === 'object' ? ('not' in value ? issue[key] !== value.not : value.in.includes(issue[key])) : issue[key] === value;
     });
   }
   const mutate = async () => { writes++; return { id: 'comment', authorId: 'actor' }; };
@@ -50,6 +53,8 @@ function fixture() {
       findMany: async ({ where }) => issues.filter(issue => matchesIssue(issue, where)),
       findFirst: async ({ where }) => issues.find(issue => matchesIssue(issue, where)) ?? null,
       findUnique: async ({ where }) => issues.find(issue => issue.id === where.id) ?? null,
+      count: async ({ where }) => issues.filter(issue => matchesIssue(issue, where)).length,
+      update: async ({ where, data }) => { const issue = issues.find(row => matchesIssue(row, where)); assert.ok(issue); writes++; Object.assign(issue, data); return issue; },
       delete: mutate,
     },
     issueFollower: { findMany: async () => [] },
@@ -57,19 +62,21 @@ function fixture() {
     issueComment: { create: mutate, update: mutate, delete: mutate, findFirst: async () => ({ id: 'comment', authorId: 'actor', replies: [] }), findMany: async () => [] },
     issueCommentReaction: { create: mutate, delete: mutate, findFirst: async () => null },
     issueRelation: { upsert: mutate },
-    workspace: { findFirst: async () => ({ id: 'workspace' }), findUnique: async ({ where }) => ({ id: where.id, ownerId: 'actor' }), delete: mutate },
+    workspace: { findFirst: async ({ where }) => ['workspace', 'other'].map(id => ({ id, slug: id, name: id, ownerId: 'actor', members: [] })).find(row => matches(row, where)) || null, findUnique: async ({ where }) => ({ id: where.id, ownerId: 'actor' }), delete: mutate },
+    project: { findFirst: async ({ where }) => projects.find(row => matches(row, where)) || null },
+    issueDeletionAudit: { create: mutate }, issueActivity: { create: mutate },
     user: { findUnique: async () => ({ id: 'actor' }) },
     $transaction: async operation => { writes++; return typeof operation === 'function' ? operation(prisma) : Promise.all(operation); },
   };
   const guard = load('src/lib/forge/legacy-write-guard.ts', {
-    'server-only': {}, '@/lib/prisma': { prisma }, './reader': { readForgeBindings: async () => {
+    'server-only': {}, '@/lib/prisma': { prisma, issueTrashPrisma: prisma }, './reader': { readForgeBindings: async () => {
       if (bindings instanceof Error) throw bindings;
       return bindings;
     } },
   });
   const dependencies = {
     '@/lib/forge/legacy-write-guard': guard,
-    '@/lib/prisma': { prisma },
+    '@/lib/prisma': { prisma, issueTrashPrisma: prisma },
     '@/lib/session': { getCurrentUser: async () => ({ id: 'actor' }) },
     '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'actor', email: 'actor@example.test' } }) },
     '@/lib/auth-options': { authOptions: {} },
@@ -77,7 +84,13 @@ function fixture() {
     '@/utils/mentions': { extractMentionUserIds: () => [] },
     '@/lib/post-access': {},
     '@/lib/notification-service': {}, 'next/cache': { revalidatePath() {} },
+    'server-only': {},
+    '@/lib/permissions': { Permission: { DELETE_ANY_TASK: 'any', DELETE_SELF_TASK: 'self' }, checkUserPermissions: async () => ({ any: { hasPermission: true }, self: { hasPermission: true } }), canActOnOwnContent: () => true },
+    '@/lib/event-bus': { emitIssueCreated: async () => {}, emitIssueDeleted: async () => {} },
+    '@/lib/agent-label-triggers': load('src/lib/agent-label-triggers.ts', {}),
   };
+  dependencies['@/lib/issue-trash'] = load('src/lib/issue-trash.ts', dependencies);
+  dependencies['@/lib/issue-trash-response'] = load('src/lib/issue-trash-response.ts', dependencies);
   return { guard, dependencies, issues, projects, relations, writes: () => writes, bind: value => { bindings = value; } };
 }
 const request = body => new Request('http://localhost/api/issues', { method: 'POST', body: JSON.stringify(body) });
@@ -184,7 +197,8 @@ test('issue deletion denies connected cascade endpoints in either direction and 
     await f.guard.assertLegacyIssueWriteAllowed('legacy');
     const response = await route.DELETE(request({}), params('legacy'));
     assert.equal(response.status, link === 'unrelated' ? 200 : 409, link);
-    assert.equal(f.writes(), link === 'unrelated' ? 1 : 0, link);
+    assert.equal(f.writes(), link === 'unrelated' ? 4 : 0, link);
+    if (link === 'unrelated') assert.ok(f.issues.find(issue => issue.id === 'legacy').deletedAt instanceof Date);
   }
 });
 
@@ -200,18 +214,17 @@ test('both workspace deletion callers deny relation cascades through either issu
           sourceIssueId: direction === 'incoming' ? 'bound' : 'legacy',
           targetIssueId: direction === 'outgoing' ? 'bound' : direction === 'incoming' ? 'legacy' : 'ordinary-peer',
         });
-        const allowed = direction === 'unrelated';
+        const unrelated = direction === 'unrelated';
         const context = `${caller}/${foreignKey}/${direction}`;
         if (caller === 'route') {
           const route = load('src/app/api/workspaces/[workspaceId]/route.ts', f.dependencies);
           const response = await route.DELETE(request({}), { params: Promise.resolve({ workspaceId: 'other' }) });
-          assert.equal(response.status, allowed ? 200 : 409, context);
+          assert.equal(response.status, 409, context);
         } else {
           const actions = load('src/actions/workspace.ts', { ...f.dependencies, '@/lib/auth': {}, '@/lib/utils': {} });
-          if (allowed) assert.deepEqual(await actions.deleteWorkspace('other'), { success: true });
-          else await assert.rejects(actions.deleteWorkspace('other'), f.guard.ForgeProjectWriteError, context);
+          await assert.rejects(actions.deleteWorkspace('other'), unrelated ? f.dependencies['@/lib/issue-trash'].IssueTrashError : f.guard.ForgeProjectWriteError, context);
         }
-        assert.equal(f.writes(), allowed ? 1 : 0, context);
+        assert.equal(f.writes(), 0, context);
       }
     }
   }

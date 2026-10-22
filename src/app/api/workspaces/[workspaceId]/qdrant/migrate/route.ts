@@ -157,10 +157,12 @@ export async function POST(
     // -----------------------------------------------------------------------
     console.log(`[qdrant-migrate] Starting activity migration for workspace ${workspaceId}...`);
 
+    const visibleIssues = await prisma.issue.findMany({ where: { workspaceId }, select: { id: true } });
+    const visibleActivityWhere = { workspaceId, itemType: 'ISSUE', itemId: { in: visibleIssues.map(issue => issue.id) } };
     let activityOffset = 0;
     while (true) {
       const activities = await prisma.issueActivity.findMany({
-        where: { workspaceId },
+        where: visibleActivityWhere,
         select: {
           id: true,
           action: true,
@@ -343,10 +345,11 @@ export async function GET(
 
     const collectionInfo = await getCollectionInfo();
 
+    const visibleIssues = await prisma.issue.findMany({ where: { workspaceId }, select: { id: true } });
     // Get PostgreSQL counts for comparison
     const [issueCount, activityCount, contextCount] = await Promise.all([
       prisma.issue.count({ where: { workspaceId } }),
-      prisma.issueActivity.count({ where: { workspaceId } }),
+      prisma.issueActivity.count({ where: { workspaceId, itemType: 'ISSUE', itemId: { in: visibleIssues.map(issue => issue.id) } } }),
       prisma.note.count({ where: { workspaceId, isEncrypted: false } }),
     ]);
 

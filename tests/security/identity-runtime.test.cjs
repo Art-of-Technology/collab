@@ -18,6 +18,7 @@ test('legacy Slack commands are unavailable and never read or create tasks', asy
 test('Prisma excludes credentials from default and nested reads; explicit auth selection still works', async () => {
   const { prisma: client } = load('src/lib/prisma.ts', {
     '@prisma/client': require('@prisma/client'),
+    './issue-visibility': load('src/lib/issue-visibility.ts'),
   }, { global: {}, process: { env: { NODE_ENV: 'test' } } });
   const queries = [];
   // Capture the real client's emitted engine protocol; no database is contacted.

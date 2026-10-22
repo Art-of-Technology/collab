@@ -1,6 +1,6 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
+import { prisma, issueTrashPrisma } from '@/lib/prisma';
 import { readForgeBindings } from './reader';
 
 export class ForgeProjectWriteError extends Error {
@@ -25,7 +25,7 @@ export async function assertLegacyIssueDeleteAllowed(issueId: string) {
 
 async function assertIssueDeletionAllowed(deleted: Prisma.IssueWhereInput, projectIds: string[]) {
   if (!projectIds.length) return;
-  const affected = await prisma.issue.findFirst({
+  const affected = await issueTrashPrisma.issue.findFirst({
     where: {
       projectId: { in: projectIds },
       OR: [

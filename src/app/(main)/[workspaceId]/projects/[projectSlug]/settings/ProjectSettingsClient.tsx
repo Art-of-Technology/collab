@@ -53,6 +53,7 @@ import {
 import { isValidNewIssuePrefix } from "@/lib/shared-issue-key-utils";
 import { GitConnections } from "@/components/git-providers/GitConnections";
 import { GitHubOAuthConnection } from "@/components/github/GitHubOAuthConnection";
+import { IssueTrash } from "@/components/issues/IssueTrash";
 
 interface ProjectSettingsClientProps {
   workspaceId: string;
@@ -60,12 +61,13 @@ interface ProjectSettingsClientProps {
 }
 
 // Tab configuration
-type SettingsTab = "general" | "statuses" | "github" | "danger";
+type SettingsTab = "general" | "statuses" | "github" | "trash" | "danger";
 
 const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "general", label: "General", icon: <FileText className="h-4 w-4" /> },
   { id: "statuses", label: "Statuses", icon: <Circle className="h-4 w-4" /> },
   { id: "github", label: "Git providers", icon: <Github className="h-4 w-4" /> },
+  { id: "trash", label: "Trash", icon: <Trash2 className="h-4 w-4" /> },
   { id: "danger", label: "Danger Zone", icon: <AlertTriangle className="h-4 w-4" /> },
 ];
 
@@ -92,7 +94,7 @@ export default function ProjectSettingsClient({
   const { currentWorkspace } = useWorkspace();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    searchParams.get("tab") === "github" ? "github" : "general"
+    searchParams.get("tab") === "trash" ? "trash" : searchParams.get("tab") === "github" ? "github" : "general"
   );
   const [saving, setSaving] = useState(false);
 
@@ -784,6 +786,8 @@ export default function ProjectSettingsClient({
               <GitConnections projectId={project.id} />
             </div>
           )}
+
+          {activeTab === "trash" && <IssueTrash workspaceId={currentWorkspace?.id ?? project.workspaceId ?? workspaceId} projectId={project.id} />}
 
           {/* Danger Zone Tab */}
           {activeTab === "danger" && (

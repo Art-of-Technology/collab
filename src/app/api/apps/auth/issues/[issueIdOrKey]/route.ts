@@ -1,4 +1,6 @@
-import { ForgeProjectWriteError, assertLegacyIssueDeleteAllowed, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
+import { changeIssueTrash, IssueTrashError } from '@/lib/issue-trash';
+import { issueTrashErrorResponse } from '@/lib/issue-trash-response';
+import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
 /**
  * Third-Party App API: Single Issue Endpoints
  * GET /api/apps/auth/issues/:issueIdOrKey - Get issue details
@@ -12,7 +14,7 @@ import { Prisma } from '@prisma/client';
 import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
-import { emitIssueUpdated, emitIssueDeleted } from '@/lib/event-bus';
+import { emitIssueUpdated } from '@/lib/event-bus';
 
 // Schema for updating issues
 const UpdateIssueSchema = z.object({
@@ -451,52 +453,13 @@ export const PATCH = withAppAuth(
 export const DELETE = withAppAuth(
   async (request: NextRequest, context: AppAuthContext, { params }: { params: Promise<{ issueIdOrKey: string }> }) => {
     try {
-      const { issueIdOrKey } = await params;
-
-      const existingIssue = await findIssue(issueIdOrKey, context.workspace.id);
-      if (!existingIssue) {
-        return NextResponse.json(
-          { error: 'not_found', error_description: 'Issue not found' },
-          { status: 404 }
-        );
-      }
-
-      await assertLegacyIssueDeleteAllowed(existingIssue.id);
-
-      // Delete the issue
-      await prisma.issue.delete({
-        where: { id: existingIssue.id },
-      });
-
-      // Fire-and-forget Qdrant sync
-      emitIssueDeleted(
-        { id: existingIssue.id },
-        {
-          userId: context.user.id,
-          workspaceId: context.workspace.id,
-          workspaceName: context.workspace.name || '',
-          workspaceSlug: context.workspace.slug || '',
-          source: 'mcp-api',
-        },
-        { async: true }
-      ).catch(() => {});
-
-      return NextResponse.json({
-        message: 'Issue deleted successfully',
-        deletedIssue: {
-          id: existingIssue.id,
-          issueKey: existingIssue.issueKey,
-          title: existingIssue.title,
-        },
-      });
-    } catch (error) {
-      if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
-      console.error('Error deleting issue:', error);
-      return NextResponse.json(
-        { error: 'server_error', error_description: 'Internal server error' },
-        { status: 500 }
-      );
-    }
+      const projectId = new URL(request.url).searchParams.get('projectId');
+      if (!projectId) throw new IssueTrashError(400, 'Project is required');
+      const deletedIssue = await changeIssueTrash({ idOrKey: (await params).issueIdOrKey,
+        workspaceId: context.workspace.id, projectId, action: 'TRASHED',
+        actor: { userId: context.user.id, client: 'app', appId: context.app.id, installationId: context.installation.id } });
+      return NextResponse.json({ message: 'Issue moved to Trash', deletedIssue });
+    } catch (error) { return issueTrashErrorResponse(error); }
   },
   { requiredScopes: ['issues:write'] }
 );

@@ -1,3 +1,5 @@
+import { changeIssueTrash } from '@/lib/issue-trash';
+import { issueTrashErrorResponse } from '@/lib/issue-trash-response';
 import { ForgeProjectWriteError, assertLegacyIssueDeleteAllowed } from '@/lib/forge/legacy-write-guard';
 import { Prisma } from '@prisma/client';
 import { checkUserPermissions, canActOnOwnContent, Permission } from '@/lib/permissions';
@@ -8,7 +10,7 @@ import { trackFieldChanges, createActivity, compareObjects, trackAssignment, tra
 import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
-import { emitIssueUpdated, emitIssueDeleted } from "@/lib/event-bus";
+import { emitIssueUpdated } from "@/lib/event-bus";
 import { findIssueByIdOrKey, getStandardIssueInclude, userHasWorkspaceAccess } from "@/lib/issue-finder";
 import { updateIssue } from "@/lib/issue-mutation";
 
@@ -328,16 +330,11 @@ export async function DELETE(
       userId: currentUser.id
     });
 
-    if (!existingIssue) {
+    const projectId = url.searchParams.get('projectId');
+    if (!existingIssue || (projectId && existingIssue.projectId !== projectId)) {
       return NextResponse.json({ error: "Issue not found" }, { status: 404 });
     }
     
-    // Get full issue data with workspace for webhook
-    const issueWithWorkspace = await prisma.issue.findUnique({
-      where: { id: existingIssue.id },
-      include: { workspace: { select: { id: true, name: true, slug: true } } }
-    });
-
     // Check workspace access and ownership
     const hasAccess = await userHasWorkspaceAccess(currentUser.id, existingIssue.workspaceId);
 
@@ -383,27 +380,8 @@ export async function DELETE(
       console.warn('[ISSUES_DELETE_NOTIFY_PREP]', prepErr);
     }
 
-    // Emit webhook event before deletion (while we still have the data)
-    try {
-      await emitIssueDeleted(
-        existingIssue,
-        {
-          userId: currentUser.id,
-          workspaceId: existingIssue.workspaceId,
-          workspaceName: issueWithWorkspace?.workspace?.name || '',
-          workspaceSlug: issueWithWorkspace?.workspace?.slug || '',
-          source: 'api'
-        },
-        { async: true } // Don't block the deletion
-      );
-    } catch (webhookError) {
-      console.warn('[ISSUES_DELETE_WEBHOOK]', webhookError);
-    }
-
-    // Delete the issue
-    await prisma.issue.delete({
-      where: { id: existingIssue.id }
-    });
+    await changeIssueTrash({ idOrKey: existingIssue.id, workspaceId: existingIssue.workspaceId,
+      projectId: existingIssue.projectId, action: 'TRASHED', actor: { userId: currentUser.id, client: 'browser' } });
 
     // Send deletion notifications
     try {
@@ -413,7 +391,7 @@ export async function DELETE(
           select: { userId: true }
         });
         const pfSet = new Set(projectFollowers.map(pf => pf.userId));
-        const content = `@[${currentUser.name}](${currentUser.id}) deleted an issue #[${(existingIssue as any).issueKey}](${existingIssue.id})`;
+        const content = `@[${currentUser.name}](${currentUser.id}) moved an issue to Trash #[${(existingIssue as any).issueKey}](${existingIssue.id})`;
 
         const projectRecipients = deletionRecipients.filter((id) => pfSet.has(id));
         const standardRecipients = deletionRecipients.filter((id) => !pfSet.has(id));
@@ -441,14 +419,9 @@ export async function DELETE(
       console.warn('[ISSUES_DELETE_NOTIFY]', notificationError);
     }
 
-    return NextResponse.json({ message: "Issue deleted successfully" });
+    return NextResponse.json({ message: "Issue moved to Trash" });
 
   } catch (error) {
-    if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
-    console.error("Error deleting issue:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return issueTrashErrorResponse(error);
   }
 }

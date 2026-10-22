@@ -123,8 +123,9 @@ async function getWorkloadContext(workspaceId: string, prisma: any) {
 
 async function getRecentChangesContext(workspaceId: string, prisma: any) {
   try {
+    const visibleIssues = await prisma.issue.findMany({ where: { workspaceId }, select: { id: true } });
     const recentActivities = await prisma.issueActivity.findMany({
-      where: { workspaceId },
+      where: { workspaceId, itemType: 'ISSUE', itemId: { in: visibleIssues.map((issue: { id: string }) => issue.id) } },
       orderBy: { createdAt: 'desc' },
       take: 10,
       select: {

@@ -46,9 +46,9 @@ Module.syncBuiltinESMExports();
   return { dir, contract, run };
 }
 
-test('actual bootstrap CLI emits one guarded schema transaction with exact supplements then 12 native baselines', t => {
+test('actual bootstrap CLI emits one guarded schema transaction with exact supplements then ordered native baselines', t => {
   const { contract, run } = fixture(t), result = run();
-  assert.equal(result.status, 0, result.stderr); assert.equal(result.calls.length, 14);
+  assert.equal(result.status, 0, result.stderr); assert.equal(result.calls.length, contract.migrations.length + 2);
   assert.deepEqual(result.calls[0].args.slice(1, 4), ['migrate', 'diff', '--from-empty']);
   const apply = result.calls[1]; assert.equal(apply.command, 'psql');
   assert.deepEqual(apply.args, ['-X', '-q', '-w', '-v', 'ON_ERROR_STOP=1', '--file=-']);
@@ -65,15 +65,20 @@ test('actual bootstrap CLI emits one guarded schema transaction with exact suppl
   const tail = version.slice(version.indexOf('CREATE FUNCTION "retain_version_access_invalidation"'));
   assert.ok(apply.input.includes(schemaSql + '\nALTER TABLE "ForgeExecutionAttempt" ADD ' + check + ';\n' + active + '\n' + tail + '\nCOMMIT;'));
   assert.ok(!apply.input.includes('ADD COLUMN "issueAccessInvalidated"'), 'modeled flag is generated once; historical existing-row backfill is not replayed');
+  assert.deepEqual(contract.migrations.slice(-3).map(row => row.name), [
+    '20261017000100_agent_handoffs', '20261021223000_git_provider_connections', '20261022190000_issue_trash',
+  ]);
+  assert.ok(!apply.input.includes('ADD COLUMN "deletedAt"'), 'Trash columns and restrictive FKs come from the current schema, not replayed upgrade SQL');
   assert.deepEqual(result.calls.slice(2).map(call => call.args.at(-1)), contract.migrations.map(row => row.name));
   assert.ok(result.calls.slice(2).every(call => call.args[2] === 'resolve' && call.args.at(-2) === '--applied'));
 });
 
-for (const change of ['schema', 'migration', 'added-history', 'cli']) test(`changed ${change} refuses before generation or connection`, t => {
+for (const change of ['schema', 'migration', 'added-history', 'removed-history', 'cli']) test(`changed ${change} refuses before generation or connection`, t => {
   const { dir, contract, run } = fixture(t);
   if (change === 'schema') fs.appendFileSync(path.join(dir, 'prisma/schema.prisma'), '\n// drift\n');
   if (change === 'migration') fs.appendFileSync(path.join(dir, 'prisma/migrations', contract.migrations[0].name, 'migration.sql'), '\n-- drift\n');
   if (change === 'added-history') fs.mkdirSync(path.join(dir, 'prisma/migrations/new-migration'));
+  if (change === 'removed-history') fs.rmSync(path.join(dir, 'prisma/migrations', contract.migrations.at(-1).name), { recursive: true });
   const result = run(change === 'cli' ? { FIXTURE_VERSION: '7.0.0' } : {});
   assert.equal(result.status, 1); assert.equal(result.calls.length, 0); assert.match(result.stderr, /Requalify/);
 });

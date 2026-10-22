@@ -7,6 +7,7 @@ const { runInNewContext } = require('node:vm');
 const ts = require('typescript');
 
 function load(file, dependencies = {}, globals = {}) {
+  dependencies = { ...dependencies };
   const exports = {};
   const source = readFileSync(resolve(process.env.SECURITY_TEST_ROOT || resolve(__dirname, '../../'), file), 'utf8');
   const { outputText } = ts.transpileModule(source, {
@@ -16,10 +17,29 @@ function load(file, dependencies = {}, globals = {}) {
     exports,
     ...globals,
     require(name) {
+      if (!(name in dependencies) && ['@/lib/issue-trash', '@/lib/issue-trash-response', '@/lib/issue-trash-browser'].includes(name)) {
+        // Keep error classes shared while exercising the actual lifecycle. A fixture must
+        // supply every database operation and event needed by the path it invokes.
+        const database = dependencies['@/lib/prisma'] || {};
+        const trashDependencies = { ...dependencies, 'server-only': {},
+          '@/lib/prisma': { ...database, issueTrashPrisma: database.issueTrashPrisma || database.prisma },
+        };
+        trashDependencies['@/lib/permissions'] ||= load('src/lib/permissions.ts', { './prisma': database }, globals);
+        const unexpectedEvent = () => { throw new Error('Unexpected issue lifecycle event; provide a fixture'); };
+        trashDependencies['@/lib/event-bus'] ||= { emitIssueCreated: unexpectedEvent, emitIssueDeleted: unexpectedEvent };
+        dependencies['@/lib/forge/legacy-write-guard'] ||= load('src/lib/forge/legacy-write-guard.ts', {
+          './reader': { readForgeBindings: async () => [] }, ...trashDependencies,
+        }, globals);
+        trashDependencies['@/lib/forge/legacy-write-guard'] = dependencies['@/lib/forge/legacy-write-guard'];
+        dependencies['@/lib/issue-trash'] ||= load('src/lib/issue-trash.ts', trashDependencies, globals);
+        if (!(name in dependencies)) dependencies[name] = load(`src/${name.slice(2)}.ts`, dependencies, globals);
+        return dependencies[name];
+      }
       if (!(name in dependencies) && name === '@/lib/forge/legacy-write-guard') {
         return load('src/lib/forge/legacy-write-guard.ts', {
           'server-only': {}, './reader': { readForgeBindings: async () => [] },
           ...dependencies,
+          '@/lib/prisma': { ...dependencies['@/lib/prisma'], issueTrashPrisma: dependencies['@/lib/prisma']?.issueTrashPrisma || dependencies['@/lib/prisma']?.prisma },
         }, globals);
       }
       if (!(name in dependencies) && name === '@/lib/request-session') {

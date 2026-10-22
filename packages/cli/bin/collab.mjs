@@ -31,6 +31,17 @@ function parse(argv) {
 function allowed(options, names) {
   if (Object.keys(options).some(key => !names.includes(key))) throw new CliError('unknown_option', `Supported options: ${names.map(n => `--${n}`).join(', ')}`);
 }
+function checkedDeletePreview(value, identifier, projectId) {
+  if (!value || typeof value.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(value.id) ||
+      !(value.issueKey === null || typeof value.issueKey === 'string') || typeof value.title !== 'string' ||
+      value.projectId !== projectId || (value.id !== identifier && value.issueKey !== identifier) ||
+      value.counts?.issues !== 1 || ['comments', 'relations', 'workLogs'].some(key => !Number.isSafeInteger(value.counts?.[key]) || value.counts[key] < 0)) {
+    throw new CliError('invalid_preview', 'Deletion preview did not match the requested issue and project, or its affected counts were invalid. No deletion was sent.', 5);
+  }
+  const { id, issueKey, title } = value;
+  const { issues, comments, relations, workLogs } = value.counts;
+  return { id, issueKey, title, projectId, counts: { issues, comments, relations, workLogs } };
+}
 function converted(value, type) {
   if (type === 'string') return value;
   if (type === 'boolean' && ['true', 'false'].includes(value)) return value === 'true';
@@ -53,7 +64,7 @@ async function boundedInput(file) {
   } finally { clearTimeout(timer); if (file !== '-') stream.destroy(); }
 }
 function help() {
-  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
+  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors and issue deletion previews on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
 }
 async function main() {
   const { words, options } = parse(process.argv.slice(2));
@@ -93,7 +104,10 @@ async function main() {
   if (args.length !== parameters.length || args.some(a => !/^[a-zA-Z0-9_-]+$/.test(a))) throw new CliError('invalid_identifier', `Expected ${parameters.length} ID/key argument(s); only letters, digits, underscores and hyphens allowed.`);
   allowed(options, [...globals, ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...Object.keys(spec.localOptions || {}).map(flagName), 'input', 'content-file', 'description-file', 'yes', 'dry-run', 'all']);
   if (options.all && !spec.pagination) throw new CliError('unsupported_pagination', '--all is supported only for issues, notes and worklogs lists.');
-  if (spec.method === 'DELETE' && !options.yes) throw new CliError('confirmation_required', 'Deletion requires --yes.');
+  if (spec.method === 'DELETE' && !options.yes && !(spec.deletePreview && options['dry-run'])) throw new CliError('confirmation_required', 'Deletion requires --yes.');
+  if (spec.requiredQuery?.includes('projectId') && options.project && options['project-id'] && options.project !== options['project-id']) {
+    throw new CliError('conflicting_project', '--project and --project-id must identify the same project.');
+  }
   const body = {};
   if (options.input) {
     if (!Object.keys(spec.fields).length) throw new CliError('invalid_input', 'This command does not accept a body.');
@@ -181,6 +195,14 @@ async function main() {
           return request(selected.base, `/api/apps/auth/agents/inbox?${q}`, { token: selected.token, timeout, signal });
         } });
     } finally { process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop); }
+  }
+  if (spec.deletePreview) {
+    const previewPath = `/api/apps/auth/${endpoint}/delete-preview?${query}`;
+    const preview = checkedDeletePreview(await request(selected.base, previewPath, { token: selected.token, timeout }), args[0], query.get('projectId'));
+    // Bind the mutation to the resolved immutable ID rather than looking up the key again.
+    endpoint = `issues/${encodeURIComponent(preview.id)}`;
+    if (options['dry-run']) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), preview };
+    await new Promise((resolve, reject) => process.stderr.write(JSON.stringify({ deletePreview: preview }) + '\n', error => error ? reject(error) : resolve()));
   }
   if (options['dry-run']) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), body: payload };
   const send = async (requestTimeout = timeout) => {

@@ -48,9 +48,13 @@ export async function GET(
     const userIds = userIdsStr ? userIdsStr.split(',').filter(Boolean) : undefined;
     const limit = limitStr ? parseInt(limitStr, 10) : 50;
 
+    const visibleIssues = await prisma.issue.findMany({ where: { workspaceId }, select: { id: true } });
+    const visibleActivityWhere = { itemType: 'ISSUE', itemId: { in: visibleIssues.map(issue => issue.id) } };
+
     // Fetch activities
     const activities = await prisma.issueActivity.findMany({
       where: {
+        ...visibleActivityWhere,
         workspaceId,
         createdAt: {
           gte: startDate,

@@ -6,6 +6,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const root = path.resolve(__dirname, '../..');
+const contract = JSON.parse(fs.readFileSync(path.join(root, 'prisma/bootstrap-contract.json'), 'utf8'));
 const run = (command, args, env) => spawnSync(command, args, { cwd: root, env: { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('PG'))), ...env }, encoding: 'utf8', timeout: 180000 });
 
 test('fixture runner removes ambient PG variables and preserves explicit overrides', () => {
@@ -51,11 +52,17 @@ test('native fresh bootstrap, subsequent migrations, and populated-target refusa
     const [fresh, legacy, namespace, unknown] = names;
     assert.equal(run(process.execPath, ['scripts/bootstrap-empty-database.mjs', '--empty-database-only'], { ...target(fresh), PGHOSTADDR: '127.0.0.2', PGHOST: 'ignored.example.test', PGPORT: '1', PGDATABASE: 'ignored' }).status, 0, 'bootstrap a truly empty target');
     for (const command of ['status', 'deploy']) assert.equal(run(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', command], target(fresh)).status, 0, 'native migration command succeeds after baseline');
-    assert.equal(query(fresh, 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL'), '12');
+    assert.equal(query(fresh, 'SELECT migration_name || \':\' || checksum FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name'), contract.migrations.map(row => row.name + ':' + row.sha256).join('\n'));
+    assert.equal(run(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'diff', '--from-schema-datasource', 'prisma/schema.prisma', '--to-schema-datamodel', 'prisma/schema.prisma', '--exit-code'], target(fresh)).status, 0, 'bootstrapped database matches the complete current model');
+    assert.equal(query(fresh, `SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('AgentRegistration','AgentHandoff','AgentReceipt','GitConnection','GitConnectionActivity','IssueDeletionAudit')`), '6');
+    assert.equal(query(fresh, `SELECT column_name || ':' || data_type || ':' || is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='Issue' AND column_name IN ('deletedAt','deletedById') ORDER BY column_name`), 'deletedAt:timestamp without time zone:YES\ndeletedById:text:YES');
+    assert.equal(query(fresh, `SELECT count(*) FROM pg_constraint WHERE conrelid='"Issue"'::regclass AND conname IN ('Issue_projectId_fkey','Issue_workspaceId_fkey') AND confdeltype='r'`), '2');
+    assert.equal(query(fresh, `SELECT count(*) FROM pg_constraint WHERE conrelid='"IssueDeletionAudit"'::regclass AND contype='f'`), '0', 'durable audit snapshots must not cascade with entity deletion');
+    assert.equal(query(fresh, `SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND indexname IN ('Issue_projectId_deletedAt_idx','Issue_workspaceId_deletedAt_idx','IssueDeletionAudit_workspaceId_createdAt_idx','IssueDeletionAudit_issueId_createdAt_idx')`), '4');
     assert.equal(query(fresh, "SELECT count(*) FROM pg_constraint WHERE conname='ForgeExecutionAttempt_state_check' AND contype='c'"), '1');
     assert.equal(query(fresh, "SELECT count(*) FROM pg_constraint WHERE conname='ForgeExecutionAttempt_projectId_fkey' AND confdeltype='r'"), '1');
     assert.equal(query(fresh, "SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname='ForgeExecutionAttempt_active_issue_key' AND i.indisunique AND i.indpred IS NOT NULL"), '1');
-    const catalog = JSON.parse(fs.readFileSync(path.join(root, 'prisma/bootstrap-contract.json'), 'utf8')).unmodeledCatalog;
+    const catalog = contract.unmodeledCatalog;
     for (const { name, table } of catalog.versionFunctionsAndTriggers) {
       assert.equal(query(fresh, `SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname='${name}' AND p.prorettype='trigger'::regtype`), '1');
       assert.equal(query(fresh, `SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_proc p ON p.oid=t.tgfoid WHERE n.nspname='public' AND c.relname='${table}' AND t.tgname='${name}' AND p.proname='${name}' AND NOT t.tgisinternal AND t.tgenabled='O'`), '1');
@@ -77,7 +84,7 @@ test('native fresh bootstrap, subsequent migrations, and populated-target refusa
     assert.equal(query(legacy, 'SELECT value FROM sentinel'), 'keep');
     assert.equal(query(legacy, "SELECT count(*) FROM pg_tables WHERE schemaname IN ('public','pgcustom')"), '2');
     assert.equal(query(legacy, "SELECT to_regclass('public._prisma_migrations') IS NULL"), 't');
-    assert.equal(query(fresh, 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL'), '12');
+    assert.equal(query(fresh, 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL'), String(contract.migrations.length));
   } finally {
     fs.rmSync(wrapper, {recursive:true,force:true});
     for (const name of names) assert.equal(run('dropdb', ['--if-exists', name], pg).status, 0, 'remove owned disposable database');
