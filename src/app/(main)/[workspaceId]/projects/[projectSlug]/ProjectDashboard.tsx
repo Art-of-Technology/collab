@@ -378,7 +378,7 @@ export function ProjectDashboard({
   });
 
   // Fetch project summary data
-  const { data: summary, isLoading } = useProjectSummary(projectId);
+  const { data: summary, isLoading, isError: summaryError, refetch: refetchSummary } = useProjectSummary(projectId);
 
   // Filter views that include this project
   const projectViews = useMemo(() => {
@@ -429,6 +429,9 @@ export function ProjectDashboard({
     );
   }
 
+  const repositories = summary?.repositories;
+  const repositoryCount = repositories?.connections.length || 0;
+  const repositorySettingsHref = `/${workspaceSlug}/projects/${projectSlug}/settings?tab=github`;
   const overdueCount = summary?.stats.overdueCount || 0;
   const atRiskCount = summary?.stats.atRiskCount || 0;
   const allAttentionIssues = [
@@ -600,31 +603,43 @@ export function ProjectDashboard({
           {/* Right Column: Activity Feed */}
           <div className="flex flex-col gap-4">
 
-            {/* GitHub Activity */}
+            {/* Repository Activity */}
             <SectionCard
-              title="GitHub"
-              subtitle={summary?.github?.connected ? "Repository connected" : "Not connected"}
-              icon={<Github className="h-4 w-4 text-collab-500" />}
+              title="Repository"
+              subtitle={summaryError ? "Connection status unavailable" : repositoryCount ? `${repositoryCount} ${repositoryCount === 1 ? 'repository' : 'repositories'} connected` : "No repository connected"}
+              icon={<GitBranch className="h-4 w-4 text-collab-500" />}
               iconBg="bg-collab-900"
-              viewAllHref={`/${workspaceSlug}/projects/${projectSlug}/github`}
+              viewAllHref={repositorySettingsHref}
             >
-              {!summary?.github?.connected ? (
+              {summaryError ? (
+                <div role="alert" className="p-3 text-sm text-collab-400 space-y-2">
+                  <p>Could not load repository connections.</p>
+                  <Button variant="outline" size="sm" onClick={() => refetchSummary()}>Retry</Button>
+                </div>
+              ) : !repositoryCount ? (
                 <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <p className="text-xs text-collab-500/60 mb-2">Connect a repository</p>
+                  <p className="text-xs text-collab-500/60 mb-2">Link a repository from your Git provider</p>
                   <Link
-                    href={`/${workspaceSlug}/projects/${projectSlug}/github/settings`}
+                    href={repositorySettingsHref}
                     className="text-xs text-blue-400 hover:text-blue-300"
                   >
-                    Setup GitHub →
+                    Connect repository →
                   </Link>
                 </div>
-              ) : !summary?.github?.activities?.length ? (
-                <EmptyState text="No recent activity" icon={<Github className="h-5 w-5" />} />
               ) : (
-                <div className="max-h-[200px] overflow-y-auto">
-                  {summary.github.activities.slice(0, 5).map((activity: ActivityItem) => (
-                    <ActivityRow key={activity.id} activity={activity} />
-                  ))}
+                <div>
+                  <div className="px-3 pb-2 text-xs text-collab-400 space-y-1">
+                    {repositories?.connections.map(connection => <p key={connection.id} className="break-all">{connection.name}</p>)}
+                  </div>
+                  {!repositories?.activities.length ? (
+                    <EmptyState text="No recent activity" icon={<GitBranch className="h-5 w-5" />} />
+                  ) : (
+                    <div className="max-h-[200px] overflow-y-auto">
+                      {repositories.activities.slice(0, 5).map((activity: ActivityItem) => (
+                        <ActivityRow key={activity.id} activity={activity} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </SectionCard>

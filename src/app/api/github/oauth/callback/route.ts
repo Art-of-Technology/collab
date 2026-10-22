@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
-import { exchangeCodeForToken, getGitHubUser } from '@/lib/github/oauth-config';
+import { exchangeCodeForToken, getGitHubUser, GITHUB_OAUTH_CONFIG } from '@/lib/github/oauth-config';
 import { prisma } from '@/lib/prisma';
 import { EncryptionService } from '@/lib/encryption';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { readGitHubOAuthState, GITHUB_OAUTH_COOKIE, GITHUB_OAUTH_COOKIE_OPTIONS } from '@/lib/github/oauth-state';
 
 export async function GET(request: NextRequest) {
-  const redirectUrl = new URL('/projects', request.url);
+  const redirectUrl = new URL('/projects', GITHUB_OAUTH_CONFIG.redirectUri);
   const finish = () => {
     const response = NextResponse.redirect(redirectUrl);
     response.headers.set('Cache-Control', 'no-store');

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -62,6 +63,7 @@ interface GitHubRepositorySettingsProps {
 }
 
 export function GitHubRepositorySettings({ projectId, repository, onUpdate }: GitHubRepositorySettingsProps) {
+  const queryClient = useQueryClient();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [showManualForm, setShowManualForm] = useState(false);
 
@@ -94,6 +96,7 @@ export function GitHubRepositorySettings({ projectId, repository, onUpdate }: Gi
         throw new Error(error.error || `Failed to disconnect repository (${response.status})`);
       }
 
+      await queryClient.invalidateQueries({ queryKey: ['projectSummary', projectId] });
       toast.success('Repository disconnected successfully');
       // Repository disconnected, component will re-render
       onUpdate?.();

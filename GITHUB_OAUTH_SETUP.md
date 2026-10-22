@@ -46,6 +46,10 @@ GITHUB_CLIENT_SECRET=your_github_client_secret_here
 NEXTAUTH_URL=https://your-collab-domain.com
 ```
 
+Set `NEXTAUTH_URL` to the canonical public Collab origin, matching the registered
+callback URL above. For callback redirect behavior, see the
+[browser-state contract](docs/security/2026-09-23-hardening.md#github-oauth-browser-state).
+
 ### **Step 3: Deploy and Test**
 
 1. Deploy your application with the new environment variables

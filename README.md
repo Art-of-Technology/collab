@@ -364,6 +364,12 @@ Open **Project Settings → Git providers** to browse or enter a repository path
 and connect using an access token. See [Git provider connections](docs/git-provider-connections.md)
 for supported servers, credentials, refresh, reconnect and retained history.
 
+The project dashboard's **Repository** card lists saved active connections,
+including legacy GitHub, GitLab and Forgejo repositories. **Connect repository**
+opens Git providers settings. Connecting, changing or disconnecting a repository
+refreshes the cached summary. Failed summary or GitHub connection checks show
+**Retry** instead of reporting that the repository is disconnected.
+
 GitHub repository authorization uses the current tab. After project access is
 validated, authorization returns to the project's Git providers tab, where
 cancellation and provider errors appear or successful authorization exposes

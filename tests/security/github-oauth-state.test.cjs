@@ -7,7 +7,7 @@ function fixture(options = {}) {
   let actor = { id: 'alice', email: 'alice@example.test', createdAt: new Date(), updatedAt: new Date() };
   const effects = [], logs = [];
   const requestCookieName = options.environment === 'development' ? 'collab-github-oauth' : cookieName;
-  const globals = { URL, Buffer, crypto, Error, process: { env: { NODE_ENV: options.environment || 'production', ENCRYPTION_KEY: 'X7!kPd4@vL9#qR2$wN6%aB8&zC3*mF5+' } }, console: { log: (...v) => logs.push(v), warn: (...v) => logs.push(v), error: (...v) => logs.push(v) } };
+  const globals = { URL, Buffer, crypto, Error, process: { env: { NODE_ENV: options.environment || 'production', NEXTAUTH_URL: 'https://collab.example', ENCRYPTION_KEY: 'X7!kPd4@vL9#qR2$wN6%aB8&zC3*mF5+' } }, console: { log: (...v) => logs.push(v), warn: (...v) => logs.push(v), error: (...v) => logs.push(v) } };
   const encryption = load('src/lib/encryption.ts', { crypto: { default: { ...crypto, createCipheriv(...args) {
     if (options.encryptError) throw new Error('raw state=' + 'a'.repeat(64) + ' token=provider-token key=' + globals.process.env.ENCRYPTION_KEY + ' sensitive provider payload');
     return crypto.createCipheriv(...args);
@@ -15,7 +15,7 @@ function fixture(options = {}) {
   const project = { id: 'p1', slug: 'project', workspace: { slug: 'workspace', ownerId: options.access ? 'bob' : 'alice', members: options.access === 'member' || options.access === 'revoked' ? [{ userId: 'alice', status: options.access === 'member' }] : [] } };
   const response = (body, init = {}) => ({ body, status: init.status || 200, headers: new Headers(init.headers), cookies: { values: [], set(...args) { this.values.push(args); } } });
   const deps = {
-    'next/server': { NextResponse: { json: response, redirect: url => ({ ...response(null, { status: 307 }), url: String(url) }) } },
+    'next/server': { NextResponse: { json: response, redirect: url => ({ ...response(null, { status: 307, headers: { Location: String(url) } }), url: String(url) }) } },
     'next-auth': { getServerSession: async () => options.absent ? null : { user: actor } },
     '@/lib/request-session': { getServerSession: async () => { if (options.sessionError) throw new Error('sensitive session payload state=raw-state token=provider-token'); return options.absent ? null : { user: actor }; } },
     '@/lib/auth': { authConfig: {} }, '@/lib/auth-options': { authOptions: {} },
@@ -25,7 +25,7 @@ function fixture(options = {}) {
       findUnique: async () => project,
       findFirst: async ({ where }) => !options.denied && matches(project, where) ? project : null,
     } } },
-    '@/lib/github/oauth-config': { getGitHubAuthUrl: state => 'https://github.com/login/oauth/authorize?state=' + encodeURIComponent(state), exchangeCodeForToken: async code => { effects.push(['exchange', code]); if (options.providerError) throw new Error('sensitive provider payload'); return 'provider-token'; }, getGitHubUser: async () => { effects.push(['profile']); return { id: 1, login: 'octocat' }; } },
+    '@/lib/github/oauth-config': { ...load('src/lib/github/oauth-config.ts', {}, { ...globals, URLSearchParams }), getGitHubAuthUrl: state => 'https://github.com/login/oauth/authorize?state=' + encodeURIComponent(state), exchangeCodeForToken: async code => { effects.push(['exchange', code]); if (options.providerError) throw new Error('sensitive provider payload'); return 'provider-token'; }, getGitHubUser: async () => { effects.push(['profile']); return { id: 1, login: 'octocat' }; } },
     'node:crypto': crypto,
   };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, globals);
@@ -35,7 +35,7 @@ function fixture(options = {}) {
   const callback = load('src/app/api/github/oauth/callback/route.ts', deps, globals).GET;
   const nonce = 'a'.repeat(64);
   const envelope = overrides => encryption.encrypt({ kind: 'github-oauth-state', version: 1, nonce, userId: 'alice', projectId: null, expiresAt: Date.now() + 300000, ...overrides });
-  const request = (path, cookie) => ({ url: 'https://collab.example' + path, cookies: { get: name => name === requestCookieName && cookie ? { value: cookie } : undefined } });
+  const request = (path, cookie) => ({ url: (options.requestOrigin || 'https://collab.example') + path, headers: new Headers(options.headers), cookies: { get: name => name === requestCookieName && cookie ? { value: cookie } : undefined } });
   return { effects, logs, nonce, envelope, encryption, options, setActor: id => actor = { ...actor, id }, issue: query => issuer(request('/api/github/oauth/auth-url' + (query || ''))), callback: (query, cookie) => callback(request('/api/github/oauth/callback?' + query, cookie)) };
 }
 function cleared(response) { assert.ok(response.cookies.values.some(([name, value, opts]) => name === cookieName && value === '' && opts.maxAge === 0 && opts.path === '/')); }
@@ -110,4 +110,33 @@ test('project consent denial and provider failure return to accessible project s
     assert.equal(f.effects.some(e => e[0] === 'write'), false);
     cleared(response);
   }
+});
+
+test('project callback redirects to the configured public origin behind a proxy', async () => {
+  const f = fixture({ requestOrigin: 'http://0.0.0.0:3000', headers: { host: 'attacker.example', 'x-forwarded-host': 'attacker.example', 'x-forwarded-proto': 'http' } });
+  const issued = await f.issue('?state=project:p1');
+  const response = await f.callback('code=valid&state=' + issued.body.state, issued.cookies.values[0][1]);
+  assert.equal(response.status, 307);
+  const url = new URL(response.headers.get('location'));
+  assert.equal(url.origin, 'https://collab.example');
+  assert.equal(url.pathname, '/workspace/projects/project/settings');
+  assert.equal(url.searchParams.get('tab'), 'github');
+  assert.equal(url.searchParams.get('github_connected'), 'true');
+  assert.equal(url.searchParams.get('github_user'), 'octocat');
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(f.effects.map(effect => effect[0]), ['exchange', 'profile', 'write']);
+  cleared(response);
+  const options = response.cookies.values[0][2];
+  assert.equal(options.secure, true); assert.equal(options.httpOnly, true); assert.equal(options.sameSite, 'lax');
+});
+
+test('invalid callback state redirects to the public origin without provider effects', async () => {
+  const f = fixture({ requestOrigin: 'http://0.0.0.0:3000', headers: { host: 'attacker.example', 'x-forwarded-host': 'attacker.example' } });
+  const response = await f.callback('code=unused&state=invalid');
+  const url = new URL(response.headers.get('location'));
+  assert.equal(url.origin, 'https://collab.example');
+  assert.equal(url.pathname, '/projects');
+  assert.equal(url.searchParams.get('github_error'), 'Invalid or expired authorization state');
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  denied(f, response);
 });

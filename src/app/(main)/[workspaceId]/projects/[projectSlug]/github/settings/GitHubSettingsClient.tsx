@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -96,6 +97,7 @@ export function GitHubSettingsClient({
   workspaceSlug,
 }: GitHubSettingsClientProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabType>('connection');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
@@ -172,6 +174,7 @@ export function GitHubSettingsClient({
       });
 
       if (response.ok) {
+        await queryClient.invalidateQueries({ queryKey: ['projectSummary', project.id] });
         toast.success('Repository disconnected');
         setRepoData(null);
         router.refresh();

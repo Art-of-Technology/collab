@@ -49,7 +49,9 @@ function fixture(options={}){
  const hidden=issue('foreign-parent',{projectId:'foreign',project:foreign,workspaceId:'foreign',workspace:foreign.workspace});
  const visibleParent=issue('visible-parent');
  const issues=[issue('overdue',{parent:hidden,targetRelations:[{relationType:'BLOCKS',sourceIssue:hidden},{relationType:'BLOCKS',sourceIssue:visibleParent}]}),issue('upcoming',{dueDate:date(1),parent:visibleParent}),issue('completed',{statusId:'done',projectStatus:statuses[1]}),issue('undated',{dueDate:null}),issue('foreign-workspace',{workspaceId:'foreign',workspace:foreign.workspace}),issue('foreign-status',{statusId:hiddenStatus.id,projectStatus:hiddenStatus})];
- const repo={id:'repo',fullName:'org/repo',projectId:target.id,project:target};
+ const repo={id:'repo',fullName:'org/repo',isActive:!options.inactiveRepository,projectId:target.id,project:target};
+ const connections=options.providers?['gitlab','forgejo'].map((provider,index)=>({id:provider,provider,repositoryPath:`team/${provider}`,projectId:target.id,project:target,isActive:true,createdAt:date(-index),credentials:'never-expose',activity:[{id:provider,kind:'commit',title:`${provider} commit`,date:now}]})):[];
+ connections.push({id:'foreign-git',provider:'gitlab',repositoryPath:'secret/repo',projectId:target.id,project:foreign,isActive:true,createdAt:now,activity:[]},{id:'inactive-git',provider:'forgejo',repositoryPath:'old/repo',projectId:target.id,project:target,isActive:false,createdAt:now,activity:[]});
  const commits=[{id:'commit',repositoryId:'repo',repository:repo,sha:'abc',message:'message\nbody',authorName:'Alice',commitDate:date(-1)}];
  const pulls=[{id:'pull',repositoryId:'repo',repository:repo,githubPrId:1,title:'PR',state:'OPEN',createdAt:date(-1),updatedAt:now,mergedAt:null,createdBy:{name:'Alice'}}];
  const version={repository:repo,issueAccessInvalidated:!!options.invalidVersion,issues:options.foreignVersionIssue?[{issue:hidden}]:[]};
@@ -62,7 +64,8 @@ function fixture(options={}){
  function revoke(){target.workspace.ownerId='bob';target.workspace.members=[{userId:'alice',status:false}];}
  const db={user:{findUnique:async()=>options.deleted?null:actor},project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
  findMany:async args=>{reads.push('issues');return query(issues,args);},count:async args=>{reads.push('count');return query(issues,args).length;},groupBy:async args=>{reads.push('group');if(options.dbError)throw new Error('private-database-detail');const groups={};for(const x of query(issues,args))groups[x.statusId]=(groups[x.statusId]||0)+1;return Object.entries(groups).map(([statusId,id])=>({statusId,_count:{id}}));}},
- repository:{findFirst:async args=>{reads.push('repository');const value=query([repo],args)[0]||null;if(value&&options.revokeRepository)revoke();return value;}},
+ repository:{findFirst:async args=>{reads.push('repository');const value=query(options.noRepository?[]:[repo],args)[0]||null;if(value&&options.revokeRepository)revoke();return value;}},
+ gitConnection:{findMany:async args=>{reads.push('gitConnections');return query(connections,args);}},
  commit:{findMany:async args=>query(commits,args)},pullRequest:{findMany:async args=>query(pulls,args)},release:{findMany:async args=>query(releases,args)},featureRequest:{findMany:async args=>query(features,args)},note:{findMany:async args=>query(notes,args)}};
  const deps={'@/lib/prisma':{prisma:db},'@/lib/auth':{authConfig:{}},'@/lib/auth-options':{authOptions:{}},'next-auth/next':{getServerSession:async()=>options.absent?null:{user:{id:'alice',email:options.staleEmail?'bob@example.test':actor.email}}},'@/lib/request-session':{getServerSession:async()=>options.absent?null:{user:{id:'alice',email:options.staleEmail?'bob@example.test':actor.email}}},'@/lib/post-access':load('src/lib/post-access.ts'),'next/server':{NextResponse:{json:(body,init={})=>({body,status:init.status||200,headers:new Headers(init.headers)})}}};
  const globals={Error,console:{error:(...args)=>logs.push(args)}};deps['@/lib/session']=load('src/lib/session.ts',deps,globals);deps['@/lib/issue-finder']=load('src/lib/issue-finder.ts',deps,globals);deps['@/lib/secrets/access']=load('src/lib/secrets/access.ts',deps,globals);
@@ -83,3 +86,23 @@ test('authorized GitHub activity, date windows and response transformations rema
 test('success is no-store and unexpected errors use fixed safe logs',async()=>{assert.equal((await fixture().call()).headers.get('cache-control'),'no-store');const f=fixture({dbError:true});assert.equal((await f.call()).status,500);assert.ok(f.logs.length&&f.logs.every(x=>x.length===1&&!x[0].includes('private-database-detail')));});
 
 test('summary release projection hides invalidated and foreign-issue versions',async()=>{for(const options of [{invalidVersion:true},{foreignVersionIssue:true},{}]){const r=await fixture(options).call();assert.equal(r.status,200);assert.equal(r.body.github.activities.filter(x=>x.type==='release').length,Object.keys(options).length?0:1);}});
+
+
+test('repository summary persists active GitHub, GitLab and Forgejo links across refresh',async()=>{
+ const f=fixture({providers:true});
+ for(let refresh=0;refresh<2;refresh++){
+  const r=await f.call();assert.equal(r.status,200);
+  assert.deepEqual(plain(r.body.repositories.connections.map(c=>c.name).sort()),['org/repo','team/forgejo','team/gitlab']);
+  assert.equal(r.body.repositories.activities.length,5);
+  assert.equal(JSON.stringify(r.body.repositories).includes('never-expose'),false);
+  assert.equal(JSON.stringify(r.body.repositories).includes('secret/repo'),false);
+  assert.equal(JSON.stringify(r.body.repositories).includes('old/repo'),false);
+ }
+});
+test('provider-only projects are connected; inactive and absent repositories are not',async()=>{
+ const providers=await fixture({providers:true,noRepository:true}).call();assert.equal(providers.body.repositories.connections.length,2);assert.equal(providers.body.github.connected,false);
+ for(const options of [{noRepository:true},{inactiveRepository:true}]){const r=await fixture(options).call();assert.deepEqual(plain(r.body.repositories),{connections:[],activities:[]});}
+});
+test('provider summary rechecks access before returning persisted metadata or activity',async()=>{
+ const r=await fixture({providers:true,noRepository:true,revokeLookup:true}).call();assert.equal(r.status,200);assert.deepEqual(plain(r.body.repositories),{connections:[],activities:[]});
+});

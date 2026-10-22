@@ -759,7 +759,11 @@ Missing/deleted actors redirect to login. Invalid state and revoked project
 access return a generic error to `/projects`. Once project access is validated,
 the callback returns to that project's settings with `tab=github` for success,
 consent denial, missing code and subsequent provider or persistence failures.
-Personal flows remain on `/projects`. Callback responses clear the cookie
+Personal flows remain on `/projects`. Every callback outcome uses the origin of
+`GITHUB_OAUTH_CONFIG.redirectUri`, not the incoming request URL or forwarded host
+headers. See [OAuth setup](../../GITHUB_OAUTH_SETUP.md#step-2-configure-environment-variables)
+for public-origin configuration and `tests/security/github-oauth-state.test.cjs`
+for redirect regression coverage. Callback responses clear the cookie
 on the same path and are `no-store`; authorization URLs and state are not logged,
 and raw provider/decryption errors are not returned in redirects. Shared
 encryption/decryption and live-user session failures log only fixed messages.
@@ -890,8 +894,16 @@ bindings. Workspace Notes linked to another project in the same workspace remain
 visible, as do project-only Notes; foreign workspace bindings do not become
 visible through the project branch of the query.
 
-Existing response projections, widget limits, date windows and ordering remain
-unchanged. Successful responses are `no-store`; unexpected error logs use a fixed
+The existing `github` projection remains compatible. The additive `repositories`
+projection lists active legacy GitHub repositories and active `GitConnection`
+records as `{ id, provider, name }`, without credentials. Provider queries repeat
+current project access. Activity combines active legacy GitHub activity with up
+to five saved entries per active provider connection, sorted newest first and
+limited to ten entries overall. Inactive connections are excluded from this
+projection even when their history is retained.
+
+Other widget limits, date windows and ordering remain unchanged. Successful
+responses are `no-store`; unexpected error logs use a fixed
 message. Eleven actual-route modeled checks pass after ten failures and one
 control on prior source; the exact route and shared predicates pass a scoped
 Prisma/Next/Node typecheck. The database boundary is mocked, so native isolation,
