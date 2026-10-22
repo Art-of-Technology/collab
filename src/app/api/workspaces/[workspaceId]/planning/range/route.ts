@@ -118,7 +118,7 @@ export async function GET(
     const userIds = userIdsStr ? userIdsStr.split(',').filter(Boolean) : undefined;
 
     const visibleIssues = await prisma.issue.findMany({ where: { workspaceId }, select: { id: true } });
-    const visibleActivityWhere = { itemType: 'ISSUE', itemId: { in: visibleIssues.map(issue => issue.id) } };
+    const visibleActivityWhere = { itemId: { in: visibleIssues.map(issue => issue.id) } };
 
     // Fetch activities in the date range
     const activities = await prisma.issueActivity.findMany({

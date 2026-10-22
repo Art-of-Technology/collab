@@ -7,5 +7,5 @@ export const GET = withAppAuth(async (request: NextRequest, context: AppAuthCont
   try {
     const result = await listIssueTrash(context.user.id, context.workspace.id, new URL(request.url).searchParams.get('projectId'));
     return NextResponse.json({ issues: result.issues, canPurge: false });
-  } catch (error) { return issueTrashErrorResponse(error); }
+  } catch (error) { return issueTrashErrorResponse(error, 'app'); }
 }, { requiredScopes: ['issues:read'] });

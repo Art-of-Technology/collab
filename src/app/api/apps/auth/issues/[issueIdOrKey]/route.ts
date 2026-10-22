@@ -459,7 +459,7 @@ export const DELETE = withAppAuth(
         workspaceId: context.workspace.id, projectId, action: 'TRASHED',
         actor: { userId: context.user.id, client: 'app', appId: context.app.id, installationId: context.installation.id } });
       return NextResponse.json({ message: 'Issue moved to Trash', deletedIssue });
-    } catch (error) { return issueTrashErrorResponse(error); }
+    } catch (error) { return issueTrashErrorResponse(error, 'app'); }
   },
   { requiredScopes: ['issues:write'] }
 );

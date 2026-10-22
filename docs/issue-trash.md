@@ -20,6 +20,8 @@ The migration adds nullable Trash fields and a standalone audit table, then chan
 
 Before an existing-database migration, identify the current application database, schema and migration ledger, take a fresh private custom-format backup, inspect its table of contents, and retain a hash-verified copy away from the database host. Apply only the reviewed additive SQL when the database has no Prisma migration ledger; do not blindly replay migration history. Preserve current application environment variables and encryption keys during release.
 
-The fields and audit table must remain on image rollback. An image predating Trash does not honor its visibility or deletion rules; reverting to it requires preventing issue writes until the compatible image is restored. Previously hard-deleted records and comments are not recovered by this migration.
+The fields and audit table must remain after an image change. An image predating Trash can expose or hard-delete retained issues; use a compatible image or prevent affected reads and writes until a compatible image is restored. Previously hard-deleted records and comments are not recovered by this migration.
 
 Verification includes executable CLI/API/UI tests, an actual PostgreSQL lifecycle with audit-failure rollback, nested visibility, scoped restore/purge and database-level parent deletion refusal. Search delivery remains best-effort, so search results recheck current issue visibility before returning content.
+
+Activity feeds validate parents against active issue IDs in the same workspace because activity records have no Issue foreign key. Excluding only locally trashed IDs would still admit orphaned or foreign-workspace parents. This currently loads the workspace's active IDs per request; a database join is a performance follow-up if profiling shows material cost, and must preserve parent existence, workspace isolation, pagination and counts.

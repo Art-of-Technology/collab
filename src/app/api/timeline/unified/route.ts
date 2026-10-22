@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     }
 
     const visibleIssues = await prisma.issue.findMany({ where: { workspaceId }, select: { id: true } });
-    const visibleActivityWhere = { itemType: 'ISSUE', itemId: { in: visibleIssues.map(issue => issue.id) } };
+    const visibleActivityWhere = { itemId: { in: visibleIssues.map(issue => issue.id) } };
 
     // Build activity filter
     const activityWhere: any = {

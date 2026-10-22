@@ -36,12 +36,11 @@ export const GET = withAppAuth(
         where.userId = userId;
       }
 
-      // Activity rows have no Issue FK: scope them to currently visible issues.
+      // shortcut: Activity parents lack a relation; keep same-workspace active IDs until profiling justifies a database join.
       const visibleIssues = await prisma.issue.findMany({
         where: { workspaceId: context.workspace.id, ...(projectId ? { projectId } : {}) },
         select: { id: true },
       });
-      where.itemType = 'ISSUE';
       where.itemId = { in: visibleIssues.map(issue => issue.id) };
 
       const [activities, total] = await Promise.all([

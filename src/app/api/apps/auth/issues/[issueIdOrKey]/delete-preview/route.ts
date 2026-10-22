@@ -8,5 +8,5 @@ export const GET = withAppAuth(async (request: NextRequest, context: AppAuthCont
   try {
     return NextResponse.json(await previewIssueTrash(context.user.id, context.workspace.id,
       new URL(request.url).searchParams.get('projectId'), (await params).issueIdOrKey));
-  } catch (error) { return issueTrashErrorResponse(error); }
+  } catch (error) { return issueTrashErrorResponse(error, 'app'); }
 }, { requiredScopes: ['issues:read'] });

@@ -11,5 +11,5 @@ export const POST = withAppAuth(async (request: NextRequest, context: AppAuthCon
     return NextResponse.json(await changeIssueTrash({ idOrKey: (await params).issueIdOrKey,
       workspaceId: context.workspace.id, projectId, action: 'RESTORED',
       actor: { userId: context.user.id, client: 'app', appId: context.app.id, installationId: context.installation.id } }));
-  } catch (error) { return issueTrashErrorResponse(error); }
+  } catch (error) { return issueTrashErrorResponse(error, 'app'); }
 }, { requiredScopes: ['issues:write'] });
