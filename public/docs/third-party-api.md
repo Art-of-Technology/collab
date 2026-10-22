@@ -291,6 +291,8 @@ All endpoints below require the selected project's `projectId` query parameter a
 
 Preview returns `id`, `issueKey`, `title`, `projectId` and `counts` (`issues`, `comments`, `relations`, `workLogs`). DELETE moves the issue to Trash and returns `message` plus `deletedIssue` (`id`, `issueKey`, `title`). Listing returns `issues` and `canPurge: false`; restore returns the original `id`, `issueKey` and `title`. Missing project scope fails closed. App tokens have no permanent-deletion endpoint.
 
+Trash lifecycle errors return a stable `error` code and a human-readable `error_description`: `validation_error` (400), `forbidden` (403), `not_found` (404), `issue_conflict` (409), or `server_error` (500). Forge write refusals retain `forge_connected_project` (409). On an issue conflict, reload the issue before retrying; unexpected failures return a generic description without database diagnostics.
+
 For retention, browser permissions and permanent deletion, see [Issue Trash and Restore](https://github.com/Art-of-Technology/collab/blob/main/docs/issue-trash.md).
 
 ### Tasks

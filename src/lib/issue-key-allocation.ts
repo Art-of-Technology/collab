@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 
+/** Call inside the creation transaction: the project lock serializes allocation, and raw reads reserve trashed keys. */
 export async function allocateIssueKey(tx: Prisma.TransactionClient, projectId: string): Promise<string> {
   const [project] = await tx.$queryRaw<Array<{ issuePrefix: string; nextIssueNumbers: Prisma.JsonValue }>>`
     SELECT "issuePrefix", "nextIssueNumbers" FROM "Project" WHERE id = ${projectId} FOR UPDATE
