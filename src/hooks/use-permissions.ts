@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
-import { Permission, WorkspaceRole } from "@/lib/permissions";
+import { Permission, WorkspaceRole } from "@/lib/permission-types";
 
 interface PermissionCheckResult {
   hasPermission: boolean;

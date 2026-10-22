@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, Settings, Users, Shield, AlertTriangle, Clock, UserCircleIcon, ShoppingBag } from 'lucide-react';
-import { WorkspaceRole, Permission, getRoleDisplayName, getPermissionDisplayName } from '@/lib/permissions';
+import { WorkspaceRole, Permission, getRoleDisplayName, getPermissionDisplayName } from '@/lib/permission-types';
 
 interface PermissionItem {
   id: string;
