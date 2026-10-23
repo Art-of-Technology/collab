@@ -254,7 +254,7 @@ Collab is designed to streamline internal communication and work tracking by off
   [custom-role contract](docs/security/2026-09-23-hardening.md#custom-role-and-member-role-boundaries).
 - Open **Settings** in the bottom-left profile menu to reach your profile and notification settings, in either the expanded or collapsed sidebar. This action is disabled until a workspace is selected. The workspace settings index (`/workspaces/<workspaceId>/settings`) redirects to workspace management (`/workspaces/<workspaceId>`); the retired AI-key settings route remains unavailable.
 - Use the timeline to post status updates, tasks, and feature requests.
-- Use the workspace [Project overview](#project-overview) to select a project.
+- Use [Workspace Home](docs/workspace-dashboard.md) to review work across projects.
 - Customize your avatar with partial updates; see the
   [avatar update contract](docs/security/2026-09-23-hardening.md#avatar-updates-and-safe-responses).
 - Organize work using boards, milestones, and stories.
@@ -341,11 +341,10 @@ across all accessible, non-archived projects before limiting the results to five
 The **Projects** label opens the full list, and **Create project** remains available
 even when the section is collapsed.
 
-Open `/{workspace}/dashboard`, choose a project and select **Show project**.
-The GET selector uses `?project=<project-id>` and reloads only that project's
-overview. A sole eligible project is selected automatically only when the
-parameter is absent; submitting **Choose a project** leaves `?project=` empty
-and loads no project payload. Multiple projects are never aggregated.
+Open **Home** for the [workspace overview](docs/workspace-dashboard.md), including
+filtering, project summaries, cached repository activity and the URL for opening
+a selected project's issues and memory. Within a selected overview, choose another
+project and select **Show project** to switch projects.
 
 For a Forge-connected project, Issues shows counts for the loaded result, a
 short issue preview and any partial-results warning. Projects without a Forge

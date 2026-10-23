@@ -64,7 +64,7 @@ This document tracks the implementation progress of transforming Collab into an 
 
 This section and the dashboard entries below record the earlier AI integration.
 Current workspace dashboard behavior is owned by
-[Project overview](../README.md#project-overview).
+[Workspace Home](workspace-dashboard.md).
 
 | Task | Status | File | Notes |
 |------|--------|------|-------|
@@ -74,7 +74,7 @@ Current workspace dashboard behavior is owned by
 | Dashboard index | ✅ Complete | `src/components/dashboard/index.ts` | All exports |
 | Dashboard API | ✅ Complete | `src/app/api/ai/dashboard/route.ts` | Fetches focus items, insights, stats |
 | AIDashboard component | ✅ Complete | `src/app/(main)/[workspaceId]/dashboard/components/AIDashboard.tsx` | Client component |
-| Dashboard page update | Superseded | `src/app/(main)/[workspaceId]/dashboard/page.tsx` | See [Project overview](../README.md#project-overview) |
+| Dashboard page update | Superseded | `src/app/(main)/[workspaceId]/dashboard/page.tsx` | See [Workspace Home](workspace-dashboard.md) |
 
 ---
 
