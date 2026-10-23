@@ -6,5 +6,5 @@ interface SettingsPageProps {
 
 export default async function SettingsPage({ params }: SettingsPageProps) {
   const { workspaceId } = await params;
-  redirect(`/workspaces/${workspaceId}/settings/ai-keys`);
+  redirect(`/workspaces/${workspaceId}`);
 }

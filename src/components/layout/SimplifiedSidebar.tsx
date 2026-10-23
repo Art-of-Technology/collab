@@ -182,7 +182,8 @@ export default function SimplifiedSidebar({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 bg-collab-900 border-collab-700">
               <DropdownMenuItem
-                onClick={() => router.push(`/workspaces/${currentWorkspace?.id}/settings/ai-keys`)}
+                onClick={() => currentWorkspace && router.push(`${workspaceBase}/profile`)}
+                disabled={!currentWorkspace}
                 className="text-collab-400 hover:text-white focus:bg-collab-800"
               >
                 <Settings className="mr-2 h-4 w-4" /> Settings
@@ -382,7 +383,8 @@ export default function SimplifiedSidebar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56 bg-collab-900 border-collab-700">
             <DropdownMenuItem
-              onClick={() => router.push(`/workspaces/${currentWorkspace?.id}/settings/ai-keys`)}
+              onClick={() => currentWorkspace && router.push(`${workspaceBase}/profile`)}
+              disabled={!currentWorkspace}
               className="text-collab-400 hover:text-white focus:bg-collab-800"
             >
               <Settings className="mr-2 h-4 w-4" /> Settings

@@ -1,5 +1,6 @@
 export interface Invitation {
   id: string;
+  token: string;
   email: string;
   createdAt: string;
   expiresAt: string;

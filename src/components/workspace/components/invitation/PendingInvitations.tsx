@@ -1,8 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { User } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import { urlResolver } from "@/lib/url-resolver";
 import CancelInvitationButton from "./CancelInvitationButton";
 import type { PendingInvitationsProps } from "./types";
 
@@ -11,6 +15,21 @@ export default function PendingInvitations({
   workspaceId, 
   canCancelInvitations 
 }: PendingInvitationsProps) {
+  const { toast } = useToast();
+  const [manualCopy, setManualCopy] = useState<{ id: string; url: string } | null>(null);
+
+  async function copyInvitationLink(id: string, token: string) {
+    const url = new URL(urlResolver.workspaceInvitation(encodeURIComponent(token)), window.location.origin).href;
+    setManualCopy(null);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: 'Invitation link copied', description: 'Share this link with the invited person.' });
+    } catch {
+      setManualCopy({ id, url });
+      toast({ title: 'Could not copy the link', description: 'Select and copy the invitation link below.', variant: 'destructive' });
+    }
+  }
+
   return (
     <Card className="border border-border/40 bg-card/50">
       <CardHeader className="pb-3 pt-4 px-4">
@@ -36,11 +55,20 @@ export default function PendingInvitations({
                   Expires on {new Date(invitation.expiresAt).toLocaleDateString()}
                 </div>
                 {canCancelInvitations && (
-                  <div className="mt-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {invitation.token && (
+                      <Button type="button" variant="outline" size="sm" onClick={() => copyInvitationLink(invitation.id, invitation.token)}>
+                        Copy invitation link
+                      </Button>
+                    )}
                     <CancelInvitationButton 
                       invitationId={invitation.id} 
                       workspaceId={workspaceId} 
+                      onSuccess={() => setManualCopy(null)}
                     />
+                    {manualCopy?.id === invitation.id && (
+                      <Input aria-label={`Invitation link for ${invitation.email}`} value={manualCopy.url} readOnly onFocus={event => event.target.select()} />
+                    )}
                   </div>
                 )}
               </div>

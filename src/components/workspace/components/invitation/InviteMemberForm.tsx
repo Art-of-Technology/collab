@@ -16,7 +16,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useInviteMember } from './hooks';
+import { invitationFeedback, useInviteMember } from './hooks';
 
 const inviteFormSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -40,6 +40,7 @@ export default function InviteMemberForm({ workspaceId, onInviteSent }: InviteMe
   });
   
   async function onSubmit(data: InviteFormValues) {
+    inviteMutation.reset();
     try {
       await inviteMutation.mutateAsync(data.email);
       form.reset();
@@ -47,25 +48,31 @@ export default function InviteMemberForm({ workspaceId, onInviteSent }: InviteMe
       if (onInviteSent) {
         onInviteSent();
       }
-    } catch (error) {
-      // Error is already handled by the mutation hook
-      console.error('Invitation error:', error);
+    } catch {
+      // The mutation displays the error without clearing the entered email.
     }
   }
   
   return (
     <div>
       {inviteMutation.error && (
-        <div className="bg-destructive/10 text-destructive text-xs p-2.5 rounded flex items-center mb-3">
+        <div role="alert" className="bg-destructive/10 text-destructive text-xs p-2.5 rounded flex items-center mb-3">
           <AlertCircle className="h-3 w-3 mr-1.5" />
           {inviteMutation.error instanceof Error ? inviteMutation.error.message : 'An error occurred while sending the invitation'}
         </div>
       )}
       
-      {inviteMutation.isSuccess && (
-        <div className="bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 text-xs p-2.5 rounded flex items-center mb-3">
-          <CheckCircle className="h-3 w-3 mr-1.5" />
-          Invitation sent successfully!
+      {inviteMutation.isSuccess && inviteMutation.data && (
+        <div role="status" className={`text-xs p-2.5 rounded flex items-start mb-3 ${inviteMutation.data.emailSent === true
+          ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+          : 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300'}`}>
+          {inviteMutation.data.emailSent === true
+            ? <CheckCircle className="h-3 w-3 mr-1.5 shrink-0" />
+            : <AlertCircle className="h-3 w-3 mr-1.5 shrink-0" />}
+          <div>
+            <p>{invitationFeedback(inviteMutation.data).title}</p>
+            {inviteMutation.data.emailSent !== true && <p className="mt-1">{invitationFeedback(inviteMutation.data).description}</p>}
+          </div>
         </div>
       )}
       
