@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-[CLI 0.5.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.5.0) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
+[CLI 0.5.1 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.5.1) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
+
+Version 0.5.1 lets `collab auth login` recover locks left by a crashed login using this version. A running login remains protected; empty locks from older releases need one-time cleanup as described below.
 
 Version 0.5.0 adds project-scoped issue deletion previews, Trash and Restore. Issue deletion requires a selected project; update the CLI before using deletion against the Trash-enabled server. Existing credentials are preserved when updating.
 
@@ -152,7 +154,9 @@ collab auth refresh
 collab auth logout
 ```
 
-Refresh is explicit to avoid concurrent processes rotating the same token. It verifies the original token workspace and user while preserving the selected workspace and project. Profiles without a saved token workspace/user binding must log in again before refreshing. Login/configuration writes are serialized by a local exclusive lock. After a crashed login, confirm no other process owns that profile before manually removing its `.lock` file.
+Refresh is explicit to avoid concurrent processes rotating the same token. It verifies the original token workspace and user while preserving the selected workspace and project. Profiles without a saved token workspace/user binding must log in again before refreshing. Login/configuration writes are serialized by a local exclusive lock. After a crashed login, run `collab auth login` again: locks created by this version recover automatically when their local loopback socket is available. A running login keeps its lock, and existing credentials remain unchanged until the new login succeeds.
+
+Empty locks from older CLI versions, damaged locks, locks from another host, and locks whose socket port is occupied cannot be recovered automatically. The `state_locked` error includes `lockFile`; stop other Collab commands before removing that file once. The default is `~/.config/collab/default.json.lock` (on Windows, `%USERPROFILE%\.config\collab\default.json.lock`). Keep `default.json`, which contains credentials. Use `collab auth status` to inspect local login state and `collab whoami` to verify server access.
 
 Use `collab auth login --read-only` for an agent that only needs to inspect projects, issues and Notes. The browser consent lists the requested read permissions; write commands will be denied by the server.
 
