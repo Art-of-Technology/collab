@@ -47,7 +47,7 @@ function fixture(options = {}) {
     state: 'open', date: date(10 + Math.min(index, 10)), url: `${row.url.replace(/\/$/, '')}/pull/1` }));
   activity.find(row => row.id === 'github').date = date(23);
   const version = { repository: repo, issueAccessInvalidated: false, issues: [] };
-  const pulls = [{ id: 'legacy-pr', title: 'legacy duplicate', repository: repo, githubPrId: 1, state: 'OPEN', updatedAt: date(23) }];
+  const pulls = [{ id: 'legacy-pr', title: 'legacy duplicate', repository: repo, githubPrId: 1, state: 'OPEN', githubUpdatedAt: date(23), updatedAt: date(23) }];
   const releases = [{ id: 'release', repository: repo, version, name: 'Release', tagName: 'v1.0',
     githubUrl: 'https://github.com/team/repo/releases/tag/v1.0', isDraft: false, publishedAt: date(22) }];
   function query(rows, args, model) {
@@ -116,6 +116,47 @@ test('mixed cached providers are scoped, bounded, safe to serialize and GitHub d
   const serialized = JSON.stringify(result);
   for (const hidden of ['private-token', 'foreign', 'revoked', 'archive', 'inactive', 'credentials', 'accessToken']) assert.equal(serialized.includes(hidden), false);
   assert.ok(result.items.every((row, i) => !i || row.date <= result.items[i - 1].date));
+});
+
+test('old closed PR cache upserts cannot displace newer provider events', async () => {
+  const f = fixture(), pull = f.pulls[0];
+  f.activity.splice(0, f.activity.length, { ...f.activity[0], date: new Date('2026-10-21T12:00:00Z') });
+  pull.githubPrId = 2;
+  pull.githubUpdatedAt = new Date('2026-10-23T12:00:00Z');
+  for (let i = 0; i < 6; i++) f.pulls.push({
+    ...pull, id: `closed-${i}`, githubPrId: i + 10, state: 'CLOSED',
+    githubUpdatedAt: new Date('2026-09-01T12:00:00Z'), updatedAt: new Date('2026-10-24T12:00:00Z'),
+  });
+  f.pulls.push({ ...pull, id: 'undated', githubPrId: 99, githubUpdatedAt: null, updatedAt: new Date('2026-10-25T12:00:00Z') });
+  const result = await f.call();
+  assert.equal(result.kind, 'ready');
+  assert.equal(result.items.length, 6);
+  assert.deepEqual(Array.from(result.items.slice(0, 3), row => [row.id, row.date]), [
+    ['github:legacy-pr', '2026-10-23T12:00:00.000Z'],
+    ['release:release', '2026-10-22T12:00:00.000Z'],
+    ['connection:github', '2026-10-21T12:00:00.000Z'],
+  ]);
+  assert.equal(result.items[0].refreshedAt, '2026-10-19T12:00:00.000Z');
+  assert.equal(result.items[0].refreshIsAttempt, true);
+  assert.ok(result.items.slice(3).every(row => row.state === 'CLOSED' && row.date === '2026-09-01T12:00:00.000Z'));
+  assert.equal(result.items.some(row => row.id === 'github:undated'), false);
+});
+
+test('release deduplication ignores owner/repository case but preserves tag case', async () => {
+  const f = fixture(), release = f.releases[0];
+  f.activity.length = f.pulls.length = 0;
+  f.releases.splice(0, f.releases.length,
+    { ...release, id: 'upper', tagName: 'v1.2.3-RC.1', githubUrl: 'https://github.com/TEAM/REPO/releases/tag/v1.2.3-RC.1' },
+    { ...release, id: 'upper-copy', tagName: 'v1.2.3-RC.1', githubUrl: 'https://github.com/team/repo/releases/tag/v1.2.3-RC.1' },
+    { ...release, id: 'lower', tagName: 'v1.2.3-rc.1', githubUrl: 'https://github.com/team/repo/releases/tag/v1.2.3-rc.1' },
+  );
+  const result = await f.call();
+  assert.equal(result.kind, 'ready');
+  assert.equal(result.connectionCount, 7);
+  assert.deepEqual(Array.from(result.items, row => row.url).sort(), [
+    'https://github.com/TEAM/REPO/releases/tag/v1.2.3-RC.1',
+    'https://github.com/team/repo/releases/tag/v1.2.3-rc.1',
+  ]);
 });
 
 test('permission lookup failures report unavailable without reading repository payloads', async () => {

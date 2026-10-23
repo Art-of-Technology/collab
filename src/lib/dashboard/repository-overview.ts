@@ -29,7 +29,7 @@ function canonicalUrl(value: string): string {
   url.search = '';
   url.hash = '';
   url.pathname = url.pathname.replace(/\/$/, '');
-  if (url.hostname === 'github.com') url.pathname = url.pathname.toLowerCase();
+  if (url.hostname === 'github.com') url.pathname = url.pathname.replace(/^\/[^/]+\/[^/]+/, path => path.toLowerCase());
   return url.href.replace(/\/$/, '');
 }
 
@@ -78,8 +78,8 @@ export async function loadWorkspaceRepositoryOverview({ actorId, workspaceId }: 
         select: { id: true, title: true, url: true, state: true, date: true, connection: { select: connectionSelect } },
       }),
       prisma.pullRequest.findMany({
-        where: { repository: repositoryWhere }, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: 6,
-        select: { id: true, githubPrId: true, title: true, state: true, updatedAt: true, repository: { select: repositorySelect } },
+        where: { repository: repositoryWhere, githubUpdatedAt: { not: null } }, orderBy: [{ githubUpdatedAt: 'desc' }, { id: 'asc' }], take: 6,
+        select: { id: true, githubPrId: true, title: true, state: true, githubUpdatedAt: true, repository: { select: repositorySelect } },
       }),
       prisma.release.findMany({
         where: { repository: repositoryWhere, version: versionAccessWhere(actorId), isDraft: false, publishedAt: { not: null } },
@@ -99,7 +99,7 @@ export async function loadWorkspaceRepositoryOverview({ actorId, workspaceId }: 
         id: `github:${row.id}`, project: row.repository.project, provider: 'github',
         repository: row.repository.fullName, kind: 'pull_request' as const, title: row.title,
         url: safeUrl(`https://github.com/${row.repository.fullName}/pull/${row.githubPrId}`),
-        state: row.state, date: row.updatedAt.toISOString(),
+        state: row.state, date: row.githubUpdatedAt!.toISOString(),
         refreshedAt: row.repository.syncedAt?.toISOString() ?? null, refreshIsAttempt: true,
       })),
       ...releases.map(row => ({

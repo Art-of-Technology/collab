@@ -129,7 +129,7 @@ export default function WorkspaceOverview({ workspaceName, workspaceSlug, scope,
                 <div className="flex flex-wrap items-center gap-2 text-xs text-collab-400">
                   <span className="rounded bg-collab-700 px-2 py-0.5">{item.kind === 'release' ? 'Release' : 'PR / merge request'}</span>
                   {item.state && <span>{item.state} when recorded</span>}
-                  <span>{item.kind === 'release' ? 'Published ' : item.refreshIsAttempt ? 'Recorded ' : 'Updated '}<DateLabel value={item.date} /></span>
+                  <span>{item.kind === 'release' ? 'Published ' : 'Updated '}<DateLabel value={item.date} /></span>
                 </div>
                 <p className="text-xs text-collab-400">{item.refreshedAt ? <>{item.refreshIsAttempt ? 'Last refresh attempt: ' : 'Last refreshed: '}<DateLabel value={item.refreshedAt} /></> : 'Refresh time not recorded'}</p>
               </li>;

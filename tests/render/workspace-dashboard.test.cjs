@@ -79,12 +79,13 @@ test('My work uses GET navigation and search, and keeps repository activity expl
   assert.match(document.querySelector('#repository-activity').textContent, /not a live or complete list of open PRs/);
 });
 
-test('legacy pull requests label the local record date without claiming a provider update time', () => {
-  const legacy = { ...repoData().items[0], refreshIsAttempt: true };
+test('legacy GitHub pull requests label provider updates separately from refresh attempts', () => {
+  const legacy = { ...repoData().items[0], provider: 'github', refreshIsAttempt: true };
   const { document } = render({ repositories: repoData({ items: [legacy] }) });
   const activity = document.querySelector('#repository-activity');
-  assert.match(activity.textContent, /Recorded 23 Oct 2026, 09:00 UTC/);
-  assert.doesNotMatch(activity.textContent, /Updated 23 Oct 2026, 09:00 UTC/);
+  assert.match(activity.textContent, /Updated 23 Oct 2026, 09:00 UTC/);
+  assert.match(activity.textContent, /Last refresh attempt: 23 Oct 2026, 11:00 UTC/);
+  assert.doesNotMatch(activity.textContent, /Recorded 23 Oct 2026, 09:00 UTC/);
 });
 
 test('repository links reject unsafe and credential-bearing URLs while retaining readable activity', () => {

@@ -15,8 +15,11 @@ project. Existing `?project=<id>` links still open that project's issues and mem
   `scope=mine`, `q=<project name or slug>`, and `page=<number>` use GET navigation.
 - **Recent repository activity:** six deduplicated cached PRs, merge requests and
   published releases from connected Git providers and the existing GitHub store.
-  This is not a complete open-PR count. Provider updates, local recorded times,
-  refresh attempts and successful refreshes are labelled separately. Dates use UTC.
+  This is not a complete open-PR count. PRs are ranked and labelled by provider
+  update time; legacy GitHub PRs without that timestamp are excluded. Releases use
+  publication time. Refresh attempts and successful refreshes are labelled
+  separately. Dates use UTC. GitHub owner/repository case is ignored during
+  deduplication, while release tag and remaining path case is preserved.
 
 All data is loaded on the server with the current session, exact workspace access
 and `VIEW_TASKS`. Independent sections distinguish missing permission from a load
