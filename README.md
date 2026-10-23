@@ -152,6 +152,10 @@ Collab is designed to streamline internal communication and work tracking by off
 
    Provider rejection, missing configuration, or unconfirmed delivery is reported as `emailSent: false`; the pending invitation and copyable link remain available. A provider message ID means accepted for delivery, not proof of inbox receipt. Requests time out after 10 seconds and are never automatically retried. Timeouts, interrupted or malformed successful responses, and missing message IDs leave delivery unconfirmed. Check the recipient inbox before manually resending: resending replaces the pending invitation and invalidates its previous link.
 
+   The invitation form and create/resend notifications show **Invitation sent successfully** only when `emailSent` is explicitly `true`. Missing email configuration or a provider rejection shows **Invitation created; email not sent**. Other uncertain outcomes, including a missing delivery status, show **Invitation created; email unconfirmed**. Submitting again clears the previous feedback; a failed creation keeps the entered email for correction.
+
+   In workspace management, users with invitation permission can choose **Copy invitation link** under **Pending Invitations** when a token is available. Share the link with the invited person. If clipboard access fails or is unavailable, focus the displayed link field to select it and copy it manually. Successful cancellation clears the manual-copy field.
+
    #### App Store & OAuth (for third-party apps)
    ```bash
    APP_TOKENS_KEY="your-32-character-encryption-key-here"  # Generate with: openssl rand -hex 32
@@ -248,6 +252,7 @@ Collab is designed to streamline internal communication and work tracking by off
   [workspace permissions contract](docs/security/2026-09-23-hardening.md#scoped-permission-reads-and-resets).
   For custom-role names, grants and member assignments, see the
   [custom-role contract](docs/security/2026-09-23-hardening.md#custom-role-and-member-role-boundaries).
+- Open **Settings** in the bottom-left profile menu to reach your profile and notification settings, in either the expanded or collapsed sidebar. This action is disabled until a workspace is selected. The workspace settings index (`/workspaces/<workspaceId>/settings`) redirects to workspace management (`/workspaces/<workspaceId>`); the retired AI-key settings route remains unavailable.
 - Use the timeline to post status updates, tasks, and feature requests.
 - Use the workspace [Project overview](#project-overview) to select a project.
 - Customize your avatar with partial updates; see the
