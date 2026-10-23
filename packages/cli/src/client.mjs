@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { randomBytes } from 'node:crypto';
+import { createServer } from 'node:net';
+import { once } from 'node:events';
 import { windowsAcl } from './windows-acl.mjs';
 
 export class CliError extends Error {
@@ -71,11 +73,52 @@ export function store(profile = 'default') {
   async function exclusive(callback) {
     prepare();
     const lock = `${file}.lock`;
-    let fd;
-    try { fd = fs.openSync(lock, 'wx', 0o600); }
-    catch { throw new CliError('state_locked', 'Another login/configuration change is active. A stale lock requires explicit removal.'); }
-    try { return await callback(load(), save); }
-    finally { fs.closeSync(fd); fs.unlinkSync(lock); }
+    const locked = () => new CliError('state_locked', 'Another login/configuration change is active, or this lock cannot be recovered safely. Retry after it finishes. For an older or damaged lock, stop other Collab commands before removing the lock file.', 2, { lockFile: lock });
+    function readLock() {
+      const stat = fs.lstatSync(lock);
+      check(stat, false, lock);
+      if (stat.size > 1024) throw locked();
+      return fs.readFileSync(lock, { encoding: 'utf8', flag: fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW });
+    }
+    let previous;
+    try { previous = readLock(); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    let port = 0;
+    if (previous !== undefined) {
+      let owner;
+      try { owner = JSON.parse(previous); } catch { throw locked(); }
+      if (owner?.version !== 1 || owner.host !== os.hostname() || !Number.isInteger(owner.port) || owner.port < 1024 || owner.port > 65535 || !/^[a-f0-9]{32}$/.test(owner.nonce)) throw locked();
+      port = owner.port;
+    }
+    // The OS releases this socket on a crash; rebinding also serializes competing recoveries.
+    const guard = createServer(socket => socket.destroy());
+    const nonce = randomBytes(16).toString('hex'), temporary = `${lock}.${nonce}.tmp`;
+    let owned = false;
+    try {
+      guard.listen({ host: '127.0.0.1', port, exclusive: true });
+      try { await once(guard, 'listening'); }
+      catch (error) { if (error.code === 'EADDRINUSE') throw locked(); throw error; }
+      if (windows && !windowsAcl(temporary, 'file')) throw new CliError('unsafe_credentials', 'Cannot create a private Windows lock file.');
+      const fd = fs.openSync(temporary, windows ? 'r+' : 'wx', 0o600);
+      try {
+        fs.writeFileSync(fd, JSON.stringify({ version: 1, host: os.hostname(), port: guard.address().port, pid: process.pid, nonce }) + '\n');
+        fs.fsyncSync(fd);
+      } finally { fs.closeSync(fd); }
+      if (previous !== undefined) {
+        if (readLock() !== previous) throw locked();
+        fs.unlinkSync(lock);
+      }
+      // Publish complete metadata atomically, so a crash cannot leave a new empty lock.
+      try { fs.linkSync(temporary, lock); }
+      catch (error) { if (error.code === 'EEXIST') throw locked(); throw error; }
+      owned = true;
+      fs.unlinkSync(temporary);
+      return await callback(load(), save);
+    } finally {
+      try {
+        try { fs.unlinkSync(temporary); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+        if (owned) fs.unlinkSync(lock);
+      } finally { await new Promise(resolve => guard.close(resolve)); }
+    }
   }
   return { load, exclusive };
 }

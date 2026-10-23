@@ -862,6 +862,113 @@ test('actual login survives browser approval delay, verifies PKCE and identity, 
   assert.deepEqual(JSON.parse(readFileSync(file)), {});
 });
 
+async function pendingLogin(f, args = []) {
+  const ready = Promise.withResolvers();
+  let child;
+  const result = f.run(['auth', 'login', ...args], {
+    env: { COLLAB_TOKEN: '' },
+    childCallback: value => { child = value; },
+    stderrCallback: output => {
+      const match = output.match(/http:\/\/127\.0\.0\.1:\d+\/auth\/mcp\?[^\s]+/);
+      if (match) ready.resolve(new URL(match[0]));
+    },
+  });
+  result.then(value => ready.reject(new Error(`Login exited before authorization: ${value.stderr}`)));
+  return { child, result, authorization: await ready.promise };
+}
+
+test('login recovers after a killed process and preserves credentials until approval', async t => {
+  const f = await fixture(t, (req, res) => {
+    res.end(JSON.stringify(req.url === '/api/oauth/mcp/token'
+      ? { access_token: 'PRIVATE_NEW', token_type: 'Bearer', expires_in: 3600, workspace_id: 'workspace-one' }
+      : { id: 'same-user', workspace: { id: 'workspace-one' } }));
+  });
+  const file = path.join(f.dir, 'default.json'), lock = `${file}.lock`;
+  const saved = JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_OLD' });
+  writeCredentials(file, saved);
+  const first = await pendingLogin(f);
+  first.child.kill('SIGKILL');
+  await first.result;
+  assert.equal(existsSync(lock), true, 'forced termination leaves the lock behind');
+  const retry = await pendingLogin(f);
+  try {
+    assert.equal(readFileSync(file, 'utf8'), saved);
+    const redirect = new URL(retry.authorization.searchParams.get('redirect_uri'));
+    redirect.search = new URLSearchParams({ code: 'synthetic-code', state: retry.authorization.searchParams.get('state') });
+    assert.equal((await fetch(redirect)).status, 200);
+    const result = await retry.result;
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.data.authenticated, true);
+    assert.equal(JSON.parse(readFileSync(file)).accessToken, 'PRIVATE_NEW');
+    assert.equal(existsSync(lock), false);
+    assert.equal((await f.run(['whoami'], { env: { COLLAB_TOKEN: '' } })).data.id, 'same-user');
+  } finally { retry.child.kill('SIGKILL'); await retry.result; }
+});
+
+test('active login refuses competing login and logout without changing its lock', async t => {
+  const f = await fixture(t);
+  const first = await pendingLogin(f);
+  try {
+    const lock = path.join(f.dir, 'default.json.lock'), contents = readFileSync(lock, 'utf8');
+    for (const command of [['auth', 'login'], ['auth', 'logout']]) {
+      const result = await f.run(command, { env: { COLLAB_TOKEN: '' } });
+      assert.equal(result.error?.error, 'state_locked', result.stderr);
+      assert.equal(readFileSync(lock, 'utf8'), contents);
+    }
+    assert.equal(f.calls.length, 0);
+  } finally { first.child.kill('SIGKILL'); await first.result; }
+});
+
+test('concurrent login retries after a crash admit only one new owner', async t => {
+  const f = await fixture(t);
+  const first = await pendingLogin(f);
+  first.child.kill('SIGKILL'); await first.result;
+  const rejected = Promise.withResolvers();
+  let approvals = 0, callback;
+  const retry = () => f.run(['auth', 'login'], {
+    env: { COLLAB_TOKEN: '' },
+    stderrCallback: output => {
+      if (callback) return;
+      const match = output.match(/http:\/\/127\.0\.0\.1:\d+\/auth\/mcp\?[^\s]+/);
+      if (!match) return;
+      approvals++;
+      callback = (async () => {
+        await rejected.promise;
+        const authorization = new URL(match[0]);
+        const redirect = new URL(authorization.searchParams.get('redirect_uri'));
+        redirect.search = new URLSearchParams({ error: 'access_denied', state: authorization.searchParams.get('state') });
+        return fetch(redirect);
+      })().catch(error => error);
+    },
+  }).then(result => { if (result.error?.error === 'state_locked') rejected.resolve(); return result; });
+  const results = await Promise.all([retry(), retry()]);
+  assert.equal((await callback)?.status, 200);
+  assert.equal(approvals, 1);
+  assert.deepEqual(results.map(result => result.error?.error).sort(), ['access_denied', 'state_locked']);
+  assert.equal(existsSync(path.join(f.dir, 'default.json.lock')), false);
+  assert.equal(f.calls.length, 0);
+});
+
+test('legacy, damaged and foreign-host locks are preserved with actionable diagnostics', async t => {
+  const f = await fixture(t), lock = path.join(f.dir, 'default.json.lock');
+  for (const contents of ['', '{broken', JSON.stringify({ version: 1, host: 'another-machine', port: 12345 }), 'x'.repeat(1025)]) {
+    writeCredentials(lock, contents);
+    const result = await f.run(['auth', 'login']);
+    assert.equal(result.error?.error, 'state_locked', result.stderr);
+    assert.equal(result.error.lockFile, lock);
+    assert.equal(readFileSync(lock, 'utf8'), contents);
+    assert.equal(f.calls.length, 0);
+  }
+});
+
+test('login validation failure releases the lock for the next configuration write', async t => {
+  const f = await fixture(t), lock = path.join(f.dir, 'default.json.lock');
+  assert.equal((await f.run(['auth', 'login', '--url', 'invalid'])).error.error, 'invalid_origin');
+  assert.equal(existsSync(lock), false);
+  assert.equal((await f.run(['auth', 'logout'])).code, 0);
+  assert.equal(existsSync(lock), false);
+});
+
 
 test('refresh retains a validated workspace and project selection while rotating the original token', async t => {
   let rotated = false;
