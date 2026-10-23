@@ -22,7 +22,7 @@ Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32
 
 [CLI 0.5.1 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.5.1) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
 
-Version 0.5.1 lets `collab auth login` recover locks left by a crashed login using this version. A running login remains protected; empty locks from older releases need one-time cleanup as described below.
+Version 0.5.1 adds [automatic login crash recovery](#authentication-and-automation), with cleanup guidance for older locks.
 
 Version 0.5.0 adds project-scoped issue deletion previews, Trash and Restore. Issue deletion requires a selected project; update the CLI before using deletion against the Trash-enabled server. Existing credentials are preserved when updating.
 
@@ -193,7 +193,7 @@ The apply operation transactionally creates only the dedicated `collab-cli` syst
 
 CLI 0.4.2 includes the reviewed and merged automatic label-handoff and host-callback implementations. The final tag must contain both implementations.
 
-Merge release source to `main` before publishing `cli-v0.5.0`; the native workflow requires the tagged commit to be an ancestor of `main`. The release owner must verify all 18 public GitHub release assets (seven archives, two tagged installer scripts and their SHA-256 sidecars) before the sole app deployment owner deploys.
+Follow [Build native downloads](#build-native-downloads) for merge, tag and publication requirements. The release owner must verify all 18 public GitHub release assets (seven archives, two tagged installer scripts and their SHA-256 sidecars) before the sole app deployment owner deploys.
 
 ```sh
 npm test --prefix packages/cli
@@ -221,7 +221,7 @@ These commands are included in CLI 0.4.2. Run the one-command installer again to
 The [generic agent skill](skills/collab-agents/SKILL.md) describes registration,
 role subscriptions, bounded inbox waits, atomic claims and handoffs. Load this
 file through your agent's supported skill mechanism; it does not launch agents.
-Native users can download the [versioned SKILL.md](https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v0.5.0/packages/cli/skills/collab-agents/SKILL.md).
+Native users can get `packages/cli/skills/collab-agents/SKILL.md` from the source archive on the [CLI release page](#one-command-installation).
 Requires the matching server release and its additive agent-handoff migration.
 
 `collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to
