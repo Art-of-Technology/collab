@@ -8,18 +8,29 @@ import { checkUserPermission, Permission } from "@/lib/permissions";
 import { loadForgeBoard } from "@/lib/forge/board";
 import { loadProjectMemory } from "@/lib/forge/memory-service";
 import DashboardOverview, { type DashboardData } from "./components/DashboardClient";
+import WorkspaceOverview from "./components/WorkspaceOverview";
+import { loadWorkspaceIssueOverview } from "@/lib/dashboard/workspace-overview";
+import { loadWorkspaceRepositoryOverview } from "@/lib/dashboard/repository-overview";
+import type { DashboardScope, RepositoryOverview, WorkspaceIssueOverview } from "@/types/workspace-dashboard";
 
 export const metadata: Metadata = {
-  title: "Project overview",
-  description: "Project issues, approved memory and Ready review",
+  title: "Workspace overview",
+  description: "Project progress, issues needing attention and recent repository activity",
 };
 
-async function loadOverview(workspaceSelector: string, projectSelector: string | string[] | undefined): Promise<DashboardData | { kind: "login" }> {
+type OverviewSearch = { project?: string | string[]; scope?: string | string[]; q?: string | string[]; page?: string | string[] };
+type WorkspaceData = { kind: "workspace"; workspaceName: string; workspaceSlug: string; scope: DashboardScope; issues: WorkspaceIssueOverview; repositories: RepositoryOverview };
+
+async function loadOverview(workspaceSelector: string, search: OverviewSearch): Promise<DashboardData | WorkspaceData | { kind: "login" }> {
   try {
     const session = await getAuthSession();
     if (!session?.user?.id) return { kind: "login" };
+    const projectSelector = search.project;
     if (!workspaceSelector || workspaceSelector.length > 200 ||
       (projectSelector !== undefined && (typeof projectSelector !== "string" || projectSelector.length > 200))) return { kind: "denied" };
+    if (search.scope !== undefined && search.scope !== "all" && search.scope !== "mine") return { kind: "denied" };
+    if (search.q !== undefined && (typeof search.q !== "string" || search.q.length > 100)) return { kind: "denied" };
+    if (search.page !== undefined && (typeof search.page !== "string" || !/^[1-9]\d{0,3}$/.test(search.page))) return { kind: "denied" };
     const actorId = session.user.id;
     const workspace = await prisma.workspace.findFirst({
       where: postWorkspaceAccessWhere(actorId, workspaceSelector),
@@ -33,17 +44,25 @@ async function loadOverview(workspaceSelector: string, projectSelector: string |
     const issuesUnavailable = issues.reason === "Internal error";
     const notesUnavailable = notes.reason === "Internal error";
     if (!issues.hasPermission && !notes.hasPermission) return { kind: issuesUnavailable || notesUnavailable ? "unavailable" : "denied" };
+    const workspaceSlug = workspace.slug || workspace.id;
+    if (!projectSelector) {
+      const [issueOverview, repositories] = await Promise.all([
+        issuesUnavailable ? { kind: "unavailable" as const } : issues.hasPermission
+          ? loadWorkspaceIssueOverview({ actorId, workspaceId: workspace.id, scope: search.scope === "mine" ? "mine" : "all", projectSearch: typeof search.q === "string" ? search.q.trim() : "", projectPage: Number(search.page ?? 1) })
+          : { kind: "denied" as const },
+        issuesUnavailable ? { kind: "unavailable" as const } : issues.hasPermission
+          ? loadWorkspaceRepositoryOverview({ actorId, workspaceId: workspace.id })
+          : { kind: "denied" as const },
+      ]);
+      return { kind: "workspace", workspaceName: workspace.name, workspaceSlug, scope: search.scope === "mine" ? "mine" : "all", issues: issueOverview, repositories };
+    }
     const projects = await prisma.project.findMany({
       where: { workspaceId: workspace.id, workspace: postWorkspaceAccessWhere(actorId) },
       select: { id: true, slug: true, name: true },
       orderBy: [{ name: "asc" }, { id: "asc" }],
     });
-    const selected = projectSelector
-      ? projects.find(project => project.id === projectSelector)
-      : projectSelector === undefined && projects.length === 1 ? projects[0] : undefined;
-    if (projectSelector && !selected) return { kind: "denied" };
-    const workspaceSlug = workspace.slug || workspace.id;
-    if (!selected) return { kind: "ready", workspaceName: workspace.name, workspaceSlug, projects, selected: null };
+    const selected = projects.find(project => project.id === projectSelector);
+    if (!selected) return { kind: "denied" };
     // Recheck access on the selected payload; never use a cookie/global workspace fallback.
     const project = await prisma.project.findFirst({
       where: { id: selected.id, workspaceId: workspace.id, workspace: postWorkspaceAccessWhere(actorId) },
@@ -76,12 +95,12 @@ async function loadOverview(workspaceSelector: string, projectSelector: string |
 
 export default async function DashboardPage({ params, searchParams }: {
   params: Promise<{ workspaceId: string }>;
-  searchParams: Promise<{ project?: string | string[] }>;
+  searchParams: Promise<OverviewSearch>;
 }) {
   const { workspaceId } = await params;
-  const { project } = await searchParams;
-  const data = await loadOverview(workspaceId, project);
+  const data = await loadOverview(workspaceId, await searchParams);
   if (data.kind === "login") redirect("/login");
   if (data.kind === "denied") notFound();
+  if (data.kind === "workspace") return <WorkspaceOverview workspaceName={data.workspaceName} workspaceSlug={data.workspaceSlug} scope={data.scope} issues={data.issues} repositories={data.repositories} />;
   return <DashboardOverview data={data} />;
 }
