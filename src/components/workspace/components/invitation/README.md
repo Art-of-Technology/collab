@@ -17,12 +17,12 @@ The main container component that renders the entire invitations tab content. It
 - Handles real-time updates via query invalidation
 
 ### `PendingInvitations`
-Displays a list of pending invitations with the ability to cancel them.
+Displays pending invitations and their actions. For link copying and clipboard fallback behavior, see the [invitation delivery guide](../../../../../README.md#email-configuration-resend).
 
 **Props:**
 - `invitations: Invitation[]` - Array of pending invitations
 - `workspaceId: string` - The workspace identifier
-- `canCancelInvitations: boolean` - Permission flag for canceling invitations
+- `canCancelInvitations: boolean` - Gates both cancellation and link copying; `InvitationsTab` passes `canInviteMembers`
 
 ### `InviteNewMembers`
 Contains the form for sending new invitations to workspace members.
@@ -35,11 +35,11 @@ A form component for sending invitations with TanStack Query integration.
 
 **Props:**
 - `workspaceId: string` - The workspace identifier
-- `onInviteSent?: () => void` - Optional callback when invitation is sent
+- `onInviteSent?: () => void` - Optional callback after successful invitation creation, regardless of email delivery status
 
 **Features:**
 - Uses `useInviteMember` mutation for sending invitations
-- Automatic error handling and success notifications
+- Uses the shared `invitationFeedback` helper for the form status and create/resend notifications; see the [invitation delivery guide](../../../../../README.md#email-configuration-resend) for status meanings and form feedback behavior
 - Form validation with Zod schema
 - Automatic query invalidation on success
 

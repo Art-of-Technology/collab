@@ -8,6 +8,22 @@ export const invitationKeys = {
   workspace: (workspaceId: string) => [...invitationKeys.all, 'workspace', workspaceId] as const,
 };
 
+export function invitationFeedback(data: { emailSent?: boolean; emailDetails?: { error?: string | null } }) {
+  if (data.emailSent === true) {
+    return { title: 'Invitation sent successfully', description: 'An invitation email has been sent.' };
+  }
+
+  const error = data.emailDetails?.error;
+  const notSent = data.emailSent === false && (
+    error === 'Email delivery is not configured. Contact your workspace administrator.' ||
+    error === 'The email service did not accept the message. Please retry from workspace invitations.'
+  );
+  return {
+    title: notSent ? 'Invitation created; email not sent' : 'Invitation created; email unconfirmed',
+    description: `${error || 'Email delivery could not be confirmed.'} Copy the invitation link from Pending Invitations to share it directly.`,
+  };
+}
+
 // Hook to fetch invitations for a workspace
 export function useInvitations(workspaceId: string) {
   return useQuery({
@@ -50,7 +66,7 @@ export function useInviteMember(workspaceId: string) {
 
       return result;
     },
-    onSuccess: (data, email) => {
+    onSuccess: (data) => {
       // Invalidate and refetch invitations
       queryClient.invalidateQueries({
         queryKey: invitationKeys.workspace(workspaceId),
@@ -61,22 +77,7 @@ export function useInviteMember(workspaceId: string) {
         queryKey: ['workspace', workspaceId],
       });
 
-      // Show detailed status toast
-      if (data.emailSent === false) {
-        const errorDetail = data.emailDetails?.error ? `: ${data.emailDetails.error}` : '';
-        toast({
-          title: "Invitation created; email unconfirmed",
-          description: `The invitation was created successfully, but email delivery could not be confirmed${errorDetail}. The user can still join using the invitation link from your workspace settings.`,
-          variant: "destructive",
-        });
-      } else {
-        const messageId = data.emailDetails?.messageId ? ` (ID: ${data.emailDetails.messageId})` : '';
-        toast({
-          title: "Invitation sent successfully",
-          description: `An email invitation has been sent to ${email}${messageId}`,
-          variant: "default",
-        });
-      }
+      toast({ ...invitationFeedback(data), variant: data.emailSent === true ? 'default' : 'destructive' });
     },
     onError: (error) => {
       toast({
@@ -121,7 +122,7 @@ export function useResendInvitation(workspaceId: string) {
 
       return result;
     },
-    onSuccess: (data, { email }) => {
+    onSuccess: (data) => {
       // Invalidate and refetch invitations
       queryClient.invalidateQueries({
         queryKey: invitationKeys.workspace(workspaceId),
@@ -132,20 +133,7 @@ export function useResendInvitation(workspaceId: string) {
         queryKey: ['workspace', workspaceId],
       });
 
-      if (data.emailSent === false) {
-        const errorDetail = data.emailDetails?.error ? `: ${data.emailDetails.error}` : '';
-        toast({
-          title: "Invitation resent; email unconfirmed",
-          description: `The invitation was created successfully, but email delivery could not be confirmed${errorDetail}. The user can still join using the invitation link from your workspace settings.`,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Invitation resent successfully",
-          description: `A new invitation email has been sent to ${email}`,
-          variant: "default",
-        });
-      }
+      toast({ ...invitationFeedback(data), variant: data.emailSent === true ? 'default' : 'destructive' });
     },
     onError: (error) => {
       toast({
