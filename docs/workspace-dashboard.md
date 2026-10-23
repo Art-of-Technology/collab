@@ -1,7 +1,8 @@
 # Workspace Home
 
-Home (`/[workspace]/dashboard`) opens the workspace overview without selecting a
-project. Existing `?project=<id>` links still open that project's issues and memory.
+Home (`/[workspace]/dashboard`) opens the workspace overview when `project` is
+absent or empty, even in a workspace with only one project. Existing `?project=<id>`
+links still open that project's issues and memory.
 
 - **All work / My work:** My work limits native Collab issues to the signed-in
   assignee. Repository activity remains workspace-wide and is labelled accordingly.

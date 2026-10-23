@@ -11,7 +11,7 @@ This document outlines a comprehensive plan to transform Collab into an AI-Nativ
 ### 1.1 Dashboard Issues
 
 The dashboard proposals below are historical planning material. Current workspace
-dashboard behavior is owned by [Project overview](../README.md#project-overview).
+dashboard behavior is owned by [Workspace Home](workspace-dashboard.md).
 
 ### 1.2 Navigation/Sidebar Complexity
 
