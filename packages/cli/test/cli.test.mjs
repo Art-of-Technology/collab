@@ -300,9 +300,16 @@ test('interrupted error bodies retain sanitized status and mutation semantics', 
   }
 });
 
+// Test helpers use cmdlets, so drop module paths inherited from PowerShell 7 that Windows PowerShell cannot load.
+function windowsPowerShell(script, input) {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) if (key.toUpperCase() === 'PSMODULEPATH') delete env[key];
+  return spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { input, encoding: 'utf8', env });
+}
+// SetAccessControl writes only the changed DACL; Set-Acl also writes the SACL, which needs SeSecurityPrivilege.
 function grantEveryoneRead(file) {
-  const script = `$ErrorActionPreference = 'Stop'; $p = [Console]::In.ReadToEnd(); $acl = Get-Acl -LiteralPath $p; $sid = New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0'); $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'Read', 'Allow'); $acl.AddAccessRule($rule); Set-Acl -LiteralPath $p -AclObject $acl`;
-  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { input: file, encoding: 'utf8' });
+  const script = `$ErrorActionPreference = 'Stop'; $p = [Console]::In.ReadToEnd(); $item = if ([System.IO.Directory]::Exists($p)) { [System.IO.DirectoryInfo]::new($p) } else { [System.IO.FileInfo]::new($p) }; $acl = $item.GetAccessControl('Access'); $sid = New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0'); $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'Read', 'Allow'); $acl.AddAccessRule($rule); $item.SetAccessControl($acl)`;
+  const result = windowsPowerShell(script, file);
   assert.equal(result.status, 0, result.stderr);
 }
 function writeCredentials(file, contents) {
@@ -730,7 +737,7 @@ test('Windows credential creation sets the user owner and refuses existing files
   const contents = JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_SYNTHETIC', expiresAt: Date.now() + 60000 });
   writeFileSync(file, contents);
   const script = `$ErrorActionPreference = 'Stop'; $acl = Get-Acl -LiteralPath ([Console]::In.ReadToEnd()); @{ user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value; owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value; sddl = $acl.Sddl } | ConvertTo-Json -Compress`;
-  const inspected = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { input: file, encoding: 'utf8' });
+  const inspected = windowsPowerShell(script, file);
   assert.equal(inspected.status, 0, inspected.stderr);
   const acl = JSON.parse(inspected.stdout);
   t.diagnostic(`Node default credential ownership: ${JSON.stringify(acl)}`);
@@ -751,6 +758,26 @@ test('Windows credential creation sets the user owner and refuses existing files
   assert.equal(windowsAcl(file, 'file'), false);
   assert.equal(windowsAcl(file), false, 'creation never repairs an unsafe existing ACL');
   assert.equal(readFileSync(file, 'utf8'), contents);
+});
+
+test('Windows credential state can be created and read when the CLI is started from PowerShell 7', { skip: !windows }, async t => {
+  // pwsh prepends its own core modules to PSModulePath, and child processes inherit that value.
+  const pwsh = spawnSync('pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '[Console]::Out.Write($env:PSModulePath)'], { encoding: 'utf8' });
+  if (pwsh.status !== 0) return t.skip('PowerShell 7 is not installed');
+  const f = await fixture(t);
+  const env = { COLLAB_TOKEN: '' };
+  for (const key of Object.keys(process.env)) if (key.toUpperCase() === 'PSMODULEPATH') env[key] = undefined;
+  env.PSModulePath = pwsh.stdout;
+  // Logout saves state like login does, creating the private directory and credential file, without a server.
+  const created = path.join(f.dir, 'created-state');
+  const saved = await f.run(['auth', 'logout'], { env: { ...env, COLLAB_CONFIG_DIR: created } });
+  assert.equal(saved.code, 0, saved.stderr);
+  assert.equal(windowsAcl(created), true);
+  assert.equal(windowsAcl(path.join(created, 'default.json')), true);
+  writeCredentials(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_TOKEN', expiresAt: Date.now() + 60000 }));
+  const result = await f.run(['whoami'], { env });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(f.calls.length, 1);
 });
 
 test('unsafe Windows directory ACLs and junctions refuse credentials before dispatch', { skip: !windows }, async t => {
