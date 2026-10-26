@@ -1,7 +1,7 @@
 {
   "format": "collab-empty-bootstrap-v1",
   "prismaVersion": "6.19.3",
-  "schemaSha256": "4b1ea31a7f548225300c87c81dcff2fe1328a5dfbb2ec88d91137d6af736389a",
+  "schemaSha256": "0575ec1958e5425a8bc88bab77b666c49471da97763e422c6a2f1bac33cdd9c7",
   "migrations": [
     {
       "name": "20250101000000_remove_task_relations_foreign_key",
@@ -62,6 +62,10 @@
     {
       "name": "20261022190000_issue_trash",
       "sha256": "32e1f4017d429164acc7d8509fe20a675b999f0ad530fa6495e7354adb8ca77f"
+    },
+    {
+      "name": "20261026000100_agent_operations",
+      "sha256": "3297ce1af139b044cbda23681761365d5adf9b8a29935876e5c7eaa73774c84d"
     }
   ],
   "unmodeledCatalog": {

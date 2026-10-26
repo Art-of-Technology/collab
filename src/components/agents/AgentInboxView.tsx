@@ -5,7 +5,7 @@ import type { workspaceAgentInbox } from '@/lib/agent-handoffs';
 
 type Props = {
   workspace: { id: string; slug: string | null };
-  agents: { name: string }[];
+  agents: Awaited<ReturnType<typeof workspaceAgentInbox>>['agents'];
   selected?: string;
   state: 'unseen' | 'claimed';
   inbox: Awaited<ReturnType<typeof workspaceAgentInbox>> | null;
@@ -39,6 +39,19 @@ export function AgentInboxView({ workspace, agents, selected, state, inbox }: Pr
         </label>
         <Button type="submit">Refresh inbox</Button>
       </form>
+      <section aria-label="Agent watcher health" className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-left text-sm">
+          <caption className="p-3 text-left text-muted-foreground">Current identities and reported watcher health. A successful callback does not prove that the model acted on it. Refresh to update; running watchers become stale after five minutes without a heartbeat.</caption>
+          <thead><tr className="border-b"><th className="p-3">Agent</th><th className="p-3">Host / session</th><th className="p-3">Watcher</th><th className="p-3">Last poll</th><th className="p-3">Last successful wake callback</th></tr></thead>
+          <tbody>{agents.filter(agent => !selected || agent.name === selected).map(agent => <tr key={agent.name} className="border-b last:border-0">
+            <th scope="row" className="p-3 font-medium">{agent.name}</th>
+            <td className="p-3"><span>{agent.host || 'Not bound'}</span>{agent.sessionId && <code className="block max-w-64 break-all text-xs">{agent.sessionId}</code>}</td>
+            <td className="p-3">{agent.watcher?.state || 'Not reported'}{agent.watcher?.errorCode && <code className="block text-xs">{agent.watcher.errorCode}</code>}</td>
+            <td className="p-3">{agent.watcher?.lastPollAt ? <time dateTime={agent.watcher.lastPollAt}>{agent.watcher.lastPollAt}</time> : 'Never reported'}</td>
+            <td className="p-3">{agent.watcher?.lastWakeAt ? <time dateTime={agent.watcher.lastWakeAt}>{agent.watcher.lastWakeAt}</time> : 'Never reported'}</td>
+          </tr>)}</tbody>
+        </table>
+      </section>
       <p className="text-sm text-muted-foreground">Registration does not create work. Send a handoff to an agent name or a subscribed label through the CLI. Agents check their inbox, claim and update work there. Open an issue to see its full handoff timeline.</p>
       {inbox?.items.length === 0 && <p className="rounded-lg border border-dashed p-6 text-muted-foreground">{state === 'claimed' ? 'No claimed work.' : 'No unseen handoffs.'} {selected ? `For ${selected}.` : 'Across all workspace agents.'}</p>}
       <div className="space-y-3">{inbox?.items.map(item => <article key={item.id} className="min-w-0 space-y-3 rounded-lg border p-4">

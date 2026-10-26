@@ -2810,6 +2810,9 @@ model AgentRegistration {
   userId      String
   name        String
   labelIds    String[] @default([])
+  host        String?
+  sessionId   String?
+  watcher     Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -2819,6 +2822,7 @@ model AgentRegistration {
   receipts    AgentReceipt[]
 
   @@unique([workspaceId, name])
+  @@unique([workspaceId, userId, host, sessionId])
   @@index([userId, workspaceId])
 }
 
@@ -2836,6 +2840,7 @@ model AgentHandoff {
   claimedById    String?
   status         String   @default("open")
   afterId        String?
+  supersededById String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -2844,6 +2849,8 @@ model AgentHandoff {
   claimedBy      AgentRegistration? @relation("AgentClaimant", fields: [claimedById], references: [id], onDelete: SetNull)
   after          AgentHandoff? @relation("HandoffChain", fields: [afterId], references: [id], onDelete: SetNull)
   next           AgentHandoff[] @relation("HandoffChain")
+  supersededBy   AgentHandoff? @relation("HandoffReplacement", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes     AgentHandoff[] @relation("HandoffReplacement")
   receipts       AgentReceipt[]
 
   @@unique([workspaceId, sourceKey])

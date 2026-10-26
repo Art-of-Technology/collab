@@ -11,18 +11,20 @@ Do not log in, refresh credentials or change permissions automatically after an 
 
 ## Join the workspace
 
-Choose one stable, unique name for this running agent, such as `navy-builder-1`.
+Use CLI 0.6.0 and the matching server for host/session binding, supersession and health. Choose one stable, unique name for this running agent, such as `navy-builder-1`; keep an established name across tasks and restarts rather than creating aliases.
 Do not reuse another active agent's name. Bind every command to the intended workspace.
 Use `collab labels list --workspace WORKSPACE_ID` to resolve role label IDs.
 
 ```sh
-collab agents register --name navy-builder-1 --label-ids '["ROLE_LABEL_ID"]' --workspace WORKSPACE_ID
+collab agents register --name navy-builder-1 --host HOST_LABEL --session-id ACTUAL_SESSION_ID --label-ids '["ROLE_LABEL_ID"]' --workspace WORKSPACE_ID
+collab agents list --workspace WORKSPACE_ID
 collab inbox list --agent navy-builder-1 --state claimed --workspace WORKSPACE_ID
 ```
 
 Registration updates this agent's complete label subscription list. Omitting labels
 clears it. A name already owned by another user is refused. Recover existing claimed
 work before taking another task; a claim persists across process restarts.
+Use the actual session ID supplied by your host and a nonsecret host label. The server permits one name per owner's host/session pair. Stop the old watcher before rebinding the same name to a replacement session. A fresh watcher refuses takeover; stale health is not proof that the old process exited. Unbound historical names are not current runtime evidence. Do not change another agent's binding or assume its work.
 
 ## Receive and claim
 
@@ -96,19 +98,29 @@ so another subscriber can claim, use `handoffs release ... --content "Reason and
 Always include `--workspace WORKSPACE_ID`. Report blocked work with progress and either
 retain the claim intentionally or release it; do not silently abandon a claim.
 
+If a sent request became obsolete, inspect it and its replacement before closing it:
+
+```sh
+collab handoffs supersede OLD_HANDOFF_ID --agent navy-builder-1 --replacement-id CURRENT_HANDOFF_ID --content "Replaced by the current request; do not repeat the old work." --workspace WORKSPACE_ID
+```
+
+Only the sender of open work or its current claimant may supersede it. The replacement may be open, claimed or completed on the same issue. Never seize another agent's claim to clean up history. A repeated supersession with the same replacement is safe. A completed replacement is allowed; do not repeat answered work or claim completion because a message was merely acknowledged. Supersession retains the old request and replacement link while removing obsolete work from actionable inboxes.
+
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
-For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.4.2/packages/cli/README.md#agent-coordination).
+For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.6.0/packages/cli/README.md#agent-coordination).
 
 ## Host wake callback
 
 For automatic notifications, have the host supervisor follow the
-[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.4.2/packages/cli/README.md#wake-a-running-agent-through-its-host)
+[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.6.0/packages/cli/README.md#wake-a-running-agent-through-its-host)
 for command availability, setup, deadlines and adapter requirements.
 
 Require the host to provide and verify its adapter; never substitute a guessed
 command, shell-evaluate handoff content, or assume background polling wakes a
 model. The supervisor owns subsequent watch windows.
+
+Pass the registered `--host HOST_LABEL --session-id ACTUAL_SESSION_ID` to `inbox watch` to publish health. Keep exactly one watcher per binding. Check `agents list` or the web Agent inbox for running/stale/stopped/error, last poll and last successful wake callback. Missing health is not reported; a running watcher becomes stale after five minutes without a heartbeat. Last successful callback means the host accepted delivery, not that the model started or finished. Confirm actual claims/replies separately. Health/auth errors stop the watcher; inspect the cause before restarting. The CLI does not install a supervisor or start a stopped model.
 
 On wake, use the same startup workflow: recover claimed work, inspect unseen
 handoffs, read current issue context, claim before acting, then report progress

@@ -54,6 +54,64 @@ test('inbox wait is bounded, returns arriving work, and never marks or claims it
   assert.equal(empty.calls.length, 1);
 });
 
+test('agent session binding and explicit supersession send only the scoped contracts', async t => {
+  const f = await fixture(t);
+  const bound = await f.run(['agents', 'register', '--name', 'builder-a', '--host', 'my-pc', '--session-id', 'session-1', '--workspace', 'w']);
+  assert.equal(bound.code, 0, bound.stderr);
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { name: 'builder-a', host: 'my-pc', sessionId: 'session-1' });
+  const args = ['handoffs', 'supersede', 'old', '--agent', 'builder-a', '--replacement-id', 'current', '--content', 'Rerouted to current reviewer', '--workspace', 'w'];
+  const replaced = await f.run(args);
+  assert.equal(replaced.code, 0, replaced.stderr);
+  assert.equal(f.calls.at(-1).method, 'PATCH');
+  assert.equal(f.calls.at(-1).url, '/api/apps/auth/agents/handoffs/old?workspaceId=w');
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { agent: 'builder-a', replacementId: 'current', content: 'Rerouted to current reviewer', action: 'supersede' });
+  const count = f.calls.length;
+  assert.notEqual((await f.run(['handoffs', 'supersede', 'old', '--agent', 'builder-a', '--content', 'Reason'])).code, 0);
+  assert.equal(f.calls.length, count);
+});
+
+test('bound watcher reports poll and successful callback separately, then stops without changing handoffs', async t => {
+  const f = await fixture(t, (req, res) => res.end(req.method === 'POST' ? '{}' : '{"items":[{"id":"work","status":"open"}],"hasMore":false}'));
+  const args = ['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--host', 'my-pc', '--session-id', 'session-1',
+    '--callback', process.execPath, '--callback-args', JSON.stringify(['-e', 'process.stdin.resume()']), '--watch-seconds', '2', '--poll-seconds', '1'];
+  const result = await f.run(args);
+  assert.equal(result.code, 0, result.stderr); assert.equal(result.data.healthReported, true);
+  const posts = f.calls.filter(c => c.method === 'POST');
+  assert.ok(posts.every(c => c.url === '/api/apps/auth/agents/heartbeat?workspaceId=w'));
+  const events = posts.map(c => JSON.parse(c.body));
+  assert.equal(events[0].event, 'started'); assert.equal(events.at(-1).event, 'stopped');
+  assert.equal(events.filter(e => e.event === 'wake').length, 1);
+  assert.ok(events.some(e => e.event === 'poll'));
+  assert.equal(new Set(events.map(e => e.watcherId)).size, 1);
+  assert.ok(events.every(e => e.host === 'my-pc' && e.sessionId === 'session-1' && e.agent === 'worker'));
+  assert.ok(f.calls.every(c => c.method === 'GET' || c.url.includes('/heartbeat?')));
+  const count = f.calls.length;
+  assert.notEqual((await f.run(args.filter((v, i) => v !== '--session-id' && args[i - 1] !== '--session-id'))).code, 0);
+  assert.equal(f.calls.length, count, 'invalid binding is rejected before requests');
+});
+
+test('watcher errors retain the original failure and never record a successful wake', async t => {
+  const f = await fixture(t, (req, res, body) => {
+    if (req.method === 'POST' && JSON.parse(body).event === 'error') { res.statusCode = 503; res.end('{}'); }
+    else res.end(req.method === 'POST' ? '{}' : '{"items":[{"id":"work","status":"open"}],"hasMore":false}');
+  });
+  const args = ['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--host', 'my-pc', '--session-id', 'session-1',
+    '--callback', process.execPath, '--callback-args', JSON.stringify(['-e', 'process.stdin.resume();process.stdin.on("end",()=>process.exit(7))']), '--watch-seconds', '3'];
+  const result = await f.run(args);
+  assert.equal(result.error.error, 'wake_callback_failed');
+  const events = f.calls.filter(c => c.method === 'POST').map(c => JSON.parse(c.body));
+  assert.deepEqual(events.map(e => e.event), ['started', 'poll', 'error']);
+  assert.equal(events.at(-1).errorCode, 'wake_callback_failed');
+  const cancelled = await fixture(t, (req, res) => res.end(req.method === 'POST' ? '{}' : '{"items":[{"id":"work","status":"open"}],"hasMore":false}'));
+  const expiry = await cancelled.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--host', 'my-pc', '--session-id', 'session-1',
+    '--callback', process.execPath, '--callback-args', JSON.stringify(['-e', 'process.stdin.resume();setInterval(()=>{},1000)']), '--watch-seconds', '1']);
+  assert.equal(expiry.code, 0, expiry.stderr); assert.equal(expiry.data.callbacks, 0);
+  assert.deepEqual(cancelled.calls.filter(c => c.method === 'POST').map(c => JSON.parse(c.body).event), ['started', 'poll', 'stopped']);
+  const refused = await fixture(t, (_req, res) => { res.statusCode = 409; res.end('{"error":"watcher_active"}'); });
+  assert.notEqual((await refused.run(args)).code, 0);
+  assert.equal(refused.calls.length, 1, 'a competing watcher stops before reading or invoking the callback');
+});
+
 test('agent commands stop on permission or claim conflict errors without retry', async t => {
   const f = await fixture(t, (_req, res) => { res.statusCode = 409; res.end('{"error":"conflict"}'); });
   assert.notEqual((await f.run(['handoffs', 'claim', 'handoff-one', '--agent', 'reviewer'])).code, 0);

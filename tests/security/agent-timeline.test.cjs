@@ -12,7 +12,7 @@ const { ActivityItem } = load('src/components/issue/sections/activity/components
 });
 
 test('agent timeline identifies each agent and the work transition', () => {
-  const expected = { AGENT_CLAIM: 'picked up the work', AGENT_PROGRESS: 'reported progress', AGENT_COMPLETE: 'completed the handoff', AGENT_RELEASE: 'released the work', AGENT_ACKNOWLEDGED: 'acknowledged the handoff' };
+  const expected = { AGENT_CLAIM: 'picked up the work', AGENT_PROGRESS: 'reported progress', AGENT_COMPLETE: 'completed the handoff', AGENT_RELEASE: 'released the work', AGENT_ACKNOWLEDGED: 'acknowledged the handoff', AGENT_SUPERSEDED: 'superseded the handoff' };
   for (const [action, text] of Object.entries(expected)) {
     const activity = { action, details: { agent: { name: 'builder-a' } }, user: { name: 'Account owner' }, createdAt: new Date() };
     assert.equal(helpers.getActionText(activity), `builder-a ${text}`);

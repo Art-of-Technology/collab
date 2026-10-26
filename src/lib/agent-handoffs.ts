@@ -9,14 +9,23 @@ import { hasScope } from '@/lib/oauth-scopes';
 const name = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/);
 const id = z.string().min(1).max(128);
 const text = z.string().trim().min(1).max(16000);
-export const registrationSchema = z.object({ name, labelIds: z.array(id).max(32).default([]) }).strict();
+const host = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/);
+const sessionId = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/);
+export const registrationSchema = z.object({ name, labelIds: z.array(id).max(32).default([]),
+  host: host.optional(), sessionId: sessionId.optional(),
+}).strict().refine(v => Boolean(v.host) === Boolean(v.sessionId), 'Supply host and sessionId together');
+export const heartbeatSchema = z.object({ agent: name, host, sessionId, watcherId: z.string().uuid(),
+  event: z.enum(['started', 'poll', 'wake', 'stopped', 'error']),
+  errorCode: z.string().regex(/^[a-z_]{1,64}$/).optional(),
+}).strict().refine(v => (v.event === 'error') === Boolean(v.errorCode), 'Only error events require errorCode');
 export const sendSchema = z.object({ agent: name, issue: id, content: text,
   toAgents: z.array(name).max(32).default([]), toLabels: z.array(id).max(32).default([]),
   requestAck: z.boolean().default(false), requestId: z.string().uuid().optional(), afterId: id.optional(),
 }).strict().refine(v => v.toAgents.length + v.toLabels.length > 0, 'Supply at least one recipient or label');
-export const actionSchema = z.object({ agent: name, action: z.enum(['seen', 'ack', 'claim', 'progress', 'release', 'complete']),
-  content: text.optional(),
-}).strict().refine(v => !['progress', 'release', 'complete'].includes(v.action) || Boolean(v.content), 'This action requires content');
+export const actionSchema = z.object({ agent: name, action: z.enum(['seen', 'ack', 'claim', 'progress', 'release', 'complete', 'supersede']),
+  content: text.optional(), replacementId: id.optional(),
+}).strict().refine(v => !['progress', 'release', 'complete', 'supersede'].includes(v.action) || Boolean(v.content), 'This action requires content')
+  .refine(v => (v.action === 'supersede') === Boolean(v.replacementId), 'Only supersede requires replacementId');
 export const inboxSchema = z.object({ agent: name, limit: z.coerce.number().int().min(1).max(50).default(20),
   state: z.enum(['unseen', 'claimed']).default('unseen'),
 }).strict();
@@ -27,6 +36,18 @@ export class HandoffError extends Error {
 type DB = Prisma.TransactionClient | typeof prisma;
 type InboxContext = { user: { id: string }; workspace: { id: string } };
 type Agent = { id: string; name: string; userId: string; labelIds: string[] };
+type Watcher = { id: string; state: 'running' | 'stopped' | 'error'; startedAt: string; heartbeatAt: string;
+  lastPollAt: string | null; lastWakeAt: string | null; errorCode: string | null };
+const watcherStaleMs = 300000;
+function watcherState(value: Prisma.JsonValue | null) {
+  const watcher = value as Watcher | null;
+  if (!watcher?.id) return null;
+  return { ...watcher, state: watcher.state === 'running' && Date.now() - Date.parse(watcher.heartbeatAt) >= watcherStaleMs ? 'stale' as const : watcher.state };
+}
+function agentStatus(agent: { id: string; name: string; labelIds: string[]; host: string | null; sessionId: string | null; watcher: Prisma.JsonValue | null }) {
+  return { id: agent.id, name: agent.name, labelIds: agent.labelIds, host: agent.host, sessionId: agent.sessionId,
+    watcher: watcherState(agent.watcher) };
+}
 function issueScope(context: InboxContext): Prisma.IssueWhereInput {
   return { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id,
     project: { workspaceId: context.workspace.id } };
@@ -60,20 +81,51 @@ async function activity(db: DB, context: AppAuthContext, agent: Agent, issue: { 
 }
 
 export async function registerAgent(context: AppAuthContext, input: z.infer<typeof registrationSchema>) {
-  const labelIds = await validLabels(prisma, context.workspace.id, input.labelIds);
-  const key = { workspaceId_name: { workspaceId: context.workspace.id, name: input.name } };
-  const existing = await prisma.agentRegistration.findUnique({ where: key });
-  if (existing && existing.userId !== context.user.id) throw new HandoffError('agent_name_taken', 'This agent name belongs to another user', 409);
-  if (existing) return prisma.agentRegistration.update({ where: { id: existing.id }, data: { labelIds } });
-  try { return await prisma.agentRegistration.create({ data: { workspaceId: context.workspace.id, userId: context.user.id, name: input.name, labelIds } }); }
+  try { return await prisma.$transaction(async db => {
+    const labelIds = await validLabels(db, context.workspace.id, input.labelIds);
+    await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND name = ${input.name} FOR UPDATE`;
+    const existing = await db.agentRegistration.findUnique({ where: { workspaceId_name: { workspaceId: context.workspace.id, name: input.name } } });
+    if (existing && existing.userId !== context.user.id) throw new HandoffError('agent_name_taken', 'This agent name belongs to another user', 409);
+    const changed = input.host && (existing?.host !== input.host || existing?.sessionId !== input.sessionId);
+    if (changed && existing && watcherState(existing.watcher)?.state === 'running') {
+      throw new HandoffError('watcher_active', 'Stop the current watcher before rebinding this agent session', 409);
+    }
+    const data = { labelIds, ...(input.host && { host: input.host, sessionId: input.sessionId }), ...(changed && { watcher: {} }) };
+    return agentStatus(existing
+      ? await db.agentRegistration.update({ where: { id: existing.id }, data })
+      : await db.agentRegistration.create({ data: { workspaceId: context.workspace.id, userId: context.user.id, name: input.name, ...data } }));
+  }); }
   catch (error) {
-    if ((error as { code?: string }).code === 'P2002') throw new HandoffError('agent_name_taken', 'Agent registration changed; retry with your own name', 409);
+    if ((error as { code?: string }).code === 'P2002') throw new HandoffError('agent_identity_conflict', 'This name or host/session already has a registration. Reuse its current agent name.', 409);
     throw error;
   }
 }
 export async function listAgents(context: AppAuthContext) {
-  return prisma.agentRegistration.findMany({ where: { workspaceId: context.workspace.id },
-    select: { id: true, name: true, labelIds: true }, orderBy: { name: 'asc' }, take: 200 });
+  const agents = await prisma.agentRegistration.findMany({ where: { workspaceId: context.workspace.id }, orderBy: { name: 'asc' }, take: 200 });
+  return agents.map(agentStatus);
+}
+
+export async function reportWatcher(context: AppAuthContext, input: z.infer<typeof heartbeatSchema>) {
+  return prisma.$transaction(async db => {
+    await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND name = ${input.agent} FOR UPDATE`;
+    const agent = await ownedAgent(db, context, input.agent);
+    if (agent.host !== input.host || agent.sessionId !== input.sessionId) {
+      throw new HandoffError('agent_session_mismatch', 'Register this exact host/session binding before reporting watcher health', 409);
+    }
+    const prior = watcherState(agent.watcher);
+    if (input.event === 'started') {
+      if (prior?.id !== input.watcherId && prior?.state === 'running') throw new HandoffError('watcher_active', 'Another watcher is active for this agent', 409);
+    } else if (!prior || prior.id !== input.watcherId || !['running', 'stale'].includes(prior.state)) {
+      throw new HandoffError('watcher_changed', 'The watcher binding changed or ended. Stop this watcher.', 409);
+    }
+    const now = new Date().toISOString();
+    const watcher: Watcher = { id: input.watcherId, startedAt: prior?.id === input.watcherId ? prior.startedAt : now,
+      heartbeatAt: now, state: input.event === 'error' ? 'error' : input.event === 'stopped' ? 'stopped' : 'running',
+      lastPollAt: input.event === 'poll' ? now : prior?.lastPollAt ?? null,
+      lastWakeAt: input.event === 'wake' ? now : prior?.lastWakeAt ?? null, errorCode: input.errorCode ?? null };
+    await db.agentRegistration.update({ where: { id: agent.id }, data: { watcher } });
+    return { agent: agent.name, host: agent.host, sessionId: agent.sessionId, watcher };
+  });
 }
 
 export async function sendHandoff(context: AppAuthContext, input: z.infer<typeof sendSchema>) {
@@ -113,7 +165,7 @@ function inboxMatch(agent: Agent, state: 'unseen' | 'claimed'): Prisma.AgentHand
   return {
     OR: [{ recipientNames: { has: agent.name } }, { labelIds: { hasSome: agent.labelIds } }, { claimedById: agent.id }],
     ...(state === 'claimed' ? { claimedById: agent.id, status: 'claimed' }
-      : { receipts: { none: { agentId: agent.id, seenAt: { not: null } } } }),
+      : { status: { not: 'superseded' }, receipts: { none: { agentId: agent.id, seenAt: { not: null } } } }),
   };
 }
 
@@ -134,7 +186,7 @@ export async function agentInbox(context: InboxContext, query: z.infer<typeof in
 /** Read-only workspace monitoring; CLI ownership and mutation rules stay unchanged. */
 export async function workspaceAgentInbox(context: InboxContext, query: { agent?: string; state: 'unseen' | 'claimed'; limit: number }) {
   const agents = await prisma.agentRegistration.findMany({ where: { workspaceId: context.workspace.id },
-    select: { id: true, name: true, userId: true, labelIds: true }, orderBy: { name: 'asc' } });
+    orderBy: { name: 'asc' } });
   const selected = query.agent ? agents.filter(agent => agent.name === query.agent) : agents;
   if (query.agent && selected.length === 0) throw new HandoffError('agent_not_found', 'Agent not found in this workspace', 404);
   // Both the viewer and the recipient must still be allowed to read the issue.
@@ -142,7 +194,7 @@ export async function workspaceAgentInbox(context: InboxContext, query: { agent?
   const inbox = await readInbox(context, selected.map(agent => ({
     ...inboxMatch(agent, query.state), issue: issueScope({ ...context, user: { id: agent.userId } }),
   })), Math.min(50, Math.max(1, query.limit)));
-  return { ...inbox, agents: agents.map(agent => ({ name: agent.name })) };
+  return { ...inbox, agents: agents.map(agentStatus) };
 }
 
 export async function getHandoff(context: AppAuthContext, agentName: string, id: string) {
@@ -160,7 +212,24 @@ export async function actOnHandoff(context: AppAuthContext, id: string, input: z
   }
   return prisma.$transaction(async db => {
     const agent = await ownedAgent(db, context, input.agent);
+    if (input.action === 'supersede') {
+      // Lock both ends in a stable order so concurrent replacements cannot create a cycle.
+      await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id IN (${id}, ${input.replacementId}) ORDER BY id FOR UPDATE`;
+    }
     const handoff = await visibleHandoff(db, context, agent, id);
+    if (input.action === 'supersede') {
+      if (handoff.status === 'superseded' && handoff.supersededById === input.replacementId) return handoff;
+      const replacement = await visibleHandoff(db, context, agent, input.replacementId!);
+      if (replacement.id === id || replacement.issueId !== handoff.issueId || !['open', 'claimed', 'completed'].includes(replacement.status)) {
+        throw new HandoffError('invalid_replacement', 'Replacement must be another open, claimed or completed handoff on the same issue');
+      }
+      const changed = await db.agentHandoff.updateMany({ where: { id, OR: [
+        { status: 'open', senderId: agent.id, claimedById: null }, { status: 'claimed', claimedById: agent.id },
+      ] }, data: { status: 'superseded', supersededById: replacement.id } });
+      if (!changed.count) throw new HandoffError('supersede_conflict', 'Only the sender of open work or its current claimant can supersede it', 409);
+      await activity(db, context, agent, handoff.issue, id, 'superseded', input.content, { replacementId: replacement.id });
+      return db.agentHandoff.findUniqueOrThrow({ where: { id } });
+    }
     if (input.action === 'seen' || input.action === 'ack') {
       const data = { seenAt: new Date() };
       await db.agentReceipt.upsert({ where: { handoffId_agentId: { handoffId: id, agentId: agent.id } },

@@ -56,7 +56,7 @@ Version functions/triggers. No reset is used.
 
 After schema creation, native `prisma migrate resolve --applied` records each
 retained historical migration. These are baselines, not claims that historical
-data transformations were executed on the empty database. `prisma/bootstrap-contract.json` pins the current schema SHA256, exact fifteen
+data transformations were executed on the empty database. `prisma/bootstrap-contract.json` pins the current schema SHA256, exact sixteen
 migration names/bytes and Prisma 6.19.3. Schema changes, changed/added/removed
 migrations and CLI upgrades refuse before generation or connection and require
 reviewed requalification. Run only from the admitted immutable source bundle;
@@ -117,7 +117,7 @@ after a real COMMIT. It never selects an existing application database.
 
 ## Current source qualification and restore boundary
 
-The October 22 contract binds all fifteen migrations through
+The October 26 contract binds all sixteen migrations through
 `20261022190000_issue_trash`, including the earlier agent-handoff and Git-provider
 migrations. It retains the exact Ready and Version provenance supplements.
 Historical migrations are unchanged. Fresh schema generation installs the Trash
@@ -142,3 +142,5 @@ source and toolchain to that separately admitted empty database and repeat the
 catalog, baseline and recovery checks above. Existing installations require
 their own backup and upgrade plan; no production migration, worker activation
 or gateway cutover is implied by these local checks.
+
+The October 26 contract additionally binds `20261026000100_agent_operations`. Fresh bootstrap installs the nullable host/session/watcher fields, unique per-user host/session identity, and replacement-handoff foreign key directly from the current Prisma schema. Existing installations apply only the reviewed additive migration after a verified backup; bootstrap remains empty-database-only.

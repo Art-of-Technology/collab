@@ -12,13 +12,13 @@ const retrievalIdentifier = { trim: true, minLength: 1, maxLength: 128 };
 
 export const commands = {
   'agents list': command('GET', 'agents'),
-  'agents register': command('POST', 'agents', { name: string, labelIds: array }, {}, { required: ['name'] }),
+  'agents register': command('POST', 'agents', { name: string, labelIds: array, host: string, sessionId: string }, {}, { required: ['name'], description: 'Bind a stable agent name to a host and session with --host and --session-id together. Reuse this name after restart.' }),
   'inbox list': command('GET', 'agents/inbox', {}, { agent: string, state: string, limit: integer }, { requiredQuery: ['agent'], constraints: { state: { enum: ['unseen', 'claimed'] }, limit: { minimum: 1, maximum: 50 } } }),
   'inbox watch': command('GET', 'agents/inbox', {}, { agent: string }, {
     requiredQuery: ['agent'], watch: true,
-    localOptions: { callback: string, callbackArgs: array, watchSeconds: integer, pollSeconds: integer, callbackTimeout: integer },
+    localOptions: { callback: string, callbackArgs: array, watchSeconds: integer, pollSeconds: integer, callbackTimeout: integer, host: string, sessionId: string },
     requiredOptions: ['callback'],
-    description: 'Foreground bounded watcher; invokes a trusted local executable with JSON stdin for pending claimed/unseen work. Requires an explicit --workspace ID. No auto-claim or seen.',
+    description: 'Foreground bounded watcher; invokes a trusted local executable with JSON stdin for pending claimed/unseen work. Requires an explicit --workspace ID. Supply the registered --host and --session-id to publish watcher health. No auto-claim or seen.',
   }),
   'inbox wait': command('GET', 'agents/inbox', {}, { agent: string, limit: integer }, { requiredQuery: ['agent'], wait: true, constraints: { limit: { minimum: 1, maximum: 50 } } }),
   'handoffs send': command('POST', 'agents/handoffs', { agent: string, issue: string, content: string, toAgents: array, toLabels: array, requestAck: boolean, requestId: string, afterId: string }, {}, { required: ['agent', 'issue', 'content'] }),
@@ -26,6 +26,9 @@ export const commands = {
   ...Object.fromEntries(['seen', 'ack', 'claim', 'progress', 'release', 'complete'].map(action => [
     `handoffs ${action}`, command('PATCH', 'agents/handoffs/:id', { agent: string, content: string }, {}, { action, required: ['agent', ...(['progress', 'release', 'complete'].includes(action) ? ['content'] : [])] }),
   ])),
+  'handoffs supersede': command('PATCH', 'agents/handoffs/:id', { agent: string, content: string, replacementId: string }, {}, {
+    action: 'supersede', required: ['agent', 'content', 'replacementId'], description: 'Close obsolete work and link its existing replacement on the same issue. Only the sender of open work or the current claimant may do this.',
+  }),
   'search': command('GET', 'search', {}, { query: string, mode: string, ...projectQuery, type: string, status: string,
     assigneeId: string, after: string, before: string, ...offset, maxTokens: integer }, {
     requiredQuery: ['query'], defaults: { mode: 'hybrid', limit: 20, offset: 0, maxTokens: 8000 },
