@@ -227,8 +227,9 @@ export async function actOnHandoff(context: AppAuthContext, id: string, input: z
       }
       const changed = await db.agentHandoff.updateMany({ where: { id, OR: [
         { status: 'open', senderId: agent.id, claimedById: null }, { status: 'claimed', claimedById: agent.id },
-      ] }, data: { status: 'superseded', supersededById: replacement.id } });
+      ] }, data: { status: 'superseded' } });
       if (!changed.count) throw new HandoffError('supersede_conflict', 'Only the sender of open work or its current claimant can supersede it', 409);
+      await db.agentHandoff.update({ where: { id }, data: { supersededBy: { connect: { id: replacement.id } } } });
       await activity(db, context, agent, handoff.issue, id, 'superseded', input.content, { replacementId: replacement.id });
       return db.agentHandoff.findUniqueOrThrow({ where: { id } });
     }
