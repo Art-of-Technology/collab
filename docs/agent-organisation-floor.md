@@ -1,0 +1,67 @@
+# Organisation agent floor
+
+Delivery plan: **CLB-441**. Open **Agent inbox → Organisation floor** at
+`/{workspace}/agent-inbox/floor`.
+
+The floor is a read-only view of the workspace's registered agents and recent
+handoffs. Projects have separate rooms, with up to six rooms on screen and
+project search/drill-down. Several agents can work in one room. An agent's
+registration ID remains the same across rooms; names are agent identities,
+not project names or human account names.
+
+## What the view shows
+
+- The full registered-agent roster within the bounded snapshot, including agents
+  without linked work. Registration alone does not assign a project.
+- Project rooms, a task board, claimants and handoff instructions.
+- Named claim, progress, pass, release, acknowledgement and completion events,
+  with the recorded report/evidence and links to the canonical issues.
+- The actual project issue statuses, including custom review/blocked statuses.
+  A handoff's state is displayed separately: completing a handoff does not mark
+  its issue done. A pass is not proof of reviewer approval.
+
+A new recorded claim/pass/release/completion makes the relevant avatar walk to
+its project's board and return to its laptop. If the issue's recorded status
+changed, the card moves to that column. A claim alone never invents a status
+transition. Recent claim/progress reports can animate seated typing for at most
+five minutes. This illustrates a report, not a connection to the model host or
+proof that execution is still running. No automatic task mutation is made by
+this page.
+
+## Refresh and accessibility
+
+The view polls a session-authenticated, private/no-store endpoint every 20 seconds
+while visible. Refresh failures pause motion and mark the snapshot stale.
+Membership loss clears the view. Initial loads and reconnects after a long gap
+establish a baseline rather than replaying historical events. Existing event IDs
+are not animated twice.
+
+The motion checkbox honours the operating system's reduced-motion preference.
+Project/agent buttons and the task/event lists are usable without manipulating
+the 3D canvas. The List switch avoids loading the scene when selected; if WebGL
+cannot start or loses its context, all data remains available below it. Graphics
+resources, controls, timers and animation frames are released on unmount.
+
+## Scope and limits
+
+The server checks current workspace membership and canonical issue/project
+access, intersecting it with a registered sender/recipient/claimant's access as
+the existing inbox does. No user emails, subscription labels, credentials or raw
+activity JSON are returned. Reports use the shared sanitised Markdown renderer, including evidence links.
+
+The snapshot contains at most 200 projects, 200 registrations, the latest 200
+handoffs and 500 recent agent events. A visible notice identifies truncation.
+Rooms show at most eight avatars and three cards per status; the accompanying
+roster and task list provide the rest of the snapshot. It is not a complete
+historical export. Open an issue for its full timeline.
+
+This slice adds no migration, CLI command, model-host adapter or presence
+heartbeat. Structured review outcomes and richer presence remain separate work.
+
+## Checks
+
+`node --test tests/security/agent-floor.test.cjs tests/security/agent-inbox.test.cjs`
+executes permission/route, two-agent ownership, event deduplication, stale-report,
+reconnect, safe text rendering and scene motion/disposal checks. The scene test
+uses real Three.js geometry with an injected renderer, not live browser evidence.
+Run the repository typecheck and focused ESLint checks for the changed modules.

@@ -19,6 +19,7 @@ export function AgentInboxView({ workspace, agents, selected, state, inbox }: Pr
         <p className="mt-2 text-sm text-muted-foreground">Monitor all registered agents in this workspace. Only handoffs on issues you and the receiving agent can access are shown. Opening this page does not mark work as seen or claim it.</p></div>
       <Button asChild variant="outline"><Link href="/docs/cli#agents">Agent guide</Link></Button>
     </header>
+    <nav aria-label="Agent views" className="flex gap-4 text-sm"><span aria-current="page">Inbox</span><Link className="text-primary hover:underline" href={`${base}/agent-inbox/floor`}>Organisation floor</Link></nav>
     {agents.length === 0 ? <div className="space-y-3 rounded-lg border p-6">
       <h2 className="font-medium">No agents registered in this workspace</h2>
       <p className="text-sm text-muted-foreground">Use a unique name for each running agent, then refresh this page.</p>
