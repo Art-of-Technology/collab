@@ -5,7 +5,9 @@ Delivery plan: **CLB-441**. Open **Agent inbox → Organisation floor** at
 
 The floor is a read-only view of the workspace's registered agents and recent
 handoffs. Projects have separate rooms, with up to six rooms on screen and
-project search/drill-down. Several agents can work in one room. An agent's
+server-side project search, paging and drill-down. Every accessible project is
+reachable; polling loads only the selected page of rooms. Several agents can work
+in one room. An agent's
 registration ID remains the same across rooms; names are agent identities,
 not project names or human account names.
 
@@ -20,11 +22,13 @@ not project names or human account names.
   A handoff's state is displayed separately: completing a handoff does not mark
   its issue done. A pass is not proof of reviewer approval.
 
-A new recorded claim/pass/release/completion makes the relevant avatar walk to
+A new recorded claim/pass/completion makes the relevant avatar walk to
 its project's board and return to its laptop. If the issue's recorded status
 changed, the card moves to that column. A claim alone never invents a status
-transition. Recent claim/progress reports can animate seated typing for at most
-five minutes. This illustrates a report, not a connection to the model host or
+transition. Releases stay in the timeline. Label-triggered routing is a system
+event, never an invented agent. Recent claim/progress reports can animate seated
+typing for at most five minutes, independent of custom status names. This
+illustrates a report, not a connection to the model host or
 proof that execution is still running. No automatic task mutation is made by
 this page.
 
@@ -34,7 +38,11 @@ The view polls a session-authenticated, private/no-store endpoint every 20 secon
 while visible. Refresh failures pause motion and mark the snapshot stale.
 Membership loss clears the view. Initial loads and reconnects after a long gap
 establish a baseline rather than replaying historical events. Existing event IDs
-are not animated twice.
+are not animated twice. A 45-second overlap admits late-committed events using
+ID deduplication. Pending queues and their progress survive geometry refreshes,
+room drill-down and List/3D switches; consumed events do not replay on remount.
+Queues expire after five minutes and clear on reconnect or disabled motion.
+Cancelling motion restores board cards immediately.
 
 The motion checkbox honours the operating system's reduced-motion preference.
 Project/agent buttons and the task/event lists are usable without manipulating
@@ -47,10 +55,15 @@ resources, controls, timers and animation frames are released on unmount.
 The server checks current workspace membership and canonical issue/project
 access, intersecting it with a registered sender/recipient/claimant's access as
 the existing inbox does. No user emails, subscription labels, credentials or raw
-activity JSON are returned. Reports use the shared sanitised Markdown renderer, including evidence links.
+activity JSON are returned. Both handoffs and event evidence use the inbox
+`commentHtml` contract, sanitised on the server: Markdown, rich HTML, evidence
+links and static data-image diagrams.
 
-The snapshot contains at most 200 projects, 200 registrations, the latest 200
-handoffs and 500 recent agent events. A visible notice identifies truncation.
+Each snapshot contains up to six accessible projects, 200 registrations, and
+the latest 200 handoffs and 500 agent events for those rooms. Stable name/ID
+ordering and server-side paging, search and project selection replace the old
+permanent project cap. A visible notice identifies handoff, agent or event
+truncation.
 Rooms show at most eight avatars and three cards per status; the accompanying
 roster and task list provide the rest of the snapshot. It is not a complete
 historical export. Open an issue for its full timeline.
@@ -62,6 +75,8 @@ heartbeat. Structured review outcomes and richer presence remain separate work.
 
 `node --test tests/security/agent-floor.test.cjs tests/security/agent-inbox.test.cjs`
 executes permission/route, two-agent ownership, event deduplication, stale-report,
-reconnect, safe text rendering and scene motion/disposal checks. The scene test
+reconnect, projects beyond the former 200-project cap, system label routing, rich
+evidence, multi-event queues across rebuild/remount, cancellation and graphics
+disposal. The scene test
 uses real Three.js geometry with an injected renderer, not live browser evidence.
 Run the repository typecheck and focused ESLint checks for the changed modules.

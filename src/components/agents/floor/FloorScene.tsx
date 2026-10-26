@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type {
   FloorSnapshot,
   FloorProject,
-  FloorEvent,
+  FloorPlayback,
 } from "@/lib/agent-floor-model";
 import { createFloorRenderer } from "./floor-renderer";
 
@@ -12,7 +12,7 @@ export interface SceneProps {
   projects: FloorProject[];
   selected: string;
   animate: boolean;
-  events: FloorEvent[];
+  playback: FloorPlayback;
   onAgent: (id: string) => void;
   onProject: (id: string) => void;
 }

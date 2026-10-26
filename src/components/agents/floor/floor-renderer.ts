@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { agentReport } from "@/lib/agent-floor-model";
-import type { FloorTask, FloorEvent } from "@/lib/agent-floor-model";
+import { agentReport, floorActorKey } from "@/lib/agent-floor-model";
+import type { FloorTask } from "@/lib/agent-floor-model";
 import type { SceneProps } from "./FloorScene";
 
 type Joint = { top: THREE.Group; bottom: THREE.Group };
@@ -14,8 +14,7 @@ type Actor = {
   arms: Joint[];
   desk: THREE.Vector3;
   card: THREE.Object3D;
-  queue: FloorEvent[];
-  elapsed: number;
+  cardLabel: string;
 };
 const palette = [0x8eb9dc, 0xb2bb8d, 0xc49aba, 0xd1a67c, 0x8bbeb8, 0xb2a2d3];
 function identityColor(id: string) {
@@ -85,8 +84,6 @@ export function createFloorRenderer(
     frameId = 0,
     last = 0;
   camera.position.set(29, 34, 39);
-  const seen = new Set<string>();
-  const origins = new Map<string, number>();
   const boardCards = new Map<string, THREE.Object3D>();
   const material = (color: number) =>
     new THREE.MeshStandardMaterial({ color, roughness: 0.8 });
@@ -258,8 +255,7 @@ export function createFloorRenderer(
       arms,
       desk: root.position.clone(),
       card,
-      queue: [],
-      elapsed: 0,
+      cardLabel: "",
     };
   }
   function column(task: FloorTask, projectId: string) {
@@ -386,6 +382,9 @@ export function createFloorRenderer(
         column(task, task.projectId),
       ]),
     );
+    for (const queue of next.playback.queues.values())
+      for (const animation of queue)
+        animation.origin ??= oldPositions.get(animation.event.taskId);
     state = next;
     const nextLayout = next.projects.map((p) => p.id).join("|");
     // Rebuild only when data/rooms change; camera and input controls survive refreshes.
@@ -400,52 +399,18 @@ export function createFloorRenderer(
       controls.target.set(0, 0, 0);
       controls.update();
     }
-    const incoming = next.events.filter((event) => !seen.has(event.id));
-    next.events.forEach((event) => seen.add(event.id));
-    incoming.forEach((event) => {
-      const old = oldPositions.get(event.taskId);
-      if (old !== undefined) origins.set(event.id, old);
-    });
-    if (seen.size > 1500) {
-      seen.clear();
-      next.snapshot.events.forEach((event) => seen.add(event.id));
+    if (!next.animate) {
+      next.playback.queues.clear();
+      boardCards.forEach((card) => {
+        card.visible = true;
+      });
     }
     for (const actor of actors) {
       if (!next.animate) {
-        actor.queue = [];
-        actor.elapsed = 0;
         actor.card.visible = false;
         actor.root.position.copy(actor.desk);
-      } else
-        actor.queue.push(
-          ...incoming
-            .filter(
-              (event) =>
-                event.agentId === actor.id &&
-                event.projectId === actor.projectId &&
-                [
-                  "AGENT_CLAIM",
-                  "AGENT_PASSED",
-                  "AGENT_COMPLETE",
-                  "AGENT_RELEASE",
-                ].includes(event.action),
-            )
-            .slice(-4),
-        );
-      const queuedTask = next.snapshot.tasks.find(
-        (task) => task.id === actor.queue[0]?.taskId,
-      );
-      if (queuedTask) {
-        const card = actor.card as THREE.Mesh<
-          THREE.PlaneGeometry,
-          THREE.MeshBasicMaterial
-        >;
-        card.material.map?.dispose();
-        card.material.map = textTexture(
-          [queuedTask.issueKey, queuedTask.status],
-          "#c6dcee",
-        );
-        card.material.needsUpdate = true;
+        actor.root.rotation.y = Math.PI;
+        pose(actor, 0, false, true, false, false);
       }
       actor.root.scale.setScalar(next.selected === actor.id ? 1.08 : 1);
     }
@@ -489,23 +454,36 @@ export function createFloorRenderer(
   }
   function animateActor(actor: Actor, dt: number, time: number) {
     if (!state) return;
-    const event = actor.queue[0];
+    const key = floorActorKey(actor.projectId, actor.id);
+    const queue = state.playback.queues.get(key);
+    const animation = queue?.[0];
+    const event = animation?.event;
     const task =
       event && state.snapshot.tasks.find((t) => t.id === event.taskId);
     let moving = false,
       carrying = false;
-    if (task && state.animate) {
-      actor.elapsed += dt;
+    if (task && animation && state.animate) {
+      const label = JSON.stringify([task.issueKey, task.status]);
+      if (actor.cardLabel !== label) {
+        const card = actor.card as THREE.Mesh<
+          THREE.PlaneGeometry, THREE.MeshBasicMaterial
+        >;
+        card.material.map?.dispose();
+        card.material.map = textTexture([task.issueKey, task.status], "#c6dcee");
+        card.material.needsUpdate = true;
+        actor.cardLabel = label;
+      }
+      animation.elapsed += dt;
       const board = new THREE.Vector3(column(task, actor.projectId), 0, -3.05);
       const aisle = new THREE.Vector3(actor.desk.x, 0, -0.1);
       const origin = new THREE.Vector3(
-        origins.get(event.id) ?? board.x,
+        animation.origin ?? board.x,
         0,
         board.z,
       );
       const points = [actor.desk, aisle, origin, board, aisle, actor.desk];
-      const stage = Math.min(4, Math.floor(actor.elapsed / 2));
-      const fraction = Math.min(1, (actor.elapsed - stage * 2) / 2);
+      const stage = Math.min(4, Math.floor(animation.elapsed / 2));
+      const fraction = Math.min(1, (animation.elapsed - stage * 2) / 2);
       actor.root.position.lerpVectors(
         points[stage],
         points[stage + 1],
@@ -517,22 +495,19 @@ export function createFloorRenderer(
       carrying = stage === 2;
       actor.card.visible = carrying;
       const boardCard = boardCards.get(task.id);
-      if (boardCard) boardCard.visible = !carrying;
-      if (actor.elapsed >= 10) {
-        if (boardCard) boardCard.visible = true;
-        origins.delete(event.id);
-        actor.queue.shift();
-        actor.elapsed = 0;
+      if (boardCard && carrying) boardCard.visible = false;
+      if (animation.elapsed >= 10) {
+        queue!.shift();
+        if (!queue!.length) state.playback.queues.delete(key);
         actor.card.visible = false;
         actor.root.position.copy(actor.desk);
       }
     } else {
-      actor.queue = [];
       actor.root.position.copy(actor.desk);
       actor.root.rotation.y = Math.PI;
       actor.card.visible = false;
     }
-    const seated = !task || actor.queue.length === 0 || !state.animate;
+    const seated = !task || !queue?.length || !state.animate;
     const typing =
       seated &&
       state.animate &&
@@ -543,6 +518,9 @@ export function createFloorRenderer(
     if (disposed) return;
     const dt = Math.max(0, Math.min((time - last) / 1000, 0.1));
     last = time;
+    boardCards.forEach((card) => {
+      card.visible = true;
+    });
     actors.forEach((actor) => animateActor(actor, dt, time / 1000));
     controls.update();
     renderer.render(scene, camera);

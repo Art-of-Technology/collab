@@ -3,12 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { postWorkspaceAccessWhere } from "@/lib/post-access";
 import { issueAccessWhere, issueReadAccessWhere } from "@/lib/issue-finder";
 import type { FloorSnapshot, FloorEvent } from "@/lib/agent-floor-model";
+import { PROJECT_PAGE_SIZE } from "@/lib/agent-floor-model";
+import { commentHtml } from "@/lib/comment-html";
 
 const LIMIT = 200;
 /** All entry points use this scope, including polling after membership revocation. */
 export async function readAgentFloor(
   userId: string,
   workspaceId: string,
+  query: { page?: number; search?: string; projectId?: string } = {},
 ): Promise<FloorSnapshot | null> {
   if (!userId) return null;
   const workspace = await prisma.workspace.findFirst({
@@ -17,9 +20,24 @@ export async function readAgentFloor(
   });
   if (!workspace) return null;
   const generatedAt = new Date().toISOString();
+  const requestedPage = query.page ?? 0;
+  const page =
+    Number.isSafeInteger(requestedPage) && requestedPage >= 0 &&
+    requestedPage <= Math.floor(2147483647 / PROJECT_PAGE_SIZE)
+      ? requestedPage
+      : 0;
+  const search = (query.search || "").trim().slice(0, 200);
+  const projectId = (query.projectId || "").slice(0, 200);
   const [projectRows, agentRows] = await Promise.all([
     prisma.project.findMany({
-      where: { workspaceId: workspace.id, ...issueAccessWhere(userId) },
+      where: {
+        workspaceId: workspace.id,
+        ...issueAccessWhere(userId),
+        ...(projectId ? { id: projectId } : {}),
+        ...(search
+          ? { name: { contains: search, mode: "insensitive" as const } }
+          : {}),
+      },
       select: {
         id: true,
         name: true,
@@ -29,8 +47,9 @@ export async function readAgentFloor(
           select: { id: true, displayName: true, isFinal: true },
         },
       },
-      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-      take: LIMIT + 1,
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      skip: page * PROJECT_PAGE_SIZE,
+      take: PROJECT_PAGE_SIZE + 1,
     }),
     prisma.agentRegistration.findMany({
       where: { workspaceId: workspace.id },
@@ -40,7 +59,7 @@ export async function readAgentFloor(
     }),
   ]);
   const agents = agentRows.slice(0, LIMIT);
-  const projects = projectRows.slice(0, LIMIT);
+  const projects = projectRows.slice(0, PROJECT_PAGE_SIZE);
   const scope = (id: string) => ({
     AND: [
       issueReadAccessWhere(id),
@@ -105,7 +124,7 @@ export async function readAgentFloor(
       row.issue.projectStatus?.displayName || row.issue.status || "Unspecified",
     final: row.issue.projectStatus?.isFinal || false,
     handoffState: row.status,
-    content: row.content,
+    contentHtml: commentHtml(row.content),
     claimedById: row.claimedById,
     senderId: row.senderId,
     recipientIds: agents
@@ -149,14 +168,17 @@ export async function readAgentFloor(
           t.issueId === row.itemId &&
           t.projectId === row.projectId,
       );
-      if (!task || !agentIds.has(detail.agent?.id)) continue;
+      const system = row.action === "AGENT_LABEL_ADDED";
+      if (!task || (!system && !agentIds.has(detail.agent?.id))) continue;
       events.push({
         id: row.id,
-        agentId: detail.agent.id,
+        agentId: system ? null : detail.agent.id,
         taskId: task.id,
         projectId: task.projectId,
         action: row.action,
-        content: typeof detail.content === "string" ? detail.content : "",
+        contentHtml: commentHtml(
+          typeof detail.content === "string" ? detail.content : "",
+        ),
         at: row.createdAt.toISOString(),
       });
     } catch {
@@ -165,6 +187,10 @@ export async function readAgentFloor(
   }
   return {
     workspace,
+    projectPage: {
+      page, search, projectId,
+      hasMore: projectRows.length > PROJECT_PAGE_SIZE,
+    },
     projects: projects.map((p) => ({
       ...p,
       statuses: p.statuses.map((s) => ({
@@ -179,7 +205,6 @@ export async function readAgentFloor(
     generatedAt,
     limited:
       rows.length > LIMIT ||
-      projectRows.length > LIMIT ||
       agentRows.length > LIMIT ||
       activities.length > 500,
   };

@@ -18,7 +18,7 @@ export interface FloorTask {
   status: string;
   final: boolean;
   handoffState: string;
-  content: string;
+  contentHtml: string;
   claimedById: string | null;
   senderId: string | null;
   recipientIds: string[];
@@ -26,16 +26,22 @@ export interface FloorTask {
 }
 export interface FloorEvent {
   id: string;
-  agentId: string;
+  agentId: string | null;
   taskId: string;
   projectId: string;
   action: string;
-  content: string;
+  contentHtml: string;
   at: string;
 }
 export interface FloorSnapshot {
   workspace: { id: string; slug: string | null; name: string };
   projects: FloorProject[];
+  projectPage: {
+    page: number;
+    search: string;
+    projectId: string;
+    hasMore: boolean;
+  };
   agents: FloorAgent[];
   tasks: FloorTask[];
   events: FloorEvent[];
@@ -43,6 +49,25 @@ export interface FloorSnapshot {
   limited: boolean;
 }
 export const RECENT_REPORT_MS = 5 * 60 * 1000;
+export const PROJECT_PAGE_SIZE = 6;
+const EVENT_OVERLAP_MS = 45000;
+export interface FloorAnimation {
+  event: FloorEvent;
+  elapsed: number;
+  origin?: number;
+}
+export interface FloorPlayback {
+  seen: Map<string, string>;
+  queues: Map<string, FloorAnimation[]>;
+}
+export const floorActorKey = (projectId: string, agentId: string) =>
+  `${projectId}:${agentId}`;
+export function createFloorPlayback(initial: FloorSnapshot): FloorPlayback {
+  return {
+    seen: new Map(initial.events.map((event) => [event.id, event.at])),
+    queues: new Map(),
+  };
+}
 export const eventLabels: Record<string, string> = {
   AGENT_SENT: "Sent a handoff",
   AGENT_LABEL_ADDED: "Label routed work",
@@ -53,18 +78,59 @@ export const eventLabels: Record<string, string> = {
   AGENT_RELEASE: "Released claim",
   AGENT_ACKNOWLEDGED: "Acknowledged",
 };
-/** Snapshot refreshes never replay historical activity, including after a reconnect. */
 export function arrivingEvents(
   previous: FloorSnapshot,
   next: FloorSnapshot,
+  seen: Map<string, string>,
 ): FloorEvent[] {
-  // A long gap is a resynchronisation, not a request to replay missed work.
-  if (Date.parse(next.generatedAt) - Date.parse(previous.generatedAt) > 45000)
-    return [];
-  const seen = new Set(previous.events.map((event) => event.id));
-  return next.events
-    .filter((event) => !seen.has(event.id) && event.at > previous.generatedAt)
-    .sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+  const cutoff = Date.parse(previous.generatedAt) - EVENT_OVERLAP_MS;
+  const baseline =
+    Date.parse(next.generatedAt) - Date.parse(previous.generatedAt) > EVENT_OVERLAP_MS ||
+    previous.projectPage.page !== next.projectPage.page ||
+    previous.projectPage.search !== next.projectPage.search ||
+    previous.projectPage.projectId !== next.projectPage.projectId;
+  for (const event of previous.events) seen.set(event.id, event.at);
+  const incoming = next.events.filter((event) => {
+    const unseen = !seen.has(event.id);
+    seen.set(event.id, event.at);
+    return !baseline && unseen && Date.parse(event.at) >= cutoff;
+  });
+  for (const [id, at] of seen)
+    if (Date.parse(at) < cutoff) seen.delete(id);
+  return incoming.sort(
+    (a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id),
+  );
+}
+export function updateFloorPlayback(
+  playback: FloorPlayback,
+  previous: FloorSnapshot,
+  next: FloorSnapshot,
+  animate: boolean,
+) {
+  if (
+    !animate ||
+    Date.parse(next.generatedAt) - Date.parse(previous.generatedAt) > EVENT_OVERLAP_MS
+  )
+    playback.queues.clear();
+  for (const [key, queue] of playback.queues) {
+    const pending = queue.filter(
+      ({ event }) =>
+        Date.parse(next.generatedAt) - Date.parse(event.at) < RECENT_REPORT_MS,
+    );
+    if (pending.length) playback.queues.set(key, pending);
+    else playback.queues.delete(key);
+  }
+  for (const event of arrivingEvents(previous, next, playback.seen)) {
+    if (
+      !animate || !event.agentId ||
+      !["AGENT_CLAIM", "AGENT_PASSED", "AGENT_COMPLETE"].includes(event.action)
+    )
+      continue;
+    const key = floorActorKey(event.projectId, event.agentId);
+    const queue = playback.queues.get(key) || [];
+    queue.push({ event, elapsed: 0 });
+    playback.queues.set(key, queue);
+  }
 }
 export function agentReport(
   snapshot: FloorSnapshot,
@@ -88,7 +154,6 @@ export function agentReport(
     !!task &&
     recent &&
     !task.final &&
-    !/block|hold|wait/i.test(task.status) &&
     ["AGENT_CLAIM", "AGENT_PROGRESS"].includes(event!.action);
   return {
     tasks,

@@ -1,15 +1,16 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { MarkdownRenderer } from "@/components/ui/markdown-renderer";
 import { Button } from "@/components/ui/button";
 import {
   agentReport,
-  arrivingEvents,
+  createFloorPlayback,
+  updateFloorPlayback,
   eventLabels,
+  PROJECT_PAGE_SIZE,
 } from "@/lib/agent-floor-model";
-import type { FloorSnapshot, FloorEvent } from "@/lib/agent-floor-model";
+import type { FloorSnapshot } from "@/lib/agent-floor-model";
 
 const FloorScene = dynamic(() => import("./FloorScene"), {
   ssr: false,
@@ -17,21 +18,21 @@ const FloorScene = dynamic(() => import("./FloorScene"), {
     <p className="p-8 text-sm">Preparing the organisation floor…</p>
   ),
 });
-const PAGE_SIZE = 6;
 const timestamp = (value: string) =>
   `${value.slice(0, 19).replace("T", " ")} UTC`;
 export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
   const [snapshot, setSnapshot] = useState<FloorSnapshot | null>(initial);
   const current = useRef(initial);
-  const [project, setProject] = useState("");
-  const [page, setPage] = useState(0);
-  const [search, setSearch] = useState("");
+  const [project, setProject] = useState(initial.projectPage.projectId);
+  const [page, setPage] = useState(initial.projectPage.page);
+  const [search, setSearch] = useState(initial.projectPage.search);
   const [selected, setSelected] = useState("");
-  const [events, setEvents] = useState<FloorEvent[]>([]);
+  const [playback] = useState(() => createFloorPlayback(initial));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<"floor" | "list">("floor");
   const [motion, setMotion] = useState(false);
+  const motionEnabled = useRef(false);
   const [now, setNow] = useState(Date.now());
   const refresh = useRef<() => void>(() => {});
   const base = `/${encodeURIComponent(initial.workspace.slug || initial.workspace.id)}`;
@@ -43,6 +44,10 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
     return () => preference.removeEventListener("change", change);
   }, []);
   useEffect(() => {
+    motionEnabled.current = motion;
+    if (!motion || error) playback.queues.clear();
+  }, [motion, error, playback]);
+  useEffect(() => {
     let stopped = false,
       running = false;
     let controller: AbortController | undefined;
@@ -53,14 +58,17 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
       controller = new AbortController();
       const timeout = setTimeout(() => controller?.abort(), 10000);
       try {
+        const query = new URLSearchParams({
+          page: String(page), search, projectId: project,
+        });
         const response = await fetch(
-          `/api/workspaces/${encodeURIComponent(initial.workspace.id)}/agent-floor`,
+          `/api/workspaces/${encodeURIComponent(initial.workspace.id)}/agent-floor?${query}`,
           { cache: "no-store", signal: controller.signal },
         );
         if (stopped) return;
         if (response.status === 401 || response.status === 404) {
           setSnapshot(null);
-          setEvents([]);
+          playback.queues.clear();
           setError(
             "Access changed. Sign in again or choose a workspace you can access.",
           );
@@ -70,7 +78,9 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
         if (!response.ok) throw new Error("unavailable");
         const next: FloorSnapshot = await response.json();
         if (stopped) return;
-        setEvents(arrivingEvents(current.current, next));
+        updateFloorPlayback(
+          playback, current.current, next, motionEnabled.current,
+        );
         current.current = next;
         setSnapshot(next);
         setError("");
@@ -80,7 +90,7 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
           setError(
             "Refresh failed. Showing the last snapshot; animation is paused.",
           );
-          setEvents([]);
+          playback.queues.clear();
         }
       } finally {
         clearTimeout(timeout);
@@ -91,6 +101,11 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
     refresh.current = () => {
       void read();
     };
+    if (
+      current.current.projectPage.page !== page ||
+      current.current.projectPage.search !== search.trim() ||
+      current.current.projectPage.projectId !== project
+    ) void read();
     const timer = setInterval(() => {
       setNow(Date.now());
       void read();
@@ -105,24 +120,7 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [initial.workspace.id]);
-  const projects = useMemo(
-    () =>
-      snapshot?.projects.filter(
-        (p) =>
-          (!project || p.id === project) &&
-          p.name.toLowerCase().includes(search.toLowerCase()),
-      ) || [],
-    [snapshot, project, search],
-  );
-  const safePage = Math.min(
-    page,
-    Math.max(0, Math.ceil(projects.length / PAGE_SIZE) - 1),
-  );
-  const rooms = useMemo(
-    () => projects.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE),
-    [projects, safePage],
-  );
+  }, [initial.workspace.id, page, search, project, playback]);
   const selectProject = useCallback((id: string) => {
     setProject(id);
     setPage(0);
@@ -139,12 +137,14 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
         <Link href="/login">Sign in</Link>
       </main>
     );
+  const projects = snapshot.projects;
+  const visibleProject = snapshot.projectPage.projectId;
   const tasks = snapshot.tasks.filter(
-    (t) => !project || t.projectId === project,
+    (t) => !visibleProject || t.projectId === visibleProject,
   );
   const agents = snapshot.agents.filter(
     (a) =>
-      !project ||
+      !visibleProject ||
       tasks.some(
         (t) =>
           t.claimedById === a.id ||
@@ -155,7 +155,7 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
   const agent = agents.find((a) => a.id === selected);
   const activity = snapshot.events.filter(
     (e) =>
-      (!project || e.projectId === project) &&
+      (!visibleProject || e.projectId === visibleProject) &&
       (!agent || e.agentId === agent.id),
   );
   const selectedTasks = tasks.filter(
@@ -200,7 +200,7 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
             onChange={(e) => selectProject(e.target.value)}
             className="mt-1 block h-10 max-w-72 rounded-md border bg-background px-3"
           >
-            <option value="">All projects ({snapshot.projects.length})</option>
+            <option value="">Browse all projects</option>
             {snapshot.projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -215,8 +215,10 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
+              setProject("");
               setPage(0);
             }}
+            maxLength={200}
             placeholder="Search projects…"
             className="mt-1 block h-10 rounded-md border bg-background px-3"
           />
@@ -248,12 +250,12 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
       </div>
       <p className="text-xs text-muted-foreground" role="status">
         {error ||
-          `Snapshot ${timestamp(snapshot.generatedAt)} · refreshes every 20 seconds while visible · ${agents.length} registered agents${project ? " linked to this project" : ""}`}
+          `Snapshot ${timestamp(snapshot.generatedAt)} · refreshes every 20 seconds while visible · ${agents.length} registered agents${visibleProject ? " linked to this project" : ""}`}
       </p>
       {snapshot.limited && (
         <p className="rounded-md border p-3 text-sm">
-          Bounded view: latest 200 handoffs, up to 200 projects/agents and 500
-          events. This is not the full historical record. Open an issue for its
+          Bounded view: latest 200 handoffs and 500 events for these rooms,
+          up to 200 registered agents. Open an issue for its
           complete timeline.
         </p>
       )}
@@ -266,45 +268,43 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
                   Drag to rotate · scroll to zoom · select a person or room
                 </span>
                 <span>
-                  Room {projects.length ? safePage * PAGE_SIZE + 1 : 0}–
-                  {Math.min((safePage + 1) * PAGE_SIZE, projects.length)} of{" "}
-                  {projects.length}
+                  Page {snapshot.projectPage.page + 1} · {projects.length} rooms
                 </span>
               </div>
               <FloorScene
                 snapshot={snapshot}
-                projects={rooms}
+                projects={projects}
                 selected={selected}
                 animate={motion && !error}
-                events={events}
+                playback={playback}
                 onAgent={chooseAgent}
                 onProject={selectProject}
               />
             </div>
           )}
-          {projects.length > PAGE_SIZE && (
+          {(snapshot.projectPage.page > 0 || snapshot.projectPage.hasMore) && (
             <div className="flex items-center justify-center gap-3">
               <Button
                 variant="outline"
-                disabled={safePage === 0}
-                onClick={() => setPage(safePage - 1)}
+                disabled={busy || page === 0}
+                onClick={() => setPage(page - 1)}
               >
                 Previous rooms
               </Button>
               <span className="text-sm">
-                {safePage + 1} / {Math.ceil(projects.length / PAGE_SIZE)}
+                Page {snapshot.projectPage.page + 1} · up to {PROJECT_PAGE_SIZE} rooms
               </span>
               <Button
                 variant="outline"
-                disabled={(safePage + 1) * PAGE_SIZE >= projects.length}
-                onClick={() => setPage(safePage + 1)}
+                disabled={busy || !snapshot.projectPage.hasMore}
+                onClick={() => setPage(page + 1)}
               >
                 Next rooms
               </Button>
             </div>
           )}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {rooms.map((p) => {
+            {projects.map((p) => {
               const linked = snapshot.tasks.filter((t) => t.projectId === p.id);
               const claims = linked.filter((t) => t.handoffState === "claimed");
               return (
@@ -355,7 +355,7 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
                 snapshot,
                 a.id,
                 now,
-                project || undefined,
+                visibleProject || undefined,
               );
               return (
                 <button
@@ -390,7 +390,7 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
           <h2 className="text-lg font-semibold">
             {agent ? `${agent.name} · tasks` : "Task board"}
           </h2>
-          {project && (
+          {visibleProject && (
             <Button variant="ghost" onClick={() => selectProject("")}>
               All projects
             </Button>
@@ -404,7 +404,7 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
         <div className="flex gap-3 overflow-x-auto pb-3">
           {Array.from(
             new Set([
-              ...(project
+              ...(visibleProject
                 ? projects.flatMap((p) => p.statuses.map((s) => s.name))
                 : []),
               ...selectedTasks.map((t) => t.status),
@@ -444,9 +444,9 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
                       <summary className="cursor-pointer text-xs">
                         Handoff and next steps
                       </summary>
-                      <MarkdownRenderer
-                        className="mt-2 break-words"
-                        content={t.content}
+                      <div
+                        className="prose prose-sm dark:prose-invert mt-2 max-w-none break-words [&_img]:max-w-full"
+                        dangerouslySetInnerHTML={{ __html: t.contentHtml }}
                       />
                     </details>
                   </article>
@@ -475,7 +475,9 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
               <li key={event.id} className="py-4">
                 <div className="flex flex-wrap justify-between gap-2 text-sm">
                   <span>
-                    <strong>{names.get(event.agentId)}</strong> ·{" "}
+                    <strong>
+                      {event.agentId ? names.get(event.agentId) : "System · label routing"}
+                    </strong> ·{" "}
                     {eventLabels[event.action] ||
                       event.action
                         .replace(/^AGENT_/, "")
@@ -495,14 +497,14 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
                 >
                   {task.issueKey} · {task.title}
                 </Link>
-                {event.content && (
+                {event.contentHtml && (
                   <details className="mt-2 text-sm">
                     <summary className="cursor-pointer">
                       Report / evidence
                     </summary>
-                    <MarkdownRenderer
-                      className="mt-2 break-words"
-                      content={event.content}
+                    <div
+                      className="prose prose-sm dark:prose-invert mt-2 max-w-none break-words [&_img]:max-w-full"
+                      dangerouslySetInnerHTML={{ __html: event.contentHtml }}
                     />
                   </details>
                 )}

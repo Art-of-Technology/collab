@@ -5,7 +5,7 @@ import { readAgentFloor } from "@/lib/agent-floor";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ workspaceId: string }> },
 ) {
   const session = await getServerSession(authOptions);
@@ -16,7 +16,12 @@ export async function GET(
     );
   const { workspaceId } = await params;
   try {
-    const snapshot = await readAgentFloor(session.user.id, workspaceId);
+    const query = new URL(request.url).searchParams;
+    const snapshot = await readAgentFloor(session.user.id, workspaceId, {
+      page: Number(query.get("page") || 0),
+      search: query.get("search") || "",
+      projectId: query.get("projectId") || "",
+    });
     if (!snapshot)
       return NextResponse.json(
         { error: "not_found" },
