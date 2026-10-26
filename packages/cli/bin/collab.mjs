@@ -145,7 +145,13 @@ async function main() {
     allowed(options, ['profile', 'workspace', 'agent', 'json', ...extra]);
     const state = stateStore.load();
     if (process.env.COLLAB_TOKEN) throw new CliError('environment_context', 'Orca uses an existing saved login, not COLLAB_TOKEN.');
-    return runOrca(name, options, session(options, state), state.userId);
+    let selected;
+    try { selected = session(options, state); }
+    catch (error) {
+      if (name !== 'orca status' || error.code !== 'token_expired') throw error;
+      return runOrca(name, options, { base: state.origin, workspace: options.workspace }, state.userId, { api: async () => { throw error; } });
+    }
+    return runOrca(name, options, selected, state.userId);
   }
   const spec = commands[name];
   if (!spec) throw new CliError('unknown_command', 'Unknown command. Run collab --help.');

@@ -39,6 +39,32 @@ test('persistent per-handoff receipts suppress restart, queue permutation and cl
   assert.equal(sends, 2);
 });
 
+test('each notification persists its challenge for every pending handoff before dispatch', async () => {
+  const receiptStore = receipts();
+  const handoffIds = ['handoff-one', 'handoff-two'];
+  let last, marker;
+  const call = async (_exe, args) => {
+    if (args[1] === 'show') return shown;
+    const prompt = args[args.indexOf('--text') + 1];
+    marker = prompt.match(/<!-- collab-wake:([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}) -->/);
+    assert.ok(marker, 'the emitted notification must carry a UUID challenge marker');
+    assert.equal(last.phase, 'attempting');
+    assert.equal(last.challenge, marker[1]);
+    for (const handoffId of handoffIds) {
+      const receipt = receiptStore(binding, handoffId).load();
+      assert.equal(receipt.phase, 'attempting');
+      assert.equal(receipt.challenge, marker[1]);
+    }
+    return accepted;
+  };
+  await deliverOrca(binding, { ...event, unseen: { items: handoffIds.map(id => ({ id, status: 'open' })) } }, value => { last = value; }, undefined, call, receiptStore);
+  assert.equal(last.phase, 'accepted');
+  for (const handoffId of handoffIds) {
+    assert.equal(receiptStore(binding, handoffId).load().challenge, marker[1]);
+    assert.equal(receiptStore(binding, handoffId).load().phase, 'accepted');
+  }
+});
+
 test('unknown outcome and negative/old-host/wrong-process receipts stop without resending', async () => {
   for (const response of [null, { ok: true, result: { accepted: true } }, { ...accepted, result: { send: { ...accepted.result.send, prompt: { ...accepted.result.send.prompt, processIncarnation: 'other' } } } }, { ...accepted, result: { send: { ...accepted.result.send, accepted: false } } }]) {
     const receiptStore = receipts(); let sends = 0;
@@ -66,7 +92,7 @@ test('private receipts persist on disk and are separated by user/workspace/incar
   assert.deepEqual(deliveryStore({ ...binding, target: { ...target, incarnationId: 'new' } }, 'h1').load(), {});
 });
 
-test('setup preserves registration; verification uses open server revisions despite local clock skew', async t => {
+test('setup preserves registration; verification requires fresh completion echoes despite local clock skew', async t => {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'collab-orca-'));
   const previous = process.env.COLLAB_CONFIG_DIR; process.env.COLLAB_CONFIG_DIR = directory;
   t.after(() => { if (previous === undefined) delete process.env.COLLAB_CONFIG_DIR; else process.env.COLLAB_CONFIG_DIR = previous; rmSync(directory, { recursive: true, force: true }); });
@@ -83,18 +109,46 @@ test('setup preserves registration; verification uses open server revisions desp
   const setup = await runOrca('orca setup', opts, selected, 'user', { api, call: async () => shown });
   assert.equal(setup.watcherStarted, false); assert.ok(calls.every(([, opts]) => !opts?.method));
   const actualBinding = { ...binding, orca: opts.orca };
-  const wake = item => deliverOrca(actualBinding, { ...event, unseen: { items: [item] } }, () => {}, undefined,
-    async (_exe, args) => args[1] === 'show' ? shown : accepted);
+  const markers = new Map();
+  const wake = (item, beforeSend) => deliverOrca(actualBinding, { ...event, unseen: { items: [item] } }, () => {}, undefined,
+    async (_exe, args) => {
+      if (args[1] === 'show') { beforeSend?.(); return shown; }
+      const marker = args[args.indexOf('--text') + 1].match(/<!-- collab-wake:[0-9a-f-]+ -->/);
+      assert.ok(marker);
+      markers.set(item.id, marker[0]);
+      return accepted;
+    });
   await wake({ id: 'h1', status: 'open', updatedAt: '2026-10-26T12:02:00Z' });
   assert.equal(deliveryStore(actualBinding, 'h1').load().at, '2026-10-26T11:59:00.000Z');
   const verify = (handoff = 'h1') => runOrca('orca verify', { agent: 'pilot', workspace: 'workspace', handoff }, selected, 'user', { api, call: async () => shown });
-  assert.equal((await verify()).verified, false);
+  const hostOnly = await verify();
+  assert.equal(hostOnly.hostAccepted, true);
+  assert.equal(hostOnly.claimed, false);
+  assert.equal(hostOnly.completedWithReply, false);
+  assert.equal(hostOnly.verified, false);
   events = ['AGENT_CLAIM', 'AGENT_COMPLETE'].map((action, index) => ({ action, createdAt: `2026-10-26T12:0${index}:00Z`, details: { agent: { name: 'pilot' }, handoffId: 'h1', content: 'reply' } }));
   assert.equal((await verify()).verified, false, 'historical activity after a slow local clock cannot prove this wake');
   events.forEach(e => { e.createdAt = '2026-10-26T12:03:00Z'; e.details.agent.name = 'other'; });
   assert.equal((await verify()).verified, false);
   events.forEach(e => { e.details.agent.name = 'pilot'; });
+  for (const content of ['reply', 'reply <!-- collab-wake:00000000-0000-4000-8000-000000000000 -->']) {
+    events[1].details.content = content;
+    const result = await verify();
+    assert.equal(result.hostAccepted, true);
+    assert.equal(result.claimed, true);
+    assert.equal(result.completedWithReply, false);
+    assert.equal(result.verified, false, 'acceptance and a named completion without this marker are insufficient');
+  }
+  events[1].details.content = `reply ${markers.get('h1')}`;
   assert.equal((await verify()).verified, true);
+  for (const e of events) {
+    e.details.agent.name = 'other';
+    assert.equal((await verify()).verified, false, 'both the claim and completion must name the bound agent');
+    e.details.agent.name = 'pilot';
+    e.details.handoffId = 'another-handoff';
+    assert.equal((await verify()).verified, false, 'both events must belong to this exact handoff');
+    e.details.handoffId = 'h1';
+  }
   for (const e of events) {
     e.createdAt = '2026-10-26T12:02:00Z';
     assert.equal((await verify()).verified, false, 'both events must be strictly later than the baseline');
@@ -102,11 +156,15 @@ test('setup preserves registration; verification uses open server revisions desp
   }
   events[1].details.content = ' ';
   assert.equal((await verify()).verified, false);
-  events[1].details.content = 'reply';
+  events[1].details.content = `reply ${markers.get('h1')}`;
+  const firstMarker = markers.get('h1');
   t.mock.timers.setTime(Date.parse('2026-10-26T13:00:00Z'));
   await wake({ id: 'h1', status: 'open', updatedAt: '2026-10-26T12:04:00Z' });
+  assert.notEqual(markers.get('h1'), firstMarker, 'a released handoff gets a fresh notification challenge');
   assert.equal((await verify()).verified, false, 'release replaces the baseline for both events');
   events.forEach(e => { e.createdAt = '2026-10-26T12:05:00Z'; });
+  assert.equal((await verify()).verified, false, 'a prior notification marker cannot verify a new delivery');
+  events[1].details.content = `reply ${markers.get('h1')}`;
   assert.equal((await verify()).verified, true, 'a fast local clock does not reject new server activity');
   t.mock.timers.setTime(Date.parse('2026-10-26T11:59:00Z'));
   for (const item of [
@@ -117,24 +175,40 @@ test('setup preserves registration; verification uses open server revisions desp
   ]) {
     await wake(item);
     events.forEach(e => { e.details.handoffId = item.id; });
+    events[1].details.content = `reply ${markers.get(item.id)}`;
     const result = await verify(item.id);
     assert.equal(result.hostAccepted, true);
     assert.equal(result.verified, false, `${item.id} cannot supply an open server baseline`);
   }
-  await deliveryStore(actualBinding, 'old-receipt').exclusive((_old, save) => save({ phase: 'accepted', at: '2026-10-26T11:59:00Z' }));
+  await deliveryStore(actualBinding, 'old-receipt').exclusive((_old, save) => save({ phase: 'accepted', at: '2026-10-26T11:59:00Z', openRevision: '2026-10-26T12:02:00Z' }));
   events.forEach(e => { e.details.handoffId = 'old-receipt'; });
   assert.equal((await verify('old-receipt')).verified, false);
+  await wake({ id: 'pre-send', status: 'open', updatedAt: '2026-10-26T12:02:00Z' }, () => {
+    events = ['AGENT_CLAIM', 'AGENT_COMPLETE'].map(action => ({ action, createdAt: '2026-10-26T12:03:00Z', details: { agent: { name: 'pilot' }, handoffId: 'pre-send', content: 'completed during terminal preflight' } }));
+  });
+  const preSend = await verify('pre-send');
+  assert.equal(preSend.hostAccepted, true);
+  assert.equal(preSend.claimed, true);
+  assert.equal(preSend.completedWithReply, false);
+  assert.equal(preSend.verified, false, 'completion after the snapshot but before dispatch cannot prove a response');
+  events.push({ ...events[1], createdAt: '2026-10-26T12:04:00Z', details: JSON.stringify({ ...events[1].details, content: `fresh reply ${markers.get('pre-send')}` }) });
+  assert.equal((await verify('pre-send')).verified, true, 'a named claim may precede delivery when a fresh completion echoes it');
 });
 
-test('Orca child never inherits COLLAB_TOKEN and cancellation closes it', async () => {
-  const prior = process.env.COLLAB_TOKEN; process.env.COLLAB_TOKEN = 'private-value';
+test('Orca child strips token and remote selectors without changing parent environment', async () => {
+  const names = ['COLLAB_TOKEN', 'ORCA_ENVIRONMENT', 'ORCA_PAIRING_CODE', 'ORCA_REMOTE_PAIRING']
+    .flatMap(name => process.platform === 'win32' ? [name] : [name, name.toLowerCase()]);
+  const prior = new Map([...names, 'ORCA_TEST_KEEP'].map(name => [name, process.env[name]]));
+  for (const name of prior.keys()) process.env[name] = 'synthetic-selector';
   try {
-    const output = await orcaCall(process.execPath, ['-e', 'console.log(JSON.stringify({ok:true,hasToken:!!process.env.COLLAB_TOKEN}))', '--']);
-    assert.equal(output.hasToken, false);
+    const output = await orcaCall(process.execPath, ['-e', `console.log(JSON.stringify({ok:true,inherited:${JSON.stringify(names)}.filter(name=>Object.hasOwn(process.env,name)),kept:process.env.ORCA_TEST_KEEP==='synthetic-selector'}))`, '--']);
+    assert.deepEqual(output.inherited, []);
+    assert.equal(output.kept, true);
+    assert.equal([...prior.keys()].every(name => process.env[name] === 'synthetic-selector'), true);
     const controller = new AbortController();
     const pending = orcaCall(process.execPath, ['-e', 'setTimeout(()=>{},30000)', '--'], controller.signal);
     controller.abort(); await assert.rejects(pending, error => error === controller.signal.reason);
-  } finally { if (prior === undefined) delete process.env.COLLAB_TOKEN; else process.env.COLLAB_TOKEN = prior; }
+  } finally { for (const [name, value] of prior) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } }
 });
 
 test('released work wakes again but ordinary claimed progress does not', async () => {

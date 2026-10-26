@@ -370,9 +370,10 @@ its own verified session; this adapter deliberately does not use remote Orca sel
 
 ### Delivery and recovery
 
-Only workspace/agent/validated handoff IDs enter the fixed wake prompt. Handoff content
+Only routing metadata and a fresh verification challenge enter the fixed wake prompt. Handoff content
 is fetched by the receiving agent through Collab's access checks. No content is shell
-executed. The Orca child does not inherit `COLLAB_TOKEN`.
+executed. The Orca child does not inherit `COLLAB_TOKEN`, `ORCA_ENVIRONMENT`,
+`ORCA_PAIRING_CODE`, or `ORCA_REMOTE_PAIRING`; parent environment and configuration stay unchanged.
 
 Private per-handoff receipts survive normal renewal and watcher restarts. Already
 accepted work does not wake repeatedly when claimed or updated; releasing a handoff
@@ -383,7 +384,8 @@ work at checkpoints. A receipt does not guarantee the model acted.
 Before sending, the adapter records an intent. A failed/interrupted send or crash
 between host acceptance and receipt persistence is **uncertain**, not safely retryable.
 `orca status` shows the affected IDs and any retained host request ID even when live
-checks fail; `liveHealth` reports their outcome separately. Inspect the exact
+checks fail or the saved login expires; `liveHealth` reports their outcome separately.
+Watch and verify still require valid authentication. Inspect the exact
 terminal and Collab activity before recovery. When Orca returned a request ID, its
 `--retry-request` mechanism observes/replays that same request, never submit a fresh
 prompt just because no reply arrived. Do not delete uncertain receipts or rebind to
@@ -401,12 +403,20 @@ reply. Then run:
 collab orca verify --agent AGENT_NAME --workspace WORKSPACE_ID --handoff HANDOFF_ID
 ```
 
-`verified: true` requires a local host-accepted receipt **and actual named claim and
-completion-with-content events** on that exact handoff, both later than the open
-handoff's server revision saved before delivery. Already claimed/completed snapshots
-and receipts without that revision cannot verify a wake. Local clock skew does not
-establish event order. Merely running setup/status
-or seeing `turnStarted` is insufficient. Verification reads the latest 100 issue events;
+Each notification carries a fresh UUID marker, `<!-- collab-wake:UUID -->`, saved in
+its private receipts. The receiver is asked to include that exact marker in the
+completion content. This is operational verification metadata, not authority or a secret.
+
+`verified: true` requires a local host-accepted receipt, a named claim, and a named
+completion on that exact handoff containing this notification's marker. Both events
+must also follow the open handoff's saved server revision. A named claim was observed
+and a fresh completion echoed this delivery; this does not establish that the claim
+followed host acceptance or provide cryptographic model attestation. Activity between
+the inbox snapshot and dispatch cannot verify a wake without the new marker.
+Already claimed/completed snapshots and receipts without the revision or challenge
+cannot verify a wake. A release/new notification gets a new challenge. Local clock
+skew does not establish event order. Merely running setup/status or seeing `turnStarted`
+is insufficient. Verification reads the latest 100 issue events;
 missing/truncated evidence is not success. Test the second computer separately before
 claiming cross-computer delivery. Sleep, host restart and stopped-model recovery are
 separate checks; changed process identity intentionally stops the watcher.

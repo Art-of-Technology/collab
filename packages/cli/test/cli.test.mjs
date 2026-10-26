@@ -1197,3 +1197,45 @@ test('official Orca commands are discoverable and reject guessed bindings withou
   }
   assert.equal(f.calls.length, 0);
 });
+
+test('Orca status exposes saved recovery after login expiry while watch and verify reject it', async t => {
+  const f = await fixture(t);
+  const profile = 'recovery', workspace = 'workspace-one', userId = 'same-user', agent = 'pilot';
+  const loginFile = path.join(f.dir, `${profile}.json`);
+  const login = JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_ACCESS', refreshToken: 'PRIVATE_REFRESH', expiresAt: 0, userId, workspace: 'other-default' });
+  writeCredentials(loginFile, login);
+  const key = createHash('sha256').update(JSON.stringify([f.url, workspace, userId, agent])).digest('base64url');
+  const bindingFile = path.join(f.dir, `orca-${key}.json`);
+  const target = { runtimeId: 'runtime-one', handle: 'term-one', incarnationId: 'process-one', worktreePath: f.dir, agentIdentity: 'codex' };
+  const args = ['--agent', agent, '--workspace', workspace, '--profile', profile];
+  const env = { COLLAB_TOKEN: '' };
+  for (const phase of ['attempting', 'accepted']) {
+    const lastDelivery = { phase, at: '2026-10-26T12:00:00Z', handoffIds: ['handoff-one'], ...(phase === 'accepted' && { requestId: 'request-one' }) };
+    const saved = JSON.stringify({ origin: f.url, workspace, userId, agent, host: 'laptop', sessionId: 'session-one', orca: path.join(f.dir, 'must-not-run'), target, lastDelivery });
+    writeCredentials(bindingFile, saved);
+    const result = await f.run(['orca', 'status', ...args], { env });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.data.agent, agent);
+    assert.equal(result.data.host, 'laptop');
+    assert.equal(result.data.sessionId, 'session-one');
+    assert.deepEqual(result.data.target, target);
+    assert.deepEqual(result.data.lastDelivery, lastDelivery);
+    assert.deepEqual(result.data.liveHealth, { ok: false, error: 'token_expired' });
+    assert.equal(result.data.watcher, null);
+    assert.equal(result.data.modelExecutionVerified, false);
+    assert.equal(result.stdout.includes('PRIVATE_') || result.stderr.includes('PRIVATE_'), false);
+    assert.equal(readFileSync(bindingFile, 'utf8'), saved);
+  }
+  for (const command of ['setup', 'watch', 'verify']) {
+    const result = await f.run(['orca', command, ...args, ...(command === 'verify' ? ['--handoff', 'handoff-one'] : [])], { env });
+    assert.equal(result.code, 3);
+    assert.equal(result.error.error, 'token_expired');
+    assert.equal(result.stdout, '');
+  }
+  const other = await f.run(['orca', 'status', '--agent', agent, '--workspace', 'another-workspace', '--profile', profile], { env });
+  assert.equal(other.code, 0);
+  assert.equal(other.data.lastDelivery, null);
+  assert.equal(other.data.liveHealth.ok, false);
+  assert.equal(readFileSync(loginFile, 'utf8'), login);
+  assert.equal(f.calls.length, 0, 'expired-login recovery sends no requests');
+});

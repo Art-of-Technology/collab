@@ -145,5 +145,9 @@ an unconditional restart loop. A changed terminal/runtime requires verified setu
 Private receipts suppress repeated accepted handoffs across clean restarts. An uncertain
 send stops delivery for investigation; do not erase receipts or resend on silence.
 Host acceptance is not model execution: a harmless new test must produce an actual
-claim and completion reply, checked by `orca verify`. Remote computers each need their
+claim and completion reply, checked by `orca verify`. Include the notification's exact
+`<!-- collab-wake:UUID -->` marker in the completion content for each notified handoff
+you complete. It is verification metadata, not new authority. Verification observes a
+named claim and a fresh completion echo; it does not establish claim timing after host
+acceptance or provide cryptographic model attestation. Remote computers each need their
 own local setup. Never restart completed pilots or assume OS autostart is installed.

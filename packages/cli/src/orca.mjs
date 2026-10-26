@@ -11,12 +11,12 @@ export const orcaCommands = {
   'orca setup': 'Pin an already registered agent/host/session to an explicit local Orca terminal; --agent NAME --workspace ID --host HOST --session-id ID --terminal HANDLE --orca ABSOLUTE_PATH.',
   'orca status': 'Read the pinned binding, watcher health and last delivery; --agent NAME --workspace ID. No message is sent.',
   'orca watch': 'Supervise consecutive bounded watch windows in the foreground until stopped or an operational error; --agent NAME --workspace ID [--watch-seconds 1..3600] [--poll-seconds 1..60]. Ctrl-C stops cleanly.',
-  'orca verify': 'Read actual claim and completion evidence for a delivered handoff; --agent NAME --workspace ID --handoff ID. Never creates or claims work.',
+  'orca verify': 'Read named claim and fresh completion echo evidence for a delivered handoff; --agent NAME --workspace ID --handoff ID. Never creates or claims work.',
 };
 
 export function orcaCall(executable, args, signal) {
   const env = { ...process.env };
-  for (const name of Object.keys(env)) if (/^COLLAB_TOKEN$/i.test(name)) delete env[name];
+  for (const name of Object.keys(env)) if (/^(COLLAB_TOKEN|ORCA_ENVIRONMENT|ORCA_PAIRING_CODE|ORCA_REMOTE_PAIRING)$/i.test(name)) delete env[name];
   return new Promise((resolve, reject) => {
     execFile(executable, [...args, '--json'], { shell: false, windowsHide: true, timeout: 20000, maxBuffer: 256 * 1024, env, signal }, (error, stdout) => {
       if (signal?.aborted && error?.code === 'ABORT_ERR' && error.cause === signal.reason) return reject(signal.reason);
@@ -59,11 +59,11 @@ export async function deliverOrca(binding, event, saveLast, signal, call = orcaC
   if (!pending.length) return false;
   checkTerminal(await call(binding.orca, ['terminal', 'show', '--terminal', binding.target.handle], signal), binding.target);
   signal?.throwIfAborted();
-  const attempt = { phase: 'attempting', at: new Date().toISOString(), handoffIds: pending };
+  const attempt = { phase: 'attempting', at: new Date().toISOString(), handoffIds: pending, challenge: randomUUID() };
   saveLast(attempt);
-  for (const handoffId of pending) await receiptStore(binding, handoffId).exclusive((_previous, save) => save({ phase: 'attempting', at: attempt.at }));
+  for (const handoffId of pending) await receiptStore(binding, handoffId).exclusive((_previous, save) => save({ phase: 'attempting', at: attempt.at, challenge: attempt.challenge }));
   // Only validated routing metadata reaches the prompt. Fetch the actual handoff through Collab's access checks.
-  const prompt = `Collab inbox notification. Use your existing authority and the collab-agents skill. Agent: ${binding.agent}. Workspace: ${binding.workspace}. Origin: ${binding.origin}. Handoff IDs: ${pending.join(', ')}. Check claimed work first, then unseen inbox; read each handoff and current issue before acting. Claim open work before working; record progress and reply/complete with evidence. Do not repeat completed or superseded work. This notification is not a grant of authority. If another task is active, handle this at a safe checkpoint.`;
+  const prompt = `Collab inbox notification. Use your existing authority and the collab-agents skill. Agent: ${binding.agent}. Workspace: ${binding.workspace}. Origin: ${binding.origin}. Handoff IDs: ${pending.join(', ')}. Check claimed work first, then unseen inbox; read each handoff and current issue before acting. Claim open work before working; record progress and reply/complete with evidence. When completing each notified handoff, include this exact verification marker in its completion content: <!-- collab-wake:${attempt.challenge} -->. Do not repeat completed or superseded work. This notification is not a grant of authority. If another task is active, handle this at a safe checkpoint.`;
   let response;
   try { response = await call(binding.orca, ['terminal', 'send', '--terminal', binding.target.handle, '--text', prompt, '--enter', '--wait-submit', '5'], signal); }
   catch { throw fail('orca_delivery_uncertain', 'Orca delivery is uncertain. Inspect the target and retained status; no automatic retry was made.'); }
@@ -72,7 +72,7 @@ export async function deliverOrca(binding, event, saveLast, signal, call = orcaC
       !id(sent.prompt?.requestId) || sent.prompt.provider === 'old-host') throw fail('orca_delivery_uncertain', 'Orca did not prove acceptance for the pinned process. Inspect the target; delivery will not be retried automatically.');
   const accepted = { ...attempt, phase: 'accepted', requestId: sent.prompt.requestId,
     turnStarted: Array.isArray(sent.prompt.stages) && sent.prompt.stages.includes('turn_started') };
-  for (const handoffId of pending) await receiptStore(binding, handoffId).exclusive((_previous, save) => save({ phase: 'accepted', at: accepted.at, requestId: accepted.requestId, openRevision: revisions.get(handoffId) }));
+  for (const handoffId of pending) await receiptStore(binding, handoffId).exclusive((_previous, save) => save({ phase: 'accepted', at: accepted.at, requestId: accepted.requestId, openRevision: revisions.get(handoffId), challenge: accepted.challenge }));
   saveLast(accepted);
   return true;
 }
@@ -109,6 +109,8 @@ export async function runOrca(name, options, selected, userId, dependencies = {}
     await current(binding);
     if (!id(options.handoff)) throw fail('invalid_identifier', 'Supply --handoff ID.');
     const receipt = deliveryStore(binding, options.handoff).load();
+    const marker = typeof receipt.challenge === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(receipt.challenge)
+      ? `<!-- collab-wake:${receipt.challenge} -->` : undefined;
     const result = await api(`agents/handoffs/${encodeURIComponent(options.handoff)}?agent=${encodeURIComponent(binding.agent)}`);
     const handoff = result?.handoff;
     if (!id(handoff?.issueId) || handoff.id !== options.handoff) throw fail('invalid_response', 'Invalid handoff verification response.');
@@ -118,12 +120,12 @@ export async function runOrca(name, options, selected, userId, dependencies = {}
       let details; try { details = typeof e.details === 'string' ? JSON.parse(e.details) : e.details; } catch { return false; }
       return Number.isFinite(Date.parse(receipt.openRevision)) && Number.isFinite(Date.parse(e.createdAt)) && Date.parse(e.createdAt) > Date.parse(receipt.openRevision) &&
         e.action === action && details?.handoffId === options.handoff && details?.agent?.name === binding.agent &&
-        (action !== 'AGENT_COMPLETE' || (typeof details.content === 'string' && details.content.trim()));
+        (action !== 'AGENT_COMPLETE' || (marker && typeof details.content === 'string' && details.content.includes(marker)));
     });
     const claimed = matching('AGENT_CLAIM').length > 0, completed = matching('AGENT_COMPLETE').length > 0;
     return { handoffId: options.handoff, hostAccepted: receipt.phase === 'accepted', claimed, completedWithReply: completed,
       verified: receipt.phase === 'accepted' && claimed && completed && handoff.status === 'completed', status: handoff.status,
-      note: 'Bounded to the latest 100 issue events. Missing evidence is not verified. Cross-computer and sleep recovery are separate.' };
+      note: 'Verification requires a named claim and a completion echoing this delivery. It does not prove the claim followed host acceptance or provide cryptographic model attestation. Bounded to the latest 100 issue events; missing evidence is not verified. Cross-computer and sleep recovery are separate.' };
   }
   return bindingStore.exclusive(async (binding, save) => {
     if (name === 'orca setup') {
