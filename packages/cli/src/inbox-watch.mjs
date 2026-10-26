@@ -69,7 +69,7 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
   } finally {
     clearTimeout(timer);
     if (reportingStarted) {
-      try { await report(failure ? 'error' : 'stopped', undefined, failure ? (/^[a-z_]{1,64}$/.test(failure.code) ? failure.code : 'watcher_failed') : undefined); }
+      try { await report(failure ? 'error' : 'stopped', undefined, failure ? (typeof failure.code === 'string' && /^[a-z_]{1,64}$/.test(failure.code) ? failure.code : 'watcher_failed') : undefined); }
       catch (error) { if (!failure) throw error; } // Preserve the original API/callback failure.
     }
   }

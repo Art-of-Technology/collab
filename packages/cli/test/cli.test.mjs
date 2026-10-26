@@ -160,6 +160,21 @@ test('watcher errors retain the original failure and never record a successful w
   assert.equal(refused.calls.length, 1, 'a competing watcher stops before reading or invoking the callback');
 });
 
+test('watcher reports a bounded fallback for code-less failures and preserves the original error', async () => {
+  const failure = new Error('synthetic unexpected failure');
+  const events = [];
+  await assert.rejects(watchInbox({
+    read: async () => { throw failure; },
+    report: async (event, _signal, errorCode) => { events.push({ event, errorCode }); },
+    callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+    durationMs: 1000, intervalMs: 100, callbackTimeoutMs: 100,
+  }), error => error === failure);
+  assert.deepEqual(events, [
+    { event: 'started', errorCode: undefined },
+    { event: 'error', errorCode: 'watcher_failed' },
+  ]);
+});
+
 test('agent commands stop on permission or claim conflict errors without retry', async t => {
   const f = await fixture(t, (_req, res) => { res.statusCode = 409; res.end('{"error":"conflict"}'); });
   assert.notEqual((await f.run(['handoffs', 'claim', 'handoff-one', '--agent', 'reviewer'])).code, 0);
