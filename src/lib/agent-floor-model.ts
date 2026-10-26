@@ -112,14 +112,6 @@ export function updateFloorPlayback(
     Date.parse(next.generatedAt) - Date.parse(previous.generatedAt) > EVENT_OVERLAP_MS
   )
     playback.queues.clear();
-  for (const [key, queue] of playback.queues) {
-    const pending = queue.filter(
-      ({ event }) =>
-        Date.parse(next.generatedAt) - Date.parse(event.at) < RECENT_REPORT_MS,
-    );
-    if (pending.length) playback.queues.set(key, pending);
-    else playback.queues.delete(key);
-  }
   for (const event of arrivingEvents(previous, next, playback.seen)) {
     if (
       !animate || !event.agentId ||
@@ -130,6 +122,17 @@ export function updateFloorPlayback(
     const queue = playback.queues.get(key) || [];
     queue.push({ event, elapsed: 0 });
     playback.queues.set(key, queue);
+  }
+  const loadedProjects = new Set(next.projects.map((project) => project.id));
+  const availableTasks = new Set(next.tasks.map((task) => task.id));
+  for (const [key, queue] of playback.queues) {
+    const pending = queue.filter(
+      ({ event }) =>
+        (!loadedProjects.has(event.projectId) || availableTasks.has(event.taskId)) &&
+        Date.parse(next.generatedAt) - Date.parse(event.at) < RECENT_REPORT_MS,
+    );
+    if (pending.length) playback.queues.set(key, pending);
+    else playback.queues.delete(key);
   }
 }
 export function agentReport(

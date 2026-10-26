@@ -447,6 +447,7 @@ function sceneFixture() {
     actors: () => objects((object) => object.userData.agent),
     board: (id) => objects((object) => object.userData.task === id)[0],
     card(actor) { return actor.children.find((object) => object.geometry?.type === "PlaneGeometry"); },
+    unmount() { controller.dispose(); },
     remount() { controller.dispose(); controller = create(); controller.update(props); pending(time); },
     close() { controller.dispose(); controller.dispose(); dom.window.close(); },
   };
@@ -509,6 +510,50 @@ test("queued claims retain progress and card identity across refresh, drill-down
     f.remount();
     f.step(2500);
     assert.ok(f.actors().find((a) => a.userData.agent === "a").position.distanceTo(desk) < 0.01);
+  } finally { f.close(); }
+});
+test("deleted queued tasks unblock loaded rooms without losing off-page queues or replaying consumed events", () => {
+  const f = sceneFixture();
+  try {
+    const initial = f.props.snapshot;
+    const other = { ...initial.projects[0], id: "other" };
+    const tasks = ["A", "B"].map((id) => ({ ...initial.tasks[0], id, issueKey: `T-${id}` }));
+    const offPageTask = { ...tasks[0], id: "off-page", projectId: other.id };
+    const data = { ...initial, projects: [...initial.projects, other], tasks: [...tasks, offPageTask] };
+    f.update({ snapshot: data, projects: data.projects });
+    const desk = f.actors().find((actor) => actor.userData.agent === "a").position.clone();
+    f.unmount(); // List view keeps polling without a renderer.
+    const events = [
+      ...tasks.map((task) => claim(data, `claim-${task.id}`, task.id)),
+      { ...claim(data, "claim-off-page", offPageTask.id), projectId: other.id },
+    ];
+    f.arrive(events);
+    const playback = f.props.playback;
+    const key = model.floorActorKey("p", "a");
+    const otherKey = model.floorActorKey(other.id, "a");
+    const pendingB = playback.queues.get(key)[1];
+    const offPage = playback.queues.get(otherKey)[0];
+    const previous = f.props.snapshot;
+    const next = { ...previous, projects: initial.projects, tasks: [tasks[1]], generatedAt: at(40000) };
+    model.updateFloorPlayback(playback, previous, next, true);
+    f.update({ snapshot: next, projects: next.projects });
+    f.remount();
+    f.step(4500);
+    const actor = f.actors().find((actor) => actor.userData.agent === "a");
+    assert.equal(f.card(actor).visible, true);
+    assert.equal(f.card(actor).material.map.image.lines[0], "T-B");
+    assert.equal(playback.queues.get(key)[0], pendingB);
+    assert.equal(playback.queues.get(otherKey)[0], offPage);
+    assert.equal(offPage.elapsed, 0);
+    f.step(6000);
+    assert.equal(playback.queues.has(key), false);
+    f.arrive(events, 60000);
+    f.remount();
+    f.step(4500);
+    assert.equal(playback.queues.has(key), false);
+    assert.ok(f.actors().find((actor) => actor.userData.agent === "a").position.distanceTo(desk) < 0.01);
+    assert.equal(playback.queues.get(otherKey)[0], offPage);
+    assert.ok(events.every((event) => playback.seen.has(event.id)));
   } finally { f.close(); }
 });
 test("cancelling during carrying restores every board card and never replays cancelled events", () => {
