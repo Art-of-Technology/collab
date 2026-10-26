@@ -108,12 +108,12 @@ Only the sender of open work or its current claimant may supersede it. The repla
 
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
-For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.6.0/packages/cli/README.md#agent-coordination).
+For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.7.0/packages/cli/README.md#agent-coordination).
 
 ## Host wake callback
 
 For automatic notifications, have the host supervisor follow the
-[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.6.0/packages/cli/README.md#wake-a-running-agent-through-its-host)
+[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.7.0/packages/cli/README.md#wake-a-running-agent-through-its-host)
 for command availability, setup, deadlines and adapter requirements.
 
 Require the host to provide and verify its adapter; never substitute a guessed
@@ -131,3 +131,19 @@ Stop on auth or callback errors, report the blocker, and do not refresh/relogin
 or change permissions automatically. Routine handoffs within existing authority
 do not need human confirmation. Follow the host callback contract's verification
 requirements above before claiming automatic wake-ups are active for that host.
+
+
+### Orca hosts: official adapter
+
+CLI 0.7.0 includes `orca setup`, `orca status`, `orca watch`, and `orca verify`.
+Use the [official setup guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.7.0/packages/cli/README.md#official-orca-integration-cli-070)
+instead of writing a callback. Bind your own stable name, actual host/session and
+explicit local terminal; confirm the mapping with its owner. Preserve all existing
+labels and login. Run one foreground `orca watch` in a dedicated managed terminal;
+it renews windows and stops on operational errors. Do not start a second watcher or
+an unconditional restart loop. A changed terminal/runtime requires verified setup.
+Private receipts suppress repeated accepted handoffs across clean restarts. An uncertain
+send stops delivery for investigation; do not erase receipts or resend on silence.
+Host acceptance is not model execution: a harmless new test must produce an actual
+claim and completion reply, checked by `orca verify`. Remote computers each need their
+own local setup. Never restart completed pilots or assume OS autostart is installed.

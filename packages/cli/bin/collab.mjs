@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { orcaCommands, runOrca } from '../src/orca.mjs';
 import { watchInbox } from '../src/inbox-watch.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { commands, flagName, scopes } from '../src/commands.mjs';
@@ -67,7 +68,7 @@ async function boundedInput(file) {
   } finally { clearTimeout(timer); if (file !== '-') stream.destroy(); }
 }
 function help() {
-  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors and issue deletion previews on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema', 'update'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
+  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors and issue deletion previews on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema', 'update'], orcaCommands, globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
 }
 async function update() {
   const windows = process.platform === 'win32';
@@ -137,6 +138,14 @@ async function main() {
       }
       throw new CliError('unknown_command', 'Unknown local command. Run collab --help.');
     });
+  }
+  if (Object.hasOwn(orcaCommands, name)) {
+    if (words.length !== 2) throw new CliError('unexpected_arguments', 'Unexpected positional arguments.');
+    const extra = name === 'orca setup' ? ['host', 'session-id', 'terminal', 'orca'] : name === 'orca watch' ? ['watch-seconds', 'poll-seconds'] : name === 'orca verify' ? ['handoff'] : [];
+    allowed(options, ['profile', 'workspace', 'agent', 'json', ...extra]);
+    const state = stateStore.load();
+    if (process.env.COLLAB_TOKEN) throw new CliError('environment_context', 'Orca uses an existing saved login, not COLLAB_TOKEN.');
+    return runOrca(name, options, session(options, state), state.userId);
   }
   const spec = commands[name];
   if (!spec) throw new CliError('unknown_command', 'Unknown command. Run collab --help.');

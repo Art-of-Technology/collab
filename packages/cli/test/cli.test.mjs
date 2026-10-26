@@ -1185,3 +1185,15 @@ test('login refuses token workspace and identity workspace mismatches without sa
     assert.throws(() => readFileSync(path.join(f.dir, 'default.json')), { code: 'ENOENT' });
   }
 });
+
+test('official Orca commands are discoverable and reject guessed bindings without dispatch', async t => {
+  const f = await fixture(t);
+  const schema = await f.run(['schema']);
+  assert.equal(schema.code, 0);
+  assert.ok(schema.data.orcaCommands['orca setup']);
+  assert.ok(schema.data.orcaCommands['orca watch']);
+  for (const args of [['orca', 'setup', '--agent', 'pilot'], ['orca', 'watch', '--agent', 'pilot'], ['orca', 'watch', '--callback', 'guessed-script']]) {
+    assert.notEqual((await f.run(args)).code, 0);
+  }
+  assert.equal(f.calls.length, 0);
+});

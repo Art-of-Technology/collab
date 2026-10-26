@@ -34,11 +34,13 @@ function queue(result) {
     result.items.some(item => typeof item.id !== 'string' || item.id.length > 128 || !['open', 'claimed', 'completed'].includes(item.status))) {
     throw new CliError('invalid_response', 'Expected a bounded agent inbox.', 5);
   }
-  return { items: result.items.map(({ id, status }) => ({ id, status })), hasMore: result.hasMore };
+  return { items: result.items.map(({ id, status, updatedAt }) => ({ id, status,
+    ...(typeof updatedAt === 'string' && updatedAt.length <= 32 && Number.isFinite(Date.parse(updatedAt)) && { updatedAt }),
+  })), hasMore: result.hasMore };
 }
 
 export async function watchInbox({ read, callback, callbackArgs, agent, workspaceId, origin,
-  durationMs, intervalMs, callbackTimeoutMs, signal, report }) {
+  durationMs, intervalMs, callbackTimeoutMs, signal, report, deliver }) {
   const window = new AbortController();
   const timer = setTimeout(() => window.abort(), durationMs);
   const watchSignal = signal ? AbortSignal.any([signal, window.signal]) : window.signal;
@@ -57,9 +59,9 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
         // Coalesce unchanged queues; remind once per minute until the agent drains them.
         // No persisted ACK: restarting may repeat a notification, never lose queued work.
         if (deliveryId !== lastDelivery || Date.now() - deliveredAt >= 60000) {
-          await deliverWake(callback, callbackArgs, { ...payload, deliveryId }, callbackTimeoutMs, watchSignal);
-          lastDelivery = deliveryId; deliveredAt = Date.now(); callbacks++;
-          await report?.('wake', watchSignal);
+          const notified = deliver ? await deliver({ ...payload, deliveryId }, watchSignal) : await deliverWake(callback, callbackArgs, { ...payload, deliveryId }, callbackTimeoutMs, watchSignal);
+          lastDelivery = deliveryId; deliveredAt = Date.now();
+          if (notified !== false) { callbacks++; await report?.('wake', watchSignal); }
         }
       } else lastDelivery = undefined;
       await delay(intervalMs, undefined, { signal: watchSignal });

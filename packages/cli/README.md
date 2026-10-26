@@ -20,11 +20,11 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-[CLI 0.6.1 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.6.1) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
+[CLI 0.7.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.7.0) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
 
 Version 0.6.1 adds `collab update`, which reruns the one-command installer for the current platform from the installed native executable. Installations before 0.6.1 run the installer once more to pick it up.
 
-Version 0.6.0 adds [current agent identity, supersession and watcher health](#operating-steps-on-each-computer). These features require the matching server; installing the CLI does not install a wake adapter.
+Version 0.7.0 adds the [official Orca adapter](#official-orca-integration-cli-070). Identity, supersession and watcher health still require the existing 0.6.0 server. Installing the CLI supplies the adapter; explicitly set up and start each receiver.
 
 Version 0.5.1 adds [automatic login crash recovery](#authentication-and-automation), with cleanup guidance for older locks.
 
@@ -239,7 +239,7 @@ Agent activity is visible in the existing issue timeline and `collab issues acti
 
 ### Operating steps on each computer
 
-1. Upgrade to CLI 0.6.0, run `collab --help` and check its `version` field, and load the updated [agent skill](skills/collab-agents/SKILL.md). Use the existing authorized login.
+1. Upgrade to CLI 0.7.0, run `collab --help` and check its `version` field, and load the updated [agent skill](skills/collab-agents/SKILL.md). Use the existing authorized login.
 2. Keep one stable name for this agent. Use the actual session ID reported by your agent host, and a short host label without spaces. If you already have an established name, keep it; do not create a fresh name for every task or restart. Stop its previous watcher before binding a replacement session.
 
 ```sh
@@ -327,3 +327,82 @@ entries, and claim before acting. Delivery never marks work seen or claims it.
 Each queue includes at most 50 entries; `hasMore` means keep draining using the
 normal seen/claim/complete workflow. An unchanged full page must not be treated
 as an empty inbox. Mark other agents' claimed/completed entries seen as appropriate.
+
+
+## Official Orca integration (CLI 0.7.0)
+
+Orca hosts no longer need a custom callback script. Install or update Collab with the
+existing one-command installer on **each agent computer**, keep its existing login,
+and use that computer's local Orca CLI. Codex and Claude terminals are supported.
+The adapter never launches a stopped model, approves permissions, changes agent labels,
+or treats a queued prompt as a completed task.
+
+### Set up one stable agent
+
+Register the actual host/session first using the instructions above, preserving the
+complete existing label list. Find the receiver with `orca terminal list --json` and
+confirm its session with the agent owner. Setup is an explicit assertion of that
+session-to-terminal mapping: Orca exposes the terminal's process incarnation, not the
+Collab session ID. Never pick a nearby terminal by its project name alone.
+
+```sh
+collab orca setup --agent AGENT_NAME --workspace WORKSPACE_ID --host HOST_LABEL --session-id SESSION_ID --terminal TERMINAL_HANDLE --orca /absolute/path/to/orca
+collab orca status --agent AGENT_NAME --workspace WORKSPACE_ID
+collab orca watch --agent AGENT_NAME --workspace WORKSPACE_ID
+```
+
+On Windows pass the absolute path to the local Orca executable. This integration uses
+a saved Collab login, not `COLLAB_TOKEN`; nothing is copied to another computer. It
+uses the same private-file/Windows ACL checks as the existing login store. No new
+server deployment, provider, migration or OAuth approval is needed.
+
+`orca watch` is the foreground supervisor. Keep it in a dedicated managed terminal
+(or an existing host service manager). It renews bounded windows automatically:
+`--watch-seconds` defaults to 300 (1..3600), `--poll-seconds` to 5 (1..60). Ctrl-C/SIGTERM
+stops it and closes the active Orca child. It does not install an OS login service or
+autostart on reboot. Do not wrap failures in an unconditional restart loop.
+
+A private local lock and server watcher lease prevent duplicate watchers. Runtime,
+terminal process or registered session changes stop delivery; explicitly run setup
+for a verified replacement. Authentication, health, API and adapter errors stop renewal
+without refreshing credentials. On another computer, run the same setup there with
+its own verified session; this adapter deliberately does not use remote Orca selectors.
+
+### Delivery and recovery
+
+Only workspace/agent/validated handoff IDs enter the fixed wake prompt. Handoff content
+is fetched by the receiving agent through Collab's access checks. No content is shell
+executed. The Orca child does not inherit `COLLAB_TOKEN`.
+
+Private per-handoff receipts survive normal renewal and watcher restarts. Already
+accepted work does not wake repeatedly when claimed or updated; releasing a handoff
+with a new server revision can notify again. These receipts are delivery metadata,
+not claims or acknowledgements. Agents still recover claimed work and check unseen
+work at checkpoints. A receipt does not guarantee the model acted.
+
+Before sending, the adapter records an intent. A failed/interrupted send or crash
+between host acceptance and receipt persistence is **uncertain**, not safely retryable.
+`orca status` shows the affected IDs and any retained host request ID. Inspect the exact
+terminal and Collab activity before recovery. When Orca returned a request ID, its
+`--retry-request` mechanism observes/replays that same request, never submit a fresh
+prompt just because no reply arrived. Do not delete uncertain receipts or rebind to
+bypass them. Manual uncertain-outcome reconciliation and OS autostart are outside this
+first release; normal clean restarts are supported. Receipts live beside CLI state
+under separate `orca-*`/`wake-*` profiles and must not be used as auth profiles.
+
+### Prove the setup
+
+Create a clearly marked harmless test issue/handoff to the chosen receiver (leave old
+completed pilots closed). Ask it to read the test, claim it, and complete it with a short
+reply. Then run:
+
+```sh
+collab orca verify --agent AGENT_NAME --workspace WORKSPACE_ID --handoff HANDOFF_ID
+```
+
+`verified: true` requires a local host-accepted receipt **and actual named claim and
+completion-with-content events** on that exact handoff. Merely running setup/status
+or seeing `turnStarted` is insufficient. Verification reads the latest 100 issue events;
+missing/truncated evidence is not success. Test the second computer separately before
+claiming cross-computer delivery. Sleep, host restart and stopped-model recovery are
+separate checks; changed process identity intentionally stops the watcher.
