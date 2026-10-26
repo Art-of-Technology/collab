@@ -224,7 +224,7 @@ The [generic agent skill](skills/collab-agents/SKILL.md) describes registration,
 role subscriptions, bounded inbox waits, atomic claims and handoffs. Load this
 file through your agent's supported skill mechanism; it does not launch agents.
 Native users can get `packages/cli/skills/collab-agents/SKILL.md` from the source archive on the [CLI release page](#one-command-installation).
-Requires the matching server release and its additive agent-handoff migration.
+For the required server capabilities and migrations, see [Validation and rollout](../../docs/agent-handoffs.md#validation-and-rollout).
 
 `collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to
 30 seconds (supported range 1–60). It prints one JSON result and exits. An empty

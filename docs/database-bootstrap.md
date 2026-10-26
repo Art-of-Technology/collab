@@ -56,8 +56,8 @@ Version functions/triggers. No reset is used.
 
 After schema creation, native `prisma migrate resolve --applied` records each
 retained historical migration. These are baselines, not claims that historical
-data transformations were executed on the empty database. `prisma/bootstrap-contract.json` pins the current schema SHA256, exact sixteen
-migration names/bytes and Prisma 6.19.3. Schema changes, changed/added/removed
+data transformations were executed on the empty database. [The bootstrap contract](../prisma/bootstrap-contract.json) pins the current schema SHA256, exact
+migration names/bytes and Prisma version. Schema changes, changed/added/removed
 migrations and CLI upgrades refuse before generation or connection and require
 reviewed requalification. Run only from the admitted immutable source bundle;
 do not edit its schema, migrations, contract or tooling while bootstrap runs. On success,
@@ -117,16 +117,15 @@ after a real COMMIT. It never selects an existing application database.
 
 ## Current source qualification and restore boundary
 
-The October 26 contract binds all sixteen migrations through
-`20261022190000_issue_trash`, including the earlier agent-handoff and Git-provider
-migrations. It retains the exact Ready and Version provenance supplements.
+The bootstrap contract is the authoritative list of admitted migrations and
+their checksums. It retains the exact Ready and Version provenance supplements.
 Historical migrations are unchanged. Fresh schema generation installs the Trash
 columns, durable audit table and restrictive Issue project/workspace foreign
 keys directly; it does not replay the Trash migration's ALTER statements.
 
 `node --test tests/security/bootstrap-recipe.test.cjs` executes the actual CLI
 with process doubles. It checks exact emitted supplement bytes, one guarded
-transaction followed by fifteen ordered native baseline commands, target/env
+transaction followed by one ordered native baseline command per admitted migration, target/env
 handling, drift refusal and no retry after simulated failures. These doubles do
 not execute PostgreSQL or prove transaction, catalog or trigger behavior.
 The native fixture verifies exact baseline names/checksums, a complete model
@@ -143,4 +142,4 @@ catalog, baseline and recovery checks above. Existing installations require
 their own backup and upgrade plan; no production migration, worker activation
 or gateway cutover is implied by these local checks.
 
-The October 26 contract additionally binds `20261026000100_agent_operations`. Fresh bootstrap installs the nullable host/session/watcher fields, unique per-user host/session identity, and replacement-handoff foreign key directly from the current Prisma schema. Existing installations apply only the reviewed additive migration after a verified backup; bootstrap remains empty-database-only.
+Fresh bootstrap also installs agent identity, watcher health and supersession directly from the current Prisma schema. For an existing installation, follow the [agent-operations upgrade requirements](agent-handoffs.md#validation-and-rollout); bootstrap remains empty-database-only.
