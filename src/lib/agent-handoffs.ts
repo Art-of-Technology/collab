@@ -45,8 +45,8 @@ function watcherState(value: Prisma.JsonValue | null) {
   return { ...watcher, state: watcher.state === 'running' && Date.now() - Date.parse(watcher.heartbeatAt) >= watcherStaleMs ? 'stale' as const : watcher.state };
 }
 function agentStatus(agent: { id: string; name: string; labelIds: string[]; host: string | null; sessionId: string | null; watcher: Prisma.JsonValue | null }) {
-  return { id: agent.id, name: agent.name, labelIds: agent.labelIds, host: agent.host, sessionId: agent.sessionId,
-    watcher: watcherState(agent.watcher) };
+  return { id: agent.id, name: agent.name, labelIds: agent.labelIds,
+    ...(agent.host && { host: agent.host, sessionId: agent.sessionId, watcher: watcherState(agent.watcher) }) };
 }
 function issueScope(context: InboxContext): Prisma.IssueWhereInput {
   return { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id,
@@ -91,9 +91,11 @@ export async function registerAgent(context: AppAuthContext, input: z.infer<type
       throw new HandoffError('watcher_active', 'Stop the current watcher before rebinding this agent session', 409);
     }
     const data = { labelIds, ...(input.host && { host: input.host, sessionId: input.sessionId }), ...(changed && { watcher: {} }) };
-    return agentStatus(existing
+    const agent = existing
       ? await db.agentRegistration.update({ where: { id: existing.id }, data })
-      : await db.agentRegistration.create({ data: { workspaceId: context.workspace.id, userId: context.user.id, name: input.name, ...data } }));
+      : await db.agentRegistration.create({ data: { workspaceId: context.workspace.id, userId: context.user.id, name: input.name, ...data } });
+    return agent.host ? agentStatus(agent) : { id: agent.id, workspaceId: agent.workspaceId, userId: agent.userId,
+      name: agent.name, labelIds: agent.labelIds, createdAt: agent.createdAt, updatedAt: agent.updatedAt };
   }); }
   catch (error) {
     if ((error as { code?: string }).code === 'P2002') throw new HandoffError('agent_identity_conflict', 'This name or host/session already has a registration. Reuse its current agent name.', 409);
@@ -194,7 +196,7 @@ export async function workspaceAgentInbox(context: InboxContext, query: { agent?
   const inbox = await readInbox(context, selected.map(agent => ({
     ...inboxMatch(agent, query.state), issue: issueScope({ ...context, user: { id: agent.userId } }),
   })), Math.min(50, Math.max(1, query.limit)));
-  return { ...inbox, agents: agents.map(agentStatus) };
+  return { ...inbox, agents: agents.map(agent => ({ name: agent.name, ...(agent.host && agentStatus(agent)) })) };
 }
 
 export async function getHandoff(context: AppAuthContext, agentName: string, id: string) {

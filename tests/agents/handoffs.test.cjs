@@ -63,6 +63,24 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   await register(alice, 'lead'); await register(alice, 'worker-a', ['label-w']); await register(bob, 'worker-b', ['label-w']);
   await register(outsider, 'outsider', ['label-foreign']);
 
+  await t.test('unbound registration and list JSON contracts survive creation and label replacement', async () => {
+    let agentId;
+    for (const labelIds of [['label-w'], []]) {
+      const result = await register(alice, 'compat-agent', labelIds);
+      agentId ??= result.id;
+      const stored = await prisma.agentRegistration.findUniqueOrThrow({ where: { id: agentId } });
+      assert.deepEqual(JSON.parse(JSON.stringify(result)), { id: agentId, workspaceId: 'w', userId: 'alice',
+        name: 'compat-agent', labelIds, createdAt: stored.createdAt.toISOString(), updatedAt: stored.updatedAt.toISOString() });
+      const listed = (await service.listAgents(alice)).find(a => a.id === agentId);
+      assert.deepEqual(JSON.parse(JSON.stringify(listed)), { id: agentId, name: 'compat-agent', labelIds });
+      for (const state of ['unseen', 'claimed']) for (const agent of [undefined, 'compat-agent']) {
+        const monitor = await service.workspaceAgentInbox(alice, { state, agent, limit: 50 });
+        assert.deepEqual(JSON.parse(JSON.stringify(monitor.agents.find(a => a.name === 'compat-agent'))), { name: 'compat-agent' });
+      }
+    }
+    await prisma.agentRegistration.delete({ where: { id: agentId } });
+  });
+
   await t.test('names belong to users; subscriptions cannot reference foreign labels', async () => {
     await assert.rejects(register(bob, 'lead'), e => e.code === 'agent_name_taken');
     await assert.rejects(register(alice, 'bad', ['label-foreign']), e => e.code === 'invalid_labels');
@@ -157,6 +175,12 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     const unchanged = await bind({ name: binding.name });
     assert.equal(unchanged.sessionId, binding.sessionId);
     assert.equal(unchanged.watcher, null);
+    const listed = await service.listAgents(alice);
+    const legacy = listed.find(a => a.name === 'lead');
+    assert.deepEqual(JSON.parse(JSON.stringify(legacy)), { id: legacy.id, name: 'lead', labelIds: [] });
+    assert.deepEqual(JSON.parse(JSON.stringify(listed.find(a => a.name === binding.name))), {
+      id: unchanged.id, name: binding.name, labelIds: [], host: binding.host, sessionId: binding.sessionId, watcher: null,
+    });
     const watcherId = randomUUID();
     const heartbeat = (event, extra = {}, ctx = alice) => service.reportWatcher(ctx, service.heartbeatSchema.parse({
       agent: binding.name, host: binding.host, sessionId: binding.sessionId, watcherId, event, ...extra,

@@ -185,10 +185,13 @@ async function main() {
     const callbackTimeout = converted(options['callback-timeout'] ?? '30', 'integer');
     if (duration < 1 || duration > 3600 || interval < 1 || interval > 60 || callbackTimeout < 1 || callbackTimeout > 120) throw new CliError('invalid_timeout', 'Watch 1..3600 seconds, poll 1..60 seconds, callback timeout 1..120 seconds.');
     const host = options.host, sessionId = options['session-id'];
-    if (Boolean(host) !== Boolean(sessionId) || (host && (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(host) || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(sessionId)))) {
+    const healthReporting = host !== undefined || sessionId !== undefined;
+    if (healthReporting && (typeof host !== 'string' || typeof sessionId !== 'string' ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(host) || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(sessionId))) {
       throw new CliError('invalid_value', 'Supply the registered --host and --session-id together, using identifiers without spaces.');
     }
-    if (options['dry-run']) return { dryRun: true, callback: options.callback, callbackArgs, agent: options.agent, workspaceId: selected.workspace, duration, interval, callbackTimeout, healthReporting: Boolean(host), host, sessionId };
+    if (options['dry-run']) return { dryRun: true, callback: options.callback, callbackArgs, agent: options.agent, workspaceId: selected.workspace, duration, interval, callbackTimeout,
+      ...(healthReporting && { healthReporting, host, sessionId }) };
     const watcherId = randomUUID();
     const controller = new AbortController();
     const stop = () => controller.abort();
@@ -196,7 +199,7 @@ async function main() {
     try {
       return await watchInbox({ callback: options.callback, callbackArgs, agent: options.agent, workspaceId: selected.workspace,
         origin: selected.base, durationMs: duration * 1000, intervalMs: interval * 1000, callbackTimeoutMs: callbackTimeout * 1000,
-        report: host ? (event, signal, errorCode) => request(selected.base, `/api/apps/auth/agents/heartbeat?${new URLSearchParams({ workspaceId: selected.workspace })}`, {
+        report: healthReporting ? (event, signal, errorCode) => request(selected.base, `/api/apps/auth/agents/heartbeat?${new URLSearchParams({ workspaceId: selected.workspace })}`, {
           token: selected.token, method: 'POST', timeout: 5000, signal,
           body: { agent: options.agent, host, sessionId, watcherId, event, ...(errorCode && { errorCode }) },
         }) : undefined,

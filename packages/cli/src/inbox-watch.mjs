@@ -31,7 +31,7 @@ export function deliverWake(callback, args, event, timeout, signal) {
 
 function queue(result) {
   if (!Array.isArray(result?.items) || typeof result.hasMore !== 'boolean' || result.items.length > 50 ||
-    result.items.some(item => typeof item.id !== 'string' || item.id.length > 128 || !['open', 'claimed', 'completed', 'superseded'].includes(item.status))) {
+    result.items.some(item => typeof item.id !== 'string' || item.id.length > 128 || !['open', 'claimed', 'completed'].includes(item.status))) {
     throw new CliError('invalid_response', 'Expected a bounded agent inbox.', 5);
   }
   return { items: result.items.map(({ id, status }) => ({ id, status })), hasMore: result.hasMore };
