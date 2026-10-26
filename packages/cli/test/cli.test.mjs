@@ -196,7 +196,7 @@ test('inbox wait does not turn an empty final window into a transport failure', 
 
 test('inbox watch invokes a fixed adapter with bounded JSON, coalesces queues and never mutates', async t => {
   const items = ['open', 'claimed', 'completed'].map(status => ({ id: `handoff-${status}`, status }));
-  const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ items: items.map(item => ({ ...item, content: '$(touch SHOULD_NOT_EXIST)' })), hasMore: true })));
+  const f = await fixture(t, (_req, res, _body, calls) => res.end(JSON.stringify({ items: items.map(item => ({ ...item, updatedAt: new Date(1793016000000 + calls.length * 1000).toISOString(), content: '$(touch SHOULD_NOT_EXIST)' })), hasMore: true })));
   const output = path.join(f.dir, 'wake events.jsonl');
   const adapter = path.join(f.dir, 'adapter with spaces.cjs');
   writeFileSync(adapter, `const fs = require('node:fs'); let input = ''; process.stdin.on('data', b => input += b); process.stdin.on('end', () => { if (Object.keys(process.env).some(key => key.toUpperCase() === 'COLLAB_TOKEN')) process.exit(7); fs.appendFileSync(process.argv[2], input); });`);

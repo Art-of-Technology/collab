@@ -382,7 +382,8 @@ work at checkpoints. A receipt does not guarantee the model acted.
 
 Before sending, the adapter records an intent. A failed/interrupted send or crash
 between host acceptance and receipt persistence is **uncertain**, not safely retryable.
-`orca status` shows the affected IDs and any retained host request ID. Inspect the exact
+`orca status` shows the affected IDs and any retained host request ID even when live
+checks fail; `liveHealth` reports their outcome separately. Inspect the exact
 terminal and Collab activity before recovery. When Orca returned a request ID, its
 `--retry-request` mechanism observes/replays that same request, never submit a fresh
 prompt just because no reply arrived. Do not delete uncertain receipts or rebind to
@@ -401,7 +402,10 @@ collab orca verify --agent AGENT_NAME --workspace WORKSPACE_ID --handoff HANDOFF
 ```
 
 `verified: true` requires a local host-accepted receipt **and actual named claim and
-completion-with-content events** on that exact handoff. Merely running setup/status
+completion-with-content events** on that exact handoff, both later than the open
+handoff's server revision saved before delivery. Already claimed/completed snapshots
+and receipts without that revision cannot verify a wake. Local clock skew does not
+establish event order. Merely running setup/status
 or seeing `turnStarted` is insufficient. Verification reads the latest 100 issue events;
 missing/truncated evidence is not success. Test the second computer separately before
 claiming cross-computer delivery. Sleep, host restart and stopped-model recovery are

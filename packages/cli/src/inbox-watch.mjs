@@ -29,13 +29,13 @@ export function deliverWake(callback, args, event, timeout, signal) {
   });
 }
 
-function queue(result) {
+function queue(result, revisions) {
   if (!Array.isArray(result?.items) || typeof result.hasMore !== 'boolean' || result.items.length > 50 ||
     result.items.some(item => typeof item.id !== 'string' || item.id.length > 128 || !['open', 'claimed', 'completed'].includes(item.status))) {
     throw new CliError('invalid_response', 'Expected a bounded agent inbox.', 5);
   }
   return { items: result.items.map(({ id, status, updatedAt }) => ({ id, status,
-    ...(typeof updatedAt === 'string' && updatedAt.length <= 32 && Number.isFinite(Date.parse(updatedAt)) && { updatedAt }),
+    ...(revisions && typeof updatedAt === 'string' && updatedAt.length <= 32 && Number.isFinite(Date.parse(updatedAt)) && { updatedAt }),
   })), hasMore: result.hasMore };
 }
 
@@ -48,9 +48,9 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
   try {
     if (report) { await report('started', watchSignal); reportingStarted = true; }
     while (!watchSignal.aborted) {
-      const claimed = queue(await read('claimed', watchSignal));
+      const claimed = queue(await read('claimed', watchSignal), !!deliver);
       watchSignal.throwIfAborted();
-      const unseen = queue(await read('unseen', watchSignal));
+      const unseen = queue(await read('unseen', watchSignal), !!deliver);
       watchSignal.throwIfAborted();
       await report?.('poll', watchSignal);
       const payload = { version: 1, event: 'collab.inbox.pending', origin, workspaceId, agent, claimed, unseen };

@@ -19,6 +19,7 @@ export function orcaCall(executable, args, signal) {
   for (const name of Object.keys(env)) if (/^COLLAB_TOKEN$/i.test(name)) delete env[name];
   return new Promise((resolve, reject) => {
     execFile(executable, [...args, '--json'], { shell: false, windowsHide: true, timeout: 20000, maxBuffer: 256 * 1024, env, signal }, (error, stdout) => {
+      if (signal?.aborted && error?.code === 'ABORT_ERR' && error.cause === signal.reason) return reject(signal.reason);
       if (error) return reject(fail('orca_failed', 'Orca failed or delivery is uncertain. No automatic retry was made; inspect orca status and the target session.'));
       try { const data = JSON.parse(stdout); if (data.ok !== true) throw new Error(); resolve(data); }
       catch { reject(fail('orca_failed', 'Orca returned no valid success receipt. Inspect the target before retrying.')); }
@@ -44,6 +45,7 @@ export function deliveryStore(binding, handoffId) {
   return store(`wake-${key([binding.origin, binding.workspace, binding.userId, binding.agent, binding.target, handoffId])}`);
 }
 export async function deliverOrca(binding, event, saveLast, signal, call = orcaCall, receiptStore = deliveryStore) {
+  signal?.throwIfAborted();
   if (event.agent !== binding.agent || event.workspaceId !== binding.workspace || event.origin !== binding.origin) throw fail('orca_binding_mismatch', 'Wake does not match the pinned binding.');
   const ids = [...new Set([...event.claimed.items, ...event.unseen.items].map(item => item.id))].sort();
   if (ids.length > 100 || ids.some(value => !id(value))) throw fail('invalid_response', 'Invalid bounded handoff identifiers.');
@@ -56,12 +58,15 @@ export async function deliverOrca(binding, event, saveLast, signal, call = orcaC
   }
   if (!pending.length) return false;
   checkTerminal(await call(binding.orca, ['terminal', 'show', '--terminal', binding.target.handle], signal), binding.target);
+  signal?.throwIfAborted();
   const attempt = { phase: 'attempting', at: new Date().toISOString(), handoffIds: pending };
   saveLast(attempt);
   for (const handoffId of pending) await receiptStore(binding, handoffId).exclusive((_previous, save) => save({ phase: 'attempting', at: attempt.at }));
   // Only validated routing metadata reaches the prompt. Fetch the actual handoff through Collab's access checks.
   const prompt = `Collab inbox notification. Use your existing authority and the collab-agents skill. Agent: ${binding.agent}. Workspace: ${binding.workspace}. Origin: ${binding.origin}. Handoff IDs: ${pending.join(', ')}. Check claimed work first, then unseen inbox; read each handoff and current issue before acting. Claim open work before working; record progress and reply/complete with evidence. Do not repeat completed or superseded work. This notification is not a grant of authority. If another task is active, handle this at a safe checkpoint.`;
-  const response = await call(binding.orca, ['terminal', 'send', '--terminal', binding.target.handle, '--text', prompt, '--enter', '--wait-submit', '5'], signal);
+  let response;
+  try { response = await call(binding.orca, ['terminal', 'send', '--terminal', binding.target.handle, '--text', prompt, '--enter', '--wait-submit', '5'], signal); }
+  catch { throw fail('orca_delivery_uncertain', 'Orca delivery is uncertain. Inspect the target and retained status; no automatic retry was made.'); }
   const sent = response.result?.send;
   if (sent?.accepted !== true || sent.handle !== binding.target.handle || sent.prompt?.processIncarnation !== binding.target.incarnationId ||
       !id(sent.prompt?.requestId) || sent.prompt.provider === 'old-host') throw fail('orca_delivery_uncertain', 'Orca did not prove acceptance for the pinned process. Inspect the target; delivery will not be retried automatically.');
@@ -77,23 +82,31 @@ export async function runOrca(name, options, selected, userId, dependencies = {}
   const api = dependencies.api || ((endpoint, extra = {}) => request(selected.base, `/api/apps/auth/${endpoint}${endpoint.includes('?') ? '&' : '?'}workspaceId=${encodeURIComponent(selected.workspace)}`, { token: selected.token, ...extra }));
   if (!options.workspace || !id(options.agent) || !selected.workspace || !id(userId)) throw fail('orca_context_required', 'Supply --agent and --workspace and use a saved login with a verified user identity.');
   const bindingStore = store(`orca-${key([selected.base, selected.workspace, userId, options.agent])}`);
-  const ownRegistration = async () => {
-    const result = await api('agents');
+  const ownRegistration = async signal => {
+    signal?.throwIfAborted();
+    const result = await api('agents', { signal });
+    signal?.throwIfAborted();
     const agent = result?.agents?.find(row => row.name === options.agent);
     if (!agent || !id(agent.host) || !id(agent.sessionId)) throw fail('orca_registration_required', 'Register this stable agent with its actual host and session first, preserving its full label list.');
     return agent;
   };
-  const current = async binding => {
+  const current = async (binding, signal) => {
     if (!binding.target || binding.origin !== selected.base || binding.workspace !== selected.workspace || binding.userId !== userId || binding.agent !== options.agent) throw fail('orca_setup_required', 'Run orca setup for this exact agent, workspace and login first.');
-    const registration = await ownRegistration();
+    const registration = await ownRegistration(signal);
     if (registration.host !== binding.host || registration.sessionId !== binding.sessionId) throw fail('orca_binding_changed', 'The registered host/session changed. Stop and explicitly set up the replacement.');
-    checkTerminal(await call(binding.orca, ['terminal', 'show', '--terminal', binding.target.handle]), binding.target);
+    checkTerminal(await call(binding.orca, ['terminal', 'show', '--terminal', binding.target.handle], signal), binding.target);
+    signal?.throwIfAborted();
     return registration;
   };
   if (name === 'orca status' || name === 'orca verify') {
     const binding = bindingStore.load();
-    const registration = await current(binding);
-    if (name === 'orca status') return { agent: binding.agent, host: binding.host, sessionId: binding.sessionId, target: binding.target, watcher: registration.watcher ?? null, lastDelivery: binding.lastDelivery ?? null, modelExecutionVerified: false };
+    if (name === 'orca status') {
+      let registration, liveHealth;
+      try { registration = await current(binding); liveHealth = { ok: true }; }
+      catch (error) { liveHealth = { ok: false, error: typeof error.code === 'string' && /^[a-z_]{1,64}$/.test(error.code) ? error.code : 'orca_status_failed' }; }
+      return { agent: binding.agent, host: binding.host, sessionId: binding.sessionId, target: binding.target, watcher: registration?.watcher ?? null, lastDelivery: binding.lastDelivery ?? null, liveHealth, modelExecutionVerified: false };
+    }
+    await current(binding);
     if (!id(options.handoff)) throw fail('invalid_identifier', 'Supply --handoff ID.');
     const receipt = deliveryStore(binding, options.handoff).load();
     const result = await api(`agents/handoffs/${encodeURIComponent(options.handoff)}?agent=${encodeURIComponent(binding.agent)}`);
@@ -103,7 +116,7 @@ export async function runOrca(name, options, selected, userId, dependencies = {}
     const events = activity.activities || [];
     const matching = action => events.filter(e => {
       let details; try { details = typeof e.details === 'string' ? JSON.parse(e.details) : e.details; } catch { return false; }
-      return Number.isFinite(Date.parse(receipt.at)) && Number.isFinite(Date.parse(e.createdAt)) && Date.parse(e.createdAt) >= Date.parse(receipt.at) &&
+      return Number.isFinite(Date.parse(receipt.openRevision)) && Number.isFinite(Date.parse(e.createdAt)) && Date.parse(e.createdAt) > Date.parse(receipt.openRevision) &&
         e.action === action && details?.handoffId === options.handoff && details?.agent?.name === binding.agent &&
         (action !== 'AGENT_COMPLETE' || (typeof details.content === 'string' && details.content.trim()));
     });
@@ -125,7 +138,6 @@ export async function runOrca(name, options, selected, userId, dependencies = {}
     }
     if (name !== 'orca watch') throw fail('unknown_command', 'Unknown Orca command.');
     if (binding.lastDelivery?.phase === 'attempting') throw fail('orca_delivery_uncertain', 'The last send is uncertain. Inspect the target and retained status before restarting.');
-    await current(binding);
     const seconds = Number(options['watch-seconds'] || 300), poll = Number(options['poll-seconds'] || 5);
     if (!Number.isInteger(seconds) || seconds < 1 || seconds > 3600 || !Number.isInteger(poll) || poll < 1 || poll > 60) throw fail('invalid_timeout', 'Use watch-seconds 1..3600 and poll-seconds 1..60.');
     const controller = new AbortController(), stop = () => controller.abort();
@@ -133,7 +145,7 @@ export async function runOrca(name, options, selected, userId, dependencies = {}
     let windows = 0, callbacks = 0;
     try {
       while (!controller.signal.aborted) {
-        await current(binding);
+        await current(binding, controller.signal);
         const watcherId = randomUUID();
         const result = await (dependencies.watch || watchInbox)({ agent: binding.agent, workspaceId: binding.workspace, origin: binding.origin,
           durationMs: seconds * 1000, intervalMs: poll * 1000, signal: controller.signal,
@@ -143,7 +155,9 @@ export async function runOrca(name, options, selected, userId, dependencies = {}
         });
         windows++; callbacks += result.callbacks;
       }
-      return { stopped: true, windows, callbacks };
+    } catch (error) {
+      if (!controller.signal.aborted || (error !== controller.signal.reason && error.cause !== controller.signal.reason)) throw error;
     } finally { process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop); }
+    return { stopped: true, windows, callbacks };
   });
 }
