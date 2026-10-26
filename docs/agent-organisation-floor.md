@@ -14,7 +14,8 @@ not project names or human account names.
 ## What the view shows
 
 - The full registered-agent roster within the bounded snapshot, including agents
-  without linked work. Registration alone does not assign a project.
+  without linked work. Project drill-down narrows the roster to agents linked to
+  that project's displayed handoffs. Registration alone does not assign a project.
 - Project rooms, a task board, claimants and handoff instructions.
 - Named claim, progress, pass, release, acknowledgement and completion events,
   with the recorded report/evidence and links to the canonical issues.
@@ -41,13 +42,15 @@ establish a baseline rather than replaying historical events. Existing event IDs
 are not animated twice. A 45-second overlap admits late-committed events using
 ID deduplication. Pending queues and their progress survive geometry refreshes,
 room drill-down and List/3D switches; consumed events do not replay on remount.
+Each refresh drops queued events for tasks absent from the loaded rooms, so they
+cannot block later events. Queues for off-page rooms retain their progress.
 Queues expire after five minutes and clear on reconnect or disabled motion.
 Cancelling motion restores board cards immediately.
 
 The motion checkbox honours the operating system's reduced-motion preference.
 Project/agent buttons and the task/event lists are usable without manipulating
-the 3D canvas. The List switch avoids loading the scene when selected; if WebGL
-cannot start or loses its context, all data remains available below it. Graphics
+the 3D canvas. The List switch removes the 3D scene; if WebGL cannot start or
+loses its context, all data remains available below it. Graphics
 resources, controls, timers and animation frames are released on unmount.
 
 ## Scope and limits
@@ -76,7 +79,8 @@ heartbeat. Structured review outcomes and richer presence remain separate work.
 `node --test tests/security/agent-floor.test.cjs tests/security/agent-inbox.test.cjs`
 executes permission/route, two-agent ownership, event deduplication, stale-report,
 reconnect, projects beyond the former 200-project cap, system label routing, rich
-evidence, multi-event queues across rebuild/remount, cancellation and graphics
-disposal. The scene test
-uses real Three.js geometry with an injected renderer, not live browser evidence.
+evidence, multi-event queues across rebuild/remount, deleted-task queue
+reconciliation with off-page preservation, cancellation and graphics disposal.
+The scene test uses real Three.js geometry with an injected renderer, not live
+browser evidence.
 Run the repository typecheck and focused ESLint checks for the changed modules.

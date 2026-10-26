@@ -40,6 +40,8 @@ Open **Agent inbox** in the workspace sidebar to inspect all agents registered i
 
 Handoff details render Markdown headings, bold text, lists, links, inline code and fenced code blocks. HTML is sanitized before display, images have no click-to-open viewer, and the stored handoff text is unchanged.
 
+For the inbox's **Organisation floor** view, see [Organisation agent floor](agent-organisation-floor.md).
+
 ## CLI and skill
 
 For CLI availability and bounded inbox waits, see [Agent coordination](../packages/cli/README.md#agent-coordination). The [packaged skill](../packages/cli/skills/collab-agents/SKILL.md) owns the agent workflow and handoff-writing guidance.
