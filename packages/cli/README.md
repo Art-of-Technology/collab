@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-[CLI 0.5.1 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.5.1) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
+[CLI 0.6.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.6.0) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
+
+Version 0.6.0 adds [current agent identity, supersession and watcher health](#operating-steps-on-each-computer). These features require the matching server; installing the CLI does not install a wake adapter.
 
 Version 0.5.1 adds [automatic login crash recovery](#authentication-and-automation), with cleanup guidance for older locks.
 
@@ -191,7 +193,7 @@ The apply operation transactionally creates only the dedicated `collab-cli` syst
 
 ## Validation and release
 
-CLI 0.4.2 includes the reviewed and merged automatic label-handoff and host-callback implementations. The final tag must contain both implementations.
+CLI 0.6.0 adds current host/session bindings, explicit supersession and opt-in shared watcher health. Deploy the matching server and additive agent-operations migration before enabling these features. The final tag must contain both the CLI changes and updated agent guide.
 
 Follow [Build native downloads](#build-native-downloads) for merge, tag and publication requirements. The release owner must verify all 18 public GitHub release assets (seven archives, two tagged installer scripts and their SHA-256 sidecars) before the sole app deployment owner deploys.
 
@@ -216,13 +218,13 @@ To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_
 
 ## Agent coordination
 
-These commands are included in CLI 0.4.2. Run the one-command installer again to update; existing credentials are preserved. Version 0.2.1 does not include them.
+Basic coordination is available since CLI 0.4.2; current identities, supersession and watcher health require CLI 0.6.0 and the matching server. Run the one-command installer again to update; existing credentials are preserved. Version 0.2.1 does not include coordination commands.
 
 The [generic agent skill](skills/collab-agents/SKILL.md) describes registration,
 role subscriptions, bounded inbox waits, atomic claims and handoffs. Load this
 file through your agent's supported skill mechanism; it does not launch agents.
 Native users can get `packages/cli/skills/collab-agents/SKILL.md` from the source archive on the [CLI release page](#one-command-installation).
-Requires the matching server release and its additive agent-handoff migration.
+For the required server capabilities and migrations, see [Validation and rollout](../../docs/agent-handoffs.md#validation-and-rollout).
 
 `collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to
 30 seconds (supported range 1–60). It prints one JSON result and exits. An empty
@@ -233,6 +235,35 @@ work you own after a restart. Use `collab schema` for the complete command list.
 For delivery triggers, see [Agent handoffs](../../docs/agent-handoffs.md#automatic-label-delivery).
 Agent activity is visible in the existing issue timeline and `collab issues activity`.
 
+### Operating steps on each computer
+
+1. Upgrade to CLI 0.6.0, run `collab --help` and check its `version` field, and load the updated [agent skill](skills/collab-agents/SKILL.md). Use the existing authorized login.
+2. Keep one stable name for this agent. Use the actual session ID reported by your agent host, and a short host label without spaces. If you already have an established name, keep it; do not create a fresh name for every task or restart. Stop its previous watcher before binding a replacement session.
+
+```sh
+collab agents register --name builder-a --host laptop-a --session-id SESSION_ID --label-ids '[]' --workspace WORKSPACE_ID
+collab agents list --workspace WORKSPACE_ID
+collab inbox list --agent builder-a --state claimed --workspace WORKSPACE_ID
+```
+
+Supply the full existing role-label list instead of `[]` when subscribed; registration replaces the list. The server refuses a second name for the same owner's host/session and refuses rebinding while the old watcher is fresh. Other active agents need their own names and sessions. Unbound historical names are not evidence of an active worker.
+
+3. Run exactly one watcher for that binding under your host supervisor, using an adapter you have actually verified. Include the same `--host laptop-a --session-id SESSION_ID` flags on `inbox watch` to report health. Normal expiry needs a new bounded window; an operational/auth error needs investigation, not a restart loop or automatic login.
+4. On every wake or work checkpoint, recover claims, inspect current issue/history, claim before doing work, and close the loop with progress plus a result or linked next handoff. `ack` and `seen` do not finish a request.
+5. When an already-sent request was replaced, inspect both IDs and explicitly close the obsolete one:
+
+```sh
+collab handoffs get OLD_HANDOFF_ID --agent builder-a --workspace WORKSPACE_ID
+collab handoffs get CURRENT_HANDOFF_ID --agent builder-a --workspace WORKSPACE_ID
+collab handoffs supersede OLD_HANDOFF_ID --agent builder-a --replacement-id CURRENT_HANDOFF_ID --content "Rerouted to the current reviewer; continue using the replacement." --workspace WORKSPACE_ID
+```
+
+Only the original sender of open work or its current claimant can supersede it. Another agent's claim must first be resolved by that agent. The replacement may be open, claimed or completed on the same issue. A completed replacement is allowed so answered work can be closed without repeating it. Normal `send --after-id` remains the atomic way to finish your current request and create the next one.
+
+6. Check `agents list` or the workspace **Agent inbox** for current host/session, watcher state, last poll, and last successful callback. Missing health means **not reported**. Running health becomes **stale** after five minutes without a heartbeat. A successful callback is host acceptance; prove model execution with the actual claim/reply. Do not call cross-computer wake verified until both sides complete a real request/reply test.
+
+These steps do not install a reusable Orca adapter or supervise stopped agents. The bounded Sportsbook SBK-41 prototype demonstrated a same-host test only; its retained report is evidence, not an always-on installation recipe.
+
 ### Wake a running agent through its host
 
 `inbox watch` is included in CLI 0.4.2. Installing it does not establish live
@@ -242,10 +273,10 @@ The skill supplies coordination instructions; it cannot interrupt a model. A hos
 adapter can receive automatic wake requests with `inbox watch`:
 
 ```sh
-collab inbox watch --agent navy-builder-1 --workspace WORKSPACE_ID --callback /absolute/path/to/host-adapter --callback-args '["--session","SESSION_ID"]' --watch-seconds 3600
+collab inbox watch --agent navy-builder-1 --workspace WORKSPACE_ID --host laptop-a --session-id SESSION_ID --callback /absolute/path/to/host-adapter --callback-args '["--session","SESSION_ID"]' --watch-seconds 3600
 ```
 
-Replace the executable and arguments with your host's supported adapter. On
+First register the exact host/session binding using CLI 0.6.0 and the matching server. The host/session flags opt into health reporting and a single active watcher; omitting both retains the older read-only polling behavior without shared health. Replace the executable and arguments with your host's supported adapter. On
 Windows, use an absolute `.exe` path; for a PowerShell script use the absolute
 `powershell.exe`/`pwsh.exe` path and fixed arguments such as
 `["-NoProfile","-File","C:\\agents\\wake.ps1"]`. Collab does not interpolate a
@@ -260,7 +291,7 @@ The watcher waits for its direct adapter child to close before returning.
 An interrupted delivery is not counted as a successful callback and may repeat
 in the next window. `--poll-seconds` defaults to 5 seconds (1–60), and
 `--callback-timeout` defaults to 30 seconds (1–120). It reads both claimed and
-unseen queues using the existing login, without OAuth, refresh or write calls.
+unseen queues using the existing login, without OAuth, refresh or handoff mutations. With host/session flags it additionally posts start, poll, successful callback, stop and error health reports using a fresh watcher UUID. Health requests have a five-second timeout, including the final report after cancellation; reporting failure stops the watcher without hiding an earlier API/callback failure.
 `--timeout` still bounds each API request independently of the watch window.
 API or callback timeouts that occur before window expiry are operational failures.
 Authentication/API failures and callback errors stop the watcher with nonzero

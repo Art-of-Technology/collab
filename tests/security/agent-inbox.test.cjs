@@ -60,6 +60,26 @@ test('inbox shows sender, claimant and issue link without executable handoff con
   assert.doesNotMatch(html, /<script\b/i); assert.match(html, /Showing the oldest 50/);
 });
 
+test('web inbox exposes current identity, stale/error health and successful callback time without claiming model execution', async () => {
+  const stamp = '2026-10-26T16:00:00.000Z';
+  const f = fixture({ agents: [
+    { name: 'legacy', host: null, sessionId: null, watcher: null },
+    { name: 'current', host: 'review-pc', sessionId: 'session-1', watcher: { state: 'stale', lastPollAt: stamp, lastWakeAt: stamp } },
+    { name: 'failed', host: 'other-pc', sessionId: 'session-2', watcher: { state: 'error', errorCode: 'wake_callback_failed' } },
+  ] });
+  const document = new JSDOM(renderToStaticMarkup(await f.run())).window.document;
+  const table = document.querySelector('[aria-label="Agent watcher health"]');
+  assert.ok(table.textContent.includes('does not prove that the model acted'));
+  const rows = table.querySelectorAll('tbody tr');
+  assert.equal(rows.length, 3);
+  assert.ok(rows[0].textContent.includes('Not reported'));
+  assert.ok(rows[1].textContent.includes('review-pcsession-1'));
+  assert.ok(rows[1].textContent.includes('stale'));
+  assert.equal(rows[1].querySelectorAll(`time[datetime="${stamp}"]`).length, 2);
+  assert.ok(rows[2].textContent.includes('wake_callback_failed'));
+  assert.deepEqual(f.calls, ['inbox']);
+});
+
 test('inbox handoff details render Markdown structures and sanitize untrusted HTML', () => {
   const content = '# Suite confirmation\n\n## Contract\n\n**Completed** with `generationId`\n\n- First step\n- Second step\n\n1. Review\n2. Reply\n\n[Contract](https://example.com/contract)\n\n```json\n{"eventName":"generation.succeeded"}\n```\n\n<script>alert(1)</script><img src=x onerror="alert(1)"><a href="javascript:alert(1)">unsafe</a>';
   const html = renderToStaticMarkup(React.createElement(AgentInboxView, {

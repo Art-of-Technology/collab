@@ -75,7 +75,7 @@ test('watcher options are discoverable in CLI schema and web search with a requi
   const Reference = await reference();
   const schema = JSON.parse(execFileSync(process.execPath, [resolve('packages/cli/bin/collab.mjs'), 'schema'], { encoding: 'utf8' }));
   const watch = schema.commands['inbox watch'];
-  const options = { callback: 'string', callbackArgs: 'array', watchSeconds: 'integer', pollSeconds: 'integer', callbackTimeout: 'integer' };
+  const options = { callback: 'string', callbackArgs: 'array', watchSeconds: 'integer', pollSeconds: 'integer', callbackTimeout: 'integer', host: 'string', sessionId: 'string' };
   assert.deepEqual(watch.localOptions, options);
   assert.deepEqual(watch.requiredOptions, ['callback']);
   for (const flag of ['callback', 'callback-args', 'watch-seconds', 'poll-seconds', 'callback-timeout']) {

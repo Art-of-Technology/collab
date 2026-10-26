@@ -42,7 +42,7 @@ export const getActionText = (activity: IssueActivity, itemType: string = 'issue
   const agentActions: Record<string, string> = {
     AGENT_SENT: 'sent a handoff', AGENT_CLAIM: 'picked up the work',
     AGENT_PROGRESS: 'reported progress', AGENT_RELEASE: 'released the work',
-    AGENT_COMPLETE: 'completed the handoff', AGENT_PASSED: 'passed the work on',
+    AGENT_COMPLETE: 'completed the handoff', AGENT_PASSED: 'passed the work on', AGENT_SUPERSEDED: 'superseded the handoff',
     AGENT_ACKNOWLEDGED: 'acknowledged the handoff',
   };
   if (agentActions[activity.action] && typeof activity.details?.agent?.name === 'string') {

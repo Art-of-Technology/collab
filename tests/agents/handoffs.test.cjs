@@ -37,6 +37,12 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   await prisma.taskLabel.createMany({ data: ['w', 'foreign'].map(id => ({ id: `label-${id}`, workspaceId: id, name: 'backend', color: '#123456' })) });
   const migration = readFileSync(resolve('prisma/migrations/20261017000100_agent_handoffs/migration.sql'), 'utf8');
   for (const statement of migration.split(';').filter(s => s.trim())) await prisma.$executeRawUnsafe(statement);
+  await prisma.$executeRawUnsafe(`INSERT INTO "AgentRegistration" (id, "workspaceId", "userId", name, "updatedAt") VALUES ('legacy-agent', 'w', 'alice', 'legacy-agent', NOW())`);
+  const operationsMigration = readFileSync(resolve('prisma/migrations/20261026000100_agent_operations/migration.sql'), 'utf8');
+  for (const statement of operationsMigration.split(';').filter(s => s.trim())) await prisma.$executeRawUnsafe(statement);
+  const legacy = await prisma.agentRegistration.findUniqueOrThrow({ where: { id: 'legacy-agent' } });
+  assert.equal(legacy.host, null); assert.equal(legacy.sessionId, null); assert.equal(legacy.watcher, null);
+  await prisma.agentRegistration.delete({ where: { id: legacy.id } });
   assert.equal(await prisma.issue.count(), 2, 'migration preserves existing work');
   const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } });
   const service = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), zod: require('zod'),
@@ -56,6 +62,24 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   const act = (ctx, handoff, agent, action, content) => service.actOnHandoff(ctx, handoff.id, service.actionSchema.parse({ agent, action, ...(content && { content }) }));
   await register(alice, 'lead'); await register(alice, 'worker-a', ['label-w']); await register(bob, 'worker-b', ['label-w']);
   await register(outsider, 'outsider', ['label-foreign']);
+
+  await t.test('unbound registration and list JSON contracts survive creation and label replacement', async () => {
+    let agentId;
+    for (const labelIds of [['label-w'], []]) {
+      const result = await register(alice, 'compat-agent', labelIds);
+      agentId ??= result.id;
+      const stored = await prisma.agentRegistration.findUniqueOrThrow({ where: { id: agentId } });
+      assert.deepEqual(JSON.parse(JSON.stringify(result)), { id: agentId, workspaceId: 'w', userId: 'alice',
+        name: 'compat-agent', labelIds, createdAt: stored.createdAt.toISOString(), updatedAt: stored.updatedAt.toISOString() });
+      const listed = (await service.listAgents(alice)).find(a => a.id === agentId);
+      assert.deepEqual(JSON.parse(JSON.stringify(listed)), { id: agentId, name: 'compat-agent', labelIds });
+      for (const state of ['unseen', 'claimed']) for (const agent of [undefined, 'compat-agent']) {
+        const monitor = await service.workspaceAgentInbox(alice, { state, agent, limit: 50 });
+        assert.deepEqual(JSON.parse(JSON.stringify(monitor.agents.find(a => a.name === 'compat-agent'))), { name: 'compat-agent' });
+      }
+    }
+    await prisma.agentRegistration.delete({ where: { id: agentId } });
+  });
 
   await t.test('names belong to users; subscriptions cannot reference foreign labels', async () => {
     await assert.rejects(register(bob, 'lead'), e => e.code === 'agent_name_taken');
@@ -141,6 +165,88 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
       'collab issues activity i-w --workspace w',
       'collab context get --project p-w --workspace w',
     ]);
+  });
+  await t.test('one current host/session identity and honest watcher health survive restart without takeover', async () => {
+    const binding = { name: 'bound-worker', host: 'test-host', sessionId: 'session-1' };
+    const bind = values => service.registerAgent(alice, service.registrationSchema.parse(values));
+    await bind(binding);
+    assert.equal(service.registrationSchema.safeParse({ name: 'partial', host: 'test-host' }).success, false);
+    await assert.rejects(bind({ ...binding, name: 'duplicate-alias' }), e => e.code === 'agent_identity_conflict');
+    const unchanged = await bind({ name: binding.name });
+    assert.equal(unchanged.sessionId, binding.sessionId);
+    assert.equal(unchanged.watcher, null);
+    const listed = await service.listAgents(alice);
+    const legacy = listed.find(a => a.name === 'lead');
+    assert.deepEqual(JSON.parse(JSON.stringify(legacy)), { id: legacy.id, name: 'lead', labelIds: [] });
+    assert.deepEqual(JSON.parse(JSON.stringify(listed.find(a => a.name === binding.name))), {
+      id: unchanged.id, name: binding.name, labelIds: [], host: binding.host, sessionId: binding.sessionId, watcher: null,
+    });
+    const watcherId = randomUUID();
+    const heartbeat = (event, extra = {}, ctx = alice) => service.reportWatcher(ctx, service.heartbeatSchema.parse({
+      agent: binding.name, host: binding.host, sessionId: binding.sessionId, watcherId, event, ...extra,
+    }));
+    await assert.rejects(heartbeat('started', {}, bob), e => e.code === 'agent_not_found');
+    await assert.rejects(heartbeat('started', { sessionId: 'wrong-session' }), e => e.code === 'agent_session_mismatch');
+    await heartbeat('started');
+    await assert.rejects(heartbeat('started', { watcherId: randomUUID() }), e => e.code === 'watcher_active');
+    await assert.rejects(bind({ ...binding, sessionId: 'session-2' }), e => e.code === 'watcher_active');
+    await heartbeat('poll');
+    const woke = await heartbeat('wake');
+    assert.ok(woke.watcher.lastPollAt); assert.ok(woke.watcher.lastWakeAt);
+    await heartbeat('error', { errorCode: 'wake_callback_failed' });
+    let row = (await service.listAgents(alice)).find(a => a.name === binding.name);
+    assert.equal(row.watcher.state, 'error'); assert.equal(row.watcher.lastWakeAt, woke.watcher.lastWakeAt);
+    assert.equal(row.watcher.errorCode, 'wake_callback_failed');
+    const next = randomUUID();
+    await heartbeat('started', { watcherId: next });
+    await assert.rejects(heartbeat('poll'), e => e.code === 'watcher_changed');
+    row = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: binding.name } } });
+    await prisma.agentRegistration.update({ where: { id: row.id }, data: { watcher: { ...row.watcher, heartbeatAt: '2000-01-01T00:00:00.000Z' } } });
+    assert.equal((await service.listAgents(alice)).find(a => a.name === binding.name).watcher.state, 'stale');
+    await heartbeat('started');
+    await assert.rejects(heartbeat('stopped', { watcherId: next }), e => e.code === 'watcher_changed');
+    await heartbeat('stopped');
+    assert.equal((await service.workspaceAgentInbox(alice, { state: 'unseen', limit: 50 })).agents.find(a => a.name === binding.name).watcher.state, 'stopped');
+    const rebound = await bind({ ...binding, sessionId: 'session-2' });
+    assert.equal(rebound.watcher, null);
+    await assert.rejects(heartbeat('started'), e => e.code === 'agent_session_mismatch');
+    assert.equal((await service.listAgents(outsider)).some(a => a.name === binding.name), false);
+    const concurrent = await Promise.allSettled(['concurrent-a', 'concurrent-b'].map(name => bind({ name, host: 'test-host', sessionId: 'same-session' })));
+    assert.equal(concurrent.filter(r => r.status === 'fulfilled').length, 1);
+    assert.equal(concurrent.find(r => r.status === 'rejected').reason.code, 'agent_identity_conflict');
+  });
+  await t.test('superseding closes obsolete work, links evidence and never overrides another claimant', async () => {
+    const old = await send({ toAgents: ['worker-a'], toLabels: [] });
+    const replacement = await send({ toAgents: ['worker-b'], toLabels: [], content: 'Current request' });
+    const supersede = (ctx, agent, target = old, next = replacement) => service.actOnHandoff(ctx, target.id,
+      service.actionSchema.parse({ agent, action: 'supersede', replacementId: next.id, content: 'Request rerouted to the current reviewer' }));
+    await assert.rejects(supersede(alice, 'lead', old, old), e => e.code === 'invalid_replacement');
+    await assert.rejects(supersede(alice, 'worker-a'), e => e.code === 'handoff_not_found');
+    await act(alice, old, 'worker-a', 'claim');
+    await assert.rejects(supersede(alice, 'lead'), e => e.code === 'supersede_conflict');
+    await act(alice, old, 'worker-a', 'release', 'Sender may now reroute');
+    const done = await supersede(alice, 'lead');
+    assert.equal(done.status, 'superseded'); assert.equal(done.supersededById, replacement.id);
+    assert.equal((await supersede(alice, 'lead')).id, old.id, 'retry is idempotent');
+    assert.equal((await inbox(alice, 'worker-a')).items.some(h => h.id === old.id), false);
+    await assert.rejects(act(alice, old, 'worker-a', 'claim'), e => e.code === 'already_claimed');
+    assert.equal((await service.getHandoff(alice, 'lead', old.id)).handoff.supersededById, replacement.id);
+    const history = await prisma.issueActivity.findMany({ where: { action: 'AGENT_SUPERSEDED' } });
+    assert.equal(history.length, 1); assert.equal(JSON.parse(history[0].details).replacementId, replacement.id);
+    const claimed = await send({ toAgents: ['worker-a'], toLabels: [] });
+    const theirNext = await send({ toAgents: ['worker-a'], toLabels: [] });
+    await act(alice, claimed, 'worker-a', 'claim');
+    assert.equal((await supersede(alice, 'worker-a', claimed, theirNext)).status, 'superseded');
+    await act(alice, theirNext, 'worker-a', 'claim');
+    await act(alice, theirNext, 'worker-a', 'complete', 'Review already answered');
+    const obsolete = await send({ toAgents: ['worker-a'], toLabels: [] });
+    assert.equal((await supersede(alice, 'lead', obsolete, theirNext)).supersededById, theirNext.id, 'answered work can be linked without repeating it');
+    const a = await send({ toAgents: ['worker-a'], toLabels: [] });
+    const b = await send({ toAgents: ['worker-a'], toLabels: [] });
+    const race = await Promise.allSettled([supersede(alice, 'lead', a, b), supersede(alice, 'lead', b, a)]);
+    assert.equal(race.filter(r => r.status === 'fulfilled').length, 1, 'concurrent replacements cannot form a cycle');
+    await assert.rejects(supersede(context('alice', 'w', ['issues:read']), 'lead', a, b), e => e.code === 'insufficient_scope');
+    await assert.rejects(supersede(outsider, 'outsider', a, b), e => e.code === 'handoff_not_found');
   });
   await t.test('label triggers are atomic, deduplicated on retry, scoped and claimable', async () => {
     const { enqueueLabelHandoff, InvalidIssueLabels } = load('src/lib/agent-label-triggers.ts', { 'node:crypto': require('node:crypto') });

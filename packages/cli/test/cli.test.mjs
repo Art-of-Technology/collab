@@ -54,6 +54,127 @@ test('inbox wait is bounded, returns arriving work, and never marks or claims it
   assert.equal(empty.calls.length, 1);
 });
 
+test('agent session binding and explicit supersession send only the scoped contracts', async t => {
+  const f = await fixture(t);
+  const bound = await f.run(['agents', 'register', '--name', 'builder-a', '--host', 'my-pc', '--session-id', 'session-1', '--workspace', 'w']);
+  assert.equal(bound.code, 0, bound.stderr);
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { name: 'builder-a', host: 'my-pc', sessionId: 'session-1' });
+  const args = ['handoffs', 'supersede', 'old', '--agent', 'builder-a', '--replacement-id', 'current', '--content', 'Rerouted to current reviewer', '--workspace', 'w'];
+  const replaced = await f.run(args);
+  assert.equal(replaced.code, 0, replaced.stderr);
+  assert.equal(f.calls.at(-1).method, 'PATCH');
+  assert.equal(f.calls.at(-1).url, '/api/apps/auth/agents/handoffs/old?workspaceId=w');
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { agent: 'builder-a', replacementId: 'current', content: 'Rerouted to current reviewer', action: 'supersede' });
+  const count = f.calls.length;
+  assert.notEqual((await f.run(['handoffs', 'supersede', 'old', '--agent', 'builder-a', '--content', 'Reason'])).code, 0);
+  assert.equal(f.calls.length, count);
+});
+
+test('watcher dry-run preserves legacy JSON and includes health only for a valid binding', async t => {
+  const f = await fixture(t);
+  const args = ['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath, '--dry-run'];
+  const legacy = await f.run(args);
+  assert.equal(legacy.code, 0, legacy.stderr);
+  const expected = { dryRun: true, callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w',
+    duration: 300, interval: 5, callbackTimeout: 30 };
+  assert.deepEqual(legacy.data, expected);
+  const bound = await f.run([...args, '--host', 'my-pc', '--session-id', 'session-1']);
+  assert.equal(bound.code, 0, bound.stderr);
+  assert.deepEqual(bound.data, { ...expected, healthReporting: true, host: 'my-pc', sessionId: 'session-1' });
+  assert.equal(f.calls.length, 0);
+});
+
+test('watcher rejects empty, partial and malformed bindings before dry-run or execution', async t => {
+  const f = await fixture(t);
+  const output = path.join(f.dir, 'callback-ran');
+  const args = ['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath,
+    '--callback-args', JSON.stringify(['-e', 'require("node:fs").writeFileSync(process.argv[1], "called")', output]), '--watch-seconds', '1'];
+  for (const dryRun of [[], ['--dry-run']]) for (const binding of [
+    ['--host', '', '--session-id', ''], ['--host=', '--session-id='],
+    ['--host', ''], ['--session-id', ''], ['--host', 'my-pc'], ['--session-id', 'session-1'],
+    ['--host', '', '--session-id', 'session-1'], ['--host', 'my-pc', '--session-id', ''],
+    ['--host', 'bad host', '--session-id', 'session-1'], ['--host', 'my-pc', '--session-id', 'bad session'],
+  ]) {
+    const result = await f.run([...args, ...binding, ...dryRun]);
+    assert.notEqual(result.code, 0, JSON.stringify({ binding, dryRun }));
+    assert.equal(result.error?.error, 'invalid_value');
+    assert.equal(result.stdout, '');
+  }
+  assert.equal(f.calls.length, 0);
+  assert.equal(existsSync(output), false);
+});
+
+test('watcher rejects superseded work in either queue before invoking a callback', async t => {
+  for (const state of ['claimed', 'unseen']) await t.test(state, async t => {
+    const f = await fixture(t, (req, res) => res.end(JSON.stringify({
+      items: new URL(req.url, 'http://localhost').searchParams.get('state') === state ? [{ id: 'old-work', status: 'superseded' }] : [], hasMore: false,
+    })));
+    const output = path.join(f.dir, 'callback-ran');
+    const result = await f.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath,
+      '--callback-args', JSON.stringify(['-e', 'require("node:fs").writeFileSync(process.argv[1], "called")', output]), '--watch-seconds', '1']);
+    assert.equal(result.error?.error, 'invalid_response');
+    assert.equal(f.calls.length, state === 'claimed' ? 1 : 2);
+    assert.equal(existsSync(output), false);
+  });
+});
+
+test('bound watcher reports poll and successful callback separately, then stops without changing handoffs', async t => {
+  const f = await fixture(t, (req, res) => res.end(req.method === 'POST' ? '{}' : '{"items":[{"id":"work","status":"open"}],"hasMore":false}'));
+  const args = ['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--host', 'my-pc', '--session-id', 'session-1',
+    '--callback', process.execPath, '--callback-args', JSON.stringify(['-e', 'process.stdin.resume()']), '--watch-seconds', '2', '--poll-seconds', '1'];
+  const result = await f.run(args);
+  assert.equal(result.code, 0, result.stderr); assert.equal(result.data.healthReported, true);
+  const posts = f.calls.filter(c => c.method === 'POST');
+  assert.ok(posts.every(c => c.url === '/api/apps/auth/agents/heartbeat?workspaceId=w'));
+  const events = posts.map(c => JSON.parse(c.body));
+  assert.equal(events[0].event, 'started'); assert.equal(events.at(-1).event, 'stopped');
+  assert.equal(events.filter(e => e.event === 'wake').length, 1);
+  assert.ok(events.some(e => e.event === 'poll'));
+  assert.equal(new Set(events.map(e => e.watcherId)).size, 1);
+  assert.ok(events.every(e => e.host === 'my-pc' && e.sessionId === 'session-1' && e.agent === 'worker'));
+  assert.ok(f.calls.every(c => c.method === 'GET' || c.url.includes('/heartbeat?')));
+  const count = f.calls.length;
+  assert.notEqual((await f.run(args.filter((v, i) => v !== '--session-id' && args[i - 1] !== '--session-id'))).code, 0);
+  assert.equal(f.calls.length, count, 'invalid binding is rejected before requests');
+});
+
+test('watcher errors retain the original failure and never record a successful wake', async t => {
+  const f = await fixture(t, (req, res, body) => {
+    if (req.method === 'POST' && JSON.parse(body).event === 'error') { res.statusCode = 503; res.end('{}'); }
+    else res.end(req.method === 'POST' ? '{}' : '{"items":[{"id":"work","status":"open"}],"hasMore":false}');
+  });
+  const args = ['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--host', 'my-pc', '--session-id', 'session-1',
+    '--callback', process.execPath, '--callback-args', JSON.stringify(['-e', 'process.stdin.resume();process.stdin.on("end",()=>process.exit(7))']), '--watch-seconds', '3'];
+  const result = await f.run(args);
+  assert.equal(result.error.error, 'wake_callback_failed');
+  const events = f.calls.filter(c => c.method === 'POST').map(c => JSON.parse(c.body));
+  assert.deepEqual(events.map(e => e.event), ['started', 'poll', 'error']);
+  assert.equal(events.at(-1).errorCode, 'wake_callback_failed');
+  const cancelled = await fixture(t, (req, res) => res.end(req.method === 'POST' ? '{}' : '{"items":[{"id":"work","status":"open"}],"hasMore":false}'));
+  const expiry = await cancelled.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--host', 'my-pc', '--session-id', 'session-1',
+    '--callback', process.execPath, '--callback-args', JSON.stringify(['-e', 'process.stdin.resume();setInterval(()=>{},1000)']), '--watch-seconds', '1']);
+  assert.equal(expiry.code, 0, expiry.stderr); assert.equal(expiry.data.callbacks, 0);
+  assert.deepEqual(cancelled.calls.filter(c => c.method === 'POST').map(c => JSON.parse(c.body).event), ['started', 'poll', 'stopped']);
+  const refused = await fixture(t, (_req, res) => { res.statusCode = 409; res.end('{"error":"watcher_active"}'); });
+  assert.notEqual((await refused.run(args)).code, 0);
+  assert.equal(refused.calls.length, 1, 'a competing watcher stops before reading or invoking the callback');
+});
+
+test('watcher reports a bounded fallback for code-less failures and preserves the original error', async () => {
+  const failure = new Error('synthetic unexpected failure');
+  const events = [];
+  await assert.rejects(watchInbox({
+    read: async () => { throw failure; },
+    report: async (event, _signal, errorCode) => { events.push({ event, errorCode }); },
+    callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+    durationMs: 1000, intervalMs: 100, callbackTimeoutMs: 100,
+  }), error => error === failure);
+  assert.deepEqual(events, [
+    { event: 'started', errorCode: undefined },
+    { event: 'error', errorCode: 'watcher_failed' },
+  ]);
+});
+
 test('agent commands stop on permission or claim conflict errors without retry', async t => {
   const f = await fixture(t, (_req, res) => { res.statusCode = 409; res.end('{"error":"conflict"}'); });
   assert.notEqual((await f.run(['handoffs', 'claim', 'handoff-one', '--agent', 'reviewer'])).code, 0);
@@ -74,7 +195,8 @@ test('inbox wait does not turn an empty final window into a transport failure', 
 });
 
 test('inbox watch invokes a fixed adapter with bounded JSON, coalesces queues and never mutates', async t => {
-  const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ items: [{ id: 'handoff-one', status: 'open', content: '$(touch SHOULD_NOT_EXIST)' }], hasMore: true })));
+  const items = ['open', 'claimed', 'completed'].map(status => ({ id: `handoff-${status}`, status }));
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ items: items.map(item => ({ ...item, content: '$(touch SHOULD_NOT_EXIST)' })), hasMore: true })));
   const output = path.join(f.dir, 'wake events.jsonl');
   const adapter = path.join(f.dir, 'adapter with spaces.cjs');
   writeFileSync(adapter, `const fs = require('node:fs'); let input = ''; process.stdin.on('data', b => input += b); process.stdin.on('end', () => { if (Object.keys(process.env).some(key => key.toUpperCase() === 'COLLAB_TOKEN')) process.exit(7); fs.appendFileSync(process.argv[2], input); });`);
@@ -82,15 +204,15 @@ test('inbox watch invokes a fixed adapter with bounded JSON, coalesces queues an
     '--callback-args', JSON.stringify([adapter, output]), '--watch-seconds', '2', '--poll-seconds', '1'],
     { env: { COLLAB_TOKEN: windows ? undefined : 'synthetic-token', Collab_Token: 'synthetic-token', collab_token: 'synthetic-token' } });
   assert.equal(result.code, 0, result.stderr);
-  assert.equal(result.data.callbacks, 1);
-  assert.equal(result.data.timedOut, true);
+  assert.deepEqual(result.data, { agent: 'reviewer', workspaceId: 'w', callbacks: 1, stopped: false, timedOut: true });
   const events = readFileSync(output, 'utf8').trim().split('\n').map(JSON.parse);
   assert.equal(events.length, 1);
   assert.equal(events[0].event, 'collab.inbox.pending');
   assert.equal(events[0].agent, 'reviewer');
   assert.equal(events[0].workspaceId, 'w');
   assert.equal(events[0].unseen.hasMore, true);
-  assert.deepEqual(events[0].unseen.items, [{ id: 'handoff-one', status: 'open' }]);
+  assert.deepEqual(events[0].claimed.items, items);
+  assert.deepEqual(events[0].unseen.items, items);
   assert.equal(JSON.stringify(events).includes('touch'), false, 'remote content is not a callback argument or payload');
   assert.ok(f.calls.length >= 4);
   assert.ok(f.calls.every(c => c.method === 'GET'));

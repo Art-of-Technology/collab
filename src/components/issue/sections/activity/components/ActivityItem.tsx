@@ -35,6 +35,7 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
           <details className="mt-1 text-xs text-collab-400">
             <summary className="cursor-pointer">Handoff details</summary>
             <p className="mt-2 whitespace-pre-wrap break-words">{activity.details.content}</p>
+            {activity.action === 'AGENT_SUPERSEDED' && typeof activity.details.replacementId === 'string' && <p className="mt-2 break-all">Replacement handoff: <code>{activity.details.replacementId}</code></p>}
           </details>
         )}
         {showChangeDetails && (

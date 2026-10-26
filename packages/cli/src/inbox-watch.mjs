@@ -38,17 +38,19 @@ function queue(result) {
 }
 
 export async function watchInbox({ read, callback, callbackArgs, agent, workspaceId, origin,
-  durationMs, intervalMs, callbackTimeoutMs, signal }) {
+  durationMs, intervalMs, callbackTimeoutMs, signal, report }) {
   const window = new AbortController();
   const timer = setTimeout(() => window.abort(), durationMs);
   const watchSignal = signal ? AbortSignal.any([signal, window.signal]) : window.signal;
-  let lastDelivery, deliveredAt = 0, callbacks = 0;
+  let lastDelivery, deliveredAt = 0, callbacks = 0, failure, reportingStarted = false;
   try {
+    if (report) { await report('started', watchSignal); reportingStarted = true; }
     while (!watchSignal.aborted) {
       const claimed = queue(await read('claimed', watchSignal));
       watchSignal.throwIfAborted();
       const unseen = queue(await read('unseen', watchSignal));
       watchSignal.throwIfAborted();
+      await report?.('poll', watchSignal);
       const payload = { version: 1, event: 'collab.inbox.pending', origin, workspaceId, agent, claimed, unseen };
       const deliveryId = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
       if (claimed.items.length || unseen.items.length) {
@@ -57,12 +59,19 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
         if (deliveryId !== lastDelivery || Date.now() - deliveredAt >= 60000) {
           await deliverWake(callback, callbackArgs, { ...payload, deliveryId }, callbackTimeoutMs, watchSignal);
           lastDelivery = deliveryId; deliveredAt = Date.now(); callbacks++;
+          await report?.('wake', watchSignal);
         }
       } else lastDelivery = undefined;
       await delay(intervalMs, undefined, { signal: watchSignal });
     }
   } catch (error) {
-    if (!watchSignal.aborted || (error !== watchSignal.reason && error.cause !== watchSignal.reason)) throw error;
-  } finally { clearTimeout(timer); }
-  return { agent, workspaceId, callbacks, stopped: watchSignal.reason === signal?.reason, timedOut: watchSignal.reason === window.signal.reason };
+    if (!watchSignal.aborted || (error !== watchSignal.reason && error.cause !== watchSignal.reason)) { failure = error; throw error; }
+  } finally {
+    clearTimeout(timer);
+    if (reportingStarted) {
+      try { await report(failure ? 'error' : 'stopped', undefined, failure ? (typeof failure.code === 'string' && /^[a-z_]{1,64}$/.test(failure.code) ? failure.code : 'watcher_failed') : undefined); }
+      catch (error) { if (!failure) throw error; } // Preserve the original API/callback failure.
+    }
+  }
+  return { agent, workspaceId, callbacks, ...(report && { healthReported: reportingStarted }), stopped: watchSignal.reason === signal?.reason, timedOut: watchSignal.reason === window.signal.reason };
 }
