@@ -13,7 +13,7 @@ jobs:
   build:
     name: Native CLI (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 15
+    timeout-minutes: ${{ matrix.platform == 'windows-arm64' && 20 || 15 }}
     defaults:
       run:
         shell: bash
