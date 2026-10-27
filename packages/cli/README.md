@@ -20,7 +20,7 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-[CLI 0.7.0 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.7.0) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
+The [release process](#validation-and-release) publishes [CLI 0.7.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.7.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
 
 Version 0.6.1 adds `collab update`, which reruns the one-command installer for the current platform from the installed native executable. Installations before 0.6.1 run the installer once more to pick it up.
 
@@ -110,7 +110,7 @@ See [search API behavior](../../docs/agent-search.md) and [project context seman
 
 ## Commands and inputs
 
-`collab schema` (or `--help`) returns the complete machine-readable command, method, field and query inventory. Output is JSON, including when piped; `--json` is also accepted. No table scraping or interactive confirmation is required.
+`collab schema` (or `--help`) returns the machine-readable API command, method, field and query inventory, plus summaries of local commands. Worker setup flags and limits are documented in the [worker guide](#dedicated-managed-workers-cli-070). Output is JSON, including when piped; `--json` is also accepted. No table scraping or interactive confirmation is required.
 
 | Area | Commands |
 | --- | --- |
@@ -168,7 +168,7 @@ Use `collab auth login --read-only` for an agent that only needs to inspect proj
 
 For headless use, inject an existing Collab OAuth bearer token through your credential manager as `COLLAB_TOKEN`, together with an explicit `COLLAB_URL`. Use `COLLAB_WORKSPACE`/`COLLAB_PROJECT` or per-command flags for context. Do not put tokens in command arguments, repository files, Notes or issue comments. Maestro ID/access tokens are not Collab API tokens.
 
-`COLLAB_CONFIG_DIR` overrides the private state directory. `--timeout SECONDS` sets a per-request timeout from 1 to 120 (default 30). HTTP bodies are capped at 8 MiB. No request retries are automatic, including reads, refreshes and writes.
+`COLLAB_CONFIG_DIR` overrides the private state directory. `--timeout SECONDS` sets a per-request timeout from 1 to 120 (default 30) for ordinary API commands; worker commands use their own request deadlines. HTTP bodies are capped at 8 MiB. Ordinary API commands never retry automatically. Dedicated workers have the bounded read and lease retries described under [recovery](#limits-monitoring-and-recovery); they do not retry uncertain task mutations.
 
 | Exit | Meaning |
 | --- | --- |
@@ -195,7 +195,7 @@ The apply operation transactionally creates only the dedicated `collab-cli` syst
 
 ## Validation and release
 
-CLI 0.6.0 adds current host/session bindings, explicit supersession and opt-in shared watcher health. Deploy the matching server and additive agent-operations migration before enabling these features. The final tag must contain both the CLI changes and updated agent guide.
+Before enabling CLI 0.7.0 workers, follow the [server migration and compatibility requirements](../../docs/agent-handoffs.md#validation-and-rollout). The final tag must contain both the CLI changes and updated agent guide.
 
 Follow [Build native downloads](#build-native-downloads) for merge, tag and publication requirements. The release owner must verify all 18 public GitHub release assets (seven archives, two tagged installer scripts and their SHA-256 sidecars) before the sole app deployment owner deploys.
 
@@ -335,16 +335,16 @@ The Orca terminal prototype is retired. `orca` commands refuse dispatch: a termi
 handle is not an execution fence. Existing private prototype receipts are retained
 but never imported as worker completion or final pilot evidence.
 
-Deploy the additive `20261027000100_managed_workers` migration and matching server
-before using workers. Existing manual registrations retain their behavior. Managed
-registrations require a current generation for every handoff mutation, including
-claim, progress, pass, release and completion. A different generation cannot take
-over a live or expired-but-unclosed run. Re-registration cannot remove this fence.
+Follow the [server migration requirements](../../docs/agent-handoffs.md#validation-and-rollout)
+before using workers. The [managed-worker API contract](../../docs/agent-handoffs.md#managed-workers)
+owns generation fencing and compatibility with existing manual registrations.
 
 ### Configure and run
 
 Install Claude Code 2.1.311 or later in the 2.x line and log in separately with its
-supported authentication. The worker never logs in or refreshes credentials.
+supported authentication. Claude Code must support the host OS and architecture;
+availability of a 32-bit Collab CLI does not establish runner support. The worker
+never logs in or refreshes credentials.
 Use an existing saved Collab CLI login with issues read/write access and workspace
 write access for setup (including subscription changes and manual conversion). Each computer
 runs its own local worker with a stable agent name and explicit workspace.
@@ -356,6 +356,11 @@ collab worker run --agent sportsbook-worker --workspace WORKSPACE_ID
 collab worker status --agent sportsbook-worker --workspace WORKSPACE_ID
 collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
 ```
+
+`run` stays in the foreground. Use another terminal for `status` and `stop` while it
+is running. `doctor` checks the configured executable's version, required flags
+and existing authentication without invoking a model. `unsupported_runner` requires
+a compatible Claude installation; `needs_login` requires separate provider login.
 
 Setup checks the runner without invoking a model and does not start it. Use a new
 agent name, or explicitly use `--manage-existing` after stopping the old watcher
@@ -393,10 +398,12 @@ a clock rollback pauses admission. Costs are client estimates, can overshoot a
 provider request, and are not invoice caps. See [Claude CLI reference](https://code.claude.com/docs/en/cli-reference)
 and [cost tracking](https://code.claude.com/docs/en/agent-sdk/cost-tracking).
 
-Status shows run/task/session IDs, heartbeat, stop reason, token/cache counts,
-estimated, reserved and unknown USD. It remains readable after login expiry.
-The existing agent inbox and organisation floor show daemon lease health separately
-from an observed working child; neither idle polling nor health invokes a model.
+Local status shows run/task/session IDs, heartbeat, stop reason, token/cache counts,
+estimated, reserved and unknown USD. It remains readable after login expiry and
+reports that expiry separately in `liveHealth`. Its `online` flag checks the local
+daemon control endpoint, not server authentication. For shared inbox/floor health,
+see the [managed health contract](../../docs/agent-handoffs.md#managed-workers).
+Neither idle polling nor health invokes a model.
 Transient reads and same-generation lease messages retry at most three times with
 exponential backoff. One serialized renewal loop covers idle polling, inbox cleanup,
 pre-dispatch reads, child execution and usage-limit waits. A closed or expired
@@ -418,6 +425,7 @@ protection against a malicious process running as the same OS user.
 ### Per-user startup integration
 
 ```sh
+collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
 collab worker install --agent sportsbook-worker --workspace WORKSPACE_ID --dry-run
 collab worker install --agent sportsbook-worker --workspace WORKSPACE_ID
 collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
@@ -431,7 +439,9 @@ startup therefore requires the user session. Unsupported platforms fail explicit
 The daemon starts in its private configuration directory; only runner operations use
 the repository directory. A missing repository therefore produces a normal config
 pause instead of failing before the daemon can start.
-Dry-run returns the exact definition and supervisor commands without writes. Stop
+Stop any foreground worker before installing. Dry-run returns the definition and
+supervisor commands without installing; each invocation generates a fresh service
+installation identity. Stop
 uses the private authenticated daemon control endpoint and confirms owned closure;
 it never signals a remembered PID. Stop the foreground daemon before uninstalling.
 Before that endpoint is available, stop/status use the exclusive worker lock to
@@ -451,8 +461,11 @@ remain independent of service installation identity.
 The durable daemon restart allowance bounds OS recovery and also counts manual
 restarts conservatively. Unexpected process failures retain a nonzero exit;
 expired login and permanent configuration failures report a normal paused exit. Normal paused exits do not trigger an infinite
-service restart loop. `--profile` and an absolute private `--config-dir` select the
-saved local identity for each command.
+service restart loop. `--profile` selects saved credentials and an absolute private
+`--config-dir` selects their directory. Within that directory, worker state is keyed
+by server, workspace, saved user and agent name; profiles using the same identity
+share the worker lock, service and usage ledger. Workers require a saved login and
+refuse `COLLAB_TOKEN`.
 
 Source-phase checks remain provisional until the final pipeline candidate passes.
 No service installation or real provider pilot acceptance has been performed by
