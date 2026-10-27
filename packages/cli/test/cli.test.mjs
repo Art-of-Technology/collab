@@ -184,6 +184,16 @@ test('agent commands stop on permission or claim conflict errors without retry',
   assert.equal(denied.calls.length, 1);
 });
 
+test('claim conflict preserves only the scoped retry-safe machine code', async t => {
+  const f = await fixture(t, (_req, res) => { res.statusCode = 409; res.end('{"error":"already_claimed","message":"PRIVATE_REMOTE_TEXT"}'); });
+  const result = await f.run(['handoffs', 'claim', 'handoff-one', '--agent', 'reviewer']);
+  assert.equal(result.error.error, 'already_claimed');
+  assert.equal(result.stderr.includes('PRIVATE_REMOTE_TEXT'), false);
+  assert.equal(f.calls.length, 1);
+  const unrelated = await f.run(['issues', 'get', 'APP-1']);
+  assert.equal(unrelated.error.error, 'conflict');
+});
+
 test('inbox wait does not turn an empty final window into a transport failure', async t => {
   const f = await fixture(t, (_req, res) => new Promise(resolve => setTimeout(() => {
     res.end('{"items":[],"hasMore":false}'); resolve();
@@ -1186,56 +1196,37 @@ test('login refuses token workspace and identity workspace mismatches without sa
   }
 });
 
-test('official Orca commands are discoverable and reject guessed bindings without dispatch', async t => {
+test('dedicated worker commands replace unsafe Orca terminal dispatch', async t => {
   const f = await fixture(t);
   const schema = await f.run(['schema']);
   assert.equal(schema.code, 0);
-  assert.ok(schema.data.orcaCommands['orca setup']);
-  assert.ok(schema.data.orcaCommands['orca watch']);
-  for (const args of [['orca', 'setup', '--agent', 'pilot'], ['orca', 'watch', '--agent', 'pilot'], ['orca', 'watch', '--callback', 'guessed-script']]) {
-    assert.notEqual((await f.run(args)).code, 0);
+  assert.ok(schema.data.workerCommands['worker setup']);
+  assert.ok(schema.data.workerCommands['worker run']);
+  assert.equal(schema.data.orcaCommands, undefined);
+  for (const command of ['setup', 'watch', 'verify', 'status']) {
+    const result = await f.run(['orca', command]);
+    assert.equal(result.error.error, 'orca_retired');
   }
   assert.equal(f.calls.length, 0);
 });
 
-test('Orca status exposes saved recovery after login expiry while watch and verify reject it', async t => {
+test('worker status and stop retain local recovery after login expiry', async t => {
   const f = await fixture(t);
-  const profile = 'recovery', workspace = 'workspace-one', userId = 'same-user', agent = 'pilot';
-  const loginFile = path.join(f.dir, `${profile}.json`);
-  const login = JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_ACCESS', refreshToken: 'PRIVATE_REFRESH', expiresAt: 0, userId, workspace: 'other-default' });
-  writeCredentials(loginFile, login);
+  const userId = 'same-user', agent = 'pilot', workspace = 'workspace-one';
+  writeCredentials(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_ACCESS', refreshToken: 'PRIVATE_REFRESH', expiresAt: 0, userId, workspace }));
   const key = createHash('sha256').update(JSON.stringify([f.url, workspace, userId, agent])).digest('base64url');
-  const bindingFile = path.join(f.dir, `orca-${key}.json`);
-  const target = { runtimeId: 'runtime-one', handle: 'term-one', incarnationId: 'process-one', worktreePath: f.dir, agentIdentity: 'codex' };
-  const args = ['--agent', agent, '--workspace', workspace, '--profile', profile];
-  const env = { COLLAB_TOKEN: '' };
-  for (const phase of ['attempting', 'accepted']) {
-    const lastDelivery = { phase, at: '2026-10-26T12:00:00Z', handoffIds: ['handoff-one'], ...(phase === 'accepted' && { requestId: 'request-one' }) };
-    const saved = JSON.stringify({ origin: f.url, workspace, userId, agent, host: 'laptop', sessionId: 'session-one', orca: path.join(f.dir, 'must-not-run'), target, lastDelivery });
-    writeCredentials(bindingFile, saved);
-    const result = await f.run(['orca', 'status', ...args], { env });
-    assert.equal(result.code, 0, result.stderr);
-    assert.equal(result.data.agent, agent);
-    assert.equal(result.data.host, 'laptop');
-    assert.equal(result.data.sessionId, 'session-one');
-    assert.deepEqual(result.data.target, target);
-    assert.deepEqual(result.data.lastDelivery, lastDelivery);
-    assert.deepEqual(result.data.liveHealth, { ok: false, error: 'token_expired' });
-    assert.equal(result.data.watcher, null);
-    assert.equal(result.data.modelExecutionVerified, false);
-    assert.equal(result.stdout.includes('PRIVATE_') || result.stderr.includes('PRIVATE_'), false);
-    assert.equal(readFileSync(bindingFile, 'utf8'), saved);
-  }
-  for (const command of ['setup', 'watch', 'verify']) {
-    const result = await f.run(['orca', command, ...args, ...(command === 'verify' ? ['--handoff', 'handoff-one'] : [])], { env });
-    assert.equal(result.code, 3);
-    assert.equal(result.error.error, 'token_expired');
-    assert.equal(result.stdout, '');
-  }
-  const other = await f.run(['orca', 'status', '--agent', agent, '--workspace', 'another-workspace', '--profile', profile], { env });
-  assert.equal(other.code, 0);
-  assert.equal(other.data.lastDelivery, null);
-  assert.equal(other.data.liveHealth.ok, false);
-  assert.equal(readFileSync(loginFile, 'utf8'), login);
-  assert.equal(f.calls.length, 0, 'expired-login recovery sends no requests');
+  const saved = { status: 'uncertain', runId: 'run-one', active: { handoffId: 'handoff-one', phase: 'dispatched', reservedUSD: 0.5 }, usage: { reservedUSD: 0.5 } };
+  const file = path.join(f.dir, `worker-${key}.json`);
+  writeCredentials(file, JSON.stringify(saved));
+  const env = { COLLAB_TOKEN: '' }, args = ['--agent', agent, '--workspace', workspace];
+  const status = await f.run(['worker', 'status', ...args], { env });
+  assert.equal(status.code, 0, status.stderr);
+  assert.equal(status.data.taskId, 'handoff-one');
+  assert.equal(status.data.state, 'uncertain');
+  assert.deepEqual(status.data.liveHealth, { ok: false, error: 'token_expired' });
+  assert.equal(status.stdout.includes('PRIVATE_'), false);
+  assert.equal((await f.run(['worker', 'stop', ...args], { env })).error.error, 'stop_unconfirmed');
+  for (const command of ['setup', 'run', 'install']) assert.equal((await f.run(['worker', command, ...args], { env })).error.error, 'token_expired');
+  assert.deepEqual(JSON.parse(readFileSync(file)), saved);
+  assert.equal(f.calls.length, 0);
 });

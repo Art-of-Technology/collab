@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { orcaCommands, runOrca } from '../src/orca.mjs';
+import { workerCommands, runWorker } from '../src/worker.mjs';
 import { watchInbox } from '../src/inbox-watch.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { commands, flagName, scopes } from '../src/commands.mjs';
@@ -12,7 +12,7 @@ import { CliError, request, session, store } from '../src/client.mjs';
 import { login, refresh } from '../src/auth.mjs';
 import cliPackage from '../package.json' with { type: 'json' };
 
-const booleans = new Set(['help', 'json', 'all', 'yes', 'dry-run', 'read-only']);
+const booleans = new Set(['help', 'json', 'all', 'yes', 'dry-run', 'read-only', 'manage-existing']);
 const globals = ['url', 'profile', 'workspace', 'project', 'timeout', 'json'];
 function parse(argv) {
   const words = [], options = Object.create(null);
@@ -68,7 +68,7 @@ async function boundedInput(file) {
   } finally { clearTimeout(timer); if (file !== '-') stream.destroy(); }
 }
 function help() {
-  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors and issue deletion previews on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema', 'update'], orcaCommands, globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
+  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors and issue deletion previews on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema', 'update'], workerCommands, globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
 }
 async function update() {
   const windows = process.platform === 'win32';
@@ -107,6 +107,11 @@ async function main() {
   const { words, options } = parse(process.argv.slice(2));
   if (options.help || !words.length || words[0] === 'help' || words[0] === 'schema') return help();
   const name = commands[words[0]] ? words[0] : words.slice(0, 2).join(' ');
+  if (words[0] === 'orca') throw new CliError('orca_retired', 'Terminal dispatch was retired. Use worker setup/run with a dedicated owned Claude process.');
+  if (words[0] === 'worker' && options['config-dir']) {
+    if (!path.isAbsolute(options['config-dir'])) throw new CliError('invalid_config_dir', 'Use an absolute private --config-dir.');
+    process.env.COLLAB_CONFIG_DIR = options['config-dir'];
+  }
   const stateStore = store(options.profile);
   for (const key of ['workspace', 'project', 'workspace-id', 'project-id']) {
     if ((name === 'search' || name === 'context get') && ['project', 'project-id'].includes(key) && options[key] !== undefined) options[key] = options[key].trim();
@@ -139,19 +144,19 @@ async function main() {
       throw new CliError('unknown_command', 'Unknown local command. Run collab --help.');
     });
   }
-  if (Object.hasOwn(orcaCommands, name)) {
+  if (Object.hasOwn(workerCommands, name)) {
     if (words.length !== 2) throw new CliError('unexpected_arguments', 'Unexpected positional arguments.');
-    const extra = name === 'orca setup' ? ['host', 'session-id', 'terminal', 'orca'] : name === 'orca watch' ? ['watch-seconds', 'poll-seconds'] : name === 'orca verify' ? ['handoff'] : [];
-    allowed(options, ['profile', 'workspace', 'agent', 'json', ...extra]);
+    const extra = name === 'worker setup' ? ['host', 'cwd', 'claude', 'model', 'tools', 'review-agent', 'attempt-usd', 'daily-usd', 'timeout-seconds', 'poll-seconds', 'max-restarts', 'max-starts', 'manage-existing', 'label-ids'] : ['worker install', 'worker uninstall'].includes(name) ? ['dry-run'] : [];
+    allowed(options, ['profile', 'workspace', 'agent', 'json', 'config-dir', ...extra]);
     const state = stateStore.load();
-    if (process.env.COLLAB_TOKEN) throw new CliError('environment_context', 'Orca uses an existing saved login, not COLLAB_TOKEN.');
+    if (process.env.COLLAB_TOKEN) throw new CliError('environment_context', 'Workers use an existing saved login, not COLLAB_TOKEN.');
     let selected;
     try { selected = session(options, state); }
     catch (error) {
-      if (name !== 'orca status' || error.code !== 'token_expired') throw error;
-      return runOrca(name, options, { base: state.origin, workspace: options.workspace }, state.userId, { api: async () => { throw error; } });
+      if (!['worker status', 'worker stop', 'worker doctor', 'worker uninstall'].includes(name) || error.code !== 'token_expired') throw error;
+      return runWorker(name, options, { base: state.origin, workspace: options.workspace }, state.userId, { loginError: error.code, api: async () => { throw error; } });
     }
-    return runOrca(name, options, selected, state.userId);
+    return runWorker(name, options, selected, state.userId);
   }
   const spec = commands[name];
   if (!spec) throw new CliError('unknown_command', 'Unknown command. Run collab --help.');

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { hasScope } from '@/lib/oauth-scopes';
+import { managedStatus } from '@/lib/managed-worker-health';
 
 const name = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/);
 const id = z.string().min(1).max(128);
@@ -19,10 +20,12 @@ export const heartbeatSchema = z.object({ agent: name, host, sessionId, watcherI
   errorCode: z.string().regex(/^[a-z_]{1,64}$/).optional(),
 }).strict().refine(v => (v.event === 'error') === Boolean(v.errorCode), 'Only error events require errorCode');
 export const sendSchema = z.object({ agent: name, issue: id, content: text,
+  generation: z.string().uuid().optional(),
   toAgents: z.array(name).max(32).default([]), toLabels: z.array(id).max(32).default([]),
   requestAck: z.boolean().default(false), requestId: z.string().uuid().optional(), afterId: id.optional(),
 }).strict().refine(v => v.toAgents.length + v.toLabels.length > 0, 'Supply at least one recipient or label');
 export const actionSchema = z.object({ agent: name, action: z.enum(['seen', 'ack', 'claim', 'progress', 'release', 'complete', 'supersede']),
+  generation: z.string().uuid().optional(),
   content: text.optional(), replacementId: id.optional(),
 }).strict().refine(v => !['progress', 'release', 'complete', 'supersede'].includes(v.action) || Boolean(v.content), 'This action requires content')
   .refine(v => (v.action === 'supersede') === Boolean(v.replacementId), 'Only supersede requires replacementId');
@@ -34,6 +37,71 @@ export class HandoffError extends Error {
   constructor(public code: string, message: string, public status = 400) { super(message); }
 }
 type DB = Prisma.TransactionClient | typeof prisma;
+const workerStates = ['idle', 'working', 'stopped', 'usage-limit', 'restart-limit', 'needs-login', 'config', 'uncertain', 'retrying'] as const;
+export const workerSchema = z.object({ agent: name, host, sessionId,
+  event: z.enum(['configure', 'start', 'renew', 'close']), generation: z.string().uuid().optional(),
+  convert: z.boolean().optional(), labelIds: z.array(id).max(32).optional(),
+  state: z.enum(workerStates).default('idle'), taskId: id.nullable().optional(),
+  usage: z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), chargedUSD: z.number().finite().nonnegative(),
+    reservedUSD: z.number().finite().nonnegative(), estimatedUSD: z.number().finite().nonnegative(),
+    unknownUSD: z.number().finite().nonnegative(), restarts: z.number().int().min(0).max(100),
+    starts: z.number().int().nonnegative(), totalStarts: z.number().int().nonnegative(),
+    inputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative(),
+    cacheReadTokens: z.number().int().nonnegative(), cacheWriteTokens: z.number().int().nonnegative(),
+  }).strict().optional(),
+}).strict().refine(v => v.event === 'configure' || Boolean(v.generation), 'Generation is required');
+type ManagedWorker = { generation: string | null; closed: boolean; leaseUntil: string | null; heartbeatAt: string;
+  state: typeof workerStates[number]; taskId?: string | null; usage?: z.infer<typeof workerSchema>['usage'] };
+function assertManagedGeneration(value: Prisma.JsonValue | null, generation?: string) {
+  if (!value) {
+    if (generation) throw new HandoffError('worker_not_managed', 'This agent is not managed', 409);
+    return;
+  }
+  const worker = value as unknown as ManagedWorker;
+  if (!generation || worker.generation !== generation || worker.closed || !(Date.parse(worker.leaseUntil || '') > Date.now())) {
+    throw new HandoffError('worker_fenced', 'A live matching managed generation is required', 409);
+  }
+}
+export async function manageWorker(context: AppAuthContext, input: z.infer<typeof workerSchema>) {
+  if (!hasScope('issues:write', context.token.scopes)) throw new HandoffError('insufficient_scope', 'Managed workers require issues:write', 403);
+  return prisma.$transaction(async db => {
+    await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND name = ${input.agent} FOR UPDATE`;
+    let agent = await db.agentRegistration.findUnique({ where: { workspaceId_name: { workspaceId: context.workspace.id, name: input.agent } } });
+    if (agent && agent.userId !== context.user.id) throw new HandoffError('agent_name_taken', 'This agent belongs to another user', 403);
+    const now = new Date().toISOString();
+    if (input.event === 'configure') {
+      if (agent && !agent.managedWorker && (!input.convert || watcherState(agent.watcher)?.state === 'running' ||
+          await db.agentHandoff.count({ where: { claimedById: agent.id, status: 'claimed' } }))) {
+        throw new HandoffError('worker_conversion_required', 'Explicit conversion requires stopped watchers and no claimed manual work', 409);
+      }
+      const prior = agent?.managedWorker as unknown as ManagedWorker | null;
+      if (prior && (!prior.closed || agent!.host !== input.host || agent!.sessionId !== input.sessionId)) throw new HandoffError('worker_active', 'Close the owned generation before changing configuration', 409);
+      const labels = input.labelIds ? await validLabels(db, context.workspace.id, input.labelIds) : agent?.labelIds || [];
+      const data = { host: input.host, sessionId: input.sessionId, labelIds: labels,
+        managedWorker: prior || { generation: null, closed: true, leaseUntil: null, heartbeatAt: now, state: 'stopped' } };
+      agent = agent ? await db.agentRegistration.update({ where: { id: agent.id }, data }) :
+        await db.agentRegistration.create({ data: { workspaceId: context.workspace.id, userId: context.user.id, name: input.agent, ...data } });
+      return { worker: managedStatus(agent.managedWorker) };
+    }
+    if (!agent?.managedWorker || agent.host !== input.host || agent.sessionId !== input.sessionId) throw new HandoffError('worker_binding_changed', 'Configure this exact owned worker first', 409);
+    const prior = agent.managedWorker as unknown as ManagedWorker;
+    if (input.event === 'start') {
+      if (!prior.closed) {
+        assertManagedGeneration(agent.managedWorker, input.generation);
+        return { worker: managedStatus(agent.managedWorker) };
+      }
+      if (prior.generation === input.generation) throw new HandoffError('worker_fenced', 'Closed generations cannot restart', 409);
+    } else if (input.event === 'close') {
+      if (prior.generation !== input.generation) throw new HandoffError('worker_fenced', 'Only the owned generation can confirm closure', 409);
+    } else assertManagedGeneration(agent.managedWorker, input.generation);
+    const worker = { generation: input.generation!, closed: input.event === 'close', heartbeatAt: now,
+      leaseUntil: input.event === 'close' ? null : new Date(Date.now() + 60000).toISOString(),
+      state: input.event === 'close' && input.state === 'idle' ? 'stopped' : input.state,
+      taskId: input.taskId ?? null, ...(input.usage && { usage: input.usage }) };
+    await db.agentRegistration.update({ where: { id: agent.id }, data: { managedWorker: worker } });
+    return { worker: managedStatus(worker) };
+  });
+}
 type InboxContext = { user: { id: string }; workspace: { id: string } };
 type Agent = { id: string; name: string; userId: string; labelIds: string[] };
 type Watcher = { id: string; state: 'running' | 'stopped' | 'error'; startedAt: string; heartbeatAt: string;
@@ -44,8 +112,9 @@ function watcherState(value: Prisma.JsonValue | null) {
   if (!watcher?.id) return null;
   return { ...watcher, state: watcher.state === 'running' && Date.now() - Date.parse(watcher.heartbeatAt) >= watcherStaleMs ? 'stale' as const : watcher.state };
 }
-function agentStatus(agent: { id: string; name: string; labelIds: string[]; host: string | null; sessionId: string | null; watcher: Prisma.JsonValue | null }) {
+function agentStatus(agent: { id: string; name: string; labelIds: string[]; host: string | null; sessionId: string | null; watcher: Prisma.JsonValue | null; managedWorker?: Prisma.JsonValue | null }) {
   return { id: agent.id, name: agent.name, labelIds: agent.labelIds,
+    worker: managedStatus(agent.managedWorker),
     ...(agent.host && { host: agent.host, sessionId: agent.sessionId, watcher: watcherState(agent.watcher) }) };
 }
 function issueScope(context: InboxContext): Prisma.IssueWhereInput {
@@ -86,6 +155,7 @@ export async function registerAgent(context: AppAuthContext, input: z.infer<type
     await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND name = ${input.name} FOR UPDATE`;
     const existing = await db.agentRegistration.findUnique({ where: { workspaceId_name: { workspaceId: context.workspace.id, name: input.name } } });
     if (existing && existing.userId !== context.user.id) throw new HandoffError('agent_name_taken', 'This agent name belongs to another user', 409);
+    if (existing?.managedWorker) throw new HandoffError('managed_agent', 'Use worker setup; managed identity cannot be changed by legacy registration', 409);
     const changed = input.host && (existing?.host !== input.host || existing?.sessionId !== input.sessionId);
     if (changed && existing && watcherState(existing.watcher)?.state === 'running') {
       throw new HandoffError('watcher_active', 'Stop the current watcher before rebinding this agent session', 409);
@@ -115,6 +185,7 @@ export async function reportWatcher(context: AppAuthContext, input: z.infer<type
       throw new HandoffError('agent_session_mismatch', 'Register this exact host/session binding before reporting watcher health', 409);
     }
     const prior = watcherState(agent.watcher);
+    if (agent.managedWorker) throw new HandoffError('managed_agent', 'Use managed worker health for this agent', 409);
     if (input.event === 'started') {
       if (prior?.id !== input.watcherId && prior?.state === 'running') throw new HandoffError('watcher_active', 'Another watcher is active for this agent', 409);
     } else if (!prior || prior.id !== input.watcherId || !['running', 'stale'].includes(prior.state)) {
@@ -131,9 +202,11 @@ export async function reportWatcher(context: AppAuthContext, input: z.infer<type
 }
 
 export async function sendHandoff(context: AppAuthContext, input: z.infer<typeof sendSchema>) {
-  const agent = await ownedAgent(prisma, context, input.agent);
-  const sourceKey = `manual:${agent.id}:${input.requestId || randomUUID()}`;
   return prisma.$transaction(async db => {
+    await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND name = ${input.agent} FOR UPDATE`;
+    const agent = await ownedAgent(db, context, input.agent);
+    assertManagedGeneration(agent.managedWorker, input.generation);
+    const sourceKey = `manual:${agent.id}:${input.requestId || randomUUID()}`;
     const issue = await db.issue.findFirst({ where: { AND: [issueScope(context), { OR: [{ id: input.issue }, { issueKey: input.issue }] }] }, select: { id: true, projectId: true } });
     if (!issue) throw new HandoffError('issue_not_found', 'Issue not found or access denied', 404);
     const labelIds = await validLabels(db, context.workspace.id, input.toLabels);
@@ -213,7 +286,9 @@ export async function actOnHandoff(context: AppAuthContext, id: string, input: z
     throw new HandoffError('insufficient_scope', 'This action requires issues:write', 403);
   }
   return prisma.$transaction(async db => {
+    await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND name = ${input.agent} FOR UPDATE`;
     const agent = await ownedAgent(db, context, input.agent);
+    assertManagedGeneration(agent.managedWorker, input.generation);
     if (input.action === 'supersede') {
       // Lock both ends in a stable order so concurrent replacements cannot create a cycle.
       await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id IN (${id}, ${input.replacementId}) ORDER BY id FOR UPDATE`;

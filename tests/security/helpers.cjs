@@ -21,6 +21,7 @@ function load(file, dependencies = {}, globals = {}) {
     exports,
     ...globals,
     require(name) {
+      if (name === "@/lib/managed-worker-health") return load("src/lib/managed-worker-health.ts");
       if (!(name in dependencies) && ['@/lib/issue-trash', '@/lib/issue-trash-response', '@/lib/issue-trash-browser'].includes(name)) {
         // Keep error classes shared while exercising the actual lifecycle. A fixture must
         // supply every database operation and event needed by the path it invokes.
@@ -77,6 +78,8 @@ function matches(row, where) {
     if (value === null || typeof value !== 'object') return actual === value;
     if (Object.prototype.toString.call(value) === '[object Date]') return actual?.getTime() === value.getTime();
     if ('some' in value) return actual?.some(item => matches(item, value.some)) ?? false;
+    if ('has' in value) return Array.isArray(actual) && actual.includes(value.has);
+    if ('hasSome' in value) return Array.isArray(actual) && value.hasSome.some(item => actual.includes(item));
     if ('in' in value) return value.in.includes(actual);
     if ('notIn' in value) return !value.notIn.includes(actual);
     if ('not' in value) return actual !== value.not;

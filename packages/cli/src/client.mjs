@@ -157,6 +157,7 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
     try {
       const remoteCode = JSON.parse(text).error;
       if (remoteCode === 'forge_connected_project') code = remoteCode;
+      if (response.status === 409 && remoteCode === 'already_claimed' && /^\/api\/apps\/auth\/agents\/handoffs\//.test(endpoint)) code = remoteCode;
       const messages = {
         semantic_unavailable: [503, 'Semantic search is unavailable. Use --mode keyword or --mode hybrid for explicit keyword fallback.'],
         budget_too_small: [422, 'Increase --max-tokens to fit at least one result or context section.'],

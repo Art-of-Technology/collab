@@ -24,7 +24,7 @@ Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32
 
 Version 0.6.1 adds `collab update`, which reruns the one-command installer for the current platform from the installed native executable. Installations before 0.6.1 run the installer once more to pick it up.
 
-Version 0.7.0 adds the [official Orca adapter](#official-orca-integration-cli-070). Identity, supersession and watcher health still require the existing 0.6.0 server. Installing the CLI supplies the adapter; explicitly set up and start each receiver.
+Version 0.7.0 adds the [dedicated worker](#dedicated-managed-workers-cli-070), requiring the matching server and managed-worker migration. Existing manual identity, supersession and watcher health retain their 0.6.0 behavior. Installing the CLI does not start a worker; explicitly set up each receiver.
 
 Version 0.5.1 adds [automatic login crash recovery](#authentication-and-automation), with cleanup guidance for older locks.
 
@@ -264,7 +264,7 @@ Only the original sender of open work or its current claimant can supersede it. 
 
 6. Check `agents list` or the workspace **Agent inbox** for current host/session, watcher state, last poll, and last successful callback. Missing health means **not reported**. Running health becomes **stale** after five minutes without a heartbeat. A successful callback is host acceptance; prove model execution with the actual claim/reply. Do not call cross-computer wake verified until both sides complete a real request/reply test.
 
-These steps do not install a reusable Orca adapter or supervise stopped agents. The bounded Sportsbook SBK-41 prototype demonstrated a same-host test only; its retained report is evidence, not an always-on installation recipe.
+These manual-session steps do not install a supervisor. For automatic owned execution, use the [dedicated worker](#dedicated-managed-workers-cli-070). The bounded Sportsbook SBK-41 prototype demonstrated a same-host test only; its retained report is evidence, not an always-on installation recipe.
 
 ### Wake a running agent through its host
 
@@ -329,94 +329,104 @@ normal seen/claim/complete workflow. An unchanged full page must not be treated
 as an empty inbox. Mark other agents' claimed/completed entries seen as appropriate.
 
 
-## Official Orca integration (CLI 0.7.0)
+## Dedicated managed workers (CLI 0.7.0)
 
-Orca hosts no longer need a custom callback script. Install or update Collab with the
-existing one-command installer on **each agent computer**, keep its existing login,
-and use that computer's local Orca CLI. Codex and Claude terminals are supported.
-The adapter never launches a stopped model, approves permissions, changes agent labels,
-or treats a queued prompt as a completed task.
+The Orca terminal prototype is retired. `orca` commands refuse dispatch: a terminal
+handle is not an execution fence. Existing private prototype receipts are retained
+but never imported as worker completion or final pilot evidence.
 
-### Set up one stable agent
+Deploy the additive `20261027000100_managed_workers` migration and matching server
+before using workers. Existing manual registrations retain their behavior. Managed
+registrations require a current generation for every handoff mutation, including
+claim, progress, pass, release and completion. A different generation cannot take
+over a live or expired-but-unclosed run. Re-registration cannot remove this fence.
 
-Register the actual host/session first using the instructions above, preserving the
-complete existing label list. Find the receiver with `orca terminal list --json` and
-confirm its session with the agent owner. Setup is an explicit assertion of that
-session-to-terminal mapping: Orca exposes the terminal's process incarnation, not the
-Collab session ID. Never pick a nearby terminal by its project name alone.
+### Configure and run
 
-```sh
-collab orca setup --agent AGENT_NAME --workspace WORKSPACE_ID --host HOST_LABEL --session-id SESSION_ID --terminal TERMINAL_HANDLE --orca /absolute/path/to/orca
-collab orca status --agent AGENT_NAME --workspace WORKSPACE_ID
-collab orca watch --agent AGENT_NAME --workspace WORKSPACE_ID
-```
-
-On Windows pass the absolute path to the local Orca executable. This integration uses
-a saved Collab login, not `COLLAB_TOKEN`; nothing is copied to another computer. It
-uses the same private-file/Windows ACL checks as the existing login store. No new
-server deployment, provider, migration or OAuth approval is needed.
-
-`orca watch` is the foreground supervisor. Keep it in a dedicated managed terminal
-(or an existing host service manager). It renews bounded windows automatically:
-`--watch-seconds` defaults to 300 (1..3600), `--poll-seconds` to 5 (1..60). Ctrl-C/SIGTERM
-stops it and closes the active Orca child. It does not install an OS login service or
-autostart on reboot. Do not wrap failures in an unconditional restart loop.
-
-A private local lock and server watcher lease prevent duplicate watchers. Runtime,
-terminal process or registered session changes stop delivery; explicitly run setup
-for a verified replacement. Authentication, health, API and adapter errors stop renewal
-without refreshing credentials. On another computer, run the same setup there with
-its own verified session; this adapter deliberately does not use remote Orca selectors.
-
-### Delivery and recovery
-
-Only routing metadata and a fresh verification challenge enter the fixed wake prompt. Handoff content
-is fetched by the receiving agent through Collab's access checks. No content is shell
-executed. The Orca child does not inherit `COLLAB_TOKEN`, `ORCA_ENVIRONMENT`,
-`ORCA_PAIRING_CODE`, or `ORCA_REMOTE_PAIRING`; parent environment and configuration stay unchanged.
-
-Private per-handoff receipts survive normal renewal and watcher restarts. Already
-accepted work does not wake repeatedly when claimed or updated; releasing a handoff
-with a new server revision can notify again. These receipts are delivery metadata,
-not claims or acknowledgements. Agents still recover claimed work and check unseen
-work at checkpoints. A receipt does not guarantee the model acted.
-
-Before sending, the adapter records an intent. A failed/interrupted send or crash
-between host acceptance and receipt persistence is **uncertain**, not safely retryable.
-`orca status` shows the affected IDs and any retained host request ID even when live
-checks fail or the saved login expires; `liveHealth` reports their outcome separately.
-Watch and verify still require valid authentication. Inspect the exact
-terminal and Collab activity before recovery. When Orca returned a request ID, its
-`--retry-request` mechanism observes/replays that same request, never submit a fresh
-prompt just because no reply arrived. Do not delete uncertain receipts or rebind to
-bypass them. Manual uncertain-outcome reconciliation and OS autostart are outside this
-first release; normal clean restarts are supported. Receipts live beside CLI state
-under separate `orca-*`/`wake-*` profiles and must not be used as auth profiles.
-
-### Prove the setup
-
-Create a clearly marked harmless test issue/handoff to the chosen receiver (leave old
-completed pilots closed). Ask it to read the test, claim it, and complete it with a short
-reply. Then run:
+Install Claude Code 2.1.311 or later in the 2.x line and log in separately with its
+supported authentication. The worker never logs in or refreshes credentials.
+Use an existing saved Collab CLI login with issues read/write access. Each computer
+runs its own local worker with a stable agent name and explicit workspace.
 
 ```sh
-collab orca verify --agent AGENT_NAME --workspace WORKSPACE_ID --handoff HANDOFF_ID
+collab worker setup --agent sportsbook-worker --workspace WORKSPACE_ID --host laptop --cwd /absolute/repository --claude /absolute/claude
+collab worker doctor --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker run --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker status --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
 ```
 
-Each notification carries a fresh UUID marker, `<!-- collab-wake:UUID -->`, saved in
-its private receipts. The receiver is asked to include that exact marker in the
-completion content. This is operational verification metadata, not authority or a secret.
+Setup checks the runner without invoking a model and does not start it. Use a new
+agent name, or explicitly use `--manage-existing` after stopping the old watcher
+and resolving its claimed work. Existing labels are preserved unless the full
+replacement `--label-ids '["LABEL_ID"]'` is supplied. Setup does not reset usage.
+A managed host/session identity is stable; every admitted child gets a fresh UUID.
+The daemon claims before launching a dedicated child, owns its process handle and
+pipes, and posts validated structured results. Remote handoff content travels on
+stdin, never as shell code or command arguments. The child receives no COLLAB_ or
+ORCA_ environment values. Claude's existing provider authentication remains local.
 
-`verified: true` requires a local host-accepted receipt, a named claim, and a named
-completion on that exact handoff containing this notification's marker. Both events
-must also follow the open handoff's saved server revision. A named claim was observed
-and a fresh completion echoed this delivery; this does not establish that the claim
-followed host acceptance or provide cryptographic model attestation. Activity between
-the inbox snapshot and dispatch cannot verify a wake without the new marker.
-Already claimed/completed snapshots and receipts without the revision or challenge
-cannot verify a wake. A release/new notification gets a new challenge. Local clock
-skew does not establish event order. Merely running setup/status or seeing `turnStarted`
-is insufficient. Verification reads the latest 100 issue events;
-missing/truncated evidence is not success. Test the second computer separately before
-claiming cross-computer delivery. Sleep, host restart and stopped-model recovery are
-separate checks; changed process identity intentionally stops the watcher.
+Defaults are concurrency one, read-only `Read,Glob,Grep`, no MCP tools, no Chrome,
+no hooks, restricted mode and denied unattended permission prompts. Optional
+`--tools Read,Glob,Grep,Edit,Write` explicitly permits those local file tools;
+there is no shell tool, wildcard approval or permission bypass. `--model NAME`
+selects a model. `--review-agent NAME` permits the structured result to pass the
+handoff to that named reviewer; a blocked result records progress and pauses.
+
+### Limits, monitoring and recovery
+
+Defaults: `--attempt-usd 0.50`, `--daily-usd 2`, `--timeout-seconds 900`,
+`--max-restarts 3`, `--max-starts 20` per UTC day, `--poll-seconds 5`. Ceilings are $10/attempt, $100/UTC day,
+3600 seconds, 10 restarts/hour, 200 starts/day and 60-second polls. Attempt budget must fit daily
+budget. Each attempt reserves its full estimate before dispatch. Known usage
+reconciles it; missing usage stays charged and visible as reserved/unknown.
+The ledger survives setup, daemon restarts and same-day configuration changes.
+UTC rollover admits a new daily allowance while retaining outstanding totals;
+a clock rollback pauses admission. Costs are client estimates, can overshoot a
+provider request, and are not invoice caps. See [Claude CLI reference](https://code.claude.com/docs/en/cli-reference)
+and [cost tracking](https://code.claude.com/docs/en/agent-sdk/cost-tracking).
+
+Status shows run/task/session IDs, heartbeat, stop reason, token/cache counts,
+estimated, reserved and unknown USD. It remains readable after login expiry.
+The existing agent inbox and organisation floor show daemon lease health separately
+from an observed working child; neither idle polling nor health invokes a model.
+Transient reads retry at most three times with exponential backoff. Authentication,
+provider budget exhaustion and unclassified provider failures pause with their
+reported cost charged, even when token counters are zero. A writable failure,
+missing result, timeout, interrupted dispatch or unproven child closure blocks that
+task. No uncertain write is blindly repeated. Later startup can reconcile a saved
+validated result with the current claim without launching another child.
+
+Inspect `worker status`, the recorded child session and Collab activity for uncertain
+work. Do not delete journals or reconfigure another identity to bypass a reservation
+or unclosed generation. Automatic recovery cannot prove an orphaned child stopped;
+operator reconciliation is required in that case. The first release exposes this
+blocked state and does not provide a force-unfence command. This is at-least-once
+coordination with durable suppression, not exactly-once external side effects or
+protection against a malicious process running as the same OS user.
+
+### Per-user startup integration
+
+```sh
+collab worker install --agent sportsbook-worker --workspace WORKSPACE_ID --dry-run
+collab worker install --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker uninstall --agent sportsbook-worker --workspace WORKSPACE_ID
+```
+
+Installation is explicit and starts the configured worker: launchd LaunchAgent on
+macOS, systemd user service on Linux, interactive user Scheduled Task on Windows.
+It neither changes machine-wide services nor enables Linux user lingering. Login
+startup therefore requires the user session. Unsupported platforms fail explicitly.
+Dry-run returns the exact definition and supervisor commands without writes. Stop
+uses the private authenticated daemon control endpoint and confirms owned closure;
+it never signals a remembered PID. Stop the foreground daemon before uninstalling.
+Definitions must match their saved ownership hash before replacement/removal.
+OS restart-on-failure is bounded; the durable daemon restart allowance also counts
+manual restarts conservatively. Normal paused exits do not trigger an infinite
+service restart loop. `--profile` and an absolute private `--config-dir` select the
+saved local identity for each command.
+
+No real worker acceptance has been performed by the source review phase. The old
+CLB-446 terminal pilot is prototype evidence only. Publication, native seven-target
+qualification, same-host and two-host Sportsbook tests remain with the release owner.
