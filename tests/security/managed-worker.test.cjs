@@ -32,7 +32,7 @@ function fixture() {
     issueActivity: { create: async ({ data }) => { activities.push(data); return data; } },
     agentReceipt: { deleteMany: async () => {}, upsert: async () => {}, updateMany: async () => ({ count: 1 }) },
   };
-  const service = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), zod: require('zod'), '@/lib/prisma': { prisma: db },
+  const service = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'), '@/lib/prisma': { prisma: db },
     '@/lib/issue-finder': { issueReadAccessWhere: user => user === 'owner' ? {} : { id: 'denied' } }, '@/lib/oauth-scopes': { hasScope: (scope, scopes) => scopes.includes(scope) },
     '@/lib/managed-worker-health': health }, { Date: Clock });
   const context = { user: { id: 'owner' }, workspace: { id: 'w' }, token: { scopes: ['workspace:write', 'issues:read', 'issues:write'] } };
