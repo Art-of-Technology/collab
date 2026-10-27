@@ -467,7 +467,7 @@ async function fixture(t, handler) {
   return { run, dir, calls, url };
 }
 
-test('update is listed, takes no arguments, and refuses to run the installer outside the native executable', { skip: Boolean(executable) }, async t => {
+test('update is listed, takes no arguments, and refuses to run the installer outside the installed native executable', async t => {
   const f = await fixture(t);
   assert.ok((await f.run(['help'])).data.localCommands.includes('update'));
   const refused = await f.run(['update']);

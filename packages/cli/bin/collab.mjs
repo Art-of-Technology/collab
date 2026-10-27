@@ -71,7 +71,13 @@ function help() {
 }
 async function update() {
   const windows = process.platform === 'win32';
-  if (path.basename(process.execPath).toLowerCase() !== (windows ? 'collab.exe' : 'collab')) throw new CliError('unsupported_update', 'update only replaces the native executable from the one-command installer. For npm or source installs, reinstall with npm.', 2);
+  // The installer writes only to its documented directory; refuse anything else so success is never reported for an untouched binary.
+  const expectedDir = windows ? path.join(process.env.LOCALAPPDATA || '', 'Collab', 'bin') : path.join(os.homedir(), '.local', 'bin');
+  const fold = value => windows ? value.toLowerCase() : value;
+  const real = target => { try { return fold(fs.realpathSync(target)); } catch { return null; } };
+  if (fold(path.basename(process.execPath)) !== (windows ? 'collab.exe' : 'collab') || real(path.dirname(process.execPath)) === null || real(path.dirname(process.execPath)) !== real(expectedDir)) {
+    throw new CliError('unsupported_update', `update only replaces the executable installed by the one-command installer at ${expectedDir}. For npm or source installs, reinstall with npm.`, 2);
+  }
   const url = `https://collab.weez.boo/install.${windows ? 'ps1' : 'sh'}`;
   let script;
   try {
@@ -90,7 +96,7 @@ async function update() {
     const result = spawnSync(windows ? powershell : 'sh', windows ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', file] : [file],
       { stdio: ['ignore', 'pipe', 'inherit'], encoding: 'utf8', windowsHide: true, timeout: 300000, maxBuffer: 1024 * 1024 });
     if (result.status !== 0) {
-      if (windows && !fs.existsSync(process.execPath)) fs.renameSync(old, process.execPath);
+      if (windows && !fs.existsSync(process.execPath)) { try { fs.renameSync(old, process.execPath); } catch { /* Reported below. */ } }
       throw new CliError('update_failed', 'Installer did not complete; the current executable was kept. Rerun collab update or the one-command installer.', 5);
     }
     return { updated: true, previousVersion: cliPackage.version, installer: result.stdout.trim() };
