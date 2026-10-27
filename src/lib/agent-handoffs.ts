@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { Buffer } from 'node:buffer';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -31,6 +32,7 @@ export const actionSchema = z.object({ agent: name, action: z.enum(['seen', 'ack
   .refine(v => (v.action === 'supersede') === Boolean(v.replacementId), 'Only supersede requires replacementId');
 export const inboxSchema = z.object({ agent: name, limit: z.coerce.number().int().min(1).max(50).default(20),
   state: z.enum(['unseen', 'claimed']).default('unseen'),
+  cursor: z.string().max(4096).regex(/^[A-Za-z0-9_-]+$/).optional(),
 }).strict();
 
 export class HandoffError extends Error {
@@ -251,9 +253,14 @@ function inboxMatch(agent: Agent, state: 'unseen' | 'claimed'): Prisma.AgentHand
   };
 }
 
-async function readInbox(context: InboxContext, matches: Prisma.AgentHandoffWhereInput[], limit: number) {
+const inboxCursorSchema = z.tuple([id, id, z.enum(['unseen', 'claimed']), z.string().datetime(), id]);
+
+async function readInbox(context: InboxContext, matches: Prisma.AgentHandoffWhereInput[], limit: number,
+  position?: { createdAt: Date; id: string }) {
   const items = await prisma.agentHandoff.findMany({ where: { workspaceId: context.workspace.id,
-    issue: issueScope(context), OR: matches,
+    issue: issueScope(context), OR: matches, ...(position && { AND: [{ OR: [
+      { createdAt: { gt: position.createdAt } }, { createdAt: position.createdAt, id: { gt: position.id } },
+    ] }] }),
   }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: limit + 1,
   include: { issue: { select: { id: true, issueKey: true, title: true, projectId: true } },
     claimedBy: { select: { name: true } }, sender: { select: { name: true } } } });
@@ -262,7 +269,24 @@ async function readInbox(context: InboxContext, matches: Prisma.AgentHandoffWher
 
 export async function agentInbox(context: InboxContext, query: z.infer<typeof inboxSchema>) {
   const agent = await ownedAgent(prisma, context, query.agent);
-  return { ...await readInbox(context, [inboxMatch(agent, query.state)], query.limit), agent: agent.name };
+  let position: { createdAt: Date; id: string } | undefined;
+  if (query.cursor) {
+    try {
+      const bytes = Buffer.from(query.cursor, 'base64url');
+      if (bytes.toString('base64url') !== query.cursor) throw new Error();
+      const [workspaceId, agentId, state, timestamp, handoffId] = inboxCursorSchema.parse(JSON.parse(bytes.toString('utf8')));
+      const createdAt = new Date(timestamp);
+      if (workspaceId !== context.workspace.id || agentId !== agent.id || state !== query.state ||
+        !Number.isFinite(createdAt.getTime()) || createdAt.toISOString() !== timestamp) throw new Error();
+      position = { createdAt, id: handoffId };
+    } catch { throw new HandoffError('invalid_cursor', 'Invalid inbox cursor'); }
+  }
+  const inbox = await readInbox(context, [inboxMatch(agent, query.state)], query.limit, position);
+  const last = inbox.items.at(-1);
+  const nextCursor = inbox.hasMore && last ? Buffer.from(JSON.stringify([
+    context.workspace.id, agent.id, query.state, last.createdAt.toISOString(), last.id,
+  ])).toString('base64url') : null;
+  return { ...inbox, nextCursor, agent: agent.name };
 }
 
 /** Read-only workspace monitoring; CLI ownership and mutation rules stay unchanged. */

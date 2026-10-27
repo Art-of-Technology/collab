@@ -220,6 +220,15 @@ To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_
 
 ## Agent coordination
 
+`collab inbox list --agent NAME --state claimed --limit 50` returns `nextCursor`
+when more work is available. Pass it back with `--cursor VALUE` to read the next
+page. The cursor is scoped to the workspace, agent and queue state; current issue
+access is checked again on every page. Start again without a cursor to see work
+that arrived before the previous position. Deploy the matching server before
+using cursor pagination: older servers reject `--cursor` and may return `hasMore`
+without `nextCursor`. Consumers that need all pages must stop and report that
+unsupported server instead of silently treating its first page as complete.
+
 Basic coordination is available since CLI 0.4.2; current identities, supersession and watcher health require CLI 0.6.0 and the matching server. Run the one-command installer again to update; existing credentials are preserved. Version 0.2.1 does not include coordination commands.
 
 The [generic agent skill](skills/collab-agents/SKILL.md) describes registration,
