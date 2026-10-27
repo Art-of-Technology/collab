@@ -177,6 +177,73 @@ test('owned control stop waits for child closure and refuses competing runs', as
   assert.equal((await f.run('status')).online, false);
 });
 
+for (const mode of ['foreground', 'scheduled']) test(`${mode} startup stop and status require lock proof before control is published`, { timeout: 5000 }, async t => {
+  const f = fixture(t); await f.run('setup');
+  const identity = workerKey(f.selected, 'user', 'worker'), stateStore = store(`worker-${identity}`);
+  const options = { ...f.options };
+  if (mode === 'scheduled') {
+    await stateStore.exclusive((state, save) => workerService('worker install', identity, f.options, state, save, {
+      platform: 'linux', home: f.dir, command: ['/trusted/collab'], execute: async () => ({ stdout: '' }),
+    }));
+    options['service-id'] = f.state().service.installationId;
+  }
+  let entered, release, polled;
+  const preflight = new Promise(resolve => { entered = resolve; });
+  const pending = new Promise(resolve => { release = resolve; });
+  const ready = new Promise(resolve => { polled = resolve; });
+  f.dependencies.runner.doctor = async () => { entered(); await pending; return { ready: true }; };
+  f.dependencies.runner.execute = async () => assert.fail('Idle startup must not launch a model');
+  const api = f.dependencies.api;
+  f.dependencies.api = async (url, extra) => {
+    if (url.startsWith('agents/inbox')) { polled(); return { items: [], hasMore: false }; }
+    return api(url, extra);
+  };
+  const running = runWorker('worker run', options, f.selected, 'user', f.dependencies);
+  let finished = false;
+  t.after(async () => { release(); if (!finished) { process.emit('SIGINT'); await running; } });
+  await preflight;
+  assert.equal(f.state().runId, undefined); assert.equal(store(`ctl-${identity}`).load().port, undefined);
+  await assert.rejects(f.run('stop'), { code: 'stop_unconfirmed' });
+  const starting = await f.run('status');
+  assert.equal(starting.stopped, false); assert.equal(starting.online, false);
+  assert.equal(starting.state, 'starting'); assert.equal(starting.stopReason, 'stop_unconfirmed');
+  assert.equal(f.sessions.length, 0); assert.equal(f.calls.some(call => call.body?.event === 'start'), false);
+  release(); await ready;
+  const online = await f.run('status'); assert.equal(online.online, true); assert.equal(online.stopped, false);
+  assert.equal((await f.run('stop')).stopped, true);
+  assert.equal((await running).state, 'stopped'); finished = true;
+  assert.equal(f.state().closed, true); assert.equal(f.sessions.length, 0);
+  assert.equal((await f.run('status')).stopped, true);
+});
+
+for (const record of ['missing', 'unreachable']) test(`absence proof requires the worker lock with ${record} control metadata`, async t => {
+  const f = fixture(t); await f.run('setup');
+  const identity = workerKey(f.selected, 'user', 'worker'), stateStore = store(`worker-${identity}`);
+  if (record === 'unreachable') {
+    const server = createServer((_req, res) => { res.writeHead(503); res.end(); });
+    server.listen(0, '127.0.0.1'); await once(server, 'listening');
+    t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
+    await store(`ctl-${identity}`).exclusive((_state, save) => save({ port: server.address().port, nonce: 'old-control' }));
+  }
+  const before = f.state();
+  await stateStore.exclusive(async () => {
+    await assert.rejects(f.run('stop'), { code: 'stop_unconfirmed' });
+    const status = await f.run('status');
+    assert.equal(status.stopped, false); assert.equal(status.state, 'starting');
+  });
+  assert.deepEqual(await f.run('stop'), { online: false, stopped: true });
+  const status = await f.run('status'); assert.equal(status.stopped, true); assert.equal(status.online, false);
+  assert.deepEqual(f.state(), before); assert.equal(f.sessions.length, 0);
+});
+
+for (const unresolved of [{ runId: 'old-run', closed: false }, { active: { phase: 'dispatched', closed: false } }]) test(`unresolved ${unresolved.runId ? 'generation' : 'child'} closure refuses stop despite a free lock`, async t => {
+  const f = fixture(t); await f.run('setup');
+  await store(`worker-${workerKey(f.selected, 'user', 'worker')}`).exclusive((state, save) => save({ ...state, ...unresolved }));
+  await assert.rejects(f.run('stop'), { code: 'stop_unconfirmed' });
+  const status = await f.run('status');
+  assert.equal(status.stopped, false); assert.equal(status.state, 'uncertain'); assert.equal(status.stopReason, 'stop_unconfirmed');
+});
+
 test('daily ledger, reservations and clock rollback cannot mint spend', () => {
   const config = { attemptUSD: 0.5, dailyUSD: 1 };
   const state = {};
@@ -200,6 +267,13 @@ test('runner validates owned result/session/usage and sends content only on stdi
     assert.equal(args.some(arg => arg.includes('PRIVATE_TASK_BODY')), false);
     assert.ok(options.input.includes('PRIVATE_TASK_BODY'));
     assert.ok(args.includes('--restricted')); assert.equal(args.includes('bypassPermissions'), false);
+    assert.equal(args.includes('--max-turns'), false);
+    assert.equal(args[args.indexOf('--max-budget-usd') + 1], String(attempt.reservedUSD));
+    assert.equal(options.timeout, config.timeoutSeconds * 1000);
+    assert.equal(args[args.indexOf('--session-id') + 1], attempt.sessionId);
+    assert.equal(args[args.indexOf('--tools') + 1], 'Read,Glob,Grep');
+    assert.equal(args[args.indexOf('--permission-mode') + 1], 'dontAsk');
+    assert.equal(args[args.indexOf('--permission-prompts') + 1], 'none');
     return { code: 0, output: JSON.stringify(data) };
   });
   assert.equal((await invoke(valid)).estimatedUSD, 0.1);

@@ -1,0 +1,14 @@
+{
+  "command": [
+    "node",
+    "--test",
+    "--test-concurrency=1",
+    "--test-name-pattern",
+    "startup stop and status|absence proof requires|unresolved .* closure refuses stop|owned control stop|runner validates owned|actual CLI recovers a crashed daemon|Windows uninstall closes a delayed native launch|worker status and stop retain local recovery",
+    "packages/cli/test/worker.test.mjs",
+    "packages/cli/test/cli.test.mjs"
+  ],
+  "exit": 0,
+  "seconds": 20.07,
+  "types": "Reused worker-r3-types.log: no TypeScript inputs changed in this round."
+}

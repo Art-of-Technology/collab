@@ -61,14 +61,14 @@ function pause(state, error) {
   state.status = ['unauthorized', 'token_expired', 'needs_login', 'login_required'].includes(error.code) ? 'needs-login' : error.code === 'restart_limit' ? 'restart-limit' : error.code === 'usage_limit' ? 'usage-limit' : state.active ? 'uncertain' : 'config';
 }
 async function control(record, action) {
-  if (!record.port || !record.nonce) return { online: false, stopped: true };
+  if (!record.port || !record.nonce) return { online: false, stopped: false };
   try {
     const response = await fetch(`http://127.0.0.1:${record.port}/${action}`, { method: 'POST', headers: { authorization: `Bearer ${record.nonce}` }, signal: AbortSignal.timeout(action === 'stop' ? 15000 : 2000), redirect: 'error' });
     if (!response.ok) throw Error();
     const result = await response.json();
     if (result.nonce !== record.nonce) throw Error();
     return { online: action !== 'stop', stopped: result.stopped === true };
-  } catch { if (action === 'stop') throw fail('stop_unconfirmed', 'Owned daemon closure could not be confirmed; no PID was signalled.'); return { online: false, stopped: false }; }
+  } catch { return { online: false, stopped: false }; }
 }
 export async function runWorker(name, options, selected, userId, dependencies = {}) {
   if (!options.workspace || !selected.workspace || !selected.base || !identifier(userId) || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(options.agent || '')) throw fail('worker_context', 'Supply an explicit agent/workspace with a saved login identity.');
@@ -76,11 +76,24 @@ export async function runWorker(name, options, selected, userId, dependencies = 
   const runner = dependencies.runner || claudeRunner, now = dependencies.now || Date.now, sleep = dependencies.sleep || delay;
   const api = dependencies.api || ((endpoint, extra = {}) => request(selected.base, `/api/apps/auth/${endpoint}${endpoint.includes('?') ? '&' : '?'}workspaceId=${encodeURIComponent(selected.workspace)}`, { token: selected.token, ...extra }));
   const journal = handoffId => store(`job-${key([identity, handoffId])}`);
-  if (name === 'worker status') return { ...summary(stateStore.load()), ...await control(controlStore.load(), 'status'), ...(dependencies.loginError && { liveHealth: { ok: false, error: dependencies.loginError } }), estimateWarning: 'Client cost estimates can exceed limits and differ from invoices.' };
-  if (name === 'worker stop') {
-    const record = controlStore.load(), state = stateStore.load();
-    if (!record.port && ((state.active && state.active.closed !== true) || (state.runId && !state.closed))) throw fail('stop_unconfirmed', 'No live owned control endpoint can confirm closure. Inspect the saved session; no PID was signalled.');
-    return control(record, 'stop');
+  if (name === 'worker status' || name === 'worker stop') {
+    let health = await control(controlStore.load(), name === 'worker stop' ? 'stop' : 'status');
+    let state = stateStore.load();
+    if (!health.online && !health.stopped) {
+      try {
+        await stateStore.exclusive(current => {
+          state = current;
+          if ((state.active && state.active.closed !== true) || (state.runId && !state.closed)) throw fail('stop_unconfirmed', 'Prior worker closure is unresolved. Inspect worker status and the saved session.');
+        });
+        health = { online: false, stopped: true };
+      } catch (error) {
+        if (!['state_locked', 'stop_unconfirmed'].includes(error.code)) throw error;
+        if (name === 'worker stop') throw fail('stop_unconfirmed', 'Owned worker closure is unconfirmed. Retry worker stop after startup; inspect worker status if it remains unavailable. No PID was signalled.');
+        state = { ...state, status: error.code === 'state_locked' && !state.runId ? 'starting' : 'uncertain', stopReason: 'stop_unconfirmed' };
+      }
+    }
+    if (name === 'worker stop') return health;
+    return { ...summary(state), ...health, ...(dependencies.loginError && { liveHealth: { ok: false, error: dependencies.loginError } }), estimateWarning: 'Client cost estimates can exceed limits and differ from invoices.' };
   }
   return stateStore.exclusive(async (state, save) => {
     if (name === 'worker run' && options['service-id'] && (!state.service || state.service.retired || state.service.installationId !== options['service-id'])) {

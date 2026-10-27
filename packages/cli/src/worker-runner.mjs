@@ -49,7 +49,7 @@ export const claudeRunner = {
   async execute(config, attempt, context, signal, onSpawn, run = childProcess) {
     const tools = config.tools.join(',');
     const args = ['--print', '--restricted', '--output-format', 'json', '--session-id', attempt.sessionId,
-      '--max-budget-usd', String(attempt.reservedUSD), '--max-turns', '20', '--permission-mode', 'dontAsk', '--permission-prompts', 'none',
+      '--max-budget-usd', String(attempt.reservedUSD), '--permission-mode', 'dontAsk', '--permission-prompts', 'none',
       '--tools', tools, '--allowedTools', tools, '--disallowedTools', 'mcp__*', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
       '--setting-sources', '', '--settings', '{"disableAllHooks":true}', '--no-chrome', '--json-schema', JSON.stringify(schema),
       ...(config.model ? ['--model', config.model] : [])];

@@ -434,6 +434,9 @@ pause instead of failing before the daemon can start.
 Dry-run returns the exact definition and supervisor commands without writes. Stop
 uses the private authenticated daemon control endpoint and confirms owned closure;
 it never signals a remembered PID. Stop the foreground daemon before uninstalling.
+Before that endpoint is available, stop/status use the exclusive worker lock to
+check absence. A busy startup reports `starting`/`stop_unconfirmed`; retry stop
+after startup. Missing control metadata alone never confirms a stopped worker.
 Uninstall verifies the saved definition path, label and ownership hash, even if the
 repository or Claude executable has moved or disappeared. Uninstall before changing
 setup while a service is recorded. If installation failed or teardown was interrupted,
