@@ -13,7 +13,7 @@ All routes are under `/api/apps/auth/agents` and use the existing OAuth bearer t
 | `POST /worker` | Configure or report a managed run using [`workerSchema`](../src/lib/agent-handoffs.ts); see [managed workers](#managed-workers) | `issues:write`; `configure` also requires `workspace:write`, `issues:read` |
 | `POST /` | Register/update your own manual agent using [`registrationSchema`](../src/lib/agent-handoffs.ts) | `workspace:write`, `issues:read` |
 | `POST /heartbeat` | Report a manual agent's bound watcher start, poll, callback success, stop or error | `issues:read` |
-| `GET /inbox?agent=NAME&state=unseen` | Oldest unseen requests; limit 1–50, default 20 | `issues:read` |
+| `GET /inbox?agent=NAME&state=unseen` | Page through an owned agent's unseen or claimed requests using [`inboxSchema`](../src/lib/agent-handoffs.ts) | `issues:read` |
 | `POST /handoffs` | Send using [`sendSchema`](../src/lib/agent-handoffs.ts), including the current generation for a managed sender | `issues:read`, `issues:write` |
 | `GET /handoffs/ID?agent=NAME` | Retrieve an authorized handoff and current context commands | `issues:read` |
 | `PATCH /handoffs/ID` | Apply a handoff action using [`actionSchema`](../src/lib/agent-handoffs.ts); see the actions below | `issues:read`; work actions also require `issues:write` |
@@ -30,7 +30,13 @@ Actions:
 - `complete` requires a result and closes the request. It does not change the issue's status.
 - `supersede` requires a reason and `replacementId` referring to another open, claimed or completed handoff on the same issue that the acting agent can read. Only the original sender of still-open work or its current claimant can close it. It never takes another agent's claim. The old request leaves actionable inboxes, retains its contents, and links the replacement. A retry with the same replacement does not duplicate history; simultaneous replacements cannot create cycles.
 
-`state=claimed` recovers this agent's unfinished claims, including those it previously marked seen. Only `unseen` (the default) and `claimed` are supported. Polling never acknowledges work automatically. Both modes return the oldest matching entries with `hasMore` and the same limit. For `unseen`, mark entries seen to advance; requests claimed or completed by another agent can still appear until marked seen. For `claimed`, complete, release or pass work onward to advance; marking it seen does not remove it from this mode.
+`state=claimed` recovers this agent's unfinished claims, including those it previously marked seen. Only `unseen` (the default) and `claimed` are supported. Polling never acknowledges work automatically. Marking an entry seen removes it from `unseen`; requests claimed or completed by another agent can still appear until marked seen. Completing, releasing or passing work onward removes it from `claimed`; marking it seen does not.
+
+Both modes return `items`, `agent`, `hasMore` and `nextCursor`, ordered by `createdAt` ascending, then `id` ascending for tied timestamps. Pass a returned `nextCursor` as the `cursor` query parameter to read later entries without changing their state. The final page has `hasMore: false` and `nextCursor: null`. Query bounds are defined by `inboxSchema` above.
+
+A cursor binds the workspace, agent identity and queue state to the last returned position. Ownership, current workspace/issue access and queue membership are checked on every request. Deleting or changing the cursor's handoff does not invalidate its position. Pages reflect current data, not a snapshot; start again without a cursor to discover entries that become eligible at or before a previous position.
+
+Deploy the matching server before using pagination. Older clients can omit `cursor` and ignore the additive `nextCursor` field. Older servers reject `cursor` and may return `hasMore: true` without `nextCursor`. Consumers needing all pages must report that unsupported server instead of treating the first page as complete or retrying without the cursor.
 
 To pass work onward, send a new request with `afterId` referencing a request currently claimed by the sender on the same issue. The previous request is completed and the next one created in one transaction. The new request remains open until a recipient claims it; sending does not grant ownership to that recipient.
 

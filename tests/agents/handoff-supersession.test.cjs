@@ -31,7 +31,7 @@ test('supersession uses the production visibility guard and preserves ownership 
   await raw.issue.createMany({ data: ['one', 'two'].map(id => ({ id, workspaceId: 'alice', projectId: 'p', title: id, issueKey: id })) });
   const { issueVisibilityExtension } = load('src/lib/issue-visibility.ts');
   const prisma = raw.$extends(issueVisibilityExtension(Prisma.dmmf.datamodel.models));
-  const service = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), zod: require('zod'),
+  const service = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'),
     '@/lib/prisma': { prisma }, '@/lib/issue-finder': load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } }),
     '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') });
   const context = user => ({ user: { id: user }, workspace: { id: user }, token: { scopes: ['issues:read', 'issues:write', 'workspace:write'] } });

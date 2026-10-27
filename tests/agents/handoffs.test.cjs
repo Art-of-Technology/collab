@@ -48,8 +48,8 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   await prisma.agentRegistration.delete({ where: { id: legacy.id } });
   assert.equal(await prisma.issue.count(), 2, 'migration preserves existing work');
   const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } });
-  const service = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), zod: require('zod'),
-    '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') });
+  const service = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'),
+    '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
   await t.test('HTTP parsing bounds streamed bodies and rejects malformed input', async () => {
     const http = load('src/lib/agent-handoff-http.ts', { './agent-handoffs': service, zod: require('zod'), 'next/server': { NextResponse: Response } }, { Buffer });
     const request = body => new Request('https://example.test', { method: 'POST', body });
@@ -65,6 +65,58 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   const act = (ctx, handoff, agent, action, content) => service.actOnHandoff(ctx, handoff.id, service.actionSchema.parse({ agent, action, ...(content && { content }) }));
   await register(alice, 'lead'); await register(alice, 'worker-a', ['label-w']); await register(bob, 'worker-b', ['label-w']);
   await register(outsider, 'outsider', ['label-foreign']);
+
+  await t.test('owned inbox cursor pages tied timestamps without leaking inaccessible work', async () => {
+    const worker = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'worker-b' } } });
+    const createdAt = new Date('2026-01-01T00:00:00.000Z');
+    const ids = Array.from({ length: 58 }, (_, i) => `cursor-${String(i).padStart(3, '0')}`);
+    const rows = ids.map(id => ({ id, sourceKey: id, workspaceId: 'w', issueId: 'i-w', content: id,
+      recipientNames: ['worker-b'], status: 'claimed', claimedById: worker.id, createdAt, updatedAt: createdAt }));
+    await prisma.agentHandoff.createMany({ data: [...rows, { id: 'cursor-foreign', sourceKey: 'cursor-foreign',
+      workspaceId: 'foreign', issueId: 'i-foreign', content: 'foreign', recipientNames: ['worker-b'], createdAt, updatedAt: createdAt }] });
+    const get = (ctx, agent, state, cursor) => service.agentInbox(ctx, service.inboxSchema.parse({ agent, state, limit: 20, ...(cursor && { cursor }) }));
+    try {
+      const first = await get(bob, 'worker-b', 'claimed');
+      assert.deepEqual(Array.from(first.items, row => row.id), ids.slice(0, 20));
+      assert.equal(first.hasMore, true); assert.ok(first.nextCursor);
+      const http = load('src/lib/agent-handoff-http.ts', { './agent-handoffs': service, zod: require('zod'), 'next/server': { NextResponse: Response } }, { Buffer });
+      const route = load('src/app/api/apps/auth/agents/inbox/route.ts', {
+        '@/lib/apps/auth-middleware': { withAppAuth: (fn, options) => { assert.deepEqual(Array.from(options.requiredScopes), ['issues:read']); return fn; } },
+        '@/lib/agent-handoffs': service, '@/lib/agent-handoff-http': http,
+      }, { URL });
+      const url = new URL('https://example.test/api/apps/auth/agents/inbox');
+      for (const [key, value] of Object.entries({ agent: 'worker-b', state: 'claimed', limit: '20', cursor: first.nextCursor })) url.searchParams.set(key, value);
+      const response = await route.GET(new Request(url), bob);
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).items[0].id, ids[20]);
+      url.searchParams.set('cursor', 'bm90LWpzb24');
+      assert.equal((await route.GET(new Request(url), bob)).status, 400);
+      await assert.rejects(get(alice, 'worker-a', 'claimed', first.nextCursor), e => e.code === 'invalid_cursor');
+      await assert.rejects(get(bob, 'worker-b', 'unseen', first.nextCursor), e => e.code === 'invalid_cursor');
+      await assert.rejects(get(bob, 'worker-b', 'claimed', 'bm90LWpzb24'), e => e.code === 'invalid_cursor');
+      assert.equal(service.inboxSchema.safeParse({ agent: 'worker-b', cursor: '%%%'}).success, false);
+      assert.equal(service.inboxSchema.safeParse({ agent: 'worker-b', cursor: 'a'.repeat(4097) }).success, false);
+
+      // A deleted cursor row and status changes must not alter the remaining keyset.
+      await prisma.agentHandoff.delete({ where: { id: ids[19] } });
+      await prisma.agentHandoff.update({ where: { id: ids[20] }, data: { status: 'completed' } });
+      const second = await get(bob, 'worker-b', 'claimed', first.nextCursor);
+      assert.deepEqual(Array.from(second.items, row => row.id), ids.slice(21, 41));
+      const third = await get(bob, 'worker-b', 'claimed', second.nextCursor);
+      assert.deepEqual(Array.from(third.items, row => row.id), ids.slice(41));
+      assert.equal(third.hasMore, false); assert.equal(third.nextCursor, null);
+
+      const unseen = await get(bob, 'worker-b', 'unseen');
+      await prisma.agentReceipt.create({ data: { agentId: worker.id, handoffId: ids[21], seenAt: new Date() } });
+      const remaining = await get(bob, 'worker-b', 'unseen', unseen.nextCursor);
+      assert.ok(!remaining.items.some(row => row.id === ids[21]), 'seen status is rechecked on the next page');
+      await prisma.workspaceMember.updateMany({ where: { userId: 'bob' }, data: { status: false } });
+      assert.equal((await get(bob, 'worker-b', 'claimed', first.nextCursor)).items.length, 0, 'revoked access is rechecked on the next page');
+    } finally {
+      await prisma.workspaceMember.updateMany({ where: { userId: 'bob' }, data: { status: true } });
+      await prisma.agentHandoff.deleteMany({ where: { id: { in: [...ids, 'cursor-foreign'] } } });
+    }
+  });
 
   await t.test('unbound registration and list JSON contracts survive creation and label replacement', async () => {
     let agentId;

@@ -54,6 +54,31 @@ test('inbox wait is bounded, returns arriving work, and never marks or claims it
   assert.equal(empty.calls.length, 1);
 });
 
+test('inbox list forwards a bounded cursor and returns the next cursor', async t => {
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ items: [{ id: 'next' }], hasMore: true, nextCursor: 'next_cursor' })));
+  const result = await f.run(['inbox', 'list', '--agent', 'reviewer', '--state', 'claimed', '--cursor', 'current_cursor', '--workspace', 'w']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(new URL(f.calls[0].url, 'http://localhost').searchParams.get('cursor'), 'current_cursor');
+  assert.equal(result.data.nextCursor, 'next_cursor');
+  assert.notEqual((await f.run(['inbox', 'list', '--agent', 'reviewer', '--cursor', 'a'.repeat(4097)])).code, 0);
+  assert.equal(f.calls.length, 1);
+});
+
+test('legacy inbox responses remain unchanged and unsupported cursors fail visibly', async t => {
+  const f = await fixture(t, (req, res) => {
+    if (new URL(req.url, 'http://localhost').searchParams.has('cursor')) {
+      res.statusCode = 400; return res.end('{"error":"invalid_input"}');
+    }
+    res.end('{"items":[{"id":"first"}],"hasMore":true}');
+  });
+  const first = await f.run(['inbox', 'list', '--agent', 'reviewer']);
+  assert.equal(first.code, 0, first.stderr);
+  assert.deepEqual(first.data, { items: [{ id: 'first' }], hasMore: true });
+  const next = await f.run(['inbox', 'list', '--agent', 'reviewer', '--cursor', 'next_cursor']);
+  assert.notEqual(next.code, 0);
+  assert.equal(f.calls.length, 2, 'an unsupported cursor is not silently retried or discarded');
+});
+
 test('agent session binding and explicit supersession send only the scoped contracts', async t => {
   const f = await fixture(t);
   const bound = await f.run(['agents', 'register', '--name', 'builder-a', '--host', 'my-pc', '--session-id', 'session-1', '--workspace', 'w']);
@@ -206,7 +231,7 @@ test('inbox wait does not turn an empty final window into a transport failure', 
 
 test('inbox watch invokes a fixed adapter with bounded JSON, coalesces queues and never mutates', async t => {
   const items = ['open', 'claimed', 'completed'].map(status => ({ id: `handoff-${status}`, status }));
-  const f = await fixture(t, (_req, res, _body, calls) => res.end(JSON.stringify({ items: items.map(item => ({ ...item, updatedAt: new Date(1793016000000 + calls.length * 1000).toISOString(), content: '$(touch SHOULD_NOT_EXIST)' })), hasMore: true })));
+  const f = await fixture(t, (_req, res, _body, calls) => res.end(JSON.stringify({ items: items.map(item => ({ ...item, updatedAt: new Date(1793016000000 + calls.length * 1000).toISOString(), content: '$(touch SHOULD_NOT_EXIST)' })), hasMore: true, nextCursor: 'next_cursor' })));
   const output = path.join(f.dir, 'wake events.jsonl');
   const adapter = path.join(f.dir, 'adapter with spaces.cjs');
   writeFileSync(adapter, `const fs = require('node:fs'); let input = ''; process.stdin.on('data', b => input += b); process.stdin.on('end', () => { if (Object.keys(process.env).some(key => key.toUpperCase() === 'COLLAB_TOKEN')) process.exit(7); fs.appendFileSync(process.argv[2], input); });`);
@@ -221,6 +246,7 @@ test('inbox watch invokes a fixed adapter with bounded JSON, coalesces queues an
   assert.equal(events[0].agent, 'reviewer');
   assert.equal(events[0].workspaceId, 'w');
   assert.equal(events[0].unseen.hasMore, true);
+  assert.equal(events[0].unseen.nextCursor, undefined, 'additive server cursor does not alter the legacy wake payload');
   assert.deepEqual(events[0].claimed.items, items);
   assert.deepEqual(events[0].unseen.items, items);
   assert.equal(JSON.stringify(events).includes('touch'), false, 'remote content is not a callback argument or payload');
