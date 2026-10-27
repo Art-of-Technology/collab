@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { issueReadAccessWhere } from '@/lib/issue-finder';
 
 /**
  * GET /api/apps/auth/issues/:issueIdOrKey/activity
@@ -23,9 +24,11 @@ export const GET = withAppAuth(
       const issue = await prisma.issue.findFirst({
         where: {
           workspaceId: context.workspace.id,
-          OR: [
-            { id: issueIdOrKey },
-            { issueKey: issueIdOrKey },
+          AND: [
+            issueReadAccessWhere(context.user.id),
+            { project: { workspaceId: context.workspace.id } },
+            { OR: [{ statusId: null }, { projectStatus: { project: { workspaceId: context.workspace.id } } }] },
+            { OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] },
           ],
         },
       });
@@ -41,6 +44,7 @@ export const GET = withAppAuth(
       const where: any = {
         itemType: 'ISSUE',
         itemId: issue.id,
+        workspaceId: context.workspace.id,
       };
 
       if (action) {
@@ -67,6 +71,7 @@ export const GET = withAppAuth(
               displayName: true,
               color: true,
               iconName: true,
+              project: { select: { workspaceId: true } },
             },
           },
           newStatus: {
@@ -76,10 +81,16 @@ export const GET = withAppAuth(
               displayName: true,
               color: true,
               iconName: true,
+              project: { select: { workspaceId: true } },
             },
           },
         },
       });
+
+      const visibleStatus = (status: (typeof activities)[number]['oldStatus']) =>
+        status && status.project.workspaceId === context.workspace.id
+          ? { id: status.id, name: status.name, displayName: status.displayName, color: status.color, iconName: status.iconName }
+          : null;
 
       return NextResponse.json({
         issueKey: issue.issueKey,
@@ -88,10 +99,11 @@ export const GET = withAppAuth(
           id: activity.id,
           action: activity.action,
           fieldName: activity.fieldName,
-          oldValue: activity.oldValue,
-          newValue: activity.newValue,
-          oldStatus: activity.oldStatus || null,
-          newStatus: activity.newStatus || null,
+          // A foreign status relation makes the corresponding historical scalar ambiguous.
+          oldValue: activity.oldStatus && !visibleStatus(activity.oldStatus) ? null : activity.oldValue,
+          newValue: activity.newStatus && !visibleStatus(activity.newStatus) ? null : activity.newValue,
+          oldStatus: visibleStatus(activity.oldStatus),
+          newStatus: visibleStatus(activity.newStatus),
           details: activity.details ? JSON.parse(activity.details) : null,
           user: activity.user,
           createdAt: activity.createdAt,

@@ -223,6 +223,10 @@ GET /api/apps/auth/issues/{issueId}
 ```
 **Required scopes:** `issues:read`
 
+#### Get Issue Activity
+
+See the authoritative [app API activity reference](../public/docs/third-party-api.md#get-issue-activity) for workspace access and historical status values.
+
 #### Update Issue
 ```http
 PATCH /api/apps/auth/issues/{issueId}
