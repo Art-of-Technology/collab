@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { runWorker, workerKey, workerConfig, budget } from '../src/worker.mjs';
 import { claudeRunner, childProcess } from '../src/worker-runner.mjs';
 import { serviceDefinition, workerService } from '../src/worker-service.mjs';
-import { store } from '../src/client.mjs';
+import { store, request } from '../src/client.mjs';
 
 function fixture(t, execute) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'collab-worker-'));
@@ -231,7 +231,7 @@ test('service installation is explicit, bounded and refuses unowned definitions'
   writeFileSync(state.service.file, preview.content);
   await workerService('worker uninstall', 'test', f.options, state, () => {}, deps);
   assert.equal(calls.length, 3);
-  assert.throws(() => serviceDefinition('test', ['executable'], '/repo', '/state', { platform: 'unsupported' }), { code: 'worker_service' });
+  assert.throws(() => serviceDefinition('test', ['executable'], '/state', { platform: 'unsupported' }), { code: 'worker_service' });
 });
 
 test('actual CLI recovers a crashed daemon with bounded restarts and an owned fake Claude child', { skip: process.platform === 'win32' }, async t => {
@@ -244,6 +244,7 @@ if(args[0]==='--version') console.log('2.1.311');
 else if(args[0]==='--help') console.log('--max-budget-usd --session-id --output-format --json-schema --restricted --permission-prompts --tools --strict-mcp-config');
 else if(args[0]==='auth') console.log(JSON.stringify({loggedIn:true}));
 else {
+  process.stdin.setEncoding('utf8');
   let input=''; for await(const b of process.stdin) input+=b;
   const session=args[args.indexOf('--session-id')+1];
   fs.writeFileSync(${JSON.stringify(capture)},JSON.stringify({args,input,hasCollab:Object.keys(process.env).some(k=>k.startsWith('COLLAB_')),session}));
@@ -282,6 +283,7 @@ else {
     const env = { ...process.env }; for (const key of Object.keys(env)) if (/^COLLAB_/i.test(key)) delete env[key];
     env.COLLAB_CONFIG_DIR = dir;
     const child = spawn(process.execPath, [bin, 'worker', ...command, '--workspace', 'ws', '--agent', 'worker'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     let output = '', errors = ''; child.stdout.on('data', b => { output += b; }); child.stderr.on('data', b => { errors += b; });
     const timer = setTimeout(() => child.kill('SIGKILL'), 10000);
     const finished = once(child, 'close').then(([code, signal]) => {
@@ -457,4 +459,136 @@ test('real Claude result classification pauses provider failures without model r
   assert.equal(paused.stopReason, 'provider_error'); assert.equal(paused.usage.estimatedUSD, 0.12);
   assert.equal(f.sessions.length, 1);
   await f.run('run'); assert.equal(f.sessions.length, 1);
+});
+
+async function configureServer(t, f, respond) {
+  const server = createServer(async (req, res) => {
+    const chunks = []; for await (const chunk of req) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    res.setHeader('content-type', 'application/json');
+    respond(req, res, body);
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
+  f.selected.base = `http://127.0.0.1:${server.address().port}`;
+  f.dependencies.api = (endpoint, extra) => request(f.selected.base, `/api/apps/auth/${endpoint}?workspaceId=ws`, { ...extra, token: f.selected.token, timeout: 250 });
+}
+
+for (const rejection of ['conversion', 'labels']) test(`confirmed ${rejection} rejection permits corrected setup without changing identity or usage`, async t => {
+  const f = fixture(t), bodies = [];
+  await configureServer(t, f, (_req, res, body) => {
+    bodies.push(body);
+    if (rejection === 'conversion' && !body.convert || rejection === 'labels' && body.labelIds?.length) {
+      res.statusCode = rejection === 'conversion' ? 409 : 400;
+      res.end(JSON.stringify({ error: rejection === 'conversion' ? 'worker_conversion_required' : 'invalid_labels' }));
+    } else res.end(JSON.stringify({ worker: { closed: true, generation: null } }));
+  });
+  await store(`worker-${workerKey(f.selected, 'user', 'worker')}`).exclusive((state, save) => { budget(state, workerConfig(f.options), Date.now(), true); save(state); });
+  const usage = f.state().usage;
+  if (rejection === 'labels') f.options['label-ids'] = '["bad-label"]';
+  await assert.rejects(f.run('setup'), e => e.details.configureRejected === true);
+  assert.equal(f.state().configure.body, undefined);
+  assert.equal(f.state().stopReason, 'configure_rejected');
+  if (rejection === 'conversion') f.options['manage-existing'] = true;
+  else f.options['label-ids'] = '[]';
+  await f.run('setup');
+  assert.equal(bodies.length, 2); assert.equal(bodies[0].sessionId, bodies[1].sessionId);
+  assert.equal(f.state().config.sessionId, bodies[0].sessionId); assert.deepEqual(f.state().usage, usage);
+});
+
+for (const outcome of ['lost-reply', 'timeout', 'server-error', 'unknown-rejection', 'invalid-response']) test(`configure ${outcome} retains the exact request until replay succeeds`, async t => {
+  const f = fixture(t), bodies = [];
+  await configureServer(t, f, (req, res, body) => {
+    bodies.push(body);
+    if (bodies.length === 1) {
+      if (outcome === 'lost-reply') { req.socket.destroy(); return; }
+      if (outcome === 'timeout') return;
+      if (outcome === 'invalid-response') { res.end('{'); return; }
+      res.statusCode = outcome === 'server-error' ? 503 : 409;
+      res.end(JSON.stringify({ error: outcome === 'server-error' ? 'invalid_labels' : 'unknown_conflict' })); return;
+    }
+    res.end(JSON.stringify({ worker: { closed: true, generation: null } }));
+  });
+  await assert.rejects(f.run('setup'));
+  assert.deepEqual(f.state().configure.body, bodies[0]);
+  f.options['manage-existing'] = true;
+  await assert.rejects(f.run('setup'), { code: 'worker_setup_pending' });
+  assert.equal(bodies.length, 1);
+  delete f.options['manage-existing'];
+  await f.run('setup');
+  assert.deepEqual(bodies[1], bodies[0]); assert.equal(f.state().configure, undefined);
+});
+
+function absentService(platform, definition) {
+  if (platform === 'linux') return { stdout: 'not-found\n', stderr: '' };
+  throw Object.assign(Error(), platform === 'darwin' ? { code: 113,
+    stderr: `Bad request.\nCould not find service "${definition.label}" in domain for user gui: 501\n` } : { code: 0x80070002 });
+}
+
+for (const platform of ['darwin', 'linux', 'win32']) {
+  for (const interrupted of ['install', 'uninstall', 'local-cleanup']) test(`${platform} teardown reconciles exact service absence after interrupted ${interrupted}`, async t => {
+    const f = fixture(t), state = { config: workerConfig(f.options) }, calls = [];
+    const dependencies = { platform, home: f.dir, uid: 501, command: ['/trusted/collab'] };
+    const definition = serviceDefinition('partial', ['/trusted/collab'], f.dir, dependencies);
+    dependencies.execute = async (command, args) => {
+      calls.push([command, args]);
+      if (interrupted === 'install') throw Object.assign(Error('fixture install failure'), { code: 5 });
+      return { stdout: '' };
+    };
+    if (interrupted === 'install') await assert.rejects(workerService('worker install', 'partial', f.options, state, () => {}, dependencies), { code: 'worker_service' });
+    else await workerService('worker install', 'partial', f.options, state, () => {}, dependencies);
+    assert.ok(state.service); assert.ok(existsSync(state.service.file));
+    if (interrupted === 'local-cleanup') rmSync(state.service.file);
+    calls.length = 0;
+    dependencies.execute = async (command, args) => {
+      calls.push([command, args]);
+      if (JSON.stringify([command, args]) === JSON.stringify(definition.inspect)) return absentService(platform, definition);
+      assert.deepEqual([command, args], definition.uninstall[0]);
+      throw Object.assign(Error('fixture removal failure'), { code: 5 });
+    };
+    assert.equal((await workerService('worker uninstall', 'partial', f.options, state, () => {}, dependencies)).uninstalled, true);
+    assert.equal(state.service, undefined); assert.equal(existsSync(definition.file), false);
+    assert.deepEqual(calls.at(-1), definition.inspect);
+    assert.equal(calls.length, interrupted === 'local-cleanup' ? 1 : 2);
+  });
+
+  for (const outcome of ['present', 'permission', 'transport', 'other-service', 'killed']) test(`${platform} teardown retains ownership after ${outcome} inspection`, async t => {
+    const f = fixture(t), state = { config: workerConfig(f.options) };
+    const dependencies = { platform, home: f.dir, uid: 501, command: ['/trusted/collab'], execute: async () => ({ stdout: '' }) };
+    await workerService('worker install', 'guarded', f.options, state, () => {}, dependencies);
+    const owned = { ...state.service }, contents = readFileSync(owned.file, 'utf8');
+    const definition = serviceDefinition('guarded', ['/trusted/collab'], f.dir, dependencies);
+    dependencies.execute = async (command, args) => {
+      if (JSON.stringify([command, args]) !== JSON.stringify(definition.inspect)) throw Object.assign(Error(), { code: 5 });
+      if (outcome === 'present') return { stdout: platform === 'linux' ? 'loaded\n' : 'present' };
+      if (outcome === 'other-service') {
+        if (platform === 'darwin') return absentService(platform, { ...definition, label: 'unrelated' });
+        if (platform === 'linux') return { stdout: 'not-found\nloaded\n' };
+        throw Object.assign(Error(), { code: 1 });
+      }
+      throw Object.assign(Error(), outcome === 'permission' ? { code: platform === 'win32' ? 0x80070005 : 5 } : outcome === 'transport' ? { code: 'ETIMEDOUT' } : { code: 0x80070002, killed: true });
+    };
+    await assert.rejects(workerService('worker uninstall', 'guarded', f.options, state, () => {}, dependencies), { code: 'worker_service' });
+    assert.deepEqual(state.service, owned); assert.equal(readFileSync(owned.file, 'utf8'), contents);
+  });
+}
+
+test('childProcess preserves UTF-8 split across real stdout chunks', async () => {
+  const value = { content: 'Evidence: İstanbul/猫/🧪.ts' };
+  const child = `const bytes = Buffer.from(${JSON.stringify(JSON.stringify(value))});
+    process.stdin.resume(); process.stdin.once('end', () => {
+      let offset = 0; const send = () => { if (offset === bytes.length) return;
+        process.stdout.write(bytes.subarray(offset, ++offset)); setTimeout(send, 4); }; send();
+    });`;
+  const result = await childProcess(process.execPath, ['-e', child]);
+  assert.equal(result.code, 0); assert.deepEqual(JSON.parse(result.output), value);
+});
+
+for (const stream of ['stdout', 'stderr']) test(`childProcess retains its combined byte bound and owned closure on ${stream}`, async t => {
+  const f = fixture(t), pidFile = path.join(f.dir, 'bounded-child.pid');
+  const child = `require('node:fs').writeFileSync(process.argv[1], String(process.pid)); process.stdin.resume();
+    process.stdin.once('end', () => { process.stdout.write(Buffer.alloc(128 * 1024, 120));
+      process.${stream}.write(Buffer.alloc(129 * 1024, 120)); setInterval(() => {}, 1000); });`;
+  await assert.rejects(childProcess(process.execPath, ['-e', child, pidFile]), { code: 'worker_output_limit' });
+  assert.throws(() => process.kill(Number(readFileSync(pidFile, 'utf8')), 0), { code: 'ESRCH' });
 });

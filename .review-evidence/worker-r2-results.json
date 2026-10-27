@@ -1,0 +1,27 @@
+[
+  {
+    "name": "focused",
+    "command": [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "packages/cli/test/worker.test.mjs",
+      "tests/security/managed-worker.test.cjs",
+      "tests/security/bootstrap-recipe.test.cjs"
+    ],
+    "exit": 0,
+    "seconds": 26.14,
+    "tail": " Subtest: psql ENOENT classification stops without baselines\nok 73 - psql ENOENT classification stops without baselines\n  ---\n  duration_ms: 102.840333\n  type: 'test'\n  ...\n# Subtest: psql ETIMEDOUT classification stops without baselines\nok 74 - psql ETIMEDOUT classification stops without baselines\n  ---\n  duration_ms: 109.589208\n  type: 'test'\n  ...\n# Subtest: managed generations fence missing/stale mutation paths and refuse expired takeover\nok 75 - managed generations fence missing/stale mutation paths and refuse expired takeover\n  ---\n  duration_ms: 169.386625\n  type: 'test'\n  ...\n# Subtest: managed own-user/workspace/scopes checks and explicit conversion preserve legacy agents\nok 76 - managed own-user/workspace/scopes checks and explicit conversion preserve legacy agents\n  ---\n  duration_ms: 60.885542\n  type: 'test'\n  ...\n# Subtest: concurrent starts admit only one generation; managed pass uses the fence\nok 77 - concurrent starts admit only one generation; managed pass uses the fence\n  ---\n  duration_ms: 44.505666\n  type: 'test'\n  ...\n# Subtest: managed health distinguishes idle daemon, working child and expired lease without task leakage\nok 78 - managed health distinguishes idle daemon, working child and expired lease without task leakage\n  ---\n  duration_ms: 0.131583\n  type: 'test'\n  ...\n# Subtest: worker HTTP endpoint validates input and retains mutation scope requirement\nok 79 - worker HTTP endpoint validates input and retains mutation scope requirement\n  ---\n  duration_ms: 121.79825\n  type: 'test'\n  ...\n# Subtest: Prisma accepts the additive optional managed state while preserving agent uniqueness\nok 80 - Prisma accepts the additive optional managed state while preserving agent uniqueness\n  ---\n  duration_ms: 33.529375\n  type: 'test'\n  ...\n# Subtest: launchd and Scheduled Task definitions parse into bounded per-user invocations\nok 81 - launchd and Scheduled Task definitions parse into bounded per-user invocations\n  ---\n  duration_ms: 3522.249667\n  type: 'test'\n  ...\n# Subtest: configure enforces registration scopes on creation, subscriptions and manual conversion\nok 82 - configure enforces registration scopes on creation, subscriptions and manual conversion\n  ---\n  duration_ms: 682.203416\n  type: 'test'\n  ...\n# Subtest: same-generation start and close retry safely but expired or closed generations never revive\nok 83 - same-generation start and close retry safely but expired or closed generations never revive\n  ---\n  duration_ms: 28.522167\n  type: 'test'\n  ...\n# Subtest: darwin supervisor configuration reaches normal pause after repository is removed\nok 84 - darwin supervisor configuration reaches normal pause after repository is removed\n  ---\n  duration_ms: 134.485667\n  type: 'test'\n  ...\n# Subtest: darwin supervisor configuration reaches normal pause after repository is moved\nok 85 - darwin supervisor configuration reaches normal pause after repository is moved\n  ---\n  duration_ms: 132.3905\n  type: 'test'\n  ...\n# Subtest: linux supervisor configuration reaches normal pause after repository is removed\nok 86 - linux supervisor configuration reaches normal pause after repository is removed\n  ---\n  duration_ms: 671.210334\n  type: 'test'\n  ...\n# Subtest: linux supervisor configuration reaches normal pause after repository is moved\nok 87 - linux supervisor configuration reaches normal pause after repository is moved\n  ---\n  duration_ms: 264.323917\n  type: 'test'\n  ...\n# Subtest: win32 supervisor configuration reaches normal pause after repository is removed\nok 88 - win32 supervisor configuration reaches normal pause after repository is removed\n  ---\n  duration_ms: 246.329958\n  type: 'test'\n  ...\n# Subtest: win32 supervisor configuration reaches normal pause after repository is moved\nok 89 - win32 supervisor configuration reaches normal pause after repository is moved\n  ---\n  duration_ms: 155.79375\n  type: 'test'\n  ...\n1..89\n# tests 89\n# suites 0\n# pass 89\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 26081.017\n"
+  },
+  {
+    "name": "types",
+    "command": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "--noEmit"
+    ],
+    "exit": 0,
+    "seconds": 59.46,
+    "tail": ""
+  }
+]

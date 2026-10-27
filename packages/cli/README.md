@@ -361,7 +361,9 @@ Setup checks the runner without invoking a model and does not start it. Use a ne
 agent name, or explicitly use `--manage-existing` after stopping the old watcher
 and resolving its claimed work. Existing labels are preserved unless the full
 replacement `--label-ids '["LABEL_ID"]'` is supplied. Setup does not reset usage. If its response is lost, repeat the same setup options;
-the saved configuration intent retains the original session identity.
+the saved configuration intent retains the original session identity. A confirmed
+conversion or label validation rejection lets you correct those setup options while
+keeping that identity and usage; uncertain responses still require the exact request.
 A managed host/session identity is stable; every admitted child gets a fresh UUID.
 The daemon claims before launching a dedicated child, owns its process handle and
 pipes, and posts validated structured results. Remote handoff content travels on
@@ -426,12 +428,17 @@ Installation is explicit and starts the configured worker: launchd LaunchAgent o
 macOS, systemd user service on Linux, interactive user Scheduled Task on Windows.
 It neither changes machine-wide services nor enables Linux user lingering. Login
 startup therefore requires the user session. Unsupported platforms fail explicitly.
+The daemon starts in its private configuration directory; only runner operations use
+the repository directory. A missing repository therefore produces a normal config
+pause instead of failing before the daemon can start.
 Dry-run returns the exact definition and supervisor commands without writes. Stop
 uses the private authenticated daemon control endpoint and confirms owned closure;
 it never signals a remembered PID. Stop the foreground daemon before uninstalling.
 Uninstall verifies the saved definition path, label and ownership hash, even if the
 repository or Claude executable has moved or disappeared. Uninstall before changing
-setup while a service is recorded.
+setup while a service is recorded. If installation failed or teardown was interrupted,
+uninstall also accepts confirmed absence of the exact recorded service. Permission,
+transport and unrecognized supervisor errors retain the ownership record.
 The durable daemon restart allowance bounds OS recovery and also counts manual
 restarts conservatively. Unexpected process failures retain a nonzero exit;
 expired login and permanent configuration failures report a normal paused exit. Normal paused exits do not trigger an infinite

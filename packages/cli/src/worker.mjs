@@ -91,11 +91,17 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       const labelIds = options['label-ids'] === undefined ? undefined : JSON.parse(options['label-ids']);
       const body = { agent: options.agent, host: config.host, sessionId: config.sessionId, event: 'configure',
         ...(options['manage-existing'] && { convert: true }), ...(labelIds && { labelIds }) };
-      if (state.configure && (JSON.stringify(state.configure.config) !== JSON.stringify(config) || JSON.stringify(state.configure.body) !== JSON.stringify(body))) {
+      if (state.configure?.body && (JSON.stringify(state.configure.config) !== JSON.stringify(config) || JSON.stringify(state.configure.body) !== JSON.stringify(body))) {
         throw fail('worker_setup_pending', 'Retry setup with the same options to reconcile its saved configuration intent.');
       }
       state.configure = { config, body }; state.status = 'config'; state.stopReason = 'configure_unconfirmed'; save(state);
-      await api('agents/worker', { method: 'POST', body });
+      try { await api('agents/worker', { method: 'POST', body }); }
+      catch (error) {
+        if (error.details?.configureRejected === true) {
+          delete state.configure.body; state.stopReason = 'configure_rejected'; save(state);
+        }
+        throw error;
+      }
       state.config = config; delete state.configure; state.status = 'stopped'; state.stopReason = null; save(state);
       return { ...summary(state), started: false };
     }

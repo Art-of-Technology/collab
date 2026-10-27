@@ -114,18 +114,20 @@ test('launchd and Scheduled Task definitions parse into bounded per-user invocat
   const { JSDOM } = require('jsdom');
   const { serviceDefinition } = await import('../../packages/cli/src/worker-service.mjs');
   const args = ['/trusted/worker & tool', 'worker', 'run', '--agent', 'a'];
-  const mac = serviceDefinition('identity', args, '/repo & files', '/private state', { platform: 'darwin', home: '/user', uid: 501 });
+  const mac = serviceDefinition('identity', args, '/private state', { platform: 'darwin', home: '/user', uid: 501 });
   const document = new JSDOM(mac.content, { contentType: 'text/xml' }).window.document;
   assert.equal(document.querySelector('parsererror'), null);
   const entries = [...document.querySelector('plist > dict').children];
   const dictionary = new Map();
   for (let i = 0; i < entries.length; i += 2) dictionary.set(entries[i].textContent, entries[i + 1]);
   assert.deepEqual([...dictionary.get('ProgramArguments').children].map(value => value.textContent), args);
+  assert.equal(dictionary.get('WorkingDirectory').textContent, '/private state');
   assert.equal(dictionary.get('ThrottleInterval').textContent, '30');
   assert.equal(dictionary.get('KeepAlive').querySelector('false')?.tagName, 'false');
-  const win = serviceDefinition('identity', args, '/repo', '/state', { platform: 'win32' });
+  const win = serviceDefinition('identity', args, '/state', { platform: 'win32' });
   const task = new JSDOM(win.content, { contentType: 'text/xml' }).window.document;
   assert.equal(task.querySelector('Command').textContent, args[0]);
+  assert.equal(task.querySelector('WorkingDirectory').textContent, '/state');
   assert.equal(task.querySelector('LogonType').textContent, 'InteractiveToken');
   assert.equal(task.querySelector('RunLevel').textContent, 'LeastPrivilege');
   assert.equal(task.querySelector('RestartOnFailure Count').textContent, '3');
@@ -157,4 +159,62 @@ test('same-generation start and close retry safely but expired or closed generat
   await f.manage('close', generation); await f.manage('close', generation);
   for (const event of ['start', 'renew']) await assert.rejects(f.manage(event, generation), e => e.code === 'worker_fenced');
   await f.manage('start', randomUUID());
+});
+
+for (const platform of ['darwin', 'linux', 'win32']) for (const change of ['removed', 'moved']) test(`${platform} supervisor configuration reaches normal pause after repository is ${change}`, async t => {
+  const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
+  const { spawn } = require('node:child_process'), { once } = require('node:events');
+  const { JSDOM } = require('jsdom');
+  const { workerConfig, workerKey } = await import('../../packages/cli/src/worker.mjs');
+  const { workerService } = await import('../../packages/cli/src/worker-service.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-service-start-')), repo = path.join(dir, 'repository');
+  const previous = process.env.COLLAB_CONFIG_DIR; process.env.COLLAB_CONFIG_DIR = dir;
+  t.after(() => { if (previous === undefined) delete process.env.COLLAB_CONFIG_DIR; else process.env.COLLAB_CONFIG_DIR = previous; fs.rmSync(dir, { recursive: true, force: true }); });
+  fs.mkdirSync(repo);
+  const bin = path.resolve(__dirname, '../../packages/cli/bin/collab.mjs');
+  const options = { agent: 'worker', workspace: 'ws', host: 'laptop', cwd: repo, claude: process.execPath, 'dry-run': true };
+  const selected = { base: 'http://127.0.0.1:1', workspace: 'ws' }, identity = workerKey(selected, 'owner', 'worker');
+  const state = { config: workerConfig(options), status: 'stopped' };
+  fs.writeFileSync(path.join(dir, 'default.json'), JSON.stringify({ origin: selected.base, userId: 'owner', accessToken: 'FIXTURE', expiresAt: Date.now() + 60000 }), { mode: 0o600 });
+  const stateFile = path.join(dir, `worker-${identity}.json`);
+  fs.writeFileSync(stateFile, JSON.stringify(state), { mode: 0o600 });
+  const definition = await workerService('worker install', identity, options, state, () => assert.fail('dry-run saved state'), {
+    platform, home: dir, uid: 501, command: [process.execPath, bin], execute: async () => assert.fail('dry-run touched supervisor'),
+  });
+  let cwd, argv;
+  if (platform === 'linux') {
+    const unit = new Map(definition.content.split('\n').filter(line => line.includes('=')).map(line => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]));
+    cwd = JSON.parse(unit.get('WorkingDirectory'));
+    argv = Array.from(unit.get('ExecStart').slice(1).matchAll(/"(?:\\.|[^"\\])*"/g), match => JSON.parse(match[0]));
+    assert.equal(unit.get('Restart'), 'on-failure');
+  } else {
+    const doc = new JSDOM(definition.content, { contentType: 'text/xml' }).window.document;
+    assert.equal(doc.querySelector('parsererror'), null);
+    if (platform === 'darwin') {
+      const entries = [...doc.querySelector('plist > dict').children], dict = new Map();
+      for (let i = 0; i < entries.length; i += 2) dict.set(entries[i].textContent, entries[i + 1]);
+      cwd = dict.get('WorkingDirectory').textContent;
+      argv = [...dict.get('ProgramArguments').children].map(value => value.textContent);
+      assert.equal(dict.get('KeepAlive').querySelector('false').tagName, 'false');
+    } else {
+      cwd = doc.querySelector('WorkingDirectory').textContent;
+      argv = [doc.querySelector('Command').textContent, ...Array.from(doc.querySelector('Arguments').textContent.matchAll(/"([^"]*)"/g), match => match[1])];
+      assert.equal(doc.querySelector('RestartOnFailure Count').textContent, '3');
+    }
+  }
+  assert.equal(cwd, dir);
+  assert.deepEqual(argv, [process.execPath, bin, 'worker', 'run', '--agent', 'worker', '--workspace', 'ws', '--config-dir', dir]);
+  if (change === 'removed') fs.rmSync(repo, { recursive: true }); else fs.renameSync(repo, path.join(dir, 'moved'));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^COLLAB_/i.test(key)));
+  const child = spawn(argv[0], argv.slice(1), { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
+  let stdout = '', stderr = '';
+  child.stdout.on('data', chunk => { stdout += chunk; }); child.stderr.on('data', chunk => { stderr += chunk; });
+  const timeout = setTimeout(() => child.kill('SIGKILL'), 5000);
+  const [code] = await once(child, 'close'); clearTimeout(timeout);
+  assert.equal(code, 0, stderr);
+  const result = JSON.parse(stdout);
+  assert.equal(result.state, 'config'); assert.equal(result.stopReason, 'worker_config');
+  const saved = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+  assert.equal(saved.status, 'config'); assert.equal(saved.runId, undefined); assert.equal(saved.daemonStartedAt, undefined);
 });

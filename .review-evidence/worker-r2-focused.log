@@ -1,0 +1,544 @@
+TAP version 13
+# Subtest: worker setup/run claims before an owned session and suppresses completed duplicates
+ok 1 - worker setup/run claims before an owned session and suppresses completed duplicates
+  ---
+  duration_ms: 595.207667
+  type: 'test'
+  ...
+# Subtest: missing result keeps the reservation and daemon restart never repeats dispatch
+ok 2 - missing result keeps the reservation and daemon restart never repeats dispatch
+  ---
+  duration_ms: 246.221917
+  type: 'test'
+  ...
+# Subtest: provider budget exhaustion charges failed usage and pauses without retry
+ok 3 - provider budget exhaustion charges failed usage and pauses without retry
+  ---
+  duration_ms: 358.339625
+  type: 'test'
+  ...
+# Subtest: closed child without durable result remains uncertain across restart
+ok 4 - closed child without durable result remains uncertain across restart
+  ---
+  duration_ms: 64.346375
+  type: 'test'
+  ...
+# Subtest: losing a claim race refunds the unused reservation and continues without a child
+ok 5 - losing a claim race refunds the unused reservation and continues without a child
+  ---
+  duration_ms: 256.74
+  type: 'test'
+  ...
+# Subtest: unproven child closure stays blocked and never releases remote ownership
+ok 6 - unproven child closure stays blocked and never releases remote ownership
+  ---
+  duration_ms: 104.64675
+  type: 'test'
+  ...
+# Subtest: persisted reservation before dispatch resumes once without double charging
+ok 7 - persisted reservation before dispatch resumes once without double charging
+  ---
+  duration_ms: 318.0155
+  type: 'test'
+  ...
+# Subtest: saved validated result reconciles completion without relaunching a child
+ok 8 - saved validated result reconciles completion without relaunching a child
+  ---
+  duration_ms: 204.515833
+  type: 'test'
+  ...
+# Subtest: transient reads recover; auth pauses without retrying or invoking the model
+ok 9 - transient reads recover; auth pauses without retrying or invoking the model
+  ---
+  duration_ms: 478.356958
+  type: 'test'
+  ...
+# Subtest: owned control stop waits for child closure and refuses competing runs
+ok 10 - owned control stop waits for child closure and refuses competing runs
+  ---
+  duration_ms: 3379.077916
+  type: 'test'
+  ...
+# Subtest: daily ledger, reservations and clock rollback cannot mint spend
+ok 11 - daily ledger, reservations and clock rollback cannot mint spend
+  ---
+  duration_ms: 0.25225
+  type: 'test'
+  ...
+# Subtest: runner validates owned result/session/usage and sends content only on stdin
+ok 12 - runner validates owned result/session/usage and sends content only on stdin
+  ---
+  duration_ms: 30.726541
+  type: 'test'
+  ...
+# Subtest: doctor refuses unsupported budget capabilities before executing work
+ok 13 - doctor refuses unsupported budget capabilities before executing work
+  ---
+  duration_ms: 1.143542
+  type: 'test'
+  ...
+# Subtest: service installation is explicit, bounded and refuses unowned definitions
+ok 14 - service installation is explicit, bounded and refuses unowned definitions
+  ---
+  duration_ms: 3.677625
+  type: 'test'
+  ...
+# Subtest: actual CLI recovers a crashed daemon with bounded restarts and an owned fake Claude child
+ok 15 - actual CLI recovers a crashed daemon with bounded restarts and an owned fake Claude child
+  ---
+  duration_ms: 2786.898458
+  type: 'test'
+  ...
+# Subtest: configure intent survives a lost response and preserves identity and budget
+ok 16 - configure intent survives a lost response and preserves identity and budget
+  ---
+  duration_ms: 79.163042
+  type: 'test'
+  ...
+# Subtest: serialized lease renewals survive lost replies throughout idle
+ok 17 - serialized lease renewals survive lost replies throughout idle
+  ---
+  duration_ms: 177.018584
+  type: 'test'
+  ...
+# Subtest: serialized lease renewals survive lost replies throughout pre-dispatch
+ok 18 - serialized lease renewals survive lost replies throughout pre-dispatch
+  ---
+  duration_ms: 464.648916
+  type: 'test'
+  ...
+# Subtest: serialized lease renewals survive lost replies throughout model
+ok 19 - serialized lease renewals survive lost replies throughout model
+  ---
+  duration_ms: 503.377125
+  type: 'test'
+  ...
+# Subtest: serialized lease renewals survive lost replies throughout usage-limit
+ok 20 - serialized lease renewals survive lost replies throughout usage-limit
+  ---
+  duration_ms: 245.103042
+  type: 'test'
+  ...
+# Subtest: unknown claim is not retried and never launches a model on restart
+ok 21 - unknown claim is not retried and never launches a model on restart
+  ---
+  duration_ms: 234.84525
+  type: 'test'
+  ...
+# Subtest: uncertain result settlement reconciles without repeating work (committed=false)
+ok 22 - uncertain result settlement reconciles without repeating work (committed=false)
+  ---
+  duration_ms: 1035.666417
+  type: 'test'
+  ...
+# Subtest: uncertain result settlement reconciles without repeating work (committed=true)
+ok 23 - uncertain result settlement reconciles without repeating work (committed=true)
+  ---
+  duration_ms: 431.792375
+  type: 'test'
+  ...
+# Subtest: inbox cleanup drains terminal and other-owned pages without spending
+ok 24 - inbox cleanup drains terminal and other-owned pages without spending
+  ---
+  duration_ms: 118.8105
+  type: 'test'
+  ...
+# Subtest: uninstall uses saved ownership after runner paths disappear; setup cannot orphan it
+ok 25 - uninstall uses saved ownership after runner paths disappear; setup cannot orphan it
+  ---
+  duration_ms: 74.215125
+  type: 'test'
+  ...
+# Subtest: real Claude result classification pauses provider failures without model retry
+ok 26 - real Claude result classification pauses provider failures without model retry
+  ---
+  duration_ms: 289.018833
+  type: 'test'
+  ...
+# Subtest: confirmed conversion rejection permits corrected setup without changing identity or usage
+ok 27 - confirmed conversion rejection permits corrected setup without changing identity or usage
+  ---
+  duration_ms: 76.231
+  type: 'test'
+  ...
+# Subtest: confirmed labels rejection permits corrected setup without changing identity or usage
+ok 28 - confirmed labels rejection permits corrected setup without changing identity or usage
+  ---
+  duration_ms: 67.044708
+  type: 'test'
+  ...
+# Subtest: configure lost-reply retains the exact request until replay succeeds
+ok 29 - configure lost-reply retains the exact request until replay succeeds
+  ---
+  duration_ms: 56.118333
+  type: 'test'
+  ...
+# Subtest: configure timeout retains the exact request until replay succeeds
+ok 30 - configure timeout retains the exact request until replay succeeds
+  ---
+  duration_ms: 303.364
+  type: 'test'
+  ...
+# Subtest: configure server-error retains the exact request until replay succeeds
+ok 31 - configure server-error retains the exact request until replay succeeds
+  ---
+  duration_ms: 63.750125
+  type: 'test'
+  ...
+# Subtest: configure unknown-rejection retains the exact request until replay succeeds
+ok 32 - configure unknown-rejection retains the exact request until replay succeeds
+  ---
+  duration_ms: 55.517166
+  type: 'test'
+  ...
+# Subtest: configure invalid-response retains the exact request until replay succeeds
+ok 33 - configure invalid-response retains the exact request until replay succeeds
+  ---
+  duration_ms: 60.134
+  type: 'test'
+  ...
+# Subtest: darwin teardown reconciles exact service absence after interrupted install
+ok 34 - darwin teardown reconciles exact service absence after interrupted install
+  ---
+  duration_ms: 5.545709
+  type: 'test'
+  ...
+# Subtest: darwin teardown reconciles exact service absence after interrupted uninstall
+ok 35 - darwin teardown reconciles exact service absence after interrupted uninstall
+  ---
+  duration_ms: 11.928292
+  type: 'test'
+  ...
+# Subtest: darwin teardown reconciles exact service absence after interrupted local-cleanup
+ok 36 - darwin teardown reconciles exact service absence after interrupted local-cleanup
+  ---
+  duration_ms: 10.902
+  type: 'test'
+  ...
+# Subtest: darwin teardown retains ownership after present inspection
+ok 37 - darwin teardown retains ownership after present inspection
+  ---
+  duration_ms: 4.059
+  type: 'test'
+  ...
+# Subtest: darwin teardown retains ownership after permission inspection
+ok 38 - darwin teardown retains ownership after permission inspection
+  ---
+  duration_ms: 5.07475
+  type: 'test'
+  ...
+# Subtest: darwin teardown retains ownership after transport inspection
+ok 39 - darwin teardown retains ownership after transport inspection
+  ---
+  duration_ms: 3.9835
+  type: 'test'
+  ...
+# Subtest: darwin teardown retains ownership after other-service inspection
+ok 40 - darwin teardown retains ownership after other-service inspection
+  ---
+  duration_ms: 4.273083
+  type: 'test'
+  ...
+# Subtest: darwin teardown retains ownership after killed inspection
+ok 41 - darwin teardown retains ownership after killed inspection
+  ---
+  duration_ms: 2.69275
+  type: 'test'
+  ...
+# Subtest: linux teardown reconciles exact service absence after interrupted install
+ok 42 - linux teardown reconciles exact service absence after interrupted install
+  ---
+  duration_ms: 3.796584
+  type: 'test'
+  ...
+# Subtest: linux teardown reconciles exact service absence after interrupted uninstall
+ok 43 - linux teardown reconciles exact service absence after interrupted uninstall
+  ---
+  duration_ms: 7.191
+  type: 'test'
+  ...
+# Subtest: linux teardown reconciles exact service absence after interrupted local-cleanup
+ok 44 - linux teardown reconciles exact service absence after interrupted local-cleanup
+  ---
+  duration_ms: 6.222958
+  type: 'test'
+  ...
+# Subtest: linux teardown retains ownership after present inspection
+ok 45 - linux teardown retains ownership after present inspection
+  ---
+  duration_ms: 5.082584
+  type: 'test'
+  ...
+# Subtest: linux teardown retains ownership after permission inspection
+ok 46 - linux teardown retains ownership after permission inspection
+  ---
+  duration_ms: 3.803959
+  type: 'test'
+  ...
+# Subtest: linux teardown retains ownership after transport inspection
+ok 47 - linux teardown retains ownership after transport inspection
+  ---
+  duration_ms: 3.502458
+  type: 'test'
+  ...
+# Subtest: linux teardown retains ownership after other-service inspection
+ok 48 - linux teardown retains ownership after other-service inspection
+  ---
+  duration_ms: 2.149166
+  type: 'test'
+  ...
+# Subtest: linux teardown retains ownership after killed inspection
+ok 49 - linux teardown retains ownership after killed inspection
+  ---
+  duration_ms: 2.51025
+  type: 'test'
+  ...
+# Subtest: win32 teardown reconciles exact service absence after interrupted install
+ok 50 - win32 teardown reconciles exact service absence after interrupted install
+  ---
+  duration_ms: 1.0325
+  type: 'test'
+  ...
+# Subtest: win32 teardown reconciles exact service absence after interrupted uninstall
+ok 51 - win32 teardown reconciles exact service absence after interrupted uninstall
+  ---
+  duration_ms: 1.066375
+  type: 'test'
+  ...
+# Subtest: win32 teardown reconciles exact service absence after interrupted local-cleanup
+ok 52 - win32 teardown reconciles exact service absence after interrupted local-cleanup
+  ---
+  duration_ms: 0.92825
+  type: 'test'
+  ...
+# Subtest: win32 teardown retains ownership after present inspection
+ok 53 - win32 teardown retains ownership after present inspection
+  ---
+  duration_ms: 2.654667
+  type: 'test'
+  ...
+# Subtest: win32 teardown retains ownership after permission inspection
+ok 54 - win32 teardown retains ownership after permission inspection
+  ---
+  duration_ms: 0.784583
+  type: 'test'
+  ...
+# Subtest: win32 teardown retains ownership after transport inspection
+ok 55 - win32 teardown retains ownership after transport inspection
+  ---
+  duration_ms: 0.830041
+  type: 'test'
+  ...
+# Subtest: win32 teardown retains ownership after other-service inspection
+ok 56 - win32 teardown retains ownership after other-service inspection
+  ---
+  duration_ms: 0.669417
+  type: 'test'
+  ...
+# Subtest: win32 teardown retains ownership after killed inspection
+ok 57 - win32 teardown retains ownership after killed inspection
+  ---
+  duration_ms: 1.236917
+  type: 'test'
+  ...
+# Subtest: childProcess preserves UTF-8 split across real stdout chunks
+ok 58 - childProcess preserves UTF-8 split across real stdout chunks
+  ---
+  duration_ms: 332.617542
+  type: 'test'
+  ...
+# Subtest: childProcess retains its combined byte bound and owned closure on stdout
+ok 59 - childProcess retains its combined byte bound and owned closure on stdout
+  ---
+  duration_ms: 33.76875
+  type: 'test'
+  ...
+# Subtest: childProcess retains its combined byte bound and owned closure on stderr
+ok 60 - childProcess retains its combined byte bound and owned closure on stderr
+  ---
+  duration_ms: 29.450916
+  type: 'test'
+  ...
+# Subtest: actual bootstrap CLI emits one guarded schema transaction with exact supplements then ordered native baselines
+ok 61 - actual bootstrap CLI emits one guarded schema transaction with exact supplements then ordered native baselines
+  ---
+  duration_ms: 171.643208
+  type: 'test'
+  ...
+# Subtest: changed schema refuses before generation or connection
+ok 62 - changed schema refuses before generation or connection
+  ---
+  duration_ms: 122.914125
+  type: 'test'
+  ...
+# Subtest: changed migration refuses before generation or connection
+ok 63 - changed migration refuses before generation or connection
+  ---
+  duration_ms: 87.315959
+  type: 'test'
+  ...
+# Subtest: changed added-history refuses before generation or connection
+ok 64 - changed added-history refuses before generation or connection
+  ---
+  duration_ms: 84.564709
+  type: 'test'
+  ...
+# Subtest: changed removed-history refuses before generation or connection
+ok 65 - changed removed-history refuses before generation or connection
+  ---
+  duration_ms: 73.005291
+  type: 'test'
+  ...
+# Subtest: changed cli refuses before generation or connection
+ok 66 - changed cli refuses before generation or connection
+  ---
+  duration_ms: 141.708625
+  type: 'test'
+  ...
+# Subtest: nonempty does not retry, reset or guess successful baselining
+ok 67 - nonempty does not retry, reset or guess successful baselining
+  ---
+  duration_ms: 124.543167
+  type: 'test'
+  ...
+# Subtest: lost does not retry, reset or guess successful baselining
+ok 68 - lost does not retry, reset or guess successful baselining
+  ---
+  duration_ms: 171.875333
+  type: 'test'
+  ...
+# Subtest: diff does not retry, reset or guess successful baselining
+ok 69 - diff does not retry, reset or guess successful baselining
+  ---
+  duration_ms: 154.49075
+  type: 'test'
+  ...
+# Subtest: resolve does not retry, reset or guess successful baselining
+ok 70 - resolve does not retry, reset or guess successful baselining
+  ---
+  duration_ms: 525.24175
+  type: 'test'
+  ...
+# Subtest: invalid intent and unsupported target options never generate or connect
+ok 71 - invalid intent and unsupported target options never generate or connect
+  ---
+  duration_ms: 344.367916
+  type: 'test'
+  ...
+# Subtest: transport must be explicit and remote plaintext refuses before child processes
+ok 72 - transport must be explicit and remote plaintext refuses before child processes
+  ---
+  duration_ms: 543.127833
+  type: 'test'
+  ...
+# Subtest: psql ENOENT classification stops without baselines
+ok 73 - psql ENOENT classification stops without baselines
+  ---
+  duration_ms: 102.840333
+  type: 'test'
+  ...
+# Subtest: psql ETIMEDOUT classification stops without baselines
+ok 74 - psql ETIMEDOUT classification stops without baselines
+  ---
+  duration_ms: 109.589208
+  type: 'test'
+  ...
+# Subtest: managed generations fence missing/stale mutation paths and refuse expired takeover
+ok 75 - managed generations fence missing/stale mutation paths and refuse expired takeover
+  ---
+  duration_ms: 169.386625
+  type: 'test'
+  ...
+# Subtest: managed own-user/workspace/scopes checks and explicit conversion preserve legacy agents
+ok 76 - managed own-user/workspace/scopes checks and explicit conversion preserve legacy agents
+  ---
+  duration_ms: 60.885542
+  type: 'test'
+  ...
+# Subtest: concurrent starts admit only one generation; managed pass uses the fence
+ok 77 - concurrent starts admit only one generation; managed pass uses the fence
+  ---
+  duration_ms: 44.505666
+  type: 'test'
+  ...
+# Subtest: managed health distinguishes idle daemon, working child and expired lease without task leakage
+ok 78 - managed health distinguishes idle daemon, working child and expired lease without task leakage
+  ---
+  duration_ms: 0.131583
+  type: 'test'
+  ...
+# Subtest: worker HTTP endpoint validates input and retains mutation scope requirement
+ok 79 - worker HTTP endpoint validates input and retains mutation scope requirement
+  ---
+  duration_ms: 121.79825
+  type: 'test'
+  ...
+# Subtest: Prisma accepts the additive optional managed state while preserving agent uniqueness
+ok 80 - Prisma accepts the additive optional managed state while preserving agent uniqueness
+  ---
+  duration_ms: 33.529375
+  type: 'test'
+  ...
+# Subtest: launchd and Scheduled Task definitions parse into bounded per-user invocations
+ok 81 - launchd and Scheduled Task definitions parse into bounded per-user invocations
+  ---
+  duration_ms: 3522.249667
+  type: 'test'
+  ...
+# Subtest: configure enforces registration scopes on creation, subscriptions and manual conversion
+ok 82 - configure enforces registration scopes on creation, subscriptions and manual conversion
+  ---
+  duration_ms: 682.203416
+  type: 'test'
+  ...
+# Subtest: same-generation start and close retry safely but expired or closed generations never revive
+ok 83 - same-generation start and close retry safely but expired or closed generations never revive
+  ---
+  duration_ms: 28.522167
+  type: 'test'
+  ...
+# Subtest: darwin supervisor configuration reaches normal pause after repository is removed
+ok 84 - darwin supervisor configuration reaches normal pause after repository is removed
+  ---
+  duration_ms: 134.485667
+  type: 'test'
+  ...
+# Subtest: darwin supervisor configuration reaches normal pause after repository is moved
+ok 85 - darwin supervisor configuration reaches normal pause after repository is moved
+  ---
+  duration_ms: 132.3905
+  type: 'test'
+  ...
+# Subtest: linux supervisor configuration reaches normal pause after repository is removed
+ok 86 - linux supervisor configuration reaches normal pause after repository is removed
+  ---
+  duration_ms: 671.210334
+  type: 'test'
+  ...
+# Subtest: linux supervisor configuration reaches normal pause after repository is moved
+ok 87 - linux supervisor configuration reaches normal pause after repository is moved
+  ---
+  duration_ms: 264.323917
+  type: 'test'
+  ...
+# Subtest: win32 supervisor configuration reaches normal pause after repository is removed
+ok 88 - win32 supervisor configuration reaches normal pause after repository is removed
+  ---
+  duration_ms: 246.329958
+  type: 'test'
+  ...
+# Subtest: win32 supervisor configuration reaches normal pause after repository is moved
+ok 89 - win32 supervisor configuration reaches normal pause after repository is moved
+  ---
+  duration_ms: 155.79375
+  type: 'test'
+  ...
+1..89
+# tests 89
+# suites 0
+# pass 89
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 26081.017

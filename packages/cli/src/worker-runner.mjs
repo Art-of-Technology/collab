@@ -10,7 +10,8 @@ export function workerEnvironment() {
 export function childProcess(executable, args, { cwd, input = '', signal, timeout = 20000, onSpawn = () => {} } = {}) {
   signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
-    let output = '', size = 0, error, killTimer;
+    const output = [];
+    let size = 0, error, killTimer;
     const child = spawn(executable, args, { cwd, env: workerEnvironment(), shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     const stop = reason => { error ||= reason; child.kill(); killTimer ||= setTimeout(() => child.kill('SIGKILL'), 2000); };
     const cancel = () => stop(signal.reason);
@@ -19,11 +20,11 @@ export function childProcess(executable, args, { cwd, input = '', signal, timeou
     child.once('spawn', () => { try { onSpawn(); } catch (e) { stop(e); } });
     child.on('error', () => { error ||= failure('runner_unavailable'); });
     child.stdin.on('error', () => { error ||= failure('worker_uncertain'); });
-    child.stdout.on('data', chunk => { size += chunk.length; if (size > 256 * 1024) stop(failure('worker_output_limit')); else output += chunk; });
+    child.stdout.on('data', chunk => { size += chunk.length; if (size > 256 * 1024) stop(failure('worker_output_limit')); else output.push(chunk); });
     child.stderr.on('data', chunk => { size += chunk.length; if (size > 256 * 1024) stop(failure('worker_output_limit')); });
     child.once('close', (code, exitSignal) => {
       clearTimeout(timer); clearTimeout(killTimer); signal?.removeEventListener('abort', cancel);
-      if (error) reject(error); else resolve({ code, exitSignal, output });
+      if (error) reject(error); else resolve({ code, exitSignal, output: Buffer.concat(output).toString('utf8') });
     });
     child.stdin.end(input);
     if (signal?.aborted) cancel();
