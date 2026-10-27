@@ -272,6 +272,25 @@ GET /api/apps/auth/issues/{issueId}
 ```
 **Required scopes:** `issues:read`
 
+#### Get Issue Activity
+```http
+GET /api/apps/auth/issues/{issueIdOrKey}/activity
+```
+**Required scopes:** `issues:read`
+
+The issue must be readable by the authenticated user, and the issue, its project,
+and any linked current status's project must belong to the authenticated workspace.
+A missing or inaccessible issue, including one with a foreign project or current
+status relation, returns HTTP 404 (`not_found`), even for users who belong to both
+workspaces. Existing authentication and workspace-access errors still apply.
+
+Only activity rows belonging to that issue and authenticated workspace are returned;
+historical rows with no project relation remain eligible. Each `oldStatus` or
+`newStatus` is returned only when its project's workspace matches. A present foreign
+status relation makes both that status object and its corresponding `oldValue` or
+`newValue` null. An absent or deleted status relation leaves the historical scalar
+value intact. This filtering does not sanitize arbitrary content in `details`.
+
 #### Update Issue
 ```http
 PATCH /api/apps/auth/issues/{issueId}
