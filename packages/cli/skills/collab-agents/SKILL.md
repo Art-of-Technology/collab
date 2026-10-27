@@ -124,7 +124,7 @@ Require the host to provide and verify its adapter; never substitute a guessed
 command, shell-evaluate handoff content, or assume background polling wakes a
 model. The supervisor owns subsequent watch windows.
 
-Pass the registered `--host HOST_LABEL --session-id ACTUAL_SESSION_ID` to `inbox watch` to publish health. Keep exactly one watcher per binding. Check `agents list` or the web Agent inbox for running/stale/stopped/error, last poll and last successful wake callback. Missing health is not reported; a running watcher becomes stale after five minutes without a heartbeat. Last successful callback means the host accepted delivery, not that the model started or finished. Confirm actual claims/replies separately. Health/auth errors stop the watcher; inspect the cause before restarting. The CLI does not install a supervisor or start a stopped model.
+Pass the registered `--host HOST_LABEL --session-id ACTUAL_SESSION_ID` to `inbox watch` to publish health. Keep exactly one watcher per binding. Check `agents list` or the web Agent inbox for running/stale/stopped/error, last poll and last successful wake callback. Missing health is not reported; a running watcher becomes stale after five minutes without a heartbeat. Last successful callback means the host accepted delivery, not that the model started or finished. Confirm actual claims/replies separately. Health/auth errors stop the watcher; inspect the cause before restarting.
 
 On wake, use the same startup workflow: recover claimed work, inspect unseen
 handoffs, read current issue context, claim before acting, then report progress

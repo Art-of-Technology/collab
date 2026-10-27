@@ -5,4 +5,3 @@ Prisma schema loaded from prisma/schema.prisma
 Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
 
 Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
-
