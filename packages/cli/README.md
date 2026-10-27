@@ -345,7 +345,8 @@ over a live or expired-but-unclosed run. Re-registration cannot remove this fenc
 
 Install Claude Code 2.1.311 or later in the 2.x line and log in separately with its
 supported authentication. The worker never logs in or refreshes credentials.
-Use an existing saved Collab CLI login with issues read/write access. Each computer
+Use an existing saved Collab CLI login with issues read/write access and workspace
+write access for setup (including subscription changes and manual conversion). Each computer
 runs its own local worker with a stable agent name and explicit workspace.
 
 ```sh
@@ -359,7 +360,8 @@ collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
 Setup checks the runner without invoking a model and does not start it. Use a new
 agent name, or explicitly use `--manage-existing` after stopping the old watcher
 and resolving its claimed work. Existing labels are preserved unless the full
-replacement `--label-ids '["LABEL_ID"]'` is supplied. Setup does not reset usage.
+replacement `--label-ids '["LABEL_ID"]'` is supplied. Setup does not reset usage. If its response is lost, repeat the same setup options;
+the saved configuration intent retains the original session identity.
 A managed host/session identity is stable; every admitted child gets a fresh UUID.
 The daemon claims before launching a dedicated child, owns its process handle and
 pipes, and posts validated structured results. Remote handoff content travels on
@@ -381,6 +383,9 @@ Defaults: `--attempt-usd 0.50`, `--daily-usd 2`, `--timeout-seconds 900`,
 budget. Each attempt reserves its full estimate before dispatch. Known usage
 reconciles it; missing usage stays charged and visible as reserved/unknown.
 The ledger survives setup, daemon restarts and same-day configuration changes.
+Budgets apply per configured worker in its private state directory on this host,
+not across an organisation or provider account. Other workers and hosts have
+independent daily allowances.
 UTC rollover admits a new daily allowance while retaining outstanding totals;
 a clock rollback pauses admission. Costs are client estimates, can overshoot a
 provider request, and are not invoice caps. See [Claude CLI reference](https://code.claude.com/docs/en/cli-reference)
@@ -390,7 +395,10 @@ Status shows run/task/session IDs, heartbeat, stop reason, token/cache counts,
 estimated, reserved and unknown USD. It remains readable after login expiry.
 The existing agent inbox and organisation floor show daemon lease health separately
 from an observed working child; neither idle polling nor health invokes a model.
-Transient reads retry at most three times with exponential backoff. Authentication,
+Transient reads and same-generation lease messages retry at most three times with
+exponential backoff. One serialized renewal loop covers idle polling, inbox cleanup,
+pre-dispatch reads, child execution and usage-limit waits. A closed or expired
+generation cannot be revived by a retry. Unknown task mutations are not retried. Authentication,
 provider budget exhaustion and unclassified provider failures pause with their
 reported cost charged, even when token counters are zero. A writable failure,
 missing result, timeout, interrupted dispatch or unproven child closure blocks that
@@ -421,12 +429,17 @@ startup therefore requires the user session. Unsupported platforms fail explicit
 Dry-run returns the exact definition and supervisor commands without writes. Stop
 uses the private authenticated daemon control endpoint and confirms owned closure;
 it never signals a remembered PID. Stop the foreground daemon before uninstalling.
-Definitions must match their saved ownership hash before replacement/removal.
-OS restart-on-failure is bounded; the durable daemon restart allowance also counts
-manual restarts conservatively. Normal paused exits do not trigger an infinite
+Uninstall verifies the saved definition path, label and ownership hash, even if the
+repository or Claude executable has moved or disappeared. Uninstall before changing
+setup while a service is recorded.
+The durable daemon restart allowance bounds OS recovery and also counts manual
+restarts conservatively. Unexpected process failures retain a nonzero exit;
+expired login and permanent configuration failures report a normal paused exit. Normal paused exits do not trigger an infinite
 service restart loop. `--profile` and an absolute private `--config-dir` select the
 saved local identity for each command.
 
-No real worker acceptance has been performed by the source review phase. The old
+Source-phase checks remain provisional until the final pipeline candidate passes.
+No service installation or real provider pilot acceptance has been performed by
+the source review phase. The old
 CLB-446 terminal pilot is prototype evidence only. Publication, native seven-target
 qualification, same-host and two-host Sportsbook tests remain with the release owner.

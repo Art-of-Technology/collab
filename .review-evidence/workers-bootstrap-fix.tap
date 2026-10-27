@@ -1,0 +1,250 @@
+TAP version 13
+# Subtest: worker setup/run claims before an owned session and suppresses completed duplicates
+ok 1 - worker setup/run claims before an owned session and suppresses completed duplicates
+  ---
+  duration_ms: 1143.683042
+  type: 'test'
+  ...
+# Subtest: missing result keeps the reservation and daemon restart never repeats dispatch
+ok 2 - missing result keeps the reservation and daemon restart never repeats dispatch
+  ---
+  duration_ms: 1494.773834
+  type: 'test'
+  ...
+# Subtest: provider budget exhaustion charges failed usage and pauses without retry
+ok 3 - provider budget exhaustion charges failed usage and pauses without retry
+  ---
+  duration_ms: 486.440583
+  type: 'test'
+  ...
+# Subtest: closed child without durable result remains uncertain across restart
+ok 4 - closed child without durable result remains uncertain across restart
+  ---
+  duration_ms: 121.174916
+  type: 'test'
+  ...
+# Subtest: losing a claim race refunds the unused reservation and continues without a child
+ok 5 - losing a claim race refunds the unused reservation and continues without a child
+  ---
+  duration_ms: 261.477583
+  type: 'test'
+  ...
+# Subtest: unproven child closure stays blocked and never releases remote ownership
+ok 6 - unproven child closure stays blocked and never releases remote ownership
+  ---
+  duration_ms: 148.561709
+  type: 'test'
+  ...
+# Subtest: persisted reservation before dispatch resumes once without double charging
+ok 7 - persisted reservation before dispatch resumes once without double charging
+  ---
+  duration_ms: 531.137834
+  type: 'test'
+  ...
+# Subtest: saved validated result reconciles completion without relaunching a child
+ok 8 - saved validated result reconciles completion without relaunching a child
+  ---
+  duration_ms: 735.969125
+  type: 'test'
+  ...
+# Subtest: transient reads recover; auth pauses without retrying or invoking the model
+ok 9 - transient reads recover; auth pauses without retrying or invoking the model
+  ---
+  duration_ms: 1282.992333
+  type: 'test'
+  ...
+# Subtest: owned control stop waits for child closure and refuses competing runs
+ok 10 - owned control stop waits for child closure and refuses competing runs
+  ---
+  duration_ms: 3565.674084
+  type: 'test'
+  ...
+# Subtest: daily ledger, reservations and clock rollback cannot mint spend
+ok 11 - daily ledger, reservations and clock rollback cannot mint spend
+  ---
+  duration_ms: 0.30425
+  type: 'test'
+  ...
+# Subtest: runner validates owned result/session/usage and sends content only on stdin
+ok 12 - runner validates owned result/session/usage and sends content only on stdin
+  ---
+  duration_ms: 100.574125
+  type: 'test'
+  ...
+# Subtest: doctor refuses unsupported budget capabilities before executing work
+ok 13 - doctor refuses unsupported budget capabilities before executing work
+  ---
+  duration_ms: 1.485333
+  type: 'test'
+  ...
+# Subtest: service installation is explicit, bounded and refuses unowned definitions
+ok 14 - service installation is explicit, bounded and refuses unowned definitions
+  ---
+  duration_ms: 20.2515
+  type: 'test'
+  ...
+# Subtest: actual CLI recovers a crashed daemon with bounded restarts and an owned fake Claude child
+ok 15 - actual CLI recovers a crashed daemon with bounded restarts and an owned fake Claude child
+  ---
+  duration_ms: 6909.08775
+  type: 'test'
+  ...
+# Subtest: configure intent survives a lost response and preserves identity and budget
+ok 16 - configure intent survives a lost response and preserves identity and budget
+  ---
+  duration_ms: 117.608625
+  type: 'test'
+  ...
+# Subtest: serialized lease renewals survive lost replies throughout idle
+ok 17 - serialized lease renewals survive lost replies throughout idle
+  ---
+  duration_ms: 210.677792
+  type: 'test'
+  ...
+# Subtest: serialized lease renewals survive lost replies throughout pre-dispatch
+ok 18 - serialized lease renewals survive lost replies throughout pre-dispatch
+  ---
+  duration_ms: 506.350542
+  type: 'test'
+  ...
+# Subtest: serialized lease renewals survive lost replies throughout model
+ok 19 - serialized lease renewals survive lost replies throughout model
+  ---
+  duration_ms: 625.286958
+  type: 'test'
+  ...
+# Subtest: serialized lease renewals survive lost replies throughout usage-limit
+ok 20 - serialized lease renewals survive lost replies throughout usage-limit
+  ---
+  duration_ms: 505.290708
+  type: 'test'
+  ...
+# Subtest: unknown claim is not retried and never launches a model on restart
+ok 21 - unknown claim is not retried and never launches a model on restart
+  ---
+  duration_ms: 303.836958
+  type: 'test'
+  ...
+# Subtest: uncertain result settlement reconciles without repeating work (committed=false)
+ok 22 - uncertain result settlement reconciles without repeating work (committed=false)
+  ---
+  duration_ms: 896.427667
+  type: 'test'
+  ...
+# Subtest: uncertain result settlement reconciles without repeating work (committed=true)
+ok 23 - uncertain result settlement reconciles without repeating work (committed=true)
+  ---
+  duration_ms: 575.605667
+  type: 'test'
+  ...
+# Subtest: inbox cleanup drains terminal and other-owned pages without spending
+ok 24 - inbox cleanup drains terminal and other-owned pages without spending
+  ---
+  duration_ms: 169.884959
+  type: 'test'
+  ...
+# Subtest: uninstall uses saved ownership after runner paths disappear; setup cannot orphan it
+ok 25 - uninstall uses saved ownership after runner paths disappear; setup cannot orphan it
+  ---
+  duration_ms: 93.275125
+  type: 'test'
+  ...
+# Subtest: real Claude result classification pauses provider failures without model retry
+ok 26 - real Claude result classification pauses provider failures without model retry
+  ---
+  duration_ms: 389.991292
+  type: 'test'
+  ...
+# Subtest: actual bootstrap CLI emits one guarded schema transaction with exact supplements then ordered native baselines
+ok 27 - actual bootstrap CLI emits one guarded schema transaction with exact supplements then ordered native baselines
+  ---
+  duration_ms: 437.602333
+  type: 'test'
+  ...
+# Subtest: changed schema refuses before generation or connection
+ok 28 - changed schema refuses before generation or connection
+  ---
+  duration_ms: 295.156833
+  type: 'test'
+  ...
+# Subtest: changed migration refuses before generation or connection
+ok 29 - changed migration refuses before generation or connection
+  ---
+  duration_ms: 938.619959
+  type: 'test'
+  ...
+# Subtest: changed added-history refuses before generation or connection
+ok 30 - changed added-history refuses before generation or connection
+  ---
+  duration_ms: 1101.56925
+  type: 'test'
+  ...
+# Subtest: changed removed-history refuses before generation or connection
+ok 31 - changed removed-history refuses before generation or connection
+  ---
+  duration_ms: 407.484125
+  type: 'test'
+  ...
+# Subtest: changed cli refuses before generation or connection
+ok 32 - changed cli refuses before generation or connection
+  ---
+  duration_ms: 219.630333
+  type: 'test'
+  ...
+# Subtest: nonempty does not retry, reset or guess successful baselining
+ok 33 - nonempty does not retry, reset or guess successful baselining
+  ---
+  duration_ms: 280.8455
+  type: 'test'
+  ...
+# Subtest: lost does not retry, reset or guess successful baselining
+ok 34 - lost does not retry, reset or guess successful baselining
+  ---
+  duration_ms: 288.652708
+  type: 'test'
+  ...
+# Subtest: diff does not retry, reset or guess successful baselining
+ok 35 - diff does not retry, reset or guess successful baselining
+  ---
+  duration_ms: 950.048209
+  type: 'test'
+  ...
+# Subtest: resolve does not retry, reset or guess successful baselining
+ok 36 - resolve does not retry, reset or guess successful baselining
+  ---
+  duration_ms: 868.091584
+  type: 'test'
+  ...
+# Subtest: invalid intent and unsupported target options never generate or connect
+ok 37 - invalid intent and unsupported target options never generate or connect
+  ---
+  duration_ms: 770.836208
+  type: 'test'
+  ...
+# Subtest: transport must be explicit and remote plaintext refuses before child processes
+ok 38 - transport must be explicit and remote plaintext refuses before child processes
+  ---
+  duration_ms: 1200.972
+  type: 'test'
+  ...
+# Subtest: psql ENOENT classification stops without baselines
+ok 39 - psql ENOENT classification stops without baselines
+  ---
+  duration_ms: 239.988542
+  type: 'test'
+  ...
+# Subtest: psql ETIMEDOUT classification stops without baselines
+ok 40 - psql ETIMEDOUT classification stops without baselines
+  ---
+  duration_ms: 182.395584
+  type: 'test'
+  ...
+1..40
+# tests 40
+# suites 0
+# pass 40
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 22352.998333

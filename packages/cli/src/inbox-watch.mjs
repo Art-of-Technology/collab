@@ -29,18 +29,16 @@ export function deliverWake(callback, args, event, timeout, signal) {
   });
 }
 
-function queue(result, revisions) {
+function queue(result) {
   if (!Array.isArray(result?.items) || typeof result.hasMore !== 'boolean' || result.items.length > 50 ||
     result.items.some(item => typeof item.id !== 'string' || item.id.length > 128 || !['open', 'claimed', 'completed'].includes(item.status))) {
     throw new CliError('invalid_response', 'Expected a bounded agent inbox.', 5);
   }
-  return { items: result.items.map(({ id, status, updatedAt }) => ({ id, status,
-    ...(revisions && typeof updatedAt === 'string' && updatedAt.length <= 32 && Number.isFinite(Date.parse(updatedAt)) && { updatedAt }),
-  })), hasMore: result.hasMore };
+  return { items: result.items.map(({ id, status }) => ({ id, status })), hasMore: result.hasMore };
 }
 
 export async function watchInbox({ read, callback, callbackArgs, agent, workspaceId, origin,
-  durationMs, intervalMs, callbackTimeoutMs, signal, report, deliver }) {
+  durationMs, intervalMs, callbackTimeoutMs, signal, report }) {
   const window = new AbortController();
   const timer = setTimeout(() => window.abort(), durationMs);
   const watchSignal = signal ? AbortSignal.any([signal, window.signal]) : window.signal;
@@ -48,9 +46,9 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
   try {
     if (report) { await report('started', watchSignal); reportingStarted = true; }
     while (!watchSignal.aborted) {
-      const claimed = queue(await read('claimed', watchSignal), !!deliver);
+      const claimed = queue(await read('claimed', watchSignal));
       watchSignal.throwIfAborted();
-      const unseen = queue(await read('unseen', watchSignal), !!deliver);
+      const unseen = queue(await read('unseen', watchSignal));
       watchSignal.throwIfAborted();
       await report?.('poll', watchSignal);
       const payload = { version: 1, event: 'collab.inbox.pending', origin, workspaceId, agent, claimed, unseen };
@@ -59,9 +57,9 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
         // Coalesce unchanged queues; remind once per minute until the agent drains them.
         // No persisted ACK: restarting may repeat a notification, never lose queued work.
         if (deliveryId !== lastDelivery || Date.now() - deliveredAt >= 60000) {
-          const notified = deliver ? await deliver({ ...payload, deliveryId }, watchSignal) : await deliverWake(callback, callbackArgs, { ...payload, deliveryId }, callbackTimeoutMs, watchSignal);
+          await deliverWake(callback, callbackArgs, { ...payload, deliveryId }, callbackTimeoutMs, watchSignal);
           lastDelivery = deliveryId; deliveredAt = Date.now();
-          if (notified !== false) { callbacks++; await report?.('wake', watchSignal); }
+          callbacks++; await report?.('wake', watchSignal);
         }
       } else lastDelivery = undefined;
       await delay(intervalMs, undefined, { signal: watchSignal });

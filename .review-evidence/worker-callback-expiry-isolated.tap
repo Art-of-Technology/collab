@@ -1,0 +1,16 @@
+TAP version 13
+# Subtest: inbox watch window expiry closes a healthy adapter without reporting callback failure
+ok 1 - inbox watch window expiry closes a healthy adapter without reporting callback failure
+  ---
+  duration_ms: 2232.725333
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2401.520375

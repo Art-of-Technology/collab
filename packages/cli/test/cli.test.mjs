@@ -1226,7 +1226,42 @@ test('worker status and stop retain local recovery after login expiry', async t 
   assert.deepEqual(status.data.liveHealth, { ok: false, error: 'token_expired' });
   assert.equal(status.stdout.includes('PRIVATE_'), false);
   assert.equal((await f.run(['worker', 'stop', ...args], { env })).error.error, 'stop_unconfirmed');
-  for (const command of ['setup', 'run', 'install']) assert.equal((await f.run(['worker', command, ...args], { env })).error.error, 'token_expired');
+  for (const command of ['setup', 'install']) assert.equal((await f.run(['worker', command, ...args], { env })).error.error, 'token_expired');
   assert.deepEqual(JSON.parse(readFileSync(file)), saved);
+  const paused = await f.run(['worker', 'run', ...args], { env });
+  assert.equal(paused.code, 0, paused.stderr);
+  assert.equal(paused.data.state, 'needs-login');
+  assert.equal(paused.data.stopReason, 'token_expired');
+  assert.equal(paused.data.taskId, 'handoff-one');
+  assert.deepEqual(JSON.parse(readFileSync(file)).active, saved.active);
   assert.equal(f.calls.length, 0);
+});
+
+test('worker run pauses on missing login or invalid runner configuration before supervision', async t => {
+  const f = await fixture(t), env = { COLLAB_TOKEN: '' }, args = ['--agent', 'worker', '--workspace', 'w'];
+  const loggedOut = await f.run(['worker', 'run', ...args], { env });
+  assert.equal(loggedOut.code, 0); assert.equal(loggedOut.data.state, 'needs-login');
+  const userId = 'worker-user';
+  writeCredentials(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.url, accessToken: 'PRIVATE_ACCESS', expiresAt: Date.now() + 60000, userId }));
+  const key = createHash('sha256').update(JSON.stringify([f.url, 'w', userId, 'worker'])).digest('base64url');
+  writeCredentials(path.join(f.dir, `worker-${key}.json`), JSON.stringify({ config: { host: 'laptop', cwd: f.dir, executable: path.join(f.dir, 'missing-claude') } }));
+  const invalid = await f.run(['worker', 'run', ...args], { env });
+  assert.equal(invalid.code, 0); assert.equal(invalid.data.state, 'config'); assert.equal(invalid.data.stopReason, 'worker_config');
+  assert.equal(f.calls.length, 0);
+});
+
+test('legacy watcher coalesces revision-only changes in its emitted callback contract', async t => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'collab-watch-dedup-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const output = path.join(dir, 'notifications.jsonl'), controller = new AbortController();
+  let revision = 0, polls = 0;
+  const result = await watchInbox({
+    read: async state => ({ items: state === 'unseen' ? [{ id: 'same', status: 'open', updatedAt: new Date(++revision * 1000).toISOString() }] : [], hasMore: false }),
+    callback: process.execPath, callbackArgs: ['-e', 'let input="";process.stdin.on("data",b=>input+=b);process.stdin.on("end",()=>require("node:fs").appendFileSync(process.argv[1],input));', output],
+    agent: 'worker', workspaceId: 'w', origin: 'http://localhost', durationMs: 5000, intervalMs: 1, callbackTimeoutMs: 2000, signal: controller.signal,
+    report: async event => { if (event === 'poll' && ++polls === 3) controller.abort(); },
+  });
+  assert.equal(result.callbacks, 1);
+  const emitted = readFileSync(output, 'utf8').trim().split('\n').map(JSON.parse);
+  assert.equal(emitted.length, 1); assert.deepEqual(emitted[0].unseen, { items: [{ id: 'same', status: 'open' }], hasMore: false });
 });

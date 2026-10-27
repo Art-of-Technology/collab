@@ -64,6 +64,9 @@ function assertManagedGeneration(value: Prisma.JsonValue | null, generation?: st
 }
 export async function manageWorker(context: AppAuthContext, input: z.infer<typeof workerSchema>) {
   if (!hasScope('issues:write', context.token.scopes)) throw new HandoffError('insufficient_scope', 'Managed workers require issues:write', 403);
+  if (input.event === 'configure' && !['workspace:write', 'issues:read'].every(scope => hasScope(scope, context.token.scopes))) {
+    throw new HandoffError('insufficient_scope', 'Worker configuration requires workspace:write and issues:read', 403);
+  }
   return prisma.$transaction(async db => {
     await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND name = ${input.agent} FOR UPDATE`;
     let agent = await db.agentRegistration.findUnique({ where: { workspaceId_name: { workspaceId: context.workspace.id, name: input.agent } } });

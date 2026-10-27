@@ -148,11 +148,17 @@ async function main() {
     if (words.length !== 2) throw new CliError('unexpected_arguments', 'Unexpected positional arguments.');
     const extra = name === 'worker setup' ? ['host', 'cwd', 'claude', 'model', 'tools', 'review-agent', 'attempt-usd', 'daily-usd', 'timeout-seconds', 'poll-seconds', 'max-restarts', 'max-starts', 'manage-existing', 'label-ids'] : ['worker install', 'worker uninstall'].includes(name) ? ['dry-run'] : [];
     allowed(options, ['profile', 'workspace', 'agent', 'json', 'config-dir', ...extra]);
-    const state = stateStore.load();
-    if (process.env.COLLAB_TOKEN) throw new CliError('environment_context', 'Workers use an existing saved login, not COLLAB_TOKEN.');
-    let selected;
-    try { selected = session(options, state); }
+    let state = {}, selected;
+    try {
+      state = stateStore.load();
+      if (process.env.COLLAB_TOKEN) throw new CliError('environment_context', 'Workers use an existing saved login, not COLLAB_TOKEN.');
+      selected = session(options, state);
+    }
     catch (error) {
+      if (name === 'worker run' && error instanceof CliError) {
+        if (!state.origin || !state.userId || !options.workspace || !options.agent) return { state: error.exit === 3 ? 'needs-login' : 'config', stopReason: error.code, configured: false };
+        return runWorker(name, options, { base: state.origin, workspace: options.workspace }, state.userId, { startupError: error });
+      }
       if (!['worker status', 'worker stop', 'worker doctor', 'worker uninstall'].includes(name) || error.code !== 'token_expired') throw error;
       return runWorker(name, options, { base: state.origin, workspace: options.workspace }, state.userId, { loginError: error.code, api: async () => { throw error; } });
     }

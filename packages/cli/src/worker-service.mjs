@@ -33,21 +33,24 @@ export function serviceDefinition(identity, args, cwd, configDir, { platform = p
 }
 export async function workerService(name, identity, options, state, save, dependencies = {}) {
   const configDir = path.resolve(process.env.COLLAB_CONFIG_DIR || path.join(os.homedir(), '.config/collab'));
+  const execute = dependencies.execute || (async (command, args) => { try { await promisify(execFile)(command, args, { timeout: 15000, windowsHide: true, shell: false, maxBuffer: 65536 }); } catch { throw error('OS supervisor action failed. Inspect the named service; no other service was changed.'); } });
+  if (name === 'worker uninstall') {
+    const expected = serviceDefinition(identity, [], configDir, configDir, dependencies);
+    const owned = state.service;
+    if (!owned || owned.file !== expected.file || owned.label !== expected.label ||
+        !fs.lstatSync(owned.file).isFile() || digest(fs.readFileSync(owned.file)) !== owned.hash) throw error('No matching owned installation is recorded.');
+    if ((state.runId && !state.closed) || (state.active && state.active.closed !== true)) throw error('Owned worker closure must be confirmed before uninstalling.');
+    if (options['dry-run']) return { file: owned.file, label: owned.label, uninstall: expected.uninstall, dryRun: true };
+    for (const [command, args] of expected.uninstall) await execute(command, args);
+    fs.unlinkSync(owned.file); delete state.service; save(state);
+    return { uninstalled: true, label: owned.label };
+  }
   const args = [...(dependencies.command || (/^node(?:\.exe)?$/.test(path.basename(process.execPath)) ? [process.execPath, fileURLToPath(new URL('../bin/collab.mjs', import.meta.url))] : [process.execPath])),
     'worker', 'run', '--agent', options.agent, '--workspace', options.workspace, '--config-dir', configDir, ...(options.profile ? ['--profile', options.profile] : [])];
   const definition = serviceDefinition(identity, args, state.config.cwd, configDir, dependencies);
   if (options['dry-run']) return { ...definition, installed: false, dryRun: true };
-  const execute = dependencies.execute || (async (command, args) => { try { await promisify(execFile)(command, args, { timeout: 15000, windowsHide: true, shell: false, maxBuffer: 65536 }); } catch { throw error('OS supervisor action failed. Inspect the named service; no other service was changed.'); } });
-  const owned = state.service?.file === definition.file && state.service?.hash === digest(definition.content);
-  if (fs.existsSync(definition.file) && (!owned || fs.readFileSync(definition.file, 'utf8') !== definition.content)) throw error('Existing service definition is not the saved owned definition.');
-  if (name === 'worker uninstall') {
-    if (!owned) throw error('No matching owned installation is recorded.');
-    if ((state.runId && !state.closed) || (state.active && state.active.closed !== true)) throw error('Owned worker closure must be confirmed before uninstalling.');
-    for (const [command, args] of definition.uninstall) await execute(command, args);
-    fs.unlinkSync(definition.file); delete state.service; save(state);
-    return { uninstalled: true, label: definition.label };
-  }
   if (state.service) throw error('Uninstall the existing owned service before reinstalling.');
+  if (fs.existsSync(definition.file)) throw error('Existing service definition is not the saved owned definition.');
   fs.mkdirSync(path.dirname(definition.file), { recursive: true });
   fs.writeFileSync(definition.file, definition.content, { mode: 0o600, flag: 'wx' });
   state.service = { file: definition.file, hash: digest(definition.content), label: definition.label }; save(state);

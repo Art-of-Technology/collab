@@ -35,7 +35,7 @@ function fixture() {
   const service = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), zod: require('zod'), '@/lib/prisma': { prisma: db },
     '@/lib/issue-finder': { issueReadAccessWhere: user => user === 'owner' ? {} : { id: 'denied' } }, '@/lib/oauth-scopes': { hasScope: (scope, scopes) => scopes.includes(scope) },
     '@/lib/managed-worker-health': health }, { Date: Clock });
-  const context = { user: { id: 'owner' }, workspace: { id: 'w' }, token: { scopes: ['issues:read', 'issues:write'] } };
+  const context = { user: { id: 'owner' }, workspace: { id: 'w' }, token: { scopes: ['workspace:write', 'issues:read', 'issues:write'] } };
   const binding = { agent: 'worker', host: 'laptop', sessionId: 'stable' };
   const manage = (event, generation, extra = {}, ctx = context) => service.manageWorker(ctx, service.workerSchema.parse({ ...binding, event, generation, ...extra }));
   const act = (action, generation, ctx = context) => service.actOnHandoff(ctx, 'h', service.actionSchema.parse({ agent: 'worker', action, generation, ...(['progress', 'complete', 'release'].includes(action) && { content: 'Evidence' }) }));
@@ -132,3 +132,29 @@ test('launchd and Scheduled Task definitions parse into bounded per-user invocat
   assert.equal(task.querySelector('MultipleInstancesPolicy').textContent, 'IgnoreNew');
 });
 
+
+test('configure enforces registration scopes on creation, subscriptions and manual conversion', async () => {
+  for (const existing of ['absent', 'managed', 'manual']) for (const missing of ['workspace:write', 'issues:read', 'issues:write']) {
+    const f = fixture();
+    if (existing === 'managed') await f.manage('configure');
+    if (existing === 'manual') f.agents.push({ id: 'a', name: 'worker', workspaceId: 'w', userId: 'owner', labelIds: [], managedWorker: null });
+    const before = JSON.stringify(f.agents);
+    const context = { ...f.context, token: { scopes: f.context.token.scopes.filter(scope => scope !== missing) } };
+    await assert.rejects(f.manage('configure', undefined, { convert: true, labelIds: [] }, context), e => e.code === 'insufficient_scope');
+    assert.equal(JSON.stringify(f.agents), before);
+  }
+  const f = fixture(); await f.manage('configure');
+  const context = { ...f.context, token: { scopes: ['issues:write'] } }, generation = randomUUID();
+  for (const event of ['start', 'renew', 'close']) await f.manage(event, generation, {}, context);
+});
+
+test('same-generation start and close retry safely but expired or closed generations never revive', async () => {
+  const f = fixture(), generation = randomUUID();
+  await f.manage('configure'); await f.manage('configure');
+  await f.manage('start', generation); await f.manage('start', generation); await f.manage('renew', generation);
+  f.expire();
+  for (const event of ['start', 'renew']) await assert.rejects(f.manage(event, generation), e => e.code === 'worker_fenced');
+  await f.manage('close', generation); await f.manage('close', generation);
+  for (const event of ['start', 'renew']) await assert.rejects(f.manage(event, generation), e => e.code === 'worker_fenced');
+  await f.manage('start', randomUUID());
+});
