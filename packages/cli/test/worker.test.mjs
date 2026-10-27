@@ -35,7 +35,7 @@ function fixture(t, execute) {
     api: async (url, extra = {}) => {
       calls.push({ url, ...extra });
       if (url === 'agents/worker') { remote = { generation: extra.body.generation || null, closed: ['configure', 'close'].includes(extra.body.event) }; return { worker: remote }; }
-      if (url === 'agents') return { agents: [{ name: 'worker', worker: remote }] };
+      if (url === 'agents/worker?agent=worker') return { agent: { name: 'worker', worker: remote } };
       if (url.startsWith('agents/inbox')) {
         if (handoff.status === 'completed') { process.emit('SIGINT'); return { items: [], hasMore: false }; }
         return { items: [handoff], hasMore: false };
@@ -225,10 +225,11 @@ test('service installation is explicit, bounded and refuses unowned definitions'
   assert.equal(preview.installed, false); assert.equal(calls.length, 0);
   await workerService('worker install', 'test', f.options, state, () => {}, deps);
   assert.equal(calls.length, 2);
+  const installedContent = readFileSync(state.service.file);
   writeFileSync(state.service.file, 'unowned definition');
   await assert.rejects(workerService('worker uninstall', 'test', f.options, state, () => {}, deps), { code: 'worker_service' });
   assert.equal(calls.length, 2);
-  writeFileSync(state.service.file, preview.content);
+  writeFileSync(state.service.file, installedContent);
   await workerService('worker uninstall', 'test', f.options, state, () => {}, deps);
   assert.equal(calls.length, 3);
   assert.throws(() => serviceDefinition('test', ['executable'], '/state', { platform: 'unsupported' }), { code: 'worker_service' });
@@ -261,11 +262,11 @@ else {
     calls.push({ url: req.url, body });
     assert.equal(req.headers.authorization, 'Bearer PRIVATE_FIXTURE_TOKEN');
     res.setHeader('content-type', 'application/json');
-    if (req.url.includes('/agents/worker')) { remote = { generation: body.generation, closed: ['configure', 'close'].includes(body.event) }; res.end(JSON.stringify({ worker: remote })); }
+    if (req.url.includes('/agents/worker') && req.method === 'POST') { remote = { generation: body.generation, closed: ['configure', 'close'].includes(body.event) }; res.end(JSON.stringify({ worker: remote })); }
     else if (req.url.includes('/agents/inbox')) {
       res.end(JSON.stringify({ items: !allowWork || status === 'completed' ? [] : [{ id: 'h', status, updatedAt: '2026-10-27T00:00:00Z' }], hasMore: false })); polled();
     }
-    else if (req.url.startsWith('/api/apps/auth/agents?')) res.end(JSON.stringify({ agents: [{ name: 'worker', worker: remote }] }));
+    else if (req.url.startsWith('/api/apps/auth/agents/worker?agent=worker&')) res.end(JSON.stringify({ agent: { name: 'worker', worker: remote } }));
     else if (req.url.includes('/agents/handoffs/h')) {
       if (body?.action === 'claim') status = 'claimed';
       if (body?.action === 'complete') status = 'completed';
@@ -543,13 +544,15 @@ for (const platform of ['darwin', 'linux', 'win32']) {
     dependencies.execute = async (command, args) => {
       calls.push([command, args]);
       if (JSON.stringify([command, args]) === JSON.stringify(definition.inspect)) return absentService(platform, definition);
-      assert.deepEqual([command, args], definition.uninstall[0]);
+      if (platform === 'win32' && command === 'powershell.exe') return { stdout: JSON.stringify({ label: definition.label, closed: true }) };
+      if (platform === 'win32' && args[0] === '/Change') assert.deepEqual(args, ['/Change', '/TN', definition.label, '/Disable']);
+      else assert.deepEqual([command, args], definition.uninstall[0]);
       throw Object.assign(Error('fixture removal failure'), { code: 5 });
     };
     assert.equal((await workerService('worker uninstall', 'partial', f.options, state, () => {}, dependencies)).uninstalled, true);
     assert.equal(state.service, undefined); assert.equal(existsSync(definition.file), false);
-    assert.deepEqual(calls.at(-1), definition.inspect);
-    assert.equal(calls.length, interrupted === 'local-cleanup' ? 1 : 2);
+    assert.deepEqual(calls.at(-1), platform === 'win32' && interrupted === 'local-cleanup' ? calls.find(([command]) => command === 'powershell.exe') : definition.inspect);
+    assert.equal(calls.length, platform === 'win32' ? interrupted === 'local-cleanup' ? 2 : 5 : interrupted === 'local-cleanup' ? 1 : 2);
   });
 
   for (const outcome of ['present', 'permission', 'transport', 'other-service', 'killed']) test(`${platform} teardown retains ownership after ${outcome} inspection`, async t => {
@@ -569,7 +572,7 @@ for (const platform of ['darwin', 'linux', 'win32']) {
       throw Object.assign(Error(), outcome === 'permission' ? { code: platform === 'win32' ? 0x80070005 : 5 } : outcome === 'transport' ? { code: 'ETIMEDOUT' } : { code: 0x80070002, killed: true });
     };
     await assert.rejects(workerService('worker uninstall', 'guarded', f.options, state, () => {}, dependencies), { code: 'worker_service' });
-    assert.deepEqual(state.service, owned); assert.equal(readFileSync(owned.file, 'utf8'), contents);
+    assert.deepEqual(state.service, { ...owned, retired: true }); assert.equal(readFileSync(owned.file, 'utf8'), contents);
   });
 }
 
@@ -582,6 +585,104 @@ test('childProcess preserves UTF-8 split across real stdout chunks', async () =>
     });`;
   const result = await childProcess(process.execPath, ['-e', child]);
   assert.equal(result.code, 0); assert.deepEqual(JSON.parse(result.output), value);
+});
+
+test('Windows uninstall closes a delayed native launch before deletion and fences retired invocations', async t => {
+  const f = fixture(t); await f.run('setup');
+  const identity = workerKey(f.selected, 'user', 'worker'), stateStore = store(`worker-${identity}`);
+  const bin = fileURLToPath(new URL('../bin/collab.mjs', import.meta.url));
+  const loader = path.join(f.dir, 'delayed.mjs');
+  writeFileSync(loader, `process.send('ready'); await new Promise(resolve => process.once('message', resolve)); process.disconnect(); await import(${JSON.stringify(new URL('../bin/collab.mjs', import.meta.url).href)});`);
+  writeFileSync(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.selected.base, userId: 'user', accessToken: 'FIXTURE', expiresAt: Date.now() + 60000 }), { mode: 0o600 });
+  const dependencies = { platform: 'win32', command: [process.execPath, bin], execute: async () => ({ stdout: '' }) };
+  await stateStore.exclusive((state, save) => workerService('worker install', identity, f.options, state, save, dependencies));
+  const owned = f.state().service;
+  const args = ['worker', 'run', '--agent', 'worker', '--workspace', 'ws', '--config-dir', f.dir, '--service-id', owned.installationId];
+  const child = spawn(process.execPath, [loader, ...args], { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+  const timeout = setTimeout(() => child.kill(), 10000);
+  t.after(() => { clearTimeout(timeout); if (child.exitCode === null) child.kill(); });
+  child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
+  let output = '', errors = '', closed = false;
+  child.stdout.on('data', value => { output += value; }); child.stderr.on('data', value => { errors += value; });
+  const exit = once(child, 'close').then(value => { closed = true; return value; });
+  await once(child, 'message');
+  assert.equal((await f.run('stop')).stopped, true);
+  const actions = [];
+  dependencies.execute = async (command, argv) => {
+    actions.push(command === 'powershell.exe' ? 'closure' : argv[0]);
+    assert.equal(f.state().service.retired, true);
+    if (command === 'powershell.exe') {
+      child.send('resume');
+      const [code] = await exit;
+      assert.equal(code, 2, output + errors); assert.match(errors, /state_locked/);
+      return { stdout: JSON.stringify({ label: owned.label, closed }) };
+    }
+    if (argv[0] === '/Change') assert.deepEqual(argv, ['/Change', '/TN', owned.label, '/Disable']);
+    else { assert.deepEqual(argv, ['/Delete', '/TN', owned.label, '/F']); assert.equal(closed, true); }
+    return { stdout: '' };
+  };
+  const removed = await stateStore.exclusive((state, save) => workerService('worker uninstall', identity, f.options, state, save, dependencies));
+  assert.equal(removed.uninstalled, true); assert.deepEqual(actions, ['/Change', 'closure', '/Delete']);
+  const retired = await childProcess(process.execPath, [bin, ...args]);
+  assert.equal(retired.code, 0); assert.equal(JSON.parse(retired.output).stopReason, 'service_retired');
+  assert.equal(f.state().runId, undefined); assert.equal(f.state().daemonStartedAt, undefined); assert.equal(f.sessions.length, 0);
+  dependencies.execute = async () => ({ stdout: '' });
+  await stateStore.exclusive((state, save) => workerService('worker install', identity, f.options, state, save, dependencies));
+  const before = f.state();
+  const stale = await runWorker('worker run', { ...f.options, 'service-id': owned.installationId }, f.selected, 'user', f.dependencies);
+  assert.equal(stale.stopReason, 'service_retired'); assert.deepEqual(f.state(), before);
+  await f.run('run'); assert.equal(f.sessions.length, 1);
+});
+
+for (const proof of ['running', 'wrong-task', 'malformed', 'unavailable']) test(`Windows uninstall retains retired ownership when exact closure is ${proof}`, async t => {
+  const f = fixture(t), state = { config: workerConfig(f.options) }, actions = [];
+  const dependencies = { platform: 'win32', command: ['/trusted/collab'], execute: async () => ({ stdout: '' }) };
+  await workerService('worker install', 'closure', f.options, state, () => {}, dependencies);
+  const owned = { ...state.service };
+  dependencies.execute = async (command, args) => {
+    actions.push(command === 'powershell.exe' ? 'closure' : args[0]);
+    if (command !== 'powershell.exe') return { stdout: '' };
+    if (proof === 'unavailable') throw Object.assign(Error(), { code: 'ETIMEDOUT' });
+    return { stdout: proof === 'malformed' ? '{}' : JSON.stringify({ label: proof === 'wrong-task' ? 'other' : owned.label, closed: proof !== 'running' }) };
+  };
+  await assert.rejects(workerService('worker uninstall', 'closure', f.options, state, () => {}, dependencies), { code: 'worker_service' });
+  assert.deepEqual(actions, ['/Change', 'closure']); assert.deepEqual(state.service, { ...owned, retired: true }); assert.ok(existsSync(owned.file));
+});
+
+for (const failure of ['idle-crash', 'failed-close']) test(`exact owned lookup recovers ${failure} without the capped agents list`, async t => {
+  const f = fixture(t); await f.run('setup');
+  const api = f.dependencies.api;
+  let failClose = failure === 'failed-close';
+  f.dependencies.api = async (url, extra = {}) => {
+    assert.notEqual(url, 'agents');
+    if (extra.body?.event === 'close' && failClose) throw Object.assign(Error(), { code: 'outcome_unknown' });
+    return api(url, extra);
+  };
+  if (failClose) {
+    await f.run('run'); assert.equal(f.state().closed, false);
+  } else {
+    await store(`worker-${workerKey(f.selected, 'user', 'worker')}`).exclusive(async (state, save) => {
+      state.runId = '00000000-0000-4000-8000-000000000001'; state.closed = false;
+      await api('agents/worker', { method: 'POST', body: { event: 'start', generation: state.runId } }); save(state);
+    });
+  }
+  const prior = f.state().runId; failClose = false; f.calls.length = 0;
+  await f.run('run');
+  assert.equal(f.calls[0].url, 'agents/worker?agent=worker');
+  assert.equal(f.calls[1].body.event, 'close'); assert.equal(f.calls[1].body.generation, prior);
+  assert.equal(f.state().closed, true); assert.notEqual(f.state().runId, prior); assert.equal(f.sessions.length, 1);
+});
+
+test('missing owned recovery lookup never admits another generation', async t => {
+  const f = fixture(t); await f.run('setup');
+  await store(`worker-${workerKey(f.selected, 'user', 'worker')}`).exclusive((state, save) => { state.runId = 'old'; state.closed = false; save(state); });
+  const api = f.dependencies.api;
+  f.dependencies.api = async (url, extra) => {
+    if (url === 'agents/worker?agent=worker') throw Object.assign(Error(), { code: 'agent_not_found' });
+    return api(url, extra);
+  };
+  assert.equal((await f.run('run')).stopReason, 'agent_not_found');
+  assert.equal(f.state().runId, 'old'); assert.equal(f.state().closed, false); assert.equal(f.sessions.length, 0);
 });
 
 for (const stream of ['stdout', 'stderr']) test(`childProcess retains its combined byte bound and owned closure on ${stream}`, async t => {

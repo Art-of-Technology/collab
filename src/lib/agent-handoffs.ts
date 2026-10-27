@@ -179,6 +179,10 @@ export async function listAgents(context: AppAuthContext) {
   const agents = await prisma.agentRegistration.findMany({ where: { workspaceId: context.workspace.id }, orderBy: { name: 'asc' }, take: 200 });
   return agents.map(agentStatus);
 }
+export async function getOwnedAgent(context: AppAuthContext, agent: unknown) {
+  if (!hasScope('issues:read', context.token.scopes)) throw new HandoffError('insufficient_scope', 'Agent lookup requires issues:read', 403);
+  return agentStatus(await ownedAgent(prisma, context, name.parse(agent)));
+}
 
 export async function reportWatcher(context: AppAuthContext, input: z.infer<typeof heartbeatSchema>) {
   return prisma.$transaction(async db => {

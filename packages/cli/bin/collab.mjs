@@ -146,7 +146,7 @@ async function main() {
   }
   if (Object.hasOwn(workerCommands, name)) {
     if (words.length !== 2) throw new CliError('unexpected_arguments', 'Unexpected positional arguments.');
-    const extra = name === 'worker setup' ? ['host', 'cwd', 'claude', 'model', 'tools', 'review-agent', 'attempt-usd', 'daily-usd', 'timeout-seconds', 'poll-seconds', 'max-restarts', 'max-starts', 'manage-existing', 'label-ids'] : ['worker install', 'worker uninstall'].includes(name) ? ['dry-run'] : [];
+    const extra = name === 'worker setup' ? ['host', 'cwd', 'claude', 'model', 'tools', 'review-agent', 'attempt-usd', 'daily-usd', 'timeout-seconds', 'poll-seconds', 'max-restarts', 'max-starts', 'manage-existing', 'label-ids'] : ['worker install', 'worker uninstall'].includes(name) ? ['dry-run'] : name === 'worker run' ? ['service-id'] : [];
     allowed(options, ['profile', 'workspace', 'agent', 'json', 'config-dir', ...extra]);
     let state = {}, selected;
     try {

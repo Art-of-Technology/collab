@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { CliError } from './client.mjs';
@@ -30,6 +30,7 @@ export function serviceDefinition(identity, args, configDir, { platform = proces
   if (platform === 'win32') return { label, file: path.join(configDir, `${label}.xml`),
     content: `<?xml version="1.0" encoding="UTF-8"?><Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><Triggers><LogonTrigger><Enabled>true</Enabled></LogonTrigger></Triggers><Principals><Principal id="Author"><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><StartWhenAvailable>true</StartWhenAvailable><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><RestartOnFailure><Interval>PT1M</Interval><Count>3</Count></RestartOnFailure></Settings><Actions Context="Author"><Exec><Command>${xml(args[0])}</Command><Arguments>${xml(args.slice(1).map(quote).join(' '))}</Arguments><WorkingDirectory>${xml(configDir)}</WorkingDirectory></Exec></Actions></Task>`,
     install: [['schtasks.exe', ['/Create', '/TN', label, '/XML', path.join(configDir, `${label}.xml`)]], ['schtasks.exe', ['/Run', '/TN', label]]],
+    disable: ['schtasks.exe', ['/Change', '/TN', label, '/Disable']], closure: windowsClosureCommand(label),
     uninstall: [['schtasks.exe', ['/Delete', '/TN', label, '/F']]],
     inspect: ['schtasks.exe', ['/Query', '/TN', label, '/XML', '/HRESULT']] };
   throw error('Only macOS launchd, Linux systemd user, and Windows user Scheduled Tasks are supported.');
@@ -49,6 +50,10 @@ async function serviceAbsent(definition, execute) {
     return false;
   }
 }
+function windowsClosureCommand(label) {
+  const script = `$ErrorActionPreference='Stop'; $scheduler=New-Object -ComObject Schedule.Service; $scheduler.Connect(); $deadline=[DateTime]::UtcNow.AddSeconds(10); do { $running=@($scheduler.GetRunningTasks(1) | Where-Object { $_.Path -eq '\\${label}' }); if ($running.Count -eq 0) { @{label='${label}';closed=$true} | ConvertTo-Json -Compress; exit 0 }; Start-Sleep -Milliseconds 100 } while ([DateTime]::UtcNow -lt $deadline); exit 1`;
+  return ['powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')]];
+}
 export async function workerService(name, identity, options, state, save, dependencies = {}) {
   const configDir = path.resolve(process.env.COLLAB_CONFIG_DIR || path.join(os.homedir(), '.config/collab'));
   const execute = dependencies.execute || ((command, args) => promisify(execFile)(command, args, { timeout: 15000, windowsHide: true, shell: false, maxBuffer: 65536 }));
@@ -60,9 +65,21 @@ export async function workerService(name, identity, options, state, save, depend
     const file = fs.lstatSync(owned.file, { throwIfNoEntry: false });
     if (file && (!file.isFile() || digest(fs.readFileSync(owned.file)) !== owned.hash)) throw error('No matching owned installation is recorded.');
     if ((state.runId && !state.closed) || (state.active && state.active.closed !== true)) throw error('Owned worker closure must be confirmed before uninstalling.');
-    if (options['dry-run']) return { file: owned.file, label: owned.label, uninstall: file ? expected.uninstall : [], inspect: expected.inspect, dryRun: true };
+    if (options['dry-run']) return { file: owned.file, label: owned.label, uninstall: file ? expected.uninstall : [], inspect: expected.inspect,
+      ...(expected.closure && { disable: file ? expected.disable : undefined, closure: expected.closure }), dryRun: true };
+    owned.retired = true; save(state);
+    if (expected.closure) {
+      try {
+        if (file) {
+          try { await execute(...expected.disable); }
+          catch { if (!await serviceAbsent(expected, execute)) throw supervisorError(); }
+        } else if (!await serviceAbsent(expected, execute)) throw supervisorError();
+        const proof = JSON.parse((await execute(...expected.closure)).stdout);
+        if (proof.label !== owned.label || proof.closed !== true) throw supervisorError();
+      } catch { throw supervisorError(); }
+    }
     if (!file) {
-      if (!await serviceAbsent(expected, execute)) throw supervisorError();
+      if (!expected.closure && !await serviceAbsent(expected, execute)) throw supervisorError();
     } else {
       try { for (const [command, args] of expected.uninstall) await execute(command, args); }
       catch { if (!await serviceAbsent(expected, execute)) throw supervisorError(); }
@@ -71,15 +88,16 @@ export async function workerService(name, identity, options, state, save, depend
     delete state.service; save(state);
     return { uninstalled: true, label: owned.label };
   }
+  const installationId = randomUUID();
   const args = [...(dependencies.command || (/^node(?:\.exe)?$/.test(path.basename(process.execPath)) ? [process.execPath, fileURLToPath(new URL('../bin/collab.mjs', import.meta.url))] : [process.execPath])),
-    'worker', 'run', '--agent', options.agent, '--workspace', options.workspace, '--config-dir', configDir, ...(options.profile ? ['--profile', options.profile] : [])];
+    'worker', 'run', '--agent', options.agent, '--workspace', options.workspace, '--config-dir', configDir, '--service-id', installationId, ...(options.profile ? ['--profile', options.profile] : [])];
   const definition = serviceDefinition(identity, args, configDir, dependencies);
-  if (options['dry-run']) return { ...definition, installed: false, dryRun: true };
+  if (options['dry-run']) return { ...definition, installationId, installed: false, dryRun: true };
   if (state.service) throw error('Uninstall the existing owned service before reinstalling.');
   if (fs.existsSync(definition.file)) throw error('Existing service definition is not the saved owned definition.');
   fs.mkdirSync(path.dirname(definition.file), { recursive: true });
   fs.writeFileSync(definition.file, definition.content, { mode: 0o600, flag: 'wx' });
-  state.service = { file: definition.file, hash: digest(definition.content), label: definition.label }; save(state);
+  state.service = { file: definition.file, hash: digest(definition.content), label: definition.label, installationId }; save(state);
   try { for (const [command, args] of definition.install) await execute(command, args); }
   catch { throw supervisorError(); }
   return { installed: true, label: definition.label, file: definition.file };

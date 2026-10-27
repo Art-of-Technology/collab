@@ -439,6 +439,12 @@ repository or Claude executable has moved or disappeared. Uninstall before chang
 setup while a service is recorded. If installation failed or teardown was interrupted,
 uninstall also accepts confirmed absence of the exact recorded service. Permission,
 transport and unrecognized supervisor errors retain the ownership record.
+Scheduled launches carry an installation identity checked under the worker lock;
+retired or replaced installations cannot admit work. Windows uninstall disables
+further starts and waits for all running instances of the exact owned task to close
+before deleting it, including when its registration is already absent. Unconfirmed
+closure retains the retired installation for inspection and retry. Foreground runs
+remain independent of service installation identity.
 The durable daemon restart allowance bounds OS recovery and also counts manual
 restarts conservatively. Unexpected process failures retain a nonzero exit;
 expired login and permanent configuration failures report a normal paused exit. Normal paused exits do not trigger an infinite

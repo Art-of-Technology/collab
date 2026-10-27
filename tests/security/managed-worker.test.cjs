@@ -14,7 +14,7 @@ function fixture() {
     agentRegistration: {
       findUnique: async ({ where }) => agents.find(a => matches(a, where.workspaceId_name)),
       findFirst: async ({ where }) => agents.find(a => matches(a, where)),
-      findMany: async ({ where }) => agents.filter(a => matches(a, where)),
+      findMany: async ({ where, take }) => agents.filter(a => matches(a, where)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, take),
       create: async ({ data }) => { const row = { id: randomUUID(), labelIds: [], managedWorker: null, ...data }; agents.push(row); return row; },
       update: async ({ where, data }) => Object.assign(agents.find(a => a.id === where.id), data),
       count: async ({ where }) => agents.filter(a => matches(a, where)).length,
@@ -161,6 +161,39 @@ test('same-generation start and close retry safely but expired or closed generat
   await f.manage('start', randomUUID());
 });
 
+test('exact owned lookup reaches a worker beyond the list cap and rejects foreign identities', async () => {
+  const f = fixture();
+  for (let index = 0; index < 201; index++) f.agents.push({ id: `a-${index}`, name: `a-${String(index).padStart(3, '0')}`, userId: 'owner', workspaceId: 'w', labelIds: [], managedWorker: null });
+  await f.manage('configure'); const generation = randomUUID(); await f.manage('start', generation);
+  const listed = await f.service.listAgents(f.context);
+  assert.equal(listed.length, 200); assert.equal(listed.some(agent => agent.name === 'worker'), false);
+  const exact = await f.service.getOwnedAgent(f.context, 'worker');
+  assert.equal(exact.name, 'worker'); assert.equal(exact.worker.generation, generation); assert.equal(exact.worker.closed, false);
+  for (const context of [{ ...f.context, user: { id: 'other' } }, { ...f.context, workspace: { id: 'other' } }]) {
+    await assert.rejects(f.service.getOwnedAgent(context, 'worker'), error => error.code === 'agent_not_found');
+  }
+  await assert.rejects(f.service.getOwnedAgent(f.context, 'missing'), error => error.code === 'agent_not_found');
+  await assert.rejects(f.service.getOwnedAgent({ ...f.context, token: { scopes: ['issues:write'] } }, 'worker'), error => error.code === 'insufficient_scope');
+  await f.manage('close', generation);
+  assert.equal((await f.service.getOwnedAgent(f.context, 'worker')).worker.closed, true);
+});
+
+test('worker GET route enforces read scope and returns only the requested owned identity', async () => {
+  const f = fixture(); await f.manage('configure');
+  const http = load('src/lib/agent-handoff-http.ts', { './agent-handoffs': f.service, zod: require('zod'), 'next/server': { NextResponse: Response } }, { Buffer });
+  const route = load('src/app/api/apps/auth/agents/worker/route.ts', {
+    '@/lib/apps/auth-middleware': { withAppAuth: (handler, options) => Object.assign(handler, { scopes: options.requiredScopes }) },
+    '@/lib/agent-handoffs': f.service, '@/lib/agent-handoff-http': http,
+  });
+  assert.deepEqual(Array.from(route.GET.scopes), ['issues:read']);
+  assert.deepEqual(Array.from(route.POST.scopes), ['issues:write']);
+  const get = (agent, context = f.context) => route.GET({ nextUrl: new URL(`http://fixture/agents/worker?agent=${encodeURIComponent(agent)}`) }, context);
+  const response = await get('worker'); assert.equal(response.status, 200); assert.equal((await response.json()).agent.name, 'worker');
+  for (const context of [{ ...f.context, user: { id: 'other' } }, { ...f.context, workspace: { id: 'other' } }]) assert.equal((await get('worker', context)).status, 404);
+  assert.equal((await get('missing')).status, 404); assert.equal((await get('BAD!')).status, 400);
+  assert.equal((await get('worker', { ...f.context, token: { scopes: [] } })).status, 403);
+});
+
 for (const platform of ['darwin', 'linux', 'win32']) for (const change of ['removed', 'moved']) test(`${platform} supervisor configuration reaches normal pause after repository is ${change}`, async t => {
   const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
   const { spawn } = require('node:child_process'), { once } = require('node:events');
@@ -181,6 +214,8 @@ for (const platform of ['darwin', 'linux', 'win32']) for (const change of ['remo
   const definition = await workerService('worker install', identity, options, state, () => assert.fail('dry-run saved state'), {
     platform, home: dir, uid: 501, command: [process.execPath, bin], execute: async () => assert.fail('dry-run touched supervisor'),
   });
+  state.service = { installationId: definition.installationId, file: definition.file, label: definition.label };
+  fs.writeFileSync(stateFile, JSON.stringify(state), { mode: 0o600 });
   let cwd, argv;
   if (platform === 'linux') {
     const unit = new Map(definition.content.split('\n').filter(line => line.includes('=')).map(line => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]));
@@ -203,7 +238,7 @@ for (const platform of ['darwin', 'linux', 'win32']) for (const change of ['remo
     }
   }
   assert.equal(cwd, dir);
-  assert.deepEqual(argv, [process.execPath, bin, 'worker', 'run', '--agent', 'worker', '--workspace', 'ws', '--config-dir', dir]);
+  assert.deepEqual(argv, [process.execPath, bin, 'worker', 'run', '--agent', 'worker', '--workspace', 'ws', '--config-dir', dir, '--service-id', definition.installationId]);
   if (change === 'removed') fs.rmSync(repo, { recursive: true }); else fs.renameSync(repo, path.join(dir, 'moved'));
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^COLLAB_/i.test(key)));
   const child = spawn(argv[0], argv.slice(1), { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });

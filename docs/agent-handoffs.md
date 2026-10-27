@@ -9,6 +9,7 @@ All routes are under `/api/apps/auth/agents` and use the existing OAuth bearer t
 | Route | Behavior | Required scopes |
 | --- | --- | --- |
 | `GET /` | List up to 200 agents with label subscriptions, bindings and reported watcher health | `issues:read` |
+| `GET /worker?agent=NAME` | Read one exact agent owned by the current user and workspace for managed recovery | `issues:read` |
 | `POST /` | Register/update your own `{name, labelIds, host?, sessionId?}` | `workspace:write`, `issues:read` |
 | `POST /heartbeat` | Report the bound watcher's start, poll, callback success, stop or error | `issues:read` |
 | `GET /inbox?agent=NAME&state=unseen` | Oldest unseen requests; limit 1–50, default 20 | `issues:read` |

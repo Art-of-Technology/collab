@@ -83,6 +83,9 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     return control(record, 'stop');
   }
   return stateStore.exclusive(async (state, save) => {
+    if (name === 'worker run' && options['service-id'] && (!state.service || state.service.retired || state.service.installationId !== options['service-id'])) {
+      return { ...summary(state), state: 'stopped', stopReason: 'service_retired' };
+    }
     if (name === 'worker setup') {
       if (state.active || (state.runId && !state.closed)) throw fail('worker_uncertain', 'Reconcile the prior run through worker run/status before changing setup.');
       if (state.service) throw fail('worker_service', 'Uninstall the owned service before changing setup.');
@@ -162,7 +165,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       if (state.active && !['reserved', 'claimed', 'result', 'settling', 'completed'].includes(state.active.phase)) throw fail('worker_uncertain', 'This task requires operator reconciliation; its recorded usage remains charged.');
       await runner.doctor(config);
       if (state.runId && !state.closed) {
-        const remote = (await read('agents')).agents?.find(agent => agent.name === options.agent)?.worker;
+        const remote = (await read(`agents/worker?agent=${encodeURIComponent(options.agent)}`)).agent?.worker;
         if (remote?.generation === state.runId) await report('close', null);
         else if (!remote?.closed) throw fail('worker_uncertain', 'Remote run ownership is unresolved.');
         state.closed = true; persist();
