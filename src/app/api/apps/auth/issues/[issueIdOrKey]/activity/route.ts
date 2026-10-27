@@ -99,8 +99,9 @@ export const GET = withAppAuth(
           id: activity.id,
           action: activity.action,
           fieldName: activity.fieldName,
-          oldValue: activity.oldValue,
-          newValue: activity.newValue,
+          // A foreign status relation makes the corresponding historical scalar ambiguous.
+          oldValue: activity.oldStatus && !visibleStatus(activity.oldStatus) ? null : activity.oldValue,
+          newValue: activity.newStatus && !visibleStatus(activity.newStatus) ? null : activity.newValue,
           oldStatus: visibleStatus(activity.oldStatus),
           newStatus: visibleStatus(activity.newStatus),
           details: activity.details ? JSON.parse(activity.details) : null,
