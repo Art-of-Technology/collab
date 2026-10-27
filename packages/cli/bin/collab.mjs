@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { watchInbox } from '../src/inbox-watch.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -65,7 +67,40 @@ async function boundedInput(file) {
   } finally { clearTimeout(timer); if (file !== '-') stream.destroy(); }
 }
 function help() {
-  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors and issue deletion previews on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
+  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors and issue deletion previews on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema', 'update'], globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
+}
+async function update() {
+  const windows = process.platform === 'win32';
+  // The installer writes only to its documented directory; refuse anything else so success is never reported for an untouched binary.
+  const expectedDir = windows ? path.join(process.env.LOCALAPPDATA || '', 'Collab', 'bin') : path.join(os.homedir(), '.local', 'bin');
+  const fold = value => windows ? value.toLowerCase() : value;
+  const real = target => { try { return fold(fs.realpathSync(target)); } catch { return null; } };
+  if (fold(path.basename(process.execPath)) !== (windows ? 'collab.exe' : 'collab') || real(path.dirname(process.execPath)) === null || real(path.dirname(process.execPath)) !== real(expectedDir)) {
+    throw new CliError('unsupported_update', `update only replaces the executable installed by the one-command installer at ${expectedDir}. For npm or source installs, reinstall with npm.`, 2);
+  }
+  const url = `https://collab.weez.boo/install.${windows ? 'ps1' : 'sh'}`;
+  let script;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+    if (!response.ok) throw new Error(String(response.status));
+    script = await response.text();
+  } catch { throw new CliError('installer_unavailable', `Could not download ${url}. Check the network and retry.`, 5); }
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-update-'));
+  const old = `${process.execPath}.old`;
+  try {
+    const file = path.join(work, windows ? 'install.ps1' : 'install.sh');
+    fs.writeFileSync(file, script, { mode: 0o600 });
+    // Windows cannot overwrite a running executable, but it can be renamed; the installer then moves the new one into place.
+    if (windows) { fs.rmSync(old, { force: true }); fs.renameSync(process.execPath, old); }
+    const powershell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const result = spawnSync(windows ? powershell : 'sh', windows ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', file] : [file],
+      { stdio: ['ignore', 'pipe', 'inherit'], encoding: 'utf8', windowsHide: true, timeout: 300000, maxBuffer: 1024 * 1024 });
+    if (result.status !== 0) {
+      if (windows && !fs.existsSync(process.execPath)) { try { fs.renameSync(old, process.execPath); } catch { /* Reported below. */ } }
+      throw new CliError('update_failed', 'Installer did not complete; the current executable was kept. Rerun collab update or the one-command installer.', 5);
+    }
+    return { updated: true, previousVersion: cliPackage.version, installer: result.stdout.trim() };
+  } finally { fs.rmSync(work, { recursive: true, force: true }); }
 }
 async function main() {
   const { words, options } = parse(process.argv.slice(2));
@@ -75,6 +110,11 @@ async function main() {
   for (const key of ['workspace', 'project', 'workspace-id', 'project-id']) {
     if ((name === 'search' || name === 'context get') && ['project', 'project-id'].includes(key) && options[key] !== undefined) options[key] = options[key].trim();
     if (options[key] !== undefined && !/^[a-zA-Z0-9_-]+$/.test(options[key])) throw new CliError('invalid_identifier', 'Workspace and project selectors must be nonempty IDs.');
+  }
+  if (words[0] === 'update') {
+    allowed(options, ['json']);
+    if (words.length !== 1) throw new CliError('unexpected_arguments', 'Unexpected positional arguments.');
+    return update();
   }
   if (name.startsWith('auth ') || name.startsWith('config ')) {
     const localOptions = name === 'auth login' ? ['url', 'workspace', 'read-only'] : name === 'config set' ? ['workspace', 'project'] : [];

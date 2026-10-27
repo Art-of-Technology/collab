@@ -16,7 +16,7 @@ Windows PowerShell:
 irm https://collab.weez.boo/install.ps1 | iex
 ```
 
-Run `collab --help` immediately in the same terminal. The installer selects the native executable, checks SHA-256, and updates PATH for this terminal and future ones. No administrator access, Node.js, npm, Bun, or terminal restart required. Run the same command again to update; existing login/configuration is preserved.
+Run `collab --help` immediately in the same terminal. The installer selects the native executable, checks SHA-256, and updates PATH for this terminal and future ones. No administrator access, Node.js, npm, Bun, or terminal restart required. Run `collab update` (or the same command again) to update; existing login/configuration is preserved.
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 

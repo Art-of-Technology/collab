@@ -467,6 +467,16 @@ async function fixture(t, handler) {
   return { run, dir, calls, url };
 }
 
+test('update is listed, takes no arguments, and refuses to run the installer outside the installed native executable', { skip: Boolean(executable) }, async t => {
+  const f = await fixture(t);
+  assert.ok((await f.run(['help'])).data.localCommands.includes('update'));
+  const refused = await f.run(['update']);
+  assert.equal(refused.code, 2); assert.equal(refused.error.error, 'unsupported_update');
+  const extra = await f.run(['update', 'now']);
+  assert.equal(extra.error.error, 'unexpected_arguments');
+  assert.equal(f.calls.length, 0);
+});
+
 test('schema is offline, machine-readable and includes projects, issues and Notes', async t => {
   const f = await fixture(t);
   const result = await f.run(['schema']);
