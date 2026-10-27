@@ -40,8 +40,11 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   await prisma.$executeRawUnsafe(`INSERT INTO "AgentRegistration" (id, "workspaceId", "userId", name, "updatedAt") VALUES ('legacy-agent', 'w', 'alice', 'legacy-agent', NOW())`);
   const operationsMigration = readFileSync(resolve('prisma/migrations/20261026000100_agent_operations/migration.sql'), 'utf8');
   for (const statement of operationsMigration.split(';').filter(s => s.trim())) await prisma.$executeRawUnsafe(statement);
+  const managedWorkersMigration = readFileSync(resolve('prisma/migrations/20261027000100_managed_workers/migration.sql'), 'utf8');
+  for (const statement of managedWorkersMigration.split(';').filter(s => s.trim())) await prisma.$executeRawUnsafe(statement);
   const legacy = await prisma.agentRegistration.findUniqueOrThrow({ where: { id: 'legacy-agent' } });
   assert.equal(legacy.host, null); assert.equal(legacy.sessionId, null); assert.equal(legacy.watcher, null);
+  assert.equal(legacy.managedWorker, null, 'migration preserves existing agents as unmanaged');
   await prisma.agentRegistration.delete({ where: { id: legacy.id } });
   assert.equal(await prisma.issue.count(), 2, 'migration preserves existing work');
   const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } });
@@ -72,7 +75,7 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
       assert.deepEqual(JSON.parse(JSON.stringify(result)), { id: agentId, workspaceId: 'w', userId: 'alice',
         name: 'compat-agent', labelIds, createdAt: stored.createdAt.toISOString(), updatedAt: stored.updatedAt.toISOString() });
       const listed = (await service.listAgents(alice)).find(a => a.id === agentId);
-      assert.deepEqual(JSON.parse(JSON.stringify(listed)), { id: agentId, name: 'compat-agent', labelIds });
+      assert.deepEqual(JSON.parse(JSON.stringify(listed)), { id: agentId, name: 'compat-agent', labelIds, worker: null });
       for (const state of ['unseen', 'claimed']) for (const agent of [undefined, 'compat-agent']) {
         const monitor = await service.workspaceAgentInbox(alice, { state, agent, limit: 50 });
         assert.deepEqual(JSON.parse(JSON.stringify(monitor.agents.find(a => a.name === 'compat-agent'))), { name: 'compat-agent' });
@@ -177,9 +180,9 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     assert.equal(unchanged.watcher, null);
     const listed = await service.listAgents(alice);
     const legacy = listed.find(a => a.name === 'lead');
-    assert.deepEqual(JSON.parse(JSON.stringify(legacy)), { id: legacy.id, name: 'lead', labelIds: [] });
+    assert.deepEqual(JSON.parse(JSON.stringify(legacy)), { id: legacy.id, name: 'lead', labelIds: [], worker: null });
     assert.deepEqual(JSON.parse(JSON.stringify(listed.find(a => a.name === binding.name))), {
-      id: unchanged.id, name: binding.name, labelIds: [], host: binding.host, sessionId: binding.sessionId, watcher: null,
+      id: unchanged.id, name: binding.name, labelIds: [], worker: null, host: binding.host, sessionId: binding.sessionId, watcher: null,
     });
     const watcherId = randomUUID();
     const heartbeat = (event, extra = {}, ctx = alice) => service.reportWatcher(ctx, service.heartbeatSchema.parse({

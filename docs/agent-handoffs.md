@@ -1,6 +1,6 @@
 # Agent handoffs
 
-Collab coordinates already-running external agents. A name identifies an agent owned by a workspace user; subscriptions contain existing workspace label IDs. Matching agents receive the same durable request, but only one can claim it. Labels route work without granting access to the issue. Agents retain the authenticated user's current workspace/issue permissions.
+Collab coordinates external agent sessions and dedicated managed workers. A name identifies an agent owned by a workspace user; subscriptions contain existing workspace label IDs. Matching agents receive the same durable request, but only one can claim it. Labels route work without granting access to the issue. Agents retain the authenticated user's current workspace/issue permissions.
 
 ## API foundation
 
@@ -8,11 +8,13 @@ All routes are under `/api/apps/auth/agents` and use the existing OAuth bearer t
 
 | Route | Behavior | Required scopes |
 | --- | --- | --- |
-| `GET /` | List up to 200 agents with label subscriptions, bindings and reported watcher health | `issues:read` |
-| `POST /` | Register/update your own `{name, labelIds, host?, sessionId?}` | `workspace:write`, `issues:read` |
-| `POST /heartbeat` | Report the bound watcher's start, poll, callback success, stop or error | `issues:read` |
+| `GET /` | List up to 200 agents with label subscriptions, bindings and reported watcher or managed-worker health | `issues:read` |
+| `GET /worker?agent=NAME` | Read one exact agent owned by the current user and workspace for managed recovery | `issues:read` |
+| `POST /worker` | Configure or report a managed run using [`workerSchema`](../src/lib/agent-handoffs.ts); see [managed workers](#managed-workers) | `issues:write`; `configure` also requires `workspace:write`, `issues:read` |
+| `POST /` | Register/update your own manual agent using [`registrationSchema`](../src/lib/agent-handoffs.ts) | `workspace:write`, `issues:read` |
+| `POST /heartbeat` | Report a manual agent's bound watcher start, poll, callback success, stop or error | `issues:read` |
 | `GET /inbox?agent=NAME&state=unseen` | Oldest unseen requests; limit 1–50, default 20 | `issues:read` |
-| `POST /handoffs` | Send `{agent, issue, content, toAgents, toLabels, requestAck?, requestId?, afterId?}` | `issues:read`, `issues:write` |
+| `POST /handoffs` | Send using [`sendSchema`](../src/lib/agent-handoffs.ts), including the current generation for a managed sender | `issues:read`, `issues:write` |
 | `GET /handoffs/ID?agent=NAME` | Retrieve an authorized handoff and current context commands | `issues:read` |
 | `PATCH /handoffs/ID` | Apply a handoff action using [`actionSchema`](../src/lib/agent-handoffs.ts); see the actions below | `issues:read`; work actions also require `issues:write` |
 
@@ -34,7 +36,7 @@ To pass work onward, send a new request with `afterId` referencing a request cur
 
 ## Current identities and watcher health
 
-Use one stable agent name across restarts. Register a human-readable host identifier and the actual agent session identifier together; do not use credentials, user data or task text in either field. One workspace user cannot bind multiple names to the same host/session pair. Existing names without a binding remain compatible and are displayed as unbound. Registration without these fields preserves an existing binding. Registration still replaces the complete label subscription list.
+For manual agents, use one stable agent name across restarts. Register a human-readable host identifier and the actual agent session identifier together; do not use credentials, user data or task text in either field. One workspace user cannot bind multiple names to the same host/session pair. Existing names without a binding remain compatible and are displayed as unbound. Registration without these fields preserves an existing binding. Registration still replaces the complete label subscription list. Managed identities use the lifecycle below instead of registration or watcher heartbeats.
 
 The same name can bind a replacement session after its current watcher stops or becomes stale. Active watcher bindings refuse takeover. Rebinding clears old health so a prior session's success cannot look like current-session evidence. Never reuse a name belonging to another active agent. Host/session fields describe an owner's declared runtime; they are not new authentication credentials or proof of machine identity.
 
@@ -43,6 +45,38 @@ CLI 0.6.0 `inbox watch --host HOST --session-id SESSION_ID` reports health again
 `lastWakeAt` means the local callback exited successfully after host acceptance. It does **not** prove a model turn or completed work. Verify those through the handoff's claim, progress and reply. No callback success is recorded on timeout, cancellation or failure. Health report bodies contain no token, task content, callback arguments or raw error text. Health failures stop a reporting watcher; an error while recording a prior failure never replaces that original error. If the server is unavailable at shutdown, the last running report becomes stale.
 
 The heartbeat body is `{agent, host, sessionId, watcherId, event, errorCode?}`; events are `started`, `poll`, `wake`, `stopped`, `error`, with `errorCode` required for `error` and forbidden for other events. Only the owning user can report, and the exact host/session must already be registered. The CLI manages this lifecycle; do not manually report success on behalf of a watcher.
+
+## Managed workers
+
+The daemon manages `POST /worker` for its owning user, workspace and exact saved
+host/session binding. `configure` creates a managed registration or updates a closed
+one without changing its host/session identity. Converting a manual registration
+requires explicit `convert: true`, no running watcher and no claimed manual work.
+Omitted labels preserve subscriptions; supplied labels replace the full list.
+Legacy registration and watcher heartbeats refuse managed agents with `managed_agent`.
+For setup and operator recovery, use the [worker guide](../packages/cli/README.md#dedicated-managed-workers-cli-070).
+
+`start` admits a fresh generation UUID only after the prior run is closed. A retry
+of the active generation returns its existing state. `renew` requires that exact,
+open generation and an unexpired server lease; accepted starts and renewals grant
+a 60-second lease. `close` requires the matching generation, including after expiry,
+and is safe to repeat. Neither expiry nor a closed generation permits revival by
+renewal. Expiry alone does not prove child closure or permit another run to take over.
+
+Managed send and action requests must include the current `generation`, including
+pass, seen, ACK and supersession as well as claim, progress, release and completion.
+Missing, stale, closed or expired generations fail with `worker_fenced`; there is no
+name-only fallback. Manual agents retain their existing semantics and reject a
+supplied generation with `worker_not_managed`. These fences preserve the existing
+owner, workspace, scope and issue-access checks.
+
+Agent reads expose a `worker` health object, or null for manual agents. The exact
+owned lookup returns `{agent}`; lifecycle reports return `{worker}`. Health includes
+generation, closure, server heartbeat/lease, reported state and usage. `online`
+means the generation is open with an unexpired lease; `working` additionally
+requires the daemon's reported working state. Neither flag proves task completion.
+The web inbox displays these worker states and estimated/reserved/unknown usage;
+watcher poll and callback timestamps remain separate manual-session evidence.
 
 ## Timeline
 
@@ -66,7 +100,7 @@ Adding one or more subscribed labels in a single issue edit creates one durable 
 
 The issue edit, handoff and `AGENT_LABEL_ADDED` timeline entry commit in one transaction. The entry identifies the user who edited the issue and includes the handoff ID, routed label IDs and generated context; it has no sending agent. An unchanged save does not notify again. Concurrent updates either serialize or return a conflict; reload before retrying. Removing a label does not cancel existing handoffs or revoke a claim. Removing then re-adding it creates a new handoff, so read the timeline before starting duplicate work. Label renames, mentions and historical issue backfills are not triggers.
 
-Delivery persists while agents are offline. Inbox retrieval and claims still require the agent owner's current issue access. Inbox creation itself does not wake a model: the host must provide and verify an adapter. For watcher availability and setup, see the [CLI wake callback contract](../packages/cli/README.md#wake-a-running-agent-through-its-host). Label delivery needs only the original agent-handoff tables; current identity/health and supersession additionally require the agent-operations migration.
+Delivery persists while agents are offline. Inbox retrieval and claims still require the agent owner's current issue access. Inbox creation itself does not wake a model: a [dedicated worker](../packages/cli/README.md#dedicated-managed-workers-cli-070) must be running, or an existing session's host must provide and verify an adapter under the [CLI wake callback contract](../packages/cli/README.md#wake-a-running-agent-through-its-host). Label delivery needs only the original agent-handoff tables; current identity/health and supersession additionally require the agent-operations migration.
 
 ## Validation and rollout
 
@@ -80,4 +114,11 @@ CLI 0.6.0 identity/health/supersession requires `20261026000100_agent_operations
 
 Older server images can expose superseded rows to older watchers after rollback. Keep the additive schema and prefer a compatible forward repair.
 
-The shipped identity/health reporting does not install an Orca adapter, supervisor or stopped-agent launcher. The Sportsbook SBK-41 pilot proved a same-host round trip and duplicate suppression; its bounded, handoff-allowlisted prototype is not a general service. A reusable adapter must bind an actual current Orca handle, read `result.send.accepted`, retain the request ID for uncertain-delivery recovery, coalesce repeated handoff IDs, renew bounded watcher windows, and verify a remote idle model's claim/reply. Keep that acceptance separate from callback health and the completed pilot.
+CLI 0.7.0 workers require the matching server and additive
+`20261027000100_managed_workers` migration, which adds nullable
+`AgentRegistration.managedWorker` JSONB and leaves manual registrations unchanged.
+Apply the same target, ledger and protected-backup requirements above. Retaining
+the column alone is insufficient for safe worker operation after an app rollback:
+an older server does not enforce managed generations. Stop workers before reverting
+to such a server. See the [worker guide](../packages/cli/README.md#dedicated-managed-workers-cli-070)
+for CLI operation and release qualification boundaries.

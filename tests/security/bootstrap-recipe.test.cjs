@@ -65,8 +65,8 @@ test('actual bootstrap CLI emits one guarded schema transaction with exact suppl
   const tail = version.slice(version.indexOf('CREATE FUNCTION "retain_version_access_invalidation"'));
   assert.ok(apply.input.includes(schemaSql + '\nALTER TABLE "ForgeExecutionAttempt" ADD ' + check + ';\n' + active + '\n' + tail + '\nCOMMIT;'));
   assert.ok(!apply.input.includes('ADD COLUMN "issueAccessInvalidated"'), 'modeled flag is generated once; historical existing-row backfill is not replayed');
-  assert.deepEqual(contract.migrations.slice(-4).map(row => row.name), [
-    '20261017000100_agent_handoffs', '20261021223000_git_provider_connections', '20261022190000_issue_trash', '20261026000100_agent_operations',
+  assert.deepEqual(contract.migrations.slice(-5).map(row => row.name), [
+    '20261017000100_agent_handoffs', '20261021223000_git_provider_connections', '20261022190000_issue_trash', '20261026000100_agent_operations', '20261027000100_managed_workers',
   ]);
   assert.ok(!apply.input.includes('ADD COLUMN "deletedAt"'), 'Trash columns and restrictive FKs come from the current schema, not replayed upgrade SQL');
   assert.deepEqual(result.calls.slice(2).map(call => call.args.at(-1)), contract.migrations.map(row => row.name));

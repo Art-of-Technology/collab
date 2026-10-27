@@ -58,8 +58,8 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
         // No persisted ACK: restarting may repeat a notification, never lose queued work.
         if (deliveryId !== lastDelivery || Date.now() - deliveredAt >= 60000) {
           await deliverWake(callback, callbackArgs, { ...payload, deliveryId }, callbackTimeoutMs, watchSignal);
-          lastDelivery = deliveryId; deliveredAt = Date.now(); callbacks++;
-          await report?.('wake', watchSignal);
+          lastDelivery = deliveryId; deliveredAt = Date.now();
+          callbacks++; await report?.('wake', watchSignal);
         }
       } else lastDelivery = undefined;
       await delay(intervalMs, undefined, { signal: watchSignal });

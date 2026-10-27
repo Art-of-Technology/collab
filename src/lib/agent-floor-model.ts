@@ -8,6 +8,7 @@ export interface FloorProject {
 export interface FloorAgent {
   id: string;
   name: string;
+  worker?: { state: string; online: boolean; working: boolean; leaseUntil: string | null; usage?: { estimatedUSD: number; reservedUSD: number; unknownUSD: number } } | null;
 }
 export interface FloorTask {
   id: string;

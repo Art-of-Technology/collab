@@ -1,0 +1,98 @@
+TAP version 13
+# Subtest: watcher dry-run preserves legacy JSON and includes health only for a valid binding
+ok 1 - watcher dry-run preserves legacy JSON and includes health only for a valid binding
+  ---
+  duration_ms: 410.423667
+  type: 'test'
+  ...
+# Subtest: watcher rejects empty, partial and malformed bindings before dry-run or execution
+ok 2 - watcher rejects empty, partial and malformed bindings before dry-run or execution
+  ---
+  duration_ms: 6447.875708
+  type: 'test'
+  ...
+# Subtest: watcher rejects superseded work in either queue before invoking a callback
+    # Subtest: claimed
+    ok 1 - claimed
+      ---
+      duration_ms: 318.088667
+      type: 'test'
+      ...
+    # Subtest: unseen
+    ok 2 - unseen
+      ---
+      duration_ms: 556.801375
+      type: 'test'
+      ...
+    1..2
+ok 3 - watcher rejects superseded work in either queue before invoking a callback
+  ---
+  duration_ms: 875.560333
+  type: 'test'
+  ...
+# Subtest: bound watcher reports poll and successful callback separately, then stops without changing handoffs
+ok 4 - bound watcher reports poll and successful callback separately, then stops without changing handoffs
+  ---
+  duration_ms: 2445.549209
+  type: 'test'
+  ...
+# Subtest: watcher errors retain the original failure and never record a successful wake
+ok 5 - watcher errors retain the original failure and never record a successful wake
+  ---
+  duration_ms: 3477.445417
+  type: 'test'
+  ...
+# Subtest: watcher reports a bounded fallback for code-less failures and preserves the original error
+ok 6 - watcher reports a bounded fallback for code-less failures and preserves the original error
+  ---
+  duration_ms: 16.042583
+  type: 'test'
+  ...
+# Subtest: inbox watch window expiry closes a healthy adapter without reporting callback failure
+not ok 7 - inbox watch window expiry closes a healthy adapter without reporting callback failure
+  ---
+  duration_ms: 2735.446709
+  type: 'test'
+  location: '/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M5YK6DY692DGK3PFPGBYJS74/packages/cli/test/cli.test.mjs:361:1'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/var/folders/yz/_qq8km3x433d7wkcql1rzpvw0000gn/T/collab-cli-test-1buEob/adapter.pid'"
+  code: 'ENOENT'
+  stack: |-
+    readFileSync (node:fs:440:20)
+    TestContext.<anonymous> (file:///Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M5YK6DY692DGK3PFPGBYJS74/packages/cli/test/cli.test.mjs:374:22)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: dedicated worker commands replace unsafe Orca terminal dispatch
+ok 8 - dedicated worker commands replace unsafe Orca terminal dispatch
+  ---
+  duration_ms: 686.997042
+  type: 'test'
+  ...
+# Subtest: worker status and stop retain local recovery after login expiry
+ok 9 - worker status and stop retain local recovery after login expiry
+  ---
+  duration_ms: 745.582875
+  type: 'test'
+  ...
+# Subtest: worker run pauses on missing login or invalid runner configuration before supervision
+ok 10 - worker run pauses on missing login or invalid runner configuration before supervision
+  ---
+  duration_ms: 578.080625
+  type: 'test'
+  ...
+# Subtest: legacy watcher coalesces revision-only changes in its emitted callback contract
+ok 11 - legacy watcher coalesces revision-only changes in its emitted callback contract
+  ---
+  duration_ms: 157.216667
+  type: 'test'
+  ...
+1..11
+# tests 13
+# suites 0
+# pass 12
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18844.353542

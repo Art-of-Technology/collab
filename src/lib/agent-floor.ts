@@ -5,6 +5,7 @@ import { issueAccessWhere, issueReadAccessWhere } from "@/lib/issue-finder";
 import type { FloorSnapshot, FloorEvent } from "@/lib/agent-floor-model";
 import { PROJECT_PAGE_SIZE } from "@/lib/agent-floor-model";
 import { commentHtml } from "@/lib/comment-html";
+import { managedStatus } from "@/lib/managed-worker-health";
 
 const LIMIT = 200;
 /** All entry points use this scope, including polling after membership revocation. */
@@ -53,7 +54,7 @@ export async function readAgentFloor(
     }),
     prisma.agentRegistration.findMany({
       where: { workspaceId: workspace.id },
-      select: { id: true, name: true, userId: true, labelIds: true },
+      select: { id: true, name: true, userId: true, labelIds: true, managedWorker: true },
       orderBy: { name: "asc" },
       take: LIMIT + 1,
     }),
@@ -199,7 +200,7 @@ export async function readAgentFloor(
         isFinal: s.isFinal,
       })),
     })),
-    agents: agents.map((a) => ({ id: a.id, name: a.name })),
+    agents: agents.map((a) => ({ id: a.id, name: a.name, worker: managedStatus(a.managedWorker) })),
     tasks,
     events,
     generatedAt,

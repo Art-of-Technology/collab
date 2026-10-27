@@ -153,10 +153,17 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
   if (!response.ok) {
     const codes = { 400: 'invalid_request', 401: 'unauthorized', 403: 'forbidden', 404: 'not_found', 409: 'conflict', 429: 'rate_limited' };
     let code = codes[response.status] || 'server_error';
-    let retrievalMessage;
+    let retrievalMessage, configureRejected = false;
     try {
       const remoteCode = JSON.parse(text).error;
+      if (method === 'POST' && body?.event === 'configure' && /^\/api\/apps\/auth\/agents\/worker(?:\?|$)/.test(endpoint) &&
+          response.headers.get('content-type')?.includes('application/json')) {
+        const rejections = { invalid_request: 400, invalid_json: 400, body_too_large: 413, invalid_labels: 400,
+          insufficient_scope: 403, agent_name_taken: 403, worker_conversion_required: 409, worker_active: 409 };
+        configureRejected = Object.hasOwn(rejections, remoteCode) && rejections[remoteCode] === response.status;
+      }
       if (remoteCode === 'forge_connected_project') code = remoteCode;
+      if (response.status === 409 && remoteCode === 'already_claimed' && /^\/api\/apps\/auth\/agents\/handoffs\//.test(endpoint)) code = remoteCode;
       const messages = {
         semantic_unavailable: [503, 'Semantic search is unavailable. Use --mode keyword or --mode hybrid for explicit keyword fallback.'],
         budget_too_small: [422, 'Increase --max-tokens to fit at least one result or context section.'],
@@ -167,7 +174,7 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
       }
     } catch { /* Never echo remote error bodies. */ }
     if (mutation && response.status >= 500) code = 'outcome_unknown';
-    throw new CliError(code, retrievalMessage || (code === 'outcome_unknown' ? 'Server failed after dispatch. Inspect Collab before retrying.' : `Collab refused the request (HTTP ${response.status}).`), response.status === 401 ? 3 : response.status === 403 ? 4 : 5, { status: response.status });
+    throw new CliError(code, retrievalMessage || (code === 'outcome_unknown' ? 'Server failed after dispatch. Inspect Collab before retrying.' : `Collab refused the request (HTTP ${response.status}).`), response.status === 401 ? 3 : response.status === 403 ? 4 : 5, { status: response.status, ...(configureRejected && { configureRejected: true }) });
   }
   if (!text && (response.status === 204 || endpoint === '/api/oauth/revoke')) return { ok: true };
   try {

@@ -1,0 +1,37 @@
+[
+  {
+    "name": "workers-bootstrap",
+    "command": [
+      "node",
+      "--test",
+      "packages/cli/test/worker.test.mjs",
+      "tests/security/bootstrap-recipe.test.cjs"
+    ],
+    "exit": 0,
+    "seconds": 22.42,
+    "tail": "n or connection\nok 32 - changed cli refuses before generation or connection\n  ---\n  duration_ms: 219.630333\n  type: 'test'\n  ...\n# Subtest: nonempty does not retry, reset or guess successful baselining\nok 33 - nonempty does not retry, reset or guess successful baselining\n  ---\n  duration_ms: 280.8455\n  type: 'test'\n  ...\n# Subtest: lost does not retry, reset or guess successful baselining\nok 34 - lost does not retry, reset or guess successful baselining\n  ---\n  duration_ms: 288.652708\n  type: 'test'\n  ...\n# Subtest: diff does not retry, reset or guess successful baselining\nok 35 - diff does not retry, reset or guess successful baselining\n  ---\n  duration_ms: 950.048209\n  type: 'test'\n  ...\n# Subtest: resolve does not retry, reset or guess successful baselining\nok 36 - resolve does not retry, reset or guess successful baselining\n  ---\n  duration_ms: 868.091584\n  type: 'test'\n  ...\n# Subtest: invalid intent and unsupported target options never generate or connect\nok 37 - invalid intent and unsupported target options never generate or connect\n  ---\n  duration_ms: 770.836208\n  type: 'test'\n  ...\n# Subtest: transport must be explicit and remote plaintext refuses before child processes\nok 38 - transport must be explicit and remote plaintext refuses before child processes\n  ---\n  duration_ms: 1200.972\n  type: 'test'\n  ...\n# Subtest: psql ENOENT classification stops without baselines\nok 39 - psql ENOENT classification stops without baselines\n  ---\n  duration_ms: 239.988542\n  type: 'test'\n  ...\n# Subtest: psql ETIMEDOUT classification stops without baselines\nok 40 - psql ETIMEDOUT classification stops without baselines\n  ---\n  duration_ms: 182.395584\n  type: 'test'\n  ...\n1..40\n# tests 40\n# suites 0\n# pass 40\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 22352.998333\n"
+  },
+  {
+    "name": "worker-entry-callback",
+    "command": [
+      "node",
+      "--test",
+      "--test-name-pattern=worker|watcher|bound watcher|wake|callback",
+      "packages/cli/test/cli.test.mjs"
+    ],
+    "exit": 1,
+    "seconds": 18.94,
+    "tail": "rting callback failure\nnot ok 7 - inbox watch window expiry closes a healthy adapter without reporting callback failure\n  ---\n  duration_ms: 2735.446709\n  type: 'test'\n  location: '/Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M5YK6DY692DGK3PFPGBYJS74/packages/cli/test/cli.test.mjs:361:1'\n  failureType: 'testCodeFailure'\n  error: \"ENOENT: no such file or directory, open '/var/folders/yz/_qq8km3x433d7wkcql1rzpvw0000gn/T/collab-cli-test-1buEob/adapter.pid'\"\n  code: 'ENOENT'\n  stack: |-\n    readFileSync (node:fs:440:20)\n    TestContext.<anonymous> (file:///Users/cem/.no-mistakes/worktrees/96aa14404fa1/01M5YK6DY692DGK3PFPGBYJS74/packages/cli/test/cli.test.mjs:374:22)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: dedicated worker commands replace unsafe Orca terminal dispatch\nok 8 - dedicated worker commands replace unsafe Orca terminal dispatch\n  ---\n  duration_ms: 686.997042\n  type: 'test'\n  ...\n# Subtest: worker status and stop retain local recovery after login expiry\nok 9 - worker status and stop retain local recovery after login expiry\n  ---\n  duration_ms: 745.582875\n  type: 'test'\n  ...\n# Subtest: worker run pauses on missing login or invalid runner configuration before supervision\nok 10 - worker run pauses on missing login or invalid runner configuration before supervision\n  ---\n  duration_ms: 578.080625\n  type: 'test'\n  ...\n# Subtest: legacy watcher coalesces revision-only changes in its emitted callback contract\nok 11 - legacy watcher coalesces revision-only changes in its emitted callback contract\n  ---\n  duration_ms: 157.216667\n  type: 'test'\n  ...\n1..11\n# tests 13\n# suites 0\n# pass 12\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 18844.353542\n"
+  },
+  {
+    "name": "callback-expiry-isolated",
+    "command": [
+      "node",
+      "--test",
+      "--test-name-pattern=^inbox watch window expiry closes a healthy adapter",
+      "packages/cli/test/cli.test.mjs"
+    ],
+    "exit": 0,
+    "seconds": 2.5
+  }
+]

@@ -19,6 +19,8 @@ not project names or human account names.
 - Project rooms, a task board, claimants and handoff instructions.
 - Named claim, progress, pass, release, acknowledgement and completion events,
   with the recorded report/evidence and links to the canonical issues.
+- Managed-worker daemon/child state and estimated/reserved usage in the roster,
+  using the [managed health contract](agent-handoffs.md#managed-workers).
 - The actual project issue statuses, including custom review/blocked statuses.
   A handoff's state is displayed separately: completing a handoff does not mark
   its issue done. A pass is not proof of reviewer approval.
@@ -71,8 +73,8 @@ Rooms show at most eight avatars and three cards per status; the accompanying
 roster and task list provide the rest of the snapshot. It is not a complete
 historical export. Open an issue for its full timeline.
 
-This slice adds no migration, CLI command, model-host adapter or presence
-heartbeat. Structured review outcomes and richer presence remain separate work.
+The floor only observes workers; it does not start or control them. Worker setup
+and server prerequisites belong to the [worker guide](../packages/cli/README.md#dedicated-managed-workers-cli-070).
 
 ## Checks
 

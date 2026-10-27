@@ -20,11 +20,11 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-[CLI 0.6.1 release assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.6.1) are published to GitHub through the [release process](#validation-and-release). The release includes `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads.
+The [release process](#validation-and-release) publishes [CLI 0.7.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.7.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
 
 Version 0.6.1 adds `collab update`, which reruns the one-command installer for the current platform from the installed native executable. Installations before 0.6.1 run the installer once more to pick it up.
 
-Version 0.6.0 adds [current agent identity, supersession and watcher health](#operating-steps-on-each-computer). These features require the matching server; installing the CLI does not install a wake adapter.
+Version 0.7.0 adds the [dedicated worker](#dedicated-managed-workers-cli-070), requiring the matching server and managed-worker migration. Existing manual identity, supersession and watcher health retain their 0.6.0 behavior. Installing the CLI does not start a worker; explicitly set up each receiver.
 
 Version 0.5.1 adds [automatic login crash recovery](#authentication-and-automation), with cleanup guidance for older locks.
 
@@ -110,7 +110,7 @@ See [search API behavior](../../docs/agent-search.md) and [project context seman
 
 ## Commands and inputs
 
-`collab schema` (or `--help`) returns the complete machine-readable command, method, field and query inventory. Output is JSON, including when piped; `--json` is also accepted. No table scraping or interactive confirmation is required.
+`collab schema` (or `--help`) returns the machine-readable API command, method, field and query inventory, plus summaries of local commands. Worker setup flags and limits are documented in the [worker guide](#dedicated-managed-workers-cli-070). Output is JSON, including when piped; `--json` is also accepted. No table scraping or interactive confirmation is required.
 
 | Area | Commands |
 | --- | --- |
@@ -168,7 +168,7 @@ Use `collab auth login --read-only` for an agent that only needs to inspect proj
 
 For headless use, inject an existing Collab OAuth bearer token through your credential manager as `COLLAB_TOKEN`, together with an explicit `COLLAB_URL`. Use `COLLAB_WORKSPACE`/`COLLAB_PROJECT` or per-command flags for context. Do not put tokens in command arguments, repository files, Notes or issue comments. Maestro ID/access tokens are not Collab API tokens.
 
-`COLLAB_CONFIG_DIR` overrides the private state directory. `--timeout SECONDS` sets a per-request timeout from 1 to 120 (default 30). HTTP bodies are capped at 8 MiB. No request retries are automatic, including reads, refreshes and writes.
+`COLLAB_CONFIG_DIR` overrides the private state directory. `--timeout SECONDS` sets a per-request timeout from 1 to 120 (default 30) for ordinary API commands; worker commands use their own request deadlines. HTTP bodies are capped at 8 MiB. Ordinary API commands never retry automatically. Dedicated workers have the bounded read and lease retries described under [recovery](#limits-monitoring-and-recovery); they do not retry uncertain task mutations.
 
 | Exit | Meaning |
 | --- | --- |
@@ -195,7 +195,7 @@ The apply operation transactionally creates only the dedicated `collab-cli` syst
 
 ## Validation and release
 
-CLI 0.6.0 adds current host/session bindings, explicit supersession and opt-in shared watcher health. Deploy the matching server and additive agent-operations migration before enabling these features. The final tag must contain both the CLI changes and updated agent guide.
+Before enabling CLI 0.7.0 workers, follow the [server migration and compatibility requirements](../../docs/agent-handoffs.md#validation-and-rollout). The final tag must contain both the CLI changes and updated agent guide.
 
 Follow [Build native downloads](#build-native-downloads) for merge, tag and publication requirements. The release owner must verify all 18 public GitHub release assets (seven archives, two tagged installer scripts and their SHA-256 sidecars) before the sole app deployment owner deploys.
 
@@ -239,7 +239,7 @@ Agent activity is visible in the existing issue timeline and `collab issues acti
 
 ### Operating steps on each computer
 
-1. Upgrade to CLI 0.6.0, run `collab --help` and check its `version` field, and load the updated [agent skill](skills/collab-agents/SKILL.md). Use the existing authorized login.
+1. Upgrade to CLI 0.7.0, run `collab --help` and check its `version` field, and load the updated [agent skill](skills/collab-agents/SKILL.md). Use the existing authorized login.
 2. Keep one stable name for this agent. Use the actual session ID reported by your agent host, and a short host label without spaces. If you already have an established name, keep it; do not create a fresh name for every task or restart. Stop its previous watcher before binding a replacement session.
 
 ```sh
@@ -264,7 +264,7 @@ Only the original sender of open work or its current claimant can supersede it. 
 
 6. Check `agents list` or the workspace **Agent inbox** for current host/session, watcher state, last poll, and last successful callback. Missing health means **not reported**. Running health becomes **stale** after five minutes without a heartbeat. A successful callback is host acceptance; prove model execution with the actual claim/reply. Do not call cross-computer wake verified until both sides complete a real request/reply test.
 
-These steps do not install a reusable Orca adapter or supervise stopped agents. The bounded Sportsbook SBK-41 prototype demonstrated a same-host test only; its retained report is evidence, not an always-on installation recipe.
+These manual-session steps do not install a supervisor. For automatic owned execution, use the [dedicated worker](#dedicated-managed-workers-cli-070). The bounded Sportsbook SBK-41 prototype demonstrated a same-host test only; its retained report is evidence, not an always-on installation recipe.
 
 ### Wake a running agent through its host
 
@@ -327,3 +327,148 @@ entries, and claim before acting. Delivery never marks work seen or claims it.
 Each queue includes at most 50 entries; `hasMore` means keep draining using the
 normal seen/claim/complete workflow. An unchanged full page must not be treated
 as an empty inbox. Mark other agents' claimed/completed entries seen as appropriate.
+
+
+## Dedicated managed workers (CLI 0.7.0)
+
+The Orca terminal prototype is retired. `orca` commands refuse dispatch: a terminal
+handle is not an execution fence. Existing private prototype receipts are retained
+but never imported as worker completion or final pilot evidence.
+
+Follow the [server migration requirements](../../docs/agent-handoffs.md#validation-and-rollout)
+before using workers. The [managed-worker API contract](../../docs/agent-handoffs.md#managed-workers)
+owns generation fencing and compatibility with existing manual registrations.
+
+### Configure and run
+
+Install Claude Code 2.1.311 or later in the 2.x line and log in separately with its
+supported authentication. Claude Code must support the host OS and architecture;
+availability of a 32-bit Collab CLI does not establish runner support. The worker
+never logs in or refreshes credentials.
+Use an existing saved Collab CLI login with issues read/write access and workspace
+write access for setup (including subscription changes and manual conversion). Each computer
+runs its own local worker with a stable agent name and explicit workspace.
+
+```sh
+collab worker setup --agent sportsbook-worker --workspace WORKSPACE_ID --host laptop --cwd /absolute/repository --claude /absolute/claude
+collab worker doctor --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker run --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker status --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
+```
+
+`run` stays in the foreground. Use another terminal for `status` and `stop` while it
+is running. `doctor` checks the configured executable's version, required flags
+and existing authentication without invoking a model. `unsupported_runner` requires
+a compatible Claude installation; `needs_login` requires separate provider login.
+
+Setup checks the runner without invoking a model and does not start it. Use a new
+agent name, or explicitly use `--manage-existing` after stopping the old watcher
+and resolving its claimed work. Existing labels are preserved unless the full
+replacement `--label-ids '["LABEL_ID"]'` is supplied. Setup does not reset usage. If its response is lost, repeat the same setup options;
+the saved configuration intent retains the original session identity. A confirmed
+conversion or label validation rejection lets you correct those setup options while
+keeping that identity and usage; uncertain responses still require the exact request.
+A managed host/session identity is stable; every admitted child gets a fresh UUID.
+The daemon claims before launching a dedicated child, owns its process handle and
+pipes, and posts validated structured results. Remote handoff content travels on
+stdin, never as shell code or command arguments. The child receives no COLLAB_ or
+ORCA_ environment values. Claude's existing provider authentication remains local.
+
+Defaults are concurrency one, read-only `Read,Glob,Grep`, no MCP tools, no Chrome,
+no hooks, restricted mode and denied unattended permission prompts. Optional
+`--tools Read,Glob,Grep,Edit,Write` explicitly permits those local file tools;
+there is no shell tool, wildcard approval or permission bypass. `--model NAME`
+selects a model. `--review-agent NAME` permits the structured result to pass the
+handoff to that named reviewer; a blocked result records progress and pauses.
+
+### Limits, monitoring and recovery
+
+Defaults: `--attempt-usd 0.50`, `--daily-usd 2`, `--timeout-seconds 900`,
+`--max-restarts 3`, `--max-starts 20` per UTC day, `--poll-seconds 5`. Ceilings are $10/attempt, $100/UTC day,
+3600 seconds, 10 restarts/hour, 200 starts/day and 60-second polls. Attempt budget must fit daily
+budget. Each attempt reserves its full estimate before dispatch. Known usage
+reconciles it; missing usage stays charged and visible as reserved/unknown.
+The ledger survives setup, daemon restarts and same-day configuration changes.
+Budgets apply per configured worker in its private state directory on this host,
+not across an organisation or provider account. Other workers and hosts have
+independent daily allowances.
+UTC rollover admits a new daily allowance while retaining outstanding totals;
+a clock rollback pauses admission. Costs are client estimates, can overshoot a
+provider request, and are not invoice caps. See [Claude CLI reference](https://code.claude.com/docs/en/cli-reference)
+and [cost tracking](https://code.claude.com/docs/en/agent-sdk/cost-tracking).
+
+Local status shows run/task/session IDs, heartbeat, stop reason, token/cache counts,
+estimated, reserved and unknown USD. It remains readable after login expiry and
+reports that expiry separately in `liveHealth`. Its `online` flag checks the local
+daemon control endpoint, not server authentication. For shared inbox/floor health,
+see the [managed health contract](../../docs/agent-handoffs.md#managed-workers).
+Neither idle polling nor health invokes a model.
+Transient reads and same-generation lease messages retry at most three times with
+exponential backoff. One serialized renewal loop covers idle polling, inbox cleanup,
+pre-dispatch reads, child execution and usage-limit waits. A closed or expired
+generation cannot be revived by a retry. Unknown task mutations are not retried. Authentication,
+provider budget exhaustion and unclassified provider failures pause with their
+reported cost charged, even when token counters are zero. A writable failure,
+missing result, timeout, interrupted dispatch or unproven child closure blocks that
+task. No uncertain write is blindly repeated. Later startup can reconcile a saved
+validated result with the current claim without launching another child.
+
+Inspect `worker status`, the recorded child session and Collab activity for uncertain
+work. Do not delete journals or reconfigure another identity to bypass a reservation
+or unclosed generation. Automatic recovery cannot prove an orphaned child stopped;
+operator reconciliation is required in that case. The first release exposes this
+blocked state and does not provide a force-unfence command. This is at-least-once
+coordination with durable suppression, not exactly-once external side effects or
+protection against a malicious process running as the same OS user.
+
+### Per-user startup integration
+
+```sh
+collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker install --agent sportsbook-worker --workspace WORKSPACE_ID --dry-run
+collab worker install --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker uninstall --agent sportsbook-worker --workspace WORKSPACE_ID
+```
+
+Installation is explicit and starts the configured worker: launchd LaunchAgent on
+macOS, systemd user service on Linux, interactive user Scheduled Task on Windows.
+It neither changes machine-wide services nor enables Linux user lingering. Login
+startup therefore requires the user session. Unsupported platforms fail explicitly.
+The daemon starts in its private configuration directory; only runner operations use
+the repository directory. A missing repository therefore produces a normal config
+pause instead of failing before the daemon can start.
+Stop any foreground worker before installing. Dry-run returns the definition and
+supervisor commands without installing; each invocation generates a fresh service
+installation identity. Stop
+uses the private authenticated daemon control endpoint and confirms owned closure;
+it never signals a remembered PID. Stop the foreground daemon before uninstalling.
+Before that endpoint is available, stop/status use the exclusive worker lock to
+check absence. A busy startup reports `starting`/`stop_unconfirmed`; retry stop
+after startup. Missing control metadata alone never confirms a stopped worker.
+Uninstall verifies the saved definition path, label and ownership hash, even if the
+repository or Claude executable has moved or disappeared. Uninstall before changing
+setup while a service is recorded. If installation failed or teardown was interrupted,
+uninstall also accepts confirmed absence of the exact recorded service. Permission,
+transport and unrecognized supervisor errors retain the ownership record.
+Scheduled launches carry an installation identity checked under the worker lock;
+retired or replaced installations cannot admit work. Windows uninstall disables
+further starts and waits for all running instances of the exact owned task to close
+before deleting it, including when its registration is already absent. Unconfirmed
+closure retains the retired installation for inspection and retry. Foreground runs
+remain independent of service installation identity.
+The durable daemon restart allowance bounds OS recovery and also counts manual
+restarts conservatively. Unexpected process failures retain a nonzero exit;
+expired login and permanent configuration failures report a normal paused exit. Normal paused exits do not trigger an infinite
+service restart loop. `--profile` selects saved credentials and an absolute private
+`--config-dir` selects their directory. Within that directory, worker state is keyed
+by server, workspace, saved user and agent name; profiles using the same identity
+share the worker lock, service and usage ledger. Workers require a saved login and
+refuse `COLLAB_TOKEN`.
+
+Source-phase checks remain provisional until the final pipeline candidate passes.
+No service installation or real provider pilot acceptance has been performed by
+the source review phase. The old
+CLB-446 terminal pilot is prototype evidence only. Publication, native seven-target
+qualification, same-host and two-host Sportsbook tests remain with the release owner.

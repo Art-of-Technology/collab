@@ -1,0 +1,255 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { randomUUID } = require('node:crypto');
+const { load, matches } = require('./helpers.cjs');
+const health = load('src/lib/managed-worker-health.ts');
+function fixture() {
+  const agents = [], handoffs = [{ id: 'h', workspaceId: 'w', recipientNames: ['worker'], labelIds: [], senderId: null, claimedById: null, status: 'open', issueId: 'i', issue: { id: 'i', workspaceId: 'w', projectId: 'p', project: { workspaceId: 'w' } } }];
+  const activities = [];
+  let clock = Date.now(), lock = Promise.resolve();
+  class Clock extends Date { constructor(...args) { super(...(args.length ? args : [clock])); } static now() { return clock; } }
+  const db = {
+    $queryRaw: async () => [],
+    $transaction: async fn => { const prior = lock; let release; lock = new Promise(resolve => { release = resolve; }); await prior; try { return await fn(db); } finally { release(); } },
+    agentRegistration: {
+      findUnique: async ({ where }) => agents.find(a => matches(a, where.workspaceId_name)),
+      findFirst: async ({ where }) => agents.find(a => matches(a, where)),
+      findMany: async ({ where, take }) => agents.filter(a => matches(a, where)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, take),
+      create: async ({ data }) => { const row = { id: randomUUID(), labelIds: [], managedWorker: null, ...data }; agents.push(row); return row; },
+      update: async ({ where, data }) => Object.assign(agents.find(a => a.id === where.id), data),
+      count: async ({ where }) => agents.filter(a => matches(a, where)).length,
+    },
+    agentHandoff: {
+      count: async ({ where }) => handoffs.filter(a => matches(a, where)).length,
+      findFirst: async ({ where }) => handoffs.find(a => matches(a, where)),
+      findUnique: async ({ where }) => handoffs.find(a => a.sourceKey === where.workspaceId_sourceKey?.sourceKey),
+      findUniqueOrThrow: async ({ where }) => handoffs.find(a => a.id === where.id),
+      updateMany: async ({ where, data }) => { const rows = handoffs.filter(a => matches(a, where)); rows.forEach(row => Object.assign(row, data)); return { count: rows.length }; },
+      create: async ({ data }) => { const row = { id: randomUUID(), ...data }; handoffs.push(row); return row; },
+    },
+    issue: { findFirst: async ({ where }) => matches(handoffs[0].issue, where) ? handoffs[0].issue : null },
+    taskLabel: { count: async () => 0 },
+    issueActivity: { create: async ({ data }) => { activities.push(data); return data; } },
+    agentReceipt: { deleteMany: async () => {}, upsert: async () => {}, updateMany: async () => ({ count: 1 }) },
+  };
+  const service = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), zod: require('zod'), '@/lib/prisma': { prisma: db },
+    '@/lib/issue-finder': { issueReadAccessWhere: user => user === 'owner' ? {} : { id: 'denied' } }, '@/lib/oauth-scopes': { hasScope: (scope, scopes) => scopes.includes(scope) },
+    '@/lib/managed-worker-health': health }, { Date: Clock });
+  const context = { user: { id: 'owner' }, workspace: { id: 'w' }, token: { scopes: ['workspace:write', 'issues:read', 'issues:write'] } };
+  const binding = { agent: 'worker', host: 'laptop', sessionId: 'stable' };
+  const manage = (event, generation, extra = {}, ctx = context) => service.manageWorker(ctx, service.workerSchema.parse({ ...binding, event, generation, ...extra }));
+  const act = (action, generation, ctx = context) => service.actOnHandoff(ctx, 'h', service.actionSchema.parse({ agent: 'worker', action, generation, ...(['progress', 'complete', 'release'].includes(action) && { content: 'Evidence' }) }));
+  return { db, service, context, agents, handoffs, activities, manage, act, expire: () => { clock += 61000; } };
+}
+test('managed generations fence missing/stale mutation paths and refuse expired takeover', async () => {
+  const f = fixture(), first = randomUUID(), second = randomUUID();
+  await f.manage('configure'); await f.manage('start', first);
+  for (const action of ['claim', 'progress', 'release', 'complete', 'seen', 'ack']) for (const generation of [undefined, second]) await assert.rejects(f.act(action, generation), e => e.code === 'worker_fenced');
+  await assert.rejects(f.service.sendHandoff(f.context, f.service.sendSchema.parse({ agent: 'worker', issue: 'i', afterId: 'h', toAgents: ['worker'], content: 'review' })), e => e.code === 'worker_fenced');
+  await assert.rejects(f.manage('start', second), e => e.code === 'worker_fenced');
+  assert.equal((await f.act('claim', first)).status, 'claimed');
+  assert.equal((await f.act('claim', first)).status, 'claimed');
+  await f.act('progress', first);
+  f.expire();
+  await assert.rejects(f.act('complete', first), e => e.code === 'worker_fenced');
+  await assert.rejects(f.manage('start', second), e => e.code === 'worker_fenced');
+  await f.manage('close', first);
+  await f.manage('start', second);
+  await assert.rejects(f.act('complete', first), e => e.code === 'worker_fenced');
+  assert.equal((await f.act('complete', second)).status, 'completed');
+});
+test('managed own-user/workspace/scopes checks and explicit conversion preserve legacy agents', async () => {
+  const f = fixture();
+  f.agents.push({ id: 'a', name: 'worker', workspaceId: 'w', userId: 'owner', labelIds: [], managedWorker: null });
+  assert.equal((await f.act('claim')).status, 'claimed');
+  await assert.rejects(f.manage('configure'), e => e.code === 'worker_conversion_required');
+  await f.act('release');
+  await f.manage('configure', undefined, { convert: true });
+  const generation = randomUUID(); await f.manage('start', generation);
+  for (const ctx of [{ ...f.context, user: { id: 'other' } }, { ...f.context, workspace: { id: 'other' } }]) {
+    await assert.rejects(f.manage('start', randomUUID(), {}, ctx));
+    await assert.rejects(f.act('claim', generation, ctx), e => e.code === 'agent_not_found');
+  }
+  await assert.rejects(f.manage('renew', generation, {}, { ...f.context, token: { scopes: ['issues:read'] } }), e => e.code === 'insufficient_scope');
+  await assert.rejects(f.service.registerAgent(f.context, { name: 'worker', labelIds: [] }), e => e.code === 'managed_agent');
+});
+test('concurrent starts admit only one generation; managed pass uses the fence', async () => {
+  const f = fixture(); await f.manage('configure');
+  const generations = [randomUUID(), randomUUID()];
+  const outcomes = await Promise.allSettled(generations.map(id => f.manage('start', id)));
+  assert.equal(outcomes.filter(r => r.status === 'fulfilled').length, 1);
+  const generation = generations[outcomes.findIndex(r => r.status === 'fulfilled')];
+  await f.act('claim', generation);
+  const passed = await f.service.sendHandoff(f.context, f.service.sendSchema.parse({ agent: 'worker', generation, issue: 'i', afterId: 'h', content: 'Evidence for review', toAgents: ['worker'], requestId: randomUUID() }));
+  assert.equal(passed.afterId, 'h'); assert.equal(f.handoffs[0].status, 'completed');
+});
+test('managed health distinguishes idle daemon, working child and expired lease without task leakage', () => {
+  const state = { generation: randomUUID(), closed: false, state: 'idle', leaseUntil: new Date(Date.now() + 60000).toISOString(), taskId: 'private-task' };
+  assert.equal(health.managedStatus(state).online, true);
+  assert.equal(health.managedStatus(state).working, false);
+  assert.equal(health.managedStatus(state).taskId, undefined);
+  assert.equal(health.managedStatus({ ...state, state: 'working' }).working, true);
+  assert.equal(health.managedStatus({ ...state, state: 'working', leaseUntil: new Date(0).toISOString() }).working, false);
+});
+test('worker HTTP endpoint validates input and retains mutation scope requirement', async () => {
+  const f = fixture(); let required;
+  const http = load('src/lib/agent-handoff-http.ts', { 'next/server': { NextResponse: Response }, zod: require('zod'), './agent-handoffs': f.service }, { Buffer });
+  const route = load('src/app/api/apps/auth/agents/worker/route.ts', { '@/lib/apps/auth-middleware': { withAppAuth: (fn, options) => { required = options.requiredScopes; return fn; } }, '@/lib/agent-handoffs': f.service, '@/lib/agent-handoff-http': http });
+  assert.deepEqual(Array.from(required), ['issues:write']);
+  const request = body => new Request('https://example.test', { method: 'POST', body: JSON.stringify(body) });
+  assert.equal((await route.POST(request({ agent: 'worker', host: 'laptop', sessionId: 'stable', event: 'configure' }), f.context)).status, 200);
+  assert.equal((await route.POST(request({ agent: 'worker', host: 'laptop', sessionId: 'stable', event: 'start' }), f.context)).status, 400);
+});
+
+test('Prisma accepts the additive optional managed state while preserving agent uniqueness', async () => {
+  const model = require('@prisma/client').Prisma.dmmf;
+  const agent = model.datamodel.models.find(row => row.name === 'AgentRegistration');
+  const field = agent.fields.find(row => row.name === 'managedWorker');
+  assert.equal(field.type, 'Json'); assert.equal(field.isRequired, false);
+  assert.ok(agent.uniqueFields.some(fields => fields.join(',') === 'workspaceId,name'));
+  assert.ok(agent.uniqueFields.some(fields => fields.join(',') === 'workspaceId,userId,host,sessionId'));
+});
+
+test('launchd and Scheduled Task definitions parse into bounded per-user invocations', async () => {
+  const { JSDOM } = require('jsdom');
+  const { serviceDefinition } = await import('../../packages/cli/src/worker-service.mjs');
+  const args = ['/trusted/worker & tool', 'worker', 'run', '--agent', 'a'];
+  const mac = serviceDefinition('identity', args, '/private state', { platform: 'darwin', home: '/user', uid: 501 });
+  const document = new JSDOM(mac.content, { contentType: 'text/xml' }).window.document;
+  assert.equal(document.querySelector('parsererror'), null);
+  const entries = [...document.querySelector('plist > dict').children];
+  const dictionary = new Map();
+  for (let i = 0; i < entries.length; i += 2) dictionary.set(entries[i].textContent, entries[i + 1]);
+  assert.deepEqual([...dictionary.get('ProgramArguments').children].map(value => value.textContent), args);
+  assert.equal(dictionary.get('WorkingDirectory').textContent, '/private state');
+  assert.equal(dictionary.get('ThrottleInterval').textContent, '30');
+  assert.equal(dictionary.get('KeepAlive').querySelector('false')?.tagName, 'false');
+  const win = serviceDefinition('identity', args, '/state', { platform: 'win32' });
+  const task = new JSDOM(win.content, { contentType: 'text/xml' }).window.document;
+  assert.equal(task.querySelector('Command').textContent, args[0]);
+  assert.equal(task.querySelector('WorkingDirectory').textContent, '/state');
+  assert.equal(task.querySelector('LogonType').textContent, 'InteractiveToken');
+  assert.equal(task.querySelector('RunLevel').textContent, 'LeastPrivilege');
+  assert.equal(task.querySelector('RestartOnFailure Count').textContent, '3');
+  assert.equal(task.querySelector('MultipleInstancesPolicy').textContent, 'IgnoreNew');
+});
+
+
+test('configure enforces registration scopes on creation, subscriptions and manual conversion', async () => {
+  for (const existing of ['absent', 'managed', 'manual']) for (const missing of ['workspace:write', 'issues:read', 'issues:write']) {
+    const f = fixture();
+    if (existing === 'managed') await f.manage('configure');
+    if (existing === 'manual') f.agents.push({ id: 'a', name: 'worker', workspaceId: 'w', userId: 'owner', labelIds: [], managedWorker: null });
+    const before = JSON.stringify(f.agents);
+    const context = { ...f.context, token: { scopes: f.context.token.scopes.filter(scope => scope !== missing) } };
+    await assert.rejects(f.manage('configure', undefined, { convert: true, labelIds: [] }, context), e => e.code === 'insufficient_scope');
+    assert.equal(JSON.stringify(f.agents), before);
+  }
+  const f = fixture(); await f.manage('configure');
+  const context = { ...f.context, token: { scopes: ['issues:write'] } }, generation = randomUUID();
+  for (const event of ['start', 'renew', 'close']) await f.manage(event, generation, {}, context);
+});
+
+test('same-generation start and close retry safely but expired or closed generations never revive', async () => {
+  const f = fixture(), generation = randomUUID();
+  await f.manage('configure'); await f.manage('configure');
+  await f.manage('start', generation); await f.manage('start', generation); await f.manage('renew', generation);
+  f.expire();
+  for (const event of ['start', 'renew']) await assert.rejects(f.manage(event, generation), e => e.code === 'worker_fenced');
+  await f.manage('close', generation); await f.manage('close', generation);
+  for (const event of ['start', 'renew']) await assert.rejects(f.manage(event, generation), e => e.code === 'worker_fenced');
+  await f.manage('start', randomUUID());
+});
+
+test('exact owned lookup reaches a worker beyond the list cap and rejects foreign identities', async () => {
+  const f = fixture();
+  for (let index = 0; index < 201; index++) f.agents.push({ id: `a-${index}`, name: `a-${String(index).padStart(3, '0')}`, userId: 'owner', workspaceId: 'w', labelIds: [], managedWorker: null });
+  await f.manage('configure'); const generation = randomUUID(); await f.manage('start', generation);
+  const listed = await f.service.listAgents(f.context);
+  assert.equal(listed.length, 200); assert.equal(listed.some(agent => agent.name === 'worker'), false);
+  const exact = await f.service.getOwnedAgent(f.context, 'worker');
+  assert.equal(exact.name, 'worker'); assert.equal(exact.worker.generation, generation); assert.equal(exact.worker.closed, false);
+  for (const context of [{ ...f.context, user: { id: 'other' } }, { ...f.context, workspace: { id: 'other' } }]) {
+    await assert.rejects(f.service.getOwnedAgent(context, 'worker'), error => error.code === 'agent_not_found');
+  }
+  await assert.rejects(f.service.getOwnedAgent(f.context, 'missing'), error => error.code === 'agent_not_found');
+  await assert.rejects(f.service.getOwnedAgent({ ...f.context, token: { scopes: ['issues:write'] } }, 'worker'), error => error.code === 'insufficient_scope');
+  await f.manage('close', generation);
+  assert.equal((await f.service.getOwnedAgent(f.context, 'worker')).worker.closed, true);
+});
+
+test('worker GET route enforces read scope and returns only the requested owned identity', async () => {
+  const f = fixture(); await f.manage('configure');
+  const http = load('src/lib/agent-handoff-http.ts', { './agent-handoffs': f.service, zod: require('zod'), 'next/server': { NextResponse: Response } }, { Buffer });
+  const route = load('src/app/api/apps/auth/agents/worker/route.ts', {
+    '@/lib/apps/auth-middleware': { withAppAuth: (handler, options) => Object.assign(handler, { scopes: options.requiredScopes }) },
+    '@/lib/agent-handoffs': f.service, '@/lib/agent-handoff-http': http,
+  });
+  assert.deepEqual(Array.from(route.GET.scopes), ['issues:read']);
+  assert.deepEqual(Array.from(route.POST.scopes), ['issues:write']);
+  const get = (agent, context = f.context) => route.GET({ nextUrl: new URL(`http://fixture/agents/worker?agent=${encodeURIComponent(agent)}`) }, context);
+  const response = await get('worker'); assert.equal(response.status, 200); assert.equal((await response.json()).agent.name, 'worker');
+  for (const context of [{ ...f.context, user: { id: 'other' } }, { ...f.context, workspace: { id: 'other' } }]) assert.equal((await get('worker', context)).status, 404);
+  assert.equal((await get('missing')).status, 404); assert.equal((await get('BAD!')).status, 400);
+  assert.equal((await get('worker', { ...f.context, token: { scopes: [] } })).status, 403);
+});
+
+for (const platform of ['darwin', 'linux', 'win32']) for (const change of ['removed', 'moved']) test(`${platform} supervisor configuration reaches normal pause after repository is ${change}`, async t => {
+  const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
+  const { spawn } = require('node:child_process'), { once } = require('node:events');
+  const { JSDOM } = require('jsdom');
+  const { workerConfig, workerKey } = await import('../../packages/cli/src/worker.mjs');
+  const { workerService } = await import('../../packages/cli/src/worker-service.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-service-start-')), repo = path.join(dir, 'repository');
+  const previous = process.env.COLLAB_CONFIG_DIR; process.env.COLLAB_CONFIG_DIR = dir;
+  t.after(() => { if (previous === undefined) delete process.env.COLLAB_CONFIG_DIR; else process.env.COLLAB_CONFIG_DIR = previous; fs.rmSync(dir, { recursive: true, force: true }); });
+  fs.mkdirSync(repo);
+  const bin = path.resolve(__dirname, '../../packages/cli/bin/collab.mjs');
+  const options = { agent: 'worker', workspace: 'ws', host: 'laptop', cwd: repo, claude: process.execPath, 'dry-run': true };
+  const selected = { base: 'http://127.0.0.1:1', workspace: 'ws' }, identity = workerKey(selected, 'owner', 'worker');
+  const state = { config: workerConfig(options), status: 'stopped' };
+  fs.writeFileSync(path.join(dir, 'default.json'), JSON.stringify({ origin: selected.base, userId: 'owner', accessToken: 'FIXTURE', expiresAt: Date.now() + 60000 }), { mode: 0o600 });
+  const stateFile = path.join(dir, `worker-${identity}.json`);
+  fs.writeFileSync(stateFile, JSON.stringify(state), { mode: 0o600 });
+  const definition = await workerService('worker install', identity, options, state, () => assert.fail('dry-run saved state'), {
+    platform, home: dir, uid: 501, command: [process.execPath, bin], execute: async () => assert.fail('dry-run touched supervisor'),
+  });
+  state.service = { installationId: definition.installationId, file: definition.file, label: definition.label };
+  fs.writeFileSync(stateFile, JSON.stringify(state), { mode: 0o600 });
+  let cwd, argv;
+  if (platform === 'linux') {
+    const unit = new Map(definition.content.split('\n').filter(line => line.includes('=')).map(line => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]));
+    cwd = JSON.parse(unit.get('WorkingDirectory'));
+    argv = Array.from(unit.get('ExecStart').slice(1).matchAll(/"(?:\\.|[^"\\])*"/g), match => JSON.parse(match[0]));
+    assert.equal(unit.get('Restart'), 'on-failure');
+  } else {
+    const doc = new JSDOM(definition.content, { contentType: 'text/xml' }).window.document;
+    assert.equal(doc.querySelector('parsererror'), null);
+    if (platform === 'darwin') {
+      const entries = [...doc.querySelector('plist > dict').children], dict = new Map();
+      for (let i = 0; i < entries.length; i += 2) dict.set(entries[i].textContent, entries[i + 1]);
+      cwd = dict.get('WorkingDirectory').textContent;
+      argv = [...dict.get('ProgramArguments').children].map(value => value.textContent);
+      assert.equal(dict.get('KeepAlive').querySelector('false').tagName, 'false');
+    } else {
+      cwd = doc.querySelector('WorkingDirectory').textContent;
+      argv = [doc.querySelector('Command').textContent, ...Array.from(doc.querySelector('Arguments').textContent.matchAll(/"([^"]*)"/g), match => match[1])];
+      assert.equal(doc.querySelector('RestartOnFailure Count').textContent, '3');
+    }
+  }
+  assert.equal(cwd, dir);
+  assert.deepEqual(argv, [process.execPath, bin, 'worker', 'run', '--agent', 'worker', '--workspace', 'ws', '--config-dir', dir, '--service-id', definition.installationId]);
+  if (change === 'removed') fs.rmSync(repo, { recursive: true }); else fs.renameSync(repo, path.join(dir, 'moved'));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^COLLAB_/i.test(key)));
+  const child = spawn(argv[0], argv.slice(1), { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
+  let stdout = '', stderr = '';
+  child.stdout.on('data', chunk => { stdout += chunk; }); child.stderr.on('data', chunk => { stderr += chunk; });
+  const timeout = setTimeout(() => child.kill('SIGKILL'), 5000);
+  const [code] = await once(child, 'close'); clearTimeout(timeout);
+  assert.equal(code, 0, stderr);
+  const result = JSON.parse(stdout);
+  assert.equal(result.state, 'config'); assert.equal(result.stopReason, 'worker_config');
+  const saved = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+  assert.equal(saved.status, 'config'); assert.equal(saved.runId, undefined); assert.equal(saved.daemonStartedAt, undefined);
+});

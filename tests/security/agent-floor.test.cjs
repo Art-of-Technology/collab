@@ -268,6 +268,7 @@ function fixture() {
     issueActivity: many("activity", activities),
   };
   const service = load("src/lib/agent-floor.ts", {
+    "@/lib/managed-worker-health": load("src/lib/managed-worker-health.ts"),
     "server-only": {},
     "@/lib/prisma": { prisma },
     "@/lib/agent-floor-model": model,

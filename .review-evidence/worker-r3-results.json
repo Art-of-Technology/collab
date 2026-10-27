@@ -1,0 +1,24 @@
+[
+  {
+    "name": "focused",
+    "command": [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "packages/cli/test/worker.test.mjs",
+      "tests/security/managed-worker.test.cjs"
+    ],
+    "exit": 0,
+    "seconds": 20.71
+  },
+  {
+    "name": "types",
+    "command": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "--noEmit"
+    ],
+    "exit": 0,
+    "seconds": 18.33
+  }
+]

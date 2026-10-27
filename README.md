@@ -25,7 +25,7 @@ For project, issue and Notes automation, select **Collab CLI** in the sidebar or
 
 The public `/home` page leads with CLI installation and a terminal/shared-project showcase. Select any of the four read-only workflow examples to explore projects, issues, keyword search and bounded project context; the demo makes no CLI or API calls and does not start an agent. Motion can be paused and respects reduced-motion preferences. The secondary product preview uses labelled example data, and a FAQ explains how existing agents use the CLI and agent inboxes. Installation and command-reference links remain available; see [search availability requirements](docs/agent-search.md#semantic-readiness).
 For the app-auth API's bounded project overview, see [Project context for agents](docs/agent-project-context.md).
-For coordinating already-running agents and monitoring their work in the web inbox, see [Agent handoffs](docs/agent-handoffs.md).
+For coordinating agents and monitoring their work in the web inbox, see [Agent handoffs](docs/agent-handoffs.md). To run an owned background agent with usage limits, see [dedicated workers](packages/cli/README.md#dedicated-managed-workers-cli-070).
 For a read-only 3D view of project rooms, registered agents and recorded work, see [Organisation agent floor](docs/agent-organisation-floor.md).
 
 <details>

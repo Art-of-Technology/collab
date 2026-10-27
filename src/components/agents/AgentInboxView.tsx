@@ -47,7 +47,7 @@ export function AgentInboxView({ workspace, agents, selected, state, inbox }: Pr
           <tbody>{agents.filter(agent => !selected || agent.name === selected).map(agent => <tr key={agent.name} className="border-b last:border-0">
             <th scope="row" className="p-3 font-medium">{agent.name}</th>
             <td className="p-3"><span>{agent.host || 'Not bound'}</span>{agent.sessionId && <code className="block max-w-64 break-all text-xs">{agent.sessionId}</code>}</td>
-            <td className="p-3">{agent.watcher?.state || 'Not reported'}{agent.watcher?.errorCode && <code className="block text-xs">{agent.watcher.errorCode}</code>}</td>
+            <td className="p-3">{agent.worker ? <><span>{agent.worker.online ? 'Daemon online' : 'Daemon offline'} · {agent.worker.working ? 'Child working' : agent.worker.state}</span>{agent.worker.usage && <span className="block text-xs">Estimated ${agent.worker.usage.estimatedUSD.toFixed(2)} · reserved ${agent.worker.usage.reservedUSD.toFixed(2)} · unknown ${agent.worker.usage.unknownUSD.toFixed(2)}</span>}</> : agent.watcher?.state || 'Not reported'}{agent.watcher?.errorCode && <code className="block text-xs">{agent.watcher.errorCode}</code>}</td>
             <td className="p-3">{agent.watcher?.lastPollAt ? <time dateTime={agent.watcher.lastPollAt}>{agent.watcher.lastPollAt}</time> : 'Never reported'}</td>
             <td className="p-3">{agent.watcher?.lastWakeAt ? <time dateTime={agent.watcher.lastWakeAt}>{agent.watcher.lastWakeAt}</time> : 'Never reported'}</td>
           </tr>)}</tbody>

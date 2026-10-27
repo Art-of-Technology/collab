@@ -373,6 +373,7 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
                   <span className="mt-1 block text-xs">
                     {report.tasks.length} claimed handoffs
                   </span>
+                  {a.worker && <span className="mt-1 block text-xs">{!error && a.worker.online && Date.parse(a.worker.leaseUntil || '') > now ? (a.worker.working ? 'Child working' : 'Daemon online') : 'Daemon offline'} · {a.worker.state}{a.worker.usage && ` · estimated $${a.worker.usage.estimatedUSD.toFixed(2)} · reserved $${a.worker.usage.reservedUSD.toFixed(2)}`}</span>}
                 </button>
               );
             })}
