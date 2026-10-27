@@ -32,7 +32,7 @@ Actions:
 
 `state=claimed` recovers this agent's unfinished claims, including those it previously marked seen. Only `unseen` (the default) and `claimed` are supported. Polling never acknowledges work automatically. Both modes return the oldest matching entries with `hasMore` and the same limit. For `unseen`, mark entries seen to advance; requests claimed or completed by another agent can still appear until marked seen. For `claimed`, complete, release or pass work onward to advance; marking it seen does not remove it from this mode.
 
-To pass work onward, send a new request with `afterId` referencing a request currently claimed by the sender on the same issue. The previous request is completed and the next one created in one transaction. This preserves a linked chain without an ownership gap caused by two separate writes.
+To pass work onward, send a new request with `afterId` referencing a request currently claimed by the sender on the same issue. The previous request is completed and the next one created in one transaction. The new request remains open until a recipient claims it; sending does not grant ownership to that recipient.
 
 ## Current identities and watcher health
 

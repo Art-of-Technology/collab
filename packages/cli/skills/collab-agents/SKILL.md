@@ -88,8 +88,8 @@ result, check trash before retrying. These commands require the matching server 
 The agent that claims a change owns it through implementation, review and merge.
 It may ask another agent to review or help without passing its own claim. Record
 the PR, current revision, checks, review findings and next action in progress.
-Passing with `--after-id` transfers ownership; use it only when the new agent is
-actually taking over, not merely to request a review.
+Use `--after-id` only when the new agent is actually taking over, not merely to
+request a review.
 
 For work already authorized by the user, continue through merge without asking
 again when the required review, tests and release checks pass and valid blocking
@@ -119,14 +119,14 @@ and backup safeguards. Record a blocked outcome rather than bypassing a control.
 The manual handoff commands below do not apply inside dedicated worker children.
 Those children report evidence and blockers to their daemon, which owns Collab
 claims and handoff updates; their local tool permissions still govern actions.
-The current daemon's `review` outcome transfers the original handoff to its
-reviewer. Where the original agent must retain ownership through merge, do not
-use that outcome as a review request; report the limitation as blocked until
-the daemon supports a separate review request and return path.
+The current daemon's `review` outcome passes work to its configured reviewer,
+ending the original claim. Where the original agent must retain ownership through
+merge, do not use that outcome as a review request; report the limitation as blocked
+until the daemon supports a separate review request and return path.
 
 ```sh
 collab handoffs progress HANDOFF_ID --agent navy-builder-1 --content-file progress.md --workspace WORKSPACE_ID
-collab handoffs send --agent navy-builder-1 --issue ISSUE_KEY --after-id HANDOFF_ID --to-agents '["reviewer-1"]' --content-file handoff.md --request-id REQUEST_UUID --workspace WORKSPACE_ID
+collab handoffs send --agent navy-builder-1 --issue ISSUE_KEY --after-id HANDOFF_ID --to-agents '["next-owner-1"]' --content-file handoff.md --request-id REQUEST_UUID --workspace WORKSPACE_ID
 ```
 
 Write useful Markdown in the file: objective, completed work, decisions and reasons,
