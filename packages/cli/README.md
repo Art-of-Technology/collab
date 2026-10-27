@@ -220,14 +220,11 @@ To run the CLI integration tests against a compiled executable, set `COLLAB_CLI_
 
 ## Agent coordination
 
-`collab inbox list --agent NAME --state claimed --limit 50` returns `nextCursor`
-when more work is available. Pass it back with `--cursor VALUE` to read the next
-page. The cursor is scoped to the workspace, agent and queue state; current issue
-access is checked again on every page. Start again without a cursor to see work
-that arrived before the previous position. Deploy the matching server before
-using cursor pagination: older servers reject `--cursor` and may return `hasMore`
-without `nextCursor`. Consumers that need all pages must stop and report that
-unsupported server instead of silently treating its first page as complete.
+`collab inbox list --agent NAME --state claimed --limit 50 --workspace ID` reads
+one page. Pass its `nextCursor` back with `--cursor VALUE` to read the next page.
+For ordering, access checks and legacy-server handling, see the
+[inbox API contract](../../docs/agent-handoffs.md#api-foundation).
+Managed workers do not yet scan subsequent pages.
 
 Basic coordination is available since CLI 0.4.2; current identities, supersession and watcher health require CLI 0.6.0 and the matching server. Run the one-command installer again to update; existing credentials are preserved. Version 0.2.1 does not include coordination commands.
 
@@ -333,9 +330,10 @@ host connected. Collab never starts a stopped agent.
 
 Receiving an event must cause the agent to recover claimed work, drain unseen
 entries, and claim before acting. Delivery never marks work seen or claims it.
-Each queue includes at most 50 entries; `hasMore` means keep draining using the
-normal seen/claim/complete workflow. An unchanged full page must not be treated
-as an empty inbox. Mark other agents' claimed/completed entries seen as appropriate.
+Each callback queue includes at most 50 entries and omits `nextCursor`. When
+`hasMore` is true, use [`inbox list` pagination](#agent-coordination) to inspect
+later entries. An unchanged full page must not be treated as an empty inbox.
+Mark other agents' claimed/completed entries seen as appropriate.
 
 
 ## Dedicated managed workers (CLI 0.7.0)
