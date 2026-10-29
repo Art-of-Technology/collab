@@ -45,7 +45,7 @@ export async function coordinatorLease(context: AppAuthContext, input: z.infer<t
 
 export async function coordinatorSnapshot(context: AppAuthContext, projectId: string, cursor?: string) {
   id.parse(projectId); if (cursor) id.parse(cursor);
-  const project = await prisma.project.findFirst({ where: { id: projectId, workspaceId: context.workspace.id, ...issueAccessWhere(context.user.id) } });
+  const project = await prisma.project.findFirst({ where: { id: projectId, workspaceId: context.workspace.id, ...issueAccessWhere(context.user.id) }, select: { id: true } });
   if (!project) throw new HandoffError('project_not_found', 'Project not found', 404);
   const items = await prisma.agentHandoff.findMany({
     where: { workspaceId: context.workspace.id, status: { in: ['open', 'claimed'] }, ...(cursor && { id: { gt: cursor } }),
@@ -57,6 +57,6 @@ export async function coordinatorSnapshot(context: AppAuthContext, projectId: st
   const agents = await prisma.agentRegistration.findMany({ where: { workspaceId: context.workspace.id }, take: 501,
     select: { id: true, name: true, userId: true, labelIds: true, host: true, sessionId: true, managedWorker: true } });
   const visibleItems = await Promise.all(items.slice(0, 50).map(async item => ({ ...item, previouslyClaimed: await wasClaimed(prisma, context.workspace.id, item.issueId, item.id) })));
-  return { project: project.id, lease: project.coordinator, items: visibleItems, nextCursor: items.length > 50 ? items[49].id : null,
+  return { project: project.id, items: visibleItems, nextCursor: items.length > 50 ? items[49].id : null,
     agents: agents.slice(0, 500).map(({ userId, managedWorker, ...agent }) => ({ ...agent, managedWorker: managedStatus(managedWorker), owned: userId === context.user.id })), agentsTruncated: agents.length > 500, observedAt: new Date().toISOString() };
 }

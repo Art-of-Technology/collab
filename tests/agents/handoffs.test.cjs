@@ -415,6 +415,18 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     await manage({ event: 'configure' });
     const admission = { project: 'p-w', generation: binding.generation };
     await manage({ event: 'start', generation: workerGeneration, coordinator: admission });
+    const http = load('src/lib/agent-handoff-http.ts', { './agent-handoffs': service, zod: require('zod'), 'next/server': { NextResponse: Response } }, { Buffer });
+    const route = load('src/app/api/apps/auth/agents/coordinator/route.ts', {
+      '@/lib/apps/auth-middleware': { withAppAuth: (fn, options) => { assert.ok(options.requiredScopes.includes('projects:read')); return fn; } },
+      '@/lib/agent-handoff-http': http, '@/lib/project-coordinator': coordinator,
+    });
+    for (const reader of [alice, bob]) {
+      const response = await route.GET({ nextUrl: new URL('https://example.test/api/apps/auth/agents/coordinator?project=p-w') }, reader);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.deepEqual(Object.keys(body).sort(), ['agents', 'agentsTruncated', 'items', 'nextCursor', 'observedAt', 'project']);
+      assert.equal(body.project, 'p-w'); assert.equal(Object.hasOwn(body, 'lease'), false);
+    }
     const currentWorker = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'coordinated' } } });
     await prisma.agentRegistration.update({ where: { id: currentWorker.id }, data: { managedWorker: { ...currentWorker.managedWorker, taskId: 'private-other-project-task' } } });
     const visibleWorker = (await coordinator.coordinatorSnapshot(alice, 'p-w')).agents.find(a => a.name === 'coordinated').managedWorker;

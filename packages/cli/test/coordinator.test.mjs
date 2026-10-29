@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { runCoordinator, classifyTask } from '../src/coordinator.mjs';
 import { runWorker, workerKey } from '../src/worker.mjs';
@@ -14,6 +13,41 @@ const config = { workers: ['worker'], overdueSeconds: 1, stallSeconds: 60 };
 const task = { id: 'task', issueId: 'issue', issue: { projectId: 'project', issueKey: 'TEST-1' }, status: 'open', previouslyClaimed: false, content: 'Read package.json only', recipientNames: ['worker'], labelIds: [], createdAt: '2026-10-27T00:00:00Z', updatedAt: '2026-10-27T00:00:00Z' };
 const agent = { id: 'worker-id', name: 'worker', owned: true, labelIds: [], managedWorker: { closed: true, state: 'stopped' } };
 const now = Date.parse('2026-10-29T00:00:00Z');
+
+function parseSystemdCommand(content) {
+  const sections = {}; let section;
+  for (const line of content.split('\n')) {
+    if (!line) continue;
+    if (line.startsWith('[') && line.endsWith(']')) { section = line.slice(1, -1); sections[section] = {}; continue; }
+    const separator = line.indexOf('=');
+    assert.ok(section && separator > 0);
+    sections[section][line.slice(0, separator)] = line.slice(separator + 1);
+  }
+  const command = sections.Service.ExecStart;
+  assert.equal(command[0], ':');
+  const args = []; let index = 1;
+  while (index < command.length) {
+    while (command[index] === ' ') index++;
+    if (index === command.length) break;
+    assert.equal(command[index], '"');
+    const start = index++; let escaped = false, closed = false;
+    while (index < command.length) {
+      const char = command[index++];
+      if (escaped) { escaped = false; continue; }
+      if (char === '\\') { escaped = true; continue; }
+      if (char === '"') { closed = true; break; }
+    }
+    assert.ok(closed);
+    const word = JSON.parse(command.slice(start, index)); let decoded = '';
+    for (let i = 0; i < word.length; i++) {
+      if (word[i] === '%') { assert.equal(word[++i], '%'); decoded += '%'; }
+      else decoded += word[i];
+    }
+    args.push(decoded);
+    assert.ok(index === command.length || command[index] === ' ');
+  }
+  return args;
+}
 
 test('project decisions distinguish no route, liveness, progress and operational blockers', () => {
   const decide = (t = task, a = [agent]) => classifyTask(t, a, config, now);
@@ -454,11 +488,11 @@ test('explicit coordinator stop persists a pause; setup preserves prior task his
 test('coordinator service definition carries exact project and installation identity', async t => {
   const f = await fixture(t);
   f.options['dry-run'] = true;
-  f.deps.service = { platform: 'darwin', home: f.dir, command: ['/trusted path/runner & tool', '/exact/collab'] };
+  f.deps.service = { platform: 'linux', home: f.dir, command: ['/trusted path/runner % & "tool"', '/exact/collab'] };
   const result = await f.run('install');
   assert.equal(result.dryRun, true); assert.equal(result.installed, false);
-  const args = JSON.parse(execFileSync('python3', ['-c', 'import json, plistlib, sys; print(json.dumps(plistlib.loads(sys.stdin.buffer.read())["ProgramArguments"]))'], { input: result.content, encoding: 'utf8' }));
-  assert.deepEqual(args, ['/trusted path/runner & tool', '/exact/collab', 'coordinator', 'run', '--agent', 'coordinator', '--workspace', 'ws', '--config-dir', f.dir, '--service-id', result.installationId, '--project', 'project']);
+  const args = parseSystemdCommand(result.content);
+  assert.deepEqual(args, ['/trusted path/runner % & "tool"', '/exact/collab', 'coordinator', 'run', '--agent', 'coordinator', '--workspace', 'ws', '--config-dir', f.dir, '--service-id', result.installationId, '--project', 'project']);
   assert.equal(f.starts(), 0);
 });
 
