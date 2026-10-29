@@ -107,8 +107,9 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
   }, [currentWorkspace?.id]);
 
   // Function to fetch notifications
+  const userId = session?.user?.id;
   const fetchNotifications = useCallback(async () => {
-    if (!session?.user) {
+    if (!userId) {
       return;
     }
 
@@ -121,7 +122,7 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [session?.user]);
+  }, [userId]);
 
   // Function to mark a notification as read
   const markNotificationAsRead = useCallback(async (id: string) => {
@@ -151,10 +152,10 @@ export function MentionProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch notifications on mount and when session changes
   useEffect(() => {
-    if (session?.user) {
+    if (userId) {
       fetchNotifications();
     }
-  }, [session, fetchNotifications]);
+  }, [userId, fetchNotifications]);
 
   return (
     <MentionContext.Provider

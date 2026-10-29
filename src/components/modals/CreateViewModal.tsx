@@ -66,6 +66,7 @@ export default function CreateViewModal({
   // Fetch workspace members for assignee selector
   const { data: workspaceMembers = [] } = useQuery({
     queryKey: ['workspace-members', workspaceId],
+    enabled: isOpen && !!workspaceId,
     queryFn: async () => {
       const response = await fetch(`/api/workspaces/${workspaceId}/members`);
       if (!response.ok) {
@@ -96,6 +97,7 @@ export default function CreateViewModal({
   // Fetch workspace labels for labels selector
   const { data: workspaceLabels = [] } = useQuery({
     queryKey: ['workspace-labels', workspaceId],
+    enabled: isOpen && !!workspaceId,
     queryFn: async () => {
       const response = await fetch(`/api/workspaces/${workspaceId}/labels`);
       if (!response.ok) {

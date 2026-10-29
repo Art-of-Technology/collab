@@ -44,13 +44,7 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Preload Logo */}
-        <link rel="preload" href="/logo-text.svg" as="image" />
-        
-        {/* Preload common assets */}
-        
         <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32" />
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="shortcut icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/site.webmanifest" />

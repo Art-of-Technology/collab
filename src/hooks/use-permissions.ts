@@ -38,10 +38,9 @@ export function usePermissions(workspaceId?: string) {
       return response.json();
     },
     enabled: !!session?.user?.id && !!workspaceId,
-    staleTime: 0,
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    refetchOnMount: true,
   });
 
   const checkPermission = (permission: Permission): PermissionCheckResult => {
