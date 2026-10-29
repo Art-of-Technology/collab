@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useWorkspaceLabels, workspaceLabelsKey } from "@/hooks/queries/useWorkspaceSelectorData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,35 +30,12 @@ export function IssueLabelSelector({
   disabled = false,
   workspaceId
 }: IssueLabelSelectorProps) {
-  const [labels, setLabels] = useState<IssueLabel[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { data: labels = [], isLoading } = useWorkspaceLabels(workspaceId);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    if (!workspaceId) return;
-
-    const fetchLabels = async () => {
-      setIsLoading(true);
-      try {
-        const response = await fetch(`/api/workspaces/${workspaceId}/labels`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch workspace labels");
-        }
-        const data = await response.json();
-        setLabels(data.labels || []);
-      } catch (error) {
-        console.error("Error fetching workspace labels:", error);
-        setLabels([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchLabels();
-  }, [workspaceId]);
 
   const selectedLabels = labels.filter(label => value.includes(label.id));
   const filteredLabels = labels.filter(label => 
@@ -104,8 +83,8 @@ export function IssueLabelSelector({
         workspaceId,
       });
 
-      // Add the new label to the labels list
-      setLabels(prev => [...prev, newLabel]);
+      // Add the new label to the shared cache
+      queryClient.setQueryData<IssueLabel[]>(workspaceLabelsKey(workspaceId), prev => [...(prev ?? []), newLabel]);
       
       // Add the new label to selected values
       onChange([...value, newLabel.id]);

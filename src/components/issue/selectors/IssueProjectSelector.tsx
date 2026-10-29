@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useProjects } from "@/hooks/queries/useProjects";
 import {
   Popover,
   PopoverContent,
@@ -9,12 +10,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Home, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface Project {
-  id: string;
-  name: string;
-  color?: string;
-}
 
 interface IssueProjectSelectorProps {
   value?: string;
@@ -29,32 +24,8 @@ export function IssueProjectSelector({
   workspaceId,
   disabled = false,
 }: IssueProjectSelectorProps) {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { data: projects = [], isLoading } = useProjects({ workspaceId, includeStats: true });
   const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    if (!workspaceId) return;
-
-    const fetchProjects = async () => {
-      setIsLoading(true);
-      try {
-        const response = await fetch(`/api/workspaces/${workspaceId}/projects`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch projects");
-        }
-        const data = await response.json();
-        setProjects(data.projects || []);
-      } catch (error) {
-        console.error("Error fetching projects:", error);
-        setProjects([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchProjects();
-  }, [workspaceId]);
 
   const selectedProject = projects.find(project => project.id === value);
 

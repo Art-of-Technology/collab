@@ -18,7 +18,7 @@ export function IssueCommentsSection({
   autofocus = false
 }: IssueCommentsSectionProps) {
   const { data: currentUser } = useCurrentUser();
-  const { data: comments = [], isLoading } = useIssueComments(issueId);
+  const { data: comments = [], isLoading } = useIssueComments(issueId, initialComments);
   const addCommentMutation = useAddIssueComment();
 
   const organizedComments = useMemo(() => {
