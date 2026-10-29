@@ -411,6 +411,11 @@ reports that expiry separately in `liveHealth`. Its `online` flag checks the loc
 daemon control endpoint, not server authentication. For shared inbox/floor health,
 see the [managed health contract](../../docs/agent-handoffs.md#managed-workers).
 Neither idle polling nor health invokes a model.
+Setup can report `worker_conversion_required` or `worker_active` for a confirmed
+conflict. Start and renewal conflicts can record `worker_binding_changed` or
+`worker_fenced` as the stop reason. Other worker conflict codes remain generic;
+an unresolved closure can instead make status report `stop_unconfirmed`. Remote
+error text is not displayed.
 Transient reads and same-generation lease messages retry at most three times with
 exponential backoff. One serialized renewal loop covers idle polling, inbox cleanup,
 pre-dispatch reads, child execution and usage-limit waits. A closed or expired
