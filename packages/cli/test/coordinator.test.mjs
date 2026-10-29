@@ -283,6 +283,96 @@ test('public stop racing a claimed task prevents model dispatch', async t => {
   assert.equal(f.starts(), 0); assert.equal(f.workerDisk.load().stopReason, 'requested_stop');
 });
 
+for (const phase of ['reserved', 'claimed']) test(`explicit stop permits setup and same-task resume from ${phase}`, { timeout: 15000 }, async t => {
+  const f = await fixture(t), api = f.deps.api; let clock = now, reads = 0, reached;
+  const blocked = new Promise(resolve => { reached = resolve; });
+  f.deps.now = () => clock;
+  f.deps.api = async (url, extra = {}) => {
+    if (url.startsWith('agents/handoffs/task?')) reads++;
+    if (phase === 'reserved' ? url.startsWith('agents/handoffs/task?') && reads === 2 : url === 'issues/issue') {
+      reached(); await new Promise(resolve => extra.signal.addEventListener('abort', resolve, { once: true })); throw extra.signal.reason;
+    }
+    return api(url, extra);
+  };
+  const running = f.run('run'); await blocked;
+  assert.equal((await runWorker('worker stop', { agent: 'worker', workspace: 'ws' }, f.selected, 'user')).stopped, true);
+  const stopped = await running;
+  assert.equal(stopped.attempts.task.pending, false); assert.equal(f.workerDisk.load().active.phase, phase);
+  const active = f.workerDisk.load().active, usage = f.workerDisk.load().usage;
+  await f.workerDisk.exclusive((s, save) => { s.active.attemptId = 'mismatched'; save(s); });
+  await assert.rejects(runWorker('worker setup', { agent: 'worker', workspace: 'ws' }, f.selected, 'user', { ...f.deps.workerDependencies, api }), { code: 'worker_uncertain' });
+  await f.workerDisk.exclusive((s, save) => { s.active = active; save(s); });
+  await assert.rejects(runWorker('worker setup', { agent: 'worker', workspace: 'ws', 'daily-usd': '3' }, f.selected, 'user', { ...f.deps.workerDependencies, api }), { code: 'worker_uncertain' });
+  await runWorker('worker setup', { agent: 'worker', workspace: 'ws' }, f.selected, 'user', { ...f.deps.workerDependencies, api });
+  assert.deepEqual(f.workerDisk.load().active, active); assert.deepEqual(f.workerDisk.load().usage, usage);
+  await f.run('setup'); f.deps.api = api; clock += 30001;
+  await f.run('run'); assert.equal(f.item().status, 'completed'); assert.equal(f.starts(), 1);
+  assert.equal(f.workerDisk.load().usage.totalStarts, 1);
+});
+
+test('coordinator shutdown reconciles its interrupted pre-model child', { timeout: 15000 }, async t => {
+  const f = await fixture(t), api = f.deps.api; let clock = now, reads = 0, reached;
+  const blocked = new Promise(resolve => { reached = resolve; });
+  f.deps.now = () => clock; f.deps.once = false;
+  f.deps.api = async (url, extra = {}) => {
+    if (url.startsWith('agents/handoffs/task?') && ++reads === 2) {
+      reached(); await new Promise(resolve => extra.signal.addEventListener('abort', resolve, { once: true })); throw extra.signal.reason;
+    }
+    return api(url, extra);
+  };
+  const running = f.run('run'); await blocked; await f.run('stop');
+  const stopped = await running;
+  assert.equal(stopped.attempts.task.pending, false); assert.equal(f.workerDisk.load().active.phase, 'reserved');
+  assert.equal(f.workerDisk.load().stopReason, 'interrupted');
+  await f.run('setup'); f.deps.once = true; f.deps.api = api; clock += 30001;
+  await f.run('run'); assert.equal(f.item().status, 'completed'); assert.equal(f.starts(), 1);
+});
+
+for (const outcome of ['settled', 'unknown']) test(`coordinator shutdown records ${outcome} child outcome safely`, { timeout: 15000 }, async t => {
+  const f = await fixture(t), api = f.deps.api; let scans = 0, releaseSnapshot, seenSnapshot, releaseChild;
+  const snapshotBlocked = new Promise(resolve => { seenSnapshot = resolve; });
+  const snapshotGate = new Promise(resolve => { releaseSnapshot = resolve; });
+  const childGate = new Promise(resolve => { releaseChild = resolve; });
+  f.deps.once = false; f.deps.sleep = (ms, value, options) => delay(ms === 1000 ? 5 : ms, value, options);
+  await f.coordDisk.exclusive((s, save) => { s.config.pollSeconds = 1; save(s); });
+  f.deps.worker = async () => { await childGate; if (outcome === 'unknown') throw Object.assign(Error(), { code: 'outcome_unknown' }); return { state: 'stopped', stopReason: 'coordinator_complete' }; };
+  f.deps.api = async (url, extra) => {
+    if (url.startsWith('agents/coordinator?') && ++scans === 2) { seenSnapshot(); await snapshotGate; }
+    return api(url, extra);
+  };
+  const running = f.run('run'); await snapshotBlocked; releaseChild(); await delay(10);
+  const stopping = f.run('stop'); await delay(20); releaseSnapshot(); await stopping;
+  const stopped = await running;
+  assert.equal(stopped.attempts.task.pending, outcome === 'unknown');
+  if (outcome === 'unknown') assert.equal(stopped.status, 'blocked');
+});
+
+test('public stop survives control-lock contention after model startup', { timeout: 15000 }, async t => {
+  const f = await fixture(t); let reached, unlock, locked;
+  const started = new Promise(resolve => { reached = resolve; });
+  const lockHeld = new Promise(resolve => { locked = resolve; });
+  const release = new Promise(resolve => { unlock = resolve; });
+  f.deps.workerDependencies.runner.execute = async (_config, _job, _context, signal, spawned) => {
+    spawned(); reached(); await delay(30000, undefined, { signal });
+  };
+  const running = f.run('run'); await started;
+  const controls = store(`ctl-${workerKey(f.selected, 'user', 'worker')}`);
+  const held = (async () => {
+    for (;;) {
+      try { return await controls.exclusive(async () => { locked(); await release; }); }
+      catch (error) { if (error.code !== 'state_locked') throw error; await delay(20); }
+    }
+  })();
+  await lockHeld;
+  const stopping = runWorker('worker stop', { agent: 'worker', workspace: 'ws' }, f.selected, 'user').then(value => ({ value }), error => ({ error }));
+  await delay(80); unlock(); await held;
+  const outcome = await stopping; if (outcome.error) throw outcome.error;
+  assert.equal(outcome.value.stopped, true); const result = await running;
+  assert.ok(controls.load().stopRequested); assert.equal(f.workerDisk.load().active.phase, 'uncertain');
+  assert.equal(result.attempts.task.pending, true); assert.equal(f.workerDisk.load().active.closed, true);
+  await assert.rejects(runWorker('worker setup', { agent: 'worker', workspace: 'ws' }, f.selected, 'user', { ...f.deps.workerDependencies, api: f.deps.api }), { code: 'worker_uncertain' });
+});
+
 test('status pages cover the complete current scan and retain history', async t => {
   const f = await fixture(t), api = f.deps.api;
   await f.run('run');

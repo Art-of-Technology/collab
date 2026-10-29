@@ -71,7 +71,9 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
       if (!agent?.host || !agent.sessionId || agent.worker) throw fail('coordinator_identity', 'Register the coordinator with its own host/session identity first.');
       for (const a of workers) {
         await store(`worker-${workerKey(selected, userId, a)}`).exclusive(local => {
-          if (!local.config || local.configure || local.service || local.config.host !== agent.host || local.config.reviewAgent || local.active || local.runId && !local.closed) throw fail('coordinator_route', 'Each worker must be local, closed, separately configured, without an installed service or reviewAgent. Existing review transfers are not adopted.');
+          const prior = local.active && state.attempts?.[local.active.handoffId];
+          const retained = prior && !prior.pending && prior.worker === a && recoverableReservation(selected, userId, a, local.active.handoffId, local);
+          if (!local.config || local.configure || local.service || local.config.host !== agent.host || local.config.reviewAgent || local.active && !retained || local.runId && !local.closed) throw fail('coordinator_route', 'Each worker must be local, closed, separately configured, without an installed service or reviewAgent. Existing review transfers are not adopted.');
         });
       }
       const config = { host: agent.host, sessionId: agent.sessionId, workers, overdueSeconds: 60, stallSeconds: 900, pollSeconds: 10 };
@@ -98,14 +100,16 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
     state.attempts ||= {}; state.decisions ||= [];
     const finishChild = async () => {
-      if (!child?.settled) return;
+      if (!child?.settled || child.reconciled) return;
+      child.reconciled = true;
       const { decision, key, outcome } = child;
+      const closed = store(`worker-${workerKey(selected, userId, decision.agent)}`).load();
       let result = outcome.value;
       if (outcome.error) {
-        const closed = store(`worker-${workerKey(selected, userId, decision.agent)}`).load();
         if (!['transport_failed', 'server_error', 'rate_limited'].includes(outcome.error.code) || !closed.closed || closed.active && !recoverableReservation(selected, userId, decision.agent, key, closed)) throw outcome.error;
         result = { state: 'retrying', stopReason: outcome.error.code };
       }
+      if (closed.active ? !recoverableReservation(selected, userId, decision.agent, key, closed) : closed.runId && !closed.closed) throw fail('worker_uncertain', 'Worker closure or task outcome is unconfirmed.');
       state.attempts[key].pending = false; state.attempts[key].nextAt = now() + 30000 * 2 ** (state.attempts[key].count - 1);
       decision.reason = result.stopReason || result.state; decision.action = result.active ? 'blocked' : 'observe';
       await dispatches.exclusive((history, write) => { history.events[history.events.length - 1] = { ...decision, at: now() }; write(history); });
@@ -205,7 +209,11 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
     } catch (error) {
       if (renewError || !abort.signal.aborted) { state.status = 'blocked'; state.error = (renewError || error).code || 'coordinator_failed'; state.paused = true; }
     } finally {
-      if (child) { stop(); await child.promise; }
+      if (child) {
+        stop(); await child.promise;
+        try { await finishChild(); }
+        catch (error) { state.status = 'blocked'; state.error = error.code || 'coordinator_failed'; state.paused = true; }
+      }
       renewalAbort.abort(); await renewal;
       if (admitted) { try { await lease('close'); state.closed = true; } catch { state.closed = false; state.error = 'lease_close_unconfirmed'; } }
       if (state.status !== 'blocked') state.status = state.paused ? 'paused' : 'stopped'; save(state);

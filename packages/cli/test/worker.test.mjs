@@ -43,7 +43,7 @@ function fixture(t, execute) {
       if (url.startsWith('agents/handoffs/task-one')) {
         if (!extra.method) return { handoff };
         assert.ok(extra.body.generation);
-        if (extra.body.action === 'claim') handoff = { ...handoff, status: 'claimed' };
+        if (extra.body.action === 'claim') handoff = { ...handoff, status: 'claimed', claimedBy: { name: 'worker' } };
         if (extra.body.action === 'complete') handoff = { ...handoff, status: 'completed' };
         return handoff;
       }

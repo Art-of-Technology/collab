@@ -83,7 +83,17 @@ export async function runWorker(name, options, selected, userId, dependencies = 
   const api = dependencies.api || ((endpoint, extra = {}) => request(selected.base, `/api/apps/auth/${endpoint}${endpoint.includes('?') ? '&' : '?'}workspaceId=${encodeURIComponent(selected.workspace)}`, { token: selected.token, ...extra }));
   const journal = handoffId => store(`job-${key([identity, handoffId])}`);
   if (name === 'worker status' || name === 'worker stop') {
-    if (name === 'worker stop') await controlStore.exclusive((current, save) => save({ ...current, stopRequested: randomUUID() }));
+    if (name === 'worker stop') {
+      const requested = randomUUID(), deadline = Date.now() + 2000;
+      for (;;) {
+        try { await controlStore.exclusive((current, save) => save({ ...current, stopRequested: requested })); break; }
+        catch (error) {
+          if (error.code !== 'state_locked') throw error;
+          if (Date.now() >= deadline) throw fail('stop_unconfirmed', 'Could not record the stop request; inspect the worker and retry.');
+          await delay(20);
+        }
+      }
+    }
     let health = await control(controlStore.load(), name === 'worker stop' ? 'stop' : 'status');
     let state = stateStore.load();
     if (!health.online && !health.stopped) {
@@ -108,10 +118,12 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       return { ...summary(state), state: 'stopped', stopReason: 'service_retired' };
     }
     if (name === 'worker setup') {
-      if (state.active || (state.runId && !state.closed)) throw fail('worker_uncertain', 'Reconcile the prior run through worker run/status before changing setup.');
+      const retained = state.active && recoverableReservation(selected, userId, options.agent, state.active.handoffId, state);
+      if (state.active && !retained || (state.runId && !state.closed)) throw fail('worker_uncertain', 'Reconcile the prior run through worker run/status before changing setup.');
       if (state.service) throw fail('worker_service', 'Uninstall the owned service before changing setup.');
       const stopRequest = controlStore.load().stopRequested;
       const config = workerConfig(options, state.configure?.config || state.config);
+      if (retained && (JSON.stringify(config) !== JSON.stringify(state.config) || options['label-ids'] !== undefined || options['manage-existing'])) throw fail('worker_uncertain', 'Keep the worker configuration unchanged until the retained task is resolved.');
       await runner.doctor(config);
       const labelIds = options['label-ids'] === undefined ? undefined : JSON.parse(options['label-ids']);
       const body = { agent: options.agent, host: config.host, sessionId: config.sessionId, event: 'configure',
@@ -216,7 +228,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       server = createServer(async (req, res) => {
         if (req.method !== 'POST' || req.headers.authorization !== `Bearer ${nonce}` || !['/stop', '/status'].includes(req.url)) { res.writeHead(403); res.end(); return; }
         if (req.url === '/stop') { stop(); await finished; }
-        res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ nonce, stopped: req.url === '/stop' }));
+        res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ nonce, stopped: req.url === '/stop' && state.closed === true && state.active?.closed !== false }));
       });
       server.listen(0, '127.0.0.1'); await once(server, 'listening');
       await controlStore.exclusive((old, write) => { if (old.stopRequested) stop(); write({ ...old, port: server.address().port, nonce }); });
@@ -260,7 +272,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         const job = state.active;
         const { handoff } = await get(job.handoffId);
         if (!handoff || handoff.id !== job.handoffId) throw fail('invalid_response', 'Invalid handoff.');
-        if (dependencies.task && job.phase === 'claimed' && (handoff.issue?.projectId !== dependencies.task.project || handoff.status !== 'claimed' || handoff.claimedBy?.name !== options.agent)) throw fail('worker_uncertain', 'The retained claim no longer belongs to this worker.');
+        if (job.phase === 'claimed' && (dependencies.task && handoff.issue?.projectId !== dependencies.task.project || handoff.status !== 'claimed' || handoff.claimedBy?.name !== options.agent)) throw fail('worker_uncertain', 'The retained claim no longer belongs to this worker.');
         if (dependencies.task && job.phase === 'reserved' && handoff.status !== 'open' && handoff.claimedBy?.name === options.agent) throw fail('worker_uncertain', 'The retained reservation does not prove this claim.');
         if (job.phase === 'completed' || (handoff.status === 'completed' && ['result', 'settling'].includes(job.phase))) {
           job.phase = 'completed'; await writeJob(); delete state.active; persist(); continue;

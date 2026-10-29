@@ -106,7 +106,9 @@ export function store(profile = 'default') {
         fs.fsyncSync(fd);
       } finally { fs.closeSync(fd); }
       if (previous !== undefined) {
-        if (readLock() !== previous) throw locked();
+        let current;
+        try { current = readLock(); } catch (error) { if (error.code === 'ENOENT') throw locked(); throw error; }
+        if (current !== previous) throw locked();
         fs.unlinkSync(lock);
       }
       // Publish complete metadata atomically, so a crash cannot leave a new empty lock.

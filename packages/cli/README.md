@@ -438,6 +438,7 @@ protection against a malicious process running as the same OS user.
 
 ```sh
 collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker setup --agent sportsbook-worker --workspace WORKSPACE_ID
 collab worker install --agent sportsbook-worker --workspace WORKSPACE_ID --dry-run
 collab worker install --agent sportsbook-worker --workspace WORKSPACE_ID
 collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
@@ -453,7 +454,10 @@ the repository directory. A missing repository therefore produces a normal confi
 pause instead of failing before the daemon can start.
 Stop any foreground worker before installing. Dry-run returns the definition and
 supervisor commands without installing; each invocation generates a fresh service
-installation identity. Stop
+installation identity. After an explicit stop, run `worker setup` before installing
+or running again. If a service is already installed, uninstall it before setup and
+then reinstall it. A retained pre-model reservation keeps its existing configuration
+and journal until the same worker resolves the task. Stop
 uses the private authenticated daemon control endpoint and confirms owned closure;
 it never signals a remembered PID. Stop the foreground daemon before uninstalling.
 Before that endpoint is available, stop/status use the exclusive worker lock to
