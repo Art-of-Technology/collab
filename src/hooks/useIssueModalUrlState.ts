@@ -1,9 +1,8 @@
 import { useMemo, useCallback } from 'react';
-import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import { useSearchParams, usePathname } from 'next/navigation';
 
 export function useIssueModalUrlState() {
     const searchParams = useSearchParams();
-    const router = useRouter();
     const pathname = usePathname();
     const selectedIssueId = searchParams.get('selectedIssue');
     const parentTitle = searchParams.get('parentTitle');
@@ -33,11 +32,12 @@ export function useIssueModalUrlState() {
 
         // Only update URL if it's different to avoid unnecessary updates
         if (newUrl !== currentUrl) {
-            // Use replace to avoid cluttering history, or push if you want back button support
-            // Using push here so back button closes the modal which is intuitive
-            router.push(newUrl, { scroll: false });
+            // Shallow update: Next syncs useSearchParams from history.pushState without a server round trip,
+            // so opening an issue no longer re-renders the view page (and its issue query) on the server.
+            // pushState keeps the back button closing the modal.
+            window.history.pushState(null, '', newUrl);
         }
-    }, [searchParams, pathname, router]);
+    }, [searchParams, pathname]);
 
     const handleSetSelectedIssueId = useCallback((issueId: string | null, parentInfo?: { title: string; key: string } | null) => {
         updateUrl(issueId, parentInfo);
