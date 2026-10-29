@@ -245,7 +245,7 @@ Agent activity is visible in the existing issue timeline and `collab issues acti
 
 ### Operating steps on each computer
 
-1. Upgrade to CLI 0.7.1, run `collab --help` and check its `version` field, and load the updated [agent skill](skills/collab-agents/SKILL.md). Use the existing authorized login.
+1. Upgrade to CLI 0.8.0, run `collab --help` and check its `version` field, and load the updated [agent skill](skills/collab-agents/SKILL.md). Use the existing authorized login.
 2. Keep one stable name for this agent. Use the actual session ID reported by your agent host, and a short host label without spaces. If you already have an established name, keep it; do not create a fresh name for every task or restart. Stop its previous watcher before binding a replacement session.
 
 ```sh
@@ -492,11 +492,12 @@ qualification, same-host and two-host Sportsbook tests remain with the release o
 
 ## Project coordinator (CLI 0.8.0)
 
-A coordinator monitors one project with ordinary code. It dispatches overdue
-handoffs to explicitly configured **local dedicated workers**, using their existing
+A coordinator monitors one project with ordinary code. It dispatches overdue,
+unclaimed handoffs addressed to up to 16 explicitly configured **local dedicated workers**,
+using their existing
 claim, generation fence, journal, tool restrictions and budget. It does not inject
 messages into an interactive terminal or turn a registration into a running agent.
-The matching server and additive `20261029000100_project_coordinator` migration
+The matching server and [coordinator migration](../../docs/agent-handoffs.md#validation-and-rollout)
 must be installed first. Installation of the CLI alone starts nothing.
 
 Set up a new coordinator identity with a stable host/session pair. Use your actual
@@ -532,7 +533,9 @@ coordinator and handoff IDs. Read `collab handoffs get` and the issue timeline t
 verify the named claim and result; successful notification is not successful work.
 Status retains the latest 50 decision events and 50 dispatch events, and exposes the current scan in pages
 of 25 with `coordinator status --page N`; batches of up to 5,000 pending project handoffs are
-scanned per cycle. The dispatch journal holds up to 100 task IDs. When full, it
+scanned per cycle. If more remain, the next cycle continues from the saved cursor;
+after the last page, scanning starts again from the beginning. The dispatch journal
+holds up to 100 task IDs. When full, it
 prunes only records with confirmed worker closure and a completed or superseded
 server handoff; pending, uncertain and retry-exhausted records remain. If none can
 be reconciled, status reports `journal_retention_unresolved` and an operator must
