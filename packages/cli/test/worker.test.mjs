@@ -20,7 +20,7 @@ function fixture(t, execute) {
   const options = { agent: 'worker', workspace: 'ws', host: 'laptop', cwd: dir, claude: process.execPath };
   const selected = { base: 'https://example.test', workspace: 'ws', token: 'private' };
   const calls = [], sessions = [];
-  let handoff = { id: 'task-one', issueId: 'issue-one', content: 'untrusted $(do not execute)', status: 'open', updatedAt: '2026-10-27T00:00:00Z' }, remote;
+  let handoff = { id: 'task-one', issueId: 'issue-one', content: 'untrusted $(do not execute)', status: 'open', claimedById: null, updatedAt: '2026-10-27T00:00:00Z' }, remote, registration;
   const result = { outcome: 'complete', content: 'Evidence', reviewAgent: null, estimatedUSD: 0.1, error: false, tokens: { inputTokens: 10, outputTokens: 5, cacheReadTokens: 2, cacheWriteTokens: 1 } };
   const dependencies = {
     sleep: (ms, value, extra) => delay(ms === 10000 ? ms : 1, value, extra),
@@ -34,16 +34,16 @@ function fixture(t, execute) {
     } },
     api: async (url, extra = {}) => {
       calls.push({ url, ...extra });
-      if (url === 'agents/worker') { remote = { generation: extra.body.generation || null, closed: ['configure', 'close'].includes(extra.body.event) }; return { worker: remote }; }
-      if (url === 'agents/worker?agent=worker') return { agent: { name: 'worker', worker: remote } };
+      if (url === 'agents/worker') { registration = { id: 'worker-id', name: 'worker', host: extra.body.host, sessionId: extra.body.sessionId }; remote = { generation: extra.body.generation || null, closed: ['configure', 'close'].includes(extra.body.event) }; return { worker: remote }; }
+      if (url === 'agents/worker?agent=worker') return { agent: { ...registration, worker: remote } };
       if (url.startsWith('agents/inbox')) {
         if (handoff.status === 'completed') { process.emit('SIGINT'); return { items: [], hasMore: false }; }
-        return { items: [handoff], hasMore: false };
+        return { items: [{ ...handoff, claimedBy: handoff.claimedById ? { name: 'worker' } : null }], hasMore: false };
       }
       if (url.startsWith('agents/handoffs/task-one')) {
         if (!extra.method) return { handoff };
         assert.ok(extra.body.generation);
-        if (extra.body.action === 'claim') handoff = { ...handoff, status: 'claimed', claimedBy: { name: 'worker' } };
+        if (extra.body.action === 'claim') handoff = { ...handoff, status: 'claimed', claimedById: 'worker-id' };
         if (extra.body.action === 'complete') handoff = { ...handoff, status: 'completed' };
         return handoff;
       }
@@ -52,7 +52,7 @@ function fixture(t, execute) {
     },
   };
   const run = command => runWorker(`worker ${command}`, options, selected, 'user', dependencies);
-  return { dir, options, selected, calls, sessions, dependencies, run, state: () => store(`worker-${workerKey(selected, 'user', 'worker')}`).load() };
+  return { dir, options, selected, calls, sessions, dependencies, run, handoff: () => handoff, setHandoff: value => { handoff = value; }, state: () => store(`worker-${workerKey(selected, 'user', 'worker')}`).load() };
 }
 
 test('worker conflicts expose only scoped, valid reason codes without remote text', async t => {
@@ -228,6 +228,33 @@ test('transient reads recover; auth pauses without retrying or invoking the mode
   assert.equal((await f.run('run')).state, 'stopped'); assert.equal(f.sessions.length, 1);
   f.dependencies.api = async () => { throw Object.assign(Error(), { code: 'unauthorized' }); };
   assert.equal((await f.run('run')).state, 'needs-login'); assert.equal(f.sessions.length, 1);
+});
+
+for (const claimant of ['owned', 'other', 'missing', 'host', 'session', 'identity']) test(`claimed reservation checks ${claimant} against the owned registration`, async t => {
+  const f = fixture(t); await f.run('setup');
+  const api = f.dependencies.api; let failing = true;
+  f.dependencies.api = async (url, extra) => {
+    if (failing && url === 'issues/issue-one') throw Object.assign(Error(), { code: 'transport_failed' });
+    const response = await api(url, extra);
+    if (!failing && url === 'agents/worker?agent=worker') {
+      if (claimant === 'host') response.agent.host = 'other-host';
+      if (claimant === 'session') response.agent.sessionId = 'other-session';
+      if (claimant === 'identity') delete response.agent.id;
+    }
+    return response;
+  };
+  await assert.rejects(f.run('run'), { code: 'transport_failed' });
+  assert.equal(f.state().active.phase, 'claimed'); assert.equal(f.state().active.closed, true);
+  if (claimant === 'other') f.setHandoff({ ...f.handoff(), claimedById: 'other-id' });
+  if (claimant === 'missing') f.setHandoff({ ...f.handoff(), claimedById: null });
+  failing = false;
+  const result = await f.run('run');
+  assert.equal(f.calls.filter(call => call.body?.action === 'claim').length, 1);
+  if (claimant === 'owned') {
+    assert.equal(result.state, 'stopped'); assert.equal(f.sessions.length, 1); assert.equal(f.handoff().status, 'completed');
+  } else {
+    assert.equal(result.state, 'uncertain'); assert.equal(result.stopReason, 'worker_uncertain'); assert.equal(f.sessions.length, 0);
+  }
 });
 
 test('owned control stop waits for child closure and refuses competing runs', async t => {

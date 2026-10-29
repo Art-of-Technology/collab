@@ -84,13 +84,13 @@ async function fixture(t) {
   const api = async (url, extra = {}) => {
     calls.push({ url, body: extra.body });
     if (url === 'agents/worker?agent=coordinator') return { agent: { name: 'coordinator', host: 'host', sessionId: '535749ab-8486-433b-a17d-ce1cf3c6aec7', worker: null } };
-    if (url === 'agents/worker?agent=worker') return { agent: { worker: remote } };
+    if (url === 'agents/worker?agent=worker') { const local = store(`worker-${workerKey(selected, 'user', 'worker')}`).load(); return { agent: { id: agent.id, name: agent.name, host: local.config?.host, sessionId: local.config?.sessionId, worker: remote } }; }
     if (url === 'agents/coordinator') { leaseCalls++; return extra.body.event === 'reconcile' ? { reconciled: true } : { lease: extra.body }; }
     if (url.startsWith('agents/coordinator?')) return { project: 'project', items: ['open', 'claimed'].includes(item.status) ? [item] : [], agents: [{ ...agent, managedWorker: remote }], nextCursor: null };
     if (url === 'agents/worker') { remote = { state: extra.body.state, generation: extra.body.generation, closed: ['configure', 'close'].includes(extra.body.event) }; return { worker: remote }; }
     if (url.startsWith(`agents/handoffs/${item.id}`)) {
-      if (!extra.method) return { handoff: item };
-      if (extra.body.action === 'claim') { item.status = 'claimed'; item.claimedBy = { id: agent.id, name: agent.name }; }
+      if (!extra.method) { const { claimedBy, ...handoff } = item; return { handoff }; }
+      if (extra.body.action === 'claim') { item.status = 'claimed'; item.claimedById = agent.id; item.claimedBy = { id: agent.id, name: agent.name }; }
       if (extra.body.action === 'complete') item.status = 'completed';
       return item;
     }
@@ -242,6 +242,7 @@ for (const phase of ['reserved', 'claimed']) test(`closed transient ${phase} res
   failing = false; clock += 30001;
   const resumed = await f.run('run');
   assert.equal(resumed.attempts.task.count, 2); assert.equal(f.item().status, 'completed'); assert.equal(f.starts(), 1);
+  assert.equal(f.calls.filter(call => call.body?.action === 'claim').length, 1);
   assert.equal(f.workerDisk.load().usage.totalStarts, 1);
 });
 
@@ -252,7 +253,7 @@ test('a changed claimant never resumes a retained claimed reservation', async t 
   const api = f.deps.api;
   f.deps.api = async (url, extra) => { if (url === 'issues/issue') throw Object.assign(Error(), { code: 'transport_failed' }); return api(url, extra); };
   await f.run('run');
-  f.setItem({ ...f.item(), claimedBy: { id: 'other', name: 'other' } }); clock += 30001;
+  f.setItem({ ...f.item(), claimedById: 'other', claimedBy: { id: 'other', name: 'other' } }); clock += 30001;
   await f.run('run'); assert.equal(f.starts(), 0); assert.equal(f.workerDisk.load().active.phase, 'claimed');
 });
 

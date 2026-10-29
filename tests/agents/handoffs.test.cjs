@@ -475,6 +475,14 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     assert.equal(visibleWorker.taskId, undefined); assert.equal(visibleWorker.coordinator, undefined);
     const released = await send({ toAgents: ['worker-a', 'coordinated'], toLabels: [] });
     await act(alice, released, 'worker-a', 'claim');
+    const handoffRoute = load('src/app/api/apps/auth/agents/handoffs/[id]/route.ts', {
+      '@/lib/apps/auth-middleware': { withAppAuth: fn => fn }, '@/lib/agent-handoffs': service, '@/lib/agent-handoff-http': http,
+    }, { URL });
+    const handoffResponse = await handoffRoute.GET(new Request('https://example.test/api/apps/auth/agents/handoffs/' + released.id + '?agent=worker-a'), alice, { params: Promise.resolve({ id: released.id }) });
+    assert.equal(handoffResponse.status, 200);
+    const handoffBody = (await handoffResponse.json()).handoff;
+    assert.equal(handoffBody.claimedById, (await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'worker-a' } } })).id);
+    assert.equal(Object.hasOwn(handoffBody, 'claimedBy'), false);
     const claim = handoff => service.actOnHandoff(alice, handoff.id, service.actionSchema.parse({ agent: 'coordinated', action: 'claim', generation: workerGeneration, coordinator: admission }));
     await assert.rejects(claim(released), e => e.code === 'already_claimed');
     await act(alice, released, 'worker-a', 'release', 'Hand back');

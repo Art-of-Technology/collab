@@ -272,8 +272,14 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         const job = state.active;
         const { handoff } = await get(job.handoffId);
         if (!handoff || handoff.id !== job.handoffId) throw fail('invalid_response', 'Invalid handoff.');
-        if (job.phase === 'claimed' && (dependencies.task && handoff.issue?.projectId !== dependencies.task.project || handoff.status !== 'claimed' || handoff.claimedBy?.name !== options.agent)) throw fail('worker_uncertain', 'The retained claim no longer belongs to this worker.');
-        if (dependencies.task && job.phase === 'reserved' && handoff.status !== 'open' && handoff.claimedBy?.name === options.agent) throw fail('worker_uncertain', 'The retained reservation does not prove this claim.');
+        let ownedClaim = false;
+        if (handoff.status === 'claimed' && ['claimed', 'reserved'].includes(job.phase)) {
+          const { agent } = await read(`agents/worker?agent=${encodeURIComponent(options.agent)}`);
+          if (!identifier(agent?.id) || agent.name !== options.agent || agent.host !== config.host || agent.sessionId !== config.sessionId || !identifier(handoff.claimedById)) throw fail('worker_uncertain', 'The claim or worker identity cannot be verified.');
+          ownedClaim = handoff.claimedById === agent.id;
+        }
+        if (job.phase === 'claimed' && (dependencies.task && handoff.issue?.projectId !== dependencies.task.project || handoff.status !== 'claimed' || !ownedClaim)) throw fail('worker_uncertain', 'The retained claim no longer belongs to this worker.');
+        if (job.phase === 'reserved' && handoff.status !== 'open' && ownedClaim) throw fail('worker_uncertain', 'The retained reservation does not prove this claim.');
         if (job.phase === 'completed' || (handoff.status === 'completed' && ['result', 'settling'].includes(job.phase))) {
           job.phase = 'completed'; await writeJob(); delete state.active; persist(); continue;
         }
