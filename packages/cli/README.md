@@ -245,7 +245,7 @@ Agent activity is visible in the existing issue timeline and `collab issues acti
 
 ### Operating steps on each computer
 
-1. Upgrade to CLI 0.7.0, run `collab --help` and check its `version` field, and load the updated [agent skill](skills/collab-agents/SKILL.md). Use the existing authorized login.
+1. Upgrade to CLI 0.7.1, run `collab --help` and check its `version` field, and load the updated [agent skill](skills/collab-agents/SKILL.md). Use the existing authorized login.
 2. Keep one stable name for this agent. Use the actual session ID reported by your agent host, and a short host label without spaces. If you already have an established name, keep it; do not create a fresh name for every task or restart. Stop its previous watcher before binding a replacement session.
 
 ```sh
