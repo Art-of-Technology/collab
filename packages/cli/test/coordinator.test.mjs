@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { runCoordinator, classifyTask } from '../src/coordinator.mjs';
 import { runWorker, workerKey } from '../src/worker.mjs';
@@ -108,6 +109,44 @@ test('unknown dispatch outcome remains pending after a new coordinator invocatio
   const recovered = await f.run('run');
   assert.equal(recovered.decisions.at(-1).reason, 'uncertain_prior_dispatch');
   assert.equal(f.starts(), 0);
+});
+
+test('synchronous worker invocation failure remains pending', async t => {
+  const f = await fixture(t);
+  f.deps.worker = () => { throw Object.assign(Error('unknown'), { code: 'outcome_unknown' }); };
+  const result = await f.run('run');
+  assert.equal(result.attempts.task.pending, true); assert.equal(result.paused, true);
+  assert.equal(f.starts(), 0);
+});
+
+for (const cause of ['stop', 'renewal failure']) test(`${cause} before worker invocation restores the prior attempt`, { timeout: 15000 }, async t => {
+  const f = await fixture(t), api = f.deps.api; let release, reached;
+  const blocked = new Promise(resolve => { reached = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  const prior = { count: 1, pending: false, worker: 'worker', at: now - 60000, nextAt: now - 1 };
+  if (cause === 'stop') await f.coordDisk.exclusive((state, save) => { state.attempts = { task: prior }; save(state); });
+  f.deps.once = false;
+  f.deps.api = async (url, extra = {}) => {
+    if (url === 'agents/coordinator' && extra.body?.event === 'renew') {
+      reached(); await gate;
+      if (cause === 'renewal failure') throw Object.assign(Error('lease refused'), { code: 'coordinator_conflict' });
+    }
+    return api(url, extra);
+  };
+  const running = f.run('run'); await blocked;
+  let stopping;
+  if (cause === 'stop') {
+    stopping = f.run('stop');
+    while (!f.coordDisk.load().paused) await delay(5);
+  }
+  release(); if (stopping) await stopping;
+  const stopped = await running;
+  assert.deepEqual(stopped.attempts.task, cause === 'stop' ? prior : undefined);
+  assert.equal(f.starts(), 0); assert.equal(f.item().status, 'open');
+  await f.run('setup'); f.deps.api = api; f.deps.once = true;
+  const resumed = await f.run('run');
+  assert.equal(resumed.attempts.task.count, cause === 'stop' ? 2 : 1);
+  assert.equal(f.item().status, 'completed'); assert.equal(f.starts(), 1);
 });
 
 test('foreign project task fails closed before dispatch and lease conflict is not retried', async t => {
@@ -415,11 +454,11 @@ test('explicit coordinator stop persists a pause; setup preserves prior task his
 test('coordinator service definition carries exact project and installation identity', async t => {
   const f = await fixture(t);
   f.options['dry-run'] = true;
+  f.deps.service = { platform: 'darwin', home: f.dir, command: ['/trusted path/runner & tool', '/exact/collab'] };
   const result = await f.run('install');
   assert.equal(result.dryRun, true); assert.equal(result.installed, false);
-  assert.ok(result.content.includes('coordinator'));
-  assert.ok(result.content.includes('--project'));
-  assert.ok(result.content.includes(result.installationId));
+  const args = JSON.parse(execFileSync('python3', ['-c', 'import json, plistlib, sys; print(json.dumps(plistlib.loads(sys.stdin.buffer.read())["ProgramArguments"]))'], { input: result.content, encoding: 'utf8' }));
+  assert.deepEqual(args, ['/trusted path/runner & tool', '/exact/collab', 'coordinator', 'run', '--agent', 'coordinator', '--workspace', 'ws', '--config-dir', f.dir, '--service-id', result.installationId, '--project', 'project']);
   assert.equal(f.starts(), 0);
 });
 

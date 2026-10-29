@@ -176,15 +176,22 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
                   if (Object.keys(state.attempts).length >= 100 && !prior) {
                     decision.reason = 'journal_retention_unresolved'; decision.action = 'blocked'; decision.next = 'Inspect retained attempts, worker closure and server handoff status before resuming dispatch.';
                   } else {
-                  state.attempts[key] = { count: (prior?.count || 0) + 1, pending: true, worker: decision.agent, at: now() }; save(state);
-                  await dispatches.exclusive((history, write) => write({ events: [...(history.events || []), { ...decision, reason: 'dispatch_started', at: now() }].slice(-50) }));
-                  await lease('renew'); abort.signal.throwIfAborted();
+                  try {
+                    state.attempts[key] = { count: (prior?.count || 0) + 1, pending: true, worker: decision.agent, at: now() }; save(state);
+                    await dispatches.exclusive((history, write) => write({ events: [...(history.events || []), { ...decision, reason: 'dispatch_prepared', at: now() }].slice(-50) }));
+                    await lease('renew'); abort.signal.throwIfAborted();
+                  } catch (error) {
+                    if (prior) state.attempts[key] = prior; else delete state.attempts[key];
+                    save(state); throw error;
+                  }
                   decision.reason = 'dispatch_started'; decision.action = 'observe';
                   const active = { decision, key, settled: false };
                   child = active;
-                  active.promise = Promise.resolve().then(() => worker('worker run', { agent: decision.agent, workspace: options.workspace }, selected, userId,
-                    { ...deps.workerDependencies, api, task: { id: task.id, project: options.project }, coordinator: binding, signal: abort.signal }))
-                    .then(value => { active.outcome = { value }; active.settled = true; }, error => { active.outcome = { error }; active.settled = true; });
+                  let invocation;
+                  try { invocation = worker('worker run', { agent: decision.agent, workspace: options.workspace }, selected, userId,
+                    { ...deps.workerDependencies, api, task: { id: task.id, project: options.project }, coordinator: binding, signal: abort.signal }); }
+                  catch (error) { invocation = Promise.reject(error); }
+                  active.promise = Promise.resolve(invocation).then(value => { active.outcome = { value }; active.settled = true; }, error => { active.outcome = { error }; active.settled = true; });
                   }
                 }
               }
