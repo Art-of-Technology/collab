@@ -253,15 +253,14 @@ for (const mode of ['foreground', 'scheduled']) test(`${mode} startup stop and s
     }));
     options['service-id'] = f.state().service.installationId;
   }
-  let entered, release, polled;
+  let entered, release, polled = false;
   const preflight = new Promise(resolve => { entered = resolve; });
   const pending = new Promise(resolve => { release = resolve; });
-  const ready = new Promise(resolve => { polled = resolve; });
   f.dependencies.runner.doctor = async () => { entered(); await pending; return { ready: true }; };
   f.dependencies.runner.execute = async () => assert.fail('Idle startup must not launch a model');
   const api = f.dependencies.api;
   f.dependencies.api = async (url, extra) => {
-    if (url.startsWith('agents/inbox')) { polled(); return { items: [], hasMore: false }; }
+    if (url.startsWith('agents/inbox')) { polled = true; return { items: [], hasMore: false }; }
     return api(url, extra);
   };
   const running = runWorker('worker run', options, f.selected, 'user', f.dependencies);
@@ -274,11 +273,10 @@ for (const mode of ['foreground', 'scheduled']) test(`${mode} startup stop and s
   assert.equal(starting.stopped, false); assert.equal(starting.online, false);
   assert.equal(starting.state, 'starting'); assert.equal(starting.stopReason, 'stop_unconfirmed');
   assert.equal(f.sessions.length, 0); assert.equal(f.calls.some(call => call.body?.event === 'start'), false);
-  release(); await ready;
-  const online = await f.run('status'); assert.equal(online.online, true); assert.equal(online.stopped, false);
-  assert.equal((await f.run('stop')).stopped, true);
+  release();
   assert.equal((await running).state, 'stopped'); finished = true;
-  assert.equal(f.state().closed, true); assert.equal(f.sessions.length, 0);
+  assert.equal(f.state().closed, true); assert.equal(f.sessions.length, 0); assert.equal(polled, false);
+  assert.ok(store(`ctl-${identity}`).load().stopRequested);
   assert.equal((await f.run('status')).stopped, true);
 });
 
@@ -299,7 +297,7 @@ for (const record of ['missing', 'unreachable']) test(`absence proof requires th
   });
   assert.deepEqual(await f.run('stop'), { online: false, stopped: true });
   const status = await f.run('status'); assert.equal(status.stopped, true); assert.equal(status.online, false);
-  assert.deepEqual(f.state(), before); assert.equal(f.sessions.length, 0);
+  assert.deepEqual(f.state(), { ...before, stopReason: 'requested_stop', status: 'stopped' }); assert.equal(f.sessions.length, 0);
 });
 
 for (const unresolved of [{ runId: 'old-run', closed: false }, { active: { phase: 'dispatched', closed: false } }]) test(`unresolved ${unresolved.runId ? 'generation' : 'child'} closure refuses stop despite a free lock`, async t => {
@@ -446,6 +444,8 @@ else {
   const final = await running;
   assert.equal(final.state, 'stopped'); assert.equal(final.usage.estimatedUSD, 0.02);
   assert.equal(final.usage.restarts, 1);
+  assert.equal((await cli(['run'])).stopReason, 'requested_stop');
+  await cli(['setup', '--host', 'laptop', '--cwd', dir, '--claude', fake, '--max-restarts', '1']);
   const exhausted = await cli(['run']);
   assert.equal(exhausted.state, 'restart-limit'); assert.equal(exhausted.usage.restarts, 1);
   const starts = calls.filter(c => c.body?.event === 'start');
@@ -771,7 +771,10 @@ test('Windows uninstall closes a delayed native launch before deletion and fence
   const before = f.state();
   const stale = await runWorker('worker run', { ...f.options, 'service-id': owned.installationId }, f.selected, 'user', f.dependencies);
   assert.equal(stale.stopReason, 'service_retired'); assert.deepEqual(f.state(), before);
-  await f.run('run'); assert.equal(f.sessions.length, 1);
+  assert.equal((await f.run('run')).stopReason, 'requested_stop'); assert.equal(f.sessions.length, 0);
+  dependencies.execute = async command => ({ stdout: command === 'powershell.exe' ? JSON.stringify({ label: f.state().service.label, closed: true }) : '' });
+  await stateStore.exclusive((state, save) => workerService('worker uninstall', identity, f.options, state, save, dependencies));
+  await f.run('setup'); await f.run('run'); assert.equal(f.sessions.length, 1);
 });
 
 for (const proof of ['running', 'wrong-task', 'malformed', 'unavailable']) test(`Windows uninstall retains retired ownership when exact closure is ${proof}`, async t => {

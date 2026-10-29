@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { CliError, request, store } from './client.mjs';
-import { runWorker, workerKey, control } from './worker.mjs';
+import { runWorker, workerKey, control, recoverableReservation } from './worker.mjs';
 import { workerService } from './worker-service.mjs';
 
 export const coordinatorCommands = Object.fromEntries(['setup', 'run', 'status', 'stop', 'install', 'uninstall'].map(action =>
@@ -11,7 +11,7 @@ export const coordinatorCommands = Object.fromEntries(['setup', 'run', 'status',
 const fail = (code, message) => new CliError(code, message, 5);
 const hash = values => createHash('sha256').update(JSON.stringify(values)).digest('base64url');
 const identifier = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
-const safeReasons = new Set([null, 'coordinator_complete', 'transport_failed', 'server_error', 'rate_limited']);
+const safeReasons = new Set([null, 'coordinator_complete', 'interrupted', 'transport_failed', 'server_error', 'rate_limited']);
 
 // A heartbeat proves liveness, not meaningful task progress. Never infer closure from age.
 export function classifyTask(task, agents, config, now, localAvailable = () => true) {
@@ -92,11 +92,25 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
     const config = state.config, abort = new AbortController(), stop = () => abort.abort();
     const generation = randomUUID(), binding = { project: options.project, agent: options.agent, host: config.host, sessionId: config.sessionId, generation };
     const lease = event => api('agents/coordinator', { method: 'POST', timeout: 5000, body: { ...binding, event } });
-    let server, renewal, renewError, finish, admitted = false;
+    let server, renewal, renewError, finish, child, admitted = false;
     const finished = new Promise(resolve => { finish = resolve; });
     const renewalAbort = new AbortController();
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
     state.attempts ||= {}; state.decisions ||= [];
+    const finishChild = async () => {
+      if (!child?.settled) return;
+      const { decision, key, outcome } = child;
+      let result = outcome.value;
+      if (outcome.error) {
+        const closed = store(`worker-${workerKey(selected, userId, decision.agent)}`).load();
+        if (!['transport_failed', 'server_error', 'rate_limited'].includes(outcome.error.code) || !closed.closed || closed.active && !recoverableReservation(selected, userId, decision.agent, key, closed)) throw outcome.error;
+        result = { state: 'retrying', stopReason: outcome.error.code };
+      }
+      state.attempts[key].pending = false; state.attempts[key].nextAt = now() + 30000 * 2 ** (state.attempts[key].count - 1);
+      decision.reason = result.stopReason || result.state; decision.action = result.active ? 'blocked' : 'observe';
+      await dispatches.exclusive((history, write) => { history.events[history.events.length - 1] = { ...decision, at: now() }; write(history); });
+      child = undefined; save(state);
+    };
     try {
       if (deps.startupError) throw deps.startupError;
       await lease('acquire'); admitted = true; state.runId = generation; state.closed = false; save(state);
@@ -114,6 +128,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
       server.listen(0, '127.0.0.1'); await once(server, 'listening');
       await controls.exclusive((_s, write) => write({ port: server.address().port, nonce }));
       while (!abort.signal.aborted) {
+        await finishChild();
         if (now() < (state.clock || 0)) throw fail('clock_rollback', 'Clock moved backwards; coordinator paused.');
         state.clock = now(); state.status = 'monitoring'; state.heartbeatAt = new Date(now()).toISOString(); state.scan = { count: 0, complete: false }; save(state);
         let cursor, pages = 0;
@@ -122,15 +137,21 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
           if (snapshot.project !== options.project || !Array.isArray(snapshot.items) || snapshot.items.length > 50 || !Array.isArray(snapshot.agents) || snapshot.agentsTruncated) throw fail('coordinator_response', 'Incomplete project snapshot; no dispatch.');
           for (const task of snapshot.items) {
             abort.signal.throwIfAborted();
+            await finishChild();
             if (!identifier(task.id) || task.issue?.projectId !== options.project) throw fail('coordinator_response', 'Task project binding is invalid.');
             const available = agent => {
               const local = store(`worker-${workerKey(selected, userId, agent)}`).load();
-              return !local.config || local.config.host !== config.host || local.config.reviewAgent || local.service || local.configure || local.active || local.runId && !local.closed || !safeReasons.has(local.stopReason ?? null) ? local.stopReason || 'worker_closure_or_binding' : true;
+              const recovered = recoverableReservation(selected, userId, agent, task.id, local) && state.attempts[task.id]?.worker === agent && (task.status === 'open' && local.active.phase === 'reserved' || task.status === 'claimed' && local.active.phase === 'claimed' && task.claimedBy?.name === agent);
+              return !local.config || local.config.host !== config.host || local.config.reviewAgent || local.service || local.configure || local.active && !recovered || local.runId && !local.closed || !safeReasons.has(local.stopReason ?? null) ? local.stopReason || 'worker_closure_or_binding' : true;
             };
-            const decision = { handoffId: task.id, issueKey: String(task.issue.issueKey || '').slice(0, 128), ...classifyTask(task, snapshot.agents, config, now(), available), owner: options.agent };
+            const prior = state.attempts[task.id];
+            const resumed = task.status === 'claimed' && prior && !prior.pending && task.claimedBy?.name === prior.worker && available(prior.worker) === true;
+            const target = resumed ? { ...task, status: 'open', previouslyClaimed: false, recipientNames: [prior.worker], labelIds: [] } : task;
+            const decision = { handoffId: task.id, issueKey: String(task.issue.issueKey || '').slice(0, 128), ...classifyTask(target, snapshot.agents, config, now(), available), owner: options.agent };
             if (decision.action === 'dispatch') {
               const key = task.id, prior = state.attempts[key];
-              if (prior?.pending) { decision.reason = 'uncertain_prior_dispatch'; decision.action = 'blocked'; }
+              if (child) { decision.reason = 'worker_in_progress'; decision.action = 'observe'; }
+              else if (prior?.pending) { decision.reason = 'uncertain_prior_dispatch'; decision.action = 'blocked'; }
               else if (prior?.count >= 3) { decision.reason = 'retry_limit'; decision.action = 'blocked'; }
               else if (prior?.nextAt > now()) { decision.reason = 'backoff'; decision.action = 'observe'; }
               else {
@@ -154,18 +175,12 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
                   state.attempts[key] = { count: (prior?.count || 0) + 1, pending: true, worker: decision.agent, at: now() }; save(state);
                   await dispatches.exclusive((history, write) => write({ events: [...(history.events || []), { ...decision, reason: 'dispatch_started', at: now() }].slice(-50) }));
                   await lease('renew'); abort.signal.throwIfAborted();
-                  let result;
-                  try {
-                    result = await worker('worker run', { agent: decision.agent, workspace: options.workspace }, selected, userId,
-                      { ...deps.workerDependencies, api, task: { id: task.id, project: options.project }, coordinator: binding, signal: abort.signal });
-                  } catch (error) {
-                    const closed = store(`worker-${workerKey(selected, userId, decision.agent)}`).load();
-                    if (!['transport_failed', 'server_error', 'rate_limited'].includes(error.code) || !closed.closed || closed.active) throw error;
-                    result = { state: 'retrying', stopReason: error.code };
-                  }
-                  state.attempts[key].pending = false; state.attempts[key].nextAt = now() + 30000 * 2 ** (state.attempts[key].count - 1);
-                  decision.reason = result.stopReason || result.state; decision.action = result.active ? 'blocked' : 'observe';
-                  await dispatches.exclusive((history, write) => { history.events[history.events.length - 1] = { ...decision, at: now() }; write(history); }); save(state);
+                  decision.reason = 'dispatch_started'; decision.action = 'observe';
+                  const active = { decision, key, settled: false };
+                  child = active;
+                  active.promise = Promise.resolve().then(() => worker('worker run', { agent: decision.agent, workspace: options.workspace }, selected, userId,
+                    { ...deps.workerDependencies, api, task: { id: task.id, project: options.project }, coordinator: binding, signal: abort.signal }))
+                    .then(value => { active.outcome = { value }; active.settled = true; }, error => { active.outcome = { error }; active.settled = true; });
                   }
                 }
               }
@@ -183,13 +198,14 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
         } while (cursor && ++pages < 100 && !abort.signal.aborted);
         if (cursor) throw fail('coordinator_scan_limit', 'Project scan exceeds 5000 tasks; inspect retained status.');
         state.scan.complete = true; save(state);
-        if (deps.once) break;
+        if (deps.once) { if (child) await child.promise; await finishChild(); break; }
         await sleep(config.pollSeconds * 1000, undefined, { signal: abort.signal });
       }
       if (renewError) throw renewError;
     } catch (error) {
       if (renewError || !abort.signal.aborted) { state.status = 'blocked'; state.error = (renewError || error).code || 'coordinator_failed'; state.paused = true; }
     } finally {
+      if (child) { stop(); await child.promise; }
       renewalAbort.abort(); await renewal;
       if (admitted) { try { await lease('close'); state.closed = true; } catch { state.closed = false; state.error = 'lease_close_unconfirmed'; } }
       if (state.status !== 'blocked') state.status = state.paused ? 'paused' : 'stopped'; save(state);

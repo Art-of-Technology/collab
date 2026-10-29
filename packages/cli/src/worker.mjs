@@ -13,6 +13,12 @@ const fail = (code, message) => new CliError(code, message, 5);
 const key = value => createHash('sha256').update(JSON.stringify(value)).digest('base64url');
 const identifier = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(value);
 export function workerKey(selected, userId, agent) { return key([selected.base, selected.workspace, userId, agent]); }
+export function recoverableReservation(selected, userId, agent, taskId, state) {
+  const active = state.active;
+  if (!state.closed || !active || active.handoffId !== taskId || active.closed !== true || !['reserved', 'claimed'].includes(active.phase) || !identifier(active.attemptId) || !identifier(active.sessionId) || !Number.isFinite(active.reservedUSD) || active.reservedUSD <= 0 || typeof active.day !== 'string') return false;
+  const saved = store(`job-${key([workerKey(selected, userId, agent), taskId])}`).load();
+  return saved.handoffId === taskId && saved.attemptId === active.attemptId && saved.sessionId === active.sessionId && saved.phase === active.phase && saved.reservedUSD === active.reservedUSD && saved.day === active.day && saved.revision === active.revision && saved.closed === true;
+}
 export function workerConfig(options, previous = {}) {
   const config = { ...previous };
   for (const [flag, field] of [['host', 'host'], ['cwd', 'cwd'], ['claude', 'executable'], ['model', 'model'], ['review-agent', 'reviewAgent']]) if (options[flag] !== undefined) config[field] = options[flag];
@@ -152,7 +158,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     const persist = () => { state.heartbeatAt = new Date(now()).toISOString(); save(state); };
     const stopped = () => {
       state.status = state.active && !['reserved', 'claimed', 'result', 'completed'].includes(state.active.phase) ? 'uncertain' : 'stopped';
-      state.stopReason = state.status === 'uncertain' ? 'interrupted_attempt' : 'requested_stop';
+      state.stopReason = state.status === 'uncertain' ? 'interrupted_attempt' : controlStore.load().stopRequested ? 'requested_stop' : 'interrupted';
     };
     const retry = async (operation, signal, lease = false) => {
       for (let attempt = 0; ; attempt++) {
@@ -254,6 +260,8 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         const job = state.active;
         const { handoff } = await get(job.handoffId);
         if (!handoff || handoff.id !== job.handoffId) throw fail('invalid_response', 'Invalid handoff.');
+        if (dependencies.task && job.phase === 'claimed' && (handoff.issue?.projectId !== dependencies.task.project || handoff.status !== 'claimed' || handoff.claimedBy?.name !== options.agent)) throw fail('worker_uncertain', 'The retained claim no longer belongs to this worker.');
+        if (dependencies.task && job.phase === 'reserved' && handoff.status !== 'open' && handoff.claimedBy?.name === options.agent) throw fail('worker_uncertain', 'The retained reservation does not prove this claim.');
         if (job.phase === 'completed' || (handoff.status === 'completed' && ['result', 'settling'].includes(job.phase))) {
           job.phase = 'completed'; await writeJob(); delete state.active; persist(); continue;
         }
@@ -281,10 +289,12 @@ export async function runWorker(name, options, selected, userId, dependencies = 
             if (current.stopRequested) { stop(); controller.signal.throwIfAborted(); }
             controller.signal.throwIfAborted();
             job.phase = 'dispatching'; job.closed = false; persist(); await writeJob();
-            execution = runner.execute(config, job, context, controller.signal, () => { state.status = 'working'; job.phase = 'dispatched'; persist(); });
+            execution = runner.execute(config, job, context, controller.signal, () => { state.status = 'working'; job.phase = 'dispatched'; persist(); }).then(value => ({ value }), error => ({ error }));
           });
           try {
-            result = await execution;
+            const outcome = await execution;
+            if (outcome.error) throw outcome.error;
+            result = outcome.value;
           } catch (error) {
             job.phase = 'uncertain'; state.usage.unknownUSD += job.reservedUSD; throw error;
           } finally { job.closed = true; persist(); await writeJob(); }
@@ -319,6 +329,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       } else {
         error = renewalError || error;
         pause(state, error);
+        if (transient(error) && dependencies.task && recoverableReservation(selected, userId, options.agent, dependencies.task.id, { ...state, closed: true })) state.status = 'retrying';
         if (transient(error) || error.code === 'outcome_unknown' && !state.active || !(error instanceof CliError) && !error.code) fatalError = error;
       }
     } finally {

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { runCoordinator, classifyTask } from '../src/coordinator.mjs';
 import { runWorker, workerKey } from '../src/worker.mjs';
 import { store } from '../src/client.mjs';
@@ -53,7 +54,7 @@ async function fixture(t) {
     if (url === 'agents/worker') { remote = { state: extra.body.state, generation: extra.body.generation, closed: ['configure', 'close'].includes(extra.body.event) }; return { worker: remote }; }
     if (url.startsWith(`agents/handoffs/${item.id}`)) {
       if (!extra.method) return { handoff: item };
-      if (extra.body.action === 'claim') item.status = 'claimed';
+      if (extra.body.action === 'claim') { item.status = 'claimed'; item.claimedBy = { id: agent.id, name: agent.name }; }
       if (extra.body.action === 'complete') item.status = 'completed';
       return item;
     }
@@ -149,6 +150,85 @@ test('real worker closes a transient read failure and retries after backoff', as
   failRead = false; clock += 30001;
   const second = await f.run('run');
   assert.equal(second.attempts.task.count, 2); assert.equal(f.starts(), 1);
+});
+
+for (const phase of ['reserved', 'claimed']) test(`closed transient ${phase} reservation resumes the same task`, async t => {
+  const f = await fixture(t); let clock = now, reads = 0, failing = true;
+  f.deps.now = () => clock;
+  f.deps.workerDependencies.sleep = async (ms, _value, { signal } = {}) => { if (ms === 10000 && signal) await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true })); };
+  const api = f.deps.api;
+  f.deps.api = async (url, extra) => {
+    if (url.startsWith('agents/handoffs/task?')) reads++;
+    if (failing && (phase === 'reserved' ? url.startsWith('agents/handoffs/task?') && reads >= 2 : url === 'issues/issue')) throw Object.assign(Error(), { code: 'transport_failed' });
+    return api(url, extra);
+  };
+  const first = await f.run('run');
+  assert.equal(first.attempts.task.pending, false); assert.equal(f.workerDisk.load().active.phase, phase); assert.equal(f.starts(), 0);
+  assert.equal((await f.run('run')).decisions.at(-1).reason, 'backoff');
+  failing = false; clock += 30001;
+  const resumed = await f.run('run');
+  assert.equal(resumed.attempts.task.count, 2); assert.equal(f.item().status, 'completed'); assert.equal(f.starts(), 1);
+  assert.equal(f.workerDisk.load().usage.totalStarts, 1);
+});
+
+test('a changed claimant never resumes a retained claimed reservation', async t => {
+  const f = await fixture(t); let clock = now;
+  f.deps.now = () => clock;
+  f.deps.workerDependencies.sleep = async (ms, _value, { signal } = {}) => { if (ms === 10000 && signal) await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true })); };
+  const api = f.deps.api;
+  f.deps.api = async (url, extra) => { if (url === 'issues/issue') throw Object.assign(Error(), { code: 'transport_failed' }); return api(url, extra); };
+  await f.run('run');
+  f.setItem({ ...f.item(), claimedBy: { id: 'other', name: 'other' } }); clock += 30001;
+  await f.run('run'); assert.equal(f.starts(), 0); assert.equal(f.workerDisk.load().active.phase, 'claimed');
+});
+
+test('a transient model failure remains uncertain and is never replayed', async t => {
+  const f = await fixture(t); let starts = 0;
+  f.deps.workerDependencies.runner.execute = async (_config, _job, _context, _signal, started) => { starts++; started(); throw Object.assign(Error(), { code: 'transport_failed' }); };
+  const result = await f.run('run');
+  assert.equal(result.paused, true); assert.equal(result.attempts.task.pending, true);
+  assert.equal(f.workerDisk.load().active.phase, 'uncertain');
+  await f.run('run'); assert.equal(starts, 1);
+});
+
+test('monitoring continues across pages while one worker is running', { timeout: 15000 }, async t => {
+  const f = await fixture(t), api = f.deps.api; let release, started, scans = 0, workerCalls = 0;
+  const running = new Promise(resolve => { started = resolve; });
+  const held = new Promise(resolve => { release = resolve; }); t.after(() => release());
+  const runner = f.deps.workerDependencies.runner;
+  f.deps.workerDependencies.runner = { ...runner, execute: async (...args) => { workerCalls++; args[4](); started(); await held; return runner.execute(...args); } };
+  f.deps.once = false; f.deps.sleep = (ms, value, options) => delay(ms === 1000 ? 5 : ms, value, options);
+  await f.coordDisk.exclusive((s, save) => { s.config.pollSeconds = 1; save(s); });
+  const other = { ...task, id: 'remote-task', recipientNames: ['remote'] };
+  f.deps.api = async (url, extra) => {
+    if (url.startsWith('agents/coordinator?')) {
+      scans++;
+      const current = await api(url, extra);
+      return { ...current, items: [...current.items, other], agents: [...current.agents, { ...agent, id: 'remote-id', name: 'remote', owned: false, managedWorker: { closed: false, state: 'working', leaseUntil: new Date(now + 60000).toISOString() } }] };
+    }
+    return api(url, extra);
+  };
+  const run = f.run('run'); await running;
+  while (scans < 2 || !f.coordDisk.load().scan?.complete) await delay(5);
+  const status = await runCoordinator('coordinator status', f.options, f.selected, 'user', f.deps);
+  assert.ok(status.scan.decisions.some(d => d.handoffId === 'remote-task' && d.reason === 'busy'));
+  assert.equal(workerCalls, 1); release();
+  while (f.coordDisk.load().attempts.task?.pending) await delay(5);
+  await f.run('stop'); await run; assert.equal(workerCalls, 1);
+});
+
+for (const cause of ['coordinator abort', 'SIGTERM']) test(`${cause} does not persist public stop intent`, async t => {
+  const f = await fixture(t), api = f.deps.api, interrupt = new AbortController();
+  let reached; const reading = new Promise(resolve => { reached = resolve; });
+  const interruptedApi = async (url, extra) => {
+    if (url.startsWith('agents/handoffs/task?')) { reached(); await new Promise(resolve => extra.signal.addEventListener('abort', resolve, { once: true })); throw extra.signal.reason; }
+    return api(url, extra);
+  };
+  const run = runWorker('worker run', { agent: 'worker', workspace: 'ws' }, f.selected, 'user', { ...f.deps.workerDependencies, api: interruptedApi, task: { id: 'task', project: 'project' }, signal: interrupt.signal });
+  await reading; if (cause === 'SIGTERM') process.emit('SIGTERM'); else interrupt.abort(); await run;
+  assert.equal(f.workerDisk.load().stopReason, 'interrupted');
+  assert.equal(store(`ctl-${workerKey(f.selected, 'user', 'worker')}`).load().stopRequested, false);
+  await f.run('run'); assert.equal(f.starts(), 1);
 });
 
 test('task-bound worker exits after losing a claim race and preserves decision history', async t => {
