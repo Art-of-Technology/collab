@@ -170,8 +170,48 @@ test('setup and retired service clear stale failure operations', async t => {
   assert.equal(retired.stopReason, 'service_retired'); assert.equal(retired.stopOperation, null);
   f.dependencies.api = async () => { throw new CliError('worker_active', 'Rejected', 2, { configureRejected: true }); };
   await assert.rejects(f.run('setup'), { code: 'worker_active' });
-  assert.equal(f.state().stopReason, 'configure_rejected'); assert.equal(f.state().stopOperation, null);
-  const status = await f.run('status'); assert.equal(status.stopOperation, null);
+  assert.equal(f.state().stopReason, 'worker_active'); assert.equal(f.state().stopOperation, 'configure');
+  const status = await f.run('status'); assert.equal(status.stopOperation, 'configure');
+});
+
+for (const pending of ['generation', 'child']) test(`offline summaries retain failure during unresolved ${pending} closure`, async t => {
+  const f = fixture(t); await f.run('setup');
+  const stateStore = store(`worker-${workerKey(f.selected, 'user', 'worker')}`);
+  await stateStore.exclusive((state, save) => {
+    if (pending === 'generation') { state.runId = 'old'; state.closed = false; }
+    else state.active = { phase: 'dispatched', closed: false };
+    state.stopReason = 'worker_binding_changed'; state.stopOperation = 'renew'; save(state);
+  });
+  const check = result => {
+    assert.equal(result.closureUnconfirmed, true); assert.equal(result.stopReason, 'worker_binding_changed'); assert.equal(result.stopOperation, 'renew');
+  };
+  check(await f.run('doctor'));
+  check(await runWorker('worker run', { ...f.options, 'service-id': 'retired' }, f.selected, 'user', f.dependencies));
+  f.dependencies.startupError = new CliError('token_expired', 'Login expired');
+  const startup = await f.run('run'); check(startup); assert.equal(startup.state, 'needs-login');
+  delete f.dependencies.startupError;
+  f.dependencies.api = async url => {
+    if (url === 'agents/worker?agent=worker') return { agent: { worker: { generation: 'old', closed: false } } };
+    throw new CliError('worker_fenced', 'Safe conflict');
+  };
+  check(await f.run('run')); check(await f.run('status'));
+  assert.equal(f.sessions.length, 0);
+});
+
+test('resolved recovery permits a new generation to report its own failure', async t => {
+  const f = fixture(t); await f.run('setup');
+  const stateStore = store(`worker-${workerKey(f.selected, 'user', 'worker')}`), api = f.dependencies.api;
+  await stateStore.exclusive(async (state, save) => {
+    state.runId = 'old'; state.closed = false; state.stopReason = 'worker_binding_changed'; state.stopOperation = 'renew';
+    await api('agents/worker', { method: 'POST', body: { event: 'start', generation: 'old' } }); save(state);
+  });
+  f.dependencies.api = async (url, extra = {}) => {
+    if (extra.body?.event === 'start') throw new CliError('worker_fenced', 'Safe conflict');
+    return api(url, extra);
+  };
+  const result = await f.run('run');
+  assert.equal(result.stopReason, 'worker_fenced'); assert.equal(result.stopOperation, 'start');
+  assert.equal(result.closureUnconfirmed, false); assert.equal(f.state().closed, true);
 });
 
 test('worker setup/run claims before an owned session and suppresses completed duplicates', async t => {
@@ -682,12 +722,27 @@ for (const rejection of ['conversion', 'labels']) test(`confirmed ${rejection} r
   if (rejection === 'labels') f.options['label-ids'] = '["bad-label"]';
   await assert.rejects(f.run('setup'), e => e.details.configureRejected === true);
   assert.equal(f.state().configure.body, undefined);
-  assert.equal(f.state().stopReason, 'configure_rejected');
+  assert.equal(f.state().stopReason, rejection === 'conversion' ? 'worker_conversion_required' : 'configure_rejected');
+  assert.equal(f.state().stopOperation, rejection === 'conversion' ? 'configure' : null);
   if (rejection === 'conversion') f.options['manage-existing'] = true;
   else f.options['label-ids'] = '[]';
   await f.run('setup');
   assert.equal(bodies.length, 2); assert.equal(bodies[0].sessionId, bodies[1].sessionId);
   assert.equal(f.state().config.sessionId, bodies[0].sessionId); assert.deepEqual(f.state().usage, usage);
+});
+
+for (const code of ['worker_active', 'worker_conversion_required']) test(`configure ${code} persists only safe conflict details`, async t => {
+  const f = fixture(t); let reject = true;
+  await configureServer(t, f, (_req, res) => {
+    if (reject) { res.statusCode = 409; res.end(JSON.stringify({ error: code, message: 'PRIVATE_REMOTE_TEXT' })); }
+    else res.end(JSON.stringify({ worker: { closed: true } }));
+  });
+  await assert.rejects(f.run('setup'), { code });
+  const status = await f.run('status');
+  assert.equal(status.stopReason, code); assert.equal(status.stopOperation, 'configure');
+  assert.equal(status.setupPending, true); assert.equal(JSON.stringify(status).includes('PRIVATE_REMOTE_TEXT'), false);
+  reject = false; const setup = await f.run('setup');
+  assert.equal(setup.stopReason, null); assert.equal(setup.stopOperation, null); assert.equal(setup.setupPending, false);
 });
 
 for (const outcome of ['lost-reply', 'timeout', 'server-error', 'unknown-rejection', 'invalid-response']) test(`configure ${outcome} retains the exact request until replay succeeds`, async t => {

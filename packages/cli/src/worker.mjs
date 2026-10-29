@@ -49,16 +49,19 @@ export function budget(state, config, now = Date.now(), reserve = false) {
   }
   return true;
 }
-function summary(state, closureUnconfirmed = false) {
+const unresolvedClosure = state => !!((state.runId && !state.closed) || (state.active && state.active.closed !== true));
+function summary(state, closureUnconfirmed = unresolvedClosure(state)) {
   return { configured: !!state.config, setupPending: !!state.configure, config: state.config, state: state.status || 'stopped', runId: state.runId || null,
     taskId: state.active?.handoffId || null, attemptId: state.active?.attemptId || null, childSessionId: state.active?.sessionId || null,
     heartbeatAt: state.heartbeatAt || null, stopReason: state.stopReason || null, stopOperation: state.stopOperation || null, closureUnconfirmed, usage: state.usage || null,
     active: state.active ? { phase: state.active.phase, closed: state.active.closed === true, reservedUSD: state.active.reservedUSD } : null };
 }
 const transient = error => ['transport_failed', 'server_error', 'rate_limited'].includes(error.code);
-function pause(state, error) {
-  state.stopReason = typeof error.code === 'string' && /^[a-z_]{1,64}$/.test(error.code) ? error.code : 'worker_failed';
-  state.stopOperation = ['start', 'renew', 'close'].includes(error.workerOperation) ? error.workerOperation : null;
+function pause(state, error, preserveFailure = false) {
+  if (!preserveFailure || !unresolvedClosure(state)) {
+    state.stopReason = typeof error.code === 'string' && /^[a-z_]{1,64}$/.test(error.code) ? error.code : 'worker_failed';
+    state.stopOperation = ['start', 'renew', 'close'].includes(error.workerOperation) ? error.workerOperation : null;
+  }
   state.status = ['unauthorized', 'token_expired', 'needs_login', 'login_required'].includes(error.code) ? 'needs-login' : error.code === 'restart_limit' ? 'restart-limit' : error.code === 'usage_limit' ? 'usage-limit' : state.active ? 'uncertain' : 'config';
 }
 async function control(record, action) {
@@ -84,7 +87,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       try {
         await stateStore.exclusive(current => {
           state = current;
-          if ((state.active && state.active.closed !== true) || (state.runId && !state.closed)) throw fail('stop_unconfirmed', 'Prior worker closure is unresolved. Inspect worker status and the saved session.');
+          if (unresolvedClosure(state)) throw fail('stop_unconfirmed', 'Prior worker closure is unresolved. Inspect worker status and the saved session.');
         });
         health = { online: false, stopped: true };
       } catch (error) {
@@ -99,8 +102,9 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     return { ...summary(state, closureUnconfirmed), ...health, ...(dependencies.loginError && { liveHealth: { ok: false, error: dependencies.loginError } }), estimateWarning: 'Client cost estimates can exceed limits and differ from invoices.' };
   }
   return stateStore.exclusive(async (state, save) => {
+    let preserveFailure = unresolvedClosure(state) && !!state.stopReason;
     if (name === 'worker run' && options['service-id'] && (!state.service || state.service.retired || state.service.installationId !== options['service-id'])) {
-      return { ...summary(state), state: 'stopped', stopReason: 'service_retired', stopOperation: null };
+      return { ...summary(state), state: unresolvedClosure(state) ? 'uncertain' : 'stopped', ...(!preserveFailure && { stopReason: 'service_retired', stopOperation: null }) };
     }
     if (name === 'worker setup') {
       if (state.active || (state.runId && !state.closed)) throw fail('worker_uncertain', 'Reconcile the prior run through worker run/status before changing setup.');
@@ -117,7 +121,9 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       try { await api('agents/worker', { method: 'POST', body }); }
       catch (error) {
         if (error.details?.configureRejected === true) {
-          delete state.configure.body; state.stopReason = 'configure_rejected'; save(state);
+          delete state.configure.body;
+          const conflict = ['worker_active', 'worker_conversion_required'].includes(error.code);
+          state.stopReason = conflict ? error.code : 'configure_rejected'; state.stopOperation = conflict ? 'configure' : null; save(state);
         }
         throw error;
       }
@@ -133,7 +139,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       config = workerConfig({}, state.config);
     } catch (error) {
       if (name !== 'worker run') throw error;
-      pause(state, error); save(state); return summary(state);
+      pause(state, error, preserveFailure); save(state); return summary(state);
     }
     if (name === 'worker doctor') return { ...await runner.doctor(config), ...summary(state), platform: process.platform };
     if (name === 'worker install') return workerService(name, identity, options, state, save, dependencies.service);
@@ -146,8 +152,10 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     const persist = () => { state.heartbeatAt = new Date(now()).toISOString(); save(state); };
     const stopped = () => {
       state.status = state.active && !['reserved', 'claimed', 'result', 'completed'].includes(state.active.phase) ? 'uncertain' : 'stopped';
-      state.stopReason = state.status === 'uncertain' ? 'interrupted_attempt' : 'requested_stop';
-      state.stopOperation = null;
+      if (!preserveFailure || !unresolvedClosure(state)) {
+        state.stopReason = state.status === 'uncertain' ? 'interrupted_attempt' : 'requested_stop';
+        state.stopOperation = null;
+      }
     };
     const retry = async (operation, signal, lease = false) => {
       for (let attempt = 0; ; attempt++) {
@@ -188,6 +196,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         else if (!remote?.closed) throw fail('worker_uncertain', 'Remote run ownership is unresolved.');
         state.closed = true; persist();
       }
+      preserveFailure = false;
       state.runId = randomUUID(); state.closed = false; state.status = 'idle'; state.stopReason = null; state.stopOperation = null; persist();
       admitted = true; await report('start');
       const renewalSignal = AbortSignal.any([controller.signal, renewalController.signal]);
@@ -295,7 +304,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         stopped();
       } else {
         error = renewalError || error;
-        failed = true; pause(state, error);
+        failed = true; pause(state, error, preserveFailure);
         if (transient(error) || error.code === 'outcome_unknown' && !state.active || !(error instanceof CliError) && !error.code) fatalError = error;
       }
     } finally {
@@ -308,6 +317,6 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop);
     }
     if (fatalError) throw fatalError;
-    return summary(state, !!((state.runId && !state.closed) || (state.active && state.active.closed !== true)));
+    return summary(state);
   });
 }
