@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { runCoordinator, classifyTask } from '../src/coordinator.mjs';
 import { runWorker, workerKey } from '../src/worker.mjs';
@@ -485,6 +486,38 @@ test('explicit coordinator stop persists a pause; setup preserves prior task his
   assert.equal(resumed.attempts.task.count, 1); assert.equal(f.starts(), 1);
 });
 
+test('stop during lease acquisition is durable and requires confirmed closure', { timeout: 15000 }, async t => {
+  const f = await fixture(t), api = f.deps.api; let release, reached;
+  const acquiring = new Promise(resolve => { reached = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  f.deps.api = async (url, extra = {}) => {
+    if (url === 'agents/coordinator' && extra.body?.event === 'acquire') { reached(); await gate; }
+    return api(url, extra);
+  };
+  const running = f.run('run'); await acquiring;
+  await assert.rejects(f.run('stop'), { code: 'stop_unconfirmed' });
+  release(); const stopped = await running;
+  assert.equal(stopped.closed, true); assert.equal(stopped.paused, true);
+  assert.equal(f.starts(), 0); assert.equal(f.item().status, 'open');
+  assert.equal((await f.run('run')).state, 'paused');
+  await f.run('setup'); f.deps.api = api;
+  await f.run('run'); assert.equal(f.starts(), 1); assert.equal(f.item().status, 'completed');
+});
+
+test('coordinator SIGTERM does not create a durable stop request', { timeout: 15000 }, async t => {
+  const f = await fixture(t), api = f.deps.api; let reached, release;
+  const scanning = new Promise(resolve => { reached = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  f.deps.api = async (url, extra = {}) => {
+    if (url.startsWith('agents/coordinator?')) { reached(); await gate; }
+    return api(url, extra);
+  };
+  const running = f.run('run'); await scanning; process.emit('SIGTERM'); release();
+  const stopped = await running;
+  assert.equal(stopped.closed, true); assert.equal(stopped.paused, false); assert.equal(f.starts(), 0);
+  f.deps.api = api; await f.run('run'); assert.equal(f.starts(), 1);
+});
+
 test('coordinator service definition carries exact project and installation identity', async t => {
   const f = await fixture(t);
   f.options['dry-run'] = true;
@@ -493,6 +526,18 @@ test('coordinator service definition carries exact project and installation iden
   assert.equal(result.dryRun, true); assert.equal(result.installed, false);
   const args = parseSystemdCommand(result.content);
   assert.deepEqual(args, ['/trusted path/runner % & "tool"', '/exact/collab', 'coordinator', 'run', '--agent', 'coordinator', '--workspace', 'ws', '--config-dir', f.dir, '--service-id', result.installationId, '--project', 'project']);
+  assert.equal(f.starts(), 0);
+});
+
+test('macOS coordinator service definition carries exact launchd arguments', { skip: process.platform !== 'darwin' }, async t => {
+  const f = await fixture(t);
+  f.options['dry-run'] = true;
+  f.deps.service = { platform: 'darwin', home: f.dir, command: ['/trusted path/runner % & "tool"', '/exact/collab'] };
+  const result = await f.run('install');
+  assert.equal(result.dryRun, true); assert.equal(result.installed, false);
+  const file = path.join(f.dir, 'service.plist'); fs.writeFileSync(file, result.content);
+  const definition = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', '--', file], { encoding: 'utf8' }));
+  assert.deepEqual(definition.ProgramArguments, ['/trusted path/runner % & "tool"', '/exact/collab', 'coordinator', 'run', '--agent', 'coordinator', '--workspace', 'ws', '--config-dir', f.dir, '--service-id', result.installationId, '--project', 'project']);
   assert.equal(f.starts(), 0);
 });
 

@@ -49,9 +49,28 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
   const api = deps.api || ((endpoint, extra = {}) => request(selected.base, `/api/apps/auth/${endpoint}${endpoint.includes('?') ? '&' : '?'}workspaceId=${encodeURIComponent(options.workspace)}`, { token: selected.token, ...extra }));
   const worker = deps.worker || runWorker;
   if (name === 'coordinator status' || name === 'coordinator stop') {
+    if (name.endsWith('stop')) {
+      const requested = randomUUID(), deadline = Date.now() + 2000;
+      for (;;) {
+        try { await controls.exclusive((current, save) => save({ ...current, stopRequested: requested })); break; }
+        catch (error) {
+          if (error.code !== 'state_locked') throw error;
+          if (Date.now() >= deadline) throw fail('stop_unconfirmed', 'Could not record the stop request; inspect the coordinator and retry.');
+          await delay(20);
+        }
+      }
+    }
     const health = await control(controls.load(), name.endsWith('stop') ? 'stop' : 'status');
     if (name.endsWith('stop') && !health.stopped) {
-      await disk.exclusive((state, save) => { state.paused = true; state.status = 'paused'; save(state); });
+      try {
+        await disk.exclusive((state, save) => {
+          if (state.runId && !state.closed) throw fail('stop_unconfirmed', 'Coordinator closure is unconfirmed.');
+          state.paused = true; state.status = 'paused'; save(state); health.stopped = true;
+        });
+      } catch (error) {
+        if (!['state_locked', 'stop_unconfirmed'].includes(error.code)) throw error;
+        throw fail('stop_unconfirmed', 'Stop requested; coordinator closure is unconfirmed. Inspect status and retry.');
+      }
     }
     const state = disk.load();
     if (name === 'coordinator status') {
@@ -64,6 +83,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
   }
   return disk.exclusive(async (state, save) => {
     if (name === 'coordinator setup') {
+      const stopRequest = controls.load().stopRequested;
       if (state.service) throw fail('coordinator_service', 'Stop and uninstall the existing coordinator before changing setup.');
       const workers = options.workers?.split(',');
       if (!workers?.length || workers.length > 16 || new Set(workers).size !== workers.length || workers.some(a => !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(a))) throw fail('coordinator_config', 'Select 1..16 unique, locally configured workers.');
@@ -83,13 +103,14 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
       }
       // Setup grants local dispatch consent; it neither starts a service nor resets retry history.
       state.config = config; state.paused = false; state.status = 'ready'; save(state);
+      await controls.exclusive((current, write) => write({ ...current, stopRequested: current.stopRequested === stopRequest ? false : current.stopRequested }));
       return { configured: true, started: false, config };
     }
     if (name === 'coordinator uninstall') return workerService('worker uninstall', `coord-${identity}`, options, state, save, { ...deps.service, kind: 'coordinator' });
     if (!state.config) throw fail('coordinator_config', 'Run coordinator setup first.');
     if (name === 'coordinator install') return workerService('worker install', `coord-${identity}`, options, state, save, { ...deps.service, kind: 'coordinator' });
     if (name !== 'coordinator run') throw fail('unknown_command', 'Unknown coordinator command.');
-    if (state.paused) return { state: 'paused', next: 'Explicit coordinator setup is required to resume.' };
+    if (state.paused || controls.load().stopRequested) return { state: 'paused', next: 'Explicit coordinator setup is required to resume.' };
     if (options['service-id'] && (!state.service || state.service.retired || state.service.installationId !== options['service-id'])) return { state: 'stopped', reason: 'service_retired' };
     const config = state.config, abort = new AbortController(), stop = () => abort.abort();
     const generation = randomUUID(), binding = { project: options.project, agent: options.agent, host: config.host, sessionId: config.sessionId, generation };
@@ -118,6 +139,8 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
     try {
       if (deps.startupError) throw deps.startupError;
       await lease('acquire'); admitted = true; state.runId = generation; state.closed = false; save(state);
+      if (controls.load().stopRequested) { state.paused = true; stop(); }
+      abort.signal.throwIfAborted();
       renewal = (async () => {
         try {
           while (!renewalAbort.signal.aborted) { await sleep(10000, undefined, { signal: renewalAbort.signal }); await lease('renew'); }
@@ -127,10 +150,10 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
       server = createServer(async (req, res) => {
         if (req.method !== 'POST' || req.headers.authorization !== `Bearer ${nonce}` || !['/status', '/stop'].includes(req.url)) { res.writeHead(403); res.end(); return; }
         if (req.url === '/stop') { state.paused = true; save(state); stop(); await finished; }
-        res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ nonce, stopped: req.url === '/stop' }));
+        res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ nonce, stopped: req.url === '/stop' && state.closed === true }));
       });
       server.listen(0, '127.0.0.1'); await once(server, 'listening');
-      await controls.exclusive((_s, write) => write({ port: server.address().port, nonce }));
+      await controls.exclusive((current, write) => { if (current.stopRequested) { state.paused = true; stop(); } write({ ...current, port: server.address().port, nonce }); });
       while (!abort.signal.aborted) {
         await finishChild();
         if (now() < (state.clock || 0)) throw fail('clock_rollback', 'Clock moved backwards; coordinator paused.');
@@ -180,18 +203,22 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
                     state.attempts[key] = { count: (prior?.count || 0) + 1, pending: true, worker: decision.agent, at: now() }; save(state);
                     await dispatches.exclusive((history, write) => write({ events: [...(history.events || []), { ...decision, reason: 'dispatch_prepared', at: now() }].slice(-50) }));
                     await lease('renew'); abort.signal.throwIfAborted();
+                    await controls.exclusive(current => {
+                      if (current.stopRequested) { state.paused = true; stop(); }
+                      abort.signal.throwIfAborted();
+                      decision.reason = 'dispatch_started'; decision.action = 'observe';
+                      const active = { decision, key, settled: false };
+                      child = active;
+                      let invocation;
+                      try { invocation = worker('worker run', { agent: decision.agent, workspace: options.workspace }, selected, userId,
+                        { ...deps.workerDependencies, api, task: { id: task.id, project: options.project }, coordinator: binding, signal: abort.signal }); }
+                      catch (error) { invocation = Promise.reject(error); }
+                      active.promise = Promise.resolve(invocation).then(value => { active.outcome = { value }; active.settled = true; }, error => { active.outcome = { error }; active.settled = true; });
+                    });
                   } catch (error) {
-                    if (prior) state.attempts[key] = prior; else delete state.attempts[key];
+                    if (!child) { if (prior) state.attempts[key] = prior; else delete state.attempts[key]; }
                     save(state); throw error;
                   }
-                  decision.reason = 'dispatch_started'; decision.action = 'observe';
-                  const active = { decision, key, settled: false };
-                  child = active;
-                  let invocation;
-                  try { invocation = worker('worker run', { agent: decision.agent, workspace: options.workspace }, selected, userId,
-                    { ...deps.workerDependencies, api, task: { id: task.id, project: options.project }, coordinator: binding, signal: abort.signal }); }
-                  catch (error) { invocation = Promise.reject(error); }
-                  active.promise = Promise.resolve(invocation).then(value => { active.outcome = { value }; active.settled = true; }, error => { active.outcome = { error }; active.settled = true; });
                   }
                 }
               }
@@ -223,10 +250,11 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
       }
       renewalAbort.abort(); await renewal;
       if (admitted) { try { await lease('close'); state.closed = true; } catch { state.closed = false; state.error = 'lease_close_unconfirmed'; } }
+      if (controls.load().stopRequested) state.paused = true;
       if (state.status !== 'blocked') state.status = state.paused ? 'paused' : 'stopped'; save(state);
       finish();
       if (server) await new Promise(resolve => server.close(resolve));
-      await controls.exclusive((_s, write) => write({}));
+      await controls.exclusive((current, write) => write({ stopRequested: current.stopRequested || false }));
       process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop);
     }
     return state;
