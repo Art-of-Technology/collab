@@ -1,175 +1,43 @@
-"use client";
+import { notFound, redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/session";
+import { prisma } from "@/lib/prisma";
+import { postWorkspaceAccessWhere } from "@/lib/post-access";
+import { findIssueByIdOrKey, getStandardIssueInclude } from "@/lib/issue-finder";
+import { IssuePageClient } from "./IssuePageClient";
 
-import { Suspense, useEffect, useState, useCallback } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { IssueDetailContent } from "@/components/issue/IssueDetailContent";
-import { useWorkspace } from "@/context/WorkspaceContext";
-import { useViewTracking } from "@/hooks/useViewTracking";
-import { Loader2 } from "lucide-react";
-import { IssueUser } from "@/types/issue";
-import { IssueDetailModal } from "@/components/issue/IssueDetailModal";
-import { useIssueModalUrlState } from "@/hooks/useIssueModalUrlState";
-
-export default function IssuePage() {
-  const router = useRouter();
-  const params = useParams();
-  const searchParams = useSearchParams();
-  const { currentWorkspace, isLoading: workspaceLoading } = useWorkspace();
-  const issueParam = params?.issueId as string;
-
-  // Extract view context from URL params or referrer
-  const viewSlug = searchParams.get('view');
-  const viewName = searchParams.get('viewName');
-
-  // Use the resolved workspace ID from context
-  const workspaceId = currentWorkspace?.id || null;
-
-  if (workspaceLoading || !workspaceId || !issueParam) {
-    return (
-      <div className="flex h-[80vh] items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-collab-400" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-full w-full overflow-hidden bg-collab-950">
-      <Suspense
-        fallback={
-          <div className="flex h-[80vh] items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-collab-400" />
-          </div>
-        }
-      >
-        <IssuePageContent
-          issueId={issueParam}
-          workspaceId={workspaceId}
-          viewSlug={viewSlug}
-          viewName={viewName}
-          onClose={() => router.back()}
-        />
-      </Suspense>
-    </div>
-  );
+interface IssuePageProps {
+  params: Promise<{ workspaceId: string; issueId: string }>;
+  searchParams: Promise<{ view?: string; viewName?: string }>;
 }
 
-function IssuePageContent({ issueId, workspaceId, viewSlug, viewName, onClose }: {
-  issueId: string;
-  workspaceId: string;
-  viewSlug: string | null;
-  viewName: string | null;
-  onClose: () => void;
-}) {
-  const [issue, setIssue] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [createdByUser, setCreatedByUser] = useState<IssueUser | null>(null);
-  const { selectedIssueId, closeModal } = useIssueModalUrlState();
+// Server-rendered: the issue arrives with the HTML instead of after a session → workspaces → issue client waterfall.
+export default async function IssuePage({ params, searchParams }: IssuePageProps) {
+  const [{ workspaceId: workspaceParam, issueId }, query] = await Promise.all([params, searchParams]);
 
-  // Fetch creator separately to avoid conflicts with other useIssueActivities calls
-  useEffect(() => {
-    let isMounted = true;
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
 
-    const fetchCreator = async () => {
-      try {
-        // Get only the CREATED activity
-        const response = await fetch(
-          `/api/board-items/issue/${issueId}/activities?action=CREATED&limit=1`
-        );
-        if (response.ok && isMounted) {
-          const data = await response.json();
-          if (data && data.length > 0 && isMounted) {
-            // We get only one CREATED activity
-            setCreatedByUser(data[0].user as IssueUser);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching creator:', error);
-      }
-    };
-
-    if (issueId) {
-      fetchCreator();
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [issueId]);
-
-  // Track view when issue is successfully loaded
-  useViewTracking({
-    itemType: 'issue',
-    itemId: issueId,
-    enabled: !isLoading && !error && !!issue,
+  const workspace = await prisma.workspace.findFirst({
+    where: postWorkspaceAccessWhere(user.id, workspaceParam),
+    select: { id: true },
   });
+  if (!workspace) redirect("/welcome");
 
-  const fetchIssue = useCallback(async () => {
-    if (!issueId) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const url = new URL(`/api/issues/${issueId}`, window.location.origin);
-      if (workspaceId) {
-        url.searchParams.set('workspaceId', workspaceId);
-      }
-
-      const response = await fetch(url.toString());
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Issue not found");
-        } else if (response.status === 403) {
-          throw new Error("You don't have permission to view this issue");
-        } else {
-          throw new Error(`Failed to load issue (${response.status})`);
-        }
-      }
-
-      const data = await response.json();
-      setIssue(data.issue || data);
-    } catch (err) {
-      console.error("Failed to fetch issue:", err);
-      setError(err instanceof Error ? err.message : "Failed to load issue. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [issueId, workspaceId]);
-
-  useEffect(() => {
-    fetchIssue();
-  }, [fetchIssue]);
+  const issue = await findIssueByIdOrKey(issueId, {
+    workspaceId: workspace.id,
+    userId: user.id,
+    include: getStandardIssueInclude(user.id),
+  });
+  if (!issue) notFound();
 
   return (
-    <>
-      <title>
-        {issue?.issueKey && issue?.title
-          ? `[${issue.issueKey}] ${issue.title} - Collab by Weezboo`
-          : 'Collab by Weezboo'
-        }
-      </title>
-
-      <IssueDetailContent
-        issue={issue}
-        error={error}
-        isLoading={isLoading}
-        onRefresh={fetchIssue}
-        onClose={onClose}
-        workspaceId={workspaceId}
-        issueId={issueId}
-        viewSlug={viewSlug || undefined}
-        viewName={viewName || undefined}
-        createdByUser={createdByUser || undefined}
-      />
-
-      {selectedIssueId && (
-        <IssueDetailModal
-          issueId={selectedIssueId}
-          onClose={closeModal}
-        />
-      )}
-    </>
+    <IssuePageClient
+      issueId={issueId}
+      workspaceId={workspace.id}
+      // Same JSON shape the /api/issues/:id route returns, so the client cache and the modal agree.
+      initialIssue={JSON.parse(JSON.stringify(issue))}
+      viewSlug={query.view ?? null}
+      viewName={query.viewName ?? null}
+    />
   );
 }

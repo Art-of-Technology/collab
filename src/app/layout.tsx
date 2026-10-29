@@ -16,6 +16,10 @@ import Hotjar from "@/components/analytics/Hotjar";
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { cookies } from "next/headers";
+import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query';
+import { getServerSession } from '@/lib/request-session';
+import { authOptions } from '@/lib/auth-options';
+import { getUserWorkspaces } from '@/actions/workspace';
 
 // Load the Inter font with display swap for better font loading performance
 const inter = Inter({ 
@@ -38,6 +42,14 @@ export default async function RootLayout({
 }) {
 
   const cookieStore = await cookies();
+  // Resolve the session and the workspace list on the server. The client used to fetch both after hydration
+  // and hid the whole app behind GlobalLoading until they arrived.
+  const session = await getServerSession(authOptions);
+  const queryClient = new QueryClient();
+  if (session?.user?.id) {
+    // Same key as useUserWorkspaces in src/hooks/queries/useWorkspace.ts.
+    await queryClient.prefetchQuery({ queryKey: ['workspaces', 'list'], queryFn: async () => (await getUserWorkspaces()).all });
+  }
   const sidebar = cookieStore.get("sidebarDesktop")?.value ?? "open"; // "open" | "closed"
   const width = sidebar === "open" ? "var(--sidebar-open)" : "var(--sidebar-closed)";
 
@@ -69,8 +81,9 @@ export default async function RootLayout({
           forcedTheme="dark"
           disableTransitionOnChange
         >
-          <SessionProvider>
+          <SessionProvider session={session}>
             <QueryProvider>
+              <HydrationBoundary state={dehydrate(queryClient)}>
                 <WorkspaceProvider>
                   <WorkspaceLoadingWrapper>
                     <MentionProvider>
@@ -87,6 +100,7 @@ export default async function RootLayout({
                   </MentionProvider>
                 </WorkspaceLoadingWrapper>
               </WorkspaceProvider>
+              </HydrationBoundary>
             </QueryProvider>
           </SessionProvider>
         </ThemeProvider>
