@@ -22,7 +22,7 @@ export const issueCommentKeys = {
 /**
  * Hook to fetch issue comments
  */
-export function useIssueComments(issueId: string) {
+export function useIssueComments(issueId: string, initialComments?: IssueComment[]) {
   return useQuery({
     queryKey: issueCommentKeys.list(issueId),
     queryFn: async () => {
@@ -33,6 +33,8 @@ export function useIssueComments(issueId: string) {
       return response.json() as Promise<IssueComment[]>;
     },
     enabled: !!issueId,
+    // The issue payload already carries its comments; seed the cache so opening an issue skips the extra request.
+    ...(initialComments && initialComments.length > 0 ? { initialData: initialComments } : {}),
   });
 }
 

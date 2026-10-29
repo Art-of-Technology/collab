@@ -25,6 +25,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useDeleteIssue, useUpdateIssue, issueKeys } from "@/hooks/queries/useIssues";
 import { useQueryClient } from "@tanstack/react-query";
+import { useWorkspaceLabels } from "@/hooks/queries/useWorkspaceSelectorData";
 import PageHeader, { pageHeaderButtonStyles } from "@/components/layout/PageHeader";
 import { useSession } from "next-auth/react";
 import { useWorkspace } from "@/context/WorkspaceContext";
@@ -109,7 +110,7 @@ export function IssueDetailContent({
   const [showSavedIndicator, setShowSavedIndicator] = useState(false);
   const autosaveErrorToastShownRef = useRef(false);
   const latestDescriptionRef = useRef("");
-  const [labels, setLabels] = useState<any[]>([]);
+  const { data: labels = [] } = useWorkspaceLabels(workspaceId);
   const { toast } = useToast();
 
   // Session hooks
@@ -384,26 +385,6 @@ export function IssueDetailContent({
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [issue, lastSavedDescription, autosaveDescription]);
-
-  // Fetch labels for the workspace
-  useEffect(() => {
-    if (!workspaceId) return;
-
-    const fetchLabels = async () => {
-      try {
-        const response = await fetch(`/api/workspaces/${workspaceId}/labels`);
-        if (response.ok) {
-          const data = await response.json();
-          setLabels(data.labels || []);
-        }
-      } catch (error) {
-        console.error('Error fetching labels:', error);
-        setLabels([]);
-      }
-    };
-
-    fetchLabels();
-  }, [workspaceId]);
 
 
   // Title editing focus management - Keep focus on title input when editing

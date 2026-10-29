@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
+import { useProjectStatuses } from "@/hooks/queries/useProjectStatuses";
 import {
   Popover,
   PopoverContent,
@@ -82,43 +83,25 @@ export function IssueStatusSelector({
   projectId,
   currentStatus,
 }: IssueStatusSelectorProps) {
-  const [statuses, setStatuses] = useState<ProjectStatus[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    if (!projectId) return;
-
-    const fetchColumns = async () => {
-      setIsLoading(true);
-      try {
-        const response = await fetch(`/api/projects/${projectId}/statuses`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch statuses");
-        }
-        const data = await response.json();
-        setStatuses((data.statuses || []).map((s: any) => ({
-          id: s.id,
-          name: s.name || s.displayName,
-          displayName: s.displayName || s.name,
-          color: s.color,
-          iconName: s.iconName,
-          order: s.order ?? 0
-        })));
-      } catch (error) {
-        console.error("Error fetching statuses:", error);
-        // Fallback to default
-        setStatuses([
-          { id: "todo", name: "Todo", order: 0 },
-          { id: "in-progress", name: "In Progress", order: 1 },
-          { id: "done", name: "Done", order: 2 },
-        ]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchColumns();
-  }, [projectId]);
+  const { data: statusData, isLoading, isError } = useProjectStatuses(projectId ?? null);
+  const statuses = useMemo<ProjectStatus[]>(() => {
+    if (isError) {
+      // Fallback to default
+      return [
+        { id: "todo", name: "Todo", order: 0 },
+        { id: "in-progress", name: "In Progress", order: 1 },
+        { id: "done", name: "Done", order: 2 },
+      ];
+    }
+    return (statusData?.statuses || []).map((s) => ({
+      id: s.id,
+      name: s.name || s.displayName,
+      displayName: s.displayName || s.name,
+      color: s.color,
+      iconName: s.iconName,
+      order: s.order ?? 0
+    }));
+  }, [statusData, isError]);
 
   // Find current status to display
   const getDisplayStatus = () => {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useWorkspaceMemberUsers } from "@/hooks/queries/useWorkspaceSelectorData";
 import { useSession } from "next-auth/react";
 import {
   Popover,
@@ -27,34 +28,8 @@ export function IssueReporterSelector({
   workspaceId
 }: IssueReporterSelectorProps) {
   const { data: session } = useSession();
-  const [users, setUsers] = useState<IssueUser[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { data: users = [], isLoading } = useWorkspaceMemberUsers(workspaceId);
   const [searchQuery, setSearchQuery] = useState("");
-
-  useEffect(() => {
-    if (!workspaceId) return;
-
-    const fetchUsers = async () => {
-      setIsLoading(true);
-      try {
-        const response = await fetch(`/api/workspaces/${workspaceId}/members`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch workspace members");
-        }
-        const data = await response.json();
-        const membersArray: any[] = Array.isArray(data) ? data : (data.members || []);
-        const mappedUsers: IssueUser[] = membersArray.map((m: any) => m.user ?? m);
-        setUsers(mappedUsers);
-      } catch (error) {
-        console.error("Error fetching workspace members:", error);
-        setUsers([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, [workspaceId]);
 
   const selectedUser = users.find(user => user.id === value);
   const currentUserId = session?.user?.id;
