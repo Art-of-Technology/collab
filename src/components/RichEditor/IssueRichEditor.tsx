@@ -21,7 +21,7 @@ import {
 import type { SlashCommand } from './extensions/slash-commands-extension';
 import type { RichEditorRef } from './types';
 import { handleSlashCommandUpdate } from '@/utils/slash-command-utils';
-import { HocuspocusManager } from '@/lib/collaboration/provider';
+import type { HocuspocusManager } from '@/lib/collaboration/provider';
 import type { HocuspocusConfig } from '@/lib/collaboration/types';
 import { createCollaborationUser } from '@/lib/collaboration/utils';
 import { useSession } from 'next-auth/react';
@@ -673,6 +673,8 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
       if (hocuspocusManagerRef.current) return;
 
       const config: HocuspocusConfig = { documentId: collabDocumentId };
+      // yjs and hocuspocus only load when collaboration is actually enabled for this document.
+      const { HocuspocusManager } = await import('@/lib/collaboration/provider');
       const manager = new HocuspocusManager(config);
       hocuspocusManagerRef.current = manager;
       try {

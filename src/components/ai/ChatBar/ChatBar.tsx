@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -27,11 +28,12 @@ import { useCommandSearch } from "@/hooks/queries/useCommandSearch";
 import { useProjects } from "@/hooks/queries/useProjects";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { NewIssueModal } from "@/components/issue";
-import CreateViewModal from "@/components/modals/CreateViewModal";
-import CreateProjectModal from "@/components/modals/CreateProjectModal";
+// Modals and the chat panel load on demand; importing them statically pulled the tiptap editor stack into every route.
+const NewIssueModal = dynamic(() => import("@/components/issue/NewIssueModal"), { ssr: false });
+const CreateViewModal = dynamic(() => import("@/components/modals/CreateViewModal"), { ssr: false });
+const CreateProjectModal = dynamic(() => import("@/components/modals/CreateProjectModal"), { ssr: false });
 
-import ChatPanel from "./ChatPanel";
+const ChatPanel = dynamic(() => import("./ChatPanel"), { ssr: false });
 import ChatInput from "./ChatInput";
 import type { ChatInputHandle } from "./ChatInput";
 
@@ -509,7 +511,7 @@ export default function ChatBar() {
       {/* Modals */}
       {currentWorkspace && (
         <>
-          <NewIssueModal
+          {isNewIssueOpen && <NewIssueModal
             open={isNewIssueOpen}
             onOpenChange={setIsNewIssueOpen}
             workspaceId={currentWorkspace.id}
@@ -518,8 +520,8 @@ export default function ChatBar() {
               queryClient.invalidateQueries();
               toast({ title: "Success", description: "Issue created successfully" });
             }}
-          />
-          <CreateViewModal
+          />}
+          {isCreateViewOpen && <CreateViewModal
             isOpen={isCreateViewOpen}
             onClose={() => setIsCreateViewOpen(false)}
             workspaceId={currentWorkspace.id}
@@ -529,8 +531,8 @@ export default function ChatBar() {
               queryClient.invalidateQueries();
               toast({ title: "Success", description: "View created successfully" });
             }}
-          />
-          <CreateProjectModal
+          />}
+          {isCreateProjectOpen && <CreateProjectModal
             isOpen={isCreateProjectOpen}
             onClose={() => setIsCreateProjectOpen(false)}
             workspaceId={currentWorkspace.id}
@@ -539,7 +541,7 @@ export default function ChatBar() {
               queryClient.invalidateQueries();
               toast({ title: "Success", description: "Project created successfully" });
             }}
-          />
+          />}
         </>
       )}
     </>

@@ -51,8 +51,9 @@ import { normalizeDescriptionHTML } from '@/utils/html-normalizer';
 // Import extensions
 import { MentionExtension, IssueMentionExtension, AIImproveExtension, ResizableImageExtension, ResizableVideoExtension, ImageCSSExtension } from './extensions';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import { all, createLowlight } from 'lowlight';
-const lowlight = createLowlight(all);
+import { common, createLowlight } from 'lowlight';
+// Common grammars only (~37) instead of every highlight.js language; the full set added ~600 KB to every route.
+const lowlight = createLowlight(common);
 
 export const RichEditor = forwardRef<RichEditorRef, RichEditorProps>(({
   value = '',
