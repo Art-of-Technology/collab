@@ -164,6 +164,11 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
       }
       if (remoteCode === 'forge_connected_project') code = remoteCode;
       if (response.status === 409 && remoteCode === 'already_claimed' && /^\/api\/apps\/auth\/agents\/handoffs\//.test(endpoint)) code = remoteCode;
+      const workerConflicts = { configure: ['worker_conversion_required', 'worker_active'], start: ['worker_binding_changed', 'worker_fenced'],
+        renew: ['worker_binding_changed', 'worker_fenced'], close: ['worker_binding_changed', 'worker_fenced'] };
+      if (method === 'POST' && response.status === 409 && /^\/api\/apps\/auth\/agents\/worker(?:\?|$)/.test(endpoint) &&
+          /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '') &&
+          Object.hasOwn(workerConflicts, body?.event) && workerConflicts[body.event].includes(remoteCode)) code = remoteCode;
       const messages = {
         semantic_unavailable: [503, 'Semantic search is unavailable. Use --mode keyword or --mode hybrid for explicit keyword fallback.'],
         budget_too_small: [422, 'Increase --max-tokens to fit at least one result or context section.'],

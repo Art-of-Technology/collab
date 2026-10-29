@@ -52,12 +52,13 @@ export function budget(state, config, now = Date.now(), reserve = false) {
 function summary(state) {
   return { configured: !!state.config, setupPending: !!state.configure, config: state.config, state: state.status || 'stopped', runId: state.runId || null,
     taskId: state.active?.handoffId || null, attemptId: state.active?.attemptId || null, childSessionId: state.active?.sessionId || null,
-    heartbeatAt: state.heartbeatAt || null, stopReason: state.stopReason || null, usage: state.usage || null,
+    heartbeatAt: state.heartbeatAt || null, stopReason: state.stopReason || null, stopOperation: state.stopOperation || null, usage: state.usage || null,
     active: state.active ? { phase: state.active.phase, closed: state.active.closed === true, reservedUSD: state.active.reservedUSD } : null };
 }
 const transient = error => ['transport_failed', 'server_error', 'rate_limited'].includes(error.code);
 function pause(state, error) {
   state.stopReason = typeof error.code === 'string' && /^[a-z_]{1,64}$/.test(error.code) ? error.code : 'worker_failed';
+  state.stopOperation = ['start', 'renew', 'close'].includes(error.workerOperation) ? error.workerOperation : null;
   state.status = ['unauthorized', 'token_expired', 'needs_login', 'login_required'].includes(error.code) ? 'needs-login' : error.code === 'restart_limit' ? 'restart-limit' : error.code === 'usage_limit' ? 'usage-limit' : state.active ? 'uncertain' : 'config';
 }
 async function control(record, action) {
@@ -118,7 +119,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         }
         throw error;
       }
-      state.config = config; delete state.configure; state.status = 'stopped'; state.stopReason = null; save(state);
+      state.config = config; delete state.configure; state.status = 'stopped'; state.stopReason = null; state.stopOperation = null; save(state);
       return { ...summary(state), started: false };
     }
     if (name === 'worker uninstall') return workerService(name, identity, options, state, save, dependencies.service);
@@ -144,6 +145,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     const stopped = () => {
       state.status = state.active && !['reserved', 'claimed', 'result', 'completed'].includes(state.active.phase) ? 'uncertain' : 'stopped';
       state.stopReason = state.status === 'uncertain' ? 'interrupted_attempt' : 'requested_stop';
+      state.stopOperation = null;
     };
     const retry = async (operation, signal, lease = false) => {
       for (let attempt = 0; ; attempt++) {
@@ -156,10 +158,11 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       }
     };
     const read = endpoint => retry(() => api(endpoint, { signal: controller.signal }), controller.signal);
-    const report = (event, signal = controller.signal) => {
+    const report = async (event, signal = controller.signal) => {
       const body = { agent: options.agent, host: config.host, sessionId: config.sessionId, event, generation: state.runId,
         state: state.status, taskId: state.active?.handoffId || null, ...(state.usage && { usage: { ...state.usage } }) };
-      return retry(() => api('agents/worker', { method: 'POST', timeout: 5000, signal, body }), signal, true);
+      try { return await retry(() => api('agents/worker', { method: 'POST', timeout: 5000, signal, body }), signal, true); }
+      catch (error) { if (error instanceof CliError) error.workerOperation = event; throw error; }
     };
     const writeJob = () => journal(state.active.handoffId).exclusive((_old, write) => write(state.active));
     const restart = () => {
@@ -183,7 +186,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         else if (!remote?.closed) throw fail('worker_uncertain', 'Remote run ownership is unresolved.');
         state.closed = true; persist();
       }
-      state.runId = randomUUID(); state.closed = false; state.status = 'idle'; state.stopReason = null; persist();
+      state.runId = randomUUID(); state.closed = false; state.status = 'idle'; state.stopReason = null; state.stopOperation = null; persist();
       admitted = true; await report('start');
       const renewalSignal = AbortSignal.any([controller.signal, renewalController.signal]);
       renewal = (async () => {

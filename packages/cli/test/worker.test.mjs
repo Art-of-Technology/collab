@@ -55,6 +55,72 @@ function fixture(t, execute) {
   return { dir, options, selected, calls, sessions, dependencies, run, state: () => store(`worker-${workerKey(selected, 'user', 'worker')}`).load() };
 }
 
+test('worker conflicts expose only scoped, valid reason codes without remote text', async t => {
+  let status = 409, contentType = 'application/json', rawResponse, response = { error: 'worker_fenced', message: 'PRIVATE_REMOTE_TEXT' };
+  const server = createServer((_req, res) => { res.writeHead(status, { 'content-type': contentType }); res.end(rawResponse ?? JSON.stringify(response)); });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`, endpoint = '/api/apps/auth/agents/worker?workspaceId=ws';
+  async function rejected(pathname = endpoint, method = 'POST', event = 'renew') {
+    try { await request(base, pathname, { method, body: { event } }); assert.fail('expected rejection'); }
+    catch (error) { assert.equal((error.message + JSON.stringify(error)).includes('PRIVATE_REMOTE_TEXT'), false); return error.code; }
+  }
+  for (const event of ['start', 'renew', 'close']) {
+    for (const code of ['worker_fenced', 'worker_binding_changed']) { response.error = code; assert.equal(await rejected(endpoint, 'POST', event), code); }
+  }
+  for (const code of ['worker_active', 'worker_conversion_required']) { response.error = code; assert.equal(await rejected(endpoint, 'POST', 'configure'), code); }
+  response.error = 'worker_fenced';
+  assert.equal(await rejected(endpoint, 'POST', 'configure'), 'conflict');
+  assert.equal(await rejected('/api/apps/auth/agents/worker-extra', 'POST', 'renew'), 'conflict');
+  assert.equal(await rejected(endpoint, 'PATCH', 'renew'), 'conflict');
+  assert.equal(await rejected(endpoint, 'POST', 'other'), 'conflict');
+  contentType = 'application/json-malicious'; assert.equal(await rejected(), 'conflict');
+  contentType = 'application/json'; status = 400; assert.equal(await rejected(), 'invalid_request');
+  status = 409; response.error = 'PRIVATE_REMOTE_TEXT'; assert.equal(await rejected(), 'conflict');
+  rawResponse = '{PRIVATE_REMOTE_TEXT'; assert.equal(await rejected(), 'conflict');
+});
+
+test('worker status records a sanitized start conflict and operation without retry', async t => {
+  const f = fixture(t); await f.run('setup');
+  let starts = 0;
+  const server = createServer((req, res) => {
+    let body = ''; req.on('data', chunk => { body += chunk; }); req.on('end', () => {
+      const event = JSON.parse(body).event;
+      if (event === 'start') { starts++; res.writeHead(409, { 'content-type': 'application/json' }); res.end('{"error":"worker_fenced","message":"PRIVATE_REMOTE_TEXT"}'); }
+      else { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"worker":{"closed":true}}'); }
+    });
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening'); t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  f.dependencies.api = (endpoint, extra) => request(base, `/api/apps/auth/${endpoint}?workspaceId=ws`, extra);
+  const result = await f.run('run');
+  assert.equal(result.stopReason, 'worker_fenced'); assert.equal(result.stopOperation, 'start'); assert.equal(starts, 1);
+  const status = await f.run('status'); assert.equal(status.stopReason, 'worker_fenced'); assert.equal(status.stopOperation, 'start');
+  assert.equal(JSON.stringify(status).includes('PRIVATE_REMOTE_TEXT'), false); assert.equal(f.sessions.length, 0);
+});
+
+test('worker status records a failed lease renewal and still closes its generation', async t => {
+  const f = fixture(t); await f.run('setup');
+  const events = [];
+  const server = createServer((req, res) => {
+    let body = ''; req.on('data', chunk => { body += chunk; }); req.on('end', () => {
+      const event = JSON.parse(body).event; events.push(event);
+      if (event === 'renew') { res.writeHead(409, { 'content-type': 'application/json' }); res.end('{"error":"worker_fenced","message":"PRIVATE_REMOTE_TEXT"}'); }
+      else { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"worker":{}}'); }
+    });
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening'); t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  f.dependencies.sleep = (_ms, value, extra) => delay(10, value, extra);
+  f.dependencies.api = (endpoint, extra = {}) => endpoint.startsWith('agents/inbox')
+    ? new Promise((_resolve, reject) => extra.signal.addEventListener('abort', () => reject(extra.signal.reason), { once: true }))
+    : request(base, `/api/apps/auth/${endpoint}?workspaceId=ws`, extra);
+  const result = await f.run('run');
+  assert.equal(result.stopReason, 'worker_fenced'); assert.equal(result.stopOperation, 'renew');
+  assert.deepEqual(events, ['start', 'renew', 'close']); assert.equal(f.state().closed, true);
+  assert.equal((await f.run('status')).stopOperation, 'renew'); assert.equal(f.sessions.length, 0);
+});
+
 test('worker setup/run claims before an owned session and suppresses completed duplicates', async t => {
   const f = fixture(t);
   assert.equal((await f.run('setup')).started, false);
