@@ -49,10 +49,10 @@ export function budget(state, config, now = Date.now(), reserve = false) {
   }
   return true;
 }
-function summary(state) {
+function summary(state, closureUnconfirmed = false) {
   return { configured: !!state.config, setupPending: !!state.configure, config: state.config, state: state.status || 'stopped', runId: state.runId || null,
     taskId: state.active?.handoffId || null, attemptId: state.active?.attemptId || null, childSessionId: state.active?.sessionId || null,
-    heartbeatAt: state.heartbeatAt || null, stopReason: state.stopReason || null, stopOperation: state.stopOperation || null, usage: state.usage || null,
+    heartbeatAt: state.heartbeatAt || null, stopReason: state.stopReason || null, stopOperation: state.stopOperation || null, closureUnconfirmed, usage: state.usage || null,
     active: state.active ? { phase: state.active.phase, closed: state.active.closed === true, reservedUSD: state.active.reservedUSD } : null };
 }
 const transient = error => ['transport_failed', 'server_error', 'rate_limited'].includes(error.code);
@@ -79,7 +79,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
   const journal = handoffId => store(`job-${key([identity, handoffId])}`);
   if (name === 'worker status' || name === 'worker stop') {
     let health = await control(controlStore.load(), name === 'worker stop' ? 'stop' : 'status');
-    let state = stateStore.load();
+    let state = stateStore.load(), closureUnconfirmed = false;
     if (!health.online && !health.stopped) {
       try {
         await stateStore.exclusive(current => {
@@ -90,15 +90,17 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       } catch (error) {
         if (!['state_locked', 'stop_unconfirmed'].includes(error.code)) throw error;
         if (name === 'worker stop') throw fail('stop_unconfirmed', 'Owned worker closure is unconfirmed. Retry worker stop after startup; inspect worker status if it remains unavailable. No PID was signalled.');
-        state = { ...state, status: error.code === 'state_locked' && !state.runId ? 'starting' : 'uncertain', stopReason: 'stop_unconfirmed' };
+        closureUnconfirmed = true;
+        state = { ...state, status: error.code === 'state_locked' && !state.runId ? 'starting' : 'uncertain',
+          stopReason: state.stopReason || 'stop_unconfirmed', stopOperation: state.stopReason ? state.stopOperation : null };
       }
     }
     if (name === 'worker stop') return health;
-    return { ...summary(state), ...health, ...(dependencies.loginError && { liveHealth: { ok: false, error: dependencies.loginError } }), estimateWarning: 'Client cost estimates can exceed limits and differ from invoices.' };
+    return { ...summary(state, closureUnconfirmed), ...health, ...(dependencies.loginError && { liveHealth: { ok: false, error: dependencies.loginError } }), estimateWarning: 'Client cost estimates can exceed limits and differ from invoices.' };
   }
   return stateStore.exclusive(async (state, save) => {
     if (name === 'worker run' && options['service-id'] && (!state.service || state.service.retired || state.service.installationId !== options['service-id'])) {
-      return { ...summary(state), state: 'stopped', stopReason: 'service_retired' };
+      return { ...summary(state), state: 'stopped', stopReason: 'service_retired', stopOperation: null };
     }
     if (name === 'worker setup') {
       if (state.active || (state.runId && !state.closed)) throw fail('worker_uncertain', 'Reconcile the prior run through worker run/status before changing setup.');
@@ -111,7 +113,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       if (state.configure?.body && (JSON.stringify(state.configure.config) !== JSON.stringify(config) || JSON.stringify(state.configure.body) !== JSON.stringify(body))) {
         throw fail('worker_setup_pending', 'Retry setup with the same options to reconcile its saved configuration intent.');
       }
-      state.configure = { config, body }; state.status = 'config'; state.stopReason = 'configure_unconfirmed'; save(state);
+      state.configure = { config, body }; state.status = 'config'; state.stopReason = 'configure_unconfirmed'; state.stopOperation = null; save(state);
       try { await api('agents/worker', { method: 'POST', body }); }
       catch (error) {
         if (error.details?.configureRejected === true) {
@@ -139,7 +141,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     const controller = new AbortController(), stop = () => controller.abort();
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
     const renewalController = new AbortController();
-    let server, finish, renewal, renewalError, fatalError, admitted = false;
+    let server, finish, renewal, renewalError, fatalError, admitted = false, failed = false;
     const finished = new Promise(resolve => { finish = resolve; });
     const persist = () => { state.heartbeatAt = new Date(now()).toISOString(); save(state); };
     const stopped = () => {
@@ -204,7 +206,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       server = createServer(async (req, res) => {
         if (req.method !== 'POST' || req.headers.authorization !== `Bearer ${nonce}` || !['/stop', '/status'].includes(req.url)) { res.writeHead(403); res.end(); return; }
         if (req.url === '/stop') { stop(); await finished; }
-        res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ nonce, stopped: req.url === '/stop' }));
+        res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ nonce, stopped: req.url === '/stop' && state.closed === true && state.active?.closed !== false }));
       });
       server.listen(0, '127.0.0.1'); await once(server, 'listening');
       await controlStore.exclusive((_old, write) => write({ port: server.address().port, nonce }));
@@ -293,19 +295,19 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         stopped();
       } else {
         error = renewalError || error;
-        pause(state, error);
+        failed = true; pause(state, error);
         if (transient(error) || error.code === 'outcome_unknown' && !state.active || !(error instanceof CliError) && !error.code) fatalError = error;
       }
     } finally {
       renewalController.abort(); await renewal;
       if (admitted && state.active?.closed !== false) {
-        try { await report('close', null); state.closed = true; } catch { state.closed = false; state.stopReason ||= 'closure_unconfirmed'; }
+        try { await report('close', null); state.closed = true; } catch (error) { state.closed = false; if (!failed) pause(state, error); }
       }
       persist(); finish();
       if (server) { await new Promise(resolve => server.close(resolve)); await controlStore.exclusive((_old, write) => write({})); }
       process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop);
     }
     if (fatalError) throw fatalError;
-    return summary(state);
+    return summary(state, !!((state.runId && !state.closed) || (state.active && state.active.closed !== true)));
   });
 }

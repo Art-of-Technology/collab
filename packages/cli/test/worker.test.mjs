@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { runWorker, workerKey, workerConfig, budget } from '../src/worker.mjs';
 import { claudeRunner, childProcess } from '../src/worker-runner.mjs';
 import { serviceDefinition, workerService } from '../src/worker-service.mjs';
-import { store, request } from '../src/client.mjs';
+import { CliError, store, request } from '../src/client.mjs';
 
 function fixture(t, execute) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'collab-worker-'));
@@ -119,6 +119,59 @@ test('worker status records a failed lease renewal and still closes its generati
   assert.equal(result.stopReason, 'worker_fenced'); assert.equal(result.stopOperation, 'renew');
   assert.deepEqual(events, ['start', 'renew', 'close']); assert.equal(f.state().closed, true);
   assert.equal((await f.run('status')).stopOperation, 'renew'); assert.equal(f.sessions.length, 0);
+});
+
+for (const prior of ['none', 'start', 'renew', 'recovery']) test(`unconfirmed closure preserves ${prior} failure diagnostics`, async t => {
+  const f = fixture(t); await f.run('setup');
+  const api = f.dependencies.api, events = [];
+  if (prior === 'recovery') await store(`worker-${workerKey(f.selected, 'user', 'worker')}`).exclusive(async (state, save) => {
+    state.runId = 'old'; state.closed = false;
+    await api('agents/worker', { method: 'POST', body: { event: 'start', generation: state.runId } }); save(state);
+  });
+  if (prior === 'renew') f.dependencies.sleep = (_ms, value, extra) => delay(10, value, extra);
+  f.dependencies.api = async (url, extra = {}) => {
+    const event = extra.body?.event;
+    if (event) events.push(event);
+    if (event === 'close' || event === prior) throw new CliError('worker_fenced', 'Safe conflict');
+    if (prior === 'renew' && url.startsWith('agents/inbox')) return new Promise((_resolve, reject) => extra.signal.addEventListener('abort', () => reject(extra.signal.reason), { once: true }));
+    return api(url, extra);
+  };
+  const result = await f.run('run');
+  assert.equal(result.stopReason, 'worker_fenced'); assert.equal(result.stopOperation, ['start', 'renew'].includes(prior) ? prior : 'close');
+  assert.equal(result.closureUnconfirmed, true); assert.equal(f.state().closed, false);
+  const status = await f.run('status');
+  assert.equal(status.stopReason, result.stopReason); assert.equal(status.stopOperation, result.stopOperation);
+  assert.equal(status.closureUnconfirmed, true); assert.equal(status.stopped, false);
+  await assert.rejects(f.run('stop'), { code: 'stop_unconfirmed' });
+  assert.equal(events.filter(event => event === 'close').length, 1);
+});
+
+test('failed close cannot acknowledge a live stop', async t => {
+  const f = fixture(t); await f.run('setup');
+  let ready; const polled = new Promise(resolve => { ready = resolve; });
+  const api = f.dependencies.api;
+  f.dependencies.api = async (url, extra = {}) => {
+    if (extra.body?.event === 'close') throw new CliError('worker_fenced', 'Safe conflict');
+    if (url.startsWith('agents/inbox')) { ready(); return { items: [], hasMore: false }; }
+    return api(url, extra);
+  };
+  const running = f.run('run'); await polled;
+  await assert.rejects(f.run('stop'), { code: 'stop_unconfirmed' });
+  const result = await running;
+  assert.equal(result.stopReason, 'worker_fenced'); assert.equal(result.stopOperation, 'close');
+  assert.equal(result.closureUnconfirmed, true); assert.equal(f.state().closed, false);
+});
+
+test('setup and retired service clear stale failure operations', async t => {
+  const f = fixture(t); await f.run('setup');
+  const stateStore = store(`worker-${workerKey(f.selected, 'user', 'worker')}`);
+  await stateStore.exclusive((state, save) => { state.stopReason = 'worker_fenced'; state.stopOperation = 'start'; save(state); });
+  const retired = await runWorker('worker run', { ...f.options, 'service-id': 'retired' }, f.selected, 'user', f.dependencies);
+  assert.equal(retired.stopReason, 'service_retired'); assert.equal(retired.stopOperation, null);
+  f.dependencies.api = async () => { throw new CliError('worker_active', 'Rejected', 2, { configureRejected: true }); };
+  await assert.rejects(f.run('setup'), { code: 'worker_active' });
+  assert.equal(f.state().stopReason, 'configure_rejected'); assert.equal(f.state().stopOperation, null);
+  const status = await f.run('status'); assert.equal(status.stopOperation, null);
 });
 
 test('worker setup/run claims before an owned session and suppresses completed duplicates', async t => {
