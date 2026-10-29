@@ -20,7 +20,7 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.7.1 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.7.1) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.8.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.8.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
 
 Version 0.6.1 adds `collab update`, which reruns the one-command installer for the current platform from the installed native executable. Installations before 0.6.1 run the installer once more to pick it up.
 
@@ -484,3 +484,72 @@ No service installation or real provider pilot acceptance has been performed by
 the source review phase. The old
 CLB-446 terminal pilot is prototype evidence only. Publication, native seven-target
 qualification, same-host and two-host Sportsbook tests remain with the release owner.
+
+
+## Project coordinator (CLI 0.8.0)
+
+A coordinator monitors one project with ordinary code. It dispatches overdue
+handoffs to explicitly configured **local dedicated workers**, using their existing
+claim, generation fence, journal, tool restrictions and budget. It does not inject
+messages into an interactive terminal or turn a registration into a running agent.
+The matching server and additive `20261029000100_project_coordinator` migration
+must be installed first. Installation of the CLI alone starts nothing.
+
+Set up a new coordinator identity with a stable host/session pair. Use your actual
+workspace/project IDs, a fresh UUID and a distinct worker name. Keep your existing
+login; do not copy tokens between computers.
+
+```sh
+collab agents register --name project-coordinator --host my-host --session-id YOUR-UUID --workspace WORKSPACE
+collab worker setup --agent project-worker --host my-host --workspace WORKSPACE --cwd /absolute/repository --claude /absolute/claude --model haiku --tools Read,Glob,Grep --attempt-usd 0.10 --daily-usd 0.10 --timeout-seconds 120
+collab coordinator setup --agent project-coordinator --workspace WORKSPACE --project PROJECT --workers project-worker
+collab coordinator install --agent project-coordinator --workspace WORKSPACE --project PROJECT
+collab coordinator status --agent project-coordinator --workspace WORKSPACE --project PROJECT
+```
+
+`setup` grants consent for this local route but starts nothing. `install` explicitly
+starts the per-user service (launchd, systemd user or Windows Scheduled Tasks).
+For a foreground pilot use `coordinator run` instead. The worker must have no
+separate installed service, open run, unresolved task or review-agent configuration.
+The coordinator owns its bounded worker invocations; other hosts keep their own
+supervisors and consent. An already running remote worker is observed, never
+restarted remotely by this coordinator.
+
+Default overdue threshold is 60 seconds, meaningful-progress threshold 900 seconds,
+poll interval 10 seconds. Override at setup with `--overdue-seconds`,
+`--stall-seconds`, `--poll-seconds`. At most one model runs at a time. Each task has
+at most three dispatch attempts with 30/60/120-second backoff for safely closed
+transport failures; worker daily/attempt/start/restart limits still apply.
+
+Status reports missing execution routes, healthy idle/busy workers, stale heartbeat,
+overdue progress, configuration/auth conflicts, budget limits and uncertain prior
+outcomes. A heartbeat alone is not task progress. Decisions include the responsible
+coordinator and handoff IDs. Read `collab handoffs get` and the issue timeline to
+verify the named claim and result; successful notification is not successful work.
+Only the latest 50 decisions are displayed; up to 5,000 pending project handoffs are
+scanned per cycle. The retained dispatch journal is bounded at 1,000 task IDs and
+fails closed at that limit; it is never silently reset.
+
+The server binds one coordinator identity/host/session per project. An expired
+lease permits the same binding to recover; it does not transfer ownership. A stale
+coordinator is fenced before dispatch. Lost or ambiguous dispatch outcomes remain
+blocked after restart. No automatic reassignment, auth refresh, review/merge,
+release takeover or interactive-agent wakeup is supplied by this first slice.
+Review-author custody stays with the original author; CLB-454's unfinished transfer
+path is not enabled. A separate, explicitly agreed transfer is needed when changing
+host or coordinator owner.
+
+```sh
+collab coordinator stop --agent project-coordinator --workspace WORKSPACE --project PROJECT
+collab coordinator uninstall --agent project-coordinator --workspace WORKSPACE --project PROJECT
+```
+
+Stop waits for the owned invocation to close and records a pause. After inspecting
+a blocker, explicit setup is required to resume a paused coordinator; journals and
+usage survive setup/uninstall. Never delete state to force a retry. A worker stopped
+explicitly by its operator is not automatically restarted. Changed credentials,
+provider conflicts and uncertain child closure need the named host owner.
+
+Local deterministic tests use synthetic runners. A release must separately report
+actual local model proof and second-host proof. A new remote pilot requires its
+owner's new exact packet/go-ahead, ready acknowledgement and observed real probe.

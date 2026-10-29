@@ -375,4 +375,38 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     assert.equal((await updateIssue('outsider', 'route-labels', { labels: [] }, 'w')).status, 404);
   });
 
+  await t.test('project coordinator migration, single owner lease and tenant-filtered snapshots', async () => {
+    await prisma.$executeRawUnsafe('ALTER TABLE "Project" DROP COLUMN "coordinator"');
+    await prisma.$executeRawUnsafe(readFileSync(resolve('prisma/migrations/20261029000100_project_coordinator/migration.sql'), 'utf8'));
+    assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } })).coordinator, null);
+    const coordinator = load('src/lib/project-coordinator.ts', { zod: require('zod'), '@/lib/prisma': { prisma },
+      '@/lib/issue-finder': finder, '@/lib/agent-handoffs': service }, { Date });
+    const sessionId = randomUUID();
+    await service.registerAgent(alice, service.registrationSchema.parse({ name: 'coordinator', host: 'host', sessionId }));
+    const binding = { project: 'p-w', agent: 'coordinator', host: 'host', sessionId, generation: randomUUID(), event: 'acquire' };
+    const lease = body => coordinator.coordinatorLease(alice, coordinator.coordinatorSchema.parse({ ...binding, ...body }));
+    const races = await Promise.allSettled([lease({}), lease({ generation: randomUUID() })]);
+    assert.equal(races.filter(r => r.status === 'fulfilled').length, 1);
+    assert.equal(races.find(r => r.status === 'rejected').reason.code, 'coordinator_conflict');
+    binding.generation = races.find(r => r.status === 'fulfilled').value.lease.generation;
+    assert.equal((await lease({ event: 'renew' })).lease.generation, binding.generation);
+    await assert.rejects(coordinator.coordinatorLease(bob, binding), e => e.status === 403);
+    await assert.rejects(lease({ project: 'p-foreign' }), e => e.status === 404);
+    await assert.rejects(lease({ host: 'other-host' }), e => e.status === 403);
+    await prisma.project.update({ where: { id: 'p-w' }, data: { coordinator: { ...(await lease({ event: 'renew' })).lease, leaseUntil: new Date(0).toISOString() } } });
+    await assert.rejects(lease({ event: 'renew' }), e => e.code === 'coordinator_fenced');
+    binding.generation = randomUUID();
+    await lease({});
+    await lease({ event: 'close' });
+    await assert.rejects(lease({}), e => e.code === 'coordinator_fenced');
+    const own = await send({ toAgents: ['worker-a'], toLabels: [] });
+    const snapshot = await coordinator.coordinatorSnapshot(alice, 'p-w');
+    assert.ok(snapshot.items.some(item => item.id === own.id));
+    assert.ok(snapshot.items.every(item => item.issue.projectId === 'p-w'));
+    assert.equal(snapshot.agents.find(a => a.name === 'worker-b').owned, false);
+    await assert.rejects(coordinator.coordinatorSnapshot(outsider, 'p-w'), e => e.status === 404);
+    await prisma.agentHandoff.delete({ where: { id: own.id } });
+  });
+
+
 });

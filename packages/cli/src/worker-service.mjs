@@ -90,7 +90,8 @@ export async function workerService(name, identity, options, state, save, depend
   }
   const installationId = randomUUID();
   const args = [...(dependencies.command || (/^node(?:\.exe)?$/.test(path.basename(process.execPath)) ? [process.execPath, fileURLToPath(new URL('../bin/collab.mjs', import.meta.url))] : [process.execPath])),
-    'worker', 'run', '--agent', options.agent, '--workspace', options.workspace, '--config-dir', configDir, '--service-id', installationId, ...(options.profile ? ['--profile', options.profile] : [])];
+    dependencies.kind || 'worker', 'run', '--agent', options.agent, '--workspace', options.workspace, '--config-dir', configDir, '--service-id', installationId,
+    ...(options.project ? ['--project', options.project] : []), ...(options.profile ? ['--profile', options.profile] : [])];
   const definition = serviceDefinition(identity, args, configDir, dependencies);
   if (options['dry-run']) return { ...definition, installationId, installed: false, dryRun: true };
   if (state.service) throw error('Uninstall the existing owned service before reinstalling.');

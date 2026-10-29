@@ -60,7 +60,7 @@ function pause(state, error) {
   state.stopReason = typeof error.code === 'string' && /^[a-z_]{1,64}$/.test(error.code) ? error.code : 'worker_failed';
   state.status = ['unauthorized', 'token_expired', 'needs_login', 'login_required'].includes(error.code) ? 'needs-login' : error.code === 'restart_limit' ? 'restart-limit' : error.code === 'usage_limit' ? 'usage-limit' : state.active ? 'uncertain' : 'config';
 }
-async function control(record, action) {
+export async function control(record, action) {
   if (!record.port || !record.nonce) return { online: false, stopped: false };
   try {
     const response = await fetch(`http://127.0.0.1:${record.port}/${action}`, { method: 'POST', headers: { authorization: `Bearer ${record.nonce}` }, signal: AbortSignal.timeout(action === 'stop' ? 15000 : 2000), redirect: 'error' });
@@ -135,7 +135,11 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     if (name === 'worker doctor') return { ...await runner.doctor(config), ...summary(state), platform: process.platform };
     if (name === 'worker install') return workerService(name, identity, options, state, save, dependencies.service);
     if (name !== 'worker run') throw fail('unknown_command', 'Unknown worker command.');
+    if (dependencies.task && (!identifier(dependencies.task.id) || !identifier(dependencies.task.project))) throw fail('worker_context', 'Invalid coordinator task binding.');
+    if (dependencies.task && state.active && state.active.handoffId !== dependencies.task.id) throw fail('worker_uncertain', 'A different task still owns this worker.');
     const controller = new AbortController(), stop = () => controller.abort();
+    dependencies.signal?.throwIfAborted();
+    dependencies.signal?.addEventListener('abort', stop, { once: true });
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
     const renewalController = new AbortController();
     let server, finish, renewal, renewalError, fatalError, admitted = false;
@@ -210,7 +214,13 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         state.status = 'idle'; persist();
         if (!state.active) {
           const queues = [];
-          for (const type of ['claimed', 'unseen']) {
+          if (dependencies.task) {
+            const { handoff } = await get(dependencies.task.id);
+            if (handoff?.issue?.projectId !== dependencies.task.project) throw fail('worker_context', 'Coordinator task is outside its project.');
+            if (['completed', 'superseded'].includes(handoff.status)) break;
+            queues.push(handoff);
+          }
+          for (const type of dependencies.task ? [] : ['claimed', 'unseen']) {
             const result = await read(`agents/inbox?agent=${encodeURIComponent(options.agent)}&state=${type}&limit=50`);
             if (!Array.isArray(result.items) || result.items.length > 50 || result.items.some(row => !identifier(row.id))) throw fail('invalid_response', 'Invalid bounded inbox.');
             for (const item of result.items) {
@@ -224,10 +234,15 @@ export async function runWorker(name, options, selected, userId, dependencies = 
             const previous = journal(row.id).load();
             return previous.phase !== 'completed' || previous.revision !== row.updatedAt;
           });
+          if (!item && dependencies.task) break;
           if (!item) { await sleep(config.pollSeconds * 1000, undefined, { signal: controller.signal }); continue; }
           const previous = journal(item.id).load();
           if (previous.phase && previous.phase !== 'completed') { state.active = previous; persist(); throw fail('worker_uncertain', 'A retained journal prevents duplicate execution.'); }
-          if (!budget(state, config, now(), true)) { state.status = 'usage-limit'; persist(); await sleep(config.pollSeconds * 1000, undefined, { signal: controller.signal }); continue; }
+          if (!budget(state, config, now(), true)) {
+            state.status = 'usage-limit'; persist();
+            if (dependencies.task) throw fail('usage_limit', 'Worker budget cannot admit this task.');
+            await sleep(config.pollSeconds * 1000, undefined, { signal: controller.signal }); continue;
+          }
           state.active = { handoffId: item.id, revision: item.updatedAt, phase: 'reserved', closed: true, attemptId: randomUUID(), sessionId: randomUUID(), reservedUSD: config.attemptUSD, day: state.usage.day };
           persist(); await writeJob();
         }
@@ -253,6 +268,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
             job.phase = 'claimed'; persist(); await writeJob();
           }
           const issue = await read(`issues/${encodeURIComponent(handoff.issueId)}`);
+          if (dependencies.task && issue.project?.id !== dependencies.task.project) throw fail('worker_context', 'Task project changed before model dispatch.');
           const context = { handoff: { id: handoff.id, content: handoff.content, issueId: handoff.issueId }, issue, reviewAgent: config.reviewAgent || null };
           if (Buffer.byteLength(JSON.stringify(context)) > 44000) throw fail('worker_context_limit', 'Task context exceeds the bounded runner input.');
           job.phase = 'dispatching'; job.closed = false; persist(); await writeJob();
@@ -282,9 +298,11 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         job.phase = result.outcome === 'blocked' ? 'blocked' : 'completed'; await writeJob();
         if (job.phase === 'blocked') throw fail('worker_uncertain', 'Worker reported an authority or task blocker; inspect the Collab progress entry.');
         delete state.active; persist();
+        if (dependencies.task) break;
       }
       if (renewalError) throw renewalError;
       stopped();
+      if (dependencies.task && !state.active && !controller.signal.aborted) state.stopReason = 'coordinator_complete';
     } catch (error) {
       if (controller.signal.aborted && !renewalError) {
         stopped();
@@ -301,6 +319,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       persist(); finish();
       if (server) { await new Promise(resolve => server.close(resolve)); await controlStore.exclusive((_old, write) => write({})); }
       process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop);
+      dependencies.signal?.removeEventListener('abort', stop);
     }
     if (fatalError) throw fatalError;
     return summary(state);

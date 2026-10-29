@@ -169,6 +169,8 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
       if (method === 'POST' && response.status === 409 && /^\/api\/apps\/auth\/agents\/worker(?:\?|$)/.test(endpoint) &&
           /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '') &&
           Object.hasOwn(workerConflicts, body?.event) && workerConflicts[body.event].includes(remoteCode)) code = remoteCode;
+      if (response.status === 409 && ['coordinator_conflict', 'coordinator_fenced'].includes(remoteCode) &&
+          /^\/api\/apps\/auth\/agents\/coordinator(?:\?|$)/.test(endpoint) && response.headers.get('content-type')?.includes('application/json')) code = remoteCode;
       const messages = {
         semantic_unavailable: [503, 'Semantic search is unavailable. Use --mode keyword or --mode hybrid for explicit keyword fallback.'],
         budget_too_small: [422, 'Increase --max-tokens to fit at least one result or context section.'],
