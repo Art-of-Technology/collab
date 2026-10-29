@@ -21,7 +21,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useDeleteIssue, useUpdateIssue, issueKeys } from "@/hooks/queries/useIssues";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1026,7 +1026,7 @@ export function IssueDetailContent({
                       ref={titleInputRef}
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      className="text-lg sm:text-xl font-semibold bg-collab-700 border-collab-600 text-white placeholder-collab-500 h-auto py-1 flex-1 min-w-0"
+                      className="text-2xl sm:text-[26px] leading-snug font-semibold bg-collab-700 border-collab-600 text-white placeholder-collab-500 h-auto py-1 flex-1 min-w-0"
                       placeholder="Issue title"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
@@ -1086,8 +1086,8 @@ export function IssueDetailContent({
                   >
                     {issue.issueKey}
                   </Badge>
-                  <div className="flex flex-row items-center gap-2 min-h-[2rem] sm:h-8 w-full">
-                    <h1 className="text-lg sm:text-xl font-semibold text-white group-hover:text-blue-400 transition-colors flex-1 min-w-0 break-words text-left" data-issue-title>
+                  <div className="flex flex-row items-center gap-2 min-h-[2rem] w-full">
+                    <h1 className="text-2xl sm:text-[26px] leading-snug font-semibold text-white group-hover:text-blue-400 transition-colors flex-1 min-w-0 break-words text-left" data-issue-title>
                       {issue.title}
                     </h1>
                     <PenLine className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-collab-500 flex-shrink-0" />
@@ -1095,10 +1095,8 @@ export function IssueDetailContent({
                 </Button>
               )}
 
-              {/* Properties Row - Using New Selectors */}
+              {/* Status and type stay with the title; other properties live in the sidebar */}
               <div className={cn("flex flex-wrap items-center gap-2", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
-                {/* Core Selectors - Always visible */}
-                {/* Status Selector */}
                 <IssueStatusSelector
                   value={issue.status}
                   onChange={(value) => handleUpdate({ status: value })}
@@ -1106,41 +1104,50 @@ export function IssueDetailContent({
                   currentStatus={issue.projectStatus}
                   disabled={isUpdating}
                 />
-
-                {/* Priority Selector */}
-                <IssuePrioritySelector
-                  value={issue.priority || 'MEDIUM'}
-                  onChange={(value) => handleUpdate({ priority: value })}
-                  disabled={isUpdating}
-                />
-
-                {/* Type Selector */}
                 <IssueTypeSelector
                   value={issue.type}
                   onChange={(value) => handleUpdate({ type: value })}
                   disabled={isUpdating}
                 />
+                <div className="flex items-center gap-1 text-[13px] text-collab-500 flex-wrap">
+                  <span>Created {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</span>
+                  {createdByUser && (
+                    <>
+                      <span>by</span>
+                      <div className="flex items-center gap-1">
+                        <UserAvatar user={createdByUser} size="xs" />
+                        <span>{createdByUser?.name}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
 
-                {/* Assignee Selector */}
+          {/* Two columns: content on the left, properties on the right (properties first on small screens) */}
+          <div className={cn("flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-8 lg:gap-10 items-start", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
+            <aside className="lg:order-last lg:sticky lg:top-0 divide-y divide-collab-800 text-sm">
+              <div className="pb-4 space-y-2">
+                <h3 className="text-[13px] font-semibold text-collab-400">Assignee</h3>
                 <IssueAssigneeSelector
                   value={issue.assigneeId}
                   onChange={(value) => handleUpdate({ assigneeId: value })}
                   workspaceId={workspaceId}
                   disabled={isUpdating}
                 />
-
-                {/* Secondary Selectors - Hide on small screens */}
-                {/* Reporter Selector */}
-                <div className="hidden md:block">
-                  <IssueReporterSelector
-                    value={issue.reporterId}
-                    onChange={(value) => handleUpdate({ reporterId: value })}
-                    workspaceId={workspaceId}
-                    disabled={isUpdating}
-                  />
-                </div>
-
-                {/* Labels Selector */}
+              </div>
+              <div className="py-4 space-y-2">
+                <h3 className="text-[13px] font-semibold text-collab-400">Reporter</h3>
+                <IssueReporterSelector
+                  value={issue.reporterId}
+                  onChange={(value) => handleUpdate({ reporterId: value })}
+                  workspaceId={workspaceId}
+                  disabled={isUpdating}
+                />
+              </div>
+              <div className="py-4 space-y-2">
+                <h3 className="text-[13px] font-semibold text-collab-400">Labels</h3>
                 <IssueLabelSelector
                   value={issue.labels?.map(l => l.id) || []}
                   onChange={(labelIds) => {
@@ -1151,42 +1158,40 @@ export function IssueDetailContent({
                   workspaceId={workspaceId}
                   disabled={isUpdating}
                 />
-
-                {/* Project Selector */}
-                <div className="hidden sm:block">
-                  <IssueProjectSelector
-                    value={issue.projectId}
-                    onChange={(value) => handleUpdate({ projectId: value })}
-                    workspaceId={workspaceId || ''}
-                    disabled={isUpdating}
-                  />
-                </div>
-
-                {/* Due Date Selector */}
-                <div className="hidden sm:block">
-                  <IssueDateSelector
-                    value={issue.dueDate}
-                    onChange={(value) => handleUpdate({ dueDate: value })}
-                    disabled={isUpdating}
-                  />
-                </div>
               </div>
+              <div className="py-4 space-y-2">
+                <h3 className="text-[13px] font-semibold text-collab-400">Priority</h3>
+                <IssuePrioritySelector
+                  value={issue.priority || 'MEDIUM'}
+                  onChange={(value) => handleUpdate({ priority: value })}
+                  disabled={isUpdating}
+                />
+              </div>
+              <div className="py-4 space-y-2">
+                <h3 className="text-[13px] font-semibold text-collab-400">Project</h3>
+                <IssueProjectSelector
+                  value={issue.projectId}
+                  onChange={(value) => handleUpdate({ projectId: value })}
+                  workspaceId={workspaceId || ''}
+                  disabled={isUpdating}
+                />
+              </div>
+              <div className="py-4 space-y-2">
+                <h3 className="text-[13px] font-semibold text-collab-400">Due date</h3>
+                <IssueDateSelector
+                  value={issue.dueDate}
+                  onChange={(value) => handleUpdate({ dueDate: value })}
+                  disabled={isUpdating}
+                />
+              </div>
+              <div className="pt-4 space-y-1 text-[13px] text-collab-500">
+                <div className="flex justify-between gap-2"><span>Created</span><span className="text-collab-400">{format(new Date(issue.createdAt), 'd MMM yyyy')}</span></div>
+                {issue.updatedAt && <div className="flex justify-between gap-2"><span>Updated</span><span className="text-collab-400">{formatDistanceToNow(new Date(issue.updatedAt), { addSuffix: true })}</span></div>}
+              </div>
+            </aside>
 
-              <div className={cn("flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
-                {/* Created info */}
-                <div className="flex items-center gap-1 text-xs text-collab-500 flex-wrap">
-                  <span>Created {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}</span>
-                  {createdByUser && (
-                    <>
-                      <span className="hidden sm:inline">by</span>
-                      <div className="flex items-center gap-1">
-                        <UserAvatar user={createdByUser} size="xs" />
-                        <span className="hidden sm:inline">{createdByUser?.name}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-
+            <div className="min-w-0 space-y-6 pb-8">
+              <div className="flex items-center justify-end">
                 {/* Autosave status indicator and Editor Controls */}
                 <div className="flex items-center gap-2 sm:gap-4 text-xs text-collab-400">
                   {/* Autosave Status */}
@@ -1246,12 +1251,6 @@ export function IssueDetailContent({
                   )}
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Main Content - Full Width Experience */}
-          <div className={cn("flex-1", editingTitle ? "opacity-30 pointer-events-none transition-opacity duration-300" : "opacity-100")}>
-            <div className="space-y-6 pb-8">
               <div className="w-full relative">
 
                 {editingDescription ? <IssueRichEditor
@@ -1270,8 +1269,8 @@ export function IssueDetailContent({
                   issueId={issue.id}
                 /> : (
                   <div className="min-h-[200px] break-words overflow-x-auto">
-                    {description ? <RichTextRenderer content={renderedDescription} /> : (
-                      <p className="text-sm text-collab-400">No description yet.</p>
+                    {description ? <RichTextRenderer content={renderedDescription} className="prose-base" /> : (
+                      <p className="text-base text-collab-400">No description yet.</p>
                     )}
                   </div>
                 )}
