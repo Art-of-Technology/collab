@@ -403,7 +403,13 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     await assert.rejects(lease({ event: 'renew' }), e => e.code === 'coordinator_fenced');
     binding.generation = randomUUID();
     await lease({});
+    await prisma.project.update({ where: { id: 'p-w' }, data: { isArchived: true } });
+    await assert.rejects(lease({ event: 'renew' }), e => e.code === 'project_not_found');
+    await assert.rejects(lease({ generation: randomUUID() }), e => e.code === 'project_not_found');
+    await assert.rejects(lease({ event: 'close', generation: randomUUID() }), e => e.code === 'coordinator_conflict');
+    await assert.rejects(coordinator.coordinatorLease(bob, { ...binding, event: 'close' }), e => e.status === 403);
     await lease({ event: 'close' });
+    await prisma.project.update({ where: { id: 'p-w' }, data: { isArchived: false } });
     await assert.rejects(lease({}), e => e.code === 'coordinator_fenced');
     const own = await send({ toAgents: ['worker-a'], toLabels: [] });
     const snapshot = await coordinator.coordinatorSnapshot(alice, 'p-w');

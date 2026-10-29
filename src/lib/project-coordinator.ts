@@ -17,7 +17,7 @@ export async function coordinatorLease(context: AppAuthContext, input: z.infer<t
   return prisma.$transaction(async db => {
     await db.$queryRaw`SELECT id FROM "Project" WHERE id = ${input.project} AND "workspaceId" = ${context.workspace.id} FOR UPDATE`;
     const project = await db.project.findFirst({ where: { id: input.project, workspaceId: context.workspace.id, ...issueAccessWhere(context.user.id) }, select: { id: true, isArchived: true, coordinator: true } });
-    if (!project || project.isArchived) throw new HandoffError('project_not_found', 'An active accessible project is required', 404);
+    if (!project || project.isArchived && input.event !== 'close') throw new HandoffError('project_not_found', 'An active accessible project is required', 404);
     const agent = await db.agentRegistration.findFirst({ where: { workspaceId: context.workspace.id, userId: context.user.id, name: input.agent, host: input.host, sessionId: input.sessionId } });
     if (!agent || agent.managedWorker) throw new HandoffError('coordinator_identity', 'Use your registered coordinator host/session identity, not a managed worker', 403);
     const prior = project.coordinator as unknown as Lease | null;

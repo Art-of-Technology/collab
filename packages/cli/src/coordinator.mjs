@@ -46,6 +46,11 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
   const dispatches = store(`events-${identity}`);
   const scanPage = page => store(`scan-${hash([identity, page])}`);
   const now = deps.now || Date.now, sleep = deps.sleep || delay;
+  const setError = (state, code) => {
+    if (state.error === code) return;
+    if (state.error) state.errorHistory = [...(state.errorHistory || []), { error: state.error, at: now() }].slice(-50);
+    if (code) state.error = code; else delete state.error;
+  };
   const api = deps.api || ((endpoint, extra = {}) => request(selected.base, `/api/apps/auth/${endpoint}${endpoint.includes('?') ? '&' : '?'}workspaceId=${encodeURIComponent(options.workspace)}`, { token: selected.token, ...extra }));
   const worker = deps.worker || runWorker;
   if (name === 'coordinator status' || name === 'coordinator stop') {
@@ -90,7 +95,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
         try {
           await api('agents/coordinator', { method: 'POST', timeout: 5000, body: { project: options.project, agent: options.agent, host: state.config.host, sessionId: state.config.sessionId, generation: state.runId, event: 'close' } });
         } catch { throw fail('lease_close_unconfirmed', 'Prior coordinator closure is unconfirmed; inspect the saved generation and retry setup.'); }
-        state.closed = true; save(state);
+        state.closed = true; if (state.error === 'lease_close_unconfirmed') setError(state, null); save(state);
       }
       const workers = options.workers?.split(',');
       if (!workers?.length || workers.length > 16 || new Set(workers).size !== workers.length || workers.some(a => !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(a))) throw fail('coordinator_config', 'Select 1..16 unique, locally configured workers.');
@@ -109,7 +114,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
         if (!Number.isInteger(config[field]) || config[field] < min || config[field] > max) throw fail('coordinator_config', `Invalid --${flag}.`);
       }
       // Setup grants local dispatch consent; it neither starts a service nor resets retry history.
-      state.config = config; state.paused = false; state.status = 'ready'; delete state.error; save(state);
+      state.config = config; state.paused = false; state.status = state.error ? 'blocked' : 'ready'; save(state);
       await controls.exclusive((current, write) => write({ ...current, stopRequested: current.stopRequested === stopRequest ? false : current.stopRequested }));
       return { configured: true, started: false, config };
     }
@@ -152,7 +157,8 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
         if (['coordinator_conflict', 'coordinator_fenced'].includes(error.code) || error.details?.status >= 400 && error.details.status < 500 && ![408, 429].includes(error.details.status)) { state.closed = true; save(state); }
         throw error;
       }
-      delete state.error; save(state);
+      if (['coordinator_conflict', 'coordinator_fenced'].includes(state.error)) setError(state, null);
+      save(state);
       if (controls.load().stopRequested) { state.paused = true; stop(); }
       abort.signal.throwIfAborted();
       renewal = (async () => {
@@ -255,18 +261,18 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
       }
       if (renewError) throw renewError;
     } catch (error) {
-      if (renewError || !abort.signal.aborted) { state.status = 'blocked'; state.error = (renewError || error).code || 'coordinator_failed'; state.paused = true; }
+      if (renewError || !abort.signal.aborted) { state.status = 'blocked'; setError(state, (renewError || error).code || 'coordinator_failed'); state.paused = true; }
     } finally {
       if (child) {
         stop(); await child.promise;
         try { await finishChild(); }
-        catch (error) { state.status = 'blocked'; state.error = error.code || 'coordinator_failed'; state.paused = true; }
+        catch (error) { state.status = 'blocked'; setError(state, error.code || 'coordinator_failed'); state.paused = true; }
       }
       renewalAbort.abort(); await renewal;
-      if (admitted) { try { await lease('close'); state.closed = true; } catch { state.closed = false; state.error = 'lease_close_unconfirmed'; } }
-      if (state.runId && !state.closed) { state.status = 'blocked'; state.error = 'lease_close_unconfirmed'; state.paused = true; }
+      if (admitted) { try { await lease('close'); state.closed = true; } catch { state.closed = false; setError(state, 'lease_close_unconfirmed'); } }
+      if (state.runId && !state.closed) { state.status = 'blocked'; setError(state, 'lease_close_unconfirmed'); state.paused = true; }
       if (controls.load().stopRequested) state.paused = true;
-      if (state.status !== 'blocked') state.status = state.paused ? 'paused' : 'stopped'; save(state);
+      if (state.status !== 'blocked') state.status = state.error ? 'blocked' : state.paused ? 'paused' : 'stopped'; save(state);
       finish();
       if (server) await new Promise(resolve => server.close(resolve));
       await controls.exclusive((current, write) => write({ stopRequested: current.stopRequested || false }));

@@ -549,6 +549,11 @@ test('a definitively rejected coordinator acquisition does not require closure',
   const result = await f.run('run');
   assert.equal(result.closed, true); assert.equal(result.error, 'coordinator_conflict');
   assert.deepEqual(events, ['acquire']);
+  await f.run('setup');
+  assert.equal(f.coordDisk.load().error, 'coordinator_conflict'); assert.equal(f.coordDisk.load().status, 'blocked');
+  f.deps.api = api;
+  const resumed = await f.run('run');
+  assert.equal(resumed.error, undefined); assert.equal(resumed.errorHistory.at(-1).error, 'coordinator_conflict');
   assert.equal((await f.run('stop')).stopped, true);
 });
 
