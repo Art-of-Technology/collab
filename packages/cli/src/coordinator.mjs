@@ -85,6 +85,13 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
     if (name === 'coordinator setup') {
       const stopRequest = controls.load().stopRequested;
       if (state.service) throw fail('coordinator_service', 'Stop and uninstall the existing coordinator before changing setup.');
+      if (state.runId && !state.closed) {
+        if (!state.config?.host || !state.config?.sessionId) throw fail('lease_close_unconfirmed', 'Prior coordinator closure is unconfirmed; inspect the saved generation.');
+        try {
+          await api('agents/coordinator', { method: 'POST', timeout: 5000, body: { project: options.project, agent: options.agent, host: state.config.host, sessionId: state.config.sessionId, generation: state.runId, event: 'close' } });
+        } catch { throw fail('lease_close_unconfirmed', 'Prior coordinator closure is unconfirmed; inspect the saved generation and retry setup.'); }
+        state.closed = true; save(state);
+      }
       const workers = options.workers?.split(',');
       if (!workers?.length || workers.length > 16 || new Set(workers).size !== workers.length || workers.some(a => !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(a))) throw fail('coordinator_config', 'Select 1..16 unique, locally configured workers.');
       const { agent } = await api(`agents/worker?agent=${encodeURIComponent(options.agent)}`);
@@ -110,6 +117,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
     if (!state.config) throw fail('coordinator_config', 'Run coordinator setup first.');
     if (name === 'coordinator install') return workerService('worker install', `coord-${identity}`, options, state, save, { ...deps.service, kind: 'coordinator' });
     if (name !== 'coordinator run') throw fail('unknown_command', 'Unknown coordinator command.');
+    if (state.runId && !state.closed) return { state: 'blocked', error: 'lease_close_unconfirmed', next: 'Reconcile the saved coordinator generation through setup.' };
     if (state.paused || controls.load().stopRequested) return { state: 'paused', next: 'Explicit coordinator setup is required to resume.' };
     if (options['service-id'] && (!state.service || state.service.retired || state.service.installationId !== options['service-id'])) return { state: 'stopped', reason: 'service_retired' };
     const config = state.config, abort = new AbortController(), stop = () => abort.abort();
@@ -138,7 +146,12 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
     };
     try {
       if (deps.startupError) throw deps.startupError;
-      await lease('acquire'); admitted = true; state.runId = generation; state.closed = false; save(state);
+      state.runId = generation; state.closed = false; save(state);
+      try { await lease('acquire'); admitted = true; }
+      catch (error) {
+        if (['coordinator_conflict', 'coordinator_fenced'].includes(error.code) || error.details?.status >= 400 && error.details.status < 500 && ![408, 429].includes(error.details.status)) { state.closed = true; save(state); }
+        throw error;
+      }
       if (controls.load().stopRequested) { state.paused = true; stop(); }
       abort.signal.throwIfAborted();
       renewal = (async () => {
@@ -250,6 +263,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
       }
       renewalAbort.abort(); await renewal;
       if (admitted) { try { await lease('close'); state.closed = true; } catch { state.closed = false; state.error = 'lease_close_unconfirmed'; } }
+      if (state.runId && !state.closed) { state.status = 'blocked'; state.error = 'lease_close_unconfirmed'; state.paused = true; }
       if (controls.load().stopRequested) state.paused = true;
       if (state.status !== 'blocked') state.status = state.paused ? 'paused' : 'stopped'; save(state);
       finish();

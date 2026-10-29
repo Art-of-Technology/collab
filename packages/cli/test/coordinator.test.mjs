@@ -504,6 +504,54 @@ test('stop during lease acquisition is durable and requires confirmed closure', 
   await f.run('run'); assert.equal(f.starts(), 1); assert.equal(f.item().status, 'completed');
 });
 
+for (const failure of ['lost acquisition response', 'failed close']) test(`${failure} preserves the exact unconfirmed coordinator generation`, async t => {
+  const f = await fixture(t), api = f.deps.api, events = []; let generation, reconcile = false;
+  f.deps.api = async (url, extra = {}) => {
+    if (url === 'agents/coordinator') {
+      events.push(extra.body);
+      if (extra.body.event === 'acquire') {
+        generation = extra.body.generation;
+        const saved = f.coordDisk.load();
+        assert.equal(saved.runId, generation); assert.equal(saved.closed, false);
+        if (failure === 'lost acquisition response') throw Object.assign(Error('response lost after grant'), { code: 'outcome_unknown' });
+      }
+      if (extra.body.event === 'close' && !reconcile) throw Object.assign(Error('close unconfirmed'), { code: 'outcome_unknown' });
+    }
+    return api(url, extra);
+  };
+  if (failure === 'failed close') f.setItem({ ...task, status: 'completed' });
+  const result = await f.run('run');
+  assert.equal(result.runId, generation); assert.equal(result.closed, false);
+  assert.equal(result.status, 'blocked'); assert.equal(result.paused, true); assert.equal(result.error, 'lease_close_unconfirmed');
+  assert.equal(f.starts(), 0);
+  const status = await f.run('status');
+  assert.equal(status.runId, generation); assert.equal(status.closed, false); assert.equal(status.stopped, false);
+  await assert.rejects(f.run('stop'), { code: 'stop_unconfirmed' });
+  assert.equal((await f.run('run')).state, 'blocked');
+  await assert.rejects(f.run('setup'), { code: 'lease_close_unconfirmed' });
+  assert.equal(f.coordDisk.load().closed, false);
+  reconcile = true; await f.run('setup');
+  assert.equal(f.coordDisk.load().closed, true);
+  assert.ok(events.filter(event => event.event === 'close').every(event => event.generation === generation));
+  f.setItem(structuredClone(task)); f.deps.api = api;
+  await f.run('run'); assert.equal(f.starts(), 1); assert.equal(f.item().status, 'completed');
+});
+
+test('a definitively rejected coordinator acquisition does not require closure', async t => {
+  const f = await fixture(t), api = f.deps.api, events = [];
+  f.deps.api = async (url, extra = {}) => {
+    if (url === 'agents/coordinator') {
+      events.push(extra.body.event);
+      if (extra.body.event === 'acquire') throw Object.assign(Error('conflict'), { code: 'coordinator_conflict' });
+    }
+    return api(url, extra);
+  };
+  const result = await f.run('run');
+  assert.equal(result.closed, true); assert.equal(result.error, 'coordinator_conflict');
+  assert.deepEqual(events, ['acquire']);
+  assert.equal((await f.run('stop')).stopped, true);
+});
+
 test('coordinator SIGTERM does not create a durable stop request', { timeout: 15000 }, async t => {
   const f = await fixture(t), api = f.deps.api; let reached, release;
   const scanning = new Promise(resolve => { reached = resolve; });
