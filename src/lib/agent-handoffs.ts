@@ -59,7 +59,7 @@ type ManagedWorker = { generation: string | null; closed: boolean; leaseUntil: s
 type CoordinatorLease = { userId: string; generation: string; closed: boolean; leaseUntil: string; worker?: { id: string; generation: string } };
 async function coordinatorAdmission(db: Prisma.TransactionClient, context: AppAuthContext, binding: { project: string; generation: string }) {
   await db.$queryRaw`SELECT id FROM "Project" WHERE id = ${binding.project} AND "workspaceId" = ${context.workspace.id} FOR UPDATE`;
-  const project = await db.project.findFirst({ where: { id: binding.project, workspaceId: context.workspace.id } });
+  const project = await db.project.findFirst({ where: { id: binding.project, workspaceId: context.workspace.id }, select: { coordinator: true } });
   const lease = project?.coordinator as unknown as CoordinatorLease | null;
   if (!lease || lease.userId !== context.user.id || lease.generation !== binding.generation || lease.closed || !(Date.parse(lease.leaseUntil) > Date.now())) throw new HandoffError('coordinator_fenced', 'A live matching coordinator generation is required', 409);
   return lease;
