@@ -49,19 +49,15 @@ export function budget(state, config, now = Date.now(), reserve = false) {
   }
   return true;
 }
-const unresolvedClosure = state => !!((state.runId && !state.closed) || (state.active && state.active.closed !== true));
-function summary(state, closureUnconfirmed = unresolvedClosure(state)) {
+function summary(state) {
   return { configured: !!state.config, setupPending: !!state.configure, config: state.config, state: state.status || 'stopped', runId: state.runId || null,
     taskId: state.active?.handoffId || null, attemptId: state.active?.attemptId || null, childSessionId: state.active?.sessionId || null,
-    heartbeatAt: state.heartbeatAt || null, stopReason: state.stopReason || null, stopOperation: state.stopOperation || null, closureUnconfirmed, usage: state.usage || null,
+    heartbeatAt: state.heartbeatAt || null, stopReason: state.stopReason || null, usage: state.usage || null,
     active: state.active ? { phase: state.active.phase, closed: state.active.closed === true, reservedUSD: state.active.reservedUSD } : null };
 }
 const transient = error => ['transport_failed', 'server_error', 'rate_limited'].includes(error.code);
-function pause(state, error, preserveFailure = false) {
-  if (!preserveFailure || !unresolvedClosure(state)) {
-    state.stopReason = typeof error.code === 'string' && /^[a-z_]{1,64}$/.test(error.code) ? error.code : 'worker_failed';
-    state.stopOperation = ['start', 'renew', 'close'].includes(error.workerOperation) ? error.workerOperation : null;
-  }
+function pause(state, error) {
+  state.stopReason = typeof error.code === 'string' && /^[a-z_]{1,64}$/.test(error.code) ? error.code : 'worker_failed';
   state.status = ['unauthorized', 'token_expired', 'needs_login', 'login_required'].includes(error.code) ? 'needs-login' : error.code === 'restart_limit' ? 'restart-limit' : error.code === 'usage_limit' ? 'usage-limit' : state.active ? 'uncertain' : 'config';
 }
 async function control(record, action) {
@@ -82,29 +78,26 @@ export async function runWorker(name, options, selected, userId, dependencies = 
   const journal = handoffId => store(`job-${key([identity, handoffId])}`);
   if (name === 'worker status' || name === 'worker stop') {
     let health = await control(controlStore.load(), name === 'worker stop' ? 'stop' : 'status');
-    let state = stateStore.load(), closureUnconfirmed = false;
+    let state = stateStore.load();
     if (!health.online && !health.stopped) {
       try {
         await stateStore.exclusive(current => {
           state = current;
-          if (unresolvedClosure(state)) throw fail('stop_unconfirmed', 'Prior worker closure is unresolved. Inspect worker status and the saved session.');
+          if ((state.active && state.active.closed !== true) || (state.runId && !state.closed)) throw fail('stop_unconfirmed', 'Prior worker closure is unresolved. Inspect worker status and the saved session.');
         });
         health = { online: false, stopped: true };
       } catch (error) {
         if (!['state_locked', 'stop_unconfirmed'].includes(error.code)) throw error;
         if (name === 'worker stop') throw fail('stop_unconfirmed', 'Owned worker closure is unconfirmed. Retry worker stop after startup; inspect worker status if it remains unavailable. No PID was signalled.');
-        closureUnconfirmed = true;
-        state = { ...state, status: error.code === 'state_locked' && !state.runId ? 'starting' : 'uncertain',
-          stopReason: state.stopReason || 'stop_unconfirmed', stopOperation: state.stopReason ? state.stopOperation : null };
+        state = { ...state, status: error.code === 'state_locked' && !state.runId ? 'starting' : 'uncertain', stopReason: 'stop_unconfirmed' };
       }
     }
     if (name === 'worker stop') return health;
-    return { ...summary(state, closureUnconfirmed), ...health, ...(dependencies.loginError && { liveHealth: { ok: false, error: dependencies.loginError } }), estimateWarning: 'Client cost estimates can exceed limits and differ from invoices.' };
+    return { ...summary(state), ...health, ...(dependencies.loginError && { liveHealth: { ok: false, error: dependencies.loginError } }), estimateWarning: 'Client cost estimates can exceed limits and differ from invoices.' };
   }
   return stateStore.exclusive(async (state, save) => {
-    let preserveFailure = unresolvedClosure(state) && !!state.stopReason;
     if (name === 'worker run' && options['service-id'] && (!state.service || state.service.retired || state.service.installationId !== options['service-id'])) {
-      return { ...summary(state), state: unresolvedClosure(state) ? 'uncertain' : 'stopped', ...(!preserveFailure && { stopReason: 'service_retired', stopOperation: null }) };
+      return { ...summary(state), state: 'stopped', stopReason: 'service_retired' };
     }
     if (name === 'worker setup') {
       if (state.active || (state.runId && !state.closed)) throw fail('worker_uncertain', 'Reconcile the prior run through worker run/status before changing setup.');
@@ -117,17 +110,15 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       if (state.configure?.body && (JSON.stringify(state.configure.config) !== JSON.stringify(config) || JSON.stringify(state.configure.body) !== JSON.stringify(body))) {
         throw fail('worker_setup_pending', 'Retry setup with the same options to reconcile its saved configuration intent.');
       }
-      state.configure = { config, body }; state.status = 'config'; state.stopReason = 'configure_unconfirmed'; state.stopOperation = null; save(state);
+      state.configure = { config, body }; state.status = 'config'; state.stopReason = 'configure_unconfirmed'; save(state);
       try { await api('agents/worker', { method: 'POST', body }); }
       catch (error) {
         if (error.details?.configureRejected === true) {
-          delete state.configure.body;
-          const conflict = ['worker_active', 'worker_conversion_required'].includes(error.code);
-          state.stopReason = conflict ? error.code : 'configure_rejected'; state.stopOperation = conflict ? 'configure' : null; save(state);
+          delete state.configure.body; state.stopReason = 'configure_rejected'; save(state);
         }
         throw error;
       }
-      state.config = config; delete state.configure; state.status = 'stopped'; state.stopReason = null; state.stopOperation = null; save(state);
+      state.config = config; delete state.configure; state.status = 'stopped'; state.stopReason = null; save(state);
       return { ...summary(state), started: false };
     }
     if (name === 'worker uninstall') return workerService(name, identity, options, state, save, dependencies.service);
@@ -139,7 +130,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       config = workerConfig({}, state.config);
     } catch (error) {
       if (name !== 'worker run') throw error;
-      pause(state, error, preserveFailure); save(state); return summary(state);
+      pause(state, error); save(state); return summary(state);
     }
     if (name === 'worker doctor') return { ...await runner.doctor(config), ...summary(state), platform: process.platform };
     if (name === 'worker install') return workerService(name, identity, options, state, save, dependencies.service);
@@ -147,15 +138,12 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     const controller = new AbortController(), stop = () => controller.abort();
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
     const renewalController = new AbortController();
-    let server, finish, renewal, renewalError, fatalError, admitted = false, failed = false;
+    let server, finish, renewal, renewalError, fatalError, admitted = false;
     const finished = new Promise(resolve => { finish = resolve; });
     const persist = () => { state.heartbeatAt = new Date(now()).toISOString(); save(state); };
     const stopped = () => {
       state.status = state.active && !['reserved', 'claimed', 'result', 'completed'].includes(state.active.phase) ? 'uncertain' : 'stopped';
-      if (!preserveFailure || !unresolvedClosure(state)) {
-        state.stopReason = state.status === 'uncertain' ? 'interrupted_attempt' : 'requested_stop';
-        state.stopOperation = null;
-      }
+      state.stopReason = state.status === 'uncertain' ? 'interrupted_attempt' : 'requested_stop';
     };
     const retry = async (operation, signal, lease = false) => {
       for (let attempt = 0; ; attempt++) {
@@ -168,11 +156,10 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       }
     };
     const read = endpoint => retry(() => api(endpoint, { signal: controller.signal }), controller.signal);
-    const report = async (event, signal = controller.signal) => {
+    const report = (event, signal = controller.signal) => {
       const body = { agent: options.agent, host: config.host, sessionId: config.sessionId, event, generation: state.runId,
         state: state.status, taskId: state.active?.handoffId || null, ...(state.usage && { usage: { ...state.usage } }) };
-      try { return await retry(() => api('agents/worker', { method: 'POST', timeout: 5000, signal, body }), signal, true); }
-      catch (error) { if (error instanceof CliError) error.workerOperation = event; throw error; }
+      return retry(() => api('agents/worker', { method: 'POST', timeout: 5000, signal, body }), signal, true);
     };
     const writeJob = () => journal(state.active.handoffId).exclusive((_old, write) => write(state.active));
     const restart = () => {
@@ -196,8 +183,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         else if (!remote?.closed) throw fail('worker_uncertain', 'Remote run ownership is unresolved.');
         state.closed = true; persist();
       }
-      preserveFailure = false;
-      state.runId = randomUUID(); state.closed = false; state.status = 'idle'; state.stopReason = null; state.stopOperation = null; persist();
+      state.runId = randomUUID(); state.closed = false; state.status = 'idle'; state.stopReason = null; persist();
       admitted = true; await report('start');
       const renewalSignal = AbortSignal.any([controller.signal, renewalController.signal]);
       renewal = (async () => {
@@ -215,7 +201,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       server = createServer(async (req, res) => {
         if (req.method !== 'POST' || req.headers.authorization !== `Bearer ${nonce}` || !['/stop', '/status'].includes(req.url)) { res.writeHead(403); res.end(); return; }
         if (req.url === '/stop') { stop(); await finished; }
-        res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ nonce, stopped: req.url === '/stop' && state.closed === true && state.active?.closed !== false }));
+        res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ nonce, stopped: req.url === '/stop' }));
       });
       server.listen(0, '127.0.0.1'); await once(server, 'listening');
       await controlStore.exclusive((_old, write) => write({ port: server.address().port, nonce }));
@@ -304,13 +290,13 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         stopped();
       } else {
         error = renewalError || error;
-        failed = true; pause(state, error, preserveFailure);
+        pause(state, error);
         if (transient(error) || error.code === 'outcome_unknown' && !state.active || !(error instanceof CliError) && !error.code) fatalError = error;
       }
     } finally {
       renewalController.abort(); await renewal;
       if (admitted && state.active?.closed !== false) {
-        try { await report('close', null); state.closed = true; } catch (error) { state.closed = false; if (!failed) pause(state, error); }
+        try { await report('close', null); state.closed = true; } catch { state.closed = false; state.stopReason ||= 'closure_unconfirmed'; }
       }
       persist(); finish();
       if (server) { await new Promise(resolve => server.close(resolve)); await controlStore.exclusive((_old, write) => write({})); }

@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { runWorker, workerKey, workerConfig, budget } from '../src/worker.mjs';
 import { claudeRunner, childProcess } from '../src/worker-runner.mjs';
 import { serviceDefinition, workerService } from '../src/worker-service.mjs';
-import { CliError, store, request } from '../src/client.mjs';
+import { store, request } from '../src/client.mjs';
 
 function fixture(t, execute) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'collab-worker-'));
@@ -80,7 +80,7 @@ test('worker conflicts expose only scoped, valid reason codes without remote tex
   rawResponse = '{PRIVATE_REMOTE_TEXT'; assert.equal(await rejected(), 'conflict');
 });
 
-test('worker status records a sanitized start conflict and operation without retry', async t => {
+test('worker status records a sanitized start conflict without retry', async t => {
   const f = fixture(t); await f.run('setup');
   let starts = 0;
   const server = createServer((req, res) => {
@@ -94,8 +94,8 @@ test('worker status records a sanitized start conflict and operation without ret
   const base = `http://127.0.0.1:${server.address().port}`;
   f.dependencies.api = (endpoint, extra) => request(base, `/api/apps/auth/${endpoint}?workspaceId=ws`, extra);
   const result = await f.run('run');
-  assert.equal(result.stopReason, 'worker_fenced'); assert.equal(result.stopOperation, 'start'); assert.equal(starts, 1);
-  const status = await f.run('status'); assert.equal(status.stopReason, 'worker_fenced'); assert.equal(status.stopOperation, 'start');
+  assert.equal(result.stopReason, 'worker_fenced'); assert.equal(starts, 1);
+  const status = await f.run('status'); assert.equal(status.stopReason, 'worker_fenced');
   assert.equal(JSON.stringify(status).includes('PRIVATE_REMOTE_TEXT'), false); assert.equal(f.sessions.length, 0);
 });
 
@@ -116,102 +116,9 @@ test('worker status records a failed lease renewal and still closes its generati
     ? new Promise((_resolve, reject) => extra.signal.addEventListener('abort', () => reject(extra.signal.reason), { once: true }))
     : request(base, `/api/apps/auth/${endpoint}?workspaceId=ws`, extra);
   const result = await f.run('run');
-  assert.equal(result.stopReason, 'worker_fenced'); assert.equal(result.stopOperation, 'renew');
+  assert.equal(result.stopReason, 'worker_fenced');
   assert.deepEqual(events, ['start', 'renew', 'close']); assert.equal(f.state().closed, true);
-  assert.equal((await f.run('status')).stopOperation, 'renew'); assert.equal(f.sessions.length, 0);
-});
-
-for (const prior of ['none', 'start', 'renew', 'recovery']) test(`unconfirmed closure preserves ${prior} failure diagnostics`, async t => {
-  const f = fixture(t); await f.run('setup');
-  const api = f.dependencies.api, events = [];
-  if (prior === 'recovery') await store(`worker-${workerKey(f.selected, 'user', 'worker')}`).exclusive(async (state, save) => {
-    state.runId = 'old'; state.closed = false;
-    await api('agents/worker', { method: 'POST', body: { event: 'start', generation: state.runId } }); save(state);
-  });
-  if (prior === 'renew') f.dependencies.sleep = (_ms, value, extra) => delay(10, value, extra);
-  f.dependencies.api = async (url, extra = {}) => {
-    const event = extra.body?.event;
-    if (event) events.push(event);
-    if (event === 'close' || event === prior) throw new CliError('worker_fenced', 'Safe conflict');
-    if (prior === 'renew' && url.startsWith('agents/inbox')) return new Promise((_resolve, reject) => extra.signal.addEventListener('abort', () => reject(extra.signal.reason), { once: true }));
-    return api(url, extra);
-  };
-  const result = await f.run('run');
-  assert.equal(result.stopReason, 'worker_fenced'); assert.equal(result.stopOperation, ['start', 'renew'].includes(prior) ? prior : 'close');
-  assert.equal(result.closureUnconfirmed, true); assert.equal(f.state().closed, false);
-  const status = await f.run('status');
-  assert.equal(status.stopReason, result.stopReason); assert.equal(status.stopOperation, result.stopOperation);
-  assert.equal(status.closureUnconfirmed, true); assert.equal(status.stopped, false);
-  await assert.rejects(f.run('stop'), { code: 'stop_unconfirmed' });
-  assert.equal(events.filter(event => event === 'close').length, 1);
-});
-
-test('failed close cannot acknowledge a live stop', async t => {
-  const f = fixture(t); await f.run('setup');
-  let ready; const polled = new Promise(resolve => { ready = resolve; });
-  const api = f.dependencies.api;
-  f.dependencies.api = async (url, extra = {}) => {
-    if (extra.body?.event === 'close') throw new CliError('worker_fenced', 'Safe conflict');
-    if (url.startsWith('agents/inbox')) { ready(); return { items: [], hasMore: false }; }
-    return api(url, extra);
-  };
-  const running = f.run('run'); await polled;
-  await assert.rejects(f.run('stop'), { code: 'stop_unconfirmed' });
-  const result = await running;
-  assert.equal(result.stopReason, 'worker_fenced'); assert.equal(result.stopOperation, 'close');
-  assert.equal(result.closureUnconfirmed, true); assert.equal(f.state().closed, false);
-});
-
-test('setup and retired service clear stale failure operations', async t => {
-  const f = fixture(t); await f.run('setup');
-  const stateStore = store(`worker-${workerKey(f.selected, 'user', 'worker')}`);
-  await stateStore.exclusive((state, save) => { state.stopReason = 'worker_fenced'; state.stopOperation = 'start'; save(state); });
-  const retired = await runWorker('worker run', { ...f.options, 'service-id': 'retired' }, f.selected, 'user', f.dependencies);
-  assert.equal(retired.stopReason, 'service_retired'); assert.equal(retired.stopOperation, null);
-  f.dependencies.api = async () => { throw new CliError('worker_active', 'Rejected', 2, { configureRejected: true }); };
-  await assert.rejects(f.run('setup'), { code: 'worker_active' });
-  assert.equal(f.state().stopReason, 'worker_active'); assert.equal(f.state().stopOperation, 'configure');
-  const status = await f.run('status'); assert.equal(status.stopOperation, 'configure');
-});
-
-for (const pending of ['generation', 'child']) test(`offline summaries retain failure during unresolved ${pending} closure`, async t => {
-  const f = fixture(t); await f.run('setup');
-  const stateStore = store(`worker-${workerKey(f.selected, 'user', 'worker')}`);
-  await stateStore.exclusive((state, save) => {
-    if (pending === 'generation') { state.runId = 'old'; state.closed = false; }
-    else state.active = { phase: 'dispatched', closed: false };
-    state.stopReason = 'worker_binding_changed'; state.stopOperation = 'renew'; save(state);
-  });
-  const check = result => {
-    assert.equal(result.closureUnconfirmed, true); assert.equal(result.stopReason, 'worker_binding_changed'); assert.equal(result.stopOperation, 'renew');
-  };
-  check(await f.run('doctor'));
-  check(await runWorker('worker run', { ...f.options, 'service-id': 'retired' }, f.selected, 'user', f.dependencies));
-  f.dependencies.startupError = new CliError('token_expired', 'Login expired');
-  const startup = await f.run('run'); check(startup); assert.equal(startup.state, 'needs-login');
-  delete f.dependencies.startupError;
-  f.dependencies.api = async url => {
-    if (url === 'agents/worker?agent=worker') return { agent: { worker: { generation: 'old', closed: false } } };
-    throw new CliError('worker_fenced', 'Safe conflict');
-  };
-  check(await f.run('run')); check(await f.run('status'));
-  assert.equal(f.sessions.length, 0);
-});
-
-test('resolved recovery permits a new generation to report its own failure', async t => {
-  const f = fixture(t); await f.run('setup');
-  const stateStore = store(`worker-${workerKey(f.selected, 'user', 'worker')}`), api = f.dependencies.api;
-  await stateStore.exclusive(async (state, save) => {
-    state.runId = 'old'; state.closed = false; state.stopReason = 'worker_binding_changed'; state.stopOperation = 'renew';
-    await api('agents/worker', { method: 'POST', body: { event: 'start', generation: 'old' } }); save(state);
-  });
-  f.dependencies.api = async (url, extra = {}) => {
-    if (extra.body?.event === 'start') throw new CliError('worker_fenced', 'Safe conflict');
-    return api(url, extra);
-  };
-  const result = await f.run('run');
-  assert.equal(result.stopReason, 'worker_fenced'); assert.equal(result.stopOperation, 'start');
-  assert.equal(result.closureUnconfirmed, false); assert.equal(f.state().closed, true);
+  assert.equal((await f.run('status')).stopReason, 'worker_fenced'); assert.equal(f.sessions.length, 0);
 });
 
 test('worker setup/run claims before an owned session and suppresses completed duplicates', async t => {
@@ -722,27 +629,12 @@ for (const rejection of ['conversion', 'labels']) test(`confirmed ${rejection} r
   if (rejection === 'labels') f.options['label-ids'] = '["bad-label"]';
   await assert.rejects(f.run('setup'), e => e.details.configureRejected === true);
   assert.equal(f.state().configure.body, undefined);
-  assert.equal(f.state().stopReason, rejection === 'conversion' ? 'worker_conversion_required' : 'configure_rejected');
-  assert.equal(f.state().stopOperation, rejection === 'conversion' ? 'configure' : null);
+  assert.equal(f.state().stopReason, 'configure_rejected');
   if (rejection === 'conversion') f.options['manage-existing'] = true;
   else f.options['label-ids'] = '[]';
   await f.run('setup');
   assert.equal(bodies.length, 2); assert.equal(bodies[0].sessionId, bodies[1].sessionId);
   assert.equal(f.state().config.sessionId, bodies[0].sessionId); assert.deepEqual(f.state().usage, usage);
-});
-
-for (const code of ['worker_active', 'worker_conversion_required']) test(`configure ${code} persists only safe conflict details`, async t => {
-  const f = fixture(t); let reject = true;
-  await configureServer(t, f, (_req, res) => {
-    if (reject) { res.statusCode = 409; res.end(JSON.stringify({ error: code, message: 'PRIVATE_REMOTE_TEXT' })); }
-    else res.end(JSON.stringify({ worker: { closed: true } }));
-  });
-  await assert.rejects(f.run('setup'), { code });
-  const status = await f.run('status');
-  assert.equal(status.stopReason, code); assert.equal(status.stopOperation, 'configure');
-  assert.equal(status.setupPending, true); assert.equal(JSON.stringify(status).includes('PRIVATE_REMOTE_TEXT'), false);
-  reject = false; const setup = await f.run('setup');
-  assert.equal(setup.stopReason, null); assert.equal(setup.stopOperation, null); assert.equal(setup.setupPending, false);
 });
 
 for (const outcome of ['lost-reply', 'timeout', 'server-error', 'unknown-rejection', 'invalid-response']) test(`configure ${outcome} retains the exact request until replay succeeds`, async t => {
