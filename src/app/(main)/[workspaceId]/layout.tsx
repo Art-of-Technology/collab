@@ -26,24 +26,10 @@ export default async function WorkspaceLayout({
     redirect("/login");
   }
 
-  // Verify the workspace exists and user has access to it
-  // First try to find by slug, then by ID for backward compatibility
-  let workspace = await prisma.workspace.findFirst({
-    where: {
-      slug: workspaceId,
-      ...postWorkspaceAccessWhere(user.id)
-    },
+  // Verify the workspace exists (by slug or legacy id) and the user has access to it
+  const workspace = await prisma.workspace.findFirst({
+    where: postWorkspaceAccessWhere(user.id, workspaceId),
   });
-
-  // If not found by slug, try by ID (for backward compatibility)
-  if (!workspace) {
-    workspace = await prisma.workspace.findFirst({
-      where: {
-        id: workspaceId,
-        ...postWorkspaceAccessWhere(user.id)
-      },
-    });
-  }
 
   if (!workspace) {
     redirect("/welcome");

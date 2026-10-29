@@ -105,7 +105,7 @@ export default function ChatBar() {
 
   const { data: projects = [] } = useProjects({
     workspaceId: currentWorkspace?.id,
-    includeStats: false,
+    includeStats: true,
   });
 
   const getWorkspacePath = useCallback(

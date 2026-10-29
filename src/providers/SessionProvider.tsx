@@ -12,9 +12,9 @@ type Props = Omit<NextAuthSessionProviderProps, "children"> & {
 export default function SessionProvider({ children, ...overrides }: Props) {
   return (
     <NextAuthSessionProvider
-      refetchOnWindowFocus
+      refetchOnWindowFocus={false}
       refetchWhenOffline={false}
-      refetchInterval={60}
+      refetchInterval={0}
       {...overrides}
     >
       {children}
