@@ -11,6 +11,8 @@ All routes are under `/api/apps/auth/agents` and use the existing OAuth bearer t
 | `GET /` | List up to 200 agents with label subscriptions, bindings and reported watcher or managed-worker health | `issues:read` |
 | `GET /worker?agent=NAME` | Read one exact agent owned by the current user and workspace for managed recovery | `issues:read` |
 | `POST /worker` | Configure or report a managed run using [`workerSchema`](../src/lib/agent-handoffs.ts); see [managed workers](#managed-workers) | `issues:write`; `configure` also requires `workspace:write`, `issues:read` |
+| `GET /coordinator?project=ID` | Page visible open and claimed project handoffs and relevant worker health; optional `cursor` and repeated `route` parameters | `issues:read`, `projects:read` |
+| `POST /coordinator` | Acquire, renew, close or reconcile a project coordinator lease using [`coordinatorSchema`](../src/lib/project-coordinator.ts) | `workspace:write`, `issues:read`, `issues:write`, `projects:read` |
 | `POST /` | Register/update your own manual agent using [`registrationSchema`](../src/lib/agent-handoffs.ts) | `workspace:write`, `issues:read` |
 | `POST /heartbeat` | Report a manual agent's bound watcher start, poll, callback success, stop or error | `issues:read` |
 | `GET /inbox?agent=NAME&state=unseen` | Page through an owned agent's unseen or claimed requests using [`inboxSchema`](../src/lib/agent-handoffs.ts) | `issues:read` |
@@ -128,3 +130,9 @@ the column alone is insufficient for safe worker operation after an app rollback
 an older server does not enforce managed generations. Stop workers before reverting
 to such a server. See the [worker guide](../packages/cli/README.md#dedicated-managed-workers-cli-070)
 for CLI operation and release qualification boundaries.
+
+CLI 0.8.0 project coordinators require the matching server and additive
+`20261029000100_project_coordinator` migration, which adds nullable
+`Project.coordinator` JSONB. Apply the same target, ledger and protected-backup
+requirements above. See the [coordinator guide](../packages/cli/README.md#project-coordinator-cli-080)
+for operation and release qualification boundaries.

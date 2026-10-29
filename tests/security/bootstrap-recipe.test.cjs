@@ -4,8 +4,18 @@ const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
+const { createHash } = require('node:crypto');
 const root = path.resolve(__dirname, '../..');
 const schemaSql = 'CREATE TABLE "GeneratedFixture" (id INTEGER);';
+
+test('bootstrap contract matches the actual schema and complete migration history', () => {
+  const sha = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  const contract = JSON.parse(fs.readFileSync(path.join(root, 'prisma/bootstrap-contract.json'), 'utf8'));
+  assert.equal(contract.schemaSha256, sha(path.join(root, 'prisma/schema.prisma')));
+  const names = fs.readdirSync(path.join(root, 'prisma/migrations'), { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort();
+  assert.deepEqual(contract.migrations.map(migration => migration.name), names);
+  for (const migration of contract.migrations) assert.equal(migration.sha256, sha(path.join(root, 'prisma/migrations', migration.name, 'migration.sql')));
+});
 
 function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-bootstrap-recipe-'));
@@ -65,8 +75,8 @@ test('actual bootstrap CLI emits one guarded schema transaction with exact suppl
   const tail = version.slice(version.indexOf('CREATE FUNCTION "retain_version_access_invalidation"'));
   assert.ok(apply.input.includes(schemaSql + '\nALTER TABLE "ForgeExecutionAttempt" ADD ' + check + ';\n' + active + '\n' + tail + '\nCOMMIT;'));
   assert.ok(!apply.input.includes('ADD COLUMN "issueAccessInvalidated"'), 'modeled flag is generated once; historical existing-row backfill is not replayed');
-  assert.deepEqual(contract.migrations.slice(-5).map(row => row.name), [
-    '20261017000100_agent_handoffs', '20261021223000_git_provider_connections', '20261022190000_issue_trash', '20261026000100_agent_operations', '20261027000100_managed_workers',
+  assert.deepEqual(contract.migrations.slice(-6).map(row => row.name), [
+    '20261017000100_agent_handoffs', '20261021223000_git_provider_connections', '20261022190000_issue_trash', '20261026000100_agent_operations', '20261027000100_managed_workers', '20261029000100_project_coordinator',
   ]);
   assert.ok(!apply.input.includes('ADD COLUMN "deletedAt"'), 'Trash columns and restrictive FKs come from the current schema, not replayed upgrade SQL');
   assert.deepEqual(result.calls.slice(2).map(call => call.args.at(-1)), contract.migrations.map(row => row.name));

@@ -13,6 +13,12 @@ const fail = (code, message) => new CliError(code, message, 5);
 const key = value => createHash('sha256').update(JSON.stringify(value)).digest('base64url');
 const identifier = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(value);
 export function workerKey(selected, userId, agent) { return key([selected.base, selected.workspace, userId, agent]); }
+export function recoverableReservation(selected, userId, agent, taskId, state) {
+  const active = state.active;
+  if (!state.closed || !active || active.handoffId !== taskId || active.closed !== true || !['reserved', 'claimed'].includes(active.phase) || !identifier(active.attemptId) || !identifier(active.sessionId) || !Number.isFinite(active.reservedUSD) || active.reservedUSD <= 0 || typeof active.day !== 'string') return false;
+  const saved = store(`job-${key([workerKey(selected, userId, agent), taskId])}`).load();
+  return saved.handoffId === taskId && saved.attemptId === active.attemptId && saved.sessionId === active.sessionId && saved.phase === active.phase && saved.reservedUSD === active.reservedUSD && saved.day === active.day && saved.revision === active.revision && saved.closed === true;
+}
 export function workerConfig(options, previous = {}) {
   const config = { ...previous };
   for (const [flag, field] of [['host', 'host'], ['cwd', 'cwd'], ['claude', 'executable'], ['model', 'model'], ['review-agent', 'reviewAgent']]) if (options[flag] !== undefined) config[field] = options[flag];
@@ -58,9 +64,9 @@ function summary(state) {
 const transient = error => ['transport_failed', 'server_error', 'rate_limited'].includes(error.code);
 function pause(state, error) {
   state.stopReason = typeof error.code === 'string' && /^[a-z_]{1,64}$/.test(error.code) ? error.code : 'worker_failed';
-  state.status = ['unauthorized', 'token_expired', 'needs_login', 'login_required'].includes(error.code) ? 'needs-login' : error.code === 'restart_limit' ? 'restart-limit' : error.code === 'usage_limit' ? 'usage-limit' : state.active ? 'uncertain' : 'config';
+  state.status = ['unauthorized', 'token_expired', 'needs_login', 'login_required'].includes(error.code) ? 'needs-login' : error.code === 'restart_limit' ? 'restart-limit' : error.code === 'usage_limit' ? 'usage-limit' : state.active ? 'uncertain' : transient(error) ? 'retrying' : 'config';
 }
-async function control(record, action) {
+export async function control(record, action) {
   if (!record.port || !record.nonce) return { online: false, stopped: false };
   try {
     const response = await fetch(`http://127.0.0.1:${record.port}/${action}`, { method: 'POST', headers: { authorization: `Bearer ${record.nonce}` }, signal: AbortSignal.timeout(action === 'stop' ? 15000 : 2000), redirect: 'error' });
@@ -77,13 +83,25 @@ export async function runWorker(name, options, selected, userId, dependencies = 
   const api = dependencies.api || ((endpoint, extra = {}) => request(selected.base, `/api/apps/auth/${endpoint}${endpoint.includes('?') ? '&' : '?'}workspaceId=${encodeURIComponent(selected.workspace)}`, { token: selected.token, ...extra }));
   const journal = handoffId => store(`job-${key([identity, handoffId])}`);
   if (name === 'worker status' || name === 'worker stop') {
+    if (name === 'worker stop') {
+      const requested = randomUUID(), deadline = Date.now() + 2000;
+      for (;;) {
+        try { await controlStore.exclusive((current, save) => save({ ...current, stopRequested: requested })); break; }
+        catch (error) {
+          if (error.code !== 'state_locked') throw error;
+          if (Date.now() >= deadline) throw fail('stop_unconfirmed', 'Could not record the stop request; inspect the worker and retry.');
+          await delay(20);
+        }
+      }
+    }
     let health = await control(controlStore.load(), name === 'worker stop' ? 'stop' : 'status');
     let state = stateStore.load();
     if (!health.online && !health.stopped) {
       try {
-        await stateStore.exclusive(current => {
+        await stateStore.exclusive((current, save) => {
           state = current;
           if ((state.active && state.active.closed !== true) || (state.runId && !state.closed)) throw fail('stop_unconfirmed', 'Prior worker closure is unresolved. Inspect worker status and the saved session.');
+          if (name === 'worker stop') { state.stopReason = 'requested_stop'; state.status = 'stopped'; save(state); }
         });
         health = { online: false, stopped: true };
       } catch (error) {
@@ -100,9 +118,12 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       return { ...summary(state), state: 'stopped', stopReason: 'service_retired' };
     }
     if (name === 'worker setup') {
-      if (state.active || (state.runId && !state.closed)) throw fail('worker_uncertain', 'Reconcile the prior run through worker run/status before changing setup.');
+      const retained = state.active && recoverableReservation(selected, userId, options.agent, state.active.handoffId, state);
+      if (state.active && !retained || (state.runId && !state.closed)) throw fail('worker_uncertain', 'Reconcile the prior run through worker run/status before changing setup.');
       if (state.service) throw fail('worker_service', 'Uninstall the owned service before changing setup.');
+      const stopRequest = controlStore.load().stopRequested;
       const config = workerConfig(options, state.configure?.config || state.config);
+      if (retained && (JSON.stringify(config) !== JSON.stringify(state.config) || options['label-ids'] !== undefined || options['manage-existing'])) throw fail('worker_uncertain', 'Keep the worker configuration unchanged until the retained task is resolved.');
       await runner.doctor(config);
       const labelIds = options['label-ids'] === undefined ? undefined : JSON.parse(options['label-ids']);
       const body = { agent: options.agent, host: config.host, sessionId: config.sessionId, event: 'configure',
@@ -119,6 +140,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         throw error;
       }
       state.config = config; delete state.configure; state.status = 'stopped'; state.stopReason = null; save(state);
+      await controlStore.exclusive((current, write) => write({ ...current, stopRequested: current.stopRequested === stopRequest ? false : current.stopRequested }));
       return { ...summary(state), started: false };
     }
     if (name === 'worker uninstall') return workerService(name, identity, options, state, save, dependencies.service);
@@ -135,7 +157,12 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     if (name === 'worker doctor') return { ...await runner.doctor(config), ...summary(state), platform: process.platform };
     if (name === 'worker install') return workerService(name, identity, options, state, save, dependencies.service);
     if (name !== 'worker run') throw fail('unknown_command', 'Unknown worker command.');
+    if (controlStore.load().stopRequested || state.stopReason === 'requested_stop') return { ...summary(state), state: 'stopped', stopReason: 'requested_stop' };
+    if (dependencies.task && (!identifier(dependencies.task.id) || !identifier(dependencies.task.project))) throw fail('worker_context', 'Invalid coordinator task binding.');
+    if (dependencies.task && state.active && state.active.handoffId !== dependencies.task.id) throw fail('worker_uncertain', 'A different task still owns this worker.');
     const controller = new AbortController(), stop = () => controller.abort();
+    dependencies.signal?.throwIfAborted();
+    dependencies.signal?.addEventListener('abort', stop, { once: true });
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
     const renewalController = new AbortController();
     let server, finish, renewal, renewalError, fatalError, admitted = false;
@@ -143,7 +170,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     const persist = () => { state.heartbeatAt = new Date(now()).toISOString(); save(state); };
     const stopped = () => {
       state.status = state.active && !['reserved', 'claimed', 'result', 'completed'].includes(state.active.phase) ? 'uncertain' : 'stopped';
-      state.stopReason = state.status === 'uncertain' ? 'interrupted_attempt' : 'requested_stop';
+      state.stopReason = state.status === 'uncertain' ? 'interrupted_attempt' : controlStore.load().stopRequested ? 'requested_stop' : 'interrupted';
     };
     const retry = async (operation, signal, lease = false) => {
       for (let attempt = 0; ; attempt++) {
@@ -158,7 +185,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     const read = endpoint => retry(() => api(endpoint, { signal: controller.signal }), controller.signal);
     const report = (event, signal = controller.signal) => {
       const body = { agent: options.agent, host: config.host, sessionId: config.sessionId, event, generation: state.runId,
-        state: state.status, taskId: state.active?.handoffId || null, ...(state.usage && { usage: { ...state.usage } }) };
+        state: state.status, taskId: state.active?.handoffId || null, ...(dependencies.coordinator && { coordinator: { project: dependencies.coordinator.project, generation: dependencies.coordinator.generation } }), ...(state.usage && { usage: { ...state.usage } }) };
       return retry(() => api('agents/worker', { method: 'POST', timeout: 5000, signal, body }), signal, true);
     };
     const writeJob = () => journal(state.active.handoffId).exclusive((_old, write) => write(state.active));
@@ -168,11 +195,11 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       state.restarts.push(now()); state.usage.restarts = state.restarts.length; persist();
     };
     const action = (handoffId, action, content) => api(`agents/handoffs/${encodeURIComponent(handoffId)}`, { method: 'PATCH', signal: controller.signal,
-      body: { agent: options.agent, generation: state.runId, action, ...(content && { content }) } });
+      body: { agent: options.agent, generation: state.runId, action, ...(dependencies.coordinator && action === 'claim' && { coordinator: { project: dependencies.coordinator.project, generation: dependencies.coordinator.generation } }), ...(content && { content }) } });
     const get = handoffId => read(`agents/handoffs/${encodeURIComponent(handoffId)}?agent=${encodeURIComponent(options.agent)}`);
     try {
       budget(state, config, now());
-      if (state.daemonStartedAt || state.runId) restart();
+      if ((state.daemonStartedAt || state.runId) && !(state.closed && state.stopReason === 'coordinator_complete' && !state.active)) restart();
       state.daemonStartedAt = now(); persist();
       if (state.active && !state.active.closed) throw fail('worker_uncertain', 'Prior child closure is unproven. Inspect the saved child session; do not clear the journal or start another model.');
       if (state.active && !['reserved', 'claimed', 'result', 'settling', 'completed'].includes(state.active.phase)) throw fail('worker_uncertain', 'This task requires operator reconciliation; its recorded usage remains charged.');
@@ -201,16 +228,22 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       server = createServer(async (req, res) => {
         if (req.method !== 'POST' || req.headers.authorization !== `Bearer ${nonce}` || !['/stop', '/status'].includes(req.url)) { res.writeHead(403); res.end(); return; }
         if (req.url === '/stop') { stop(); await finished; }
-        res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ nonce, stopped: req.url === '/stop' }));
+        res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ nonce, stopped: req.url === '/stop' && state.closed === true && state.active?.closed !== false }));
       });
       server.listen(0, '127.0.0.1'); await once(server, 'listening');
-      await controlStore.exclusive((_old, write) => write({ port: server.address().port, nonce }));
+      await controlStore.exclusive((old, write) => { if (old.stopRequested) stop(); write({ ...old, port: server.address().port, nonce }); });
       while (!controller.signal.aborted) {
         budget(state, config, now());
         state.status = 'idle'; persist();
         if (!state.active) {
           const queues = [];
-          for (const type of ['claimed', 'unseen']) {
+          if (dependencies.task) {
+            const { handoff } = await get(dependencies.task.id);
+            if (handoff?.issue?.projectId !== dependencies.task.project) throw fail('worker_context', 'Coordinator task is outside its project.');
+            if (['completed', 'superseded'].includes(handoff.status)) break;
+            queues.push(handoff);
+          }
+          for (const type of dependencies.task ? [] : ['claimed', 'unseen']) {
             const result = await read(`agents/inbox?agent=${encodeURIComponent(options.agent)}&state=${type}&limit=50`);
             if (!Array.isArray(result.items) || result.items.length > 50 || result.items.some(row => !identifier(row.id))) throw fail('invalid_response', 'Invalid bounded inbox.');
             for (const item of result.items) {
@@ -224,16 +257,29 @@ export async function runWorker(name, options, selected, userId, dependencies = 
             const previous = journal(row.id).load();
             return previous.phase !== 'completed' || previous.revision !== row.updatedAt;
           });
+          if (!item && dependencies.task) break;
           if (!item) { await sleep(config.pollSeconds * 1000, undefined, { signal: controller.signal }); continue; }
           const previous = journal(item.id).load();
           if (previous.phase && previous.phase !== 'completed') { state.active = previous; persist(); throw fail('worker_uncertain', 'A retained journal prevents duplicate execution.'); }
-          if (!budget(state, config, now(), true)) { state.status = 'usage-limit'; persist(); await sleep(config.pollSeconds * 1000, undefined, { signal: controller.signal }); continue; }
+          if (!budget(state, config, now(), true)) {
+            state.status = 'usage-limit'; persist();
+            if (dependencies.task) throw fail('usage_limit', 'Worker budget cannot admit this task.');
+            await sleep(config.pollSeconds * 1000, undefined, { signal: controller.signal }); continue;
+          }
           state.active = { handoffId: item.id, revision: item.updatedAt, phase: 'reserved', closed: true, attemptId: randomUUID(), sessionId: randomUUID(), reservedUSD: config.attemptUSD, day: state.usage.day };
           persist(); await writeJob();
         }
         const job = state.active;
         const { handoff } = await get(job.handoffId);
         if (!handoff || handoff.id !== job.handoffId) throw fail('invalid_response', 'Invalid handoff.');
+        let ownedClaim = false;
+        if (handoff.status === 'claimed' && ['claimed', 'reserved'].includes(job.phase)) {
+          const { agent } = await read(`agents/worker?agent=${encodeURIComponent(options.agent)}`);
+          if (!identifier(agent?.id) || agent.name !== options.agent || agent.host !== config.host || agent.sessionId !== config.sessionId || !identifier(handoff.claimedById)) throw fail('worker_uncertain', 'The claim or worker identity cannot be verified.');
+          ownedClaim = handoff.claimedById === agent.id;
+        }
+        if (job.phase === 'claimed' && (dependencies.task && handoff.issue?.projectId !== dependencies.task.project || handoff.status !== 'claimed' || !ownedClaim)) throw fail('worker_uncertain', 'The retained claim no longer belongs to this worker.');
+        if (job.phase === 'reserved' && handoff.status !== 'open' && ownedClaim) throw fail('worker_uncertain', 'The retained reservation does not prove this claim.');
         if (job.phase === 'completed' || (handoff.status === 'completed' && ['result', 'settling'].includes(job.phase))) {
           job.phase = 'completed'; await writeJob(); delete state.active; persist(); continue;
         }
@@ -248,17 +294,25 @@ export async function runWorker(name, options, selected, userId, dependencies = 
               state.usage.reservedUSD = Math.max(0, state.usage.reservedUSD - job.reservedUSD);
               if (job.day === state.usage.day) state.usage.chargedUSD = Math.max(0, state.usage.chargedUSD - job.reservedUSD);
               job.phase = 'completed'; await writeJob(); delete state.active; persist();
-              await action(job.handoffId, 'seen'); continue;
+              await action(job.handoffId, 'seen'); if (dependencies.task) break; continue;
             }
             job.phase = 'claimed'; persist(); await writeJob();
           }
           const issue = await read(`issues/${encodeURIComponent(handoff.issueId)}`);
+          if (dependencies.task && issue.project?.id !== dependencies.task.project) throw fail('worker_context', 'Task project changed before model dispatch.');
           const context = { handoff: { id: handoff.id, content: handoff.content, issueId: handoff.issueId }, issue, reviewAgent: config.reviewAgent || null };
           if (Buffer.byteLength(JSON.stringify(context)) > 44000) throw fail('worker_context_limit', 'Task context exceeds the bounded runner input.');
-          job.phase = 'dispatching'; job.closed = false; persist(); await writeJob();
-          let result;
+          let result, execution;
+          await controlStore.exclusive(async current => {
+            if (current.stopRequested) { stop(); controller.signal.throwIfAborted(); }
+            controller.signal.throwIfAborted();
+            job.phase = 'dispatching'; job.closed = false; persist(); await writeJob();
+            execution = runner.execute(config, job, context, controller.signal, () => { state.status = 'working'; job.phase = 'dispatched'; persist(); }).then(value => ({ value }), error => ({ error }));
+          });
           try {
-            result = await runner.execute(config, job, context, controller.signal, () => { state.status = 'working'; job.phase = 'dispatched'; persist(); });
+            const outcome = await execution;
+            if (outcome.error) throw outcome.error;
+            result = outcome.value;
           } catch (error) {
             job.phase = 'uncertain'; state.usage.unknownUSD += job.reservedUSD; throw error;
           } finally { job.closed = true; persist(); await writeJob(); }
@@ -282,15 +336,18 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         job.phase = result.outcome === 'blocked' ? 'blocked' : 'completed'; await writeJob();
         if (job.phase === 'blocked') throw fail('worker_uncertain', 'Worker reported an authority or task blocker; inspect the Collab progress entry.');
         delete state.active; persist();
+        if (dependencies.task) break;
       }
       if (renewalError) throw renewalError;
       stopped();
+      if (dependencies.task && !state.active && !controller.signal.aborted) state.stopReason = 'coordinator_complete';
     } catch (error) {
       if (controller.signal.aborted && !renewalError) {
         stopped();
       } else {
         error = renewalError || error;
         pause(state, error);
+        if (transient(error) && dependencies.task && recoverableReservation(selected, userId, options.agent, dependencies.task.id, { ...state, closed: true })) state.status = 'retrying';
         if (transient(error) || error.code === 'outcome_unknown' && !state.active || !(error instanceof CliError) && !error.code) fatalError = error;
       }
     } finally {
@@ -299,8 +356,9 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         try { await report('close', null); state.closed = true; } catch { state.closed = false; state.stopReason ||= 'closure_unconfirmed'; }
       }
       persist(); finish();
-      if (server) { await new Promise(resolve => server.close(resolve)); await controlStore.exclusive((_old, write) => write({})); }
+      if (server) { await new Promise(resolve => server.close(resolve)); await controlStore.exclusive((old, write) => write({ stopRequested: old.stopRequested || false })); }
       process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop);
+      dependencies.signal?.removeEventListener('abort', stop);
     }
     if (fatalError) throw fatalError;
     return summary(state);

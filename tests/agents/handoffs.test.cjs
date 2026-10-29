@@ -5,14 +5,15 @@ const { tmpdir, userInfo } = require('node:os');
 const { join, resolve } = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
-const { PrismaClient } = require('@prisma/client');
+const { Prisma, PrismaClient } = require('@prisma/client');
 const { load } = require('../security/helpers.cjs');
 
 // Same socket-only disposable PostgreSQL pattern as tests/search; no application DB.
 const directory = mkdtempSync(join(tmpdir(), 'collab-handoffs-pg-'));
 const bindir = execFileSync('pg_config', ['--bindir'], { encoding: 'utf8' }).trim();
-let started = false, prisma;
+let started = false, prisma, publicPrisma;
 after(async () => {
+  await publicPrisma?.$disconnect();
   await prisma?.$disconnect();
   if (started) execFileSync(join(bindir, 'pg_ctl'), ['-D', join(directory, 'data'), '-m', 'immediate', '-w', 'stop'], { stdio: 'pipe' });
   rmSync(directory, { recursive: true, force: true });
@@ -27,6 +28,11 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--skip-generate', '--schema', resolve('prisma/schema.prisma')],
     { env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
   prisma = new PrismaClient({ datasources: { db: { url } } });
+  class TestPrismaClient extends PrismaClient {
+    constructor(options) { super({ ...options, datasources: { db: { url } } }); }
+  }
+  publicPrisma = load('src/lib/prisma.ts', { '@prisma/client': { Prisma, PrismaClient: TestPrismaClient },
+    './issue-visibility': load('src/lib/issue-visibility.ts') }, { global: {}, process: { env: { NODE_ENV: 'production' } } }).prisma;
   // Exercise the additive migration itself against existing rows, rather than only db push.
   await prisma.$executeRawUnsafe('DROP TABLE "AgentReceipt", "AgentHandoff", "AgentRegistration"');
   await prisma.user.createMany({ data: ['alice', 'bob', 'outsider'].map(id => ({ id, name: id })) });
@@ -47,9 +53,9 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   assert.equal(legacy.managedWorker, null, 'migration preserves existing agents as unmanaged');
   await prisma.agentRegistration.delete({ where: { id: legacy.id } });
   assert.equal(await prisma.issue.count(), 2, 'migration preserves existing work');
-  const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } });
+  const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma: publicPrisma } });
   const service = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'),
-    '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
+    '@/lib/prisma': { prisma: publicPrisma }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
   await t.test('HTTP parsing bounds streamed bodies and rejects malformed input', async () => {
     const http = load('src/lib/agent-handoff-http.ts', { './agent-handoffs': service, zod: require('zod'), 'next/server': { NextResponse: Response } }, { Buffer });
     const request = body => new Request('https://example.test', { method: 'POST', body });
@@ -374,5 +380,168 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     assert.equal(await prisma.agentHandoff.count({ where: { issueId: 'route-labels' } }), 2);
     assert.equal((await updateIssue('outsider', 'route-labels', { labels: [] }, 'w')).status, 404);
   });
+
+  await t.test('project coordinator migration, single owner lease and tenant-filtered snapshots', async () => {
+    await prisma.$executeRawUnsafe('ALTER TABLE "Project" DROP COLUMN "coordinator"');
+    await prisma.$executeRawUnsafe(readFileSync(resolve('prisma/migrations/20261029000100_project_coordinator/migration.sql'), 'utf8'));
+    assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } })).coordinator, null);
+    const coordinator = load('src/lib/project-coordinator.ts', { zod: require('zod'), '@/lib/prisma': { prisma: publicPrisma },
+      '@/lib/issue-finder': finder, '@/lib/agent-handoffs': service }, { Date });
+    const sessionId = randomUUID();
+    await service.registerAgent(alice, service.registrationSchema.parse({ name: 'coordinator', host: 'host', sessionId }));
+    const generation = expires => { const random = randomUUID().replaceAll('-', ''), stamp = Date.parse(expires).toString(16).padStart(12, '0'); return `${stamp.slice(0, 8)}-${stamp.slice(8)}-7${random.slice(13, 16)}-${random.slice(16, 20)}-${random.slice(20)}`; };
+    const attemptExpires = new Date(Date.now() + 30000).toISOString();
+    const binding = { project: 'p-w', agent: 'coordinator', host: 'host', sessionId, generation: generation(attemptExpires), attemptExpires, event: 'acquire' };
+    const lease = body => coordinator.coordinatorLease(alice, coordinator.coordinatorSchema.parse({ ...binding, ...body }));
+    const absentExpiry = new Date(Date.now() + 100).toISOString();
+    const absent = { ...binding, generation: generation(absentExpiry), attemptExpires: absentExpiry };
+    await assert.rejects(lease({ ...absent, event: 'reconcile' }), e => e.code === 'coordinator_pending');
+    await new Promise(resolve => setTimeout(resolve, 150));
+    assert.equal((await lease({ ...absent, event: 'reconcile' })).reconciled, true);
+    await assert.rejects(lease(absent), e => e.code === 'coordinator_fenced');
+    const matchedExpiry = new Date(Date.now() + 150).toISOString();
+    const matched = { ...binding, generation: generation(matchedExpiry), attemptExpires: matchedExpiry };
+    await lease(matched);
+    await assert.rejects(lease({ ...matched, attemptExpires: absentExpiry, event: 'reconcile' }), e => e.code === 'coordinator_fenced');
+    await assert.rejects(lease({ ...matched, event: 'reconcile' }), e => e.code === 'coordinator_pending');
+    await new Promise(resolve => setTimeout(resolve, 200));
+    assert.equal((await lease({ ...matched, event: 'reconcile' })).reconciled, true);
+    await assert.rejects(lease(matched), e => e.code === 'coordinator_fenced');
+    const races = await Promise.allSettled([lease({}), lease({ generation: generation(attemptExpires) })]);
+    assert.equal(races.filter(r => r.status === 'fulfilled').length, 1);
+    assert.equal(races.find(r => r.status === 'rejected').reason.code, 'coordinator_conflict');
+    binding.generation = races.find(r => r.status === 'fulfilled').value.lease.generation;
+    const laterExpiry = new Date(Date.now() + 100).toISOString();
+    const later = { ...binding, generation: generation(laterExpiry), attemptExpires: laterExpiry };
+    await assert.rejects(lease({ ...later, event: 'reconcile' }), e => e.code === 'coordinator_pending');
+    await new Promise(resolve => setTimeout(resolve, 150));
+    assert.equal((await lease({ ...later, event: 'reconcile' })).reconciled, true);
+    assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } })).coordinator.generation, binding.generation);
+    await assert.rejects(lease(later), e => e.code === 'coordinator_fenced');
+    assert.equal((await lease({ event: 'renew' })).lease.generation, binding.generation);
+    await assert.rejects(coordinator.coordinatorLease(bob, binding), e => e.status === 403);
+    await assert.rejects(lease({ project: 'p-foreign' }), e => e.status === 404);
+    await assert.rejects(lease({ host: 'other-host' }), e => e.status === 403);
+    await prisma.project.update({ where: { id: 'p-w' }, data: { coordinator: { ...(await lease({ event: 'renew' })).lease, leaseUntil: new Date(0).toISOString() } } });
+    await assert.rejects(lease({ event: 'renew' }), e => e.code === 'coordinator_fenced');
+    binding.generation = generation(attemptExpires);
+    await lease({});
+    await prisma.project.update({ where: { id: 'p-w' }, data: { isArchived: true } });
+    await assert.rejects(lease({ event: 'renew' }), e => e.code === 'project_not_found');
+    await assert.rejects(lease({ generation: generation(attemptExpires) }), e => e.code === 'project_not_found');
+    await assert.rejects(lease({ event: 'close', generation: randomUUID() }), e => e.code === 'coordinator_conflict');
+    await assert.rejects(coordinator.coordinatorLease(bob, { ...binding, event: 'close' }), e => e.status === 403);
+    await lease({ event: 'close' });
+    await prisma.project.update({ where: { id: 'p-w' }, data: { isArchived: false } });
+    await assert.rejects(lease({}), e => e.code === 'coordinator_fenced');
+    const own = await send({ toAgents: ['worker-a'], toLabels: [] });
+    await prisma.agentRegistration.createMany({ data: Array.from({ length: 501 }, (_, i) => ({ workspaceId: 'w', userId: 'alice', name: `unrelated-${i}` })) });
+    const snapshot = await coordinator.coordinatorSnapshot(alice, 'p-w', undefined, ['worker-a', 'worker-b']);
+    assert.equal(snapshot.agentsTruncated, false); assert.equal(snapshot.agents.length, 2);
+    const bulk = Array.from({ length: 5001 }, (_, i) => ({ id: `bulk-${String(i).padStart(5, '0')}`, sourceKey: `bulk-${i}`, workspaceId: 'w', issueId: 'i-w', content: 'boundary', recipientNames: ['worker-a'] }));
+    await prisma.agentHandoff.createMany({ data: bulk });
+    const beyond = await coordinator.coordinatorSnapshot(alice, 'p-w', 'bulk-04999', ['worker-a']);
+    assert.equal(beyond.items[0].id, 'bulk-05000'); assert.equal(beyond.agentsTruncated, false);
+    await prisma.agentHandoff.deleteMany({ where: { id: { in: bulk.map(item => item.id) } } });
+    assert.ok(snapshot.items.some(item => item.id === own.id));
+    assert.ok(snapshot.items.every(item => item.issue.projectId === 'p-w'));
+    assert.equal(snapshot.agents.find(a => a.name === 'worker-b').owned, false);
+    await assert.rejects(coordinator.coordinatorSnapshot(outsider, 'p-w'), e => e.status === 404);
+    await prisma.agentHandoff.delete({ where: { id: own.id } });
+
+    binding.generation = generation(attemptExpires);
+    await lease({});
+    const workerSession = randomUUID(), workerGeneration = randomUUID();
+    const workerBody = { agent: 'coordinated', host: 'host', sessionId: workerSession };
+    const manage = body => service.manageWorker(alice, service.workerSchema.parse({ ...workerBody, ...body }));
+    await manage({ event: 'configure' });
+    const admission = { project: 'p-w', generation: binding.generation };
+    await manage({ event: 'start', generation: workerGeneration, coordinator: admission });
+    const http = load('src/lib/agent-handoff-http.ts', { './agent-handoffs': service, zod: require('zod'), 'next/server': { NextResponse: Response } }, { Buffer });
+    const route = load('src/app/api/apps/auth/agents/coordinator/route.ts', {
+      '@/lib/apps/auth-middleware': { withAppAuth: (fn, options) => { assert.ok(options.requiredScopes.includes('projects:read')); return fn; } },
+      '@/lib/agent-handoff-http': http, '@/lib/project-coordinator': coordinator,
+    });
+    for (const reader of [alice, bob]) {
+      const response = await route.GET({ nextUrl: new URL('https://example.test/api/apps/auth/agents/coordinator?project=p-w') }, reader);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.deepEqual(Object.keys(body).sort(), ['agents', 'agentsTruncated', 'items', 'nextCursor', 'observedAt', 'project']);
+      assert.equal(body.project, 'p-w'); assert.equal(Object.hasOwn(body, 'lease'), false);
+    }
+    const currentWorker = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'coordinated' } } });
+    await prisma.agentRegistration.update({ where: { id: currentWorker.id }, data: { managedWorker: { ...currentWorker.managedWorker, taskId: 'private-other-project-task' } } });
+    const visibleWorker = (await coordinator.coordinatorSnapshot(alice, 'p-w', undefined, ['coordinated'])).agents.find(a => a.name === 'coordinated').managedWorker;
+    assert.equal(visibleWorker.taskId, undefined); assert.equal(visibleWorker.coordinator, undefined);
+    const released = await send({ toAgents: ['worker-a', 'coordinated'], toLabels: [] });
+    await act(alice, released, 'worker-a', 'claim');
+    const handoffRoute = load('src/app/api/apps/auth/agents/handoffs/[id]/route.ts', {
+      '@/lib/apps/auth-middleware': { withAppAuth: fn => fn }, '@/lib/agent-handoffs': service, '@/lib/agent-handoff-http': http,
+    }, { URL });
+    const handoffResponse = await handoffRoute.GET(new Request('https://example.test/api/apps/auth/agents/handoffs/' + released.id + '?agent=worker-a'), alice, { params: Promise.resolve({ id: released.id }) });
+    assert.equal(handoffResponse.status, 200);
+    const handoffBody = (await handoffResponse.json()).handoff;
+    assert.equal(handoffBody.claimedById, (await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'worker-a' } } })).id);
+    assert.equal(Object.hasOwn(handoffBody, 'claimedBy'), false);
+    const claim = handoff => service.actOnHandoff(alice, handoff.id, service.actionSchema.parse({ agent: 'coordinated', action: 'claim', generation: workerGeneration, coordinator: admission }));
+    await assert.rejects(claim(released), e => e.code === 'already_claimed');
+    await act(alice, released, 'worker-a', 'release', 'Hand back');
+    const afterRelease = await coordinator.coordinatorSnapshot(alice, 'p-w');
+    assert.equal(afterRelease.items.find(item => item.id === released.id).previouslyClaimed, true);
+    await assert.rejects(claim(released), e => e.code === 'coordinator_fenced');
+    const fresh = await send({ toAgents: ['coordinated'], toLabels: [] });
+    await claim(fresh);
+    const current = await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } });
+    await prisma.project.update({ where: { id: 'p-w' }, data: { coordinator: { ...current.coordinator, leaseUntil: new Date(0).toISOString() } } });
+    await assert.rejects(lease({ generation: generation(attemptExpires) }), e => e.code === 'coordinator_conflict');
+    await assert.rejects(claim(fresh), e => e.code === 'coordinator_fenced');
+    await manage({ event: 'close', generation: workerGeneration, coordinator: admission });
+    await lease({ generation: generation(attemptExpires) });
+
+    const direct = await publicPrisma.project.findUniqueOrThrow({ where: { id: 'p-w' } });
+    const nested = await publicPrisma.issue.findUniqueOrThrow({ where: { id: 'i-w' }, include: { project: true } });
+    assert.equal(Object.hasOwn(direct, 'coordinator'), false); assert.equal(Object.hasOwn(nested.project, 'coordinator'), false);
+    const privateLease = await publicPrisma.project.findUniqueOrThrow({ where: { id: 'p-w' }, select: { coordinator: true } });
+    assert.equal(privateLease.coordinator.sessionId, sessionId);
+
+    let actor = null;
+    const session = load('src/lib/session.ts', { '@/lib/request-session': { getServerSession: async () => actor ? { user: actor } : null },
+      '@/lib/auth-options': { authOptions: {} }, '@/lib/prisma': { prisma: publicPrisma } }, { console: { error() {} } });
+    const archive = load('src/app/api/projects/[projectId]/archive/route.ts', {
+      'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma: publicPrisma },
+      '@/lib/session': session, '@/lib/post-access': load('src/lib/post-access.ts'),
+    }, { console: { error() {} } });
+    const archiveRequest = body => archive.PATCH(new Request('https://example.test', { method: 'PATCH', body }), { params: Promise.resolve({ projectId: 'p-w' }) });
+    const beforeArchive = (await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } })).isArchived;
+    assert.equal((await archiveRequest('{')).status, 401);
+    actor = { id: 'outsider' };
+    assert.equal((await archiveRequest(JSON.stringify({ isArchived: true }))).status, 404);
+    assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } })).isArchived, beforeArchive);
+    actor = { id: 'alice' };
+    for (const value of [null, 'true', 1, [], {}]) assert.equal((await archiveRequest(JSON.stringify({ isArchived: value }))).status, 400);
+    assert.equal((await archiveRequest('{')).status, 400);
+    assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } })).isArchived, beforeArchive);
+    const archived = await archiveRequest(JSON.stringify({ isArchived: true }));
+    assert.equal(archived.status, 200); assert.equal((await archived.json()).project.coordinator, undefined);
+    assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } })).isArchived, true);
+    actor = { id: 'bob' };
+    assert.equal((await archiveRequest(JSON.stringify({ isArchived: false }))).status, 200);
+    await prisma.workspaceMember.updateMany({ where: { workspaceId: 'w', userId: 'bob' }, data: { status: false } });
+    assert.equal((await archiveRequest(JSON.stringify({ isArchived: true }))).status, 404);
+    assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } })).isArchived, false);
+    await prisma.workspaceMember.updateMany({ where: { workspaceId: 'w', userId: 'bob' }, data: { status: true } });
+
+    const appProjects = load('src/app/api/apps/auth/projects/[projectId]/route.ts', {
+      'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma: publicPrisma }, zod: require('zod'),
+      '@/lib/apps/auth-middleware': { withAppAuth: (fn, options) => { assert.ok(options.requiredScopes.includes('projects:read') || options.requiredScopes.includes('projects:write')); return fn; } },
+    }, { console: { error() {} } });
+    const appResponse = await appProjects.PATCH(new Request('https://example.test', { method: 'PATCH', body: JSON.stringify({ name: 'Updated project' }) }), alice, { params: Promise.resolve({ projectId: 'p-w' }) });
+    assert.equal(appResponse.status, 200); const appProject = await appResponse.json();
+    assert.equal(appProject.name, 'Updated project'); assert.equal(Object.hasOwn(appProject, 'coordinator'), false);
+    const foreignAppResponse = await appProjects.PATCH(new Request('https://example.test', { method: 'PATCH', body: JSON.stringify({ name: 'Foreign change' }) }), outsider, { params: Promise.resolve({ projectId: 'p-w' }) });
+    assert.equal(foreignAppResponse.status, 404);
+    assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } })).name, 'Updated project');
+  });
+
 
 });

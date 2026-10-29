@@ -20,7 +20,7 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.7.1 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.7.1) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.8.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.8.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
 
 Version 0.6.1 adds `collab update`, which reruns the one-command installer for the current platform from the installed native executable. Installations before 0.6.1 run the installer once more to pick it up.
 
@@ -245,7 +245,7 @@ Agent activity is visible in the existing issue timeline and `collab issues acti
 
 ### Operating steps on each computer
 
-1. Upgrade to CLI 0.7.1, run `collab --help` and check its `version` field, and load the updated [agent skill](skills/collab-agents/SKILL.md). Use the existing authorized login.
+1. Upgrade to CLI 0.8.0, run `collab --help` and check its `version` field, and load the updated [agent skill](skills/collab-agents/SKILL.md). Use the existing authorized login.
 2. Keep one stable name for this agent. Use the actual session ID reported by your agent host, and a short host label without spaces. If you already have an established name, keep it; do not create a fresh name for every task or restart. Stop its previous watcher before binding a replacement session.
 
 ```sh
@@ -438,6 +438,7 @@ protection against a malicious process running as the same OS user.
 
 ```sh
 collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
+collab worker setup --agent sportsbook-worker --workspace WORKSPACE_ID
 collab worker install --agent sportsbook-worker --workspace WORKSPACE_ID --dry-run
 collab worker install --agent sportsbook-worker --workspace WORKSPACE_ID
 collab worker stop --agent sportsbook-worker --workspace WORKSPACE_ID
@@ -453,7 +454,10 @@ the repository directory. A missing repository therefore produces a normal confi
 pause instead of failing before the daemon can start.
 Stop any foreground worker before installing. Dry-run returns the definition and
 supervisor commands without installing; each invocation generates a fresh service
-installation identity. Stop
+installation identity. After an explicit stop, run `worker setup` before installing
+or running again. If a service is already installed, uninstall it before setup and
+then reinstall it. A retained pre-model reservation keeps its existing configuration
+and journal until the same worker resolves the task. Stop
 uses the private authenticated daemon control endpoint and confirms owned closure;
 it never signals a remembered PID. Stop the foreground daemon before uninstalling.
 Before that endpoint is available, stop/status use the exclusive worker lock to
@@ -484,3 +488,80 @@ No service installation or real provider pilot acceptance has been performed by
 the source review phase. The old
 CLB-446 terminal pilot is prototype evidence only. Publication, native seven-target
 qualification, same-host and two-host Sportsbook tests remain with the release owner.
+
+
+## Project coordinator (CLI 0.8.0)
+
+A coordinator monitors one project with ordinary code. It dispatches overdue,
+unclaimed handoffs addressed to up to 16 explicitly configured **local dedicated workers**,
+using their existing
+claim, generation fence, journal, tool restrictions and budget. It does not inject
+messages into an interactive terminal or turn a registration into a running agent.
+The matching server and [coordinator migration](../../docs/agent-handoffs.md#validation-and-rollout)
+must be installed first. Installation of the CLI alone starts nothing.
+
+Set up a new coordinator identity with a stable host/session pair. Use your actual
+workspace/project IDs, a fresh UUID and a distinct worker name. Keep your existing
+login; do not copy tokens between computers.
+
+```sh
+collab agents register --name project-coordinator --host my-host --session-id YOUR-UUID --workspace WORKSPACE
+collab worker setup --agent project-worker --host my-host --workspace WORKSPACE --cwd /absolute/repository --claude /absolute/claude --model haiku --tools Read,Glob,Grep --attempt-usd 0.10 --daily-usd 0.10 --timeout-seconds 120
+collab coordinator setup --agent project-coordinator --workspace WORKSPACE --project PROJECT --workers project-worker
+collab coordinator install --agent project-coordinator --workspace WORKSPACE --project PROJECT
+collab coordinator status --agent project-coordinator --workspace WORKSPACE --project PROJECT
+```
+
+`setup` grants consent for this local route but starts nothing. `install` explicitly
+starts the per-user service (launchd, systemd user or Windows Scheduled Tasks).
+For a foreground pilot use `coordinator run` instead. The worker must have no
+separate installed service, open run, unresolved task or review-agent configuration.
+The coordinator owns its bounded worker invocations; other hosts keep their own
+supervisors and consent. An already running remote worker is observed, never
+restarted remotely by this coordinator.
+
+Default overdue threshold is 60 seconds, meaningful-progress threshold 900 seconds,
+poll interval 10 seconds. Override at setup with `--overdue-seconds`,
+`--stall-seconds`, `--poll-seconds`. At most one model runs at a time. Each task has
+at most three dispatch attempts with 30/60/120-second backoff for safely closed
+transport failures; worker daily/attempt/start/restart limits still apply.
+
+Status reports missing execution routes, healthy idle/busy workers, stale heartbeat,
+overdue progress, configuration/auth conflicts, budget limits and uncertain prior
+outcomes. A heartbeat alone is not task progress. Decisions include the responsible
+coordinator and handoff IDs. Read `collab handoffs get` and the issue timeline to
+verify the named claim and result; successful notification is not successful work.
+Status retains the latest 50 decision events and 50 dispatch events, and exposes the current scan in pages
+of 25 with `coordinator status --page N`; batches of up to 5,000 pending project handoffs are
+scanned per cycle. If more remain, the next cycle continues from the saved cursor;
+after the last page, scanning starts again from the beginning. The dispatch journal
+holds up to 100 task IDs. When full, it
+prunes only records with confirmed worker closure and a completed or superseded
+server handoff; pending, uncertain and retry-exhausted records remain. If none can
+be reconciled, status reports `journal_retention_unresolved` and an operator must
+inspect those records and the corresponding worker and handoff states.
+
+The server binds one coordinator identity/host/session per project. An expired
+lease permits the same binding to recover; it does not transfer ownership. A stale
+coordinator is fenced before dispatch. Lost or ambiguous dispatch outcomes remain
+blocked after restart. No automatic reassignment, auth refresh, review/merge,
+release takeover or interactive-agent wakeup is supplied by this first slice.
+Review-author custody stays with the original author; CLB-454's unfinished transfer
+path is not enabled. A separate, explicitly agreed transfer is needed when changing
+host or coordinator owner.
+
+```sh
+collab coordinator stop --agent project-coordinator --workspace WORKSPACE --project PROJECT
+collab coordinator uninstall --agent project-coordinator --workspace WORKSPACE --project PROJECT
+```
+
+Stop waits for the owned invocation to close and records a pause. After inspecting
+a blocker, explicit setup is required to resume a paused coordinator; journals and
+usage survive setup/uninstall. Never delete state to force a retry. A worker stopped
+explicitly by its operator is not automatically restarted. Changed credentials,
+provider conflicts and uncertain child closure need the named host owner.
+Run `worker setup` explicitly to clear a worker's durable stop request.
+
+Local deterministic tests use synthetic runners. A release must separately report
+actual local model proof and second-host proof. A new remote pilot requires its
+owner's new exact packet/go-ahead, ready acknowledgement and observed real probe.

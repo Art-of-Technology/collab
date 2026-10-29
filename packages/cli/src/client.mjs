@@ -54,6 +54,8 @@ export function store(profile = 'default') {
     }
   }
   function save(state) {
+    const serialized = JSON.stringify(state) + '\n';
+    if (Buffer.byteLength(serialized) > 65536) throw new CliError('state_too_large', 'CLI state exceeds the supported size; no state was written.');
     prepare();
     const temporary = `${file}.${randomBytes(8).toString('hex')}.tmp`;
     try {
@@ -62,7 +64,7 @@ export function store(profile = 'default') {
       const fd = fs.openSync(temporary, windows ? 'r+' : 'wx', 0o600);
       try {
         check(fs.fstatSync(fd), false, temporary);
-        fs.writeFileSync(fd, JSON.stringify(state) + '\n'); fs.fsyncSync(fd);
+        fs.writeFileSync(fd, serialized); fs.fsyncSync(fd);
       } finally { fs.closeSync(fd); }
       fs.renameSync(temporary, file);
       // Windows cannot open directories for fsync; the credential file itself was flushed above.
@@ -104,7 +106,9 @@ export function store(profile = 'default') {
         fs.fsyncSync(fd);
       } finally { fs.closeSync(fd); }
       if (previous !== undefined) {
-        if (readLock() !== previous) throw locked();
+        let current;
+        try { current = readLock(); } catch (error) { if (error.code === 'ENOENT') throw locked(); throw error; }
+        if (current !== previous) throw locked();
         fs.unlinkSync(lock);
       }
       // Publish complete metadata atomically, so a crash cannot leave a new empty lock.
@@ -169,6 +173,8 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
       if (method === 'POST' && response.status === 409 && /^\/api\/apps\/auth\/agents\/worker(?:\?|$)/.test(endpoint) &&
           /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '') &&
           Object.hasOwn(workerConflicts, body?.event) && workerConflicts[body.event].includes(remoteCode)) code = remoteCode;
+      if (response.status === 409 && ['coordinator_conflict', 'coordinator_fenced'].includes(remoteCode) &&
+          /^\/api\/apps\/auth\/agents\/coordinator(?:\?|$)/.test(endpoint) && response.headers.get('content-type')?.includes('application/json')) code = remoteCode;
       const messages = {
         semantic_unavailable: [503, 'Semantic search is unavailable. Use --mode keyword or --mode hybrid for explicit keyword fallback.'],
         budget_too_small: [422, 'Increase --max-tokens to fit at least one result or context section.'],

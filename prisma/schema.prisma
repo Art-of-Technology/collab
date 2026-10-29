@@ -482,6 +482,7 @@ model Project {
   updatedAt        DateTime @updatedAt
   issuePrefix      String
   nextIssueNumbers Json     @default("{\"EPIC\": 1, \"STORY\": 1, \"TASK\": 1, \"BUG\": 1, \"MILESTONE\": 1, \"SUBTASK\": 1}")
+  coordinator      Json?
 
   // Relationships
   workspace       Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

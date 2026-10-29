@@ -20,7 +20,7 @@ function fixture(t, execute) {
   const options = { agent: 'worker', workspace: 'ws', host: 'laptop', cwd: dir, claude: process.execPath };
   const selected = { base: 'https://example.test', workspace: 'ws', token: 'private' };
   const calls = [], sessions = [];
-  let handoff = { id: 'task-one', issueId: 'issue-one', content: 'untrusted $(do not execute)', status: 'open', updatedAt: '2026-10-27T00:00:00Z' }, remote;
+  let handoff = { id: 'task-one', issueId: 'issue-one', content: 'untrusted $(do not execute)', status: 'open', claimedById: null, updatedAt: '2026-10-27T00:00:00Z' }, remote, registration;
   const result = { outcome: 'complete', content: 'Evidence', reviewAgent: null, estimatedUSD: 0.1, error: false, tokens: { inputTokens: 10, outputTokens: 5, cacheReadTokens: 2, cacheWriteTokens: 1 } };
   const dependencies = {
     sleep: (ms, value, extra) => delay(ms === 10000 ? ms : 1, value, extra),
@@ -34,16 +34,16 @@ function fixture(t, execute) {
     } },
     api: async (url, extra = {}) => {
       calls.push({ url, ...extra });
-      if (url === 'agents/worker') { remote = { generation: extra.body.generation || null, closed: ['configure', 'close'].includes(extra.body.event) }; return { worker: remote }; }
-      if (url === 'agents/worker?agent=worker') return { agent: { name: 'worker', worker: remote } };
+      if (url === 'agents/worker') { registration = { id: 'worker-id', name: 'worker', host: extra.body.host, sessionId: extra.body.sessionId }; remote = { generation: extra.body.generation || null, closed: ['configure', 'close'].includes(extra.body.event) }; return { worker: remote }; }
+      if (url === 'agents/worker?agent=worker') return { agent: { ...registration, worker: remote } };
       if (url.startsWith('agents/inbox')) {
         if (handoff.status === 'completed') { process.emit('SIGINT'); return { items: [], hasMore: false }; }
-        return { items: [handoff], hasMore: false };
+        return { items: [{ ...handoff, claimedBy: handoff.claimedById ? { name: 'worker' } : null }], hasMore: false };
       }
       if (url.startsWith('agents/handoffs/task-one')) {
         if (!extra.method) return { handoff };
         assert.ok(extra.body.generation);
-        if (extra.body.action === 'claim') handoff = { ...handoff, status: 'claimed' };
+        if (extra.body.action === 'claim') handoff = { ...handoff, status: 'claimed', claimedById: 'worker-id' };
         if (extra.body.action === 'complete') handoff = { ...handoff, status: 'completed' };
         return handoff;
       }
@@ -52,7 +52,7 @@ function fixture(t, execute) {
     },
   };
   const run = command => runWorker(`worker ${command}`, options, selected, 'user', dependencies);
-  return { dir, options, selected, calls, sessions, dependencies, run, state: () => store(`worker-${workerKey(selected, 'user', 'worker')}`).load() };
+  return { dir, options, selected, calls, sessions, dependencies, run, handoff: () => handoff, setHandoff: value => { handoff = value; }, state: () => store(`worker-${workerKey(selected, 'user', 'worker')}`).load() };
 }
 
 test('worker conflicts expose only scoped, valid reason codes without remote text', async t => {
@@ -230,6 +230,33 @@ test('transient reads recover; auth pauses without retrying or invoking the mode
   assert.equal((await f.run('run')).state, 'needs-login'); assert.equal(f.sessions.length, 1);
 });
 
+for (const claimant of ['owned', 'other', 'missing', 'host', 'session', 'identity']) test(`claimed reservation checks ${claimant} against the owned registration`, async t => {
+  const f = fixture(t); await f.run('setup');
+  const api = f.dependencies.api; let failing = true;
+  f.dependencies.api = async (url, extra) => {
+    if (failing && url === 'issues/issue-one') throw Object.assign(Error(), { code: 'transport_failed' });
+    const response = await api(url, extra);
+    if (!failing && url === 'agents/worker?agent=worker') {
+      if (claimant === 'host') response.agent.host = 'other-host';
+      if (claimant === 'session') response.agent.sessionId = 'other-session';
+      if (claimant === 'identity') delete response.agent.id;
+    }
+    return response;
+  };
+  await assert.rejects(f.run('run'), { code: 'transport_failed' });
+  assert.equal(f.state().active.phase, 'claimed'); assert.equal(f.state().active.closed, true);
+  if (claimant === 'other') f.setHandoff({ ...f.handoff(), claimedById: 'other-id' });
+  if (claimant === 'missing') f.setHandoff({ ...f.handoff(), claimedById: null });
+  failing = false;
+  const result = await f.run('run');
+  assert.equal(f.calls.filter(call => call.body?.action === 'claim').length, 1);
+  if (claimant === 'owned') {
+    assert.equal(result.state, 'stopped'); assert.equal(f.sessions.length, 1); assert.equal(f.handoff().status, 'completed');
+  } else {
+    assert.equal(result.state, 'uncertain'); assert.equal(result.stopReason, 'worker_uncertain'); assert.equal(f.sessions.length, 0);
+  }
+});
+
 test('owned control stop waits for child closure and refuses competing runs', async t => {
   let started;
   const ready = new Promise(resolve => { started = resolve; });
@@ -253,15 +280,14 @@ for (const mode of ['foreground', 'scheduled']) test(`${mode} startup stop and s
     }));
     options['service-id'] = f.state().service.installationId;
   }
-  let entered, release, polled;
+  let entered, release, polled = false;
   const preflight = new Promise(resolve => { entered = resolve; });
   const pending = new Promise(resolve => { release = resolve; });
-  const ready = new Promise(resolve => { polled = resolve; });
   f.dependencies.runner.doctor = async () => { entered(); await pending; return { ready: true }; };
   f.dependencies.runner.execute = async () => assert.fail('Idle startup must not launch a model');
   const api = f.dependencies.api;
   f.dependencies.api = async (url, extra) => {
-    if (url.startsWith('agents/inbox')) { polled(); return { items: [], hasMore: false }; }
+    if (url.startsWith('agents/inbox')) { polled = true; return { items: [], hasMore: false }; }
     return api(url, extra);
   };
   const running = runWorker('worker run', options, f.selected, 'user', f.dependencies);
@@ -274,11 +300,10 @@ for (const mode of ['foreground', 'scheduled']) test(`${mode} startup stop and s
   assert.equal(starting.stopped, false); assert.equal(starting.online, false);
   assert.equal(starting.state, 'starting'); assert.equal(starting.stopReason, 'stop_unconfirmed');
   assert.equal(f.sessions.length, 0); assert.equal(f.calls.some(call => call.body?.event === 'start'), false);
-  release(); await ready;
-  const online = await f.run('status'); assert.equal(online.online, true); assert.equal(online.stopped, false);
-  assert.equal((await f.run('stop')).stopped, true);
+  release();
   assert.equal((await running).state, 'stopped'); finished = true;
-  assert.equal(f.state().closed, true); assert.equal(f.sessions.length, 0);
+  assert.equal(f.state().closed, true); assert.equal(f.sessions.length, 0); assert.equal(polled, false);
+  assert.ok(store(`ctl-${identity}`).load().stopRequested);
   assert.equal((await f.run('status')).stopped, true);
 });
 
@@ -299,7 +324,7 @@ for (const record of ['missing', 'unreachable']) test(`absence proof requires th
   });
   assert.deepEqual(await f.run('stop'), { online: false, stopped: true });
   const status = await f.run('status'); assert.equal(status.stopped, true); assert.equal(status.online, false);
-  assert.deepEqual(f.state(), before); assert.equal(f.sessions.length, 0);
+  assert.deepEqual(f.state(), { ...before, stopReason: 'requested_stop', status: 'stopped' }); assert.equal(f.sessions.length, 0);
 });
 
 for (const unresolved of [{ runId: 'old-run', closed: false }, { active: { phase: 'dispatched', closed: false } }]) test(`unresolved ${unresolved.runId ? 'generation' : 'child'} closure refuses stop despite a free lock`, async t => {
@@ -446,6 +471,8 @@ else {
   const final = await running;
   assert.equal(final.state, 'stopped'); assert.equal(final.usage.estimatedUSD, 0.02);
   assert.equal(final.usage.restarts, 1);
+  assert.equal((await cli(['run'])).stopReason, 'requested_stop');
+  await cli(['setup', '--host', 'laptop', '--cwd', dir, '--claude', fake, '--max-restarts', '1']);
   const exhausted = await cli(['run']);
   assert.equal(exhausted.state, 'restart-limit'); assert.equal(exhausted.usage.restarts, 1);
   const starts = calls.filter(c => c.body?.event === 'start');
@@ -771,7 +798,10 @@ test('Windows uninstall closes a delayed native launch before deletion and fence
   const before = f.state();
   const stale = await runWorker('worker run', { ...f.options, 'service-id': owned.installationId }, f.selected, 'user', f.dependencies);
   assert.equal(stale.stopReason, 'service_retired'); assert.deepEqual(f.state(), before);
-  await f.run('run'); assert.equal(f.sessions.length, 1);
+  assert.equal((await f.run('run')).stopReason, 'requested_stop'); assert.equal(f.sessions.length, 0);
+  dependencies.execute = async command => ({ stdout: command === 'powershell.exe' ? JSON.stringify({ label: f.state().service.label, closed: true }) : '' });
+  await stateStore.exclusive((state, save) => workerService('worker uninstall', identity, f.options, state, save, dependencies));
+  await f.run('setup'); await f.run('run'); assert.equal(f.sessions.length, 1);
 });
 
 for (const proof of ['running', 'wrong-task', 'malformed', 'unavailable']) test(`Windows uninstall retains retired ownership when exact closure is ${proof}`, async t => {

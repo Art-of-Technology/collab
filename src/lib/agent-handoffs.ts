@@ -27,6 +27,7 @@ export const sendSchema = z.object({ agent: name, issue: id, content: text,
 }).strict().refine(v => v.toAgents.length + v.toLabels.length > 0, 'Supply at least one recipient or label');
 export const actionSchema = z.object({ agent: name, action: z.enum(['seen', 'ack', 'claim', 'progress', 'release', 'complete', 'supersede']),
   generation: z.string().uuid().optional(),
+  coordinator: z.object({ project: id, generation: z.string().uuid() }).strict().optional(),
   content: text.optional(), replacementId: id.optional(),
 }).strict().refine(v => !['progress', 'release', 'complete', 'supersede'].includes(v.action) || Boolean(v.content), 'This action requires content')
   .refine(v => (v.action === 'supersede') === Boolean(v.replacementId), 'Only supersede requires replacementId');
@@ -42,6 +43,7 @@ type DB = Prisma.TransactionClient | typeof prisma;
 const workerStates = ['idle', 'working', 'stopped', 'usage-limit', 'restart-limit', 'needs-login', 'config', 'uncertain', 'retrying'] as const;
 export const workerSchema = z.object({ agent: name, host, sessionId,
   event: z.enum(['configure', 'start', 'renew', 'close']), generation: z.string().uuid().optional(),
+  coordinator: z.object({ project: id, generation: z.string().uuid() }).strict().optional(),
   convert: z.boolean().optional(), labelIds: z.array(id).max(32).optional(),
   state: z.enum(workerStates).default('idle'), taskId: id.nullable().optional(),
   usage: z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), chargedUSD: z.number().finite().nonnegative(),
@@ -53,7 +55,18 @@ export const workerSchema = z.object({ agent: name, host, sessionId,
   }).strict().optional(),
 }).strict().refine(v => v.event === 'configure' || Boolean(v.generation), 'Generation is required');
 type ManagedWorker = { generation: string | null; closed: boolean; leaseUntil: string | null; heartbeatAt: string;
-  state: typeof workerStates[number]; taskId?: string | null; usage?: z.infer<typeof workerSchema>['usage'] };
+  state: typeof workerStates[number]; taskId?: string | null; usage?: z.infer<typeof workerSchema>['usage']; coordinator?: { project: string; generation: string } };
+type CoordinatorLease = { userId: string; generation: string; closed: boolean; leaseUntil: string; worker?: { id: string; generation: string } };
+async function coordinatorAdmission(db: Prisma.TransactionClient, context: AppAuthContext, binding: { project: string; generation: string }) {
+  await db.$queryRaw`SELECT id FROM "Project" WHERE id = ${binding.project} AND "workspaceId" = ${context.workspace.id} FOR UPDATE`;
+  const project = await db.project.findFirst({ where: { id: binding.project, workspaceId: context.workspace.id }, select: { coordinator: true } });
+  const lease = project?.coordinator as unknown as CoordinatorLease | null;
+  if (!lease || lease.userId !== context.user.id || lease.generation !== binding.generation || lease.closed || !(Date.parse(lease.leaseUntil) > Date.now())) throw new HandoffError('coordinator_fenced', 'A live matching coordinator generation is required', 409);
+  return lease;
+}
+export async function wasClaimed(db: DB, workspaceId: string, issueId: string, handoffId: string) {
+  return Boolean(await db.issueActivity.findFirst({ where: { workspaceId, itemId: issueId, itemType: 'ISSUE', action: 'AGENT_CLAIM', details: { contains: `"handoffId":${JSON.stringify(handoffId)}` } }, select: { id: true } }));
+}
 function assertManagedGeneration(value: Prisma.JsonValue | null, generation?: string) {
   if (!value) {
     if (generation) throw new HandoffError('worker_not_managed', 'This agent is not managed', 409);
@@ -70,6 +83,7 @@ export async function manageWorker(context: AppAuthContext, input: z.infer<typeo
     throw new HandoffError('insufficient_scope', 'Worker configuration requires workspace:write and issues:read', 403);
   }
   return prisma.$transaction(async db => {
+    const lease = input.event === 'start' && input.coordinator ? await coordinatorAdmission(db, context, input.coordinator) : null;
     await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND name = ${input.agent} FOR UPDATE`;
     let agent = await db.agentRegistration.findUnique({ where: { workspaceId_name: { workspaceId: context.workspace.id, name: input.agent } } });
     if (agent && agent.userId !== context.user.id) throw new HandoffError('agent_name_taken', 'This agent belongs to another user', 403);
@@ -91,6 +105,11 @@ export async function manageWorker(context: AppAuthContext, input: z.infer<typeo
     if (!agent?.managedWorker || agent.host !== input.host || agent.sessionId !== input.sessionId) throw new HandoffError('worker_binding_changed', 'Configure this exact owned worker first', 409);
     const prior = agent.managedWorker as unknown as ManagedWorker;
     if (input.event === 'start') {
+      if (lease?.worker) {
+        const owner = await db.agentRegistration.findUnique({ where: { id: lease.worker.id } });
+        const active = owner?.managedWorker as unknown as ManagedWorker | null;
+        if (active && !active.closed && (lease.worker.id !== agent.id || lease.worker.generation !== input.generation)) throw new HandoffError('coordinator_conflict', 'Prior coordinator worker closure is unconfirmed', 409);
+      }
       if (!prior.closed) {
         assertManagedGeneration(agent.managedWorker, input.generation);
         return { worker: managedStatus(agent.managedWorker) };
@@ -102,8 +121,9 @@ export async function manageWorker(context: AppAuthContext, input: z.infer<typeo
     const worker = { generation: input.generation!, closed: input.event === 'close', heartbeatAt: now,
       leaseUntil: input.event === 'close' ? null : new Date(Date.now() + 60000).toISOString(),
       state: input.event === 'close' && input.state === 'idle' ? 'stopped' : input.state,
-      taskId: input.taskId ?? null, ...(input.usage && { usage: input.usage }) };
+      taskId: input.taskId ?? null, ...((input.event === 'start' ? input.coordinator : prior.coordinator) && { coordinator: input.event === 'start' ? input.coordinator : prior.coordinator }), ...(input.usage && { usage: input.usage }) };
     await db.agentRegistration.update({ where: { id: agent.id }, data: { managedWorker: worker } });
+    if (lease && input.coordinator) await db.$executeRaw`UPDATE "Project" SET coordinator = ${JSON.stringify({ ...lease, worker: { id: agent.id, generation: input.generation } })}::jsonb WHERE id = ${input.coordinator.project}`;
     return { worker: managedStatus(worker) };
   });
 }
@@ -317,13 +337,19 @@ export async function actOnHandoff(context: AppAuthContext, id: string, input: z
     throw new HandoffError('insufficient_scope', 'This action requires issues:write', 403);
   }
   return prisma.$transaction(async db => {
+    const lease = input.coordinator && input.action === 'claim' ? await coordinatorAdmission(db, context, input.coordinator) : null;
     await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND name = ${input.agent} FOR UPDATE`;
     const agent = await ownedAgent(db, context, input.agent);
     assertManagedGeneration(agent.managedWorker, input.generation);
+    const managed = agent.managedWorker as unknown as ManagedWorker | null;
+    if (input.action === 'claim' && managed?.coordinator) {
+      if (!lease || input.coordinator?.project !== managed.coordinator.project || input.coordinator.generation !== managed.coordinator.generation || lease.worker?.id !== agent.id || lease.worker.generation !== input.generation) throw new HandoffError('coordinator_fenced', 'Coordinator worker admission is required', 409);
+    } else if (lease) throw new HandoffError('coordinator_fenced', 'Coordinator worker admission is required', 409);
     if (input.action === 'supersede') {
       // Lock both ends in a stable order so concurrent replacements cannot create a cycle.
       await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id IN (${id}, ${input.replacementId}) ORDER BY id FOR UPDATE`;
     }
+    if (lease) await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${id} FOR UPDATE`;
     const handoff = await visibleHandoff(db, context, agent, id);
     if (input.action === 'supersede') {
       if (handoff.status === 'superseded' && handoff.supersededById === input.replacementId) return handoff;
@@ -354,6 +380,8 @@ export async function actOnHandoff(context: AppAuthContext, id: string, input: z
       if (!handoff.recipientNames.includes(agent.name) && !handoff.labelIds.some(label => agent.labelIds.includes(label))) {
         throw new HandoffError('not_a_recipient', 'Only a matching recipient can claim this handoff', 403);
       }
+      if (lease && handoff.status !== 'open') throw new HandoffError('already_claimed', 'Another agent claimed or completed this work', 409);
+      if (lease && (handoff.issue.projectId !== input.coordinator!.project || await wasClaimed(db, context.workspace.id, handoff.issueId, id))) throw new HandoffError('coordinator_fenced', 'Previously claimed work cannot be automatically reassigned', 409);
       const claimed = await db.agentHandoff.updateMany({ where: { id, status: 'open', claimedById: null }, data: { status: 'claimed', claimedById: agent.id } });
       if (!claimed.count) throw new HandoffError('already_claimed', 'Another agent claimed or completed this work', 409);
     } else {
