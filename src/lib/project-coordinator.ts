@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { HandoffError, wasClaimed } from '@/lib/agent-handoffs';
+import { managedStatus } from '@/lib/managed-worker-health';
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 export const coordinatorSchema = z.object({
@@ -57,5 +58,5 @@ export async function coordinatorSnapshot(context: AppAuthContext, projectId: st
     select: { id: true, name: true, userId: true, labelIds: true, host: true, sessionId: true, managedWorker: true } });
   const visibleItems = await Promise.all(items.slice(0, 50).map(async item => ({ ...item, previouslyClaimed: await wasClaimed(prisma, context.workspace.id, item.issueId, item.id) })));
   return { project: project.id, lease: project.coordinator, items: visibleItems, nextCursor: items.length > 50 ? items[49].id : null,
-    agents: agents.slice(0, 500).map(({ userId, ...agent }) => ({ ...agent, owned: userId === context.user.id })), agentsTruncated: agents.length > 500, observedAt: new Date().toISOString() };
+    agents: agents.slice(0, 500).map(({ userId, managedWorker, ...agent }) => ({ ...agent, managedWorker: managedStatus(managedWorker), owned: userId === context.user.id })), agentsTruncated: agents.length > 500, observedAt: new Date().toISOString() };
 }

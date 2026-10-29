@@ -376,11 +376,12 @@ export async function actOnHandoff(context: AppAuthContext, id: string, input: z
       return { id, action: input.action, status: handoff.status };
     }
     if (input.action === 'claim') {
-      if (lease && (handoff.issue.projectId !== input.coordinator!.project || await wasClaimed(db, context.workspace.id, handoff.issueId, id))) throw new HandoffError('coordinator_fenced', 'Previously claimed work cannot be automatically reassigned', 409);
       if (handoff.claimedById === agent.id && handoff.status === 'claimed') return handoff;
       if (!handoff.recipientNames.includes(agent.name) && !handoff.labelIds.some(label => agent.labelIds.includes(label))) {
         throw new HandoffError('not_a_recipient', 'Only a matching recipient can claim this handoff', 403);
       }
+      if (lease && handoff.status !== 'open') throw new HandoffError('already_claimed', 'Another agent claimed or completed this work', 409);
+      if (lease && (handoff.issue.projectId !== input.coordinator!.project || await wasClaimed(db, context.workspace.id, handoff.issueId, id))) throw new HandoffError('coordinator_fenced', 'Previously claimed work cannot be automatically reassigned', 409);
       const claimed = await db.agentHandoff.updateMany({ where: { id, status: 'open', claimedById: null }, data: { status: 'claimed', claimedById: agent.id } });
       if (!claimed.count) throw new HandoffError('already_claimed', 'Another agent claimed or completed this work', 409);
     } else {

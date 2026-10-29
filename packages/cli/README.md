@@ -526,9 +526,13 @@ overdue progress, configuration/auth conflicts, budget limits and uncertain prio
 outcomes. A heartbeat alone is not task progress. Decisions include the responsible
 coordinator and handoff IDs. Read `collab handoffs get` and the issue timeline to
 verify the named claim and result; successful notification is not successful work.
-Only the latest 50 decisions are displayed; up to 5,000 pending project handoffs are
-scanned per cycle. The retained dispatch journal is bounded at 1,000 task IDs and
-fails closed at that limit; it is never silently reset.
+Status retains the latest 50 decision events and 50 dispatch events, and exposes the current scan in pages
+of 25 with `coordinator status --page N`; up to 5,000 pending project handoffs are
+scanned per cycle. The dispatch journal holds up to 100 task IDs. When full, it
+prunes only records with confirmed worker closure and a completed or superseded
+server handoff; pending, uncertain and retry-exhausted records remain. If none can
+be reconciled, status reports `journal_retention_unresolved` and an operator must
+inspect those records and the corresponding worker and handoff states.
 
 The server binds one coordinator identity/host/session per project. An expired
 lease permits the same binding to recover; it does not transfer ownership. A stale
@@ -549,6 +553,7 @@ a blocker, explicit setup is required to resume a paused coordinator; journals a
 usage survive setup/uninstall. Never delete state to force a retry. A worker stopped
 explicitly by its operator is not automatically restarted. Changed credentials,
 provider conflicts and uncertain child closure need the named host owner.
+Run `worker setup` explicitly to clear a worker's durable stop request.
 
 Local deterministic tests use synthetic runners. A release must separately report
 actual local model proof and second-host proof. A new remote pilot requires its

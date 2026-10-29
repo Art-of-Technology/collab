@@ -415,12 +415,17 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     await manage({ event: 'configure' });
     const admission = { project: 'p-w', generation: binding.generation };
     await manage({ event: 'start', generation: workerGeneration, coordinator: admission });
+    const currentWorker = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'coordinated' } } });
+    await prisma.agentRegistration.update({ where: { id: currentWorker.id }, data: { managedWorker: { ...currentWorker.managedWorker, taskId: 'private-other-project-task' } } });
+    const visibleWorker = (await coordinator.coordinatorSnapshot(alice, 'p-w')).agents.find(a => a.name === 'coordinated').managedWorker;
+    assert.equal(visibleWorker.taskId, undefined); assert.equal(visibleWorker.coordinator, undefined);
     const released = await send({ toAgents: ['worker-a', 'coordinated'], toLabels: [] });
     await act(alice, released, 'worker-a', 'claim');
+    const claim = handoff => service.actOnHandoff(alice, handoff.id, service.actionSchema.parse({ agent: 'coordinated', action: 'claim', generation: workerGeneration, coordinator: admission }));
+    await assert.rejects(claim(released), e => e.code === 'already_claimed');
     await act(alice, released, 'worker-a', 'release', 'Hand back');
     const afterRelease = await coordinator.coordinatorSnapshot(alice, 'p-w');
     assert.equal(afterRelease.items.find(item => item.id === released.id).previouslyClaimed, true);
-    const claim = handoff => service.actOnHandoff(alice, handoff.id, service.actionSchema.parse({ agent: 'coordinated', action: 'claim', generation: workerGeneration, coordinator: admission }));
     await assert.rejects(claim(released), e => e.code === 'coordinator_fenced');
     const fresh = await send({ toAgents: ['coordinated'], toLabels: [] });
     await claim(fresh);

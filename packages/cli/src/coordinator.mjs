@@ -7,7 +7,7 @@ import { runWorker, workerKey, control } from './worker.mjs';
 import { workerService } from './worker-service.mjs';
 
 export const coordinatorCommands = Object.fromEntries(['setup', 'run', 'status', 'stop', 'install', 'uninstall'].map(action =>
-  [`coordinator ${action}`, 'Project coordinator; explicit --agent NAME --workspace ID --project ID. setup requires --workers NAME[,NAME].']));
+  [`coordinator ${action}`, `Project coordinator; explicit --agent NAME --workspace ID --project ID. ${action === 'status' ? 'Use --page N for current scan decisions.' : 'setup requires --workers NAME[,NAME].'}`]));
 const fail = (code, message) => new CliError(code, message, 5);
 const hash = values => createHash('sha256').update(JSON.stringify(values)).digest('base64url');
 const identifier = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
@@ -19,16 +19,18 @@ export function classifyTask(task, agents, config, now, localAvailable = () => t
   if (!Number.isFinite(age) || age < 0) return { reason: 'invalid_timestamp', action: 'blocked' };
   if (task.status === 'claimed') {
     const claimed = agents.find(a => a.id === task.claimedBy?.id)?.managedWorker;
+    if (claimed && (claimed.closed || ['config', 'uncertain', 'needs-login', 'usage-limit', 'restart-limit'].includes(claimed.state))) return { reason: claimed.state, action: 'blocked', agent: task.claimedBy?.name };
     const reason = claimed && !claimed.closed && !(Date.parse(claimed.leaseUntil) > now) ? 'stale_heartbeat' : age >= config.stallSeconds * 1000 ? 'progress_overdue' : 'working';
     return { reason, action: 'observe', agent: task.claimedBy?.name };
   }
   if (task.previouslyClaimed !== false) return { reason: 'prior_claim', action: 'blocked' };
-  const matches = agents.filter(a => (task.recipientNames.includes(a.name) || a.labelIds.some(label => task.labelIds.includes(label))) && a.owned && config.workers.includes(a.name) && a.managedWorker);
+  const matches = agents.filter(a => (task.recipientNames.includes(a.name) || a.labelIds.some(label => task.labelIds.includes(label))) && a.managedWorker);
   if (!matches.length) return { reason: 'no_execution_route', action: 'blocked' };
   const decisions = matches.map(worker => {
     const state = worker.managedWorker;
     if (['config', 'uncertain', 'needs-login', 'usage-limit', 'restart-limit'].includes(state.state)) return { reason: state.state, action: 'blocked', agent: worker.name };
     if (!state.closed) return { reason: Date.parse(state.leaseUntil) > now ? (state.state === 'working' ? 'busy' : 'healthy_idle') : 'stale_heartbeat', action: 'observe', agent: worker.name };
+    if (!worker.owned || !config.workers.includes(worker.name)) return { reason: 'no_execution_route', action: 'blocked', agent: worker.name };
     const localReason = localAvailable(worker.name);
     if (localReason !== true) return { reason: localReason, action: 'blocked', agent: worker.name };
     if (age < config.overdueSeconds * 1000) return { reason: 'waiting', action: 'observe', agent: worker.name };
@@ -41,6 +43,8 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
   if (!identifier(userId) || !identifier(options.workspace) || !identifier(options.project) || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(options.agent || '')) throw fail('coordinator_context', 'Supply your registered agent, explicit workspace and project.');
   const identity = hash([selected.base, options.workspace, options.project, userId, options.agent]);
   const disk = store(`coord-${identity}`), controls = store(`cctl-${identity}`);
+  const dispatches = store(`events-${identity}`);
+  const scanPage = page => store(`scan-${hash([identity, page])}`);
   const now = deps.now || Date.now, sleep = deps.sleep || delay;
   const api = deps.api || ((endpoint, extra = {}) => request(selected.base, `/api/apps/auth/${endpoint}${endpoint.includes('?') ? '&' : '?'}workspaceId=${encodeURIComponent(options.workspace)}`, { token: selected.token, ...extra }));
   const worker = deps.worker || runWorker;
@@ -49,7 +53,14 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
     if (name.endsWith('stop') && !health.stopped) {
       await disk.exclusive((state, save) => { state.paused = true; state.status = 'paused'; save(state); });
     }
-    return { ...disk.load(), ...health, automaticModelPolling: false };
+    const state = disk.load();
+    if (name === 'coordinator status') {
+      const page = Number(options.page ?? 1);
+      if (!Number.isInteger(page) || page < 1 || page > 200) throw fail('coordinator_page', 'Use --page from 1 to 200.');
+      const count = state.scan?.count || 0, pages = Math.ceil(count / 25);
+      return { ...state, dispatchHistory: dispatches.load().events || [], scan: { ...state.scan, page, pages, decisions: page <= pages ? (scanPage(page).load().decisions || []).slice(0, Math.min(25, count - (page - 1) * 25)) : [] }, ...health, automaticModelPolling: false };
+    }
+    return { ...state, ...health, automaticModelPolling: false };
   }
   return disk.exclusive(async (state, save) => {
     if (name === 'coordinator setup') {
@@ -104,7 +115,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
       await controls.exclusive((_s, write) => write({ port: server.address().port, nonce }));
       while (!abort.signal.aborted) {
         if (now() < (state.clock || 0)) throw fail('clock_rollback', 'Clock moved backwards; coordinator paused.');
-        state.clock = now(); state.status = 'monitoring'; state.heartbeatAt = new Date(now()).toISOString(); save(state);
+        state.clock = now(); state.status = 'monitoring'; state.heartbeatAt = new Date(now()).toISOString(); state.scan = { count: 0, complete: false }; save(state);
         let cursor, pages = 0;
         do {
           const snapshot = await api(`agents/coordinator?project=${encodeURIComponent(options.project)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
@@ -125,8 +136,23 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
               else {
                 {
                   // Persist before dispatch. A crash before a return requires reconciliation, not a second start.
-                  if (Object.keys(state.attempts).length >= 100 && !prior) throw fail('coordinator_journal_full', 'Retained coordinator journal is full; inspect completed history before creating another coordinator.');
+                  if (Object.keys(state.attempts).length >= 100 && !prior) {
+                    for (const [id, attempt] of Object.entries(state.attempts)) {
+                      if (attempt.pending || attempt.count >= 3 || !config.workers.includes(attempt.worker)) continue;
+                      const local = store(`worker-${workerKey(selected, userId, attempt.worker)}`).load();
+                      if (!local.closed || local.active) continue;
+                      try {
+                        const remote = (await api(`agents/worker?agent=${encodeURIComponent(attempt.worker)}`)).agent?.worker;
+                        const handoff = (await api(`agents/handoffs/${encodeURIComponent(id)}?agent=${encodeURIComponent(attempt.worker)}`)).handoff;
+                        if (remote?.closed === true && handoff?.id === id && handoff.issue?.projectId === options.project && ['completed', 'superseded'].includes(handoff.status)) { delete state.attempts[id]; save(state); break; }
+                      } catch { continue; }
+                    }
+                  }
+                  if (Object.keys(state.attempts).length >= 100 && !prior) {
+                    decision.reason = 'journal_retention_unresolved'; decision.action = 'blocked'; decision.next = 'Inspect retained attempts, worker closure and server handoff status before resuming dispatch.';
+                  } else {
                   state.attempts[key] = { count: (prior?.count || 0) + 1, pending: true, worker: decision.agent, at: now() }; save(state);
+                  await dispatches.exclusive((history, write) => write({ events: [...(history.events || []), { ...decision, reason: 'dispatch_started', at: now() }].slice(-50) }));
                   await lease('renew'); abort.signal.throwIfAborted();
                   let result;
                   try {
@@ -138,16 +164,25 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
                     result = { state: 'retrying', stopReason: error.code };
                   }
                   state.attempts[key].pending = false; state.attempts[key].nextAt = now() + 30000 * 2 ** (state.attempts[key].count - 1);
-                  decision.reason = result.stopReason || result.state; decision.action = result.active ? 'blocked' : 'observe'; save(state);
+                  decision.reason = result.stopReason || result.state; decision.action = result.active ? 'blocked' : 'observe';
+                  await dispatches.exclusive((history, write) => { history.events[history.events.length - 1] = { ...decision, at: now() }; write(history); }); save(state);
+                  }
                 }
               }
             }
             state.decisions.push(decision); state.decisions = state.decisions.slice(-50); save(state);
+            const page = Math.floor(state.scan.count / 25) + 1;
+            await scanPage(page).exclusive((current, write) => {
+              const decisions = state.scan.count % 25 === 0 ? [] : current.decisions;
+              decisions.push(decision); write({ decisions });
+            });
+            state.scan.count++; save(state);
           }
           if (snapshot.nextCursor && (!identifier(snapshot.nextCursor) || snapshot.nextCursor === cursor)) throw fail('coordinator_response', 'Invalid snapshot cursor.');
           cursor = snapshot.nextCursor;
         } while (cursor && ++pages < 100 && !abort.signal.aborted);
         if (cursor) throw fail('coordinator_scan_limit', 'Project scan exceeds 5000 tasks; inspect retained status.');
+        state.scan.complete = true; save(state);
         if (deps.once) break;
         await sleep(config.pollSeconds * 1000, undefined, { signal: abort.signal });
       }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { runCoordinator, classifyTask } from '../src/coordinator.mjs';
 import { runWorker, workerKey } from '../src/worker.mjs';
 import { store } from '../src/client.mjs';
@@ -25,6 +26,8 @@ test('project decisions distinguish no route, liveness, progress and operational
   assert.equal(decide(task, [{ ...agent, managedWorker: { state: 'idle', closed: false, leaseUntil: new Date(now + 60000).toISOString() } }]).reason, 'healthy_idle');
   assert.equal(decide(task, [{ ...agent, managedWorker: { state: 'working', closed: false, leaseUntil: new Date(now - 1).toISOString() } }]).reason, 'stale_heartbeat');
   assert.equal(decide({ ...task, previouslyClaimed: true }).reason, 'prior_claim');
+  assert.equal(decide(task, [{ ...agent, owned: false, managedWorker: { closed: false, state: 'working', leaseUntil: new Date(now + 1000).toISOString() } }]).reason, 'busy');
+  assert.equal(decide({ ...task, status: 'claimed', claimedBy: { id: agent.id, name: agent.name } }, [{ ...agent, managedWorker: { closed: true, state: 'needs-login' } }]).reason, 'needs-login');
   const second = { ...agent, name: 'worker-two', labelIds: ['label'] };
   for (const recipient of [{ recipientNames: ['worker', 'worker-two'], labelIds: [] }, { recipientNames: [], labelIds: ['label'] }]) {
     const first = { ...agent, labelIds: ['label'], managedWorker: { closed: false, state: 'working' } };
@@ -65,7 +68,8 @@ async function fixture(t) {
   const run = command => runCoordinator(`coordinator ${command}`, options, selected, 'user', deps);
   await run('setup');
   return { dir, run, options, selected, deps, calls, starts: () => starts, leaseCalls: () => leaseCalls,
-    item: () => item, setItem: value => { item = value; }, workerDisk: store(`worker-${workerKey(selected, 'user', 'worker')}`) };
+    item: () => item, setItem: value => { item = value; }, workerDisk: store(`worker-${workerKey(selected, 'user', 'worker')}`),
+    coordDisk: store(`coord-${createHash('sha256').update(JSON.stringify([selected.base, 'ws', 'project', 'user', 'coordinator'])).digest('base64url')}`) };
 }
 
 test('coordinator executes only the bound task through the actual fenced worker and replay does not repeat model', async t => {
@@ -160,6 +164,74 @@ test('task-bound worker exits after losing a claim race and preserves decision h
   assert.equal(second.decisions.length, 1); assert.equal(second.decisions[0].handoffId, 'task');
 });
 
+test('five completed coordinator tasks do not consume crash restart allowance', async t => {
+  const f = await fixture(t);
+  await f.workerDisk.exclusive((s, save) => { s.config.dailyUSD = 5; save(s); });
+  for (let i = 0; i < 5; i++) {
+    f.setItem({ ...task, id: `task-${i}` });
+    const result = await f.run('run');
+    assert.equal(result.error, undefined); assert.equal(f.item().status, 'completed');
+  }
+  assert.equal(f.starts(), 5); assert.equal(f.workerDisk.load().usage.restarts, 0);
+  await f.workerDisk.exclusive((s, save) => { s.closed = false; s.stopReason = 'interrupted_attempt'; s.restarts = Array(3).fill(Date.now()); save(s); });
+  f.setItem({ ...task, id: 'crash-limit' });
+  const result = await runWorker('worker run', { agent: 'worker', workspace: 'ws' }, f.selected, 'user', f.deps.workerDependencies);
+  assert.equal(result.stopReason, 'restart_limit');
+});
+
+test('public stop of a closed worker persists until setup', async t => {
+  const f = await fixture(t);
+  assert.equal((await runWorker('worker stop', { agent: 'worker', workspace: 'ws' }, f.selected, 'user')).stopped, true);
+  assert.equal(f.workerDisk.load().stopReason, 'requested_stop');
+  assert.equal((await f.run('run')).decisions.at(-1).reason, 'requested_stop'); assert.equal(f.starts(), 0);
+  await runWorker('worker setup', { agent: 'worker', workspace: 'ws' }, f.selected, 'user', { ...f.deps.workerDependencies, api: f.deps.api });
+  await f.run('run'); assert.equal(f.starts(), 1);
+});
+
+test('public stop racing a claimed task prevents model dispatch', async t => {
+  const f = await fixture(t); const api = f.deps.api;
+  let release, reached;
+  const atIssue = new Promise(resolve => { reached = resolve; });
+  const proceed = new Promise(resolve => { release = resolve; });
+  f.deps.api = async (url, extra) => { if (url === 'issues/issue') { reached(); await proceed; } return api(url, extra); };
+  const running = f.run('run'); await atIssue;
+  const stopping = runWorker('worker stop', { agent: 'worker', workspace: 'ws' }, f.selected, 'user');
+  const controls = store(`ctl-${workerKey(f.selected, 'user', 'worker')}`);
+  for (let i = 0; i < 1000 && !controls.load().stopRequested; i++) await new Promise(resolve => setImmediate(resolve));
+  assert.ok(controls.load().stopRequested); release();
+  assert.equal((await stopping).stopped, true); await running;
+  assert.equal(f.starts(), 0); assert.equal(f.workerDisk.load().stopReason, 'requested_stop');
+});
+
+test('status pages cover the complete current scan and retain history', async t => {
+  const f = await fixture(t), api = f.deps.api;
+  await f.run('run');
+  const items = Array.from({ length: 51 }, (_, i) => ({ ...task, id: `task-${String(i).padStart(2, '0')}` }));
+  f.deps.api = async (url, extra) => url.startsWith('agents/coordinator?') ? { project: 'project', items: url.includes('&cursor=') ? items.slice(50) : items.slice(0, 50), nextCursor: url.includes('&cursor=') ? null : items[49].id, agents: [{ ...agent, owned: false, managedWorker: { closed: false, state: 'working', leaseUntil: new Date(now + 10000).toISOString() } }] } : api(url, extra);
+  const result = await f.run('run'); assert.equal(result.scan.count, 51); assert.equal(result.decisions.length, 50);
+  for (const page of [1, 2, 3]) {
+    const status = await runCoordinator('coordinator status', { ...f.options, page }, f.selected, 'user', f.deps);
+    assert.equal(status.scan.pages, 3); assert.equal(status.scan.decisions.length, page === 3 ? 1 : 25);
+    assert.equal(status.scan.decisions[0].handoffId, items[(page - 1) * 25].id);
+    assert.equal(status.dispatchHistory[0].handoffId, 'task');
+  }
+  assert.equal(f.starts(), 1);
+});
+
+test('full journal prunes only reconciled terminal work and preserves uncertainty', async t => {
+  const f = await fixture(t), api = f.deps.api;
+  const records = Object.fromEntries(Array.from({ length: 99 }, (_, i) => [`held-${i}`, { count: 1, pending: true, worker: 'worker', at: now }]));
+  records.resolved = { count: 1, pending: false, worker: 'worker', at: now };
+  await f.coordDisk.exclusive((s, save) => { s.attempts = records; save(s); });
+  await f.workerDisk.exclusive((s, save) => { s.closed = true; save(s); });
+  f.deps.api = async (url, extra) => url.startsWith('agents/handoffs/resolved?') ? { handoff: { id: 'resolved', status: 'completed', issue: { projectId: 'project' } } } : api(url, extra);
+  const result = await f.run('run');
+  assert.equal(result.attempts.resolved, undefined); assert.equal(result.attempts['held-0'].pending, true); assert.equal(f.starts(), 1);
+  f.setItem({ ...task, id: 'new-task' });
+  const blocked = await f.run('run');
+  assert.equal(blocked.decisions.at(-1).reason, 'journal_retention_unresolved'); assert.equal(f.starts(), 1);
+});
+
 test('explicit coordinator stop persists a pause; setup preserves prior task history', async t => {
   const f = await fixture(t);
   await f.run('run');
@@ -181,12 +253,13 @@ test('coordinator service definition carries exact project and installation iden
   assert.equal(f.starts(), 0);
 });
 
-test('coordinator conflict codes survive HTTP without exposing arbitrary response text', async t => {
+test('coordinator and claim conflict codes survive HTTP without exposing response text', async t => {
   const { createServer } = await import('node:http');
   const { once } = await import('node:events');
   const { request } = await import('../src/client.mjs');
-  const server = createServer((_req, res) => { res.writeHead(409, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: 'coordinator_fenced', error_description: 'secret details' })); });
+  const server = createServer((req, res) => { res.writeHead(409, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: req.url.startsWith('/api/apps/auth/agents/handoffs/') ? 'already_claimed' : 'coordinator_fenced', error_description: 'secret details' })); });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(() => new Promise(resolve => server.close(resolve)));
   await assert.rejects(request(`http://127.0.0.1:${server.address().port}`, '/api/apps/auth/agents/coordinator', { method: 'POST', body: {} }), error => error.code === 'coordinator_fenced' && !error.message.includes('secret'));
+  await assert.rejects(request(`http://127.0.0.1:${server.address().port}`, '/api/apps/auth/agents/handoffs/task', { method: 'PATCH', body: {} }), error => error.code === 'already_claimed' && !error.message.includes('secret'));
 });

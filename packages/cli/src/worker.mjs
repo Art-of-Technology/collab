@@ -77,13 +77,15 @@ export async function runWorker(name, options, selected, userId, dependencies = 
   const api = dependencies.api || ((endpoint, extra = {}) => request(selected.base, `/api/apps/auth/${endpoint}${endpoint.includes('?') ? '&' : '?'}workspaceId=${encodeURIComponent(selected.workspace)}`, { token: selected.token, ...extra }));
   const journal = handoffId => store(`job-${key([identity, handoffId])}`);
   if (name === 'worker status' || name === 'worker stop') {
+    if (name === 'worker stop') await controlStore.exclusive((current, save) => save({ ...current, stopRequested: randomUUID() }));
     let health = await control(controlStore.load(), name === 'worker stop' ? 'stop' : 'status');
     let state = stateStore.load();
     if (!health.online && !health.stopped) {
       try {
-        await stateStore.exclusive(current => {
+        await stateStore.exclusive((current, save) => {
           state = current;
           if ((state.active && state.active.closed !== true) || (state.runId && !state.closed)) throw fail('stop_unconfirmed', 'Prior worker closure is unresolved. Inspect worker status and the saved session.');
+          if (name === 'worker stop') { state.stopReason = 'requested_stop'; state.status = 'stopped'; save(state); }
         });
         health = { online: false, stopped: true };
       } catch (error) {
@@ -102,6 +104,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     if (name === 'worker setup') {
       if (state.active || (state.runId && !state.closed)) throw fail('worker_uncertain', 'Reconcile the prior run through worker run/status before changing setup.');
       if (state.service) throw fail('worker_service', 'Uninstall the owned service before changing setup.');
+      const stopRequest = controlStore.load().stopRequested;
       const config = workerConfig(options, state.configure?.config || state.config);
       await runner.doctor(config);
       const labelIds = options['label-ids'] === undefined ? undefined : JSON.parse(options['label-ids']);
@@ -119,6 +122,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         throw error;
       }
       state.config = config; delete state.configure; state.status = 'stopped'; state.stopReason = null; save(state);
+      await controlStore.exclusive((current, write) => write({ ...current, stopRequested: current.stopRequested === stopRequest ? false : current.stopRequested }));
       return { ...summary(state), started: false };
     }
     if (name === 'worker uninstall') return workerService(name, identity, options, state, save, dependencies.service);
@@ -135,6 +139,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     if (name === 'worker doctor') return { ...await runner.doctor(config), ...summary(state), platform: process.platform };
     if (name === 'worker install') return workerService(name, identity, options, state, save, dependencies.service);
     if (name !== 'worker run') throw fail('unknown_command', 'Unknown worker command.');
+    if (controlStore.load().stopRequested || state.stopReason === 'requested_stop') return { ...summary(state), state: 'stopped', stopReason: 'requested_stop' };
     if (dependencies.task && (!identifier(dependencies.task.id) || !identifier(dependencies.task.project))) throw fail('worker_context', 'Invalid coordinator task binding.');
     if (dependencies.task && state.active && state.active.handoffId !== dependencies.task.id) throw fail('worker_uncertain', 'A different task still owns this worker.');
     const controller = new AbortController(), stop = () => controller.abort();
@@ -176,7 +181,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     const get = handoffId => read(`agents/handoffs/${encodeURIComponent(handoffId)}?agent=${encodeURIComponent(options.agent)}`);
     try {
       budget(state, config, now());
-      if (state.daemonStartedAt || state.runId) restart();
+      if ((state.daemonStartedAt || state.runId) && !(state.closed && state.stopReason === 'coordinator_complete' && !state.active)) restart();
       state.daemonStartedAt = now(); persist();
       if (state.active && !state.active.closed) throw fail('worker_uncertain', 'Prior child closure is unproven. Inspect the saved child session; do not clear the journal or start another model.');
       if (state.active && !['reserved', 'claimed', 'result', 'settling', 'completed'].includes(state.active.phase)) throw fail('worker_uncertain', 'This task requires operator reconciliation; its recorded usage remains charged.');
@@ -208,7 +213,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ nonce, stopped: req.url === '/stop' }));
       });
       server.listen(0, '127.0.0.1'); await once(server, 'listening');
-      await controlStore.exclusive((_old, write) => write({ port: server.address().port, nonce }));
+      await controlStore.exclusive((old, write) => { if (old.stopRequested) stop(); write({ ...old, port: server.address().port, nonce }); });
       while (!controller.signal.aborted) {
         budget(state, config, now());
         state.status = 'idle'; persist();
@@ -271,10 +276,15 @@ export async function runWorker(name, options, selected, userId, dependencies = 
           if (dependencies.task && issue.project?.id !== dependencies.task.project) throw fail('worker_context', 'Task project changed before model dispatch.');
           const context = { handoff: { id: handoff.id, content: handoff.content, issueId: handoff.issueId }, issue, reviewAgent: config.reviewAgent || null };
           if (Buffer.byteLength(JSON.stringify(context)) > 44000) throw fail('worker_context_limit', 'Task context exceeds the bounded runner input.');
-          job.phase = 'dispatching'; job.closed = false; persist(); await writeJob();
-          let result;
+          let result, execution;
+          await controlStore.exclusive(async current => {
+            if (current.stopRequested) { stop(); controller.signal.throwIfAborted(); }
+            controller.signal.throwIfAborted();
+            job.phase = 'dispatching'; job.closed = false; persist(); await writeJob();
+            execution = runner.execute(config, job, context, controller.signal, () => { state.status = 'working'; job.phase = 'dispatched'; persist(); });
+          });
           try {
-            result = await runner.execute(config, job, context, controller.signal, () => { state.status = 'working'; job.phase = 'dispatched'; persist(); });
+            result = await execution;
           } catch (error) {
             job.phase = 'uncertain'; state.usage.unknownUSD += job.reservedUSD; throw error;
           } finally { job.closed = true; persist(); await writeJob(); }
@@ -317,7 +327,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
         try { await report('close', null); state.closed = true; } catch { state.closed = false; state.stopReason ||= 'closure_unconfirmed'; }
       }
       persist(); finish();
-      if (server) { await new Promise(resolve => server.close(resolve)); await controlStore.exclusive((_old, write) => write({})); }
+      if (server) { await new Promise(resolve => server.close(resolve)); await controlStore.exclusive((old, write) => write({ stopRequested: old.stopRequested || false })); }
       process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop);
       dependencies.signal?.removeEventListener('abort', stop);
     }

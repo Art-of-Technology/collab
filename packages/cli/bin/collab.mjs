@@ -147,7 +147,7 @@ async function main() {
   }
   if (Object.hasOwn(coordinatorCommands, name)) {
     if (words.length !== 2) throw new CliError('unexpected_arguments', 'Unexpected positional arguments.');
-    const extra = name === 'coordinator setup' ? ['workers', 'overdue-seconds', 'stall-seconds', 'poll-seconds'] : ['coordinator install', 'coordinator uninstall'].includes(name) ? ['dry-run'] : name === 'coordinator run' ? ['service-id'] : [];
+    const extra = name === 'coordinator setup' ? ['workers', 'overdue-seconds', 'stall-seconds', 'poll-seconds'] : ['coordinator install', 'coordinator uninstall'].includes(name) ? ['dry-run'] : name === 'coordinator run' ? ['service-id'] : name === 'coordinator status' ? ['page'] : [];
     allowed(options, ['profile', 'workspace', 'project', 'agent', 'json', 'config-dir', ...extra]);
     const state = stateStore.load();
     if (process.env.COLLAB_TOKEN) throw new CliError('environment_context', 'Coordinators use an existing saved login.');
