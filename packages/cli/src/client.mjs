@@ -54,6 +54,8 @@ export function store(profile = 'default') {
     }
   }
   function save(state) {
+    const serialized = JSON.stringify(state) + '\n';
+    if (Buffer.byteLength(serialized) > 65536) throw new CliError('state_too_large', 'CLI state exceeds the supported size; no state was written.');
     prepare();
     const temporary = `${file}.${randomBytes(8).toString('hex')}.tmp`;
     try {
@@ -62,7 +64,7 @@ export function store(profile = 'default') {
       const fd = fs.openSync(temporary, windows ? 'r+' : 'wx', 0o600);
       try {
         check(fs.fstatSync(fd), false, temporary);
-        fs.writeFileSync(fd, JSON.stringify(state) + '\n'); fs.fsyncSync(fd);
+        fs.writeFileSync(fd, serialized); fs.fsyncSync(fd);
       } finally { fs.closeSync(fd); }
       fs.renameSync(temporary, file);
       // Windows cannot open directories for fsync; the credential file itself was flushed above.

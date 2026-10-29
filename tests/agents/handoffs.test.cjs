@@ -406,6 +406,30 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     assert.equal(snapshot.agents.find(a => a.name === 'worker-b').owned, false);
     await assert.rejects(coordinator.coordinatorSnapshot(outsider, 'p-w'), e => e.status === 404);
     await prisma.agentHandoff.delete({ where: { id: own.id } });
+
+    binding.generation = randomUUID();
+    await lease({});
+    const workerSession = randomUUID(), workerGeneration = randomUUID();
+    const workerBody = { agent: 'coordinated', host: 'host', sessionId: workerSession };
+    const manage = body => service.manageWorker(alice, service.workerSchema.parse({ ...workerBody, ...body }));
+    await manage({ event: 'configure' });
+    const admission = { project: 'p-w', generation: binding.generation };
+    await manage({ event: 'start', generation: workerGeneration, coordinator: admission });
+    const released = await send({ toAgents: ['worker-a', 'coordinated'], toLabels: [] });
+    await act(alice, released, 'worker-a', 'claim');
+    await act(alice, released, 'worker-a', 'release', 'Hand back');
+    const afterRelease = await coordinator.coordinatorSnapshot(alice, 'p-w');
+    assert.equal(afterRelease.items.find(item => item.id === released.id).previouslyClaimed, true);
+    const claim = handoff => service.actOnHandoff(alice, handoff.id, service.actionSchema.parse({ agent: 'coordinated', action: 'claim', generation: workerGeneration, coordinator: admission }));
+    await assert.rejects(claim(released), e => e.code === 'coordinator_fenced');
+    const fresh = await send({ toAgents: ['coordinated'], toLabels: [] });
+    await claim(fresh);
+    const current = await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } });
+    await prisma.project.update({ where: { id: 'p-w' }, data: { coordinator: { ...current.coordinator, leaseUntil: new Date(0).toISOString() } } });
+    await assert.rejects(lease({ generation: randomUUID() }), e => e.code === 'coordinator_conflict');
+    await assert.rejects(claim(fresh), e => e.code === 'coordinator_fenced');
+    await manage({ event: 'close', generation: workerGeneration, coordinator: admission });
+    await lease({ generation: randomUUID() });
   });
 
 

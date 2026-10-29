@@ -58,7 +58,7 @@ function summary(state) {
 const transient = error => ['transport_failed', 'server_error', 'rate_limited'].includes(error.code);
 function pause(state, error) {
   state.stopReason = typeof error.code === 'string' && /^[a-z_]{1,64}$/.test(error.code) ? error.code : 'worker_failed';
-  state.status = ['unauthorized', 'token_expired', 'needs_login', 'login_required'].includes(error.code) ? 'needs-login' : error.code === 'restart_limit' ? 'restart-limit' : error.code === 'usage_limit' ? 'usage-limit' : state.active ? 'uncertain' : 'config';
+  state.status = ['unauthorized', 'token_expired', 'needs_login', 'login_required'].includes(error.code) ? 'needs-login' : error.code === 'restart_limit' ? 'restart-limit' : error.code === 'usage_limit' ? 'usage-limit' : state.active ? 'uncertain' : transient(error) ? 'retrying' : 'config';
 }
 export async function control(record, action) {
   if (!record.port || !record.nonce) return { online: false, stopped: false };
@@ -162,7 +162,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
     const read = endpoint => retry(() => api(endpoint, { signal: controller.signal }), controller.signal);
     const report = (event, signal = controller.signal) => {
       const body = { agent: options.agent, host: config.host, sessionId: config.sessionId, event, generation: state.runId,
-        state: state.status, taskId: state.active?.handoffId || null, ...(state.usage && { usage: { ...state.usage } }) };
+        state: state.status, taskId: state.active?.handoffId || null, ...(dependencies.coordinator && { coordinator: { project: dependencies.coordinator.project, generation: dependencies.coordinator.generation } }), ...(state.usage && { usage: { ...state.usage } }) };
       return retry(() => api('agents/worker', { method: 'POST', timeout: 5000, signal, body }), signal, true);
     };
     const writeJob = () => journal(state.active.handoffId).exclusive((_old, write) => write(state.active));
@@ -172,7 +172,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
       state.restarts.push(now()); state.usage.restarts = state.restarts.length; persist();
     };
     const action = (handoffId, action, content) => api(`agents/handoffs/${encodeURIComponent(handoffId)}`, { method: 'PATCH', signal: controller.signal,
-      body: { agent: options.agent, generation: state.runId, action, ...(content && { content }) } });
+      body: { agent: options.agent, generation: state.runId, action, ...(dependencies.coordinator && action === 'claim' && { coordinator: { project: dependencies.coordinator.project, generation: dependencies.coordinator.generation } }), ...(content && { content }) } });
     const get = handoffId => read(`agents/handoffs/${encodeURIComponent(handoffId)}?agent=${encodeURIComponent(options.agent)}`);
     try {
       budget(state, config, now());
@@ -263,7 +263,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
               state.usage.reservedUSD = Math.max(0, state.usage.reservedUSD - job.reservedUSD);
               if (job.day === state.usage.day) state.usage.chargedUSD = Math.max(0, state.usage.chargedUSD - job.reservedUSD);
               job.phase = 'completed'; await writeJob(); delete state.active; persist();
-              await action(job.handoffId, 'seen'); continue;
+              await action(job.handoffId, 'seen'); if (dependencies.task) break; continue;
             }
             job.phase = 'claimed'; persist(); await writeJob();
           }

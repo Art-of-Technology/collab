@@ -14,7 +14,7 @@ const identifier = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$
 const safeReasons = new Set([null, 'coordinator_complete', 'transport_failed', 'server_error', 'rate_limited']);
 
 // A heartbeat proves liveness, not meaningful task progress. Never infer closure from age.
-export function classifyTask(task, agents, config, now) {
+export function classifyTask(task, agents, config, now, localAvailable = () => true) {
   const age = now - Date.parse(task.status === 'claimed' ? task.updatedAt : task.createdAt);
   if (!Number.isFinite(age) || age < 0) return { reason: 'invalid_timestamp', action: 'blocked' };
   if (task.status === 'claimed') {
@@ -22,14 +22,19 @@ export function classifyTask(task, agents, config, now) {
     const reason = claimed && !claimed.closed && !(Date.parse(claimed.leaseUntil) > now) ? 'stale_heartbeat' : age >= config.stallSeconds * 1000 ? 'progress_overdue' : 'working';
     return { reason, action: 'observe', agent: task.claimedBy?.name };
   }
-  const matches = agents.filter(a => task.recipientNames.includes(a.name) || a.labelIds.some(label => task.labelIds.includes(label)));
-  const worker = matches.find(a => a.owned && config.workers.includes(a.name) && a.managedWorker);
-  if (!worker) return { reason: 'no_execution_route', action: 'blocked' };
-  const state = worker.managedWorker;
-  if (['config', 'uncertain', 'needs-login', 'usage-limit', 'restart-limit'].includes(state.state)) return { reason: state.state, action: 'blocked', agent: worker.name };
-  if (!state.closed) return { reason: Date.parse(state.leaseUntil) > now ? (state.state === 'working' ? 'busy' : 'healthy_idle') : 'stale_heartbeat', action: 'observe', agent: worker.name };
-  if (age < config.overdueSeconds * 1000) return { reason: 'waiting', action: 'observe', agent: worker.name };
-  return { reason: 'overdue', action: 'dispatch', agent: worker.name };
+  if (task.previouslyClaimed !== false) return { reason: 'prior_claim', action: 'blocked' };
+  const matches = agents.filter(a => (task.recipientNames.includes(a.name) || a.labelIds.some(label => task.labelIds.includes(label))) && a.owned && config.workers.includes(a.name) && a.managedWorker);
+  if (!matches.length) return { reason: 'no_execution_route', action: 'blocked' };
+  const decisions = matches.map(worker => {
+    const state = worker.managedWorker;
+    if (['config', 'uncertain', 'needs-login', 'usage-limit', 'restart-limit'].includes(state.state)) return { reason: state.state, action: 'blocked', agent: worker.name };
+    if (!state.closed) return { reason: Date.parse(state.leaseUntil) > now ? (state.state === 'working' ? 'busy' : 'healthy_idle') : 'stale_heartbeat', action: 'observe', agent: worker.name };
+    const localReason = localAvailable(worker.name);
+    if (localReason !== true) return { reason: localReason, action: 'blocked', agent: worker.name };
+    if (age < config.overdueSeconds * 1000) return { reason: 'waiting', action: 'observe', agent: worker.name };
+    return { reason: 'overdue', action: 'dispatch', agent: worker.name };
+  });
+  return decisions.find(d => d.action === 'dispatch') || decisions.find(d => d.reason === 'waiting') || decisions[0];
 }
 
 export async function runCoordinator(name, options, selected, userId, deps = {}) {
@@ -99,7 +104,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
       await controls.exclusive((_s, write) => write({ port: server.address().port, nonce }));
       while (!abort.signal.aborted) {
         if (now() < (state.clock || 0)) throw fail('clock_rollback', 'Clock moved backwards; coordinator paused.');
-        state.clock = now(); state.status = 'monitoring'; state.heartbeatAt = new Date(now()).toISOString(); state.decisions = []; save(state);
+        state.clock = now(); state.status = 'monitoring'; state.heartbeatAt = new Date(now()).toISOString(); save(state);
         let cursor, pages = 0;
         do {
           const snapshot = await api(`agents/coordinator?project=${encodeURIComponent(options.project)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
@@ -107,25 +112,26 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
           for (const task of snapshot.items) {
             abort.signal.throwIfAborted();
             if (!identifier(task.id) || task.issue?.projectId !== options.project) throw fail('coordinator_response', 'Task project binding is invalid.');
-            const decision = { handoffId: task.id, issueKey: task.issue.issueKey, ...classifyTask(task, snapshot.agents, config, now()), owner: options.agent };
+            const available = agent => {
+              const local = store(`worker-${workerKey(selected, userId, agent)}`).load();
+              return !local.config || local.config.host !== config.host || local.config.reviewAgent || local.service || local.configure || local.active || local.runId && !local.closed || !safeReasons.has(local.stopReason ?? null) ? local.stopReason || 'worker_closure_or_binding' : true;
+            };
+            const decision = { handoffId: task.id, issueKey: String(task.issue.issueKey || '').slice(0, 128), ...classifyTask(task, snapshot.agents, config, now(), available), owner: options.agent };
             if (decision.action === 'dispatch') {
               const key = task.id, prior = state.attempts[key];
               if (prior?.pending) { decision.reason = 'uncertain_prior_dispatch'; decision.action = 'blocked'; }
               else if (prior?.count >= 3) { decision.reason = 'retry_limit'; decision.action = 'blocked'; }
               else if (prior?.nextAt > now()) { decision.reason = 'backoff'; decision.action = 'observe'; }
               else {
-                const local = store(`worker-${workerKey(selected, userId, decision.agent)}`).load();
-                if (!local.config || local.config.host !== config.host || local.config.reviewAgent || local.service || local.configure || local.active || local.runId && !local.closed || !safeReasons.has(local.stopReason ?? null)) {
-                  decision.reason = local.stopReason || 'worker_closure_or_binding'; decision.action = 'blocked';
-                } else {
+                {
                   // Persist before dispatch. A crash before a return requires reconciliation, not a second start.
-                  if (Object.keys(state.attempts).length >= 1000 && !prior) throw fail('coordinator_journal_full', 'Retained coordinator journal is full; inspect completed history before creating another coordinator.');
+                  if (Object.keys(state.attempts).length >= 100 && !prior) throw fail('coordinator_journal_full', 'Retained coordinator journal is full; inspect completed history before creating another coordinator.');
                   state.attempts[key] = { count: (prior?.count || 0) + 1, pending: true, worker: decision.agent, at: now() }; save(state);
                   await lease('renew'); abort.signal.throwIfAborted();
                   let result;
                   try {
                     result = await worker('worker run', { agent: decision.agent, workspace: options.workspace }, selected, userId,
-                      { ...deps.workerDependencies, api, task: { id: task.id, project: options.project }, signal: abort.signal });
+                      { ...deps.workerDependencies, api, task: { id: task.id, project: options.project }, coordinator: binding, signal: abort.signal });
                   } catch (error) {
                     const closed = store(`worker-${workerKey(selected, userId, decision.agent)}`).load();
                     if (!['transport_failed', 'server_error', 'rate_limited'].includes(error.code) || !closed.closed || closed.active) throw error;

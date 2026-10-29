@@ -8,7 +8,7 @@ import { runWorker, workerKey } from '../src/worker.mjs';
 import { store } from '../src/client.mjs';
 
 const config = { workers: ['worker'], overdueSeconds: 1, stallSeconds: 60 };
-const task = { id: 'task', issueId: 'issue', issue: { projectId: 'project', issueKey: 'TEST-1' }, status: 'open', content: 'Read package.json only', recipientNames: ['worker'], labelIds: [], createdAt: '2026-10-27T00:00:00Z', updatedAt: '2026-10-27T00:00:00Z' };
+const task = { id: 'task', issueId: 'issue', issue: { projectId: 'project', issueKey: 'TEST-1' }, status: 'open', previouslyClaimed: false, content: 'Read package.json only', recipientNames: ['worker'], labelIds: [], createdAt: '2026-10-27T00:00:00Z', updatedAt: '2026-10-27T00:00:00Z' };
 const agent = { id: 'worker-id', name: 'worker', owned: true, labelIds: [], managedWorker: { closed: true, state: 'stopped' } };
 const now = Date.parse('2026-10-29T00:00:00Z');
 
@@ -24,6 +24,13 @@ test('project decisions distinguish no route, liveness, progress and operational
   }
   assert.equal(decide(task, [{ ...agent, managedWorker: { state: 'idle', closed: false, leaseUntil: new Date(now + 60000).toISOString() } }]).reason, 'healthy_idle');
   assert.equal(decide(task, [{ ...agent, managedWorker: { state: 'working', closed: false, leaseUntil: new Date(now - 1).toISOString() } }]).reason, 'stale_heartbeat');
+  assert.equal(decide({ ...task, previouslyClaimed: true }).reason, 'prior_claim');
+  const second = { ...agent, name: 'worker-two', labelIds: ['label'] };
+  for (const recipient of [{ recipientNames: ['worker', 'worker-two'], labelIds: [] }, { recipientNames: [], labelIds: ['label'] }]) {
+    const first = { ...agent, labelIds: ['label'], managedWorker: { closed: false, state: 'working' } };
+    assert.equal(classifyTask({ ...task, ...recipient }, [first, second], { ...config, workers: ['worker', 'worker-two'] }, now).agent, 'worker-two');
+    assert.equal(classifyTask({ ...task, ...recipient }, [agent, second], { ...config, workers: ['worker', 'worker-two'] }, now, name => name === 'worker' ? 'requested_stop' : true).agent, 'worker-two');
+  }
 });
 
 async function fixture(t) {
@@ -79,10 +86,10 @@ test('coordinator executes only the bound task through the actual fenced worker 
 test('explicit worker stop and uncertain local state are never blindly restarted', async t => {
   const f = await fixture(t);
   await f.workerDisk.exclusive((s, save) => save({ ...s, stopReason: 'requested_stop' }));
-  assert.equal((await f.run('run')).decisions[0].action, 'blocked');
+  assert.equal((await f.run('run')).decisions.at(-1).action, 'blocked');
   assert.equal(f.starts(), 0);
   await f.workerDisk.exclusive((s, save) => save({ ...s, stopReason: null, runId: 'old', closed: false }));
-  assert.equal((await f.run('run')).decisions[0].reason, 'worker_closure_or_binding');
+  assert.equal((await f.run('run')).decisions.at(-1).reason, 'worker_closure_or_binding');
   assert.equal(f.starts(), 0);
 });
 
@@ -94,7 +101,7 @@ test('unknown dispatch outcome remains pending after a new coordinator invocatio
   assert.equal((await f.run('run')).state, 'paused');
   await f.run('setup');
   const recovered = await f.run('run');
-  assert.equal(recovered.decisions[0].reason, 'uncertain_prior_dispatch');
+  assert.equal(recovered.decisions.at(-1).reason, 'uncertain_prior_dispatch');
   assert.equal(f.starts(), 0);
 });
 
@@ -117,10 +124,40 @@ test('closed transient failures back off and stop at the retained retry limit', 
     throw Object.assign(Error(), { code: 'transport_failed' });
   };
   await f.run('run'); assert.equal(calls, 1);
-  assert.equal((await f.run('run')).decisions[0].reason, 'backoff'); assert.equal(calls, 1);
+  assert.equal((await f.run('run')).decisions.at(-1).reason, 'backoff'); assert.equal(calls, 1);
   clock += 30001; await f.run('run'); assert.equal(calls, 2);
   clock += 60001; await f.run('run'); assert.equal(calls, 3);
-  clock += 120001; assert.equal((await f.run('run')).decisions[0].reason, 'retry_limit'); assert.equal(calls, 3);
+  clock += 120001; assert.equal((await f.run('run')).decisions.at(-1).reason, 'retry_limit'); assert.equal(calls, 3);
+});
+
+test('real worker closes a transient read failure and retries after backoff', async t => {
+  const f = await fixture(t); let clock = now, failRead = true;
+  f.deps.now = () => clock;
+  f.deps.workerDependencies.sleep = async (ms, _value, { signal } = {}) => { if (ms === 10000 && signal) await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true })); };
+  const api = f.deps.api;
+  f.deps.api = async (url, extra) => {
+    if (failRead && url.startsWith('agents/handoffs/task?')) throw Object.assign(Error(), { code: 'transport_failed' });
+    return api(url, extra);
+  };
+  const first = await f.run('run');
+  assert.equal(first.decisions.at(-1).reason, 'transport_failed');
+  assert.equal(f.workerDisk.load().status, 'retrying');
+  failRead = false; clock += 30001;
+  const second = await f.run('run');
+  assert.equal(second.attempts.task.count, 2); assert.equal(f.starts(), 1);
+});
+
+test('task-bound worker exits after losing a claim race and preserves decision history', async t => {
+  const f = await fixture(t); const api = f.deps.api; let claims = 0;
+  f.deps.api = async (url, extra) => {
+    if (extra?.body?.action === 'claim') { claims++; throw Object.assign(Error(), { code: 'already_claimed' }); }
+    return api(url, extra);
+  };
+  const first = await f.run('run');
+  assert.equal(claims, 1); assert.equal(f.starts(), 0); assert.equal(first.attempts.task.pending, false);
+  f.setItem({ ...task, status: 'completed' });
+  const second = await f.run('run');
+  assert.equal(second.decisions.length, 1); assert.equal(second.decisions[0].handoffId, 'task');
 });
 
 test('explicit coordinator stop persists a pause; setup preserves prior task history', async t => {
