@@ -668,6 +668,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   // Initialize collaboration (Hocuspocus) when document id is provided
   useEffect(() => {
     if (!isCollaborationEnabled || !hasCollabDocumentId) return;
+    let cancelled = false;
 
     const initializeCollaboration = async () => {
       if (hocuspocusManagerRef.current) return;
@@ -675,13 +676,17 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
       const config: HocuspocusConfig = { documentId: collabDocumentId };
       // yjs and hocuspocus only load when collaboration is actually enabled for this document.
       const { HocuspocusManager } = await import('@/lib/collaboration/provider');
+      // The effect may have been cleaned up while the import was pending; never create a manager nobody will destroy.
+      if (cancelled || hocuspocusManagerRef.current) return;
       const manager = new HocuspocusManager(config);
       hocuspocusManagerRef.current = manager;
       try {
         await manager.initialize();
+        if (cancelled) return;
         setCollabReady((v) => v + 1);
         setCollabError(false);
       } catch (e) {
+        if (cancelled) return;
         console.error('Failed to initialize collaboration:', e);
         setCollabError(true);
         // Allow editor to render without collaboration on error
@@ -691,6 +696,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
 
     initializeCollaboration();
     return () => {
+      cancelled = true;
       hocuspocusManagerRef.current?.destroy();
       hocuspocusManagerRef.current = null;
     };
