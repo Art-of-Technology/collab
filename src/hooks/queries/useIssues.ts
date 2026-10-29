@@ -81,8 +81,10 @@ export function useIssuesByWorkspace(workspaceId: string, projectIds?: string[])
 }
 
 // Hook for fetching a single issue
-export function useIssue(issueId: string, workspaceId?: string) {
+export function useIssue(issueId: string, workspaceId?: string, initialData?: unknown) {
   return useQuery({
+    // Server-rendered pages seed the cache so the first paint needs no request.
+    ...(initialData ? { initialData } : {}),
     // Always include workspaceId in query key for consistent caching
     queryKey: [...issueKeys.detail(issueId), workspaceId ?? null],
     queryFn: async () => {
