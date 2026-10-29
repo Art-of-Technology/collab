@@ -3,7 +3,7 @@ import { handoffBody, handoffResponse } from '@/lib/agent-handoff-http';
 import { coordinatorLease, coordinatorSchema, coordinatorSnapshot } from '@/lib/project-coordinator';
 
 export const GET = withAppAuth(async (request, context) => handoffResponse(() =>
-  coordinatorSnapshot(context, request.nextUrl.searchParams.get('project') || '', request.nextUrl.searchParams.get('cursor') || undefined)),
+  coordinatorSnapshot(context, request.nextUrl.searchParams.get('project') || '', request.nextUrl.searchParams.get('cursor') || undefined, request.nextUrl.searchParams.getAll('route'))),
 { requiredScopes: ['issues:read', 'projects:read'] });
 export const POST = withAppAuth(async (request, context) => handoffResponse(async () =>
   coordinatorLease(context, coordinatorSchema.parse(await handoffBody(request)))),

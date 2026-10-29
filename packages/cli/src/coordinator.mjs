@@ -11,6 +11,10 @@ export const coordinatorCommands = Object.fromEntries(['setup', 'run', 'status',
 const fail = (code, message) => new CliError(code, message, 5);
 const hash = values => createHash('sha256').update(JSON.stringify(values)).digest('base64url');
 const identifier = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+const generationForExpiry = expires => {
+  const random = randomUUID().replaceAll('-', ''), stamp = expires.toString(16).padStart(12, '0');
+  return `${stamp.slice(0, 8)}-${stamp.slice(8)}-7${random.slice(13, 16)}-${random.slice(16, 20)}-${random.slice(20)}`;
+};
 const safeReasons = new Set([null, 'coordinator_complete', 'interrupted', 'transport_failed', 'server_error', 'rate_limited']);
 
 // A heartbeat proves liveness, not meaningful task progress. Never infer closure from age.
@@ -49,6 +53,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
   const setError = (state, code) => {
     if (state.error === code) return;
     if (state.error) state.errorHistory = [...(state.errorHistory || []), { error: state.error, at: now() }].slice(-50);
+    delete state.errorSource;
     if (code) state.error = code; else delete state.error;
   };
   const api = deps.api || ((endpoint, extra = {}) => request(selected.base, `/api/apps/auth/${endpoint}${endpoint.includes('?') ? '&' : '?'}workspaceId=${encodeURIComponent(options.workspace)}`, { token: selected.token, ...extra }));
@@ -93,8 +98,9 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
       if (state.runId && !state.closed) {
         if (!state.config?.host || !state.config?.sessionId) throw fail('lease_close_unconfirmed', 'Prior coordinator closure is unconfirmed; inspect the saved generation.');
         try {
-          await api('agents/coordinator', { method: 'POST', timeout: 5000, body: { project: options.project, agent: options.agent, host: state.config.host, sessionId: state.config.sessionId, generation: state.runId, event: 'close' } });
-        } catch { throw fail('lease_close_unconfirmed', 'Prior coordinator closure is unconfirmed; inspect the saved generation and retry setup.'); }
+          const result = await api('agents/coordinator', { method: 'POST', timeout: 5000, body: { project: options.project, agent: options.agent, host: state.config.host, sessionId: state.config.sessionId, generation: state.runId, ...(state.attemptExpires && { attemptExpires: state.attemptExpires }), event: state.attemptExpires ? 'reconcile' : 'close' } });
+          if (state.attemptExpires && result.reconciled !== true) throw fail('lease_close_unconfirmed', 'Reconciliation was not confirmed.');
+        } catch { throw fail('lease_close_unconfirmed', `Prior coordinator closure is unconfirmed; retry setup after ${state.attemptExpires || 'inspecting the saved generation'}.`); }
         state.closed = true; if (state.error === 'lease_close_unconfirmed') setError(state, null); save(state);
       }
       const workers = options.workers?.split(',');
@@ -126,9 +132,9 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
     if (state.paused || controls.load().stopRequested) return { state: 'paused', next: 'Explicit coordinator setup is required to resume.' };
     if (options['service-id'] && (!state.service || state.service.retired || state.service.installationId !== options['service-id'])) return { state: 'stopped', reason: 'service_retired' };
     const config = state.config, abort = new AbortController(), stop = () => abort.abort();
-    const generation = randomUUID(), binding = { project: options.project, agent: options.agent, host: config.host, sessionId: config.sessionId, generation };
-    const lease = event => api('agents/coordinator', { method: 'POST', timeout: 5000, body: { ...binding, event } });
-    let server, renewal, renewError, finish, child, admitted = false;
+    const expiry = Date.now() + 30000, generation = generationForExpiry(expiry), attemptExpires = new Date(expiry).toISOString(), binding = { project: options.project, agent: options.agent, host: config.host, sessionId: config.sessionId, generation };
+    const lease = event => api('agents/coordinator', { method: 'POST', timeout: 5000, body: { ...binding, ...(event === 'acquire' && { attemptExpires }), event } });
+    let server, renewal, renewError, finish, child, admitted = false, snapshotFailure = false;
     const finished = new Promise(resolve => { finish = resolve; });
     const renewalAbort = new AbortController();
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
@@ -151,7 +157,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
     };
     try {
       if (deps.startupError) throw deps.startupError;
-      state.runId = generation; state.closed = false; save(state);
+      state.runId = generation; state.attemptExpires = attemptExpires; state.closed = false; save(state);
       try { await lease('acquire'); admitted = true; }
       catch (error) {
         if (['coordinator_conflict', 'coordinator_fenced'].includes(error.code) || error.details?.status >= 400 && error.details.status < 500 && ![408, 429].includes(error.details.status)) { state.closed = true; save(state); }
@@ -178,14 +184,17 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
         await finishChild();
         if (now() < (state.clock || 0)) throw fail('clock_rollback', 'Clock moved backwards; coordinator paused.');
         state.clock = now(); state.status = 'monitoring'; state.heartbeatAt = new Date(now()).toISOString(); state.scan = { count: 0, complete: false }; save(state);
-        let cursor, pages = 0;
+        let cursor = state.scanCursor, pages = 0;
         do {
-          const snapshot = await api(`agents/coordinator?project=${encodeURIComponent(options.project)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
-          if (snapshot.project !== options.project || !Array.isArray(snapshot.items) || snapshot.items.length > 50 || !Array.isArray(snapshot.agents) || snapshot.agentsTruncated) throw fail('coordinator_response', 'Incomplete project snapshot; no dispatch.');
+          let snapshot;
+          try {
+            snapshot = await api(`agents/coordinator?project=${encodeURIComponent(options.project)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}${config.workers.map(route => `&route=${encodeURIComponent(route)}`).join('')}`);
+            if (snapshot.project !== options.project || !Array.isArray(snapshot.items) || snapshot.items.length > 50 || !Array.isArray(snapshot.agents) || snapshot.agentsTruncated) throw fail('coordinator_response', 'Incomplete project snapshot; no dispatch.');
+          } catch (error) { snapshotFailure = true; throw error; }
           for (const task of snapshot.items) {
             abort.signal.throwIfAborted();
             await finishChild();
-            if (!identifier(task.id) || task.issue?.projectId !== options.project) throw fail('coordinator_response', 'Task project binding is invalid.');
+            if (!identifier(task.id) || task.issue?.projectId !== options.project) { snapshotFailure = true; throw fail('coordinator_response', 'Task project binding is invalid.'); }
             const available = agent => {
               const local = store(`worker-${workerKey(selected, userId, agent)}`).load();
               const recovered = recoverableReservation(selected, userId, agent, task.id, local) && state.attempts[task.id]?.worker === agent && (task.status === 'open' && local.active.phase === 'reserved' || task.status === 'claimed' && local.active.phase === 'claimed' && task.claimedBy?.name === agent);
@@ -251,17 +260,19 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
             });
             state.scan.count++; save(state);
           }
-          if (snapshot.nextCursor && (!identifier(snapshot.nextCursor) || snapshot.nextCursor === cursor)) throw fail('coordinator_response', 'Invalid snapshot cursor.');
+          if (snapshot.nextCursor && (!identifier(snapshot.nextCursor) || snapshot.nextCursor === cursor)) { snapshotFailure = true; throw fail('coordinator_response', 'Invalid snapshot cursor.'); }
           cursor = snapshot.nextCursor;
+          state.scanCursor = cursor || null; save(state);
         } while (cursor && ++pages < 100 && !abort.signal.aborted);
-        if (cursor) throw fail('coordinator_scan_limit', 'Project scan exceeds 5000 tasks; inspect retained status.');
-        state.scan.complete = true; save(state);
+        state.scan.complete = !cursor; state.scan.nextCursor = cursor || null;
+        if (state.errorSource === 'snapshot') { setError(state, null); delete state.errorSource; }
+        save(state);
         if (deps.once) { if (child) await child.promise; await finishChild(); break; }
         await sleep(config.pollSeconds * 1000, undefined, { signal: abort.signal });
       }
       if (renewError) throw renewError;
     } catch (error) {
-      if (renewError || !abort.signal.aborted) { state.status = 'blocked'; setError(state, (renewError || error).code || 'coordinator_failed'); state.paused = true; }
+      if (renewError || !abort.signal.aborted) { state.status = 'blocked'; setError(state, (renewError || error).code || 'coordinator_failed'); state.errorSource = snapshotFailure && !renewError ? 'snapshot' : null; state.paused = true; }
     } finally {
       if (child) {
         stop(); await child.promise;

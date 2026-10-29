@@ -85,7 +85,7 @@ async function fixture(t) {
     calls.push({ url, body: extra.body });
     if (url === 'agents/worker?agent=coordinator') return { agent: { name: 'coordinator', host: 'host', sessionId: '535749ab-8486-433b-a17d-ce1cf3c6aec7', worker: null } };
     if (url === 'agents/worker?agent=worker') return { agent: { worker: remote } };
-    if (url === 'agents/coordinator') { leaseCalls++; return { lease: extra.body }; }
+    if (url === 'agents/coordinator') { leaseCalls++; return extra.body.event === 'reconcile' ? { reconciled: true } : { lease: extra.body }; }
     if (url.startsWith('agents/coordinator?')) return { project: 'project', items: ['open', 'claimed'].includes(item.status) ? [item] : [], agents: [{ ...agent, managedWorker: remote }], nextCursor: null };
     if (url === 'agents/worker') { remote = { state: extra.body.state, generation: extra.body.generation, closed: ['configure', 'close'].includes(extra.body.event) }; return { worker: remote }; }
     if (url.startsWith(`agents/handoffs/${item.id}`)) {
@@ -462,6 +462,32 @@ test('status pages cover the complete current scan and retain history', async t 
   assert.equal(f.starts(), 1);
 });
 
+test('bounded scan resumes after 5000 and survives restart without duplicate dispatch', async t => {
+  const f = await fixture(t), api = f.deps.api; let scans = 0;
+  f.deps.api = async (url, extra) => {
+    if (!url.startsWith('agents/coordinator?')) return api(url, extra);
+    const query = new URL(`https://example.test/${url}`).searchParams;
+    assert.deepEqual(query.getAll('route'), ['worker']);
+    const offset = Number(query.get('cursor')?.slice(1) || 0); scans++;
+    if (offset < 5000) return { project: 'project', items: [], agents: [agent], nextCursor: `c${offset + 50}` };
+    return { project: 'project', items: f.item().status === 'open' ? [f.item()] : [], agents: [agent], nextCursor: null };
+  };
+  const first = await f.run('run');
+  assert.equal(first.scan.complete, false); assert.equal(first.scan.nextCursor, 'c5000'); assert.equal(f.starts(), 0);
+  const second = await f.run('run');
+  assert.equal(second.scan.complete, true); assert.equal(f.starts(), 1); assert.equal(f.item().status, 'completed');
+  assert.equal(second.scanCursor, null); assert.equal(scans, 101);
+});
+
+test('successful snapshot clears only its recovered error and retains history', async t => {
+  const f = await fixture(t), api = f.deps.api;
+  f.deps.api = async (url, extra) => { if (url.startsWith('agents/coordinator?')) throw Object.assign(Error(), { code: 'transport_failed' }); return api(url, extra); };
+  assert.equal((await f.run('run')).error, 'transport_failed');
+  await f.run('setup'); f.deps.api = api;
+  const recovered = await f.run('run');
+  assert.equal(recovered.error, undefined); assert.equal(recovered.errorHistory.at(-1).error, 'transport_failed');
+});
+
 test('full journal prunes only reconciled terminal work and preserves uncertainty', async t => {
   const f = await fixture(t), api = f.deps.api;
   const records = Object.fromEntries(Array.from({ length: 99 }, (_, i) => [`held-${i}`, { count: 1, pending: true, worker: 'worker', at: now }]));
@@ -515,7 +541,7 @@ for (const failure of ['lost acquisition response', 'failed close']) test(`${fai
         assert.equal(saved.runId, generation); assert.equal(saved.closed, false);
         if (failure === 'lost acquisition response') throw Object.assign(Error('response lost after grant'), { code: 'outcome_unknown' });
       }
-      if (extra.body.event === 'close' && !reconcile) throw Object.assign(Error('close unconfirmed'), { code: 'outcome_unknown' });
+      if (['close', 'reconcile'].includes(extra.body.event) && !reconcile) throw Object.assign(Error('close unconfirmed'), { code: 'outcome_unknown' });
     }
     return api(url, extra);
   };
@@ -532,7 +558,7 @@ for (const failure of ['lost acquisition response', 'failed close']) test(`${fai
   assert.equal(f.coordDisk.load().closed, false);
   reconcile = true; await f.run('setup');
   assert.equal(f.coordDisk.load().closed, true); assert.equal(f.coordDisk.load().error, undefined);
-  assert.ok(events.filter(event => event.event === 'close').every(event => event.generation === generation));
+  assert.ok(events.filter(event => ['close', 'reconcile'].includes(event.event)).every(event => event.generation === generation));
   f.setItem(structuredClone(task)); f.deps.api = api;
   const resumed = await f.run('run'); assert.equal(resumed.error, undefined); assert.equal(f.starts(), 1); assert.equal(f.item().status, 'completed');
 });

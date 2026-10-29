@@ -531,7 +531,7 @@ outcomes. A heartbeat alone is not task progress. Decisions include the responsi
 coordinator and handoff IDs. Read `collab handoffs get` and the issue timeline to
 verify the named claim and result; successful notification is not successful work.
 Status retains the latest 50 decision events and 50 dispatch events, and exposes the current scan in pages
-of 25 with `coordinator status --page N`; up to 5,000 pending project handoffs are
+of 25 with `coordinator status --page N`; batches of up to 5,000 pending project handoffs are
 scanned per cycle. The dispatch journal holds up to 100 task IDs. When full, it
 prunes only records with confirmed worker closure and a completed or superseded
 server handoff; pending, uncertain and retry-exhausted records remain. If none can
