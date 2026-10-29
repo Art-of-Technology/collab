@@ -109,7 +109,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
         if (!Number.isInteger(config[field]) || config[field] < min || config[field] > max) throw fail('coordinator_config', `Invalid --${flag}.`);
       }
       // Setup grants local dispatch consent; it neither starts a service nor resets retry history.
-      state.config = config; state.paused = false; state.status = 'ready'; save(state);
+      state.config = config; state.paused = false; state.status = 'ready'; delete state.error; save(state);
       await controls.exclusive((current, write) => write({ ...current, stopRequested: current.stopRequested === stopRequest ? false : current.stopRequested }));
       return { configured: true, started: false, config };
     }
@@ -152,6 +152,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
         if (['coordinator_conflict', 'coordinator_fenced'].includes(error.code) || error.details?.status >= 400 && error.details.status < 500 && ![408, 429].includes(error.details.status)) { state.closed = true; save(state); }
         throw error;
       }
+      delete state.error; save(state);
       if (controls.load().stopRequested) { state.paused = true; stop(); }
       abort.signal.throwIfAborted();
       renewal = (async () => {

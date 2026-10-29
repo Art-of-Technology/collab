@@ -531,10 +531,10 @@ for (const failure of ['lost acquisition response', 'failed close']) test(`${fai
   await assert.rejects(f.run('setup'), { code: 'lease_close_unconfirmed' });
   assert.equal(f.coordDisk.load().closed, false);
   reconcile = true; await f.run('setup');
-  assert.equal(f.coordDisk.load().closed, true);
+  assert.equal(f.coordDisk.load().closed, true); assert.equal(f.coordDisk.load().error, undefined);
   assert.ok(events.filter(event => event.event === 'close').every(event => event.generation === generation));
   f.setItem(structuredClone(task)); f.deps.api = api;
-  await f.run('run'); assert.equal(f.starts(), 1); assert.equal(f.item().status, 'completed');
+  const resumed = await f.run('run'); assert.equal(resumed.error, undefined); assert.equal(f.starts(), 1); assert.equal(f.item().status, 'completed');
 });
 
 test('a definitively rejected coordinator acquisition does not require closure', async t => {
