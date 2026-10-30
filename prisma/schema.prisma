@@ -378,6 +378,7 @@ model FeatureRequestComment {
 model Workspace {
   agentRegistrations  AgentRegistration[]
   agentHandoffs       AgentHandoff[]
+  agentTransferOffers AgentTransferOffer[]
   id                  String                @id @default(cuid())
   name                String
   slug                String                @unique
@@ -542,6 +543,7 @@ model ForgeExecutionAttempt {
 
 model Issue {
   agentHandoffs AgentHandoff[]
+  agentTransferOffers AgentTransferOffer[]
   id          String    @id @default(cuid())
   title       String
   description String?
@@ -2822,6 +2824,8 @@ model AgentRegistration {
   sent        AgentHandoff[] @relation("AgentSender")
   claimed     AgentHandoff[] @relation("AgentClaimant")
   receipts    AgentReceipt[]
+  transferOffersSent AgentTransferOffer[] @relation("TransferOfferSender")
+  transferOffersReceived AgentTransferOffer[] @relation("TransferOfferRecipient")
 
   @@unique([workspaceId, name])
   @@unique([workspaceId, userId, host, sessionId])
@@ -2854,11 +2858,40 @@ model AgentHandoff {
   supersededBy   AgentHandoff? @relation("HandoffReplacement", fields: [supersededById], references: [id], onDelete: SetNull)
   supersedes     AgentHandoff[] @relation("HandoffReplacement")
   receipts       AgentReceipt[]
+  transferOffers AgentTransferOffer[] @relation("TransferOfferParent")
+  acceptedTransferOffer AgentTransferOffer? @relation("TransferOfferAccepted")
 
   @@unique([workspaceId, sourceKey])
   @@index([workspaceId, createdAt, id])
   @@index([issueId])
   @@index([claimedById, status])
+}
+
+// Separate offers are never placed in a legacy worker inbox.
+model AgentTransferOffer {
+  id                String @id @default(cuid())
+  workspaceId       String
+  issueId           String
+  parentId          String
+  senderId          String?
+  recipientId       String?
+  recipientName     String
+  requestId         String
+  content           String
+  status            String @default("pending")
+  acceptedHandoffId String? @unique
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issue             Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  parent            AgentHandoff @relation("TransferOfferParent", fields: [parentId], references: [id], onDelete: Cascade)
+  sender            AgentRegistration? @relation("TransferOfferSender", fields: [senderId], references: [id], onDelete: SetNull)
+  recipient         AgentRegistration? @relation("TransferOfferRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+  acceptedHandoff   AgentHandoff? @relation("TransferOfferAccepted", fields: [acceptedHandoffId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, senderId, requestId])
+  @@index([recipientId, status])
+  @@index([parentId, status])
 }
 
 model AgentReceipt {

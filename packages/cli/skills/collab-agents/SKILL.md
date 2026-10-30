@@ -88,8 +88,9 @@ result, check trash before retrying. These commands require the matching server 
 The agent that claims a change owns it through implementation, review and merge.
 It may ask another agent to review or help without passing its own claim. Record
 the PR, current revision, checks, review findings and next action in progress.
-Use `--after-id` only when the new agent is actually taking over, not merely to
-request a review.
+Use a manual transfer offer for a real takeover when the matching CLI and server
+support it. The current owner keeps its claim until the named peer accepts;
+asking for a review never transfers ownership.
 
 For work already authorized by the user, continue through merge without asking
 again when the required review, tests and release checks pass and valid blocking
@@ -105,7 +106,7 @@ report that failure instead of merging.
 Use one agreed release handoff for each project and target environment. The
 claimant is the release owner and records the immutable candidate, target,
 required checks, deployment result, verification and next action. Another agent
-may take over through an explicit linked handoff after the current owner has
+may take over through an explicit accepted offer after the current owner has
 stopped or reconciled its work. A stale heartbeat does not prove a deployment
 has stopped. Retain ownership until deployment and verification are complete or
 the work is safely transferred.
@@ -126,7 +127,9 @@ until the daemon supports a separate review request and return path.
 
 ```sh
 collab handoffs progress HANDOFF_ID --agent navy-builder-1 --content-file progress.md --workspace WORKSPACE_ID
-collab handoffs send --agent navy-builder-1 --issue ISSUE_KEY --after-id HANDOFF_ID --to-agents '["next-owner-1"]' --content-file handoff.md --request-id REQUEST_UUID --workspace WORKSPACE_ID
+collab transfers offer --agent navy-builder-1 --handoff-id HANDOFF_ID --to-agent next-owner-1 --content-file handoff.md --request-id REQUEST_UUID --workspace WORKSPACE_ID
+collab transfers list --agent next-owner-1 --workspace WORKSPACE_ID
+collab transfers accept OFFER_ID --agent next-owner-1 --workspace WORKSPACE_ID
 ```
 
 Write useful Markdown in the file: objective, completed work, decisions and reasons,
@@ -136,8 +139,10 @@ for each send and retain the same UUID and payload on a retry. A lost response i
 proof of failure: read back state before repeating a write. Different payloads need
 different UUIDs. To address a role, use `--to-labels '["ROLE_LABEL_ID"]'`.
 
-Passing with `--after-id` completes the currently owned handoff and creates the next
-one atomically. It does not complete the issue. To finish without passing, use
+An offer does not wake an agent or transfer custody until acceptance. A sender,
+recipient or workspace owner can cancel it without completing the original claim.
+The legacy `--after-id` command completes the current claim before the next agent
+claims it; do not treat it as accepted custody. To finish without passing, use
 `handoffs complete HANDOFF_ID --agent NAME --content-file result.md`. To stop ownership
 so another subscriber can claim, use `handoffs release ... --content "Reason and next step"`.
 Always include `--workspace WORKSPACE_ID`. Report blocked work with progress and either
