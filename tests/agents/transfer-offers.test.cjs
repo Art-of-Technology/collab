@@ -132,13 +132,29 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     await assert.rejects(service.listTransferOffers(carol, service.transferOfferListSchema.parse({ agent: 'carol', status: 'accepted', cursor: accepted.nextCursor })), e => e.code === 'invalid_cursor');
   });
 
-  await t.test('accept and cancel retries return the same response as the original action', async () => {
+  await t.test('accept and cancel retries preserve response shape and return current state', async () => {
     const acceptedOffer = await offer(await original());
     const accepted = await act(bob, acceptedOffer, 'bob', 'accept');
-    assert.deepEqual(JSON.parse(JSON.stringify(await act(bob, acceptedOffer, 'bob', 'accept'))), JSON.parse(JSON.stringify(accepted)));
     const cancelledOffer = await offer(await original());
     const cancelled = await act(bob, cancelledOffer, 'bob', 'cancel');
-    assert.deepEqual(JSON.parse(JSON.stringify(await act(bob, cancelledOffer, 'bob', 'cancel'))), JSON.parse(JSON.stringify(cancelled)));
+    await service.actOnHandoff(bob, accepted.handoff.id, service.actionSchema.parse({ agent: 'bob', action: 'release', content: 'Released' }));
+    await prisma.issue.update({ where: { id: 'i-w' }, data: { title: 'Updated issue' } });
+    const retry = await act(bob, acceptedOffer, 'bob', 'accept');
+    const cancelledRetry = await act(bob, cancelledOffer, 'bob', 'cancel');
+    const keys = value => Object.keys(value).sort();
+    assert.deepEqual(keys(retry), keys(accepted));
+    assert.deepEqual(keys(retry.offer), keys(accepted.offer));
+    assert.deepEqual(keys(retry.handoff), keys(accepted.handoff));
+    assert.deepEqual(keys(cancelledRetry), keys(cancelled));
+    assert.equal(retry.offer.id, accepted.offer.id);
+    assert.equal(retry.handoff.id, accepted.handoff.id);
+    assert.equal(retry.handoff.status, 'open');
+    assert.equal(retry.handoff.claimedById, null);
+    assert.equal(retry.offer.issue.title, 'Updated issue');
+    assert.equal(retry.handoff.issue.title, 'Updated issue');
+    assert.equal(cancelledRetry.id, cancelled.id);
+    assert.equal(cancelledRetry.issue.title, 'Updated issue');
+    assert.equal(await prisma.agentHandoff.count({ where: { afterId: acceptedOffer.parentId } }), 1);
   });
 
   await t.test('reusing a recipient name does not grant access to the offer', async () => {

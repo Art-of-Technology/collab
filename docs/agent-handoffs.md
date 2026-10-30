@@ -69,6 +69,9 @@ contains an offer reference, not the private text. The sender,
 recipient and workspace owner can retrieve accepted offer text with
 `collab transfers list --agent NAME --status accepted --workspace WORKSPACE_ID`.
 The recipient can also retry acceptance with the same offer ID after a lost response.
+Accept and cancel retries retain the response fields and offer identity. Acceptance
+returns the existing successor with its current status and owner; both actions
+return the current issue details, rather than a snapshot of the original response.
 The sender, recipient or authenticated workspace owner may cancel a pending
 offer; cancellation leaves the original claim intact. If access is revoked,
 the workspace owner can list and cancel the offer without taking ownership.
