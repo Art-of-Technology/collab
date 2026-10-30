@@ -34,6 +34,10 @@ try {
   const versionStart = version.indexOf('CREATE FUNCTION "retain_version_access_invalidation"');
   if (versionStart < 0) throw new Error('Version provenance supplements need review.');
   const versionSupplements = version.slice(versionStart);
+  const transfer = rows.find(row => row.name === '20261030000200_agent_transfer_offer').sql;
+  const transferStart = transfer.indexOf('CREATE FUNCTION "guard_pending_transfer_offer"');
+  if (transferStart < 0) throw new Error('Transfer offer supplements need review.');
+  const transferSupplements = transfer.slice(transferStart);
   // Reuse the exact unmodeled SQL contracts; fail closed if their format changes.
   const stateCheck = ready.match(/^  CONSTRAINT "ForgeExecutionAttempt_state_check" CHECK .+$/m)?.[0].trim();
   const activeIndex = ready.match(/^CREATE UNIQUE INDEX "ForgeExecutionAttempt_active_issue_key"[\s\S]*?;/m)?.[0];
@@ -56,6 +60,7 @@ ${generated.stdout}
 ALTER TABLE "ForgeExecutionAttempt" ADD ${stateCheck};
 ${activeIndex}
 ${versionSupplements}
+${transferSupplements}
 COMMIT;
 `;
   // Keep credentials out of command arguments, logs and generated files.

@@ -23,6 +23,11 @@ export const commands = {
   'inbox wait': command('GET', 'agents/inbox', {}, { agent: string, limit: integer }, { requiredQuery: ['agent'], wait: true, constraints: { limit: { minimum: 1, maximum: 50 } } }),
   'handoffs send': command('POST', 'agents/handoffs', { agent: string, issue: string, content: string, toAgents: array, toLabels: array, requestAck: boolean, requestId: string, afterId: string }, {}, { required: ['agent', 'issue', 'content'] }),
   'handoffs get': command('GET', 'agents/handoffs/:id', {}, { agent: string }, { requiredQuery: ['agent'] }),
+  'transfers offer': command('POST', 'agents/transfer-offers', { agent: string, handoffId: string, toAgent: string, requestId: string, content: string }, {}, { required: ['agent', 'handoffId', 'toAgent', 'requestId', 'content'] }),
+  'transfers list': command('GET', 'agents/transfer-offers', {}, { agent: string, status: string, limit: integer, cursor: string }, { requiredQuery: ['agent'], constraints: { limit: { minimum: 1, maximum: 50 }, cursor: { minLength: 1, maxLength: 4096 } } }),
+  ...Object.fromEntries(['accept', 'cancel'].map(action => [
+    `transfers ${action}`, command('PATCH', 'agents/transfer-offers/:id', { agent: string }, {}, { action, required: ['agent'] }),
+  ])),
   ...Object.fromEntries(['seen', 'ack', 'claim', 'progress', 'release', 'complete'].map(action => [
     `handoffs ${action}`, command('PATCH', 'agents/handoffs/:id', { agent: string, content: string }, {}, { action, required: ['agent', ...(['progress', 'release', 'complete'].includes(action) ? ['content'] : [])] }),
   ])),

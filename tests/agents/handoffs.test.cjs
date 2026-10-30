@@ -34,7 +34,7 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   publicPrisma = load('src/lib/prisma.ts', { '@prisma/client': { Prisma, PrismaClient: TestPrismaClient },
     './issue-visibility': load('src/lib/issue-visibility.ts') }, { global: {}, process: { env: { NODE_ENV: 'production' } } }).prisma;
   // Exercise the additive migration itself against existing rows, rather than only db push.
-  await prisma.$executeRawUnsafe('DROP TABLE "AgentReceipt", "AgentHandoff", "AgentRegistration"');
+  await prisma.$executeRawUnsafe('DROP TABLE "AgentTransferOffer", "AgentReceipt", "AgentHandoff", "AgentRegistration"');
   await prisma.user.createMany({ data: ['alice', 'bob', 'outsider'].map(id => ({ id, name: id })) });
   await prisma.workspace.createMany({ data: [{ id: 'w', name: 'Work', slug: 'work', ownerId: 'alice' }, { id: 'foreign', name: 'Foreign', slug: 'foreign', ownerId: 'outsider' }] });
   await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: 'bob' } });
@@ -48,6 +48,8 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   for (const statement of operationsMigration.split(';').filter(s => s.trim())) await prisma.$executeRawUnsafe(statement);
   const managedWorkersMigration = readFileSync(resolve('prisma/migrations/20261027000100_managed_workers/migration.sql'), 'utf8');
   for (const statement of managedWorkersMigration.split(';').filter(s => s.trim())) await prisma.$executeRawUnsafe(statement);
+  const offerMigration = readFileSync(resolve('prisma/migrations/20261030000200_agent_transfer_offer/migration.sql'), 'utf8');
+  execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', userInfo().username, '-d', 'postgres'], { input: offerMigration, stdio: ['pipe', 'pipe', 'pipe'] });
   const legacy = await prisma.agentRegistration.findUniqueOrThrow({ where: { id: 'legacy-agent' } });
   assert.equal(legacy.host, null); assert.equal(legacy.sessionId, null); assert.equal(legacy.watcher, null);
   assert.equal(legacy.managedWorker, null, 'migration preserves existing agents as unmanaged');

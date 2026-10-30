@@ -19,6 +19,9 @@ All routes are under `/api/apps/auth/agents` and use the existing OAuth bearer t
 | `POST /handoffs` | Send using [`sendSchema`](../src/lib/agent-handoffs.ts), including the current generation for a managed sender | `issues:read`, `issues:write` |
 | `GET /handoffs/ID?agent=NAME` | Retrieve an authorized handoff and current context commands | `issues:read` |
 | `PATCH /handoffs/ID` | Apply a handoff action using [`actionSchema`](../src/lib/agent-handoffs.ts); see the actions below | `issues:read`; work actions also require `issues:write` |
+| `GET /transfer-offers` | Page pending or accepted manual transfer offers visible to the named owned agent; the workspace owner can inspect offers on accessible issues | `issues:read` |
+| `POST /transfer-offers` | Offer a claimed handoff to one named manual agent with an idempotent request UUID | `issues:read`, `issues:write` |
+| `PATCH /transfer-offers/ID` | Accept or cancel a manual offer | `issues:read`, `issues:write` |
 
 Agent names start with a lowercase letter or digit and use lowercase letters, digits, hyphens and underscores (1–64 characters). Named recipients must be registered. Handoff content is bounded to 16,000 characters; request bodies to 64 KiB. A caller-supplied UUID `requestId` makes sequential retries return the original request and rejects changed payloads. Concurrent duplicate creation returns 409; retry with the same UUID. Returned context commands bind `--workspace` to the authorized handoff workspace. They do not grant their required scopes: project Notes still need `context:read`.
 
@@ -41,6 +44,52 @@ A cursor binds the workspace, agent identity and queue state to the last returne
 Deploy the matching server before using pagination. Older clients can omit `cursor` and ignore the additive `nextCursor` field. Older servers reject `cursor` and may return `hasMore: true` without `nextCursor`. Consumers needing all pages must report that unsupported server instead of treating the first page as complete or retrying without the cursor.
 
 To pass work onward, send a new request with `afterId` referencing a request currently claimed by the sender on the same issue. The previous request is completed and the next one created in one transaction. The new request remains open until a recipient claims it; sending does not grant ownership to that recipient.
+
+### Transfers that retain ownership until acceptance
+
+For manual agents, use a transfer offer when the current owner must remain
+accountable until the recipient accepts. The sender first stops or reconciles
+any active work and records the outcome. The recipient must independently verify
+the current state before acting. For deployments, this does not establish that a
+previous process stopped or replace the target's deployment lock.
+
+```sh
+collab transfers offer --agent owner --handoff-id CLAIMED_ID --to-agent peer \
+  --request-id UUID --content 'Stopped; candidate, checks and next action' --workspace WORKSPACE_ID
+collab transfers list --agent peer --workspace WORKSPACE_ID
+collab transfers accept OFFER_ID --agent peer --workspace WORKSPACE_ID
+```
+
+Use a fresh UUID for each offer and retain it for exact retries. An offer is not
+placed in the managed-worker inbox and does not wake or run an agent. The sender
+keeps the original claim until the named recipient accepts; acceptance closes
+the original and creates the recipient's already-claimed successor atomically.
+Transfer lists default to pending offers; use `--status accepted` for accepted
+offers. A pagination cursor is bound to the workspace, agent and status, so use
+it only with the same status. Pages reflect current data rather than a snapshot.
+Offer text is excluded from shared issue activity and search. The successor
+contains an offer reference, not the private text. The sender,
+recipient and workspace owner can retrieve accepted offer text with
+`collab transfers list --agent NAME --status accepted --workspace WORKSPACE_ID`.
+The recipient can also retry acceptance with the same offer ID after a lost response.
+Accept and cancel retries retain the response fields and offer identity. Acceptance
+returns the existing successor with its current status and owner; both actions
+return the current issue details, rather than a snapshot of the original response.
+The sender, recipient or authenticated workspace owner may cancel a pending
+offer; cancellation leaves the original claim intact. If access is revoked,
+the workspace owner can list and cancel the offer without taking ownership.
+The sender must resolve or cancel a pending offer before releasing, completing,
+or passing its claim through the legacy path. A current server reports
+`transfer_offer_pending`; an older server may report a generic error. Deleting a
+claimant with a pending offer is blocked until the offer is cancelled; do not
+infer a stopped process from cancellation or account removal.
+
+The database migration installs the guard before a new server creates offers.
+All server replicas and the database must be qualified before use. Drain writers
+and cancel pending offers before removing the guard or rolling back schema.
+Legacy `afterId` behavior remains available and does not retain custody until
+acceptance, so adopting offers alone does not enforce the rule for older clients.
+Managed workers do not participate in this manual protocol.
 
 ## Current identities and watcher health
 
@@ -136,3 +185,8 @@ CLI 0.8.0 project coordinators require the matching server and additive
 `Project.coordinator` JSONB. Apply the same target, ledger and protected-backup
 requirements above. See the [coordinator guide](../packages/cli/README.md#project-coordinator-cli-080)
 for operation and release qualification boundaries.
+
+Manual transfer offers require the matching server and additive
+`20261030000200_agent_transfer_offer` migration, including its pending-offer
+guard. Apply the same target, ledger and protected-backup requirements above.
+For fresh databases, see [empty-database bootstrap](database-bootstrap.md).
