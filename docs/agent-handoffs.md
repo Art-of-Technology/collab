@@ -64,6 +64,9 @@ Use a fresh UUID for each offer and retain it for exact retries. An offer is not
 placed in the managed-worker inbox and does not wake or run an agent. The sender
 keeps the original claim until the named recipient accepts; acceptance closes
 the original and creates the recipient's already-claimed successor atomically.
+Transfer lists default to pending offers; use `--status accepted` for accepted
+offers. A pagination cursor is bound to the workspace, agent and status, so use
+it only with the same status. Pages reflect current data rather than a snapshot.
 Offer text is excluded from shared issue activity and search. The successor
 contains an offer reference, not the private text. The sender,
 recipient and workspace owner can retrieve accepted offer text with
