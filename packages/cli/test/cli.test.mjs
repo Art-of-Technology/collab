@@ -16,6 +16,23 @@ const bin = fileURLToPath(new URL('../bin/collab.mjs', import.meta.url));
 const executable = process.env.COLLAB_CLI_EXECUTABLE;
 const windows = process.platform === 'win32';
 
+test('manual transfer offer commands preserve recipient, request identity and explicit acceptance', async t => {
+  const f = await fixture(t);
+  const requestId = '12345678-1234-4234-8234-123456789012';
+  const created = await f.run(['transfers', 'offer', '--agent', 'owner', '--handoff-id', 'original', '--to-agent', 'peer', '--request-id', requestId, '--content', 'Stopped and ready', '--workspace', 'w']);
+  assert.equal(created.code, 0, created.stderr);
+  assert.equal(f.calls.at(-1).url, '/api/apps/auth/agents/transfer-offers?workspaceId=w');
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { agent: 'owner', handoffId: 'original', toAgent: 'peer', requestId, content: 'Stopped and ready' });
+  const list = await f.run(['transfers', 'list', '--agent', 'peer', '--limit', '10', '--workspace', 'w']);
+  assert.equal(list.code, 0, list.stderr); assert.equal(f.calls.at(-1).method, 'GET');
+  for (const action of ['accept', 'cancel']) {
+    const result = await f.run(['transfers', action, 'offer-one', '--agent', 'peer', '--workspace', 'w']);
+    assert.equal(result.code, 0, result.stderr); assert.equal(f.calls.at(-1).method, 'PATCH');
+    assert.deepEqual(JSON.parse(f.calls.at(-1).body), { agent: 'peer', action });
+  }
+  assert.notEqual((await f.run(['transfers', 'offer', '--agent', 'owner', '--handoff-id', 'original', '--to-agent', 'peer', '--content', 'No identity'])).code, 0);
+});
+
 test('agent registration, handoff and claim commands send scoped fixed API requests', async t => {
   const f = await fixture(t);
   assert.equal((await f.run(['agents', 'register', '--name', 'builder-a', '--label-ids', '["role-build"]', '--workspace', 'w'])).code, 0);

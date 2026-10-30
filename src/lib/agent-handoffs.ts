@@ -35,6 +35,11 @@ export const inboxSchema = z.object({ agent: name, limit: z.coerce.number().int(
   state: z.enum(['unseen', 'claimed']).default('unseen'),
   cursor: z.string().max(4096).regex(/^[A-Za-z0-9_-]+$/).optional(),
 }).strict();
+export const transferOfferSchema = z.object({ agent: name, handoffId: id, toAgent: name,
+  requestId: z.string().uuid(), content: text }).strict();
+export const transferOfferActionSchema = z.object({ agent: name, action: z.enum(['accept', 'cancel']) }).strict();
+export const transferOfferListSchema = z.object({ agent: name, limit: z.coerce.number().int().min(1).max(50).default(20),
+  cursor: z.string().max(4096).regex(/^[A-Za-z0-9_-]+$/).optional() }).strict();
 
 export class HandoffError extends Error {
   constructor(public code: string, message: string, public status = 400) { super(message); }
@@ -174,6 +179,18 @@ async function activity(db: DB, context: AppAuthContext, agent: Agent, issue: { 
     details: JSON.stringify({ agent: { id: agent.id, name: agent.name }, handoffId, content, ...extra }) } });
 }
 
+// Hold the rows used by issueReadAccessWhere until a transfer mutation commits.
+async function lockTransferAccess(db: Prisma.TransactionClient, workspaceId: string, issueId: string, firstUser: string, secondUser: string) {
+  await db.$queryRaw`SELECT id FROM "Workspace" WHERE id = ${workspaceId} FOR SHARE`;
+  await db.$queryRaw`SELECT id FROM "WorkspaceMember" WHERE "workspaceId" = ${workspaceId} AND "userId" IN (${firstUser}, ${secondUser}) ORDER BY id FOR SHARE`;
+  await db.$queryRaw`SELECT id FROM "Issue" WHERE id = ${issueId} AND "workspaceId" = ${workspaceId} FOR SHARE`;
+  await db.$queryRaw`SELECT p.id FROM "Project" p WHERE p.id IN (
+    SELECT i."projectId" FROM "Issue" i WHERE i.id = ${issueId} AND i."workspaceId" = ${workspaceId}
+    UNION SELECT s."projectId" FROM "ProjectStatus" s JOIN "Issue" i ON i."statusId" = s.id WHERE i.id = ${issueId} AND i."workspaceId" = ${workspaceId}
+  ) ORDER BY p.id FOR SHARE`;
+  await db.$queryRaw`SELECT s.id FROM "ProjectStatus" s JOIN "Issue" i ON i."statusId" = s.id WHERE i.id = ${issueId} AND i."workspaceId" = ${workspaceId} FOR SHARE OF s`;
+}
+
 export async function registerAgent(context: AppAuthContext, input: z.infer<typeof registrationSchema>) {
   try { return await prisma.$transaction(async db => {
     const labelIds = await validLabels(db, context.workspace.id, input.labelIds);
@@ -254,6 +271,12 @@ export async function sendHandoff(context: AppAuthContext, input: z.infer<typeof
     if (input.afterId) {
       const prior = await visibleHandoff(db, context, agent, input.afterId);
       if (prior.issueId !== issue.id) throw new HandoffError('invalid_chain', 'A handoff chain must stay on the same issue');
+      if (prior.status === 'claimed' && prior.claimedById === agent.id) {
+        await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${prior.id} AND "workspaceId" = ${context.workspace.id} AND "claimedById" = ${agent.id} FOR UPDATE`;
+        if (await db.agentTransferOffer.findFirst({ where: { parentId: prior.id, status: 'pending' }, select: { id: true } })) {
+          throw new HandoffError('transfer_offer_pending', 'Accept or cancel the pending transfer offer before changing this claim', 409);
+        }
+      }
       const released = await db.agentHandoff.updateMany({ where: { id: prior.id, status: 'claimed', claimedById: agent.id }, data: { status: 'completed' } });
       if (!released.count) throw new HandoffError('claim_required', 'Claim the previous handoff before passing it on', 409);
       await activity(db, context, agent, issue, prior.id, 'passed', input.content, { toAgents: recipientNames, toLabels: labelIds });
@@ -262,6 +285,145 @@ export async function sendHandoff(context: AppAuthContext, input: z.infer<typeof
       senderId: agent.id, content: input.content, recipientNames, labelIds, requestAck: input.requestAck, afterId: input.afterId } });
     await activity(db, context, agent, issue, handoff.id, 'sent', input.content, { toAgents: recipientNames, toLabels: labelIds, afterId: input.afterId });
     return handoff;
+  });
+}
+
+// An offer is intentionally separate from the legacy worker inbox. The sender
+// keeps its claim until the named manual recipient accepts.
+export async function createTransferOffer(context: AppAuthContext, input: z.infer<typeof transferOfferSchema>) {
+  if (!['issues:read', 'issues:write'].every(scope => hasScope(scope, context.token.scopes))) throw new HandoffError('insufficient_scope', 'Transfer offers require issues:read and issues:write', 403);
+  return prisma.$transaction(async db => {
+    let sender = await ownedAgent(db, context, input.agent);
+    const prior = await visibleHandoff(db, context, sender, input.handoffId);
+    const retry = await db.agentTransferOffer.findUnique({ where: { workspaceId_senderId_requestId: {
+      workspaceId: context.workspace.id, senderId: sender.id, requestId: input.requestId,
+    } } });
+    if (retry) {
+      if (retry.parentId !== prior.id || retry.recipientName !== input.toAgent || retry.content !== input.content) {
+        throw new HandoffError('request_conflict', 'This requestId was already used for a different offer', 409);
+      }
+      return retry;
+    }
+    if (prior.status !== 'claimed' || prior.claimedById !== sender.id) throw new HandoffError('claim_required', 'Only the current owner can offer this work', 409);
+    let recipient = await db.agentRegistration.findFirst({ where: { workspaceId: context.workspace.id, name: input.toAgent } });
+    if (!recipient || recipient.id === sender.id || recipient.managedWorker) throw new HandoffError('recipient_not_found', 'A different registered manual agent is required', 404);
+    if (!await db.issue.findFirst({ where: { id: prior.issueId,
+      ...issueScope({ user: { id: recipient.userId }, workspace: context.workspace }) }, select: { id: true } })) {
+      throw new HandoffError('recipient_not_found', 'Recipient cannot access this issue', 404);
+    }
+    const senderId = sender.id, recipientId = recipient.id;
+    // Both registrations precede the handoff lock, in a stable order, to avoid
+    // a create/accept deadlock on the successor's sender foreign key.
+    await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND id IN (${sender.id}, ${recipient.id}) ORDER BY id FOR UPDATE`;
+    sender = await ownedAgent(db, context, input.agent);
+    recipient = await db.agentRegistration.findFirst({ where: { workspaceId: context.workspace.id, name: input.toAgent } });
+    if (sender.id !== senderId || sender.managedWorker) throw new HandoffError('managed_agent', 'Transfer offers require the same manual agent', 409);
+    if (!recipient || recipient.id !== recipientId || recipient.id === sender.id || recipient.managedWorker) throw new HandoffError('recipient_not_found', 'A different registered manual agent is required', 404);
+    await lockTransferAccess(db, context.workspace.id, prior.issueId, sender.userId, recipient.userId);
+    const existing = await db.agentTransferOffer.findUnique({ where: { workspaceId_senderId_requestId: {
+      workspaceId: context.workspace.id, senderId: sender.id, requestId: input.requestId,
+    } } });
+    if (existing) {
+      if (existing.parentId !== prior.id || existing.recipientName !== input.toAgent || existing.content !== input.content) {
+        throw new HandoffError('request_conflict', 'This requestId was already used for a different offer', 409);
+      }
+      return existing;
+    }
+    await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${prior.id} AND "workspaceId" = ${context.workspace.id} AND "claimedById" = ${sender.id} FOR UPDATE`;
+    const current = await visibleHandoff(db, context, sender, prior.id);
+    if (current.status !== 'claimed' || current.claimedById !== sender.id) throw new HandoffError('claim_required', 'Only the current owner can offer this work', 409);
+    const recipientIssue = await db.issue.findFirst({ where: { id: current.issueId,
+      ...issueScope({ user: { id: recipient.userId }, workspace: context.workspace }) }, select: { id: true } });
+    if (!recipientIssue) throw new HandoffError('recipient_not_found', 'Recipient cannot access this issue', 404);
+    if (await db.agentTransferOffer.findFirst({ where: { parentId: current.id, status: 'pending' } })) {
+      throw new HandoffError('offer_pending', 'Cancel the existing offer before sending another', 409);
+    }
+    const offer = await db.agentTransferOffer.create({ data: { workspaceId: context.workspace.id, issueId: current.issueId,
+      parentId: current.id, senderId: sender.id, recipientId: recipient.id, recipientName: recipient.name, requestId: input.requestId, content: input.content } });
+    await activity(db, context, sender, current.issue, current.id, 'transfer_offered', input.content, { offerId: offer.id, recipient: recipient.name });
+    return offer;
+  });
+}
+
+export async function listTransferOffers(context: AppAuthContext, query: z.infer<typeof transferOfferListSchema>) {
+  const agent = await ownedAgent(prisma, context, query.agent);
+  const owner = await prisma.workspace.findFirst({ where: { id: context.workspace.id, ownerId: context.user.id }, select: { id: true } });
+  let position: { createdAt: Date; id: string } | undefined;
+  if (query.cursor) {
+    try {
+      const bytes = Buffer.from(query.cursor, 'base64url');
+      if (bytes.toString('base64url') !== query.cursor) throw new Error();
+      const [workspaceId, agentId, timestamp, offerId] = z.tuple([id, id, z.string().datetime(), id]).parse(JSON.parse(bytes.toString('utf8')));
+      const createdAt = new Date(timestamp);
+      if (workspaceId !== context.workspace.id || agentId !== agent.id || createdAt.toISOString() !== timestamp) throw new Error();
+      position = { createdAt, id: offerId };
+    } catch { throw new HandoffError('invalid_cursor', 'Invalid offer cursor'); }
+  }
+  const rows = await prisma.agentTransferOffer.findMany({ where: { workspaceId: context.workspace.id, status: 'pending',
+    ...(!owner && { OR: [{ senderId: agent.id }, { recipientId: agent.id }] }), issue: issueScope(context), ...(position && { AND: [{ OR: [
+      { createdAt: { gt: position.createdAt } }, { createdAt: position.createdAt, id: { gt: position.id } },
+    ] }] }) }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: query.limit + 1,
+    include: { issue: { select: { issueKey: true, title: true } }, sender: { select: { name: true } }, recipient: { select: { name: true } } } });
+  const items = rows.slice(0, query.limit);
+  const last = items.at(-1);
+  const hasMore = rows.length > query.limit;
+  const nextCursor = hasMore && last ? Buffer.from(JSON.stringify([context.workspace.id, agent.id, last.createdAt.toISOString(), last.id])).toString('base64url') : null;
+  return { items, hasMore, nextCursor };
+}
+
+export async function actOnTransferOffer(context: AppAuthContext, offerId: string, input: z.infer<typeof transferOfferActionSchema>) {
+  if (!['issues:read', 'issues:write'].every(scope => hasScope(scope, context.token.scopes))) throw new HandoffError('insufficient_scope', 'Transfer offers require issues:read and issues:write', 403);
+  return prisma.$transaction(async db => {
+    let agent = await ownedAgent(db, context, input.agent);
+    const owner = input.action === 'cancel' && await db.workspace.findFirst({ where: { id: context.workspace.id, ownerId: context.user.id }, select: { id: true } });
+    // The preliminary read is scoped; both records are locked in parent/offer order and re-read.
+    const where = { id: offerId, workspaceId: context.workspace.id,
+      ...(input.action === 'accept' ? { recipientId: agent.id } : !owner ? { OR: [{ senderId: agent.id }, { recipientId: agent.id }] } : {}), issue: issueScope(context) };
+    const actorId = agent.id;
+    const initial = await db.agentTransferOffer.findFirst({ where });
+    if (!initial) throw new HandoffError('offer_not_found', 'Offer not found or access denied', 404);
+    await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND id IN (${agent.id}, ${initial.senderId ?? agent.id}) ORDER BY id FOR UPDATE`;
+    agent = await ownedAgent(db, context, input.agent);
+    if (agent.id !== actorId || agent.managedWorker) throw new HandoffError('managed_agent', 'Transfer offers require the same manual agent', 409);
+    const originalSender = initial.senderId ? await db.agentRegistration.findFirst({ where: { id: initial.senderId, workspaceId: context.workspace.id } }) : null;
+    await lockTransferAccess(db, context.workspace.id, initial.issueId, agent.userId, originalSender?.userId ?? agent.userId);
+    await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${initial.parentId} AND "workspaceId" = ${context.workspace.id} FOR UPDATE`;
+    await db.$queryRaw`SELECT id FROM "AgentTransferOffer" WHERE id = ${offerId} AND "workspaceId" = ${context.workspace.id} FOR UPDATE`;
+    const offer = await db.agentTransferOffer.findFirst({ where, include: { issue: { select: { id: true, issueKey: true, title: true, projectId: true } } } });
+    if (!offer) throw new HandoffError('offer_not_found', 'Offer not found or access denied', 404);
+    if (input.action === 'cancel') {
+      if (offer.senderId !== agent.id && offer.recipientId !== agent.id && !await db.workspace.findFirst({
+        where: { id: context.workspace.id, ownerId: context.user.id }, select: { id: true },
+      })) throw new HandoffError('offer_not_found', 'Offer not found or access denied', 404);
+      if (offer.status === 'cancelled') return offer;
+      if (offer.status !== 'pending') throw new HandoffError('offer_closed', 'The offer is no longer pending', 409);
+      const result = await db.agentTransferOffer.update({ where: { id: offer.id }, data: { status: 'cancelled' } });
+      await activity(db, context, agent, offer.issue, offer.parentId, 'transfer_cancelled', undefined, { offerId: offer.id });
+      return result;
+    }
+    if (offer.status === 'accepted') {
+      if (!offer.acceptedHandoffId) throw new HandoffError('offer_closed', 'Accepted handoff is unavailable', 409);
+      return { offer, handoff: await visibleHandoff(db, context, agent, offer.acceptedHandoffId) };
+    }
+    if (offer.status !== 'pending' || !offer.senderId) throw new HandoffError('offer_closed', 'The offer is no longer pending', 409);
+    const sender = await db.agentRegistration.findFirst({ where: { id: offer.senderId, workspaceId: context.workspace.id } });
+    if (!sender || sender.managedWorker) throw new HandoffError('offer_closed', 'Original owner is unavailable', 409);
+    const senderIssue = await db.issue.findFirst({ where: { id: offer.issueId,
+      ...issueScope({ user: { id: sender.userId }, workspace: context.workspace }) }, select: { id: true } });
+    if (!senderIssue) throw new HandoffError('offer_closed', 'Original owner cannot access this issue', 409);
+    // The database guard also protects against older servers releasing the parent.
+    // Mark acceptance before closing the parent; both writes commit or roll back together.
+    await db.agentTransferOffer.update({ where: { id: offer.id }, data: { status: 'accepted' } });
+    const changed = await db.agentHandoff.updateMany({ where: { id: offer.parentId, workspaceId: context.workspace.id,
+      issueId: offer.issueId, status: 'claimed', claimedById: sender.id }, data: { status: 'completed' } });
+    if (!changed.count) throw new HandoffError('claim_changed', 'Original ownership changed; create a new offer', 409);
+    const handoff = await db.agentHandoff.create({ data: { workspaceId: context.workspace.id, issueId: offer.issueId,
+      sourceKey: `transfer-offer:${offer.id}`, senderId: sender.id, claimedById: agent.id, status: 'claimed',
+      recipientNames: [agent.name], content: offer.content, afterId: offer.parentId } });
+    const accepted = await db.agentTransferOffer.update({ where: { id: offer.id }, data: { acceptedHandoffId: handoff.id } });
+    await activity(db, context, agent, offer.issue, offer.parentId, 'transfer_accepted', undefined, { offerId: offer.id, successorId: handoff.id });
+    await activity(db, context, agent, offer.issue, handoff.id, 'claim', undefined, { offerId: offer.id });
+    return { offer: accepted, handoff };
   });
 }
 
@@ -351,6 +513,12 @@ export async function actOnHandoff(context: AppAuthContext, id: string, input: z
     }
     if (lease) await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${id} FOR UPDATE`;
     const handoff = await visibleHandoff(db, context, agent, id);
+    if (['complete', 'release', 'supersede'].includes(input.action) && handoff.status === 'claimed' && handoff.claimedById === agent.id) {
+      await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${id} AND "workspaceId" = ${context.workspace.id} AND "claimedById" = ${agent.id} FOR UPDATE`;
+      if (await db.agentTransferOffer.findFirst({ where: { parentId: id, status: 'pending' }, select: { id: true } })) {
+        throw new HandoffError('transfer_offer_pending', 'Accept or cancel the pending transfer offer before changing this claim', 409);
+      }
+    }
     if (input.action === 'supersede') {
       if (handoff.status === 'superseded' && handoff.supersededById === input.replacementId) return handoff;
       const replacement = await visibleHandoff(db, context, agent, input.replacementId!);

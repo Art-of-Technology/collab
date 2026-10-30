@@ -73,10 +73,12 @@ test('actual bootstrap CLI emits one guarded schema transaction with exact suppl
   const active = ready.match(/^CREATE UNIQUE INDEX "ForgeExecutionAttempt_active_issue_key"[\s\S]*?;/m)[0];
   const version = fs.readFileSync(path.join(root, 'prisma/migrations/20260924130000_version_access_invalidation/migration.sql'), 'utf8');
   const tail = version.slice(version.indexOf('CREATE FUNCTION "retain_version_access_invalidation"'));
-  assert.ok(apply.input.includes(schemaSql + '\nALTER TABLE "ForgeExecutionAttempt" ADD ' + check + ';\n' + active + '\n' + tail + '\nCOMMIT;'));
+  const transfer = fs.readFileSync(path.join(root, 'prisma/migrations/20261030000200_agent_transfer_offer/migration.sql'), 'utf8');
+  const transferTail = transfer.slice(transfer.indexOf('CREATE FUNCTION "guard_pending_transfer_offer"'));
+  assert.ok(apply.input.includes(schemaSql + '\nALTER TABLE "ForgeExecutionAttempt" ADD ' + check + ';\n' + active + '\n' + tail + '\n' + transferTail + '\nCOMMIT;'));
   assert.ok(!apply.input.includes('ADD COLUMN "issueAccessInvalidated"'), 'modeled flag is generated once; historical existing-row backfill is not replayed');
-  assert.deepEqual(contract.migrations.slice(-6).map(row => row.name), [
-    '20261017000100_agent_handoffs', '20261021223000_git_provider_connections', '20261022190000_issue_trash', '20261026000100_agent_operations', '20261027000100_managed_workers', '20261029000100_project_coordinator',
+  assert.deepEqual(contract.migrations.slice(-7).map(row => row.name), [
+    '20261017000100_agent_handoffs', '20261021223000_git_provider_connections', '20261022190000_issue_trash', '20261026000100_agent_operations', '20261027000100_managed_workers', '20261029000100_project_coordinator', '20261030000200_agent_transfer_offer',
   ]);
   assert.ok(!apply.input.includes('ADD COLUMN "deletedAt"'), 'Trash columns and restrictive FKs come from the current schema, not replayed upgrade SQL');
   assert.deepEqual(result.calls.slice(2).map(call => call.args.at(-1)), contract.migrations.map(row => row.name));
