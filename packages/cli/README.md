@@ -537,7 +537,8 @@ scanned per cycle. If more remain, the next cycle continues from the saved curso
 after the last page, scanning starts again from the beginning. The dispatch journal
 holds up to 100 task IDs. When full, it
 prunes only records with confirmed worker closure and a completed or superseded
-server handoff; pending, uncertain and retry-exhausted records remain. If none can
+server handoff, including retry-exhausted records and records for workers no longer
+configured; pending, uncertain and non-terminal records remain. If none can
 be reconciled, status reports `journal_retention_unresolved` and an operator must
 inspect those records and the corresponding worker and handoff states.
 
