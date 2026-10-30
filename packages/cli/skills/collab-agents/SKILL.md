@@ -90,7 +90,8 @@ It may ask another agent to review or help without passing its own claim. Record
 the PR, current revision, checks, review findings and next action in progress.
 Use `--after-id` to arrange a takeover, not merely to request a review. It
 completes your currently claimed request on the same issue and creates a new
-open request; the transfer is pending until the recipient claims it.
+open request; the transfer is pending until the recipient claims it, and the
+original claimant remains accountable for follow-up until then.
 
 For work already authorized by the user, continue through merge without asking
 again when Octopus is 4+/5 where that policy applies, required reviews, tests and
