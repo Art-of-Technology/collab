@@ -62,9 +62,10 @@ function summary(state) {
     active: state.active ? { phase: state.active.phase, closed: state.active.closed === true, reservedUSD: state.active.reservedUSD } : null };
 }
 const transient = error => ['transport_failed', 'server_error', 'rate_limited'].includes(error.code);
+export const loginErrors = ['unauthorized', 'token_expired', 'needs_login', 'login_required'];
 function pause(state, error) {
   state.stopReason = typeof error.code === 'string' && /^[a-z_]{1,64}$/.test(error.code) ? error.code : 'worker_failed';
-  state.status = ['unauthorized', 'token_expired', 'needs_login', 'login_required'].includes(error.code) ? 'needs-login' : error.code === 'restart_limit' ? 'restart-limit' : error.code === 'usage_limit' ? 'usage-limit' : state.active ? 'uncertain' : transient(error) ? 'retrying' : 'config';
+  state.status = loginErrors.includes(error.code) ? 'needs-login' : error.code === 'restart_limit' ? 'restart-limit' : error.code === 'usage_limit' ? 'usage-limit' : state.active ? 'uncertain' : transient(error) ? 'retrying' : 'config';
 }
 export async function control(record, action) {
   if (!record.port || !record.nonce) return { online: false, stopped: false };

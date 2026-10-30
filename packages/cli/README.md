@@ -20,7 +20,7 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.8.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.8.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.8.1 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.8.1) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
 
 Version 0.6.1 adds `collab update`, which reruns the one-command installer for the current platform from the installed native executable. Installations before 0.6.1 run the installer once more to pick it up.
 
@@ -537,7 +537,8 @@ scanned per cycle. If more remain, the next cycle continues from the saved curso
 after the last page, scanning starts again from the beginning. The dispatch journal
 holds up to 100 task IDs. When full, it
 prunes only records with confirmed worker closure and a completed or superseded
-server handoff; pending, uncertain and retry-exhausted records remain. If none can
+server handoff, including retry-exhausted records and records for workers no longer
+configured; pending, uncertain and non-terminal records remain. If none can
 be reconciled, status reports `journal_retention_unresolved` and an operator must
 inspect those records and the corresponding worker and handoff states.
 
