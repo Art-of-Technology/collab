@@ -113,6 +113,34 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     await check();
   });
 
+  await t.test('pagination cursors are bound to the offer status', async () => {
+    await offer(await original());
+    await offer(await original());
+    const pending = await service.listTransferOffers(bob, service.transferOfferListSchema.parse({ agent: 'bob', limit: 1 }));
+    assert.ok(pending.nextCursor);
+    await assert.rejects(service.listTransferOffers(bob, service.transferOfferListSchema.parse({
+      agent: 'bob', status: 'accepted', cursor: pending.nextCursor,
+    })), e => e.code === 'invalid_cursor');
+    const page = await service.listTransferOffers(bob, service.transferOfferListSchema.parse({ agent: 'bob', limit: 1, cursor: pending.nextCursor }));
+    assert.notEqual(page.items[0].id, pending.items[0].id);
+    const first = await offer(await original()), second = await offer(await original());
+    await act(bob, first, 'bob', 'accept');
+    await act(bob, second, 'bob', 'accept');
+    const accepted = await service.listTransferOffers(bob, service.transferOfferListSchema.parse({ agent: 'bob', status: 'accepted', limit: 1 }));
+    assert.ok(accepted.nextCursor);
+    await assert.rejects(service.listTransferOffers(bob, service.transferOfferListSchema.parse({ agent: 'bob', cursor: accepted.nextCursor })), e => e.code === 'invalid_cursor');
+    await assert.rejects(service.listTransferOffers(carol, service.transferOfferListSchema.parse({ agent: 'carol', status: 'accepted', cursor: accepted.nextCursor })), e => e.code === 'invalid_cursor');
+  });
+
+  await t.test('accept and cancel retries return the same response as the original action', async () => {
+    const acceptedOffer = await offer(await original());
+    const accepted = await act(bob, acceptedOffer, 'bob', 'accept');
+    assert.deepEqual(JSON.parse(JSON.stringify(await act(bob, acceptedOffer, 'bob', 'accept'))), JSON.parse(JSON.stringify(accepted)));
+    const cancelledOffer = await offer(await original());
+    const cancelled = await act(bob, cancelledOffer, 'bob', 'cancel');
+    assert.deepEqual(JSON.parse(JSON.stringify(await act(bob, cancelledOffer, 'bob', 'cancel'))), JSON.parse(JSON.stringify(cancelled)));
+  });
+
   await t.test('reusing a recipient name does not grant access to the offer', async () => {
     await prisma.user.create({ data: { id: 'eve', name: 'eve' } });
     await prisma.workspaceMember.create({ data: { userId: 'eve', workspaceId: 'w' } });

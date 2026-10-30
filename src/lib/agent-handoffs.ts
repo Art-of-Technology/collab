@@ -354,9 +354,9 @@ export async function listTransferOffers(context: AppAuthContext, query: z.infer
     try {
       const bytes = Buffer.from(query.cursor, 'base64url');
       if (bytes.toString('base64url') !== query.cursor) throw new Error();
-      const [workspaceId, agentId, timestamp, offerId] = z.tuple([id, id, z.string().datetime(), id]).parse(JSON.parse(bytes.toString('utf8')));
+      const [workspaceId, agentId, status, timestamp, offerId] = z.tuple([id, id, z.enum(['pending', 'accepted']), z.string().datetime(), id]).parse(JSON.parse(bytes.toString('utf8')));
       const createdAt = new Date(timestamp);
-      if (workspaceId !== context.workspace.id || agentId !== agent.id || createdAt.toISOString() !== timestamp) throw new Error();
+      if (workspaceId !== context.workspace.id || agentId !== agent.id || status !== query.status || createdAt.toISOString() !== timestamp) throw new Error();
       position = { createdAt, id: offerId };
     } catch { throw new HandoffError('invalid_cursor', 'Invalid offer cursor'); }
   }
@@ -368,7 +368,7 @@ export async function listTransferOffers(context: AppAuthContext, query: z.infer
   const items = rows.slice(0, query.limit);
   const last = items.at(-1);
   const hasMore = rows.length > query.limit;
-  const nextCursor = hasMore && last ? Buffer.from(JSON.stringify([context.workspace.id, agent.id, last.createdAt.toISOString(), last.id])).toString('base64url') : null;
+  const nextCursor = hasMore && last ? Buffer.from(JSON.stringify([context.workspace.id, agent.id, query.status, last.createdAt.toISOString(), last.id])).toString('base64url') : null;
   return { items, hasMore, nextCursor };
 }
 
@@ -400,7 +400,7 @@ export async function actOnTransferOffer(context: AppAuthContext, offerId: strin
       if (offer.status !== 'pending') throw new HandoffError('offer_closed', 'The offer is no longer pending', 409);
       const result = await db.agentTransferOffer.update({ where: { id: offer.id }, data: { status: 'cancelled' } });
       await activity(db, context, agent, offer.issue, offer.parentId, 'transfer_cancelled', undefined, { offerId: offer.id });
-      return result;
+      return { ...result, issue: offer.issue };
     }
     if (offer.status === 'accepted') {
       if (!offer.acceptedHandoffId) throw new HandoffError('offer_closed', 'Accepted handoff is unavailable', 409);
@@ -424,7 +424,7 @@ export async function actOnTransferOffer(context: AppAuthContext, offerId: strin
     const accepted = await db.agentTransferOffer.update({ where: { id: offer.id }, data: { acceptedHandoffId: handoff.id } });
     await activity(db, context, agent, offer.issue, offer.parentId, 'transfer_accepted', undefined, { offerId: offer.id, successorId: handoff.id });
     await activity(db, context, agent, offer.issue, handoff.id, 'claim', undefined, { offerId: offer.id });
-    return { offer: accepted, handoff };
+    return { offer: { ...accepted, issue: offer.issue }, handoff: { ...handoff, issue: offer.issue } };
   });
 }
 
