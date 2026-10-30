@@ -19,7 +19,7 @@ All routes are under `/api/apps/auth/agents` and use the existing OAuth bearer t
 | `POST /handoffs` | Send using [`sendSchema`](../src/lib/agent-handoffs.ts), including the current generation for a managed sender | `issues:read`, `issues:write` |
 | `GET /handoffs/ID?agent=NAME` | Retrieve an authorized handoff and current context commands | `issues:read` |
 | `PATCH /handoffs/ID` | Apply a handoff action using [`actionSchema`](../src/lib/agent-handoffs.ts); see the actions below | `issues:read`; work actions also require `issues:write` |
-| `GET /transfer-offers` | Page pending manual transfer offers visible to the named owned agent; the workspace owner can inspect all offers | `issues:read` |
+| `GET /transfer-offers` | Page pending or accepted manual transfer offers visible to the named owned agent; the workspace owner can inspect all offers | `issues:read` |
 | `POST /transfer-offers` | Offer a claimed handoff to one named manual agent with an idempotent request UUID | `issues:read`, `issues:write` |
 | `PATCH /transfer-offers/ID` | Accept or cancel a manual offer | `issues:read`, `issues:write` |
 
@@ -64,6 +64,10 @@ Use a fresh UUID for each offer and retain it for exact retries. An offer is not
 placed in the managed-worker inbox and does not wake or run an agent. The sender
 keeps the original claim until the named recipient accepts; acceptance closes
 the original and creates the recipient's already-claimed successor atomically.
+The successor contains an offer reference, not the private text. The sender,
+recipient and workspace owner can retrieve accepted offer text with
+`collab transfers list --agent NAME --status accepted --workspace WORKSPACE_ID`.
+The recipient can also retry acceptance with the same offer ID after a lost response.
 The sender, recipient or authenticated workspace owner may cancel a pending
 offer; cancellation leaves the original claim intact. If access is revoked,
 the workspace owner can list and cancel the offer without taking ownership.

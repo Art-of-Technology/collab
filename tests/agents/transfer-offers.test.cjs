@@ -93,11 +93,49 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
       assert.equal(JSON.stringify(activities).includes(secret), false);
       const result = await search.searchProjectContent(carol, queryModule.searchQuerySchema.parse({ query: secret, mode: 'exact', type: 'activity' }));
       assert.equal(result.results.length, 0);
+      for (const state of ['unseen', 'claimed']) {
+        const inbox = await service.workspaceAgentInbox(carol, { state, limit: 50 });
+        assert.equal(JSON.stringify(inbox).includes(secret), false);
+        const ownInbox = await service.agentInbox(carol, service.inboxSchema.parse({ agent: 'carol', state }));
+        assert.equal(JSON.stringify(ownInbox).includes(secret), false);
+      }
     };
     await check();
     const accepted = await act(bob, pending, 'bob', 'accept');
-    assert.equal(accepted.handoff.content, secret);
+    assert.equal(accepted.handoff.content, `Transfer offer: ${pending.id}`);
+    assert.equal(accepted.offer.content, secret);
+    assert.equal((await act(bob, pending, 'bob', 'accept')).offer.content, secret);
+    for (const [ctx, agent] of [[alice, 'alice'], [bob, 'bob']]) {
+      const result = await service.listTransferOffers(ctx, service.transferOfferListSchema.parse({ agent, status: 'accepted' }));
+      assert.equal(result.items.find(x => x.id === pending.id).content, secret);
+    }
+    assert.equal((await service.listTransferOffers(carol, service.transferOfferListSchema.parse({ agent: 'carol', status: 'accepted' }))).items.some(x => x.id === pending.id), false);
     await check();
+  });
+
+  await t.test('reusing a recipient name does not grant access to the offer', async () => {
+    await prisma.user.create({ data: { id: 'eve', name: 'eve' } });
+    await prisma.workspaceMember.create({ data: { userId: 'eve', workspaceId: 'w' } });
+    const eve = context('eve');
+    const registration = await service.registerAgent(eve, service.registrationSchema.parse({ name: 'temporary' }));
+    const row = await original(), pending = await offer(row, { toAgent: 'temporary', content: 'private identity-bound text' });
+    await act(eve, pending, 'temporary', 'accept');
+    await prisma.agentRegistration.delete({ where: { id: registration.id } });
+    await service.registerAgent(carol, service.registrationSchema.parse({ name: 'temporary' }));
+    assert.equal((await service.listTransferOffers(carol, service.transferOfferListSchema.parse({ agent: 'temporary', status: 'accepted' }))).items.some(x => x.id === pending.id), false);
+    await assert.rejects(act(carol, pending, 'temporary', 'accept'), e => e.code === 'offer_not_found');
+    assert.equal(JSON.stringify(await service.agentInbox(carol, service.inboxSchema.parse({ agent: 'temporary' }))).includes(pending.content), false);
+  });
+
+  await t.test('sender, recipient and workspace owner can retrieve accepted text', async () => {
+    const row = await service.sendHandoff(bob, service.sendSchema.parse({ agent: 'bob', issue: 'w-1', content: 'Owned task', toAgents: ['bob'] }));
+    await service.actOnHandoff(bob, row.id, service.actionSchema.parse({ agent: 'bob', action: 'claim' }));
+    const pending = await service.createTransferOffer(bob, service.transferOfferSchema.parse({ agent: 'bob', handoffId: row.id, toAgent: 'carol', requestId: randomUUID(), content: 'private transfer' }));
+    await act(carol, pending, 'carol', 'accept');
+    for (const [ctx, agent] of [[alice, 'alice'], [bob, 'bob'], [carol, 'carol']]) {
+      const result = await service.listTransferOffers(ctx, service.transferOfferListSchema.parse({ agent, status: 'accepted' }));
+      assert.equal(result.items.find(x => x.id === pending.id).content, pending.content);
+    }
   });
 
   await t.test('offer is invisible to legacy inbox; acceptance is atomic and idempotent', async () => {

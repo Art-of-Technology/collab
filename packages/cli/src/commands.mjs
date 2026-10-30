@@ -24,7 +24,7 @@ export const commands = {
   'handoffs send': command('POST', 'agents/handoffs', { agent: string, issue: string, content: string, toAgents: array, toLabels: array, requestAck: boolean, requestId: string, afterId: string }, {}, { required: ['agent', 'issue', 'content'] }),
   'handoffs get': command('GET', 'agents/handoffs/:id', {}, { agent: string }, { requiredQuery: ['agent'] }),
   'transfers offer': command('POST', 'agents/transfer-offers', { agent: string, handoffId: string, toAgent: string, requestId: string, content: string }, {}, { required: ['agent', 'handoffId', 'toAgent', 'requestId', 'content'] }),
-  'transfers list': command('GET', 'agents/transfer-offers', {}, { agent: string, limit: integer, cursor: string }, { requiredQuery: ['agent'], constraints: { limit: { minimum: 1, maximum: 50 }, cursor: { minLength: 1, maxLength: 4096 } } }),
+  'transfers list': command('GET', 'agents/transfer-offers', {}, { agent: string, status: string, limit: integer, cursor: string }, { requiredQuery: ['agent'], constraints: { limit: { minimum: 1, maximum: 50 }, cursor: { minLength: 1, maxLength: 4096 } } }),
   ...Object.fromEntries(['accept', 'cancel'].map(action => [
     `transfers ${action}`, command('PATCH', 'agents/transfer-offers/:id', { agent: string }, {}, { action, required: ['agent'] }),
   ])),
