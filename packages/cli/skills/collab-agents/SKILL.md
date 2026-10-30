@@ -94,11 +94,11 @@ open request; the transfer is pending until the recipient claims it, and the
 original claimant remains accountable for follow-up until then.
 
 For work already authorized by the user, continue through merge without asking
-again when Octopus is 4+/5 where that policy applies, required reviews, tests and
-release checks pass, and valid blocking findings are resolved. Follow the project's
-actual review requirements, branch protections and explicit holds; a handoff
-cannot override them. If a gate fails or a hold applies, record the exact blocker
-and keep working within your authority.
+again when Octopus Review is 4+/5 where that policy applies, required reviews,
+tests and release checks pass, and valid blocking findings are resolved. Follow
+the project's actual review requirements, branch protections and explicit holds;
+a handoff cannot override them. If a gate fails or a hold applies, record the
+exact blocker and keep working within your authority.
 For example, a peer can review your PR while you remain the owner; after its
 required checks and review pass, merge it. If a required check fails, fix or
 report that failure instead of merging.
