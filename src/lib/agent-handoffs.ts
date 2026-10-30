@@ -39,6 +39,7 @@ export const transferOfferSchema = z.object({ agent: name, handoffId: id, toAgen
   requestId: z.string().uuid(), content: text }).strict();
 export const transferOfferActionSchema = z.object({ agent: name, action: z.enum(['accept', 'cancel']) }).strict();
 export const transferOfferListSchema = z.object({ agent: name, limit: z.coerce.number().int().min(1).max(50).default(20),
+  status: z.enum(['pending', 'accepted']).default('pending'),
   cursor: z.string().max(4096).regex(/^[A-Za-z0-9_-]+$/).optional() }).strict();
 
 export class HandoffError extends Error {
@@ -359,7 +360,7 @@ export async function listTransferOffers(context: AppAuthContext, query: z.infer
       position = { createdAt, id: offerId };
     } catch { throw new HandoffError('invalid_cursor', 'Invalid offer cursor'); }
   }
-  const rows = await prisma.agentTransferOffer.findMany({ where: { workspaceId: context.workspace.id, status: 'pending',
+  const rows = await prisma.agentTransferOffer.findMany({ where: { workspaceId: context.workspace.id, status: query.status,
     ...(!owner && { OR: [{ senderId: agent.id }, { recipientId: agent.id }] }), issue: issueScope(context), ...(position && { AND: [{ OR: [
       { createdAt: { gt: position.createdAt } }, { createdAt: position.createdAt, id: { gt: position.id } },
     ] }] }) }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: query.limit + 1,
@@ -419,7 +420,7 @@ export async function actOnTransferOffer(context: AppAuthContext, offerId: strin
     if (!changed.count) throw new HandoffError('claim_changed', 'Original ownership changed; create a new offer', 409);
     const handoff = await db.agentHandoff.create({ data: { workspaceId: context.workspace.id, issueId: offer.issueId,
       sourceKey: `transfer-offer:${offer.id}`, senderId: sender.id, claimedById: agent.id, status: 'claimed',
-      recipientNames: [agent.name], content: offer.content, afterId: offer.parentId } });
+      recipientNames: [agent.name], content: `Transfer offer: ${offer.id}`, afterId: offer.parentId } });
     const accepted = await db.agentTransferOffer.update({ where: { id: offer.id }, data: { acceptedHandoffId: handoff.id } });
     await activity(db, context, agent, offer.issue, offer.parentId, 'transfer_accepted', undefined, { offerId: offer.id, successorId: handoff.id });
     await activity(db, context, agent, offer.issue, handoff.id, 'claim', undefined, { offerId: offer.id });
