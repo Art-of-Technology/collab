@@ -503,6 +503,61 @@ test('full journal prunes only reconciled terminal work and preserves uncertaint
   assert.equal(blocked.decisions.at(-1).reason, 'journal_retention_unresolved'); assert.equal(f.starts(), 1);
 });
 
+test('full journal prunes third-attempt and removed-worker records only when the server confirms them terminal', async t => {
+  const f = await fixture(t), api = f.deps.api;
+  f.deps.worker = async () => ({ state: 'stopped' });
+  const records = Object.fromEntries(Array.from({ length: 97 }, (_, i) => [`held-${i}`, { count: 1, pending: true, worker: 'worker', at: now }]));
+  records.third = { count: 3, pending: false, worker: 'worker', at: now };
+  records.failed = { count: 3, pending: false, worker: 'worker', at: now };
+  records.retired = { count: 1, pending: false, worker: 'retired', at: now };
+  await f.coordDisk.exclusive((s, save) => { s.attempts = records; save(s); });
+  await f.workerDisk.exclusive((s, save) => { s.closed = true; save(s); });
+  await store(`worker-${workerKey(f.selected, 'user', 'retired')}`).exclusive((s, save) => save({ ...s, closed: true }));
+  f.deps.api = async (url, extra) => {
+    if (url === 'agents/worker?agent=retired') return { agent: { name: 'retired', worker: { closed: true } } };
+    if (url.startsWith('agents/handoffs/third?') || url.startsWith('agents/handoffs/retired?')) return { handoff: { id: url.split('/')[2].split('?')[0], status: 'completed', issue: { projectId: 'project' } } };
+    if (url.startsWith('agents/handoffs/failed?')) return { handoff: { id: 'failed', status: 'open', issue: { projectId: 'project' } } };
+    return api(url, extra);
+  };
+  const first = await f.run('run');
+  assert.equal(first.attempts.third, undefined); assert.equal(first.attempts.failed.count, 3); assert.equal(first.attempts.task.pending, false);
+  f.setItem({ ...task, id: 'task-two' });
+  const second = await f.run('run');
+  assert.equal(second.attempts.retired, undefined); assert.equal(second.attempts.failed.count, 3); assert.equal(second.attempts['task-two'].pending, false);
+  f.setItem({ ...task, id: 'task-three' });
+  const blocked = await f.run('run');
+  assert.equal(blocked.decisions.at(-1).reason, 'journal_retention_unresolved'); assert.equal(blocked.attempts['task-three'], undefined);
+  assert.equal(Object.keys(blocked.attempts).length, 100); assert.equal(blocked.attempts['held-0'].pending, true);
+});
+
+test('a recovered login error clears after an authenticated acquisition and is retained in history', async t => {
+  const f = await fixture(t), api = f.deps.api;
+  f.deps.api = async (url, extra = {}) => { if (url === 'agents/coordinator' && extra.body?.event === 'acquire') throw Object.assign(Error(), { code: 'token_expired', details: { status: 401 } }); return api(url, extra); };
+  const failed = await f.run('run');
+  assert.equal(failed.error, 'token_expired'); assert.equal(failed.status, 'blocked'); assert.equal(failed.closed, true);
+  await f.run('setup');
+  assert.equal((await f.run('run')).error, 'token_expired', 'an unauthenticated retry keeps the error current');
+  await f.run('setup'); f.deps.api = api;
+  const recovered = await f.run('run');
+  assert.equal(recovered.error, undefined); assert.equal(recovered.status, 'stopped');
+  assert.equal(recovered.errorHistory.at(-1).error, 'token_expired'); assert.equal(f.starts(), 1);
+});
+
+test('status reports a confirmed stop after a clean shutdown and unconfirmed while the generation is held', { timeout: 15000 }, async t => {
+  const f = await fixture(t), api = f.deps.api; let reached, release;
+  await f.run('run');
+  const stopped = await f.run('status');
+  assert.equal(stopped.online, false); assert.equal(stopped.closed, true); assert.equal(stopped.stopped, true);
+  const acquiring = new Promise(resolve => { reached = resolve; }), gate = new Promise(resolve => { release = resolve; });
+  f.deps.api = async (url, extra = {}) => { if (url === 'agents/coordinator' && extra.body?.event === 'acquire') { reached(); await gate; } return api(url, extra); };
+  f.setItem({ ...task, status: 'completed' });
+  const running = f.run('run'); await acquiring;
+  const held = await f.run('status');
+  assert.equal(held.online, false); assert.equal(held.stopped, false);
+  release(); await running;
+  assert.equal((await f.run('status')).stopped, true);
+});
+
 test('explicit coordinator stop persists a pause; setup preserves prior task history', async t => {
   const f = await fixture(t);
   await f.run('run');

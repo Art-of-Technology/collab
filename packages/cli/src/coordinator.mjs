@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { CliError, request, store } from './client.mjs';
-import { runWorker, workerKey, control, recoverableReservation } from './worker.mjs';
+import { runWorker, workerKey, control, recoverableReservation, loginErrors } from './worker.mjs';
 import { workerService } from './worker-service.mjs';
 
 export const coordinatorCommands = Object.fromEntries(['setup', 'run', 'status', 'stop', 'install', 'uninstall'].map(action =>
@@ -71,15 +71,17 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
       }
     }
     const health = await control(controls.load(), name.endsWith('stop') ? 'stop' : 'status');
-    if (name.endsWith('stop') && !health.stopped) {
+    // No endpoint is not proof of a stop; the exclusive lock plus a closed saved generation is.
+    if (!health.online && !health.stopped) {
       try {
         await disk.exclusive((state, save) => {
           if (state.runId && !state.closed) throw fail('stop_unconfirmed', 'Coordinator closure is unconfirmed.');
-          state.paused = true; state.status = 'paused'; save(state); health.stopped = true;
+          if (name.endsWith('stop')) { state.paused = true; state.status = 'paused'; save(state); }
+          health.stopped = true;
         });
       } catch (error) {
         if (!['state_locked', 'stop_unconfirmed'].includes(error.code)) throw error;
-        throw fail('stop_unconfirmed', 'Stop requested; coordinator closure is unconfirmed. Inspect status and retry.');
+        if (name.endsWith('stop')) throw fail('stop_unconfirmed', 'Stop requested; coordinator closure is unconfirmed. Inspect status and retry.');
       }
     }
     const state = disk.load();
@@ -163,7 +165,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
         if (['coordinator_conflict', 'coordinator_fenced'].includes(error.code) || error.details?.status >= 400 && error.details.status < 500 && ![408, 429].includes(error.details.status)) { state.closed = true; save(state); }
         throw error;
       }
-      if (['coordinator_conflict', 'coordinator_fenced'].includes(state.error)) setError(state, null);
+      if (['coordinator_conflict', 'coordinator_fenced', ...loginErrors].includes(state.error)) setError(state, null);
       save(state);
       if (controls.load().stopRequested) { state.paused = true; stop(); }
       abort.signal.throwIfAborted();
@@ -215,7 +217,7 @@ export async function runCoordinator(name, options, selected, userId, deps = {})
                   // Persist before dispatch. A crash before a return requires reconciliation, not a second start.
                   if (Object.keys(state.attempts).length >= 100 && !prior) {
                     for (const [id, attempt] of Object.entries(state.attempts)) {
-                      if (attempt.pending || attempt.count >= 3 || !config.workers.includes(attempt.worker)) continue;
+                      if (attempt.pending || !identifier(attempt.worker)) continue;
                       const local = store(`worker-${workerKey(selected, userId, attempt.worker)}`).load();
                       if (!local.closed || local.active) continue;
                       try {
