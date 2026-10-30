@@ -340,7 +340,7 @@ export async function createTransferOffer(context: AppAuthContext, input: z.infe
     }
     const offer = await db.agentTransferOffer.create({ data: { workspaceId: context.workspace.id, issueId: current.issueId,
       parentId: current.id, senderId: sender.id, recipientId: recipient.id, recipientName: recipient.name, requestId: input.requestId, content: input.content } });
-    await activity(db, context, sender, current.issue, current.id, 'transfer_offered', input.content, { offerId: offer.id, recipient: recipient.name });
+    await activity(db, context, sender, current.issue, current.id, 'transfer_offered', undefined, { offerId: offer.id, recipient: recipient.name });
     return offer;
   });
 }

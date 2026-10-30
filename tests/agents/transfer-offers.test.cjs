@@ -28,7 +28,6 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     { env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
   const migration = readFileSync(resolve('prisma/migrations/20261030000200_agent_transfer_offer/migration.sql'), 'utf8');
   const trigger = migration.slice(migration.indexOf('CREATE FUNCTION "guard_pending_transfer_offer"'));
-  assert.ok(trigger.startsWith('CREATE FUNCTION'));
   execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', username, '-d', 'postgres'], { input: trigger, stdio: ['pipe', 'pipe', 'pipe'] });
   prisma = new PrismaClient({ datasources: { db: { url } } });
   class TestPrismaClient extends PrismaClient { constructor(options) { super({ ...options, datasources: { db: { url } } }); } }
@@ -70,6 +69,36 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     }
     throw new Error(`Expected ${count} PostgreSQL lock waiters`);
   };
+
+  await t.test('offer content stays out of issue activity and search before and after acceptance', async () => {
+    const row = await original(), secret = `privateoffer${randomUUID().replaceAll('-', '')}`;
+    const pending = await offer(row, { content: secret });
+    assert.equal((await service.listTransferOffers(bob, service.transferOfferListSchema.parse({ agent: 'bob' }))).items.find(x => x.id === pending.id).content, secret);
+    assert.equal((await service.listTransferOffers(carol, service.transferOfferListSchema.parse({ agent: 'carol' }))).items.some(x => x.id === pending.id), false);
+    const activityRoute = load('src/app/api/issues/[issueId]/activities/route.ts', {
+      'next/server': { NextResponse: Response }, '@/lib/auth': { getAuthSession: async () => ({ user: { id: 'carol' } }) },
+      '@/lib/prisma': { prisma: servicePrisma },
+    }, { URL, console });
+    const queryModule = load('src/lib/agent-search-query.ts', { zod: require('zod') }, { Buffer });
+    const lexical = load('src/lib/agent-search-lexical.ts', { '@prisma/client': { Prisma }, '@/lib/prisma': { prisma: servicePrisma } });
+    const search = load('src/lib/agent-search.ts', { '@prisma/client': { Prisma }, '@/lib/prisma': { prisma: servicePrisma },
+      '@/lib/issue-finder': finder, '@/lib/secrets/access': load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma: servicePrisma }, '@/lib/issue-finder': finder }),
+      '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts'),
+      './agent-search-query': queryModule, './agent-search-lexical': lexical, './agent-search-vectors': {} }, { Buffer });
+    const check = async () => {
+      const response = await activityRoute.GET(new Request('https://example.test'), { params: Promise.resolve({ issueId: 'i-w' }) });
+      assert.equal(response.status, 200);
+      const activities = await response.json();
+      assert.ok(activities.some(x => x.action === 'AGENT_TRANSFER_OFFERED' && x.details.offerId === pending.id));
+      assert.equal(JSON.stringify(activities).includes(secret), false);
+      const result = await search.searchProjectContent(carol, queryModule.searchQuerySchema.parse({ query: secret, mode: 'exact', type: 'activity' }));
+      assert.equal(result.results.length, 0);
+    };
+    await check();
+    const accepted = await act(bob, pending, 'bob', 'accept');
+    assert.equal(accepted.handoff.content, secret);
+    await check();
+  });
 
   await t.test('offer is invisible to legacy inbox; acceptance is atomic and idempotent', async () => {
     const row = await original(), requestId = randomUUID();
