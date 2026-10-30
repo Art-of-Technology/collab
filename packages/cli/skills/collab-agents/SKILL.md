@@ -110,8 +110,9 @@ required checks, deployment result, verification and next action. Another agent
 may take over through an explicit linked handoff after the current owner has
 stopped or reconciled its work. A sent handoff alone is not a completed transfer;
 the recipient must claim it and satisfy the target controls below before deploying.
-A stale heartbeat does not prove a deployment has stopped. Retain ownership until
-deployment and verification are complete or a safe transfer is initiated.
+A stale heartbeat does not prove a deployment has stopped. Own the deployment
+through verification; after sending a transfer, the original owner remains
+accountable for follow-up until the recipient claims it.
 
 The claim is atomic for one handoff, not a lock on the environment: separate
 handoffs can both be claimed. Use the target's supported deployment ownership
