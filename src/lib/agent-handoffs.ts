@@ -134,7 +134,7 @@ export async function manageWorker(context: AppAuthContext, input: z.infer<typeo
   });
 }
 type InboxContext = { user: { id: string }; workspace: { id: string } };
-type Agent = { id: string; name: string; userId: string; labelIds: string[] };
+type Agent = { id: string; name: string; userId: string; labelIds: string[]; managedWorker?: Prisma.JsonValue | null };
 type Watcher = { id: string; state: 'running' | 'stopped' | 'error'; startedAt: string; heartbeatAt: string;
   lastPollAt: string | null; lastWakeAt: string | null; errorCode: string | null };
 const watcherStaleMs = 300000;
@@ -435,6 +435,7 @@ export async function actOnTransferOffer(context: AppAuthContext, offerId: strin
 function inboxMatch(agent: Agent, state: 'unseen' | 'claimed'): Prisma.AgentHandoffWhereInput {
   return {
     OR: [{ recipientNames: { has: agent.name } }, { labelIds: { hasSome: agent.labelIds } }, { claimedById: agent.id }],
+    ...(agent.managedWorker ? { NOT: { sourceKey: { startsWith: 'transfer-offer:' } } } : {}),
     ...(state === 'claimed' ? { claimedById: agent.id, status: 'claimed' }
       : { status: { not: 'superseded' }, receipts: { none: { agentId: agent.id, seenAt: { not: null } } } }),
   };
@@ -549,6 +550,7 @@ export async function actOnHandoff(context: AppAuthContext, id: string, input: z
       return { id, action: input.action, status: handoff.status };
     }
     if (input.action === 'claim') {
+      if (agent.managedWorker && handoff.sourceKey.startsWith('transfer-offer:')) throw new HandoffError('managed_agent', 'Managed workers cannot claim transfer successors', 409);
       if (handoff.claimedById === agent.id && handoff.status === 'claimed') return handoff;
       if (!handoff.recipientNames.includes(agent.name) && !handoff.labelIds.some(label => agent.labelIds.includes(label))) {
         throw new HandoffError('not_a_recipient', 'Only a matching recipient can claim this handoff', 403);

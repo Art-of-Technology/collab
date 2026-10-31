@@ -78,6 +78,10 @@
     {
       "name": "20261030000200_agent_transfer_offer",
       "sha256": "e0b39e476220d4facbca0254627d5d7b5853823e86ae13655ad3be324e1f6cf1"
+    },
+    {
+      "name": "20261031000100_transfer_worker_guard",
+      "sha256": "45a46cfec841209705ec98a692b9fdd5cdec108dd609386e53ab9dd225fc148d"
     }
   ],
   "unmodeledCatalog": {

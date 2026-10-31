@@ -50,6 +50,8 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   for (const statement of managedWorkersMigration.split(';').filter(s => s.trim())) await prisma.$executeRawUnsafe(statement);
   const offerMigration = readFileSync(resolve('prisma/migrations/20261030000200_agent_transfer_offer/migration.sql'), 'utf8');
   execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', userInfo().username, '-d', 'postgres'], { input: offerMigration, stdio: ['pipe', 'pipe', 'pipe'] });
+  const workerGuard = readFileSync(resolve('prisma/migrations/20261031000100_transfer_worker_guard/migration.sql'), 'utf8');
+  execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', userInfo().username, '-d', 'postgres'], { input: workerGuard, stdio: ['pipe', 'pipe', 'pipe'] });
   const legacy = await prisma.agentRegistration.findUniqueOrThrow({ where: { id: 'legacy-agent' } });
   assert.equal(legacy.host, null); assert.equal(legacy.sessionId, null); assert.equal(legacy.watcher, null);
   assert.equal(legacy.managedWorker, null, 'migration preserves existing agents as unmanaged');

@@ -84,9 +84,13 @@ or passing its claim through the legacy path. A current server reports
 claimant with a pending offer is blocked until the offer is cancelled; do not
 infer a stopped process from cancellation or account removal.
 
-The database migration installs the guard before a new server creates offers.
+The database migration installs the guards before a new server creates offers.
+Transfer successors cannot be claimed by managed workers, including through older
+servers; workers must not run without these guards. The migration refuses existing
+managed claims on transfer successors until they are resolved.
 All server replicas and the database must be qualified before use. Drain writers
-and cancel pending offers before removing the guard or rolling back schema.
+and managed workers, resolve transfer successors and cancel pending offers before
+removing either guard or rolling back schema.
 Legacy `afterId` behavior remains available and does not retain custody until
 acceptance, so adopting offers alone does not enforce the rule for older clients.
 Managed workers do not participate in this manual protocol.

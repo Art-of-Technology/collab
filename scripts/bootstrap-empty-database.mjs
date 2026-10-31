@@ -38,6 +38,9 @@ try {
   const transferStart = transfer.indexOf('CREATE FUNCTION "guard_pending_transfer_offer"');
   if (transferStart < 0) throw new Error('Transfer offer supplements need review.');
   const transferSupplements = transfer.slice(transferStart);
+  const transferWorkerMigration = rows.find(row => row.name === '20261031000100_transfer_worker_guard').sql;
+  if (!transferWorkerMigration.startsWith('BEGIN;\n') || !transferWorkerMigration.endsWith('COMMIT;\n')) throw new Error('Transfer worker supplements need review.');
+  const transferWorkerSupplements = transferWorkerMigration.slice('BEGIN;\n'.length, -'COMMIT;\n'.length);
   // Reuse the exact unmodeled SQL contracts; fail closed if their format changes.
   const stateCheck = ready.match(/^  CONSTRAINT "ForgeExecutionAttempt_state_check" CHECK .+$/m)?.[0].trim();
   const activeIndex = ready.match(/^CREATE UNIQUE INDEX "ForgeExecutionAttempt_active_issue_key"[\s\S]*?;/m)?.[0];
@@ -61,6 +64,7 @@ ALTER TABLE "ForgeExecutionAttempt" ADD ${stateCheck};
 ${activeIndex}
 ${versionSupplements}
 ${transferSupplements}
+${transferWorkerSupplements}
 COMMIT;
 `;
   // Keep credentials out of command arguments, logs and generated files.

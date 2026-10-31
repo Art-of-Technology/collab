@@ -46,7 +46,8 @@ run in one PostgreSQL transaction. Prisma generates the current modeled schema;
 the script also applies the exact Ready state CHECK and active-attempt partial
 unique index from the retained Ready migration, plus all six Version provenance
 functions and triggers from `20260924130000_version_access_invalidation`, and
-the pending-transfer guard function and trigger from `20261030000200_agent_transfer_offer`.
+the pending-transfer guard from `20261030000200_agent_transfer_offer` and the
+managed-worker claim and conversion guards from `20261031000100_transfer_worker_guard`.
 The current model already creates `Version.issueAccessInvalidated` with default
 false. The historical migration first marks existing rows true; that upgrade
 backfill is deliberately not replayed into an empty bootstrap. Existing databases

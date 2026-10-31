@@ -43,6 +43,15 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
   await prisma.project.createMany({ data: ['w', 'foreign'].map(id => ({ id: `p-${id}`, workspaceId: id, name: id, slug: id, issuePrefix: id })) });
   await prisma.issue.createMany({ data: ['w', 'foreign'].map(id => ({ id: `i-${id}`, workspaceId: id, projectId: `p-${id}`, title: id, issueKey: `${id}-1` })) });
   for (const [ctx, name] of [[alice, 'alice'], [bob, 'bob'], [carol, 'carol'], [dave, 'dave'], [foreign, 'outsider']]) await service.registerAgent(ctx, service.registrationSchema.parse({ name }));
+  await service.manageWorker(bob, service.workerSchema.parse({ agent: 'migration-worker', host: 'host', sessionId: 'migration', event: 'configure' }));
+  const unsafeWorker = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'migration-worker' } } });
+  const unsafe = await prisma.agentHandoff.create({ data: { workspaceId: 'w', issueId: 'i-w', sourceKey: 'transfer-offer:unsafe', content: 'Reference', status: 'claimed', claimedById: unsafeWorker.id } });
+  const workerGuard = readFileSync(resolve('prisma/migrations/20261031000100_transfer_worker_guard/migration.sql'), 'utf8');
+  const applyWorkerGuard = () => execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', username, '-d', 'postgres'], { input: workerGuard, stdio: ['pipe', 'pipe', 'pipe'] });
+  assert.throws(applyWorkerGuard, /Resolve managed claims on transfer successors/);
+  await prisma.agentHandoff.delete({ where: { id: unsafe.id } });
+  await prisma.agentRegistration.delete({ where: { id: unsafeWorker.id } });
+  applyWorkerGuard();
   const original = async () => {
     const row = await service.sendHandoff(alice, service.sendSchema.parse({ agent: 'alice', issue: 'w-1', content: 'Owned task', toAgents: ['alice'], requestId: randomUUID() }));
     return service.actOnHandoff(alice, row.id, service.actionSchema.parse({ agent: 'alice', action: 'claim' }));
@@ -205,6 +214,52 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
       await assert.rejects(act(carol, row, 'retry-worker', action), e => e.code === 'offer_not_found');
     }
     await act(alice, pending, 'alice', 'cancel');
+  });
+
+  await t.test('transfer successors cannot enter managed execution across server versions', async () => {
+    const recipient = await service.registerAgent(bob, service.registrationSchema.parse({ name: 'transfer-target' }));
+    const pending = await offer(await original(), { toAgent: 'transfer-target', content: 'Private instructions' });
+    const accepted = await act(bob, pending, 'transfer-target', 'accept');
+    await assert.rejects(prisma.agentRegistration.update({ where: { id: recipient.id }, data: { managedWorker: { state: 'stopped' } } }), /Release transfer successors/);
+    await service.manageWorker(carol, service.workerSchema.parse({ agent: 'other-worker', host: 'host', sessionId: 'other', event: 'configure' }));
+    const other = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'other-worker' } } });
+    const release = service.actOnHandoff(bob, accepted.handoff.id, service.actionSchema.parse({ agent: 'transfer-target', action: 'release', content: 'Released' }));
+    const legacyClaim = prisma.agentHandoff.updateMany({ where: { id: accepted.handoff.id, status: 'open', claimedById: null }, data: { status: 'claimed', claimedById: other.id } });
+    const [released, legacy] = await Promise.allSettled([release, legacyClaim]);
+    assert.equal(released.status, 'fulfilled');
+    if (legacy.status === 'fulfilled') assert.equal(legacy.value.count, 0);
+    else assert.match(String(legacy.reason), /Managed workers cannot claim/);
+    assert.equal((await parent(accepted.handoff)).status, 'open');
+    await service.actOnHandoff(bob, accepted.handoff.id, service.actionSchema.parse({ agent: 'transfer-target', action: 'claim' }));
+    await service.actOnHandoff(bob, accepted.handoff.id, service.actionSchema.parse({ agent: 'transfer-target', action: 'release', content: 'Released again' }));
+    const manage = body => service.manageWorker(bob, service.workerSchema.parse({ agent: 'transfer-target', host: 'host', sessionId: 'target', ...body }));
+    await manage({ event: 'configure', convert: true });
+    const generation = randomUUID();
+    await manage({ event: 'start', generation });
+    const ordinary = await service.sendHandoff(alice, service.sendSchema.parse({ agent: 'alice', issue: 'w-1', content: 'Ordinary work', toAgents: ['transfer-target'] }));
+    await service.actOnHandoff(bob, ordinary.id, service.actionSchema.parse({ agent: 'transfer-target', action: 'claim', generation }));
+    await service.actOnHandoff(bob, ordinary.id, service.actionSchema.parse({ agent: 'transfer-target', action: 'complete', content: 'Done', generation }));
+    const inbox = await service.agentInbox(bob, service.inboxSchema.parse({ agent: 'transfer-target' }));
+    assert.equal(inbox.items.some(item => item.id === accepted.handoff.id), false);
+    await assert.rejects(service.actOnHandoff(bob, accepted.handoff.id, service.actionSchema.parse({ agent: 'transfer-target', action: 'claim', generation })), e => e.code === 'managed_agent');
+    await assert.rejects(prisma.agentHandoff.update({ where: { id: accepted.handoff.id }, data: { status: 'claimed', claimedById: recipient.id } }), /Managed workers cannot claim/);
+    await manage({ event: 'close', generation });
+    const coordinator = { project: 'p-w', generation: randomUUID() };
+    await prisma.project.update({ where: { id: 'p-w' }, data: { coordinator: { userId: 'bob', generation: coordinator.generation, closed: false, leaseUntil: new Date(Date.now() + 60000).toISOString() } } });
+    const coordinatedGeneration = randomUUID();
+    await manage({ event: 'start', generation: coordinatedGeneration, coordinator });
+    await assert.rejects(service.actOnHandoff(bob, accepted.handoff.id, service.actionSchema.parse({ agent: 'transfer-target', action: 'claim', generation: coordinatedGeneration, coordinator })), e => e.code === 'managed_agent');
+    await manage({ event: 'close', generation: coordinatedGeneration });
+    await prisma.project.update({ where: { id: 'p-w' }, data: { coordinator: Prisma.DbNull } });
+    assert.equal((await act(bob, pending, 'transfer-target', 'accept')).offer.content, pending.content);
+    await prisma.agentRegistration.delete({ where: { id: recipient.id } });
+    await service.manageWorker(carol, service.workerSchema.parse({ agent: 'transfer-target', host: 'host', sessionId: 'replacement', event: 'configure' }));
+    const replacement = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'transfer-target' } } });
+    const replacementGeneration = randomUUID();
+    await service.manageWorker(carol, service.workerSchema.parse({ agent: 'transfer-target', host: 'host', sessionId: 'replacement', event: 'start', generation: replacementGeneration }));
+    await assert.rejects(service.actOnHandoff(carol, accepted.handoff.id, service.actionSchema.parse({ agent: 'transfer-target', action: 'claim', generation: replacementGeneration })), e => e.code === 'managed_agent');
+    await assert.rejects(prisma.agentHandoff.update({ where: { id: accepted.handoff.id }, data: { status: 'claimed', claimedById: replacement.id } }), /Managed workers cannot claim/);
+    assert.equal(JSON.stringify(await service.agentInbox(carol, service.inboxSchema.parse({ agent: 'transfer-target' }))).includes(pending.content), false);
   });
 
   await t.test('reusing a recipient name does not grant access to the offer', async () => {
