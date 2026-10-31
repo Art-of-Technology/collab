@@ -1,7 +1,7 @@
 {
   "format": "collab-empty-bootstrap-v1",
   "prismaVersion": "6.19.3",
-  "schemaSha256": "b3f9ced85a89d998406967205ca96eeb0eaca667852df3458c23af96556e5277",
+  "schemaSha256": "cf48e2053b71a01a848d320a3d385c7158e15fa4f08a44f4bcdc875c74706fb6",
   "migrations": [
     {
       "name": "20250101000000_remove_task_relations_foreign_key",
@@ -74,6 +74,22 @@
     {
       "name": "20261029000100_project_coordinator",
       "sha256": "64a492c41e7319ec69a2c079512464ee382b062494c0ccc173fd8a9633c0dcfa"
+    },
+    {
+      "name": "20261030000200_agent_transfer_offer",
+      "sha256": "e0b39e476220d4facbca0254627d5d7b5853823e86ae13655ad3be324e1f6cf1"
+    },
+    {
+      "name": "20261031000100_transfer_worker_guard",
+      "sha256": "45a46cfec841209705ec98a692b9fdd5cdec108dd609386e53ab9dd225fc148d"
+    },
+    {
+      "name": "20261031000200_transfer_recipient_guard",
+      "sha256": "afd22eddbf1d424c06c057278fb32fe237abb467473d561b98f23c4a598b7af9"
+    },
+    {
+      "name": "20261031000300_pending_offer_serialization",
+      "sha256": "83f8c51fb567a11c964cac2f415f2929c68fc991a8b4e877c0707eeb12cd54ff"
     }
   ],
   "unmodeledCatalog": {

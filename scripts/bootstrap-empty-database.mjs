@@ -34,6 +34,19 @@ try {
   const versionStart = version.indexOf('CREATE FUNCTION "retain_version_access_invalidation"');
   if (versionStart < 0) throw new Error('Version provenance supplements need review.');
   const versionSupplements = version.slice(versionStart);
+  const transfer = rows.find(row => row.name === '20261030000200_agent_transfer_offer').sql;
+  const transferStart = transfer.indexOf('CREATE FUNCTION "guard_pending_transfer_offer"');
+  if (transferStart < 0) throw new Error('Transfer offer supplements need review.');
+  const transferSupplements = transfer.slice(transferStart);
+  const transferWorkerMigration = rows.find(row => row.name === '20261031000100_transfer_worker_guard').sql;
+  if (!transferWorkerMigration.startsWith('BEGIN;\n') || !transferWorkerMigration.endsWith('COMMIT;\n')) throw new Error('Transfer worker supplements need review.');
+  const transferWorkerSupplements = transferWorkerMigration.slice('BEGIN;\n'.length, -'COMMIT;\n'.length);
+  const transferRecipientMigration = rows.find(row => row.name === '20261031000200_transfer_recipient_guard').sql;
+  if (!transferRecipientMigration.startsWith('BEGIN;\n') || !transferRecipientMigration.endsWith('COMMIT;\n')) throw new Error('Transfer recipient supplements need review.');
+  const transferRecipientSupplements = transferRecipientMigration.slice('BEGIN;\n'.length, -'COMMIT;\n'.length);
+  const pendingSerializationMigration = rows.find(row => row.name === '20261031000300_pending_offer_serialization').sql;
+  if (!pendingSerializationMigration.startsWith('BEGIN;\n') || !pendingSerializationMigration.endsWith('COMMIT;\n')) throw new Error('Pending offer supplements need review.');
+  const pendingSerializationSupplements = pendingSerializationMigration.slice('BEGIN;\n'.length, -'COMMIT;\n'.length);
   // Reuse the exact unmodeled SQL contracts; fail closed if their format changes.
   const stateCheck = ready.match(/^  CONSTRAINT "ForgeExecutionAttempt_state_check" CHECK .+$/m)?.[0].trim();
   const activeIndex = ready.match(/^CREATE UNIQUE INDEX "ForgeExecutionAttempt_active_issue_key"[\s\S]*?;/m)?.[0];
@@ -56,6 +69,10 @@ ${generated.stdout}
 ALTER TABLE "ForgeExecutionAttempt" ADD ${stateCheck};
 ${activeIndex}
 ${versionSupplements}
+${transferSupplements}
+${transferWorkerSupplements}
+${transferRecipientSupplements}
+${pendingSerializationSupplements}
 COMMIT;
 `;
   // Keep credentials out of command arguments, logs and generated files.

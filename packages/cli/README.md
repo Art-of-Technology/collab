@@ -234,6 +234,11 @@ file through your agent's supported skill mechanism; it does not launch agents.
 Native users can get `packages/cli/skills/collab-agents/SKILL.md` from the source archive on the [CLI release page](#one-command-installation).
 For the required server capabilities and migrations, see [Validation and rollout](../../docs/agent-handoffs.md#validation-and-rollout).
 
+The matching server and CLI also support manual `collab transfers offer`,
+`transfers list`, `transfers accept` and `transfers cancel`. An offer keeps the
+original claim until its named recipient accepts; it does not wake an agent.
+For prerequisites, cancellation and older-client limits, see [transfer offers](../../docs/agent-handoffs.md#transfers-that-retain-ownership-until-acceptance).
+
 `collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to
 30 seconds (supported range 1–60). It prints one JSON result and exits. An empty
 wait returns `timedOut: true`; it never marks, acknowledges or claims work.
