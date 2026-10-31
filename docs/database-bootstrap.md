@@ -8,9 +8,10 @@ history. It does not repair historical shadow-database replay, upgrade an
 existing installation or authorize production changes.
 
 The contract includes agent handoffs, transfer offers, Git provider connections
-and issue Trash. Their tables, indexes and foreign keys are represented by the
-current Prisma schema; the transfer offer guard also requires a SQL supplement. This does not
-qualify upgrades of an existing installation. In particular, do not use bootstrap
+and issue Trash. Their modeled tables, indexes and foreign keys are represented
+by the current Prisma schema; transfer guards and the pending-offer partial index
+also require SQL supplements. This does not qualify upgrades of an existing
+installation. In particular, do not use bootstrap
 or baseline commands on a populated database without a migration ledger. Apply
 only its separately reviewed upgrade SQL after a fresh backup. For Git provider
 upgrades, see [Git provider database and deployment](git-provider-connections.md#database-and-deployment).
@@ -56,7 +57,7 @@ backfill is deliberately not replayed into an empty bootstrap. Existing database
 must run the original migration, including its conservative invalidation. The modeled project foreign
 key preserves delete restriction. Do not substitute `db push` for bootstrap or
 reviewed upgrade migrations: it does not install the unmodeled constraints and
-Version functions/triggers or the pending-transfer guard. No reset is used.
+Version or transfer functions/triggers. No reset is used.
 
 After schema creation, native `prisma migrate resolve --applied` records each
 retained historical migration. These are baselines, not claims that historical
@@ -84,8 +85,9 @@ Recovery is an explicit operator investigation, not an automatic retry:
    backup before considering further writes.
 2. Compare the actual schema with the reviewed Prisma model and inspect the
    Ready state CHECK, partial unique index and restrictive project foreign key,
-   plus the six enabled Version function/trigger pairs and the enabled
-   pending-transfer guard on their expected tables.
+   plus the six enabled Version function/trigger pairs, all transfer guard
+   functions and enabled triggers, and the pending-offer partial unique index on
+   their expected tables.
    Verify `Version.issueAccessInvalidated` is non-null with default false.
    The expected catalog is defined by the pinned schema, original supplement SQL
    and `prisma/bootstrap-contract.json`; actual native readback is still required.
@@ -124,7 +126,7 @@ after a real COMMIT. It never selects an existing application database.
 
 The bootstrap contract is the authoritative list of admitted migrations and
 their checksums. It retains the exact Ready, Version provenance and transfer
-guard supplements.
+guard and index supplements.
 Historical migrations are unchanged. Fresh schema generation installs the Trash
 columns, durable audit table and restrictive Issue project/workspace foreign
 keys directly; it does not replay the Trash migration's ALTER statements.

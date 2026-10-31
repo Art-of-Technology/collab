@@ -93,7 +93,7 @@ Transfer claims and manual-to-managed conversion require read committed isolatio
 other isolation levels fail closed.
 All server replicas and the database must be qualified before use. Drain writers
 and managed workers, resolve transfer successors and cancel pending offers before
-removing either guard or rolling back schema.
+removing any transfer guard or rolling back schema.
 Legacy `afterId` behavior remains available and does not retain custody until
 acceptance, so adopting offers alone does not enforce the rule for older clients.
 Managed workers do not participate in this manual protocol.
