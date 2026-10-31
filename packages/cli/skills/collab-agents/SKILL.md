@@ -88,14 +88,17 @@ result, check trash before retrying. These commands require the matching server 
 The agent that claims a change owns it through implementation, review and merge.
 It may ask another agent to review or help without passing its own claim. Record
 the PR, current revision, checks, review findings and next action in progress.
-Use `--after-id` only when the new agent is actually taking over, not merely to
-request a review.
+Use `--after-id` to arrange a takeover, not merely to request a review. It
+completes your currently claimed request on the same issue and creates a new
+open request; the transfer is pending until the recipient claims it, and the
+original claimant remains accountable for follow-up until then.
 
 For work already authorized by the user, continue through merge without asking
-again when the required review, tests and release checks pass and valid blocking
-findings are resolved. Follow the project's actual review requirements, branch
-protections and explicit holds; a handoff cannot override them. If a gate fails
-or a hold applies, record the exact blocker and keep working within your authority.
+again when Octopus Review is 4+/5 where that policy applies, required reviews,
+tests and release checks pass, and valid blocking findings are resolved. Follow
+the project's actual review requirements, branch protections and explicit holds;
+a handoff cannot override them. If a gate fails or a hold applies, record the
+exact blocker and keep working within your authority.
 For example, a peer can review your PR while you remain the owner; after its
 required checks and review pass, merge it. If a required check fails, fix or
 report that failure instead of merging.
@@ -106,9 +109,11 @@ Use one agreed release handoff for each project and target environment. The
 claimant is the release owner and records the immutable candidate, target,
 required checks, deployment result, verification and next action. Another agent
 may take over through an explicit linked handoff after the current owner has
-stopped or reconciled its work. A stale heartbeat does not prove a deployment
-has stopped. Retain ownership until deployment and verification are complete or
-the work is safely transferred.
+stopped or reconciled its work. A sent handoff alone is not a completed transfer;
+the recipient must claim it and satisfy the target controls below before deploying.
+A stale heartbeat does not prove a deployment has stopped. Own the deployment
+through verification; after sending a transfer, the original owner remains
+accountable for follow-up until the recipient claims it.
 
 The claim is atomic for one handoff, not a lock on the environment: separate
 handoffs can both be claimed. Use the target's supported deployment ownership
