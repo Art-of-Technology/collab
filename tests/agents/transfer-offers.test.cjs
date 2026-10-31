@@ -157,6 +157,56 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     assert.equal(await prisma.agentHandoff.count({ where: { afterId: acceptedOffer.parentId } }), 1);
   });
 
+  await t.test('closed retries remain authorized after conversion to a managed worker', async () => {
+    const registration = await service.registerAgent(bob, service.registrationSchema.parse({ name: 'retry-worker' }));
+    const acceptedOffer = await offer(await original(), { toAgent: 'retry-worker', content: 'Private accepted offer' });
+    const accepted = await act(bob, acceptedOffer, 'retry-worker', 'accept');
+    const cancelledOffer = await offer(await original(), { toAgent: 'retry-worker', content: 'Private cancelled offer' });
+    const cancelled = await act(bob, cancelledOffer, 'retry-worker', 'cancel');
+    const pending = await offer(await original(), { toAgent: 'retry-worker' });
+    const senderHandoff = await service.sendHandoff(bob, service.sendSchema.parse({ agent: 'retry-worker', issue: 'w-1', content: 'Owned task', toAgents: ['retry-worker'] }));
+    await service.actOnHandoff(bob, senderHandoff.id, service.actionSchema.parse({ agent: 'retry-worker', action: 'claim' }));
+    const senderOffer = await service.createTransferOffer(bob, service.transferOfferSchema.parse({ agent: 'retry-worker', handoffId: senderHandoff.id, toAgent: 'carol', content: 'Private sender offer', requestId: randomUUID() }));
+    const senderCancelled = await act(bob, senderOffer, 'retry-worker', 'cancel');
+    await service.actOnHandoff(bob, senderHandoff.id, service.actionSchema.parse({ agent: 'retry-worker', action: 'release', content: 'Released' }));
+    await service.actOnHandoff(bob, accepted.handoff.id, service.actionSchema.parse({ agent: 'retry-worker', action: 'release', content: 'Released' }));
+    await service.manageWorker(bob, service.workerSchema.parse({ agent: 'retry-worker', host: 'host', sessionId: 'session', event: 'configure', convert: true }));
+    const retry = await act(bob, acceptedOffer, 'retry-worker', 'accept');
+    const cancelledRetry = await act(bob, cancelledOffer, 'retry-worker', 'cancel');
+    const keys = value => Object.keys(value).sort();
+    assert.deepEqual(keys(retry), keys(accepted));
+    assert.deepEqual(keys(retry.offer), keys(accepted.offer));
+    assert.deepEqual(keys(retry.handoff), keys(accepted.handoff));
+    assert.deepEqual(keys(cancelledRetry), keys(cancelled));
+    assert.equal(retry.offer.id, accepted.offer.id);
+    assert.equal(retry.offer.content, acceptedOffer.content);
+    assert.equal(retry.handoff.id, accepted.handoff.id);
+    assert.equal(retry.handoff.status, 'open');
+    assert.equal(retry.handoff.claimedById, null);
+    assert.equal(cancelledRetry.id, cancelled.id);
+    assert.equal(cancelledRetry.content, cancelledOffer.content);
+    const senderRetry = await act(bob, senderOffer, 'retry-worker', 'cancel');
+    assert.deepEqual(keys(senderRetry), keys(senderCancelled));
+    assert.equal(senderRetry.id, senderCancelled.id);
+    assert.equal(senderRetry.content, senderOffer.content);
+    assert.equal(await prisma.agentHandoff.count({ where: { afterId: acceptedOffer.parentId } }), 1);
+    for (const action of ['accept', 'cancel']) {
+      await assert.rejects(act(bob, pending, 'retry-worker', action), e => e.code === 'managed_agent');
+    }
+    await assert.rejects(offer(await original(), { toAgent: 'retry-worker' }), e => e.code === 'recipient_not_found');
+    await prisma.workspaceMember.updateMany({ where: { userId: 'bob', workspaceId: 'w' }, data: { status: false } });
+    for (const [row, action] of [[acceptedOffer, 'accept'], [cancelledOffer, 'cancel'], [senderOffer, 'cancel']]) {
+      await assert.rejects(act(bob, row, 'retry-worker', action), e => e.code === 'offer_not_found');
+    }
+    await prisma.workspaceMember.updateMany({ where: { userId: 'bob', workspaceId: 'w' }, data: { status: true } });
+    await prisma.agentRegistration.delete({ where: { id: registration.id } });
+    await service.registerAgent(carol, service.registrationSchema.parse({ name: 'retry-worker' }));
+    for (const [row, action] of [[acceptedOffer, 'accept'], [cancelledOffer, 'cancel'], [senderOffer, 'cancel']]) {
+      await assert.rejects(act(carol, row, 'retry-worker', action), e => e.code === 'offer_not_found');
+    }
+    await act(alice, pending, 'alice', 'cancel');
+  });
+
   await t.test('reusing a recipient name does not grant access to the offer', async () => {
     await prisma.user.create({ data: { id: 'eve', name: 'eve' } });
     await prisma.workspaceMember.create({ data: { userId: 'eve', workspaceId: 'w' } });

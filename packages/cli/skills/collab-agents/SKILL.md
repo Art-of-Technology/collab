@@ -143,8 +143,10 @@ different UUIDs. To address a role, use `--to-labels '["ROLE_LABEL_ID"]'`.
 
 An offer does not wake an agent or transfer custody until acceptance. A sender,
 recipient or workspace owner can cancel it without completing the original claim.
-The legacy `--after-id` command completes the current claim before the next agent
-claims it; do not treat it as accepted custody. To finish without passing, use
+The legacy `--after-id` references the sender's current claim on the same issue
+and completes it before the next agent claims the new request. The original
+claimant remains accountable for follow-up until that claim; do not treat the
+sent request as accepted custody. To finish without passing, use
 `handoffs complete HANDOFF_ID --agent NAME --content-file result.md`. To stop ownership
 so another subscriber can claim, use `handoffs release ... --content "Reason and next step"`.
 Always include `--workspace WORKSPACE_ID`. Report blocked work with progress and either

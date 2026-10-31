@@ -385,13 +385,17 @@ export async function actOnTransferOffer(context: AppAuthContext, offerId: strin
     if (!initial) throw new HandoffError('offer_not_found', 'Offer not found or access denied', 404);
     await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND id IN (${agent.id}, ${initial.senderId ?? agent.id}) ORDER BY id FOR UPDATE`;
     agent = await ownedAgent(db, context, input.agent);
-    if (agent.id !== actorId || agent.managedWorker) throw new HandoffError('managed_agent', 'Transfer offers require the same manual agent', 409);
+    if (agent.id !== actorId) throw new HandoffError('managed_agent', 'Transfer offers require the same manual agent', 409);
     const originalSender = initial.senderId ? await db.agentRegistration.findFirst({ where: { id: initial.senderId, workspaceId: context.workspace.id } }) : null;
     await lockTransferAccess(db, context.workspace.id, initial.issueId, agent.userId, originalSender?.userId ?? agent.userId);
     await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${initial.parentId} AND "workspaceId" = ${context.workspace.id} FOR UPDATE`;
     await db.$queryRaw`SELECT id FROM "AgentTransferOffer" WHERE id = ${offerId} AND "workspaceId" = ${context.workspace.id} FOR UPDATE`;
     const offer = await db.agentTransferOffer.findFirst({ where, include: { issue: { select: { id: true, issueKey: true, title: true, projectId: true } } } });
     if (!offer) throw new HandoffError('offer_not_found', 'Offer not found or access denied', 404);
+    if (agent.managedWorker && !(input.action === 'accept' && offer.status === 'accepted') &&
+      !(input.action === 'cancel' && offer.status === 'cancelled')) {
+      throw new HandoffError('managed_agent', 'Transfer offers require the same manual agent', 409);
+    }
     if (input.action === 'cancel') {
       if (offer.senderId !== agent.id && offer.recipientId !== agent.id && !await db.workspace.findFirst({
         where: { id: context.workspace.id, ownerId: context.user.id }, select: { id: true },
