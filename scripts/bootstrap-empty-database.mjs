@@ -41,6 +41,9 @@ try {
   const transferWorkerMigration = rows.find(row => row.name === '20261031000100_transfer_worker_guard').sql;
   if (!transferWorkerMigration.startsWith('BEGIN;\n') || !transferWorkerMigration.endsWith('COMMIT;\n')) throw new Error('Transfer worker supplements need review.');
   const transferWorkerSupplements = transferWorkerMigration.slice('BEGIN;\n'.length, -'COMMIT;\n'.length);
+  const transferRecipientMigration = rows.find(row => row.name === '20261031000200_transfer_recipient_guard').sql;
+  if (!transferRecipientMigration.startsWith('BEGIN;\n') || !transferRecipientMigration.endsWith('COMMIT;\n')) throw new Error('Transfer recipient supplements need review.');
+  const transferRecipientSupplements = transferRecipientMigration.slice('BEGIN;\n'.length, -'COMMIT;\n'.length);
   // Reuse the exact unmodeled SQL contracts; fail closed if their format changes.
   const stateCheck = ready.match(/^  CONSTRAINT "ForgeExecutionAttempt_state_check" CHECK .+$/m)?.[0].trim();
   const activeIndex = ready.match(/^CREATE UNIQUE INDEX "ForgeExecutionAttempt_active_issue_key"[\s\S]*?;/m)?.[0];
@@ -65,6 +68,7 @@ ${activeIndex}
 ${versionSupplements}
 ${transferSupplements}
 ${transferWorkerSupplements}
+${transferRecipientSupplements}
 COMMIT;
 `;
   // Keep credentials out of command arguments, logs and generated files.

@@ -84,10 +84,13 @@ or passing its claim through the legacy path. A current server reports
 claimant with a pending offer is blocked until the offer is cancelled; do not
 infer a stopped process from cancellation or account removal.
 
-The database migration installs the guards before a new server creates offers.
+Install all three transfer migrations listed below before enabling offers or workers.
 Transfer successors cannot be claimed by managed workers, including through older
-servers; workers must not run without these guards. The migration refuses existing
-managed claims on transfer successors until they are resolved.
+servers; workers must not run without these guards. The migrations refuse existing
+unauthorized claims on transfer successors until they are resolved. Only the original
+recipient registration can reclaim a released successor, with current issue access.
+Transfer claims and manual-to-managed conversion require read committed isolation;
+other isolation levels fail closed.
 All server replicas and the database must be qualified before use. Drain writers
 and managed workers, resolve transfer successors and cancel pending offers before
 removing either guard or rolling back schema.
@@ -190,7 +193,9 @@ CLI 0.8.0 project coordinators require the matching server and additive
 requirements above. See the [coordinator guide](../packages/cli/README.md#project-coordinator-cli-080)
 for operation and release qualification boundaries.
 
-Manual transfer offers require the matching server and additive
-`20261030000200_agent_transfer_offer` migration, including its pending-offer
-guard. Apply the same target, ledger and protected-backup requirements above.
+Manual transfer offers require the matching server and all three additive migrations:
+`20261030000200_agent_transfer_offer`, `20261031000100_transfer_worker_guard`, and
+`20261031000200_transfer_recipient_guard`. Apply and verify all three before enabling
+offers or workers, including during mixed-version rollout. Apply the same target,
+ledger and protected-backup requirements above.
 For fresh databases, see [empty-database bootstrap](database-bootstrap.md).

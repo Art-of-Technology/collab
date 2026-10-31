@@ -52,6 +52,12 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
   await prisma.agentHandoff.delete({ where: { id: unsafe.id } });
   await prisma.agentRegistration.delete({ where: { id: unsafeWorker.id } });
   applyWorkerGuard();
+  const recipientGuard = readFileSync(resolve('prisma/migrations/20261031000200_transfer_recipient_guard/migration.sql'), 'utf8');
+  const invalidClaim = await prisma.agentHandoff.create({ data: { workspaceId: 'w', issueId: 'i-w', sourceKey: 'transfer-offer:missing', content: 'Reference', status: 'claimed', claimedById: (await prisma.agentRegistration.findFirstOrThrow({ where: { name: 'bob' } })).id } });
+  const applyRecipientGuard = () => execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', username, '-d', 'postgres'], { input: recipientGuard, stdio: ['pipe', 'pipe', 'pipe'] });
+  assert.throws(applyRecipientGuard, /Resolve unauthorized claims on transfer successors/);
+  await prisma.agentHandoff.delete({ where: { id: invalidClaim.id } });
+  applyRecipientGuard();
   const original = async () => {
     const row = await service.sendHandoff(alice, service.sendSchema.parse({ agent: 'alice', issue: 'w-1', content: 'Owned task', toAgents: ['alice'], requestId: randomUUID() }));
     return service.actOnHandoff(alice, row.id, service.actionSchema.parse({ agent: 'alice', action: 'claim' }));
@@ -260,6 +266,71 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     await assert.rejects(service.actOnHandoff(carol, accepted.handoff.id, service.actionSchema.parse({ agent: 'transfer-target', action: 'claim', generation: replacementGeneration })), e => e.code === 'managed_agent');
     await assert.rejects(prisma.agentHandoff.update({ where: { id: accepted.handoff.id }, data: { status: 'claimed', claimedById: replacement.id } }), /Managed workers cannot claim/);
     assert.equal(JSON.stringify(await service.agentInbox(carol, service.inboxSchema.parse({ agent: 'transfer-target' }))).includes(pending.content), false);
+  });
+
+  await t.test('repeatable-read claim and conversion fail closed in both lock orders', async () => {
+    const registration = await service.registerAgent(bob, service.registrationSchema.parse({ name: 'race-recipient' }));
+    const pending = await offer(await original(), { toAgent: 'race-recipient' });
+    const accepted = await act(bob, pending, 'race-recipient', 'accept');
+    const release = () => service.actOnHandoff(bob, accepted.handoff.id, service.actionSchema.parse({ agent: 'race-recipient', action: 'release', content: 'Released' }));
+    await release();
+    let snapshotReady, beginConversion, claimReady, finishClaim;
+    const snapshot = new Promise(resolve => { snapshotReady = resolve; });
+    const convert = new Promise(resolve => { beginConversion = resolve; });
+    const claimed = new Promise(resolve => { claimReady = resolve; });
+    const finish = new Promise(resolve => { finishClaim = resolve; });
+    const conversion = prisma.$transaction(async db => {
+      await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE id = ${registration.id}`;
+      snapshotReady(); await convert;
+      await db.agentRegistration.update({ where: { id: registration.id }, data: { managedWorker: { state: 'stopped' } } });
+    }, { isolationLevel: 'RepeatableRead', timeout: 15000 }).then(() => null, error => error);
+    await snapshot;
+    const claim = prisma.$transaction(async db => {
+      await db.agentHandoff.update({ where: { id: accepted.handoff.id }, data: { status: 'claimed', claimedById: registration.id } });
+      claimReady(); await finish;
+    }, { timeout: 15000 });
+    await claimed;
+    beginConversion();
+    try { await waitForLock('AgentRegistration'); } finally { finishClaim(); }
+    await claim;
+    assert.match(String(await conversion), /Worker conversion requires read committed/);
+    assert.equal((await prisma.agentRegistration.findUniqueOrThrow({ where: { id: registration.id } })).managedWorker, null);
+    await release();
+    let convertedReady, finishConversion;
+    const converted = new Promise(resolve => { convertedReady = resolve; });
+    const finishConverted = new Promise(resolve => { finishConversion = resolve; });
+    const firstConversion = prisma.$transaction(async db => {
+      await db.agentRegistration.update({ where: { id: registration.id }, data: { managedWorker: { state: 'stopped' } } });
+      convertedReady(); await finishConverted;
+    }, { timeout: 15000 });
+    await converted;
+    try {
+      await assert.rejects(prisma.$transaction(db => db.agentHandoff.update({ where: { id: accepted.handoff.id }, data: { status: 'claimed', claimedById: registration.id } }), { isolationLevel: 'RepeatableRead', timeout: 15000 }), /Transfer claims require read committed/);
+    } finally { finishConversion(); }
+    await firstConversion;
+    assert.equal((await parent(accepted.handoff)).status, 'open');
+    await assert.rejects(prisma.agentHandoff.update({ where: { id: accepted.handoff.id }, data: { status: 'claimed', claimedById: registration.id } }), /Managed workers cannot claim/);
+  });
+
+  await t.test('only the original recipient can reclaim a released transfer', async () => {
+    const registration = await service.registerAgent(bob, service.registrationSchema.parse({ name: 'manual-reclaim' }));
+    const pending = await offer(await original(), { toAgent: 'manual-reclaim', content: 'Private reclaim details' });
+    const accepted = await act(bob, pending, 'manual-reclaim', 'accept');
+    const action = (ctx, agent, action) => service.actOnHandoff(ctx, accepted.handoff.id, service.actionSchema.parse({ agent, action, ...(action === 'release' && { content: 'Released' }) }));
+    await action(bob, 'manual-reclaim', 'release');
+    await prisma.workspaceMember.updateMany({ where: { workspaceId: 'w', userId: 'bob' }, data: { status: false } });
+    await assert.rejects(action(bob, 'manual-reclaim', 'claim'), e => e.code === 'handoff_not_found');
+    await prisma.workspaceMember.updateMany({ where: { workspaceId: 'w', userId: 'bob' }, data: { status: true } });
+    await action(bob, 'manual-reclaim', 'claim');
+    await action(bob, 'manual-reclaim', 'release');
+    assert.equal((await act(bob, pending, 'manual-reclaim', 'accept')).offer.content, pending.content);
+    await prisma.agentRegistration.delete({ where: { id: registration.id } });
+    const replacement = await service.registerAgent(carol, service.registrationSchema.parse({ name: 'manual-reclaim' }));
+    assert.equal((await service.agentInbox(carol, service.inboxSchema.parse({ agent: 'manual-reclaim' }))).items.some(item => item.id === accepted.handoff.id), false);
+    await assert.rejects(action(carol, 'manual-reclaim', 'claim'), e => e.code === 'handoff_not_found');
+    await assert.rejects(prisma.agentHandoff.update({ where: { id: accepted.handoff.id }, data: { status: 'claimed', claimedById: replacement.id } }), /Only the original recipient/);
+    assert.equal((await parent(accepted.handoff)).status, 'open');
+    assert.equal(JSON.stringify(await service.workspaceAgentInbox(carol, { state: 'unseen', agent: 'manual-reclaim', limit: 50 })).includes(pending.content), false);
   });
 
   await t.test('reusing a recipient name does not grant access to the offer', async () => {

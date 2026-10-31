@@ -82,6 +82,10 @@
     {
       "name": "20261031000100_transfer_worker_guard",
       "sha256": "45a46cfec841209705ec98a692b9fdd5cdec108dd609386e53ab9dd225fc148d"
+    },
+    {
+      "name": "20261031000200_transfer_recipient_guard",
+      "sha256": "afd22eddbf1d424c06c057278fb32fe237abb467473d561b98f23c4a598b7af9"
     }
   ],
   "unmodeledCatalog": {
