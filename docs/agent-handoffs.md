@@ -84,7 +84,7 @@ or passing its claim through the legacy path. A current server reports
 claimant with a pending offer is blocked until the offer is cancelled; do not
 infer a stopped process from cancellation or account removal.
 
-Install all three transfer migrations listed below before enabling offers or workers.
+Install all four transfer migrations listed below before enabling offers or workers.
 Transfer successors cannot be claimed by managed workers, including through older
 servers; workers must not run without these guards. The migrations refuse existing
 unauthorized claims on transfer successors until they are resolved. Only the original
@@ -193,9 +193,11 @@ CLI 0.8.0 project coordinators require the matching server and additive
 requirements above. See the [coordinator guide](../packages/cli/README.md#project-coordinator-cli-080)
 for operation and release qualification boundaries.
 
-Manual transfer offers require the matching server and all three additive migrations:
-`20261030000200_agent_transfer_offer`, `20261031000100_transfer_worker_guard`, and
-`20261031000200_transfer_recipient_guard`. Apply and verify all three before enabling
+Manual transfer offers require the matching server and all four additive migrations:
+`20261030000200_agent_transfer_offer`, `20261031000100_transfer_worker_guard`,
+`20261031000200_transfer_recipient_guard`, and `20261031000300_pending_offer_serialization`.
+The last migration refuses inconsistent pending offers; resolve them before retrying.
+Apply and verify all four before enabling
 offers or workers, including during mixed-version rollout. Apply the same target,
 ledger and protected-backup requirements above.
 For fresh databases, see [empty-database bootstrap](database-bootstrap.md).

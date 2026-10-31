@@ -68,9 +68,10 @@ test('native fresh bootstrap, subsequent migrations, and populated-target refusa
     assert.equal(query(fresh, "SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname='ForgeExecutionAttempt_active_issue_key' AND i.indisunique AND i.indpred IS NOT NULL"), '1');
     const catalog = contract.unmodeledCatalog;
     assert.equal(query(fresh, `SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_proc p ON p.oid=t.tgfoid WHERE n.nspname='public' AND c.relname='AgentHandoff' AND t.tgname='guard_pending_transfer_offer' AND p.proname='guard_pending_transfer_offer' AND NOT t.tgisinternal AND t.tgenabled='O'`), '1');
-    for (const [name, table] of [['guard_transfer_managed_claim', 'AgentHandoff'], ['guard_transfer_worker_conversion', 'AgentRegistration']]) {
+    for (const [name, table] of [['guard_transfer_managed_claim', 'AgentHandoff'], ['guard_transfer_worker_conversion', 'AgentRegistration'], ['serialize_pending_transfer_offer', 'AgentTransferOffer']]) {
       assert.equal(query(fresh, `SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_proc p ON p.oid=t.tgfoid WHERE n.nspname='public' AND c.relname='${table}' AND t.tgname='${name}' AND p.proname='${name}' AND NOT t.tgisinternal AND t.tgenabled='O'`), '1');
     }
+    assert.equal(query(fresh, `SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname='AgentTransferOffer_one_pending_parent' AND i.indisunique AND i.indpred IS NOT NULL`), '1');
     for (const { name, table } of catalog.versionFunctionsAndTriggers) {
       assert.equal(query(fresh, `SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname='${name}' AND p.prorettype='trigger'::regtype`), '1');
       assert.equal(query(fresh, `SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_proc p ON p.oid=t.tgfoid WHERE n.nspname='public' AND c.relname='${table}' AND t.tgname='${name}' AND p.proname='${name}' AND NOT t.tgisinternal AND t.tgenabled='O'`), '1');

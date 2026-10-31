@@ -48,7 +48,8 @@ unique index from the retained Ready migration, plus all six Version provenance
 functions and triggers from `20260924130000_version_access_invalidation`, and
 the pending-transfer guard from `20261030000200_agent_transfer_offer`, the
 managed-worker guards from `20261031000100_transfer_worker_guard`, and their
-recipient and isolation updates from `20261031000200_transfer_recipient_guard`.
+recipient and isolation updates from `20261031000200_transfer_recipient_guard`,
+and pending-offer serialization from `20261031000300_pending_offer_serialization`.
 The current model already creates `Version.issueAccessInvalidated` with default
 false. The historical migration first marks existing rows true; that upgrade
 backfill is deliberately not replayed into an empty bootstrap. Existing databases

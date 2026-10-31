@@ -54,6 +54,8 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', userInfo().username, '-d', 'postgres'], { input: workerGuard, stdio: ['pipe', 'pipe', 'pipe'] });
   const recipientGuard = readFileSync(resolve('prisma/migrations/20261031000200_transfer_recipient_guard/migration.sql'), 'utf8');
   execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', userInfo().username, '-d', 'postgres'], { input: recipientGuard, stdio: ['pipe', 'pipe', 'pipe'] });
+  const pendingGuard = readFileSync(resolve('prisma/migrations/20261031000300_pending_offer_serialization/migration.sql'), 'utf8');
+  execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', userInfo().username, '-d', 'postgres'], { input: pendingGuard, stdio: ['pipe', 'pipe', 'pipe'] });
   const legacy = await prisma.agentRegistration.findUniqueOrThrow({ where: { id: 'legacy-agent' } });
   assert.equal(legacy.host, null); assert.equal(legacy.sessionId, null); assert.equal(legacy.watcher, null);
   assert.equal(legacy.managedWorker, null, 'migration preserves existing agents as unmanaged');

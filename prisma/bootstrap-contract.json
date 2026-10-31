@@ -86,6 +86,10 @@
     {
       "name": "20261031000200_transfer_recipient_guard",
       "sha256": "afd22eddbf1d424c06c057278fb32fe237abb467473d561b98f23c4a598b7af9"
+    },
+    {
+      "name": "20261031000300_pending_offer_serialization",
+      "sha256": "83f8c51fb567a11c964cac2f415f2929c68fc991a8b4e877c0707eeb12cd54ff"
     }
   ],
   "unmodeledCatalog": {

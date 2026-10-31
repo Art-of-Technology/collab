@@ -77,10 +77,11 @@ test('actual bootstrap CLI emits one guarded schema transaction with exact suppl
   const transferTail = transfer.slice(transfer.indexOf('CREATE FUNCTION "guard_pending_transfer_offer"'));
   const workerGuard = fs.readFileSync(path.join(root, 'prisma/migrations/20261031000100_transfer_worker_guard/migration.sql'), 'utf8').slice('BEGIN;\n'.length, -'COMMIT;\n'.length);
   const recipientGuard = fs.readFileSync(path.join(root, 'prisma/migrations/20261031000200_transfer_recipient_guard/migration.sql'), 'utf8').slice('BEGIN;\n'.length, -'COMMIT;\n'.length);
-  assert.ok(apply.input.includes(schemaSql + '\nALTER TABLE "ForgeExecutionAttempt" ADD ' + check + ';\n' + active + '\n' + tail + '\n' + transferTail + '\n' + workerGuard + '\n' + recipientGuard + '\nCOMMIT;'));
+  const pendingGuard = fs.readFileSync(path.join(root, 'prisma/migrations/20261031000300_pending_offer_serialization/migration.sql'), 'utf8').slice('BEGIN;\n'.length, -'COMMIT;\n'.length);
+  assert.ok(apply.input.includes(schemaSql + '\nALTER TABLE "ForgeExecutionAttempt" ADD ' + check + ';\n' + active + '\n' + tail + '\n' + transferTail + '\n' + workerGuard + '\n' + recipientGuard + '\n' + pendingGuard + '\nCOMMIT;'));
   assert.ok(!apply.input.includes('ADD COLUMN "issueAccessInvalidated"'), 'modeled flag is generated once; historical existing-row backfill is not replayed');
-  assert.deepEqual(contract.migrations.slice(-9).map(row => row.name), [
-    '20261017000100_agent_handoffs', '20261021223000_git_provider_connections', '20261022190000_issue_trash', '20261026000100_agent_operations', '20261027000100_managed_workers', '20261029000100_project_coordinator', '20261030000200_agent_transfer_offer', '20261031000100_transfer_worker_guard', '20261031000200_transfer_recipient_guard',
+  assert.deepEqual(contract.migrations.slice(-10).map(row => row.name), [
+    '20261017000100_agent_handoffs', '20261021223000_git_provider_connections', '20261022190000_issue_trash', '20261026000100_agent_operations', '20261027000100_managed_workers', '20261029000100_project_coordinator', '20261030000200_agent_transfer_offer', '20261031000100_transfer_worker_guard', '20261031000200_transfer_recipient_guard', '20261031000300_pending_offer_serialization',
   ]);
   assert.ok(!apply.input.includes('ADD COLUMN "deletedAt"'), 'Trash columns and restrictive FKs come from the current schema, not replayed upgrade SQL');
   assert.deepEqual(result.calls.slice(2).map(call => call.args.at(-1)), contract.migrations.map(row => row.name));

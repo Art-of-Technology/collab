@@ -58,6 +58,19 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
   assert.throws(applyRecipientGuard, /Resolve unauthorized claims on transfer successors/);
   await prisma.agentHandoff.delete({ where: { id: invalidClaim.id } });
   applyRecipientGuard();
+  const pendingMigration = readFileSync(resolve('prisma/migrations/20261031000300_pending_offer_serialization/migration.sql'), 'utf8');
+  const migrationSender = await prisma.agentRegistration.findFirstOrThrow({ where: { workspaceId: 'w', name: 'alice' } });
+  const migrationRecipient = await prisma.agentRegistration.findFirstOrThrow({ where: { workspaceId: 'w', name: 'bob' } });
+  const migrationParent = await prisma.agentHandoff.create({ data: { workspaceId: 'w', issueId: 'i-w', sourceKey: 'migration-pending', content: 'Owned', status: 'claimed', claimedById: migrationSender.id } });
+  const migrationOffer = { workspaceId: 'w', issueId: 'i-w', parentId: migrationParent.id, senderId: migrationSender.id, recipientId: migrationRecipient.id, recipientName: 'bob', content: 'Offer' };
+  const firstPending = await prisma.agentTransferOffer.create({ data: { ...migrationOffer, requestId: randomUUID() } });
+  const duplicatePending = await prisma.agentTransferOffer.create({ data: { ...migrationOffer, requestId: randomUUID() } });
+  const applyPendingGuard = () => execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', username, '-d', 'postgres'], { input: pendingMigration, stdio: ['pipe', 'pipe', 'pipe'] });
+  assert.throws(applyPendingGuard, /Resolve inconsistent pending transfer offers/);
+  await prisma.agentTransferOffer.delete({ where: { id: duplicatePending.id } });
+  applyPendingGuard();
+  assert.equal((await prisma.agentHandoff.findUniqueOrThrow({ where: { id: migrationParent.id } })).updatedAt.getTime(), migrationParent.updatedAt.getTime());
+  await prisma.agentTransferOffer.update({ where: { id: firstPending.id }, data: { status: 'cancelled' } });
   const original = async () => {
     const row = await service.sendHandoff(alice, service.sendSchema.parse({ agent: 'alice', issue: 'w-1', content: 'Owned task', toAgents: ['alice'], requestId: randomUUID() }));
     return service.actOnHandoff(alice, row.id, service.actionSchema.parse({ agent: 'alice', action: 'claim' }));
@@ -522,6 +535,90 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     const accepted = await detail.PATCH(new Request('https://example.test', { method: 'PATCH', body: JSON.stringify({ agent: 'bob', action: 'accept' }) }), bob, { params: Promise.resolve({ id: pending.id }) });
     assert.equal(accepted.status, 200); assert.equal((await accepted.json()).handoff.status, 'claimed');
   });
+
+  for (const isolation of ['ReadCommitted', 'RepeatableRead', 'Serializable']) {
+    for (const action of ['release', 'complete', 'pass']) for (const winner of ['offer', 'legacy']) {
+      await t.test(`${isolation}: ${winner} wins against legacy ${action}`, async () => {
+        const row = await original();
+        const recipient = await prisma.agentRegistration.findFirstOrThrow({ where: { workspaceId: 'w', name: 'bob' } });
+        const data = { workspaceId: 'w', issueId: 'i-w', parentId: row.id, senderId: row.claimedById,
+          recipientId: recipient.id, recipientName: 'bob', requestId: randomUUID(), content: 'Offer' };
+        let snapshotReady, proceed, winnerReady, finishWinner;
+        const snapshot = new Promise(resolve => { snapshotReady = resolve; });
+        const start = new Promise(resolve => { proceed = resolve; });
+        const ready = new Promise(resolve => { winnerReady = resolve; });
+        const finish = new Promise(resolve => { finishWinner = resolve; });
+        const legacyWrite = async db => {
+          const changed = await db.agentHandoff.updateMany({ where: { id: row.id, status: 'claimed', claimedById: row.claimedById },
+            data: action === 'release' ? { status: 'open', claimedById: null } : { status: 'completed' } });
+          assert.equal(changed.count, 1);
+          if (action === 'pass') await db.agentHandoff.create({ data: { workspaceId: 'w', issueId: 'i-w', sourceKey: `legacy:${randomUUID()}`,
+            content: 'Legacy pass', senderId: row.claimedById, recipientNames: ['bob'], afterId: row.id } });
+        };
+        const losing = prisma.$transaction(async db => {
+          await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${row.id}`;
+          snapshotReady(); await start;
+          return winner === 'offer' ? legacyWrite(db) : db.agentTransferOffer.create({ data });
+        }, { isolationLevel: isolation, timeout: 15000 }).then(value => ({ value }), error => ({ error }));
+        await snapshot;
+        const winning = prisma.$transaction(async db => {
+          const result = winner === 'offer' ? await db.agentTransferOffer.create({ data }) : await legacyWrite(db);
+          winnerReady(); await finish; return result;
+        }, { isolationLevel: isolation, timeout: 15000 });
+        await ready; proceed();
+        try { await waitForLock(winner === 'offer' ? 'AgentHandoff' : 'AgentTransferOffer'); } finally { finishWinner(); }
+        await winning;
+        const outcome = await losing;
+        assert.ok(outcome.error, 'the stale writer must fail');
+        assert.match(String(outcome.error), /Pending transfer|original claim|serializ|P2034|40001|write conflict/i);
+        const saved = await parent(row);
+        const offers = await prisma.agentTransferOffer.findMany({ where: { parentId: row.id, status: 'pending' } });
+        const successors = await prisma.agentHandoff.count({ where: { afterId: row.id } });
+        if (winner === 'offer') {
+          assert.equal(saved.status, 'claimed'); assert.equal(saved.claimedById, row.claimedById);
+          assert.equal(saved.updatedAt.getTime(), row.updatedAt.getTime());
+          assert.equal(offers.length, 1); assert.equal(successors, 0);
+          await act(alice, offers[0], 'alice', 'cancel');
+        } else {
+          assert.equal(saved.status, action === 'release' ? 'open' : 'completed');
+          assert.equal(offers.length, 0); assert.equal(successors, action === 'pass' ? 1 : 0);
+        }
+      });
+    }
+    for (const winner of ['first', 'second']) await t.test(`${isolation}: ${winner} competing offer wins`, async () => {
+      const row = await original();
+      const recipient = await prisma.agentRegistration.findFirstOrThrow({ where: { workspaceId: 'w', name: 'bob' } });
+      const data = { workspaceId: 'w', issueId: 'i-w', parentId: row.id, senderId: row.claimedById,
+        recipientId: recipient.id, recipientName: 'bob', content: 'Offer' };
+      let snapshotReady, proceed, winnerReady, finishWinner;
+      const snapshot = new Promise(resolve => { snapshotReady = resolve; });
+      const start = new Promise(resolve => { proceed = resolve; });
+      const ready = new Promise(resolve => { winnerReady = resolve; });
+      const finish = new Promise(resolve => { finishWinner = resolve; });
+      const requestIds = { first: randomUUID(), second: randomUUID() };
+      const loser = winner === 'first' ? 'second' : 'first';
+      const losing = prisma.$transaction(async db => {
+        await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${row.id}`;
+        snapshotReady(); await start;
+        return db.agentTransferOffer.create({ data: { ...data, requestId: requestIds[loser] } });
+      }, { isolationLevel: isolation, timeout: 15000 }).then(value => ({ value }), error => ({ error }));
+      await snapshot;
+      const winning = prisma.$transaction(async db => {
+        const created = await db.agentTransferOffer.create({ data: { ...data, requestId: requestIds[winner] } });
+        winnerReady(); await finish; return created;
+      }, { isolationLevel: isolation, timeout: 15000 });
+      await ready; proceed();
+      try { await waitForLock('AgentTransferOffer'); } finally { finishWinner(); }
+      const created = await winning;
+      const outcome = await losing;
+      assert.ok(outcome.error); assert.match(String(outcome.error), /unique|serializ|P2034|40001|write conflict/i);
+      const saved = await parent(row);
+      assert.equal(saved.status, 'claimed'); assert.equal(saved.claimedById, row.claimedById);
+      assert.equal(saved.updatedAt.getTime(), row.updatedAt.getTime());
+      assert.equal(await prisma.agentTransferOffer.count({ where: { parentId: row.id, status: 'pending' } }), 1);
+      await act(alice, created, 'alice', 'cancel');
+    });
+  }
 
   await t.test('old writer racing an offer cannot release the claim once offer wins', async () => {
     const row = await original();
