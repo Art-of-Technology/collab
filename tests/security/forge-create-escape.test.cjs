@@ -19,7 +19,6 @@ test('closing a retained dialog discards create title and description without su
   const deps = { react: React, 'react/jsx-runtime': require('react/jsx-runtime'), 'next/link': { default: native('a') },
     '@/components/ui/button': { Button: native('button') }, '@/components/ui/input': { Input: native('input') },
     '@/components/ui/textarea': { Textarea: native('textarea') }, '@/components/ui/badge': { Badge: native('span') },
-    '@/components/RichEditor': { RichTextRenderer: () => null }, '@/lib/comment-html': { commentHtml: value => value },
     '@/components/ui/dialog': { Dialog, DialogContent: native('section'), DialogHeader: native('header'), DialogTitle: native('h2'), DialogDescription: native('p') },
     '@/lib/forge/tasks': { needsAttention: () => false, taskStatuses: ['backlog', 'in-progress', 'waiting', 'blocked', 'done'], taskPriorities: ['normal'] },
     './actions': actions, './ForgeExecution': { ForgeExecution: () => null } };

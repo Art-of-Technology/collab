@@ -75,7 +75,6 @@ test('editor retains overlap review after unavailable reloads and comment readba
       useState: state,
       useRef: initial => state({ current: initial })[0],
       useEffect: callback => { if (!effect) effect = callback; },
-      useMemo: callback => callback(),
       useTransition: () => [false, callback => { pending = callback(); }],
     };
     const fields = { title: 'A', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' };
@@ -84,8 +83,8 @@ test('editor retains overlap review after unavailable reloads and comment readba
     const { ForgeIssueEditor } = compile(path.resolve(__dirname, '../../src/app/(main)/[workspaceId]/projects/[projectSlug]/board/ForgeIssueEditor.tsx'), {
       react: hooks, 'react/jsx-runtime': { jsx, jsxs: jsx },
       '@/components/ui/button': { Button: 'button' }, '@/components/ui/input': { Input: 'input' }, '@/components/ui/textarea': { Textarea: 'textarea' },
-      '@/components/RichEditor': { RichTextRenderer: 'div' }, '@/lib/comment-html': { commentHtml: value => value },
       '@/lib/forge/tasks': { taskStatuses: ['backlog'], taskPriorities: ['normal'] },
+      './ForgeExecution': { ForgeExecution: 'div' },
       './actions': { getIssue: async () => next, changeIssue: async () => { writes++; return { kind: 'saved' }; } },
     });
     const render = () => { cursor = 0; return descendants(ForgeIssueEditor({ number: 1, workspaceSlug: 'workspace', projectSlug: 'project', onSaved() {}, onDenied() {} })); };
@@ -131,10 +130,10 @@ test('editor preserves rejected drafts and confirmed saves when a later refresh 
     };
     const ready = { kind: 'ready', bodyWarning: false, fields: { title: 'A', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' }, rights: { canEdit: true }, snapshot: { fingerprint: 'a'.repeat(64), issue: { title: 'A', state: 'open', body: '' }, comments: [] } };
     const { ForgeIssueEditor } = compile(path.resolve(__dirname, '../../src/app/(main)/[workspaceId]/projects/[projectSlug]/board/ForgeIssueEditor.tsx'), {
-      react: { useState: state, useRef: initial => state({ current: initial })[0], useEffect: cb => { if (!effect) effect = cb; }, useMemo: cb => cb(), useTransition: () => [false, cb => { pending = cb(); }] },
+      react: { useState: state, useRef: initial => state({ current: initial })[0], useEffect: cb => { if (!effect) effect = cb; }, useTransition: () => [false, cb => { pending = cb(); }] },
       'react/jsx-runtime': { jsx, jsxs: jsx }, '@/components/ui/button': { Button: 'button' }, '@/components/ui/input': { Input: 'input' }, '@/components/ui/textarea': { Textarea: 'textarea' },
-      '@/components/RichEditor': { RichTextRenderer: 'div' }, '@/lib/comment-html': { commentHtml: value => value },
       '@/lib/forge/tasks': { taskStatuses: ['backlog'], taskPriorities: ['normal'] },
+      './ForgeExecution': { ForgeExecution: 'div' },
       './actions': { getIssue: async () => { if (failedRead) { if (outcome === 'saved-unavailable') { assert.equal(saved, 1); return { kind: 'unavailable' }; } throw new Error('refresh offline'); } return ready; }, changeIssue: async () => ({ kind: outcome === 'saved-unavailable' ? 'saved' : outcome, number: 1 }) },
     });
     const render = () => { cursor = 0; return nodesOf(ForgeIssueEditor({ number: 1, workspaceSlug: 'workspace', projectSlug: 'project', onSaved: () => { saved++; }, onDenied: () => { denied++; } })); };

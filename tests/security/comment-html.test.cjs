@@ -84,58 +84,6 @@ test('Markdown and explicit HTML cannot introduce executable markup', () => {
   }
 });
 
-test('board restrictions retain safe color and remove layout styling without changing existing comments', () => {
-  const input = '<div style="position:fixed;color:red;background:url(https://example.com/track)" class="fixed" id="cover"><strong>Bold</strong></div>';
-  assert.match(documentFor(input).querySelector('div').getAttribute('style'), /position:fixed/);
-  for (const html of [commentHtml(input, null, true), commentHtml('', input, true)]) {
-    const doc = new JSDOM(html).window.document;
-    assert.equal(doc.querySelector('strong')?.textContent, 'Bold');
-    assert.equal(doc.querySelector('div').getAttribute('style'), 'color: red');
-    assert.equal(doc.querySelectorAll('[class],[id],style').length, 0);
-    assert.equal(doc.querySelector('div').style.position, '');
-    assert.equal(doc.querySelector('div').style.background, '');
-  }
-});
-
-test('board media becomes readable links without active resource elements', () => {
-  const input = '![Tracking image](https://example.com/image)\n\n<picture><source srcset="https://example.com/set"><img src="https://example.com/picture" alt="Picture"></picture><video src="https://example.com/movie" poster="https://example.com/poster"></video><audio><source src="https://example.com/audio"></audio><iframe src="https://example.com/frame"></iframe><object data="https://example.com/object"></object><svg><image href="https://example.com/svg"></image></svg>';
-  const doc = new JSDOM(commentHtml(input, null, true)).window.document;
-  assert.equal(doc.querySelectorAll('img,picture,video,audio,source,iframe,embed,object,svg,[src],[srcset],[poster]').length, 0);
-  for (const [href, label] of [['https://example.com/image', 'Tracking image'], ['https://example.com/picture', 'Picture'], ['https://example.com/movie', 'Media'], ['https://example.com/audio', 'Media']]) {
-    assert.equal(doc.querySelector(`a[href="${href}"]`)?.textContent, label);
-  }
-  assert.equal(documentFor('![Original](https://example.com/image)').querySelector('img')?.getAttribute('src'), 'https://example.com/image');
-});
-
-test('board lists retain ordered numbering and read-only task states', () => {
-  const markdown = '3. Third\n4. Fourth\n\n- [x] Done\n- [ ] Pending';
-  for (const doc of [new JSDOM(commentHtml(markdown, null, true)).window.document,
-    new JSDOM(commentHtml('', '<ol start="3" reversed><li value="7">Seventh</li><li><ol start="4"><li>Nested</li></ol></li></ol><ul><li><input type="checkbox" checked>Done</li><li><input type="checkbox">Pending</li><li><input type="text" value="unwanted"></li></ul>', true)).window.document]) {
-    assert.equal(doc.querySelector('ol').start, 3);
-    const items = [...doc.querySelectorAll('ul li')];
-    assert.match(items[0].textContent, /^\[x\]\s*Done/);
-    assert.match(items[1].textContent, /^\[ \]\s*Pending/);
-    assert.equal(doc.querySelectorAll('input,button').length, 0);
-  }
-  const doc = new JSDOM(commentHtml('', '<ol start="3" reversed><li value="7">Seventh</li><li><ol start="4"><li>Nested</li></ol></li></ol>', true)).window.document;
-  assert.equal(doc.querySelector('ol').reversed, true);
-  assert.equal(doc.querySelector('ol > li').value, 7);
-  assert.equal(doc.querySelector('ol ol').start, 4);
-});
-
-test('board comment and media links preserve drafts with safe separate-tab targets', () => {
-  const input = '[Markdown](https://example.com/markdown)\n\n<a href="/relative" target="_self" rel="opener">Relative</a> ![Image](https://example.com/image)\n\n<a href="javascript:alert(1)">Unsafe</a>';
-  const doc = new JSDOM(commentHtml(input, null, true), { url: 'https://fixture.invalid/board' }).window.document;
-  const links = [...doc.querySelectorAll('a[href]')];
-  assert.deepEqual(links.map(link => link.textContent), ['Markdown', 'Relative', 'Image']);
-  for (const link of links) {
-    assert.equal(link.target, '_blank');
-    assert.equal(link.rel, 'noopener noreferrer');
-  }
-  assert.equal(doc.querySelector('a[href^="javascript:"]'), null);
-  assert.equal(documentFor('[Original](https://example.com)').querySelector('a').getAttribute('target'), null);
-});
-
 test('issue comment display and edit form both receive formatted content, including replies', () => {
   const React = require('react');
   const { renderToStaticMarkup } = require('react-dom/server');
@@ -177,48 +125,7 @@ test('issue comment display and edit form both receive formatted content, includ
   }
 });
 
-test('board comments render sanitized Markdown and retain comment permissions', () => {
-  const React = require('react');
-  const { renderToStaticMarkup } = require('react-dom/server');
-  const { RichTextRenderer } = load('src/components/RichEditor/RichTextRenderer.tsx', {
-    react: { ...React, default: React }, 'react/jsx-runtime': require('react/jsx-runtime'),
-    '@/lib/utils': { cn: (...values) => values.join(' ') },
-    '@/context/WorkspaceContext': { useWorkspace: () => ({}) },
-  });
-  const fields = { title: 'Issue', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' };
-  const body = '**Bold**\n\n[Link](https://example.com)\n\n<div style="position:fixed;inset:0;z-index:9999" class="fixed inset-0 z-50" id="overlay"><a href="https://example.com/login">Sign in</a><span style="color:red">Text</span></div>\n\n<style>body { display:none }</style>\n\n<img src=x onerror="alert(1)"><script>alert(1)</script>\n\n' + 'long'.repeat(300);
-  const ready = { kind: 'ready', fields, rights: { canComment: true }, snapshot: { fingerprint: 'a', issue: { title: 'Issue', state: 'open', body: '' }, comments: [
-    { id: 1, user: { login: 'writer' }, body, fingerprint: 'one', canEdit: true },
-    { id: 2, user: { login: 'other' }, body: 'Plain comment', fingerprint: 'two', canEdit: false },
-  ] } };
-  let index = 0;
-  const hooks = { ...React, useState: initial => [[ready, fields, fields][index++] ?? initial, () => {}], useRef: initial => ({ current: initial }), useEffect: () => {}, useTransition: () => [false, () => {}] };
-  const native = tag => ({ children, ...props }) => React.createElement(tag, props, children);
-  const { ForgeIssueEditor } = load('src/app/(main)/[workspaceId]/projects/[projectSlug]/board/ForgeIssueEditor.tsx', {
-    react: hooks, 'react/jsx-runtime': require('react/jsx-runtime'),
-    '@/components/ui/button': { Button: native('button') }, '@/components/ui/input': { Input: native('input') }, '@/components/ui/textarea': { Textarea: native('textarea') },
-    '@/components/RichEditor': { RichTextRenderer }, '@/lib/comment-html': { commentHtml },
-    '@/lib/forge/tasks': { taskStatuses: ['backlog'], taskPriorities: ['normal'] },
-    './actions': {}, './ForgeExecution': { ForgeExecution: () => null },
-  });
-  const doc = new JSDOM(renderToStaticMarkup(React.createElement(ForgeIssueEditor, { number: 1, workspaceSlug: 'ws', projectSlug: 'project', onSaved() {}, onDenied() {} }))).window.document;
-  const articles = doc.querySelectorAll('article');
-  assert.equal(articles[0].querySelector('strong')?.textContent, 'Bold');
-  assert.equal(articles[0].querySelector('a')?.href, 'https://example.com/');
-  assert.equal(articles[0].querySelectorAll('script,[onerror]').length, 0);
-  const display = articles[0].querySelector('.prose-base');
-  assert.equal(display.querySelectorAll('style,[class],[id]').length, 0);
-  assert.equal([...display.querySelectorAll('[style]')].map(node => node.getAttribute('style')).join(''), 'color: red');
-  assert.equal([...display.querySelectorAll('a')].find(link => link.textContent === 'Sign in')?.href, 'https://example.com/login');
-  assert.ok(display.textContent.includes('long'.repeat(300)));
-  assert.ok(display.parentElement.classList.contains('break-words'));
-  assert.ok(display.parentElement.classList.contains('overflow-x-auto'));
-  assert.equal(articles[0].querySelectorAll('button').length, 1);
-  assert.equal(articles[1].querySelectorAll('button').length, 0);
-  assert.equal(doc.querySelector('section[aria-label="Issue comments"] form button').textContent, 'Post comment');
-});
-
-test('board comment rendering is reused across edits and refreshed on reload', async () => {
+test('board comments remain literal and preserve edit controls and drafts', async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: 'https://fixture.invalid' });
   const previous = { window: global.window, document: global.document, flag: global.IS_REACT_ACT_ENVIRONMENT };
   global.window = dom.window; global.document = dom.window.document; global.IS_REACT_ACT_ENVIRONMENT = true;
@@ -227,38 +134,35 @@ test('board comment rendering is reused across edits and refreshed on reload', a
   const { act, createElement: h } = React;
   const root = createRoot(document.getElementById('root'));
   const fields = { title: 'Issue', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' };
-  const view = body => ({ kind: 'ready', fields, rights: { canEdit: true, canComment: true }, snapshot: { fingerprint: 'a', issue: { title: 'Issue', state: 'open', body: '' }, comments: [{ id: 1, user: { login: 'writer' }, body, fingerprint: body, canEdit: true }] } });
-  let next = view('**Original**'), conversions = 0;
+  const body = '**Bold**\n![Image](https://example.com/image)\n<script>alert(1)</script>\n' + 'long'.repeat(300);
+  const view = text => ({ kind: 'ready', fields, rights: { canEdit: true, canComment: true }, snapshot: { fingerprint: 'a', issue: { title: 'Issue', state: 'open', body: '' }, comments: [
+    { id: 1, user: { login: 'writer' }, body: text, fingerprint: text, canEdit: true },
+    { id: 2, user: { login: 'other' }, body: 'Other comment', fingerprint: 'two', canEdit: false },
+  ] } });
+  let next = view(body);
   const native = tag => ({ children, ...props }) => h(tag, props, children);
   const { ForgeIssueEditor } = load('src/app/(main)/[workspaceId]/projects/[projectSlug]/board/ForgeIssueEditor.tsx', {
     react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
     '@/components/ui/button': { Button: native('button') }, '@/components/ui/input': { Input: native('input') }, '@/components/ui/textarea': { Textarea: native('textarea') },
-    '@/components/RichEditor': { RichTextRenderer: ({ content }) => h('div', { dangerouslySetInnerHTML: { __html: content } }) },
-    '@/lib/comment-html': { commentHtml: (...args) => { conversions++; return commentHtml(...args); } },
     '@/lib/forge/tasks': { taskStatuses: ['backlog'], taskPriorities: ['normal'] },
     './actions': { getIssue: async () => next }, './ForgeExecution': { ForgeExecution: () => null },
   });
   const button = text => [...document.querySelectorAll('button')].find(element => element.textContent === text);
   try {
     await act(async () => root.render(h(ForgeIssueEditor, { number: 1, workspaceSlug: 'ws', projectSlug: 'project', onSaved() {}, onDenied() {} })));
-    assert.equal(document.querySelector('article strong')?.textContent, 'Original');
-    assert.equal(conversions, 1);
+    const articles = document.querySelectorAll('article');
+    const display = articles[0].querySelectorAll('p')[1];
+    assert.equal(display.textContent, body);
+    assert.equal(display.querySelectorAll('strong,img,script,a').length, 0);
+    for (const name of ['text-base', 'leading-7', 'whitespace-pre-wrap', 'break-words', 'overflow-x-auto']) assert.ok(display.classList.contains(name));
+    assert.equal(articles[0].querySelectorAll('button').length, 1);
+    assert.equal(articles[1].querySelectorAll('button').length, 0);
     await act(async () => button('Edit shared-account comment').click());
-    assert.equal(document.querySelector('section[aria-label="Issue comments"] textarea').value, '**Original**');
-    assert.equal(conversions, 1);
-    const title = document.querySelector('input');
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(title, 'Draft title');
-      title.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-    });
-    assert.equal(conversions, 1);
-    next = view('**Updated** <script>alert(1)</script>');
+    assert.equal(document.querySelector('section[aria-label="Issue comments"] textarea').value, body);
+    next = view('Updated **literal**');
     await act(async () => button('Reload source, keep draft').click());
-    assert.equal(document.querySelector('article strong')?.textContent, 'Updated');
-    assert.equal(document.querySelector('article script'), null);
-    assert.equal(conversions, 2);
-    assert.equal(document.querySelector('input').value, 'Draft title');
-    assert.equal(document.querySelector('section[aria-label="Issue comments"] textarea').value, '**Original**');
+    assert.equal(document.querySelector('article p:nth-child(2)').textContent, 'Updated **literal**');
+    assert.equal(document.querySelector('section[aria-label="Issue comments"] textarea').value, body);
   } finally {
     await act(async () => root.unmount());
     dom.window.close();
