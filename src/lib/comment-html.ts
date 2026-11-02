@@ -5,7 +5,7 @@ import { marked } from 'marked';
 export function commentHtml(content: string, html?: string | null, board = false): string {
   const restrictions = board ? {
     ALLOWED_TAGS: ['a', 'p', 'div', 'span', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'strong', 'b', 'em', 'i', 's', 'del', 'u', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
-    ALLOWED_ATTR: ['href', 'title', 'style'],
+    ALLOWED_ATTR: ['href', 'title', 'style', 'start', 'value', 'reversed', 'target', 'rel'],
     ALLOW_DATA_ATTR: false,
   } : {};
   let source = html || marked.parse(content, { async: false, gfm: true, breaks: true });
@@ -32,6 +32,13 @@ export function commentHtml(content: string, html?: string | null, board = false
       } else {
         media.replaceWith(inertDocument.createTextNode(label));
       }
+    }
+    for (const checkbox of template.content.querySelectorAll('input[type="checkbox" i]')) {
+      checkbox.replaceWith(inertDocument.createTextNode(checkbox.hasAttribute('checked') ? '[x] ' : '[ ] '));
+    }
+    for (const link of template.content.querySelectorAll('a')) {
+      link.setAttribute('target', '_blank');
+      link.setAttribute('rel', 'noopener noreferrer');
     }
     for (const element of template.content.querySelectorAll('style, link, script, meta, base')) element.remove();
     for (const element of template.content.querySelectorAll('*')) {

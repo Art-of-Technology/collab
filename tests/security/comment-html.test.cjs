@@ -107,6 +107,35 @@ test('board media becomes readable links without active resource elements', () =
   assert.equal(documentFor('![Original](https://example.com/image)').querySelector('img')?.getAttribute('src'), 'https://example.com/image');
 });
 
+test('board lists retain ordered numbering and read-only task states', () => {
+  const markdown = '3. Third\n4. Fourth\n\n- [x] Done\n- [ ] Pending';
+  for (const doc of [new JSDOM(commentHtml(markdown, null, true)).window.document,
+    new JSDOM(commentHtml('', '<ol start="3" reversed><li value="7">Seventh</li><li><ol start="4"><li>Nested</li></ol></li></ol><ul><li><input type="checkbox" checked>Done</li><li><input type="checkbox">Pending</li><li><input type="text" value="unwanted"></li></ul>', true)).window.document]) {
+    assert.equal(doc.querySelector('ol').start, 3);
+    const items = [...doc.querySelectorAll('ul li')];
+    assert.match(items[0].textContent, /^\[x\]\s*Done/);
+    assert.match(items[1].textContent, /^\[ \]\s*Pending/);
+    assert.equal(doc.querySelectorAll('input,button').length, 0);
+  }
+  const doc = new JSDOM(commentHtml('', '<ol start="3" reversed><li value="7">Seventh</li><li><ol start="4"><li>Nested</li></ol></li></ol>', true)).window.document;
+  assert.equal(doc.querySelector('ol').reversed, true);
+  assert.equal(doc.querySelector('ol > li').value, 7);
+  assert.equal(doc.querySelector('ol ol').start, 4);
+});
+
+test('board comment and media links preserve drafts with safe separate-tab targets', () => {
+  const input = '[Markdown](https://example.com/markdown)\n\n<a href="/relative" target="_self" rel="opener">Relative</a> ![Image](https://example.com/image)\n\n<a href="javascript:alert(1)">Unsafe</a>';
+  const doc = new JSDOM(commentHtml(input, null, true), { url: 'https://fixture.invalid/board' }).window.document;
+  const links = [...doc.querySelectorAll('a[href]')];
+  assert.deepEqual(links.map(link => link.textContent), ['Markdown', 'Relative', 'Image']);
+  for (const link of links) {
+    assert.equal(link.target, '_blank');
+    assert.equal(link.rel, 'noopener noreferrer');
+  }
+  assert.equal(doc.querySelector('a[href^="javascript:"]'), null);
+  assert.equal(documentFor('[Original](https://example.com)').querySelector('a').getAttribute('target'), null);
+});
+
 test('issue comment display and edit form both receive formatted content, including replies', () => {
   const React = require('react');
   const { renderToStaticMarkup } = require('react-dom/server');
