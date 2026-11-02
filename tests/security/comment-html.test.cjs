@@ -99,7 +99,7 @@ test('issue comment display and edit form both receive formatted content, includ
       '@/lib/comment-html': { commentHtml },
       '@/components/ui/custom-avatar': { CustomAvatar: noOp },
       '@/components/RichEditor': {
-        RichTextRenderer: ({ content }) => React.createElement('div', { 'data-display': true, dangerouslySetInnerHTML: { __html: content } }),
+        RichTextRenderer: ({ content, className }) => React.createElement('div', { 'data-display': true, className, dangerouslySetInnerHTML: { __html: content } }),
         RichEditor: ({ value }) => React.createElement('textarea', { 'data-editor': true, defaultValue: value }),
       },
       '@/components/ui/button': { Button: ({ children }) => React.createElement('button', null, children) },
@@ -116,6 +116,49 @@ test('issue comment display and edit form both receive formatted content, includ
       assert.equal(editor.querySelector('h2')?.textContent, 'Handoff');
     } else {
       assert.equal(doc.querySelectorAll('[data-display] h2').length, 2);
+      for (const display of doc.querySelectorAll('[data-display]')) {
+        assert.ok(display.classList.contains('prose-base'));
+        assert.ok(display.parentElement.classList.contains('break-words'));
+        assert.ok(display.parentElement.classList.contains('overflow-x-auto'));
+      }
     }
   }
+});
+
+test('board comments render sanitized Markdown and retain comment permissions', () => {
+  const React = require('react');
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const { RichTextRenderer } = load('src/components/RichEditor/RichTextRenderer.tsx', {
+    react: { ...React, default: React }, 'react/jsx-runtime': require('react/jsx-runtime'),
+    '@/lib/utils': { cn: (...values) => values.join(' ') },
+    '@/context/WorkspaceContext': { useWorkspace: () => ({}) },
+  });
+  const fields = { title: 'Issue', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' };
+  const body = '**Bold**\n\n[Link](https://example.com)\n\n<img src=x onerror="alert(1)"><script>alert(1)</script>\n\n' + 'long'.repeat(300);
+  const ready = { kind: 'ready', fields, rights: { canComment: true }, snapshot: { fingerprint: 'a', issue: { title: 'Issue', state: 'open', body: '' }, comments: [
+    { id: 1, user: { login: 'writer' }, body, fingerprint: 'one', canEdit: true },
+    { id: 2, user: { login: 'other' }, body: 'Plain comment', fingerprint: 'two', canEdit: false },
+  ] } };
+  let index = 0;
+  const hooks = { ...React, useState: initial => [[ready, fields, fields][index++] ?? initial, () => {}], useRef: initial => ({ current: initial }), useEffect: () => {}, useTransition: () => [false, () => {}] };
+  const native = tag => ({ children, ...props }) => React.createElement(tag, props, children);
+  const { ForgeIssueEditor } = load('src/app/(main)/[workspaceId]/projects/[projectSlug]/board/ForgeIssueEditor.tsx', {
+    react: hooks, 'react/jsx-runtime': require('react/jsx-runtime'),
+    '@/components/ui/button': { Button: native('button') }, '@/components/ui/input': { Input: native('input') }, '@/components/ui/textarea': { Textarea: native('textarea') },
+    '@/components/RichEditor': { RichTextRenderer }, '@/lib/comment-html': { commentHtml },
+    '@/lib/forge/tasks': { taskStatuses: ['backlog'], taskPriorities: ['normal'] },
+    './actions': {}, './ForgeExecution': { ForgeExecution: () => null },
+  });
+  const doc = new JSDOM(renderToStaticMarkup(React.createElement(ForgeIssueEditor, { number: 1, workspaceSlug: 'ws', projectSlug: 'project', onSaved() {}, onDenied() {} }))).window.document;
+  const articles = doc.querySelectorAll('article');
+  assert.equal(articles[0].querySelector('strong')?.textContent, 'Bold');
+  assert.equal(articles[0].querySelector('a')?.href, 'https://example.com/');
+  assert.equal(articles[0].querySelectorAll('script,[onerror]').length, 0);
+  const display = articles[0].querySelector('.prose-base');
+  assert.ok(display.textContent.includes('long'.repeat(300)));
+  assert.ok(display.parentElement.classList.contains('break-words'));
+  assert.ok(display.parentElement.classList.contains('overflow-x-auto'));
+  assert.equal(articles[0].querySelectorAll('button').length, 1);
+  assert.equal(articles[1].querySelectorAll('button').length, 0);
+  assert.equal(doc.querySelector('section[aria-label="Issue comments"] form button').textContent, 'Post comment');
 });

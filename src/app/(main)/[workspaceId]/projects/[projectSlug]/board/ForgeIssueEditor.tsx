@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { RichTextRenderer } from '@/components/RichEditor';
+import { commentHtml } from '@/lib/comment-html';
 import type { IssueView, IssueResult, IssueFields } from '@/lib/forge/issue-service';
 import { taskStatuses, taskPriorities } from '@/lib/forge/tasks';
 import { changeIssue, getIssue } from './actions';
@@ -125,7 +127,7 @@ export function ForgeIssueEditor({ number, workspaceSlug, projectSlug, onSaved, 
       {ready.snapshot.partialComments && <p role="status">Only the first 1,000 comments were loaded.</p>}
       {!ready.snapshot.comments.length && <p className="text-sm text-muted-foreground">No comments yet.</p>}
       {ready.snapshot.comments.map(item => <article key={item.id} className="min-w-0 rounded border p-3">
-        <p className="text-sm text-muted-foreground">{item.user.login}</p><p className="whitespace-pre-wrap break-words text-sm">{item.body}</p>
+        <p className="text-sm text-muted-foreground">{item.user.login}</p><div className="break-words overflow-x-auto"><RichTextRenderer content={commentHtml(item.body)} className="prose-base" /></div>
         {item.canEdit && <Button variant="outline" size="sm" disabled={pending || blocked} onClick={() => { setEditingComment(item.id); setCommentExpected(item.fingerprint); setComment(item.body); }}>Edit shared-account comment</Button>}
         {editingComment === item.id && commentExpected !== item.fingerprint && <Button variant="outline" disabled={pending || blocked} onClick={() => setCommentExpected(item.fingerprint)}>I reviewed the updated comment above</Button>}
       </article>)}

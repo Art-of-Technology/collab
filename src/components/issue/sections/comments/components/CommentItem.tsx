@@ -156,7 +156,7 @@ export function CommentItem({
             </span>
           </div>
 
-          <div className="mb-1">
+          <div className="mb-1 break-words overflow-x-auto">
             {isEditing ? (
               <div className="space-y-2">
                 <RichEditor
