@@ -43,7 +43,7 @@ export function ForgeIssueEditor({ number, workspaceSlug, projectSlug, onSaved, 
   }, [number, workspaceSlug, projectSlug, onDenied]);
   const ready = view?.kind === 'ready' ? view : null;
   const comments = ready?.snapshot.comments;
-  const renderedComments = useMemo(() => comments?.map(item => commentHtml(item.body)) ?? [], [comments]);
+  const renderedComments = useMemo(() => comments?.map(item => commentHtml(item.body, null, true)) ?? [], [comments]);
   const reload = () => start(async () => {
     try {
       const next = await getIssue(workspaceSlug, projectSlug, number);
