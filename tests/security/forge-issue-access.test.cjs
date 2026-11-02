@@ -75,6 +75,7 @@ test('editor retains overlap review after unavailable reloads and comment readba
       useState: state,
       useRef: initial => state({ current: initial })[0],
       useEffect: callback => { if (!effect) effect = callback; },
+      useMemo: callback => callback(),
       useTransition: () => [false, callback => { pending = callback(); }],
     };
     const fields = { title: 'A', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' };
@@ -130,7 +131,7 @@ test('editor preserves rejected drafts and confirmed saves when a later refresh 
     };
     const ready = { kind: 'ready', bodyWarning: false, fields: { title: 'A', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' }, rights: { canEdit: true }, snapshot: { fingerprint: 'a'.repeat(64), issue: { title: 'A', state: 'open', body: '' }, comments: [] } };
     const { ForgeIssueEditor } = compile(path.resolve(__dirname, '../../src/app/(main)/[workspaceId]/projects/[projectSlug]/board/ForgeIssueEditor.tsx'), {
-      react: { useState: state, useRef: initial => state({ current: initial })[0], useEffect: cb => { if (!effect) effect = cb; }, useTransition: () => [false, cb => { pending = cb(); }] },
+      react: { useState: state, useRef: initial => state({ current: initial })[0], useEffect: cb => { if (!effect) effect = cb; }, useMemo: cb => cb(), useTransition: () => [false, cb => { pending = cb(); }] },
       'react/jsx-runtime': { jsx, jsxs: jsx }, '@/components/ui/button': { Button: 'button' }, '@/components/ui/input': { Input: 'input' }, '@/components/ui/textarea': { Textarea: 'textarea' },
       '@/components/RichEditor': { RichTextRenderer: 'div' }, '@/lib/comment-html': { commentHtml: value => value },
       '@/lib/forge/tasks': { taskStatuses: ['backlog'], taskPriorities: ['normal'] },

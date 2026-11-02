@@ -162,3 +162,44 @@ test('board comments render sanitized Markdown and retain comment permissions', 
   assert.equal(articles[1].querySelectorAll('button').length, 0);
   assert.equal(doc.querySelector('section[aria-label="Issue comments"] form button').textContent, 'Post comment');
 });
+
+test('board comment rendering is reused across edits and refreshed on reload', async () => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'https://fixture.invalid' });
+  const previous = { window: global.window, document: global.document, flag: global.IS_REACT_ACT_ENVIRONMENT };
+  global.window = dom.window; global.document = dom.window.document; global.IS_REACT_ACT_ENVIRONMENT = true;
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { act, createElement: h } = React;
+  const root = createRoot(document.getElementById('root'));
+  const fields = { title: 'Issue', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' };
+  const view = body => ({ kind: 'ready', fields, rights: { canEdit: true, canComment: true }, snapshot: { fingerprint: 'a', issue: { title: 'Issue', state: 'open', body: '' }, comments: [{ id: 1, user: { login: 'writer' }, body, fingerprint: body, canEdit: true }] } });
+  let next = view('**Original**'), conversions = 0;
+  const native = tag => ({ children, ...props }) => h(tag, props, children);
+  const { ForgeIssueEditor } = load('src/app/(main)/[workspaceId]/projects/[projectSlug]/board/ForgeIssueEditor.tsx', {
+    react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
+    '@/components/ui/button': { Button: native('button') }, '@/components/ui/input': { Input: native('input') }, '@/components/ui/textarea': { Textarea: native('textarea') },
+    '@/components/RichEditor': { RichTextRenderer: ({ content }) => h('div', { dangerouslySetInnerHTML: { __html: content } }) },
+    '@/lib/comment-html': { commentHtml: value => { conversions++; return commentHtml(value); } },
+    '@/lib/forge/tasks': { taskStatuses: ['backlog'], taskPriorities: ['normal'] },
+    './actions': { getIssue: async () => next }, './ForgeExecution': { ForgeExecution: () => null },
+  });
+  const button = text => [...document.querySelectorAll('button')].find(element => element.textContent === text);
+  try {
+    await act(async () => root.render(h(ForgeIssueEditor, { number: 1, workspaceSlug: 'ws', projectSlug: 'project', onSaved() {}, onDenied() {} })));
+    assert.equal(document.querySelector('article strong')?.textContent, 'Original');
+    assert.equal(conversions, 1);
+    await act(async () => button('Edit shared-account comment').click());
+    assert.equal(document.querySelector('section[aria-label="Issue comments"] textarea').value, '**Original**');
+    assert.equal(conversions, 1);
+    next = view('**Updated** <script>alert(1)</script>');
+    await act(async () => button('Reload source, keep draft').click());
+    assert.equal(document.querySelector('article strong')?.textContent, 'Updated');
+    assert.equal(document.querySelector('article script'), null);
+    assert.equal(conversions, 2);
+    assert.equal(document.querySelector('section[aria-label="Issue comments"] textarea').value, '**Original**');
+  } finally {
+    await act(async () => root.unmount());
+    dom.window.close();
+    global.window = previous.window; global.document = previous.document; global.IS_REACT_ACT_ENVIRONMENT = previous.flag;
+  }
+});
