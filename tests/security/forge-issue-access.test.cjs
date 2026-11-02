@@ -84,6 +84,7 @@ test('editor retains overlap review after unavailable reloads and comment readba
       react: hooks, 'react/jsx-runtime': { jsx, jsxs: jsx },
       '@/components/ui/button': { Button: 'button' }, '@/components/ui/input': { Input: 'input' }, '@/components/ui/textarea': { Textarea: 'textarea' },
       '@/lib/forge/tasks': { taskStatuses: ['backlog'], taskPriorities: ['normal'] },
+      './ForgeExecution': { ForgeExecution: 'div' },
       './actions': { getIssue: async () => next, changeIssue: async () => { writes++; return { kind: 'saved' }; } },
     });
     const render = () => { cursor = 0; return descendants(ForgeIssueEditor({ number: 1, workspaceSlug: 'workspace', projectSlug: 'project', onSaved() {}, onDenied() {} })); };
@@ -132,6 +133,7 @@ test('editor preserves rejected drafts and confirmed saves when a later refresh 
       react: { useState: state, useRef: initial => state({ current: initial })[0], useEffect: cb => { if (!effect) effect = cb; }, useTransition: () => [false, cb => { pending = cb(); }] },
       'react/jsx-runtime': { jsx, jsxs: jsx }, '@/components/ui/button': { Button: 'button' }, '@/components/ui/input': { Input: 'input' }, '@/components/ui/textarea': { Textarea: 'textarea' },
       '@/lib/forge/tasks': { taskStatuses: ['backlog'], taskPriorities: ['normal'] },
+      './ForgeExecution': { ForgeExecution: 'div' },
       './actions': { getIssue: async () => { if (failedRead) { if (outcome === 'saved-unavailable') { assert.equal(saved, 1); return { kind: 'unavailable' }; } throw new Error('refresh offline'); } return ready; }, changeIssue: async () => ({ kind: outcome === 'saved-unavailable' ? 'saved' : outcome, number: 1 }) },
     });
     const render = () => { cursor = 0; return nodesOf(ForgeIssueEditor({ number: 1, workspaceSlug: 'workspace', projectSlug: 'project', onSaved: () => { saved++; }, onDenied: () => { denied++; } })); };

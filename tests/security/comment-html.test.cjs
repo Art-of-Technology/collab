@@ -99,7 +99,7 @@ test('issue comment display and edit form both receive formatted content, includ
       '@/lib/comment-html': { commentHtml },
       '@/components/ui/custom-avatar': { CustomAvatar: noOp },
       '@/components/RichEditor': {
-        RichTextRenderer: ({ content }) => React.createElement('div', { 'data-display': true, dangerouslySetInnerHTML: { __html: content } }),
+        RichTextRenderer: ({ content, className }) => React.createElement('div', { 'data-display': true, className, dangerouslySetInnerHTML: { __html: content } }),
         RichEditor: ({ value }) => React.createElement('textarea', { 'data-editor': true, defaultValue: value }),
       },
       '@/components/ui/button': { Button: ({ children }) => React.createElement('button', null, children) },
@@ -116,6 +116,56 @@ test('issue comment display and edit form both receive formatted content, includ
       assert.equal(editor.querySelector('h2')?.textContent, 'Handoff');
     } else {
       assert.equal(doc.querySelectorAll('[data-display] h2').length, 2);
+      for (const display of doc.querySelectorAll('[data-display]')) {
+        assert.ok(display.classList.contains('prose-base'));
+        assert.ok(display.parentElement.classList.contains('break-words'));
+        assert.ok(display.parentElement.classList.contains('overflow-x-auto'));
+      }
     }
+  }
+});
+
+test('board comments remain literal and preserve edit controls and drafts', async () => {
+  const dom = new JSDOM('<div id="root"></div>', { url: 'https://fixture.invalid' });
+  const previous = { window: global.window, document: global.document, flag: global.IS_REACT_ACT_ENVIRONMENT };
+  global.window = dom.window; global.document = dom.window.document; global.IS_REACT_ACT_ENVIRONMENT = true;
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { act, createElement: h } = React;
+  const root = createRoot(document.getElementById('root'));
+  const fields = { title: 'Issue', description: '', status: 'backlog', priority: 'normal', owner: '', dueDate: '', followUpDate: '', nextAction: '' };
+  const body = '**Bold**\n![Image](https://example.com/image)\n<script>alert(1)</script>\n' + 'long'.repeat(300);
+  const view = text => ({ kind: 'ready', fields, rights: { canEdit: true, canComment: true }, snapshot: { fingerprint: 'a', issue: { title: 'Issue', state: 'open', body: '' }, comments: [
+    { id: 1, user: { login: 'writer' }, body: text, fingerprint: text, canEdit: true },
+    { id: 2, user: { login: 'other' }, body: 'Other comment', fingerprint: 'two', canEdit: false },
+  ] } });
+  let next = view(body);
+  const native = tag => ({ children, ...props }) => h(tag, props, children);
+  const { ForgeIssueEditor } = load('src/app/(main)/[workspaceId]/projects/[projectSlug]/board/ForgeIssueEditor.tsx', {
+    react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
+    '@/components/ui/button': { Button: native('button') }, '@/components/ui/input': { Input: native('input') }, '@/components/ui/textarea': { Textarea: native('textarea') },
+    '@/lib/forge/tasks': { taskStatuses: ['backlog'], taskPriorities: ['normal'] },
+    './actions': { getIssue: async () => next }, './ForgeExecution': { ForgeExecution: () => null },
+  });
+  const button = text => [...document.querySelectorAll('button')].find(element => element.textContent === text);
+  try {
+    await act(async () => root.render(h(ForgeIssueEditor, { number: 1, workspaceSlug: 'ws', projectSlug: 'project', onSaved() {}, onDenied() {} })));
+    const articles = document.querySelectorAll('article');
+    const display = articles[0].querySelectorAll('p')[1];
+    assert.equal(display.textContent, body);
+    assert.equal(display.querySelectorAll('strong,img,script,a').length, 0);
+    for (const name of ['text-base', 'leading-7', 'whitespace-pre-wrap', 'break-words', 'overflow-x-auto']) assert.ok(display.classList.contains(name));
+    assert.equal(articles[0].querySelectorAll('button').length, 1);
+    assert.equal(articles[1].querySelectorAll('button').length, 0);
+    await act(async () => button('Edit shared-account comment').click());
+    assert.equal(document.querySelector('section[aria-label="Issue comments"] textarea').value, body);
+    next = view('Updated **literal**');
+    await act(async () => button('Reload source, keep draft').click());
+    assert.equal(document.querySelector('article p:nth-child(2)').textContent, 'Updated **literal**');
+    assert.equal(document.querySelector('section[aria-label="Issue comments"] textarea').value, body);
+  } finally {
+    await act(async () => root.unmount());
+    dom.window.close();
+    global.window = previous.window; global.document = previous.document; global.IS_REACT_ACT_ENVIRONMENT = previous.flag;
   }
 });

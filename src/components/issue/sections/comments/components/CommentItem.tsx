@@ -156,7 +156,7 @@ export function CommentItem({
             </span>
           </div>
 
-          <div className="mb-1">
+          <div className="mb-1 break-words overflow-x-auto">
             {isEditing ? (
               <div className="space-y-2">
                 <RichEditor
@@ -167,7 +167,6 @@ export function CommentItem({
                   maxHeight="200px"
                   showToolbar={true}
                   toolbarMode="floating"
-                  className="text-xs"
                 />
                 <div className="flex gap-2">
                   <Button
@@ -192,7 +191,7 @@ export function CommentItem({
             ) : (
               <RichTextRenderer
                 content={renderedContent}
-                className="text-collab-400 text-xs leading-relaxed"
+                className="prose-base"
               />
             )}
           </div>
