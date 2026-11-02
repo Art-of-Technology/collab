@@ -167,7 +167,6 @@ export function CommentItem({
                   maxHeight="200px"
                   showToolbar={true}
                   toolbarMode="floating"
-                  className="text-xs"
                 />
                 <div className="flex gap-2">
                   <Button
@@ -192,7 +191,7 @@ export function CommentItem({
             ) : (
               <RichTextRenderer
                 content={renderedContent}
-                className="text-collab-400 text-xs leading-relaxed"
+                className="prose-base"
               />
             )}
           </div>
