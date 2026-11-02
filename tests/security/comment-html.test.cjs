@@ -84,14 +84,27 @@ test('Markdown and explicit HTML cannot introduce executable markup', () => {
   }
 });
 
-test('board restrictions remove author styling without changing existing rich comment rendering', () => {
-  const input = '<div style="position:fixed" class="fixed" id="cover"><strong>Bold</strong></div>';
-  assert.equal(documentFor(input).querySelector('div').getAttribute('style'), 'position:fixed');
+test('board restrictions retain safe color and remove layout styling without changing existing comments', () => {
+  const input = '<div style="position:fixed;color:red;background:url(https://example.com/track)" class="fixed" id="cover"><strong>Bold</strong></div>';
+  assert.match(documentFor(input).querySelector('div').getAttribute('style'), /position:fixed/);
   for (const html of [commentHtml(input, null, true), commentHtml('', input, true)]) {
     const doc = new JSDOM(html).window.document;
     assert.equal(doc.querySelector('strong')?.textContent, 'Bold');
-    assert.equal(doc.querySelectorAll('[style],[class],[id],style').length, 0);
+    assert.equal(doc.querySelector('div').getAttribute('style'), 'color: red');
+    assert.equal(doc.querySelectorAll('[class],[id],style').length, 0);
+    assert.equal(doc.querySelector('div').style.position, '');
+    assert.equal(doc.querySelector('div').style.background, '');
   }
+});
+
+test('board media becomes readable links without active resource elements', () => {
+  const input = '![Tracking image](https://example.com/image)\n\n<picture><source srcset="https://example.com/set"><img src="https://example.com/picture" alt="Picture"></picture><video src="https://example.com/movie" poster="https://example.com/poster"></video><audio><source src="https://example.com/audio"></audio><iframe src="https://example.com/frame"></iframe><object data="https://example.com/object"></object><svg><image href="https://example.com/svg"></image></svg>';
+  const doc = new JSDOM(commentHtml(input, null, true)).window.document;
+  assert.equal(doc.querySelectorAll('img,picture,video,audio,source,iframe,embed,object,svg,[src],[srcset],[poster]').length, 0);
+  for (const [href, label] of [['https://example.com/image', 'Tracking image'], ['https://example.com/picture', 'Picture'], ['https://example.com/movie', 'Media'], ['https://example.com/audio', 'Media']]) {
+    assert.equal(doc.querySelector(`a[href="${href}"]`)?.textContent, label);
+  }
+  assert.equal(documentFor('![Original](https://example.com/image)').querySelector('img')?.getAttribute('src'), 'https://example.com/image');
 });
 
 test('issue comment display and edit form both receive formatted content, including replies', () => {
@@ -165,7 +178,8 @@ test('board comments render sanitized Markdown and retain comment permissions', 
   assert.equal(articles[0].querySelector('a')?.href, 'https://example.com/');
   assert.equal(articles[0].querySelectorAll('script,[onerror]').length, 0);
   const display = articles[0].querySelector('.prose-base');
-  assert.equal(display.querySelectorAll('style,[style],[class],[id]').length, 0);
+  assert.equal(display.querySelectorAll('style,[class],[id]').length, 0);
+  assert.equal([...display.querySelectorAll('[style]')].map(node => node.getAttribute('style')).join(''), 'color: red');
   assert.equal([...display.querySelectorAll('a')].find(link => link.textContent === 'Sign in')?.href, 'https://example.com/login');
   assert.ok(display.textContent.includes('long'.repeat(300)));
   assert.ok(display.parentElement.classList.contains('break-words'));
