@@ -99,6 +99,90 @@ test('worker status records a sanitized start conflict without retry', async t =
   assert.equal(JSON.stringify(status).includes('PRIVATE_REMOTE_TEXT'), false); assert.equal(f.sessions.length, 0);
 });
 
+test('worker dispatches a small handoff with bounded context for a long issue', async t => {
+  let received;
+  const f = fixture(t, ({ context, result }) => { received = context; return result; });
+  const originalApi = f.dependencies.api;
+  const description = 'Milestone history and old progress notes. '.repeat(4000);
+  f.dependencies.api = (url, extra) => url === 'issues/issue-one'
+    ? { id: 'issue-one', issueKey: 'BW-6', title: 'Long milestone', project: { id: 'project-a' }, description, privateField: 'must-not-reach-runner' }
+    : originalApi(url, extra);
+  await f.run('setup');
+  const result = await f.run('run');
+  assert.equal(result.state, 'stopped');
+  assert.equal(f.sessions.length, 1);
+  assert.equal(received.handoff.content, 'untrusted $(do not execute)');
+  assert.equal(received.issue.id, 'issue-one');
+  assert.equal(received.issue.issueKey, 'BW-6');
+  assert.equal(received.issue.title, 'Long milestone');
+  assert.equal(received.issue.projectId, 'project-a');
+  assert.ok(Object.keys(received.issue).every(key => ['id', 'issueKey', 'title', 'projectId', 'description', 'descriptionTruncated'].includes(key)));
+  assert.equal(received.issue.descriptionTruncated, true);
+  assert.ok(description.startsWith(received.issue.description));
+  assert.ok(Buffer.byteLength(received.issue.description, 'utf8') <= 4096);
+  assert.ok(Buffer.byteLength(JSON.stringify(received), 'utf8') <= 44000);
+  assert.ok(!JSON.stringify(received).includes('must-not-reach-runner'));
+});
+
+test('worker description preview respects a UTF-8 byte limit without splitting characters', async t => {
+  let received;
+  const f = fixture(t, ({ context, result }) => { received = context; return result; });
+  const originalApi = f.dependencies.api;
+  const description = `${'a'.repeat(4094)}🧪${'猫'.repeat(2000)}`;
+  f.dependencies.api = (url, extra) => url === 'issues/issue-one'
+    ? { id: 'issue-one', issueKey: 'BW-6', title: 'Unicode milestone', project: { id: 'project-a' }, description }
+    : originalApi(url, extra);
+  await f.run('setup');
+  await f.run('run');
+  assert.equal(f.sessions.length, 1);
+  assert.equal(received.issue.descriptionTruncated, true);
+  assert.ok(Buffer.byteLength(received.issue.description, 'utf8') <= 4096);
+  assert.ok(description.startsWith(received.issue.description));
+  assert.ok(!received.issue.description.includes('\ufffd'));
+  assert.ok(Buffer.byteLength(JSON.stringify(received), 'utf8') <= 44000);
+});
+
+test('worker retains a short issue description without marking it truncated', async t => {
+  let received;
+  const f = fixture(t, ({ context, result }) => { received = context; return result; });
+  const originalApi = f.dependencies.api;
+  f.dependencies.api = (url, extra) => url === 'issues/issue-one'
+    ? { id: 'issue-one', title: 'Issue', description: 'Brief context 🧪' }
+    : originalApi(url, extra);
+  await f.run('setup');
+  await f.run('run');
+  assert.equal(received.issue.description, 'Brief context 🧪');
+  assert.equal(received.issue.descriptionTruncated, false);
+});
+
+test('worker checks the canonical issue project before dispatching a coordinator task', async t => {
+  const f = fixture(t);
+  f.dependencies.task = { id: 'task-one', project: 'project-a' };
+  f.setHandoff({ ...f.handoff(), issue: { projectId: 'project-a' } });
+  const originalApi = f.dependencies.api;
+  f.dependencies.api = (url, extra) => url === 'issues/issue-one'
+    ? { id: 'issue-one', issueKey: 'BW-6', title: 'Mismatch', project: { id: 'project-b' }, description: 'test' }
+    : originalApi(url, extra);
+  await f.run('setup');
+  const result = await f.run('run');
+  assert.equal(result.stopReason, 'worker_context');
+  assert.equal(f.sessions.length, 0);
+  assert.equal(f.calls.filter(c => c.body?.action === 'complete').length, 0);
+});
+
+test('worker rejects oversized multibyte handoff instructions before model dispatch', async t => {
+  const f = fixture(t);
+  const content = '\u0001'.repeat(7200) + '🧪'.repeat(2000);
+  assert.ok(content.length <= 16000);
+  assert.ok(Buffer.byteLength(JSON.stringify(content), 'utf8') > 44000);
+  f.setHandoff({ ...f.handoff(), content });
+  await f.run('setup');
+  const result = await f.run('run');
+  assert.equal(result.stopReason, 'worker_context_limit');
+  assert.equal(f.sessions.length, 0);
+  assert.equal(f.calls.filter(c => c.body?.action === 'complete').length, 0);
+});
+
 test('worker status records a failed lease renewal and still closes its generation', async t => {
   const f = fixture(t); await f.run('setup');
   const events = [];
@@ -357,6 +441,7 @@ test('runner validates owned result/session/usage and sends content only on stdi
   const invoke = data => claudeRunner.execute(config, attempt, { content: 'PRIVATE_TASK_BODY' }, undefined, () => {}, async (_exe, args, options) => {
     assert.equal(args.some(arg => arg.includes('PRIVATE_TASK_BODY')), false);
     assert.ok(options.input.includes('PRIVATE_TASK_BODY'));
+    assert.match(options.input, /handoff is the authoritative task scope/);
     assert.ok(args.includes('--restricted')); assert.equal(args.includes('bypassPermissions'), false);
     assert.equal(args.includes('--max-turns'), false);
     assert.equal(args[args.indexOf('--max-budget-usd') + 1], String(attempt.reservedUSD));
