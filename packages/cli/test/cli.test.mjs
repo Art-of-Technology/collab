@@ -1304,9 +1304,9 @@ test('refresh rejects invalid local bindings before dispatch and refuses changed
     [{ refreshToken: 'PRIVATE_ INVALID' }, 'workspace-a', {}, 'invalid_credentials', 0],
     [{ origin: 'https://example.test/path' }, 'workspace-a', {}, 'invalid_origin', 0],
     [{}, 'workspace-b', {}, 'workspace_mismatch', 1],
-    [{}, 'workspace-a', { id: 'same-user', workspace: { id: 'workspace-b' } }, 'refresh_verification_pending', 2],
-    [{}, 'workspace-a', { id: 'other-user', workspace: { id: 'workspace-a' } }, 'refresh_verification_pending', 2],
-    [{}, 'workspace-a', { workspace: { id: 'workspace-a' } }, 'refresh_verification_pending', 2],
+    [{}, 'workspace-a', { id: 'same-user', workspace: { id: 'workspace-b' } }, 'workspace_mismatch', 2],
+    [{}, 'workspace-a', { id: 'other-user', workspace: { id: 'workspace-a' } }, 'identity_mismatch', 2],
+    [{}, 'workspace-a', { workspace: { id: 'workspace-a' } }, 'invalid_identity', 2],
   ]) {
     const f = await fixture(t, (req, res) => res.end(JSON.stringify(req.url === '/api/oauth/mcp/token'
       ? { access_token: 'PRIVATE_ROTATED', token_type: 'Bearer', expires_in: 3600, workspace_id: responseWorkspace }
@@ -1319,12 +1319,26 @@ test('refresh rejects invalid local bindings before dispatch and refuses changed
     assert.equal(result.stdout, ''); assert.ok(!result.stderr.includes('PRIVATE_'));
     assert.equal(f.calls.length, dispatches);
     const stored = JSON.parse(readFileSync(file, 'utf8'));
-    if (expected === 'refresh_verification_pending') {
+    if (dispatches === 2) {
       assert.equal(stored.accessToken, 'PRIVATE_ACCESS'); assert.equal(stored.pendingRefresh.accessToken, 'PRIVATE_ROTATED');
     } else if (dispatches) {
       assert.equal(stored.pendingRefresh, null);
       assert.equal(stored.accessToken, 'PRIVATE_ACCESS');
     } else assert.equal(readFileSync(file, 'utf8'), original);
+  }
+});
+
+test('refresh preserves identity service errors without repeating rotation', async t => {
+  for (const [status, expected] of [[401, 'unauthorized'], [403, 'forbidden'], [429, 'refresh_verification_pending'], [503, 'refresh_verification_pending']]) {
+    const f = await fixture(t, (req, res) => {
+      if (req.url === '/api/oauth/mcp/token') return res.end(JSON.stringify({ access_token: 'rotated', token_type: 'Bearer', expires_in: 3600, workspace_id: 'workspace' }));
+      res.statusCode = status; res.end('{}');
+    });
+    const file = path.join(f.dir, 'default.json'), env = { COLLAB_TOKEN: '' };
+    writeCredentials(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'old', refreshToken: 'refresh', tokenWorkspace: 'workspace', userId: 'user' }));
+    for (let attempt = 0; attempt < 2; attempt++) assert.equal((await f.run(['auth', 'refresh'], { env })).error.error, expected);
+    assert.equal(f.calls.filter(call => call.url === '/api/oauth/mcp/token').length, 1);
+    assert.equal(JSON.parse(readFileSync(file)).accessToken, 'old');
   }
 });
 

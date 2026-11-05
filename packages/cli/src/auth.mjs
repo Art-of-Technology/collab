@@ -95,7 +95,10 @@ export async function refresh(state, save) {
     throw new CliError('invalid_credentials', 'Pending refresh credentials are invalid. Sign in again.', 3);
   }
   try { await verifyIdentity(base, pending.accessToken, pending.tokenWorkspace, state.userId); }
-  catch { throw new CliError('refresh_verification_pending', 'Refresh succeeded, but its identity could not be verified. Run collab auth refresh again to verify the saved result; no new refresh will be sent.', 5); }
+  catch (error) {
+    if (!(error instanceof CliError) || (error.code !== 'transport_failed' && error.details.status !== 429 && !(error.details.status >= 500))) throw error;
+    throw new CliError('refresh_verification_pending', 'Refresh succeeded, but its identity could not be verified. Run collab auth refresh again to verify the saved result; no new refresh will be sent.', 5);
+  }
   const { pendingRefresh: _pendingRefresh, ...previous } = state;
   const next = { ...previous, accessToken: pending.accessToken, refreshToken: pending.refreshToken, expiresAt: pending.expiresAt, tokenWorkspace: pending.tokenWorkspace, scopes: pending.scopes };
   try { save(next); }
