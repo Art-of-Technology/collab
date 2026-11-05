@@ -223,6 +223,9 @@ async function main() {
   if (spec.defaultProject && !Object.hasOwn(body, 'projectId') && selected.project) body.projectId = selected.project;
   if (name === 'notes create' && body.projectId && !body.scope) body.scope = 'PROJECT';
   for (const key of spec.required || []) if (body[key] === undefined || body[key] === null || body[key] === '') throw new CliError('required_field', `Missing required --${flagName(key)}.`);
+  if (name === 'handoffs send' && !body.toAgents?.length && !body.toLabels?.length) {
+    throw new CliError('required_field', 'Supply at least one recipient with --to-agents or --to-labels as a JSON array. --agent is the sender.');
+  }
   if (['PATCH', 'PUT'].includes(spec.method) && !Object.keys(body).length) throw new CliError('empty_update', 'Supply at least one field to update.');
   const query = new URLSearchParams();
   if (selected.workspace) query.set('workspaceId', selected.workspace);

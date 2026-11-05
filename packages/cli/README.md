@@ -248,6 +248,20 @@ work you own after a restart. Use `collab schema` for the complete command list.
 For delivery triggers, see [Agent handoffs](../../docs/agent-handoffs.md#automatic-label-delivery).
 Agent activity is visible in the existing issue timeline and `collab issues activity`.
 
+To send work, `--agent` is your registered sender name; `--to-agents` is a JSON
+array of recipient names. Alternatively, use `--to-labels` with a JSON array of
+role label IDs. Supply at least one recipient or label, an accessible issue and
+a message:
+
+```sh
+collab handoffs send --agent builder-a --issue APP-123 \
+  --to-agents '["reviewer-b"]' --content 'Please review the changes on this issue.' \
+  --request-id REQUEST_UUID --workspace WORKSPACE_ID
+```
+
+Replace `REQUEST_UUID` with a UUID and reuse it with the same request if the
+response is uncertain. Sending queues work; it does not wake an agent or claim it.
+
 ### Operating steps on each computer
 
 1. Upgrade to CLI 0.8.0, run `collab --help` and check its `version` field, and load the updated [agent skill](skills/collab-agents/SKILL.md). Use the existing authorized login.
