@@ -114,11 +114,22 @@ try {
     irm https://collab.weez.boo/install.ps1 | iex
     if ($environment.GetValueKind('Path') -ne [Microsoft.Win32.RegistryValueKind]::String -or $environment.GetValue('Path') -cne $expectedRaw) { throw 'REG_SZ PATH was changed' }
     # Run the full authentication and API suite against the installed executable.
-    Write-Host "INSTALLED NATIVE ($Platform): full CLI/auth/ACL suite against $expected"
+    if ($env:COLLAB_TEST_SHARD) {
+        Write-Host "INSTALLED NATIVE ($Platform): CLI/auth/ACL shard $env:COLLAB_TEST_SHARD against $expected"
+    } else {
+        Write-Host "INSTALLED NATIVE ($Platform): full CLI/auth/ACL suite against $expected"
+    }
     $env:COLLAB_CLI_EXECUTABLE = $expected
-    node --test (Join-Path $root 'packages/cli/test/cli.test.mjs')
+    if ($env:COLLAB_TEST_SHARD) {
+        if (!$env:COLLAB_TEST_REPORT) { throw 'A test report path is required for a shard' }
+        $pattern = & node (Join-Path $root 'packages/cli/test/native-test-manifest.mjs') pattern $env:COLLAB_TEST_SHARD
+        if ($LASTEXITCODE -ne 0) { throw 'Invalid installed CLI test shard' }
+        node --test --test-reporter=tap "--test-name-pattern=$pattern" (Join-Path $root 'packages/cli/test/cli.test.mjs') | Tee-Object -FilePath $env:COLLAB_TEST_REPORT
+    } else {
+        node --test (Join-Path $root 'packages/cli/test/cli.test.mjs')
+    }
     if ($LASTEXITCODE -ne 0) { throw 'Installed Windows CLI integration tests failed' }
-    Write-Host 'PASS: PowerShell one-command installation, immediate PATH, repeat install, checksum refusal, full installed-native CLI/auth/ACL suite'
+    Write-Host 'PASS: PowerShell one-command installation, immediate PATH, repeat install, checksum refusal, and selected installed-native CLI/auth/ACL tests'
 } finally {
     $env:PROCESSOR_ARCHITECTURE = $oldArchitecture
     $env:PROCESSOR_ARCHITEW6432 = $oldWowArchitecture
