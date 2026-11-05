@@ -7,7 +7,7 @@ const app = { id: 'app', slug: 'app', name: 'CLI', status: 'PUBLISHED', isSystem
 const token = { id: 'token', accessToken: Buffer.from('bearer').toString('base64'), userId: 'alice', scopes: ['issues:read'], app, workspace, installation: null };
 const failure = (code, property = 'code') => Object.assign(new Error('private database detail'), { [property]: code });
 
-function fixture({ rows = [token], scanError, userError, workspaceError, decrypt, appError, workspaceErrors = {}, handlerError } = {}) {
+function fixture({ rows = [token], scanError, userError, workspaceError, decrypt, getEncryptionKey = () => 'fixture-key', appError, workspaceErrors = {}, handlerError } = {}) {
   const logs = [];
   let calls = 0, workspaceCalls = 0;
   const prisma = {
@@ -28,7 +28,7 @@ function fixture({ rows = [token], scanError, userError, workspaceError, decrypt
   const auth = load('src/lib/apps/auth-middleware.ts', {
     'next/server': next, '@/lib/prisma': { prisma }, '@/lib/oauth-scopes': scopeModule,
     '@/lib/post-access': load('src/lib/post-access.ts'),
-    '@/lib/apps/crypto': { decryptToken: decrypt || (async value => String(value)) },
+    '@/lib/apps/crypto': { getEncryptionKey, decryptToken: decrypt || (async value => String(value)) },
   }, { Buffer, URL, console: { error: (...args) => logs.push(args), warn: (...args) => logs.push(args), log() {} } });
   const handler = auth.withAppAuth(async (_req, context) => { calls++; if (handlerError) throw handlerError; return { status: 200, userId: context.user.id, workspaceId: context.workspace.id }; });
   return { invoke: (bearer = 'bearer', query = '') => handler({ url: 'https://example.test/api/issues' + query, headers: new Headers(bearer === null ? {} : { Authorization: `Bearer ${bearer}` }) }), logs, calls: () => calls };
@@ -88,12 +88,14 @@ test('a corrupt encrypted token does not prevent another valid token from authen
 test('missing or malformed encryption key is a server error, not an invalid credential', async () => {
   for (const key of [undefined, 'too-short']) {
     const crypto = load('src/lib/apps/crypto.ts', { crypto: require('node:crypto'), util: require('node:util'), bcrypt: {} }, { Buffer, process: { env: { APP_TOKENS_KEY: key } }, console });
-    const f = fixture({ decrypt: crypto.decryptToken });
-    const result = await f.invoke();
-    assert.equal(result.status, 500);
-    assert.equal(result.body.error, 'server_error');
-    assert.equal(f.calls(), 0);
-    assert.doesNotMatch(JSON.stringify([result, f.logs]), /too-short|APP_TOKENS_KEY/);
+    for (const rows of [[token], []]) {
+      const f = fixture({ rows, decrypt: crypto.decryptToken, getEncryptionKey: crypto.getEncryptionKey });
+      const result = await f.invoke();
+      assert.equal(result.status, 500);
+      assert.equal(result.body.error, 'server_error');
+      assert.equal(f.calls(), 0);
+      assert.doesNotMatch(JSON.stringify([result, f.logs]), /too-short|APP_TOKENS_KEY/);
+    }
   }
 });
 

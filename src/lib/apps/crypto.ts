@@ -22,7 +22,7 @@ export async function hashSecret(secret: string): Promise<string> {
 }
 
 // Get encryption key from environment variable
-function getEncryptionKey(): string {
+export function getEncryptionKey(): string {
   const key = process.env.APP_TOKENS_KEY;
   if (!key || key.length !== 32) {
     throw Object.assign(new Error('Token encryption configuration is invalid'), { code: 'TOKEN_ENCRYPTION_CONFIGURATION' });

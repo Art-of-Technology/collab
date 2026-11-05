@@ -27,7 +27,7 @@ function fixture(clientId = 'collab-cli') {
     crypto,
     '@/lib/prisma': { prisma },
     // Synthetic tokens only: exercise persistence and lookup without a deployment key.
-    '@/lib/apps/crypto': { encryptToken: async value => Buffer.from(value), decryptToken: async value => value.toString() },
+    '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', encryptToken: async value => Buffer.from(value), decryptToken: async value => value.toString() },
     '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts', {}, { URL }),
     '@/lib/post-access': load('src/lib/post-access.ts'),
     'next/server': { NextResponse: { json: (body, init) => ({ body, status: init?.status ?? 200 }) } },
@@ -117,4 +117,13 @@ test('refresh reports server error when token encryption is misconfigured', asyn
   const result = await f.exchange({ grant_type: 'refresh_token', refresh_token: first.refresh_token });
   assert.equal(result.status, 500);
   assert.doesNotMatch(JSON.stringify([result, f.logs]), /private key detail/);
+});
+
+test('refresh reports encryption configuration errors even when no tokens exist', async () => {
+  const f = fixture();
+  const realCrypto = load('src/lib/apps/crypto.ts', { crypto, util: require('node:util'), bcrypt: {} }, { Buffer, process: { env: {} }, console });
+  f.crypto.getEncryptionKey = realCrypto.getEncryptionKey;
+  const result = await f.exchange({ grant_type: 'refresh_token', refresh_token: 'unknown' });
+  assert.equal(result.status, 500);
+  assert.equal(result.body.error, 'server_error');
 });

@@ -8,7 +8,7 @@ import { postWorkspaceAccessWhere } from "@/lib/post-access";
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { decryptToken } from '@/lib/apps/crypto';
+import { decryptToken, getEncryptionKey } from '@/lib/apps/crypto';
 import { hasScope, hasAllScopes, hasAnyScope, normalizeScopes } from '@/lib/oauth-scopes';
 
 import { prisma } from '@/lib/prisma';
@@ -247,6 +247,7 @@ export async function authenticateAppRequest(
  * 2. System app tokens (no installation required)
  */
 async function findInstallationByAccessToken(token: string) {
+  getEncryptionKey();
   // Find tokens from active installations OR system app tokens
   const appTokens = await prisma.appToken.findMany({
     where: {

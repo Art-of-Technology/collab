@@ -45,7 +45,7 @@ test('app post handlers enforce live membership and preserve token and operation
     $queryRaw: async () => [], $transaction: async fn => fn(db),
   };
   const deps = { '@/lib/prisma': { prisma: db }, 'next/server': { NextResponse: Response }, zod: require('zod'),
-    '@/lib/apps/crypto': { decryptToken: async () => 'valid-token' }, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') };
+    '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', decryptToken: async () => 'valid-token' }, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') };
   const globals = { URL, Buffer, console, Error };
   deps['@/lib/apps/auth-middleware'] = load('src/lib/apps/auth-middleware.ts', deps, globals);
   const collection = load('src/app/api/apps/auth/posts/route.ts', deps, globals);
@@ -109,7 +109,7 @@ test('app post creation uses the token user rather than the installer and reject
     post: { create: async ({ data }) => { writes.push(data); return { ...data, id: 'post', author: { id: data.authorId }, _count: { comments: 0, reactions: 0, bookmarks: 0 } }; } },
   };
   const deps = { '@/lib/prisma': { prisma: db }, 'next/server': { NextResponse: Response }, zod: require('zod'),
-    '@/lib/apps/crypto': { decryptToken: async () => 'token' }, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') };
+    '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', decryptToken: async () => 'token' }, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') };
   deps['@/lib/apps/auth-middleware'] = load('src/lib/apps/auth-middleware.ts', deps, { URL, Buffer, console });
   const handler = load('src/app/api/apps/auth/posts/route.ts', deps, { URL, console }).POST;
   const request = () => new Request('https://example.test', { method: 'POST', headers: { Authorization: 'Bearer token' }, body: JSON.stringify({ message: 'From the token user' }) });

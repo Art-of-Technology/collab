@@ -1321,7 +1321,25 @@ test('refresh rejects invalid local bindings before dispatch and refuses changed
     const stored = JSON.parse(readFileSync(file, 'utf8'));
     if (expected === 'refresh_verification_pending') {
       assert.equal(stored.accessToken, 'PRIVATE_ACCESS'); assert.equal(stored.pendingRefresh.accessToken, 'PRIVATE_ROTATED');
+    } else if (dispatches) {
+      assert.equal(stored.pendingRefresh, null);
+      assert.equal(stored.accessToken, 'PRIVATE_ACCESS');
     } else assert.equal(readFileSync(file, 'utf8'), original);
+  }
+});
+
+test('uncertain refresh outcomes cannot be replayed by a later command', async t => {
+  for (const response of ['server-error', 'invalid', 'workspace']) {
+    const f = await fixture(t, (_req, res) => {
+      if (response === 'server-error') { res.statusCode = 500; return res.end('{}'); }
+      res.end(JSON.stringify(response === 'invalid' ? {} : { access_token: 'rotated', token_type: 'Bearer', expires_in: 3600, workspace_id: 'other' }));
+    });
+    const file = path.join(f.dir, 'default.json'), env = { COLLAB_TOKEN: '' };
+    writeCredentials(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'old', refreshToken: 'refresh', tokenWorkspace: 'workspace', userId: 'user' }));
+    assert.notEqual((await f.run(['auth', 'refresh'], { env })).code, 0);
+    assert.equal(JSON.parse(readFileSync(file)).pendingRefresh, null);
+    assert.equal((await f.run(['auth', 'refresh'], { env })).error.error, 'outcome_unknown');
+    assert.equal(f.calls.length, 1);
   }
 });
 

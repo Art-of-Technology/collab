@@ -2,7 +2,7 @@ import { effectiveAppScopes, isAllowedRedirectUri, normalizeScopes } from '@/lib
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes, createHash } from 'crypto';
-import { encryptToken, decryptToken } from '@/lib/apps/crypto';
+import { encryptToken, decryptToken, getEncryptionKey } from '@/lib/apps/crypto';
 
 import { prisma } from '@/lib/prisma';
 
@@ -316,6 +316,7 @@ async function handleRefreshTokenGrant(
   }
 
   // Find the token by refresh token
+  getEncryptionKey();
   const appTokens = await prisma.appToken.findMany({
     where: {
       appId: oauthClient.app.id,

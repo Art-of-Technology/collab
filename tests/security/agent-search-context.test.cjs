@@ -47,7 +47,7 @@ function harness() {
     '@/lib/oauth-scopes': scopes, '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts') };
   const service = load('src/lib/agent-project-context.ts', { ...dependencies, zod: require('zod'), './agent-search-query': queryModule }, { Buffer, Date: Clock });
   const auth = load('src/lib/apps/auth-middleware.ts', { 'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma: db },
-    '@/lib/oauth-scopes': scopes, '@/lib/apps/crypto': { decryptToken: async () => 'test-token' } }, { Buffer, URL, console });
+    '@/lib/oauth-scopes': scopes, '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', decryptToken: async () => 'test-token' } }, { Buffer, URL, console });
   const route = load('src/app/api/apps/auth/ai-context/route.ts', { ...dependencies,
     'next/server': { NextResponse: Response }, '@/lib/apps/auth-middleware': auth,
     '@/lib/agent-project-context': service, '@/lib/agent-search-query': queryModule,

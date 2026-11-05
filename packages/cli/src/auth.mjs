@@ -76,6 +76,8 @@ export async function refresh(state, save) {
   const base = origin(state.origin);
   let pending = state.pendingRefresh;
   if (!Object.hasOwn(state, 'pendingRefresh')) {
+    try { save({ ...state, pendingRefresh: null }); }
+    catch { throw new CliError('outcome_unknown', 'Refresh could not be safely prepared. Check the profile or sign in again.', 5); }
     const data = await request(base, '/api/oauth/mcp/token', { method: 'POST', form: true, body: { grant_type: 'refresh_token', client_id: 'collab-cli', refresh_token: state.refreshToken } });
     let next;
     try { next = tokens(data, state); }
@@ -85,6 +87,7 @@ export async function refresh(state, save) {
     try { save({ ...state, pendingRefresh: pending }); }
     catch { throw new CliError('outcome_unknown', 'Refresh succeeded, but the new credentials could not be safely saved. Do not retry refresh; sign in again.', 5); }
   }
+  if (pending === null) throw new CliError('outcome_unknown', 'A previous refresh may have changed your session. Sign in again.', 5);
   if (!pending || typeof pending !== 'object' || Array.isArray(pending) || pending.origin !== base || pending.userId !== state.userId || pending.tokenWorkspace !== state.tokenWorkspace ||
       typeof pending.accessToken !== 'string' || !pending.accessToken || /\s/.test(pending.accessToken) ||
       typeof pending.refreshToken !== 'string' || !pending.refreshToken || /\s/.test(pending.refreshToken) ||
