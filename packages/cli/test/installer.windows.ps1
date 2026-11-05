@@ -113,7 +113,6 @@ try {
     Copy-Item -LiteralPath (Join-Path $env:COLLAB_NATIVE_DOWNLOADS "$archive.sha256") -Destination (Join-Path $downloads "$archive.sha256")
     irm https://collab.weez.boo/install.ps1 | iex
     if ($environment.GetValueKind('Path') -ne [Microsoft.Win32.RegistryValueKind]::String -or $environment.GetValue('Path') -cne $expectedRaw) { throw 'REG_SZ PATH was changed' }
-    # Run the full authentication and API suite against the installed executable.
     if ($env:COLLAB_TEST_SHARD) {
         Write-Host "INSTALLED NATIVE ($Platform): CLI/auth/ACL shard $env:COLLAB_TEST_SHARD against $expected"
     } else {
