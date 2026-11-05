@@ -109,11 +109,13 @@ test('handoff and transfer request IDs match server UUID validation before dispa
     assert.match(result.error.message, /--request-id must be a UUID/);
     assert.ok(!result.stderr.includes(invalid));
   }
-  for (const value of [invalid, null, 'not-a-uuid']) {
-    const result = await f.run(['handoffs', 'send', '--input', '-'], {
-      input: JSON.stringify({ agent: 'builder-a', issue: 'APP-1', content: 'Review', toAgents: ['reviewer'], requestId: value }),
-    });
+  for (const [command, body] of [
+    [['handoffs', 'send'], { agent: 'builder-a', issue: 'APP-1', content: 'Review', toAgents: ['reviewer'] }],
+    [['transfers', 'offer'], { agent: 'builder-a', handoffId: 'original', toAgent: 'reviewer', content: 'Ready' }],
+  ]) for (const value of [invalid, null, 'not-a-uuid', 42, true, [], {}]) {
+    const result = await f.run([...command, '--input', '-'], { input: JSON.stringify({ ...body, requestId: value }) });
     assert.equal(result.error.error, 'invalid_value');
+    assert.match(result.error.message, /--request-id must be a UUID/);
   }
   assert.equal(f.calls.length, 0, 'invalid request IDs must not reach the server');
 

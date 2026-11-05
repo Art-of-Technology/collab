@@ -211,6 +211,10 @@ async function main() {
     if (!Object.hasOwn(spec.fields, key) || Object.hasOwn(body, key)) throw new CliError('invalid_input', 'Text file field is unsupported or duplicated.');
     body[key] = await boundedInput(options[`${key}-file`]);
   }
+  if (['handoffs send', 'transfers offer'].includes(name) && body.requestId !== undefined &&
+      (typeof body.requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId))) {
+    throw new CliError('invalid_value', '--request-id must be a UUID. Generate one with uuidgen and reuse it for retries.');
+  }
   for (const [key, value] of Object.entries(body)) {
     const type = spec.fields[key];
     if (value !== null && !(type === 'array' ? Array.isArray(value) && value.every(v => typeof v === 'string') : type === 'integer' ? Number.isSafeInteger(value) : typeof value === type)) throw new CliError('invalid_input', 'A JSON field has the wrong type.');
@@ -223,10 +227,6 @@ async function main() {
   if (spec.defaultProject && !Object.hasOwn(body, 'projectId') && selected.project) body.projectId = selected.project;
   if (name === 'notes create' && body.projectId && !body.scope) body.scope = 'PROJECT';
   for (const key of spec.required || []) if (body[key] === undefined || body[key] === null || body[key] === '') throw new CliError('required_field', `Missing required --${flagName(key)}.`);
-  if (['handoffs send', 'transfers offer'].includes(name) && body.requestId !== undefined &&
-      (typeof body.requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId))) {
-    throw new CliError('invalid_value', '--request-id must be a UUID. Generate one with uuidgen and reuse it for retries.');
-  }
   if (name === 'handoffs send' && !body.toAgents?.length && !body.toLabels?.length) {
     throw new CliError('required_field', 'Supply at least one recipient with --to-agents or --to-labels as a JSON array. --agent is the sender.');
   }
