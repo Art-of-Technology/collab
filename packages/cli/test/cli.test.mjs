@@ -98,6 +98,39 @@ test('handoff validation errors do not expose server response text', async t => 
   assert.equal(f.calls.length, 2);
 });
 
+test('handoff and transfer request IDs match server UUID validation before dispatch', async t => {
+  const f = await fixture(t);
+  const send = ['handoffs', 'send', '--agent', 'builder-a', '--issue', 'APP-1', '--content', 'Review', '--to-agents', '["reviewer"]'];
+  const offer = ['transfers', 'offer', '--agent', 'builder-a', '--handoff-id', 'original', '--to-agent', 'reviewer', '--content', 'Ready'];
+  const invalid = 'buildwake-coordinator-probe-20261105-e527a903';
+  for (const base of [send, offer]) {
+    const result = await f.run([...base, '--request-id', invalid]);
+    assert.equal(result.error.error, 'invalid_value');
+    assert.match(result.error.message, /--request-id must be a UUID/);
+    assert.ok(!result.stderr.includes(invalid));
+  }
+  for (const value of [invalid, null, 'not-a-uuid']) {
+    const result = await f.run(['handoffs', 'send', '--input', '-'], {
+      input: JSON.stringify({ agent: 'builder-a', issue: 'APP-1', content: 'Review', toAgents: ['reviewer'], requestId: value }),
+    });
+    assert.equal(result.error.error, 'invalid_value');
+  }
+  assert.equal(f.calls.length, 0, 'invalid request IDs must not reach the server');
+
+  const validIds = ['12345678-1234-4234-8234-123456789012', 'ABCDEFAB-CDEF-ABCD-EFAB-CDEFABCDEFAB', '00000000-0000-0000-0000-000000000000'];
+  for (const requestId of validIds) {
+    const result = await f.run([...send, '--request-id', requestId]);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(JSON.parse(f.calls.at(-1).body).requestId, requestId);
+  }
+  assert.equal((await f.run([...offer, '--request-id', validIds[0]])).code, 0);
+  assert.equal((await f.run(send)).code, 0, 'request ID is optional for handoffs');
+  const json = await f.run(['handoffs', 'send', '--input', '-'], {
+    input: JSON.stringify({ agent: 'builder-a', issue: 'APP-1', content: 'Review', toAgents: ['reviewer'], requestId: validIds[0] }),
+  });
+  assert.equal(json.code, 0, json.stderr);
+});
+
 test('inbox wait is bounded, returns arriving work, and never marks or claims it', async t => {
   const f = await fixture(t, (_req, res, _body, calls) => res.end(JSON.stringify({ items: calls.length < 2 ? [] : [{ id: 'new-work' }], hasMore: false })));
   const result = await f.run(['inbox', 'wait', '--agent', 'reviewer', '--wait-seconds', '3']);

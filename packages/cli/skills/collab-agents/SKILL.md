@@ -32,19 +32,59 @@ Use the actual session ID supplied by your host and a nonsecret host label. The 
 
 ## Send a handoff
 
-Use your own registered name as `--agent` (the sender), and name at least one
-recipient with `--to-agents` or a subscribed role with `--to-labels`. Both take
-JSON arrays. Include an accessible issue and a clear message:
+A handoff connects a message to an existing issue and routes it to registered
+agents or subscribed labels. `--agent` is the sender, not the recipient. Use the
+sender name owned by your current login in the intended workspace; do not reuse
+another agent's identity. Use `collab agents list --workspace WORKSPACE_ID` to
+check names and `collab labels list --workspace WORKSPACE_ID` to find label IDs.
 
 ```sh
-collab handoffs send --agent navy-builder-1 --issue APP-123 \
-  --to-agents '["reviewer-b"]' --content 'Please review the changes linked on this issue.' \
-  --request-id REQUEST_UUID --workspace WORKSPACE_ID
+collab handoffs send \
+  --agent sender-agent \
+  --issue APP-123 \
+  --to-agents '["recipient-agent"]' \
+  --content "Review the changes and report your findings." \
+  --request-id REQUEST_UUID \
+  --workspace WORKSPACE_ID
 ```
 
-Replace `REQUEST_UUID` with a UUID and retain it with the same request for an
-uncertain retry. Sending queues a handoff; it does not wake the recipient or prove
-that anyone has claimed the work.
+Replace the placeholders with real values. Provide:
+
+- `--agent NAME`: the registered sender owned by your login. Agent names have
+  1–64 lowercase letters, digits, underscores or hyphens, starting with a
+  letter or digit.
+- `--issue KEY_OR_ID`: an issue you can access in this workspace (1–128
+  characters).
+- `--content TEXT` or `--content-file FILE`: nonempty text, at most 16,000
+  characters after trimming. For stdin use `--content-file -`. Do not include
+  credentials or secrets.
+- At least one recipient: `--to-agents '["agent-name"]'` and/or
+  `--to-labels '["LABEL_ID"]'`. Both are JSON arrays, with at most 32 entries
+  each. Named agents must already be registered; labels must exist in the
+  workspace. The entire request body must be at most 64 KiB.
+
+Optional flags:
+
+- `--request-id UUID`: use a fresh UUID for each new handoff. If a response is
+  lost, inspect the handoff state and retry only with the same UUID and exactly
+  the same payload; changing the payload with an existing UUID is rejected.
+  Without an ID the server generates one, so you cannot safely identify an exact
+  retry yourself.
+- `--request-ack true` requests an acknowledgement; it does not claim or
+  complete the work. The default is `false`.
+- `--after-id HANDOFF_ID` passes a handoff you currently claim on the same
+  issue. It closes your current claim and creates a new open request in one
+  transaction. The recipient does not own the new request until it is claimed.
+  For manual agents, use `collab transfers offer` and `collab transfers accept`
+  when the current owner must retain custody until acceptance.
+- `--workspace WORKSPACE_ID` selects the intended workspace; otherwise the CLI
+  uses its configured workspace. `--dry-run` previews the request without
+  sending it; its output includes the body and may contain private information.
+
+Sending a handoff adds it to matching inboxes; it does not start or wake an agent,
+claim the request, complete the work, or grant issue access. A recipient with
+access must claim the request before acting. Verify actual claim and progress in
+Collab, and verify a real agent response before calling a wake-up successful.
 
 ## Receive and claim
 
@@ -178,12 +218,12 @@ Only the sender of open work or its current claimant may supersede it. The repla
 
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
-For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.8.0/packages/cli/README.md#agent-coordination).
+For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.8.2/packages/cli/README.md#agent-coordination).
 
 ## Host wake callback
 
 For automatic notifications, have the host supervisor follow the
-[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.8.0/packages/cli/README.md#wake-a-running-agent-through-its-host)
+[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.8.2/packages/cli/README.md#wake-a-running-agent-through-its-host)
 for command availability, setup, deadlines and adapter requirements.
 
 Require the host to provide and verify its adapter; never substitute a guessed
@@ -205,7 +245,7 @@ requirements above before claiming automatic wake-ups are active for that host.
 
 ### Dedicated managed workers
 
-Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.8.0/packages/cli/README.md#dedicated-managed-workers-cli-070)
+Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.8.2/packages/cli/README.md#dedicated-managed-workers-cli-070)
 for setup, supervision and recovery. Never use a custom terminal callback as a
 fallback. Preserve the saved login, stable identity, labels and private journals.
 
@@ -224,7 +264,7 @@ owner's qualification boundary described there.
 ## Project coordinator
 
 CLI 0.8.0 adds `coordinator setup/run/status/stop/install/uninstall` for one project.
-Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.8.0/packages/cli/README.md#project-coordinator-cli-080). A registered
+Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.8.2/packages/cli/README.md#project-coordinator-cli-080). A registered
 interactive agent without an approved execution route is not automatically wakeable.
 Only explicitly consented local dedicated workers can be dispatched. Check status
 and the issue timeline for actual claim/progress/result; do not call a queued wakeup
