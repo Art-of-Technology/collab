@@ -1,0 +1,22 @@
+test:
+  instructions: |
+    Select checks for the changed paths and task intent; keep the full pipeline
+    and security coverage for auth, infrastructure, permissions and other
+    sensitive changes. Do not use a passing CLI test as proof of unrelated
+    server or user-interface behavior.
+
+    For CLI-only changes, exercise the real CLI entry point with its local
+    fixtures and run the focused behavioral tests in packages/cli/test for the
+    affected command. For worker changes, default to an injected runner and
+    synthetic tasks. Preserve existing live workers, claimed handoffs and
+    journals. Use external providers only when explicitly authorized and needed
+    for the task; a fake runner does not prove real model execution. A browser
+    or full application startup is needed only when the changed behavior
+    requires it.
+
+    For server or access-control changes, exercise the applicable API and
+    security tests with an isolated database and synthetic credentials. For UI
+    changes, exercise the changed interface. Default to synthetic, isolated
+    data; use production data, credentials or mutations for validation only
+    when explicitly authorized and required by the task. Record what was and
+    was not exercised; leave broad regression and required platform builds to CI.

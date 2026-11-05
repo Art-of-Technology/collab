@@ -1,0 +1,45 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { manifest, patterns, verify } from './native-test-manifest.mjs';
+
+test('test shards cover a full suite including nested tests and fail on loss or duplication', t => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'collab-cli-shards-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'cli.test.mjs');
+  writeFileSync(file, `import { test } from 'node:test';
+    test('read', async t => { await t.test('first nested', () => {}); await t.test('second nested', () => {}); });
+    test('inbox', () => {});
+    test('misc', () => {});
+    test('update is listed, takes no arguments, and refuses to run the installer outside the installed native executable', { skip: process.env.TEST_INSTALLED === '1' }, () => {});
+  `);
+  const run = (pattern, installed) => {
+    const args = ['--test', '--test-reporter=tap', ...(pattern ? [`--test-name-pattern=${pattern}`] : []), file];
+    const env = { ...process.env, TEST_INSTALLED: installed ? '1' : '0' };
+    delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(process.execPath, args, { encoding: 'utf8', env });
+    assert.equal(result.status, 0, result.stderr);
+    return manifest(result.stdout);
+  };
+  const source = run(null, false);
+  const shards = patterns.map(pattern => run(pattern, true));
+  assert.doesNotThrow(() => verify(source, shards));
+  assert.throws(() => verify(source, [shards[0], shards[1]]), /three/);
+  assert.throws(() => verify(source, [shards[0], shards[1], shards[1]]), /exactly once/);
+  const lostNested = structuredClone(shards);
+  const i = lostNested.findIndex(shard => shard.names.includes('first nested'));
+  assert.notEqual(i, -1);
+  lostNested[i].names.splice(lostNested[i].names.indexOf('first nested'), 1);
+  assert.throws(() => verify(source, lostNested), /exactly once/);
+  const future = structuredClone(source);
+  future.names.push('!new test with an unpartitioned name');
+  assert.throws(() => verify(future, shards), /exactly once/);
+  const unexpectedlySkipped = structuredClone(shards);
+  unexpectedlySkipped[0].skips.push('read');
+  assert.throws(() => verify(source, unexpectedlySkipped), /skips differ/);
+  const tap = 'TAP version 13\n# Subtest: utf16\nok 1 - utf16\n# tests 1\n# fail 0\n';
+  assert.deepEqual(manifest(Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(tap, 'utf16le')])), { names: ['utf16'], skips: [] });
+});
