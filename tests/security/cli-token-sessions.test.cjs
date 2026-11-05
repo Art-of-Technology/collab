@@ -32,7 +32,8 @@ function fixture(clientId = 'collab-cli') {
     '@/lib/post-access': load('src/lib/post-access.ts'),
     'next/server': { NextResponse: { json: (body, init) => ({ body, status: init?.status ?? 200 }) } },
   };
-  const globals = { Buffer, URL, console: { log() {}, error() {} } };
+  const logs = [];
+  const globals = { Buffer, URL, console: { log() {}, error: (...args) => logs.push(args) } };
   const { POST } = load('src/app/api/oauth/mcp/token/route.ts', deps, globals);
   const { authenticateAppRequest } = load('src/lib/apps/auth-middleware.ts', deps, globals);
   const exchange = body => POST({ headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ client_id: clientId, ...body }) });
@@ -43,7 +44,7 @@ function fixture(clientId = 'collab-cli') {
   };
   const login = async (code, scope) => { const response = await exchange(grant(code, scope)); assert.equal(response.status, 200); return response.body; };
   const auth = (token, scope = 'issues:read') => authenticateAppRequest({ headers: new Headers({ Authorization: `Bearer ${token}` }) }, { requiredScopes: [scope] });
-  return { rows, exchange, grant, login, auth };
+  return { rows, exchange, grant, login, auth, prisma, logs, crypto: deps['@/lib/apps/crypto'] };
 }
 
 test('CLI logins on two machines retain independent access, refresh, scopes and revocation', async () => {
@@ -84,4 +85,36 @@ test('other system OAuth clients retain existing replacement behavior', async ()
   assert.equal((await f.auth(first.access_token)).error.statusCode, 401);
   assert.equal((await f.auth(second.access_token)).success, true);
   assert.equal(f.rows.length, 1);
+});
+
+test('refresh failure after a token update returns a sanitized server error and does not claim a safe retry', async () => {
+  const f = fixture(), first = await f.login('first');
+  const update = f.prisma.appToken.update;
+  f.prisma.appToken.update = async args => {
+    await update(args);
+    throw Object.assign(new Error('private database detail'), { code: 'P2024' });
+  };
+  const result = await f.exchange({ grant_type: 'refresh_token', refresh_token: first.refresh_token });
+  assert.equal(result.status, 500);
+  assert.equal(result.body.error, 'server_error');
+  assert.equal((await f.auth(first.access_token)).error.statusCode, 401, 'the token may already have changed');
+  assert.match(JSON.stringify(f.logs), /P2024/);
+  assert.doesNotMatch(JSON.stringify([result, f.logs]), /private database detail|collab_rt_/);
+});
+
+test('asynchronous authorization-code failure is caught and sanitized', async () => {
+  const f = fixture();
+  f.prisma.appOAuthAuthorizationCode.findUnique = async () => { throw new Error('private database detail'); };
+  const result = await f.exchange(f.grant('broken'));
+  assert.equal(result.status, 500);
+  assert.equal(result.body.error, 'server_error');
+  assert.doesNotMatch(JSON.stringify([result, f.logs]), /private database detail/);
+});
+
+test('refresh reports server error when token encryption is misconfigured', async () => {
+  const f = fixture(), first = await f.login('first');
+  f.crypto.decryptToken = async () => { throw Object.assign(new Error('private key detail'), { code: 'TOKEN_ENCRYPTION_CONFIGURATION' }); };
+  const result = await f.exchange({ grant_type: 'refresh_token', refresh_token: first.refresh_token });
+  assert.equal(result.status, 500);
+  assert.doesNotMatch(JSON.stringify([result, f.logs]), /private key detail/);
 });

@@ -81,9 +81,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (grantType === 'authorization_code') {
-      return handleAuthorizationCodeGrant(body, oauthClient);
+      return await handleAuthorizationCodeGrant(body, oauthClient);
     } else if (grantType === 'refresh_token') {
-      return handleRefreshTokenGrant(body, oauthClient);
+      return await handleRefreshTokenGrant(body, oauthClient);
     } else {
       return NextResponse.json(
         {
@@ -94,7 +94,10 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('MCP OAuth token error:', error);
+    const code = typeof error === 'object' && error !== null && 'code' in error &&
+      typeof error.code === 'string' && ['P1001', 'P1002', 'P1008', 'P1017', 'P2024'].includes(error.code)
+      ? error.code : undefined;
+    console.error(code ? `MCP OAuth token error (${code})` : 'MCP OAuth token error');
 
     return NextResponse.json(
       {
@@ -339,7 +342,8 @@ async function handleRefreshTokenGrant(
         matchedToken = appToken;
         break;
       }
-    } catch {
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'TOKEN_ENCRYPTION_CONFIGURATION') throw error;
       continue;
     }
   }

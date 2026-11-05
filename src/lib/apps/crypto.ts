@@ -24,11 +24,8 @@ export async function hashSecret(secret: string): Promise<string> {
 // Get encryption key from environment variable
 function getEncryptionKey(): string {
   const key = process.env.APP_TOKENS_KEY;
-  if (!key) {
-    throw new Error('APP_TOKENS_KEY environment variable is required');
-  }
-  if (key.length !== 32) {
-    throw new Error('APP_TOKENS_KEY must be exactly 32 characters long');
+  if (!key || key.length !== 32) {
+    throw Object.assign(new Error('Token encryption configuration is invalid'), { code: 'TOKEN_ENCRYPTION_CONFIGURATION' });
   }
   return key;
 }
@@ -77,9 +74,8 @@ export async function encryptToken(token: string): Promise<Buffer<ArrayBuffer>> 
  * Decrypt a token using AES-256-GCM
  */
 export async function decryptToken(encryptedData: Buffer): Promise<string> {
+  const key = getEncryptionKey();
   try {
-    const key = getEncryptionKey();
-    
     if (encryptedData.length < 64) { // 32 + 16 + 16 = 64 minimum bytes
       throw new Error('Invalid encrypted data length');
     }

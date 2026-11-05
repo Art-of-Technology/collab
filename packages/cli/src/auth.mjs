@@ -74,10 +74,28 @@ export async function refresh(state, save) {
   if (state.clientId !== 'collab-cli') throw new CliError('client_mismatch', 'This profile is not a Collab CLI login. Run collab auth login.', 3);
   if (typeof state.refreshToken !== 'string' || /[\s\x00-\x1f]/.test(state.refreshToken) || ![state.tokenWorkspace, state.userId].every(value => typeof value === 'string' && value)) throw new CliError('invalid_credentials', 'Token workspace or user binding is missing or invalid. Run collab auth login.', 3);
   const base = origin(state.origin);
-  const data = await request(base, '/api/oauth/mcp/token', { method: 'POST', form: true, body: { grant_type: 'refresh_token', client_id: 'collab-cli', refresh_token: state.refreshToken } });
-  const next = tokens(data, state);
-  if (next.tokenWorkspace !== state.tokenWorkspace) throw new CliError('workspace_mismatch', 'Refresh changed the token workspace. Credentials were not saved.', 3);
-  await verifyIdentity(base, next.accessToken, next.tokenWorkspace, state.userId);
-  save(next);
+  let pending = state.pendingRefresh;
+  if (!Object.hasOwn(state, 'pendingRefresh')) {
+    const data = await request(base, '/api/oauth/mcp/token', { method: 'POST', form: true, body: { grant_type: 'refresh_token', client_id: 'collab-cli', refresh_token: state.refreshToken } });
+    let next;
+    try { next = tokens(data, state); }
+    catch { throw new CliError('outcome_unknown', 'Refresh returned invalid credentials and may have changed your session. Sign in again.', 5); }
+    if (next.tokenWorkspace !== state.tokenWorkspace) throw new CliError('workspace_mismatch', 'Refresh changed the token workspace. Credentials were not saved.', 3);
+    pending = { origin: base, userId: state.userId, tokenWorkspace: next.tokenWorkspace, accessToken: next.accessToken, refreshToken: next.refreshToken, expiresAt: next.expiresAt, scopes: next.scopes };
+    try { save({ ...state, pendingRefresh: pending }); }
+    catch { throw new CliError('outcome_unknown', 'Refresh succeeded, but the new credentials could not be safely saved. Do not retry refresh; sign in again.', 5); }
+  }
+  if (!pending || typeof pending !== 'object' || Array.isArray(pending) || pending.origin !== base || pending.userId !== state.userId || pending.tokenWorkspace !== state.tokenWorkspace ||
+      typeof pending.accessToken !== 'string' || !pending.accessToken || /\s/.test(pending.accessToken) ||
+      typeof pending.refreshToken !== 'string' || !pending.refreshToken || /\s/.test(pending.refreshToken) ||
+      !Number.isSafeInteger(pending.expiresAt) || !Array.isArray(pending.scopes)) {
+    throw new CliError('invalid_credentials', 'Pending refresh credentials are invalid. Sign in again.', 3);
+  }
+  try { await verifyIdentity(base, pending.accessToken, pending.tokenWorkspace, state.userId); }
+  catch { throw new CliError('refresh_verification_pending', 'Refresh succeeded, but its identity could not be verified. Run collab auth refresh again to verify the saved result; no new refresh will be sent.', 5); }
+  const { pendingRefresh: _pendingRefresh, ...previous } = state;
+  const next = { ...previous, accessToken: pending.accessToken, refreshToken: pending.refreshToken, expiresAt: pending.expiresAt, tokenWorkspace: pending.tokenWorkspace, scopes: pending.scopes };
+  try { save(next); }
+  catch { throw new CliError('outcome_unknown', 'Refreshed credentials were verified, but saving them failed. Check the profile before retrying.', 5); }
   return { refreshed: true, origin: state.origin, workspace: next.workspace };
 }
