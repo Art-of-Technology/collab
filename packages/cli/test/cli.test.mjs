@@ -55,6 +55,49 @@ test('agent registration, handoff and claim commands send scoped fixed API reque
   assert.equal(f.calls.length, before);
 });
 
+test('handoff send requires a recipient and distinguishes the sender before dispatch', async t => {
+  const f = await fixture(t);
+  const base = ['handoffs', 'send', '--agent', 'builder-a', '--issue', 'APP-1', '--content', 'Please review'];
+  for (const extra of [[], ['--to-agents', '[]'], ['--to-agents', '[]', '--to-labels', '[]']]) {
+    const result = await f.run([...base, ...extra]);
+    assert.equal(result.error.error, 'required_field');
+    assert.match(result.error.message, /--to-agents or --to-labels/);
+    assert.match(result.error.message, /--agent is the sender/);
+  }
+  const json = await f.run(['handoffs', 'send', '--input', '-'], {
+    input: JSON.stringify({ agent: 'builder-a', issue: 'APP-1', content: 'Please review', toAgents: [] }),
+  });
+  assert.equal(json.error.error, 'required_field');
+  assert.equal(f.calls.length, 0);
+
+  for (const [flag, values] of [['--to-agents', '["reviewer"]'], ['--to-labels', '["review-role"]']]) {
+    const result = await f.run([...base, flag, values]);
+    assert.equal(result.code, 0, result.stderr);
+  }
+  const withJsonRecipient = await f.run(['handoffs', 'send', '--input', '-'], {
+    input: JSON.stringify({ agent: 'builder-a', issue: 'APP-1', content: 'Please review', toAgents: ['reviewer'] }),
+  });
+  assert.equal(withJsonRecipient.code, 0, withJsonRecipient.stderr);
+  assert.equal(f.calls.length, 3);
+  assert.match((await f.run(['schema'])).data.commands['handoffs send'].description, /--agent.*sender|Send from --agent/);
+});
+
+test('handoff validation errors do not expose server response text', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(400, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'invalid_request', error_description: 'PRIVATE_SENTINEL' }));
+  });
+  const result = await f.run(['handoffs', 'send', '--agent', 'builder-a', '--issue', 'APP-1', '--content', 'Review', '--to-agents', '["reviewer"]']);
+  assert.equal(result.error.error, 'invalid_request');
+  assert.match(result.error.message, /--agent \(sender\).*--to-agents.*--issue.*--content.*--request-id.*--after-id/);
+  assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  assert.equal(f.calls.length, 1);
+  const other = await f.run(['issues', 'create', '--project', 'project-one', '--title', 'Test']);
+  assert.equal(other.error.message, 'Collab refused the request (HTTP 400).');
+  assert.ok(!other.stderr.includes('PRIVATE_SENTINEL'));
+  assert.equal(f.calls.length, 2);
+});
+
 test('inbox wait is bounded, returns arriving work, and never marks or claims it', async t => {
   const f = await fixture(t, (_req, res, _body, calls) => res.end(JSON.stringify({ items: calls.length < 2 ? [] : [{ id: 'new-work' }], hasMore: false })));
   const result = await f.run(['inbox', 'wait', '--agent', 'reviewer', '--wait-seconds', '3']);

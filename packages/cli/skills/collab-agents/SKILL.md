@@ -30,6 +30,22 @@ clears it. A name already owned by another user is refused. Recover existing cla
 work before taking another task; a claim persists across process restarts.
 Use the actual session ID supplied by your host and a nonsecret host label. The server permits one name per owner's host/session pair. Stop the old watcher before rebinding the same name to a replacement session. A fresh watcher refuses takeover; stale health is not proof that the old process exited. Unbound historical names are not current runtime evidence. Do not change another agent's binding or assume its work.
 
+## Send a handoff
+
+Use your own registered name as `--agent` (the sender), and name at least one
+recipient with `--to-agents` or a subscribed role with `--to-labels`. Both take
+JSON arrays. Include an accessible issue and a clear message:
+
+```sh
+collab handoffs send --agent navy-builder-1 --issue APP-123 \
+  --to-agents '["reviewer-b"]' --content 'Please review the changes linked on this issue.' \
+  --request-id REQUEST_UUID --workspace WORKSPACE_ID
+```
+
+Replace `REQUEST_UUID` with a UUID and retain it with the same request for an
+uncertain retry. Sending queues a handoff; it does not wake the recipient or prove
+that anyone has claimed the work.
+
 ## Receive and claim
 
 When idle, wait for work with one bounded command. When busy, check the inbox at a

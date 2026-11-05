@@ -21,7 +21,7 @@ export const commands = {
     description: 'Foreground bounded watcher; invokes a trusted local executable with JSON stdin for pending claimed/unseen work. Requires an explicit --workspace ID. Supply the registered --host and --session-id to publish watcher health. No auto-claim or seen.',
   }),
   'inbox wait': command('GET', 'agents/inbox', {}, { agent: string, limit: integer }, { requiredQuery: ['agent'], wait: true, constraints: { limit: { minimum: 1, maximum: 50 } } }),
-  'handoffs send': command('POST', 'agents/handoffs', { agent: string, issue: string, content: string, toAgents: array, toLabels: array, requestAck: boolean, requestId: string, afterId: string }, {}, { required: ['agent', 'issue', 'content'] }),
+  'handoffs send': command('POST', 'agents/handoffs', { agent: string, issue: string, content: string, toAgents: array, toLabels: array, requestAck: boolean, requestId: string, afterId: string }, {}, { required: ['agent', 'issue', 'content'], description: 'Send from --agent to at least one registered recipient in --to-agents or role label in --to-labels (JSON arrays).' }),
   'handoffs get': command('GET', 'agents/handoffs/:id', {}, { agent: string }, { requiredQuery: ['agent'] }),
   'transfers offer': command('POST', 'agents/transfer-offers', { agent: string, handoffId: string, toAgent: string, requestId: string, content: string }, {}, { required: ['agent', 'handoffId', 'toAgent', 'requestId', 'content'] }),
   'transfers list': command('GET', 'agents/transfer-offers', {}, { agent: string, status: string, limit: integer, cursor: string }, { requiredQuery: ['agent'], constraints: { limit: { minimum: 1, maximum: 50 }, cursor: { minLength: 1, maxLength: 4096 } } }),

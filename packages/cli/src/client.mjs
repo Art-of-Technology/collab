@@ -185,6 +185,9 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
       }
     } catch { /* Never echo remote error bodies. */ }
     if (mutation && response.status >= 500) code = 'outcome_unknown';
+    if (method === 'POST' && response.status === 400 && /^\/api\/apps\/auth\/agents\/handoffs(?:\?|$)/.test(endpoint)) {
+      retrievalMessage = 'Check --agent (sender), --to-agents or --to-labels (recipient), an accessible --issue and nonempty --content. Optional --request-id must be a UUID; --after-id must be a claimed handoff on the same issue.';
+    }
     throw new CliError(code, retrievalMessage || (code === 'outcome_unknown' ? 'Server failed after dispatch. Inspect Collab before retrying.' : `Collab refused the request (HTTP ${response.status}).`), response.status === 401 ? 3 : response.status === 403 ? 4 : 5, { status: response.status, ...(configureRejected && { configureRejected: true }) });
   }
   if (!text && (response.status === 204 || endpoint === '/api/oauth/revoke')) return { ok: true };
