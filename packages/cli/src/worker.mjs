@@ -21,7 +21,7 @@ function issueContext(issue) {
     bytes += size;
   }
   return { id: issue.id, issueKey: issue.issueKey, title: issue.title,
-    projectId: issue.project?.id ?? issue.projectId ?? null, description, descriptionTruncated };
+    projectId: issue.project?.id ?? null, description, descriptionTruncated };
 }
 export function workerKey(selected, userId, agent) { return key([selected.base, selected.workspace, userId, agent]); }
 export function recoverableReservation(selected, userId, agent, taskId, state) {
