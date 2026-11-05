@@ -401,6 +401,12 @@ pipes, and posts validated structured results. Remote handoff content travels on
 stdin, never as shell code or command arguments. The child receives no COLLAB_ or
 ORCA_ environment values. Claude's existing provider authentication remains local.
 
+The handoff defines the task scope within existing authority. The child also receives
+issue ID, key, title, project ID and a background description preview of at most
+4096 UTF-8 bytes, with `descriptionTruncated` indicating whether it was cut short.
+Include all instructions needed for the task in the handoff. Oversized combined
+context stops the worker before dispatch with `worker_context_limit`.
+
 Defaults are concurrency one, read-only `Read,Glob,Grep`, no MCP tools, no Chrome,
 no hooks, restricted mode and denied unattended permission prompts. Optional
 `--tools Read,Glob,Grep,Edit,Write` explicitly permits those local file tools;

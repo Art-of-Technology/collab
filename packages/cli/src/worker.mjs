@@ -12,6 +12,17 @@ export const workerCommands = Object.fromEntries(['setup', 'run', 'status', 'sto
 const fail = (code, message) => new CliError(code, message, 5);
 const key = value => createHash('sha256').update(JSON.stringify(value)).digest('base64url');
 const identifier = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(value);
+function issueContext(issue) {
+  let description = '', bytes = 0, descriptionTruncated = false;
+  for (const character of typeof issue.description === 'string' ? issue.description : '') {
+    const size = Buffer.byteLength(character);
+    if (bytes + size > 4096) { descriptionTruncated = true; break; }
+    description += character;
+    bytes += size;
+  }
+  return { id: issue.id, issueKey: issue.issueKey, title: issue.title,
+    projectId: issue.project?.id ?? null, description, descriptionTruncated };
+}
 export function workerKey(selected, userId, agent) { return key([selected.base, selected.workspace, userId, agent]); }
 export function recoverableReservation(selected, userId, agent, taskId, state) {
   const active = state.active;
@@ -301,7 +312,7 @@ export async function runWorker(name, options, selected, userId, dependencies = 
           }
           const issue = await read(`issues/${encodeURIComponent(handoff.issueId)}`);
           if (dependencies.task && issue.project?.id !== dependencies.task.project) throw fail('worker_context', 'Task project changed before model dispatch.');
-          const context = { handoff: { id: handoff.id, content: handoff.content, issueId: handoff.issueId }, issue, reviewAgent: config.reviewAgent || null };
+          const context = { handoff: { id: handoff.id, content: handoff.content, issueId: handoff.issueId }, issue: issueContext(issue), reviewAgent: config.reviewAgent || null };
           if (Buffer.byteLength(JSON.stringify(context)) > 44000) throw fail('worker_context_limit', 'Task context exceeds the bounded runner input.');
           let result, execution;
           await controlStore.exclusive(async current => {
