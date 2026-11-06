@@ -1,5 +1,6 @@
 import { effectiveAppScopes, isAllowedRedirectUri, normalizeScopes } from '@/lib/oauth-scopes';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
+import { authErrorDiagnostics } from '@/lib/auth-error-diagnostics';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes, createHash } from 'crypto';
 import { encryptToken, decryptToken, getEncryptionKey } from '@/lib/apps/crypto';
@@ -94,10 +95,8 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    const code = typeof error === 'object' && error !== null && 'code' in error &&
-      typeof error.code === 'string' && ['P1001', 'P1002', 'P1008', 'P1017', 'P2024'].includes(error.code)
-      ? error.code : undefined;
-    console.error(code ? `MCP OAuth token error (${code})` : 'MCP OAuth token error');
+    const { code, name } = authErrorDiagnostics(error);
+    console.error('MCP OAuth token error', name, code || 'unknown');
 
     return NextResponse.json(
       {

@@ -116,7 +116,18 @@ test('refresh reports server error when token encryption is misconfigured', asyn
   f.crypto.decryptToken = async () => { throw Object.assign(new Error('private key detail'), { code: 'TOKEN_ENCRYPTION_CONFIGURATION' }); };
   const result = await f.exchange({ grant_type: 'refresh_token', refresh_token: first.refresh_token });
   assert.equal(result.status, 500);
+  assert.match(JSON.stringify(f.logs), /TOKEN_ENCRYPTION_CONFIGURATION/);
   assert.doesNotMatch(JSON.stringify([result, f.logs]), /private key detail/);
+});
+
+test('OAuth errors log sanitized names and Prisma errorCode without leaking arbitrary text', async () => {
+  const f = fixture();
+  f.prisma.appOAuthAuthorizationCode.findUnique = async () => { throw Object.assign(new TypeError('private detail'), { errorCode: 'P2024' }); };
+  const result = await f.exchange(f.grant('broken'));
+  assert.equal(result.status, 500);
+  assert.match(JSON.stringify(f.logs), /TypeError/);
+  assert.match(JSON.stringify(f.logs), /P2024/);
+  assert.doesNotMatch(JSON.stringify([result, f.logs]), /private detail/);
 });
 
 test('refresh reports encryption configuration errors even when no tokens exist', async () => {

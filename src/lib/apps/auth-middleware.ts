@@ -1,5 +1,6 @@
 import { effectiveAppScopes } from '@/lib/oauth-scopes';
 import { postWorkspaceAccessWhere } from "@/lib/post-access";
+import { authErrorDiagnostics } from '@/lib/auth-error-diagnostics';
 /**
  * OAuth Authentication Middleware for Third-Party App API Access
  * 
@@ -67,11 +68,8 @@ export interface AuthMiddlewareResult {
 }
 
 function authenticationError(error: unknown): NonNullable<AuthMiddlewareResult['error']> {
-  const codes = typeof error === 'object' && error !== null
-    ? ['code' in error ? error.code : null, 'errorCode' in error ? error.errorCode : null] : [];
-  const transientCode = codes.find((code): code is string => typeof code === 'string' && ['P1001', 'P1002', 'P1008', 'P1017', 'P2024'].includes(code));
-  const unavailable = transientCode !== undefined;
-  console.error(unavailable ? `App authentication temporarily unavailable (${transientCode})` : 'App authentication error');
+  const { code, name, transient: unavailable } = authErrorDiagnostics(error);
+  console.error(unavailable ? 'App authentication temporarily unavailable' : 'App authentication error', name, code || 'unknown');
   return {
     code: unavailable ? 'temporarily_unavailable' : 'server_error',
     message: unavailable ? 'Authentication is temporarily unavailable' : 'Internal server error during authentication',

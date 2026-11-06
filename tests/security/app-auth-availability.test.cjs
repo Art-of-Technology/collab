@@ -59,7 +59,15 @@ for (const [label, options] of [
 test('unexpected database errors return sanitized 500 instead of invalid token', async () => {
   const f = fixture({ scanError: failure('P9999') }); const response = await f.invoke();
   assert.equal(response.status, 500); assert.equal(response.body.error, 'server_error');
-  assert.equal(f.calls(), 0); assert.doesNotMatch(JSON.stringify([response, f.logs]), /private database detail/);
+  assert.equal(f.calls(), 0); assert.match(JSON.stringify(f.logs), /P9999/);
+  assert.doesNotMatch(JSON.stringify([response, f.logs]), /private database detail/);
+});
+
+test('diagnostic names and codes are allowlisted before logging', async () => {
+  const error = Object.assign(new TypeError('private message'), { code: 'private token', name: 'private name' });
+  const f = fixture({ scanError: error });
+  assert.equal((await f.invoke()).status, 500);
+  assert.doesNotMatch(JSON.stringify(f.logs), /private/);
 });
 
 test('missing, invalid, and revoked credentials remain unauthorized', async () => {
@@ -94,6 +102,7 @@ test('missing or malformed encryption key is a server error, not an invalid cred
       assert.equal(result.status, 500);
       assert.equal(result.body.error, 'server_error');
       assert.equal(f.calls(), 0);
+    assert.match(JSON.stringify(f.logs), /TOKEN_ENCRYPTION_CONFIGURATION/);
       assert.doesNotMatch(JSON.stringify([result, f.logs]), /too-short|APP_TOKENS_KEY/);
     }
   }

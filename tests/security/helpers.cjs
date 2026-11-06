@@ -55,7 +55,7 @@ function load(file, dependencies = {}, globals = {}) {
           'next/headers': { headers() { throw new Error('Unexpected gateway header read in legacy fixture'); } },
         }, legacyGlobals);
       }
-      if (!(name in dependencies) && ['@/lib/issue-key-allocation', '@/lib/note-tag-access', '@/lib/issue-mutation', '@/lib/post-access', '@/lib/delete-post-comment', '@/lib/user-utils', '@/lib/notification-access', '@/lib/secrets/access', '@/lib/issue-finder', '@/lib/shared-issue-key-utils'].includes(name)) {
+      if (!(name in dependencies) && ['@/lib/auth-error-diagnostics', '@/lib/issue-key-allocation', '@/lib/note-tag-access', '@/lib/issue-mutation', '@/lib/post-access', '@/lib/delete-post-comment', '@/lib/user-utils', '@/lib/notification-access', '@/lib/secrets/access', '@/lib/issue-finder', '@/lib/shared-issue-key-utils'].includes(name)) {
         return load(`src/${name.slice(2)}.ts`, dependencies, globals);
       }
       if (!(name in dependencies) && name === '@/lib/agent-label-triggers') return load('src/lib/agent-label-triggers.ts', { 'node:crypto': require('node:crypto') });
