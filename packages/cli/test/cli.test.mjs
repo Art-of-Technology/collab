@@ -1336,7 +1336,11 @@ test('refresh preserves identity service errors without repeating rotation', asy
     });
     const file = path.join(f.dir, 'default.json'), env = { COLLAB_TOKEN: '' };
     writeCredentials(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'old', refreshToken: 'refresh', tokenWorkspace: 'workspace', userId: 'user' }));
-    for (let attempt = 0; attempt < 2; attempt++) assert.equal((await f.run(['auth', 'refresh'], { env })).error.error, expected);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = await f.run(['auth', 'refresh'], { env });
+      assert.equal(result.error.error, expected);
+      if (status === 401 || status === 403) assert.match(result.error.message, /not activated\. Sign in again/);
+    }
     assert.equal(f.calls.filter(call => call.url === '/api/oauth/mcp/token').length, 1);
     assert.equal(JSON.parse(readFileSync(file)).accessToken, 'old');
   }

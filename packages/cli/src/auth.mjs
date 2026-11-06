@@ -96,7 +96,10 @@ export async function refresh(state, save) {
   }
   try { await verifyIdentity(base, pending.accessToken, pending.tokenWorkspace, state.userId); }
   catch (error) {
-    if (!(error instanceof CliError) || (error.code !== 'transport_failed' && error.details.status !== 429 && !(error.details.status >= 500))) throw error;
+    if (!(error instanceof CliError)) throw error;
+    if (error.code !== 'transport_failed' && error.details.status !== 429 && !(error.details.status >= 500)) {
+      throw new CliError(error.code, 'Refreshed credentials could not be verified and were not activated. Sign in again.', error.exit, error.details);
+    }
     throw new CliError('refresh_verification_pending', 'Refresh succeeded, but its identity could not be verified. Run collab auth refresh again to verify the saved result; no new refresh will be sent.', 5);
   }
   const { pendingRefresh: _pendingRefresh, ...previous } = state;
