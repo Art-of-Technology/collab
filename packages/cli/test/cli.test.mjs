@@ -1048,6 +1048,28 @@ test('explicit refresh verifies identity before saving and sends no refresh toke
   assert.equal(JSON.parse(readFileSync(file)).accessToken, 'PRIVATE_ROTATED');
 });
 
+test('refresh retains rotated credentials privately and retries only identity verification after an outage', async t => {
+  let available = false;
+  const f = await fixture(t, (req, res) => {
+    if (req.url === '/api/oauth/mcp/token') return res.end(JSON.stringify({ access_token: 'PRIVATE_ROTATED', refresh_token: 'PRIVATE_NEW_REFRESH', token_type: 'Bearer', expires_in: 3600, workspace_id: 'workspace-one', scope: 'issues:read' }));
+    if (!available) { res.statusCode = 408; return res.end('{}'); }
+    res.end(JSON.stringify({ id: 'same-user', workspace: { id: 'workspace-one' } }));
+  });
+  const file = path.join(f.dir, 'default.json'), env = { COLLAB_TOKEN: '' };
+  writeCredentials(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'expired', refreshToken: 'PRIVATE_REFRESH', expiresAt: 0, workspace: 'workspace-one', tokenWorkspace: 'workspace-one', userId: 'same-user' }));
+  const first = await f.run(['auth', 'refresh'], { env });
+  assert.equal(first.error.error, 'refresh_verification_pending'); assert.equal(first.stdout, ''); assert.ok(!first.stderr.includes('PRIVATE_'));
+  const retained = JSON.parse(readFileSync(file));
+  assert.equal(retained.accessToken, 'expired'); assert.equal(retained.pendingRefresh.accessToken, 'PRIVATE_ROTATED');
+  assert.equal(retained.pendingRefresh.refreshToken, 'PRIVATE_NEW_REFRESH');
+  available = true;
+  const second = await f.run(['auth', 'refresh'], { env });
+  assert.equal(second.code, 0, second.stderr);
+  assert.equal(f.calls.filter(call => call.url === '/api/oauth/mcp/token').length, 1);
+  const stored = JSON.parse(readFileSync(file));
+  assert.equal(stored.accessToken, 'PRIVATE_ROTATED'); assert.equal(stored.refreshToken, 'PRIVATE_NEW_REFRESH'); assert.equal('pendingRefresh' in stored, false);
+});
+
 test('read-only login requests no write scopes and denial stores no credentials', async t => {
   const f = await fixture(t); let callback;
   const result = await f.run(['auth', 'login', '--read-only'], { env: { COLLAB_TOKEN: '' }, stderrCallback: output => {
@@ -1295,7 +1317,47 @@ test('refresh rejects invalid local bindings before dispatch and refuses changed
     const result = await f.run(['auth', 'refresh'], { env: { COLLAB_TOKEN: '' } });
     assert.notEqual(result.code, 0); assert.equal(result.error.error, expected);
     assert.equal(result.stdout, ''); assert.ok(!result.stderr.includes('PRIVATE_'));
-    assert.equal(f.calls.length, dispatches); assert.equal(readFileSync(file, 'utf8'), original);
+    assert.equal(f.calls.length, dispatches);
+    const stored = JSON.parse(readFileSync(file, 'utf8'));
+    if (dispatches === 2) {
+      assert.equal(stored.accessToken, 'PRIVATE_ACCESS'); assert.equal(stored.pendingRefresh.accessToken, 'PRIVATE_ROTATED');
+    } else if (dispatches) {
+      assert.equal(stored.pendingRefresh, null);
+      assert.equal(stored.accessToken, 'PRIVATE_ACCESS');
+    } else assert.equal(readFileSync(file, 'utf8'), original);
+  }
+});
+
+test('refresh preserves identity service errors without repeating rotation', async t => {
+  for (const [status, expected] of [[401, 'unauthorized'], [403, 'forbidden'], [408, 'refresh_verification_pending'], [429, 'refresh_verification_pending'], [503, 'refresh_verification_pending']]) {
+    const f = await fixture(t, (req, res) => {
+      if (req.url === '/api/oauth/mcp/token') return res.end(JSON.stringify({ access_token: 'rotated', token_type: 'Bearer', expires_in: 3600, workspace_id: 'workspace' }));
+      res.statusCode = status; res.end('{}');
+    });
+    const file = path.join(f.dir, 'default.json'), env = { COLLAB_TOKEN: '' };
+    writeCredentials(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'old', refreshToken: 'refresh', tokenWorkspace: 'workspace', userId: 'user' }));
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = await f.run(['auth', 'refresh'], { env });
+      assert.equal(result.error.error, expected);
+      if (status === 401 || status === 403) assert.match(result.error.message, /not activated\. Sign in again/);
+    }
+    assert.equal(f.calls.filter(call => call.url === '/api/oauth/mcp/token').length, 1);
+    assert.equal(JSON.parse(readFileSync(file)).accessToken, 'old');
+  }
+});
+
+test('uncertain refresh outcomes cannot be replayed by a later command', async t => {
+  for (const response of ['server-error', 'invalid', 'workspace']) {
+    const f = await fixture(t, (_req, res) => {
+      if (response === 'server-error') { res.statusCode = 500; return res.end('{}'); }
+      res.end(JSON.stringify(response === 'invalid' ? {} : { access_token: 'rotated', token_type: 'Bearer', expires_in: 3600, workspace_id: 'other' }));
+    });
+    const file = path.join(f.dir, 'default.json'), env = { COLLAB_TOKEN: '' };
+    writeCredentials(file, JSON.stringify({ origin: f.url, clientId: 'collab-cli', accessToken: 'old', refreshToken: 'refresh', tokenWorkspace: 'workspace', userId: 'user' }));
+    assert.notEqual((await f.run(['auth', 'refresh'], { env })).code, 0);
+    assert.equal(JSON.parse(readFileSync(file)).pendingRefresh, null);
+    assert.equal((await f.run(['auth', 'refresh'], { env })).error.error, 'outcome_unknown');
+    assert.equal(f.calls.length, 1);
   }
 });
 

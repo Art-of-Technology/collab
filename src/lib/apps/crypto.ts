@@ -22,13 +22,10 @@ export async function hashSecret(secret: string): Promise<string> {
 }
 
 // Get encryption key from environment variable
-function getEncryptionKey(): string {
+export function getEncryptionKey(): string {
   const key = process.env.APP_TOKENS_KEY;
-  if (!key) {
-    throw new Error('APP_TOKENS_KEY environment variable is required');
-  }
-  if (key.length !== 32) {
-    throw new Error('APP_TOKENS_KEY must be exactly 32 characters long');
+  if (!key || key.length !== 32) {
+    throw Object.assign(new Error('Token encryption configuration is invalid'), { code: 'TOKEN_ENCRYPTION_CONFIGURATION' });
   }
   return key;
 }
@@ -37,8 +34,8 @@ function getEncryptionKey(): string {
  * Encrypt a token using AES-256-GCM
  */
 export async function encryptToken(token: string): Promise<Buffer<ArrayBuffer>> {
+  const key = getEncryptionKey();
   try {
-    const key = getEncryptionKey();
     
     // Generate random IV and salt
     const iv = randomBytes(16);
@@ -67,8 +64,8 @@ export async function encryptToken(token: string): Promise<Buffer<ArrayBuffer>> 
     
     return result;
     
-  } catch (error) {
-    console.error('Token encryption failed:', error);
+  } catch {
+    console.error('Token encryption failed');
     throw new Error('Failed to encrypt token');
   }
 }
@@ -77,9 +74,8 @@ export async function encryptToken(token: string): Promise<Buffer<ArrayBuffer>> 
  * Decrypt a token using AES-256-GCM
  */
 export async function decryptToken(encryptedData: Buffer): Promise<string> {
+  const key = getEncryptionKey();
   try {
-    const key = getEncryptionKey();
-    
     if (encryptedData.length < 64) { // 32 + 16 + 16 = 64 minimum bytes
       throw new Error('Invalid encrypted data length');
     }
@@ -103,8 +99,8 @@ export async function decryptToken(encryptedData: Buffer): Promise<string> {
     
     return decrypted.toString('utf8');
     
-  } catch (error) {
-    console.error('Token decryption failed:', error);
+  } catch {
+    console.error('Token decryption failed');
     throw new Error('Failed to decrypt token');
   }
 }
@@ -159,8 +155,8 @@ export async function validateEncryption(): Promise<boolean> {
     const decrypted = await decryptToken(encrypted);
     
     return testToken === decrypted;
-  } catch (error) {
-    console.error('Encryption validation failed:', error);
+  } catch {
+    console.error('Encryption validation failed');
     return false;
   }
 }

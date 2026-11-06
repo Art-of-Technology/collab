@@ -91,7 +91,7 @@ function harness() {
   }, { Buffer });
   const auth = load('src/lib/apps/auth-middleware.ts', {
     'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma: db }, '@/lib/oauth-scopes': scopes,
-    '@/lib/apps/crypto': { decryptToken: async () => 'test-token' },
+    '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', decryptToken: async () => 'test-token' },
   }, { Buffer, console, URL });
   const route = load('src/app/api/apps/auth/search/route.ts', {
     'next/server': { NextResponse: Response }, '@/lib/apps/auth-middleware': auth,

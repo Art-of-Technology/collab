@@ -153,7 +153,7 @@ test('chat siblings protect conversation history and queued messages', async t =
     '@/lib/prisma': { prisma: db }, 'next/server': { NextResponse: Response },
       '@/lib/coclaw-retired': load('src/lib/coclaw-retired.ts', { 'next/server': { NextResponse: Response } }),
     '@/lib/session': { getCurrentUser: async () => user }, '@/lib/auth': { getAuthSession: async () => user && { user } },
-    '@/lib/apps/crypto': { decryptToken: async () => 'valid-token' }, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'),
+    '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', decryptToken: async () => 'valid-token' }, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'),
   };
   const globals = { URL, Buffer, console };
   deps['@/lib/apps/auth-middleware'] = load('src/lib/apps/auth-middleware.ts', deps, globals);

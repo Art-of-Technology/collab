@@ -55,7 +55,7 @@ function appNotesHarness() {
   });
   const auth = load('src/lib/apps/auth-middleware.ts', {
     'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma: db },
-    '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), '@/lib/apps/crypto': { decryptToken: async () => 'test-token' },
+    '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', decryptToken: async () => 'test-token' },
   }, { URL, Buffer, console });
   const secrets = load('src/lib/secrets/crypto.ts', { crypto: { default: require('node:crypto') } }, {
     Buffer, process: { env: { SECRETS_MASTER_KEY: '0123456789abcdef0123456789abcdef' } },

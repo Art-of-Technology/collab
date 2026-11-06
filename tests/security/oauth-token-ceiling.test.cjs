@@ -29,7 +29,7 @@ function fixture(kind, overrides = {}) {
   };
   const deps = { 'next/server': next, crypto, '@/lib/prisma': { prisma: db }, '@/lib/oauth-scopes': scopes,
     '@/lib/post-access': load('src/lib/post-access.ts'),
-    '@/lib/apps/crypto': { encryptToken: async v => Buffer.from(v), decryptToken: async v => String(v) },
+    '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', encryptToken: async v => Buffer.from(v), decryptToken: async v => String(v) },
     '@/lib/apps/jwt-assertion': {}, '@/lib/apps/webhook-auto-creation': {} };
   const handler = load(`src/app/api/oauth/${kind === 'mcp' ? 'mcp/' : ''}token/route.ts`, deps, globals);
   const invoke = async (body = {}) => {
@@ -65,7 +65,7 @@ test('scope ceiling is enforced on already-issued tokens through actual authenti
   const token = { id: 'token', accessToken: Buffer.from('bearer').toString('base64'), userId: 'alice', scopes: ['issues:read', 'secrets:read'],
     app: { id: 'app', slug: 'app', status: 'PUBLISHED', isSystemApp: true, scopes: [{ scope: 'issues:read' }] }, workspace };
   const auth = load('src/lib/apps/auth-middleware.ts', { 'next/server': next, '@/lib/oauth-scopes': scopes,
-    '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/apps/crypto': { decryptToken: async v => String(v) },
+    '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', decryptToken: async v => String(v) },
     '@/lib/prisma': { prisma: { appToken: { findMany: async () => [token] }, workspace: { findFirst: async () => workspace } } } }, globals);
   const request = { headers: new Headers({ Authorization: 'Bearer bearer' }) };
   assert.equal((await auth.authenticateAppRequest(request, { requiredScopes: ['secrets:read'] })).success, false);
@@ -89,7 +89,7 @@ for (const installed of [false, true]) {
           installation: installed ? { id: 'install', appId: 'app', app, workspace, scopes: installationGrants } : null };
         const handler = load('src/app/api/oauth/introspect/route.ts', {
           'next/server': next, '@/lib/oauth-scopes': scopes,
-          '@/lib/apps/crypto': { decryptToken: async value => String(value) },
+          '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', decryptToken: async value => String(value) },
           '@/lib/oauth-client-auth': { authenticateOAuthClient: async () => ({ valid: true, oauthClient: { app: { id: 'app' } } }) },
           '@/lib/prisma': { prisma: { appToken: { findMany: async ({ include }) => {
             assert.equal(include.app.include.scopes, true);

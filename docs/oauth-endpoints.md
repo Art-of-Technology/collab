@@ -459,6 +459,8 @@ Common error codes:
 - `access_denied`: User denied authorization
 - `server_error`: Internal server error
 
+App API authentication returns HTTP 503 `temporarily_unavailable` for recognized transient database failures and HTTP 500 `server_error` for other authentication failures, including invalid token encryption configuration. Invalid or revoked credentials remain authorization failures. The system-app token endpoint (`POST /api/oauth/mcp/token`) returns HTTP 500 `server_error` for unexpected failures without exposing private error details. A server error or lost response during token exchange or refresh does not establish whether the mutation completed; do not automatically replay it.
+
 ## Database Schema
 
 The implementation includes the following key models:

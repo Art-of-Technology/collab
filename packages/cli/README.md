@@ -20,7 +20,7 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.8.2 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.8.2) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.8.3 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.8.3) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
 
 Version 0.6.1 adds `collab update`, which reruns the one-command installer for the current platform from the installed native executable. Installations before 0.6.1 run the installer once more to pick it up.
 
@@ -160,6 +160,8 @@ collab auth logout
 
 Refresh is explicit to avoid concurrent processes rotating the same token. It verifies the original token workspace and user while preserving the selected workspace and project. Profiles without a saved token workspace/user binding must log in again before refreshing. Login/configuration writes are serialized by a local exclusive lock. After a crashed login, run `collab auth login` again: locks created by this version recover automatically when their local loopback socket is available. A running login keeps its lock, and existing credentials remain unchanged until the new login succeeds.
 
+If refresh succeeds but the identity check is unavailable, the CLI keeps the returned credentials privately without using them and reports `refresh_verification_pending`. Run `collab auth refresh` again to check that saved result; this does not send another refresh request. If verification definitively fails, the credentials are not activated; sign in again. An `outcome_unknown` can mean the server changed the session without returning usable credentials. Follow the error's instructions to check the profile or sign in again; an uncertain refresh is not replayed.
+
 Empty locks from older CLI versions, damaged locks, locks from another host, and locks whose socket port is occupied cannot be recovered automatically. The `state_locked` error includes `lockFile`; stop other Collab commands before removing that file once. The default is `~/.config/collab/default.json.lock` (on Windows, `%USERPROFILE%\.config\collab\default.json.lock`). Keep `default.json`, which contains credentials. Use `collab auth status` to inspect local login state and `collab whoami` to verify server access.
 
 Use `collab auth login --read-only` for an agent that only needs to inspect projects, issues and Notes. The browser consent lists the requested read permissions; write commands will be denied by the server.
@@ -179,7 +181,7 @@ For headless use, inject an existing Collab OAuth bearer token through your cred
 | 4 | Server authorization refused |
 | 5 | API, transport, pagination or uncertain-write failure |
 
-Errors are JSON records on stderr, with no raw remote error response body. An issue deletion error after preview follows the `deletePreview` record on a separate line. After `outcome_unknown`, read the affected item or check `issues trash` before deciding whether to retry. Issue/Note edits do **not** provide idempotency keys or compare-and-swap updates; never interpret a timeout as proof a write did not happen. For handoff retry and ownership guarantees, see the [agent handoff API contract](../../docs/agent-handoffs.md#api-foundation). Concurrent agents should own separate issues/Notes or coordinate their edits. Forge-backed projects retain their existing write refusal; the CLI does not bypass it.
+Errors are JSON records on stderr, with no raw remote error response body. An issue deletion error after preview follows the `deletePreview` record on a separate line. After an issue or Note mutation reports `outcome_unknown`, read the affected item or check `issues trash` before deciding whether to retry. Issue/Note edits do **not** provide idempotency keys or compare-and-swap updates; never interpret a timeout as proof a write did not happen. For handoff retry and ownership guarantees, see the [agent handoff API contract](../../docs/agent-handoffs.md#api-foundation). Concurrent agents should own separate issues/Notes or coordinate their edits. Forge-backed projects retain their existing write refusal; the CLI does not bypass it.
 
 ## Administrator setup
 

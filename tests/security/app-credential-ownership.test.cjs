@@ -47,7 +47,7 @@ function fixture({ owner = 'alice', subject = 'alice', deleted = false, revealed
     'next-auth': { getServerSession: async () => session },
     '@/lib/request-session': { getServerSession: async () => session },
     'next/server': { NextResponse: { json } }, zod: require('zod'),
-    '@/lib/apps/crypto': { decryptToken: async () => { calls.decrypt++; if (decryptFails) throw new Error('bad ciphertext'); return 'fixture-secret'; },
+    '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', decryptToken: async () => { calls.decrypt++; if (decryptFails) throw new Error('bad ciphertext'); return 'fixture-secret'; },
       generateClientCredentials: async () => { calls.generate++; return { apiKey: 'new-fixture-key', clientId: 'new-client', clientSecret: 'new-fixture-secret' }; },
       encryptToken: async () => Buffer.from('encrypted-new-fixture') },
     '@/lib/apps/validation': { isReservedSlug: () => false, fetchManifest: async () => { calls.fetch++; return {}; },

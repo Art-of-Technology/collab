@@ -52,7 +52,7 @@ test('issue activity respects issue and activity workspace boundaries', async t 
   await prisma.appToken.createMany({ data: ['alice', 'bob', 'both', 'mallory'].map(userId => ({ id: `token-${userId}`, appId: 'app', workspaceId: userId === 'mallory' ? 'foreign' : 'w', userId, accessToken: Buffer.from(`fixture-${userId}`).toString('base64'), scopes: ['issues:read'] })) });
   const oauth = load('src/lib/oauth-scopes.ts', {}, { URL });
   const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } });
-  const auth = load('src/lib/apps/auth-middleware.ts', { 'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma }, '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/oauth-scopes': oauth, '@/lib/apps/crypto': { decryptToken: async bytes => bytes.toString() } }, { Buffer, URL, Date, console });
+  const auth = load('src/lib/apps/auth-middleware.ts', { 'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma }, '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/oauth-scopes': oauth, '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', decryptToken: async bytes => bytes.toString() } }, { Buffer, URL, Date, console });
   const activity = load('src/app/api/apps/auth/issues/[issueIdOrKey]/activity/route.ts', { 'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma }, '@/lib/apps/auth-middleware': auth, '@/lib/issue-finder': finder }, { URL, console });
   server = createServer(async (req, res) => {
     try {

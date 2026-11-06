@@ -1,8 +1,9 @@
 import { effectiveAppScopes, isAllowedRedirectUri, normalizeScopes } from '@/lib/oauth-scopes';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
+import { authErrorDiagnostics } from '@/lib/auth-error-diagnostics';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes, createHash } from 'crypto';
-import { encryptToken, decryptToken } from '@/lib/apps/crypto';
+import { encryptToken, decryptToken, getEncryptionKey } from '@/lib/apps/crypto';
 
 import { prisma } from '@/lib/prisma';
 
@@ -81,9 +82,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (grantType === 'authorization_code') {
-      return handleAuthorizationCodeGrant(body, oauthClient);
+      return await handleAuthorizationCodeGrant(body, oauthClient);
     } else if (grantType === 'refresh_token') {
-      return handleRefreshTokenGrant(body, oauthClient);
+      return await handleRefreshTokenGrant(body, oauthClient);
     } else {
       return NextResponse.json(
         {
@@ -94,7 +95,8 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('MCP OAuth token error:', error);
+    const { code, name } = authErrorDiagnostics(error);
+    console.error('MCP OAuth token error', name, code || 'unknown');
 
     return NextResponse.json(
       {
@@ -313,6 +315,7 @@ async function handleRefreshTokenGrant(
   }
 
   // Find the token by refresh token
+  getEncryptionKey();
   const appTokens = await prisma.appToken.findMany({
     where: {
       appId: oauthClient.app.id,
@@ -339,7 +342,8 @@ async function handleRefreshTokenGrant(
         matchedToken = appToken;
         break;
       }
-    } catch {
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'TOKEN_ENCRYPTION_CONFIGURATION') throw error;
       continue;
     }
   }
