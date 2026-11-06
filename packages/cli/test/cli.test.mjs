@@ -1052,7 +1052,7 @@ test('refresh retains rotated credentials privately and retries only identity ve
   let available = false;
   const f = await fixture(t, (req, res) => {
     if (req.url === '/api/oauth/mcp/token') return res.end(JSON.stringify({ access_token: 'PRIVATE_ROTATED', refresh_token: 'PRIVATE_NEW_REFRESH', token_type: 'Bearer', expires_in: 3600, workspace_id: 'workspace-one', scope: 'issues:read' }));
-    if (!available) { res.statusCode = 503; return res.end('{}'); }
+    if (!available) { res.statusCode = 408; return res.end('{}'); }
     res.end(JSON.stringify({ id: 'same-user', workspace: { id: 'workspace-one' } }));
   });
   const file = path.join(f.dir, 'default.json'), env = { COLLAB_TOKEN: '' };
@@ -1329,7 +1329,7 @@ test('refresh rejects invalid local bindings before dispatch and refuses changed
 });
 
 test('refresh preserves identity service errors without repeating rotation', async t => {
-  for (const [status, expected] of [[401, 'unauthorized'], [403, 'forbidden'], [429, 'refresh_verification_pending'], [503, 'refresh_verification_pending']]) {
+  for (const [status, expected] of [[401, 'unauthorized'], [403, 'forbidden'], [408, 'refresh_verification_pending'], [429, 'refresh_verification_pending'], [503, 'refresh_verification_pending']]) {
     const f = await fixture(t, (req, res) => {
       if (req.url === '/api/oauth/mcp/token') return res.end(JSON.stringify({ access_token: 'rotated', token_type: 'Bearer', expires_in: 3600, workspace_id: 'workspace' }));
       res.statusCode = status; res.end('{}');
