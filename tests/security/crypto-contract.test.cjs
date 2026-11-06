@@ -38,3 +38,20 @@ test('review: encryption roundtrip and generated Prisma Bytes assignments retain
     getCanonicalFileName: name => name, getCurrentDirectory: () => process.cwd(), getNewLine: () => '\n',
   }));
 });
+
+test('crypto failures do not log private exception details', async () => {
+  const logs = [];
+  const env = { APP_TOKENS_KEY: '0123456789abcdef0123456789abcdef' };
+  const nodeCrypto = require('node:crypto');
+  const crypto = load('src/lib/apps/crypto.ts', {
+    crypto: { ...nodeCrypto, createCipheriv() { throw new Error('private encryption detail'); } },
+    util: require('node:util'), bcrypt: {},
+  }, { Buffer, process: { env }, console: { error: (...args) => logs.push(args) } });
+  await assert.rejects(crypto.encryptToken('secret'), /Failed to encrypt token/);
+  await assert.rejects(crypto.decryptToken(Buffer.alloc(1)), /Failed to decrypt token/);
+  assert.equal(await crypto.validateEncryption(), false);
+  assert.doesNotMatch(JSON.stringify(logs), /private encryption detail|Invalid encrypted data length|stack/);
+  delete env.APP_TOKENS_KEY;
+  await assert.rejects(crypto.encryptToken('secret'), error => error.code === 'TOKEN_ENCRYPTION_CONFIGURATION');
+  await assert.rejects(crypto.decryptToken(Buffer.alloc(1)), error => error.code === 'TOKEN_ENCRYPTION_CONFIGURATION');
+});

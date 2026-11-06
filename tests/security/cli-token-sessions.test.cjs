@@ -130,6 +130,21 @@ test('OAuth errors log sanitized names and Prisma errorCode without leaking arbi
   assert.doesNotMatch(JSON.stringify([result, f.logs]), /private detail/);
 });
 
+test('OAuth errors reject unsupported code-shaped diagnostics', async () => {
+  const f = fixture();
+  f.prisma.appOAuthAuthorizationCode.findUnique = async () => { throw Object.assign(new Error('private detail'), { errorCode: 'P9999' }); };
+  assert.equal((await f.exchange(f.grant('broken'))).status, 500);
+  assert.doesNotMatch(JSON.stringify(f.logs), /P9999|private detail/);
+});
+
+test('authorization code encryption reports the real configuration failure safely', async () => {
+  const f = fixture();
+  const realCrypto = load('src/lib/apps/crypto.ts', { crypto, util: require('node:util'), bcrypt: {} }, { Buffer, process: { env: {} }, console: { error: (...args) => f.logs.push(args) } });
+  f.crypto.encryptToken = realCrypto.encryptToken;
+  assert.equal((await f.exchange(f.grant('broken'))).status, 500);
+  assert.match(JSON.stringify(f.logs), /TOKEN_ENCRYPTION_CONFIGURATION/);
+});
+
 test('refresh reports encryption configuration errors even when no tokens exist', async () => {
   const f = fixture();
   const realCrypto = load('src/lib/apps/crypto.ts', { crypto, util: require('node:util'), bcrypt: {} }, { Buffer, process: { env: {} }, console });

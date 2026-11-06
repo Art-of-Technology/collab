@@ -59,7 +59,7 @@ for (const [label, options] of [
 test('unexpected database errors return sanitized 500 instead of invalid token', async () => {
   const f = fixture({ scanError: failure('P9999') }); const response = await f.invoke();
   assert.equal(response.status, 500); assert.equal(response.body.error, 'server_error');
-  assert.equal(f.calls(), 0); assert.match(JSON.stringify(f.logs), /P9999/);
+  assert.equal(f.calls(), 0); assert.doesNotMatch(JSON.stringify(f.logs), /P9999/);
   assert.doesNotMatch(JSON.stringify([response, f.logs]), /private database detail/);
 });
 
