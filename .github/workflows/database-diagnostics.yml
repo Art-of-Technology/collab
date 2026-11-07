@@ -33,6 +33,7 @@ jobs:
           cache: npm
       - run: npm ci --legacy-peer-deps
       - run: npx prisma generate
+      - run: node --test --test-concurrency=1 tests/security/database-diagnostics.test.cjs
       - run: |
           node -e "if (!process.env.COLLAB_DIAGNOSTICS_TEST_DATABASE_URL) throw new Error('Missing disposable database URL')"
           npm run test:database-diagnostics
