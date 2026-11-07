@@ -1,0 +1,41 @@
+name: Database diagnostics
+on:
+  pull_request:
+    paths: ['src/lib/database-diagnostics.ts', 'src/lib/prisma.ts', 'src/lib/issue-visibility.ts', 'prisma/**', 'tests/integration/database-diagnostics-db.test.cjs', 'tests/security/database-diagnostics.test.cjs', 'tests/security/helpers.cjs', 'package.json', 'package-lock.json', '.github/workflows/database-diagnostics.yml']
+  push:
+    branches: [main]
+    paths: ['src/lib/database-diagnostics.ts', 'src/lib/prisma.ts', 'src/lib/issue-visibility.ts', 'prisma/**', 'tests/integration/database-diagnostics-db.test.cjs', 'tests/security/database-diagnostics.test.cjs', 'tests/security/helpers.cjs', 'package.json', 'package-lock.json', '.github/workflows/database-diagnostics.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: collab
+          POSTGRES_PASSWORD: collab
+          POSTGRES_DB: collab_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npx prisma generate
+      - run: node --test --test-concurrency=1 tests/security/database-diagnostics.test.cjs
+      - run: |
+          node -e "if (!process.env.COLLAB_DIAGNOSTICS_TEST_DATABASE_URL) throw new Error('Missing disposable database URL')"
+          npm run test:database-diagnostics
+        env:
+          COLLAB_DIAGNOSTICS_TEST_DATABASE_URL: postgresql://collab:collab@localhost:5432/collab_test
