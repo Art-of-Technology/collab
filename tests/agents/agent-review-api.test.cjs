@@ -70,6 +70,8 @@ test('identity-bound review guards custody, authorizes participants and records 
   await prisma.agentRegistration.update({ where: { id: 'owner-id' }, data: { managedWorker: require('@prisma/client').Prisma.DbNull } });
   const review = await create();
   assert.equal((await create()).id, review.id, 'idempotent creation');
+  await assert.rejects(api.createReview(context('owner'), { ...input, requestId: randomUUID() }), error => error.code === 'review_already_active' && error.status === 409, 'a distinct request reports the active review');
+  await assert.rejects(api.createReview(context('owner'), { ...input, content: 'changed' }), error => error.code === 'request_conflict', 'a reused request ID with changed content remains a conflict');
   await assert.rejects(api.getReview(context('outsider'), 'outsider', review.id));
   await assert.rejects(api.createReview({ ...context('owner'), token: { scopes: ['issues:read'] } }, input));
   const action = (user, data) => api.actOnReview(context(user), review.id, api.reviewActionSchema.parse({ agent: user, ...data }));

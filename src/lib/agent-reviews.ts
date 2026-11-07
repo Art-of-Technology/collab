@@ -137,6 +137,8 @@ export async function createReview(context: AppAuthContext, input: z.infer<typeo
     if (current.issueId !== issue.id || current.status !== 'claimed' || current.claimedById !== owner.id) {
       throw new HandoffError('claim_required', 'The original owner must retain the claim', 409);
     }
+    const active = await db.agentReviewRequest.findFirst({ where: { originalHandoffId: current.id, status: { in: ['pending', 'claimed', 'replied'] } }, select: { id: true } });
+    if (active) throw new HandoffError('review_already_active', 'This handoff already has an active review. Read it before taking further action.', 409);
     const created = await db.agentReviewRequest.create({ data: { workspaceId: context.workspace.id, issueId: issue.id,
       originalHandoffId: current.id, ownerAgentId: owner.id, reviewerAgentId: reviewer.id, requestId: input.requestId,
       repository: input.repository, pullRequestNumber: input.pullRequestNumber, revision: input.revision, requestContent: input.content } });

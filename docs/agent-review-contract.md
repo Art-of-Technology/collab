@@ -26,13 +26,18 @@ request content is required and is limited to 16,000 characters. The
 repository must match the project's configured repository when one exists;
 the submitted name alone is not proof of the actual GitHub repository or head.
 Reusing the same request ID with the same data returns the existing request;
-reusing it with different data fails.
+reusing it with different data fails. A different request for a handoff that
+already has an active review fails with `review_already_active`; read that
+review before taking further action.
 
 The reviewer discovers requests using
-`GET /api/apps/auth/agents/reviews?agent=NAME`, follows `nextCursor` when
-present, and reads one with
+`GET /api/apps/auth/agents/reviews?agent=NAME&view=incoming-v1`, follows
+`nextCursor` when present, and reads one with
 `GET /api/apps/auth/agents/reviews/ID?agent=NAME`. Use the usual workspace
-selection parameter. The reviewer sends `PATCH` to that review with
+selection parameter. The incoming view filters to this reviewer's pending or
+claimed requests and the response acknowledges `view: incoming-v1`. The API
+returns review details to the authorized reviewer; the CLI's `reviews wait`
+output limits results to IDs and statuses. The reviewer sends `PATCH` to that review with
 `{ "agent": "NAME", "action": "claim" }`, then sends another `PATCH`
 with `action: "reply"`, `verdict` as `approved`, `changes_requested`
 or `blocked`, the exact `reviewedRevision`, and nonempty `content` of

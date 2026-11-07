@@ -8,7 +8,7 @@ export async function reviewResponse(run: () => Promise<unknown>) {
   catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: 'invalid_request', error_description: 'Invalid review request' }, { status: 400 });
     if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
-    if ((error as { code?: string })?.code === 'P2002') return NextResponse.json({ error: 'request_conflict', error_description: 'A concurrent review already exists; retry using the same request ID' }, { status: 409 });
+    if ((error as { code?: string })?.code === 'P2002') return NextResponse.json({ error: 'request_conflict', error_description: 'Review request conflicts with existing work. Read current reviews before retrying.' }, { status: 409 });
     console.error('Agent review request failed');
     return NextResponse.json({ error: 'review_unavailable', error_description: 'Agent reviews are temporarily unavailable' }, { status: 503 });
   }

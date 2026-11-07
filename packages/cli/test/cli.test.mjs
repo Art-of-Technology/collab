@@ -109,6 +109,18 @@ test('review errors stay sanitized and uncertain writes are never retried automa
   assert.ok(!hold.stderr.includes('PRIVATE_SENTINEL')); assert.equal(f.calls.length, 2);
 });
 
+test('review request explains an existing active review without exposing server text', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(409); res.end(JSON.stringify({ error: 'review_already_active', error_description: 'PRIVATE_SENTINEL' }));
+  });
+  const result = await f.run(['reviews', 'request', '--agent', 'author', '--handoff-id', 'h', '--reviewer-agent-id', 'peer-id',
+    '--request-id', '12345678-1234-4234-8234-123456789012', '--repository', 'org/repo', '--pull-request-number', '1', '--revision', 'c'.repeat(40), '--content', 'Review']);
+  assert.equal(result.error.error, 'review_already_active');
+  assert.match(result.error.message, /already has an active review/);
+  assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  assert.equal(f.calls.length, 1);
+});
+
 test('a review denied by workspace scope fails without retry or leaking server details', async t => {
   const f = await fixture(t, (_req, res) => {
     res.writeHead(403); res.end(JSON.stringify({ error: 'forbidden', error_description: 'PRIVATE_SENTINEL' }));
