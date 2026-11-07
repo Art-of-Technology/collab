@@ -379,6 +379,7 @@ model Workspace {
   agentRegistrations  AgentRegistration[]
   agentHandoffs       AgentHandoff[]
   agentTransferOffers AgentTransferOffer[]
+  agentReviewRequests AgentReviewRequest[]
   id                  String                @id @default(cuid())
   name                String
   slug                String                @unique
@@ -544,6 +545,7 @@ model ForgeExecutionAttempt {
 model Issue {
   agentHandoffs AgentHandoff[]
   agentTransferOffers AgentTransferOffer[]
+  agentReviewRequests AgentReviewRequest[]
   id          String    @id @default(cuid())
   title       String
   description String?
@@ -2826,6 +2828,8 @@ model AgentRegistration {
   receipts    AgentReceipt[]
   transferOffersSent AgentTransferOffer[] @relation("TransferOfferSender")
   transferOffersReceived AgentTransferOffer[] @relation("TransferOfferRecipient")
+  reviewRequestsOwned AgentReviewRequest[] @relation("ReviewRequestOwner")
+  reviewRequestsReceived AgentReviewRequest[] @relation("ReviewRequestRecipient")
 
   @@unique([workspaceId, name])
   @@unique([workspaceId, userId, host, sessionId])
@@ -2860,6 +2864,7 @@ model AgentHandoff {
   receipts       AgentReceipt[]
   transferOffers AgentTransferOffer[] @relation("TransferOfferParent")
   acceptedTransferOffer AgentTransferOffer? @relation("TransferOfferAccepted")
+  reviewRequests AgentReviewRequest[]
 
   @@unique([workspaceId, sourceKey])
   @@index([workspaceId, createdAt, id])
@@ -2892,6 +2897,39 @@ model AgentTransferOffer {
   @@unique([workspaceId, senderId, requestId])
   @@index([recipientId, status])
   @@index([parentId, status])
+}
+
+// Separate ID-bound requests cannot be discovered by older name-based inboxes.
+model AgentReviewRequest {
+  id                String @id @default(cuid())
+  workspaceId       String
+  issueId           String
+  originalHandoffId String
+  ownerAgentId      String?
+  reviewerAgentId   String?
+  requestId         String
+  repository        String
+  pullRequestNumber Int
+  revision          String
+  requestContent    String
+  responseContent   String?
+  responseOutcome   String?
+  reviewedRevision  String?
+  holdReason        String?
+  holdVersion       Int @default(0)
+  cancelReason      String?
+  status            String @default("pending")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issue             Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  originalHandoff   AgentHandoff @relation(fields: [originalHandoffId], references: [id], onDelete: Cascade)
+  ownerAgent        AgentRegistration? @relation("ReviewRequestOwner", fields: [ownerAgentId], references: [id], onDelete: SetNull)
+  reviewerAgent     AgentRegistration? @relation("ReviewRequestRecipient", fields: [reviewerAgentId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, ownerAgentId, requestId])
+  @@index([reviewerAgentId, status, createdAt, id])
+  @@index([originalHandoffId, status])
 }
 
 model AgentReceipt {

@@ -73,7 +73,7 @@ async function coordinatorAdmission(db: Prisma.TransactionClient, context: AppAu
 export async function wasClaimed(db: DB, workspaceId: string, issueId: string, handoffId: string) {
   return Boolean(await db.issueActivity.findFirst({ where: { workspaceId, itemId: issueId, itemType: 'ISSUE', action: 'AGENT_CLAIM', details: { contains: `"handoffId":${JSON.stringify(handoffId)}` } }, select: { id: true } }));
 }
-function assertManagedGeneration(value: Prisma.JsonValue | null, generation?: string) {
+export function assertManagedGeneration(value: Prisma.JsonValue | null, generation?: string) {
   if (!value) {
     if (generation) throw new HandoffError('worker_not_managed', 'This agent is not managed', 409);
     return;
@@ -148,11 +148,11 @@ function agentStatus(agent: { id: string; name: string; labelIds: string[]; host
     worker: managedStatus(agent.managedWorker),
     ...(agent.host && { host: agent.host, sessionId: agent.sessionId, watcher: watcherState(agent.watcher) }) };
 }
-function issueScope(context: InboxContext): Prisma.IssueWhereInput {
+export function issueScope(context: InboxContext): Prisma.IssueWhereInput {
   return { AND: [issueReadAccessWhere(context.user.id)], workspaceId: context.workspace.id,
     project: { workspaceId: context.workspace.id } };
 }
-async function ownedAgent(db: DB, context: InboxContext, agent: string) {
+export async function ownedAgent(db: DB, context: InboxContext, agent: string) {
   const row = await db.agentRegistration.findFirst({ where: { workspaceId: context.workspace.id, userId: context.user.id, name: agent } });
   if (!row) throw new HandoffError('agent_not_found', 'Register this agent with your own login first', 404);
   return row;
@@ -161,7 +161,7 @@ function recipients(agent: Agent): Prisma.AgentHandoffWhereInput {
   return { OR: [{ recipientNames: { has: agent.name } }, { labelIds: { hasSome: agent.labelIds } },
     { senderId: agent.id }, { claimedById: agent.id }] };
 }
-async function visibleHandoff(db: DB, context: AppAuthContext, agent: Agent, handoffId: string) {
+export async function visibleHandoff(db: DB, context: AppAuthContext, agent: Agent, handoffId: string) {
   const row = await db.agentHandoff.findFirst({ where: { id: handoffId, workspaceId: context.workspace.id,
     AND: [recipients(agent)], issue: issueScope(context) }, include: { issue: { select: { id: true, issueKey: true, title: true, projectId: true } } } });
   if (!row) throw new HandoffError('handoff_not_found', 'Handoff not found or access denied', 404);
@@ -181,15 +181,28 @@ async function activity(db: DB, context: AppAuthContext, agent: Agent, issue: { 
 }
 
 // Hold the rows used by issueReadAccessWhere until a transfer mutation commits.
-async function lockTransferAccess(db: Prisma.TransactionClient, workspaceId: string, issueId: string, firstUser: string, secondUser: string) {
+export async function lockTransferAccessRoots(db: Prisma.TransactionClient, workspaceId: string, issueId: string, firstUser: string, secondUser: string) {
   await db.$queryRaw`SELECT id FROM "Workspace" WHERE id = ${workspaceId} FOR SHARE`;
   await db.$queryRaw`SELECT id FROM "WorkspaceMember" WHERE "workspaceId" = ${workspaceId} AND "userId" IN (${firstUser}, ${secondUser}) ORDER BY id FOR SHARE`;
   await db.$queryRaw`SELECT id FROM "Issue" WHERE id = ${issueId} AND "workspaceId" = ${workspaceId} FOR SHARE`;
-  await db.$queryRaw`SELECT p.id FROM "Project" p WHERE p.id IN (
-    SELECT i."projectId" FROM "Issue" i WHERE i.id = ${issueId} AND i."workspaceId" = ${workspaceId}
-    UNION SELECT s."projectId" FROM "ProjectStatus" s JOIN "Issue" i ON i."statusId" = s.id WHERE i.id = ${issueId} AND i."workspaceId" = ${workspaceId}
-  ) ORDER BY p.id FOR SHARE`;
+}
+export async function lockTransferAccessProjects(db: Prisma.TransactionClient, workspaceId: string, issueId: string, lockProjectsForUpdate = false) {
+  if (lockProjectsForUpdate) {
+    await db.$queryRaw`SELECT p.id FROM "Project" p WHERE p.id IN (
+      SELECT i."projectId" FROM "Issue" i WHERE i.id = ${issueId} AND i."workspaceId" = ${workspaceId}
+      UNION SELECT s."projectId" FROM "ProjectStatus" s JOIN "Issue" i ON i."statusId" = s.id WHERE i.id = ${issueId} AND i."workspaceId" = ${workspaceId}
+    ) ORDER BY p.id FOR UPDATE`;
+  } else {
+    await db.$queryRaw`SELECT p.id FROM "Project" p WHERE p.id IN (
+      SELECT i."projectId" FROM "Issue" i WHERE i.id = ${issueId} AND i."workspaceId" = ${workspaceId}
+      UNION SELECT s."projectId" FROM "ProjectStatus" s JOIN "Issue" i ON i."statusId" = s.id WHERE i.id = ${issueId} AND i."workspaceId" = ${workspaceId}
+    ) ORDER BY p.id FOR SHARE`;
+  }
   await db.$queryRaw`SELECT s.id FROM "ProjectStatus" s JOIN "Issue" i ON i."statusId" = s.id WHERE i.id = ${issueId} AND i."workspaceId" = ${workspaceId} FOR SHARE OF s`;
+}
+export async function lockTransferAccess(db: Prisma.TransactionClient, workspaceId: string, issueId: string, firstUser: string, secondUser: string) {
+  await lockTransferAccessRoots(db, workspaceId, issueId, firstUser, secondUser);
+  await lockTransferAccessProjects(db, workspaceId, issueId);
 }
 
 export async function registerAgent(context: AppAuthContext, input: z.infer<typeof registrationSchema>) {
