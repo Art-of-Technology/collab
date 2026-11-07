@@ -82,6 +82,136 @@ check the installed guards and fail closed when they differ from the expected
 definitions; exact catalog rendering must be validated on every supported
 PostgreSQL version. A database owner can replace a trigger function while a
 request is in flight despite the table locks. The deployment process must
-therefore stop and drain review writes while privileged DDL is applied, then
-verify the guards before resuming. That operational serialization has not yet
-been implemented or verified; this candidate is not ready for production.
+therefore stop and drain all affected writers, including indirect cascade
+deletes, while privileged DDL is applied, then verify the guards before
+resuming. Enforce that boundary for the initial rollout and every later
+privileged DDL change; preventing reconnects must be verified, not assumed.
+That operational serialization has not yet been implemented or verified; this
+candidate is not ready for production.
+
+## Runtime database privileges
+
+The migration creates `AgentReviewRequest` as the migration executor. The
+application and other writers may use different database roles, and privileges
+on old tables do not automatically grant access to this new table. The new
+triggers run with the caller's privileges: if the runtime cannot read the new table,
+existing handoff status changes, transfer offers and agent deletions can fail
+even before any agent uses reviews.
+
+This is a mandatory release gate, not a permission to deploy. Under one
+controlled rollout window, stop and drain all affected writers, including
+review, handoff, transfer and agent registration changes and indirect cascade
+deletes. Identify the exact migration executor and inventory every effective
+database writer role from its actual connection, including app replicas, old
+workers, legacy clients and authorized maintenance jobs. Take the required
+backup. Confirm the migration connection resolves unqualified objects into
+`public`, apply the reviewed migration, and verify the new table is
+`public."AgentReviewRequest"`. Grant each writer role only the privileges its
+paths need, and verify every role and the guards before any writer resumes.
+The migration has its own `BEGIN` and `COMMIT`, so migration and separately issued grant are not one SQL
+transaction. The drain must remain in force across both commits and all
+verification. If any step fails or a writer identity or inventory is
+uncertain, keep the writers stopped and reconcile the rollout rather than
+assuming access.
+
+When a grant is needed, the table owner or an authorized grantor can issue this
+for each independently verified review-API writer role, with psql's
+identifier-quoted variable `runtime_role` set to that role. In an interactive
+psql session, use this recipe only if the verified role matches the ASCII
+allowlist `[A-Za-z_][A-Za-z0-9_]{0,62}` exactly. Stop and use a separately
+reviewed quoting method for any other role name. Replace the example value
+with the verified allowed role, then run:
+
+```sql
+\set ON_ERROR_STOP on
+\set runtime_role verified_role_name
+GRANT SELECT, INSERT, UPDATE ON TABLE public."AgentReviewRequest" TO :"runtime_role";
+```
+
+Grant by capability, not by application label:
+
+- A role changing handoff claims or creating pending transfers needs `SELECT`
+  on the review table for the corresponding guards. A pending transfer also
+  locks the parent handoff: the role needs `SELECT` and `UPDATE` on at least
+  one column of `AgentHandoff`, plus its normal transfer-write privileges.
+- A role directly deleting agent registrations needs `SELECT` and, when an
+  owned review is active, `UPDATE` to cancel it. The active-review path also
+  locks the parent handoff and needs `SELECT` and `UPDATE` on at least one
+  `AgentHandoff` column. Indirect cascades may have different privilege
+  behavior; test each actual deletion path and role.
+- A role creating and mutating reviews needs `SELECT`, `INSERT` and `UPDATE`.
+
+Use the same identifier-quoted command with the privileges each verified role
+needs. Never substitute roles inferred from historic evidence.
+
+Connect as each actual writer and confirm its effective principal and required
+privileges, including inherited privileges, before resuming. For a review-API
+writer, schema USAGE and the three required table privileges must be true:
+
+```sql
+SELECT current_user, session_user,
+       effective_principal.rolsuper AS current_is_superuser,
+       login_principal.rolsuper AS login_is_superuser,
+       effective_principal.rolcreaterole AS current_can_create_roles,
+       login_principal.rolcreaterole AS login_can_create_roles,
+       pg_get_userbyid(review_table.relowner) AS table_owner,
+       pg_has_role(current_user, review_table.relowner, 'MEMBER') AS current_owner_member,
+       pg_has_role(session_user, review_table.relowner, 'MEMBER') AS login_owner_member,
+       has_schema_privilege(current_user, 'public', 'USAGE') AS can_use_schema,
+       has_table_privilege(current_user, review_table.oid, 'SELECT') AS can_read,
+       has_table_privilege(current_user, review_table.oid, 'INSERT') AS can_insert,
+       has_table_privilege(current_user, review_table.oid, 'UPDATE') AS can_update,
+       has_table_privilege(current_user, review_table.oid, 'DELETE') AS can_delete,
+       has_table_privilege(current_user, review_table.oid, 'TRUNCATE') AS can_truncate,
+       has_any_column_privilege(current_user, review_table.oid, 'REFERENCES') AS can_reference,
+       has_table_privilege(current_user, review_table.oid, 'TRIGGER') AS can_trigger,
+       EXISTS (
+         SELECT 1 FROM pg_roles candidate
+         WHERE (pg_has_role(current_user, candidate.oid, 'MEMBER')
+             OR pg_has_role(session_user, candidate.oid, 'MEMBER'))
+           AND (candidate.rolsuper OR candidate.rolcreaterole
+             OR pg_has_role(candidate.oid, review_table.relowner, 'MEMBER')
+             OR has_table_privilege(candidate.oid, review_table.oid, 'DELETE')
+             OR has_table_privilege(candidate.oid, review_table.oid, 'TRUNCATE')
+             OR has_any_column_privilege(candidate.oid, review_table.oid, 'REFERENCES')
+             OR has_table_privilege(candidate.oid, review_table.oid, 'TRIGGER'))
+       ) AS unsafe_member_role
+FROM pg_class review_table
+JOIN pg_roles effective_principal ON effective_principal.rolname = current_user
+JOIN pg_roles login_principal ON login_principal.rolname = session_user
+WHERE review_table.oid = to_regclass('public."AgentReviewRequest"');
+```
+
+Verify schema USAGE and the required permissions for each role; a review API
+writer needs the three listed table privileges. Handoff and transfer writers
+need at least `can_read`; direct registration deletion also needs `can_update`
+when the agent owns an active review. Exactly one row must be returned. Neither
+the login nor current role may be superuser, hold CREATEROLE, or be a member
+of the table-owner role. `unsafe_member_role` must be false: the conservative
+membership scan includes NOINHERIT roles and roles with ADMIN options even
+when SET is initially disabled. Effective DELETE, TRUNCATE, column REFERENCES
+and TRIGGER privileges must be absent, including privileges inherited through
+PUBLIC or other roles. Do
+not revoke broader existing privileges without a separately reviewed plan;
+keep the rollout held while they are reconciled. Verify a
+bounded synthetic handoff, transfer and review flow under the respective writer
+identities in an isolated or otherwise safely admitted target, including the
+review guard; do not use real active work as a probe.
+Review admission reads Workspace, Issue, AgentRegistration, AgentHandoff and
+AgentTransferOffer; it locks rows in the first four tables and performs a
+no-op update of the handoff timestamp. Verify the runtime has `SELECT` and
+column-level `UPDATE` rights needed to acquire each row lock, plus `UPDATE` on
+`AgentHandoff.updatedAt` and the other existing-table privileges required by
+the real flow. Privilege checks on the new
+table alone do not prove old-table privileges, function permissions, live
+connection settings or guard behavior are correct.
+This table-privilege readback is necessary but does not establish guard DDL
+safety. Separately inventory and qualify trusted schema and function owners,
+role administrators, powerful built-in roles, security-definer routines,
+proxy identities, and any other means to alter guard functions or assume
+privileged roles. Prove the affected-writer drain and no-reconnect boundary is
+enforced during this rollout and every later privileged DDL change; verify
+supported PostgreSQL catalog definitions before resuming. Preserve the stop
+until every release prerequisite passes.
+`db push` does not apply this migration or its triggers and is not a supported
+rollout or upgrade path.
