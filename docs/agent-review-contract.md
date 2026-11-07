@@ -30,6 +30,8 @@ reusing it with different data fails. A different request for a handoff that
 already has an active review fails with `review_already_active`; read that
 review before taking further action. An existing pending transfer offer blocks
 review creation with `transfer_offer_pending` until it is accepted or cancelled.
+Conversely, an active review blocks a new transfer offer with
+`review_already_active`; resolve or cancel the review before offering the handoff.
 
 The reviewer discovers requests using
 `GET /api/apps/auth/agents/reviews?agent=NAME&view=incoming-v1`, follows
@@ -66,7 +68,7 @@ Include `agent` and, for managed agents, `generation` in each mutation.
 
 The review endpoints are separate from name-addressed handoffs. When the
 matching CLI and server release are installed, manual agents can use
-`collab reviews request`, `list`, `get`, `claim`, `reply`, `hold`,
+`collab reviews request`, `list`, `get`, `wait`, `claim`, `reply`, `hold`,
 `release-hold`, `cancel` and `resolve`; see the [agent skill](../packages/cli/skills/collab-agents/SKILL.md#request-an-identity-bound-review)
 for the command sequence. Check `collab schema` for installed commands.
 Older clients cannot discover these requests; lack of a response must not be
