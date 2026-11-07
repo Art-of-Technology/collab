@@ -7,10 +7,9 @@ PostgreSQL database from the current schema and explicitly baselines that
 history. It does not repair historical shadow-database replay, upgrade an
 existing installation or authorize production changes.
 
-The current review schema and migration are not yet qualified by the bootstrap
-contract. The script refuses this source until the bootstrap supplements and
-contract are requalified, including the review guards. See the [review rollout
-prerequisite](agent-review-contract.md#rollout-prerequisite).
+The review schema and guards are installed as part of the bootstrap transaction.
+Runtime roles still require separately qualified privileges; see the [review
+rollout prerequisite](agent-review-contract.md#rollout-prerequisite).
 
 The contract includes agent handoffs, transfer offers, Git provider connections
 and issue Trash. Their modeled tables, indexes and foreign keys are represented
