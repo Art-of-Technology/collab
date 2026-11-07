@@ -200,4 +200,7 @@ The last migration refuses inconsistent pending offers; resolve them before retr
 Apply and verify all four before enabling
 offers or workers, including during mixed-version rollout. Apply the same target,
 ledger and protected-backup requirements above.
+The review migration also affects existing handoff, transfer and registration
+writers; follow its [runtime privilege and drain requirements](agent-review-contract.md#runtime-database-privileges)
+before applying it.
 For fresh databases, see [empty-database bootstrap](database-bootstrap.md).

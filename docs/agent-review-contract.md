@@ -197,12 +197,13 @@ keep the rollout held while they are reconciled. Verify a
 bounded synthetic handoff, transfer and review flow under the respective writer
 identities in an isolated or otherwise safely admitted target, including the
 review guard; do not use real active work as a probe.
-Review admission reads Workspace, Issue, AgentRegistration, AgentHandoff and
-AgentTransferOffer; it locks rows in the first four tables and performs a
-no-op update of the handoff timestamp. Verify the runtime has `SELECT` and
-column-level `UPDATE` rights needed to acquire each row lock, plus `UPDATE` on
-`AgentHandoff.updatedAt` and the other existing-table privileges required by
-the real flow. Privilege checks on the new
+Review admission reads and locks rows in `User`, `Workspace`, `WorkspaceMember`,
+`Issue`, `Project`, `ProjectStatus`, `AgentRegistration` and `AgentHandoff`;
+request creation also locks `Repository` rows. The guard reads
+`AgentTransferOffer` and performs a no-op update of the handoff timestamp.
+Verify the runtime has `SELECT` and column-level `UPDATE` rights needed to
+acquire each row lock, plus `UPDATE` on `AgentHandoff.updatedAt` and the other
+existing-table privileges required by the real flow. Privilege checks on the new
 table alone do not prove old-table privileges, function permissions, live
 connection settings or guard behavior are correct.
 This table-privilege readback is necessary but does not establish guard DDL
