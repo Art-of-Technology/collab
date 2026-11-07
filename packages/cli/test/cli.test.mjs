@@ -8,13 +8,22 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { windowsAcl } from '../src/windows-acl.mjs';
+import { aclFailureKind, windowsAcl } from '../src/windows-acl.mjs';
 import { commands } from '../src/commands.mjs';
 import { watchInbox } from '../src/inbox-watch.mjs';
 
 const bin = fileURLToPath(new URL('../bin/collab.mjs', import.meta.url));
 const executable = process.env.COLLAB_CLI_EXECUTABLE;
 const windows = process.platform === 'win32';
+
+test('ACL failure diagnostics classify subprocess failures without exposing output', () => {
+  const run = (code, options = {}) => spawnSync(process.execPath, ['-e', code], { encoding: 'utf8', ...options });
+  const exited = run("process.stderr.write('PRIVATE_SENTINEL'); process.exit(7)");
+  assert.equal(aclFailureKind(exited), 'nonzero-exit');
+  assert.equal(aclFailureKind(run('setInterval(() => {}, 1000)', { timeout: 100 })), 'timeout');
+  assert.equal(aclFailureKind(spawnSync(path.join('missing-private-path', 'no-executable'))), 'spawn-error');
+  if (!windows) assert.equal(aclFailureKind(run("process.kill(process.pid, 'SIGTERM')")), 'signal');
+});
 
 test('manual transfer offer commands preserve recipient, request identity and explicit acceptance', async t => {
   const f = await fixture(t);
@@ -773,13 +782,21 @@ function grantEveryoneRead(file) {
   assert.equal(result.status, 0, result.stderr);
 }
 function writeCredentials(file, contents) {
-  if (windows && !existsSync(file)) assert.equal(windowsAcl(file, 'file'), true, 'create owned private credential fixture');
+  if (windows && !existsSync(file)) {
+    let failure;
+    const created = windowsAcl(file, 'file', kind => { failure = kind; });
+    assert.equal(created, true, `create owned private credential fixture: ${failure}`);
+  }
   writeFileSync(file, contents, { mode: 0o600 });
 }
 async function fixture(t, handler) {
   const temporary = mkdtempSync(path.join(tmpdir(), 'collab-cli-test-'));
   const dir = windows ? path.join(temporary, 'private-state') : temporary;
-  if (windows) assert.equal(windowsAcl(dir, true), true, 'create private Windows fixture');
+  if (windows) {
+    let failure;
+    const created = windowsAcl(dir, true, kind => { failure = kind; });
+    assert.equal(created, true, `create private Windows fixture: ${failure}`);
+  }
   const calls = [];
   const server = createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
