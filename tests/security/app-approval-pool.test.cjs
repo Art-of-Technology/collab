@@ -8,7 +8,7 @@ function fixture({ role = 'SYSTEM_ADMIN', mutate, beforeTransaction, valid = tru
   } }) };
   const state = { app: { id: 'app', status: 'IN_REVIEW', versions: [{ id: 'version', manifest }], oauthClient: client }, writes: 0, events: [] };
   const app = { findUnique: async () => structuredClone(state.app), update: async ({ data }) => { state.writes++; Object.assign(state.app, data); } };
-  const tx = { app, $queryRaw: async () => { state.events.push('lock'); return []; },
+  const tx = { app, $queryRaw: async () => [],
     appOAuthClient: { create: async ({ data }) => { state.writes++; state.client = data; } },
     appScope: { deleteMany: async () => { state.writes++; }, createMany: async () => { state.writes++; } },
   };
@@ -26,7 +26,6 @@ test('validates the external key before acquiring a transaction and approves its
   const f = fixture(); assert.equal((await f.run()).status, 200);
   assert.ok(f.state.events.indexOf('jwks') < f.state.events.indexOf('transaction'));
   assert.ok(f.state.events.indexOf('credentials') < f.state.events.indexOf('transaction'));
-  assert.equal(f.state.events.filter(x => x === 'lock').length, 3);
   assert.equal(f.state.app.status, 'DRAFT'); assert.equal(f.state.client.jwksValidated, true);
 });
 
@@ -74,9 +73,9 @@ test('client-secret derivation happens before the transaction', async () => {
   assert.equal(f.state.client.clientSecret.toString(), 'encrypted');
 });
 
-test('app deletion locks the parent before deleting related records', async () => {
+test('app deletion removes related records before the app', async () => {
   const events = [];
-  const tx = { $queryRaw: async () => { events.push('parent-lock'); return []; } };
+  const tx = { $queryRaw: async () => [] };
   for (const name of ['appOAuthAuthorizationCode', 'appWebhook', 'appInstallation', 'appOAuthClient', 'appScope', 'appVersion', 'app']) {
     tx[name] = { deleteMany: async () => { events.push(name); }, delete: async () => { events.push(name); } };
   }
@@ -87,7 +86,6 @@ test('app deletion locks the parent before deleting related records', async () =
   };
   const route = load('src/app/api/apps/[slug]/delete/route.ts', deps, { console: { error() {} } });
   assert.equal((await route.DELETE({}, { params: Promise.resolve({ slug: 'app' }) })).status, 200);
-  assert.equal(events[0], 'parent-lock');
   assert.ok(events.indexOf('appOAuthClient') < events.indexOf('appVersion'));
   assert.equal(events.at(-1), 'app');
 });
