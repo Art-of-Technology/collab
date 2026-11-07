@@ -336,14 +336,14 @@ async function main() {
       return Math.min(timeout, remaining);
     };
     const verifyIdentity = async () => {
-      const q = new URLSearchParams(query);
+      const q = new URLSearchParams(query); q.delete('cursor');
       const result = await request(selected.base, `/api/apps/auth/agents/worker?${q}`, { token: selected.token, timeout: remainingBudget() });
       remainingBudget();
       if (result?.agent?.id !== options['reviewer-id'] || result?.agent?.name !== query.get('agent')) throw new CliError('reviewer_identity_mismatch', 'The reviewer ID does not match this owned agent registration. Check agents list.', 5);
     };
     for (;;) {
       await verifyIdentity();
-      let cursor;
+      let cursor = query.get('cursor') || undefined;
       const seen = new Set();
       for (let page = 0; page < 100; page++) {
         const q = new URLSearchParams(query); q.set('limit', '50'); q.set('view', 'incoming-v1');
@@ -355,7 +355,8 @@ async function main() {
           throw new CliError('invalid_response', 'Unexpected review page; review discovery stopped.', 5);
         }
         const items = result.items.map(item => ({ id: item.id, status: item.status }));
-        if (items.length) { await verifyIdentity(); return { items, timedOut: false }; }
+        if (result.nextCursor && result.nextCursor === cursor) throw new CliError('invalid_response', 'Repeated review cursor; review discovery stopped.', 5);
+        if (items.length) { await verifyIdentity(); return { items, nextCursor: result.nextCursor, timedOut: false }; }
         if (!result.nextCursor) break;
         if (seen.has(result.nextCursor)) throw new CliError('invalid_response', 'Repeated review cursor; review discovery stopped.', 5);
         seen.add(result.nextCursor); cursor = result.nextCursor;
@@ -363,9 +364,9 @@ async function main() {
       }
       await verifyIdentity();
       const remaining = deadline - Date.now();
-      if (remaining <= 0) return { items: [], timedOut: true };
+      if (remaining <= 0) return { items: [], nextCursor: null, timedOut: true };
       await delay(Math.min(1000, remaining));
-      if (Date.now() >= deadline) return { items: [], timedOut: true };
+      if (Date.now() >= deadline) return { items: [], nextCursor: null, timedOut: true };
     }
   }
   if (spec.wait) {

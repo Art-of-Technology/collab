@@ -231,7 +231,7 @@ test('review wait scans pages and returns only pending or claimed IDs for the ex
   });
   const result = await f.run(['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '3', '--workspace', 'w']);
   assert.equal(result.code, 0, result.stderr);
-  assert.deepEqual(result.data, { items: [{ id: 'mine', status: 'pending' }], timedOut: false });
+  assert.deepEqual(result.data, { items: [{ id: 'mine', status: 'pending' }], nextCursor: null, timedOut: false });
   assert.ok(!result.stdout.includes('PRIVATE_SENTINEL'));
   assert.equal(f.calls.length, 4);
   assert.ok(f.calls.every(call => call.method === 'GET' && call.url.includes('workspaceId=w')));
@@ -245,11 +245,11 @@ test('review wait polls arrivals, times out empty and refuses old servers or inv
     : res.end(JSON.stringify({ view: 'incoming-v1', items: calls.filter(call => call.url.includes('/agents/reviews?')).length < 2 ? [] :
       [{ id: 'mine', reviewerAgentId: 'reviewer-id', status: 'claimed', content: 'PRIVATE_SENTINEL' }], nextCursor: null })));
   const found = await arrival.run(args);
-  assert.deepEqual(found.data, { items: [{ id: 'mine', status: 'claimed' }], timedOut: false });
+  assert.deepEqual(found.data, { items: [{ id: 'mine', status: 'claimed' }], nextCursor: null, timedOut: false });
   assert.equal(arrival.calls.filter(call => call.url.includes('/agents/reviews?')).length, 2);
   const empty = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[],"nextCursor":null}'));
   const timedOut = await empty.run([...args.slice(0, -1), '1']);
-  assert.deepEqual(timedOut.data, { items: [], timedOut: true });
+  assert.deepEqual(timedOut.data, { items: [], nextCursor: null, timedOut: true });
   const old = await fixture(t, (req, res) => { if (req.url.includes('/agents/worker?')) return res.end('{"agent":{"id":"reviewer-id","name":"reviewer"}}'); res.writeHead(404); res.end('{}'); });
   const unsupported = await old.run(args);
   assert.notEqual(unsupported.code, 0); assert.equal(unsupported.error.error, 'not_found');
@@ -285,6 +285,20 @@ test('review wait reports an incomplete scan instead of a false empty result', a
   const result = await f.run(['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '10']);
   assert.equal(result.error.error, 'review_scan_incomplete');
   assert.equal(f.calls.filter(call => call.url.includes('/agents/reviews?')).length, 100);
+});
+
+test('review wait forwards the continuation and refuses a repeated cursor with results', async t => {
+  const f = await fixture(t, (req, res) => {
+    if (req.url.includes('/agents/worker?')) {
+      assert.equal(new URL(req.url, 'http://localhost').searchParams.has('cursor'), false);
+      return res.end('{"agent":{"id":"reviewer-id","name":"reviewer"}}');
+    }
+    const cursor = new URL(req.url, 'http://localhost').searchParams.get('cursor');
+    return res.end(JSON.stringify({ view: 'incoming-v1', items: [{ id: 'mine', reviewerAgentId: 'reviewer-id', status: 'pending' }], nextCursor: cursor }));
+  });
+  const result = await f.run(['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--cursor', 'previous', '--wait-seconds', '3']);
+  assert.equal(result.error.error, 'invalid_response');
+  assert.equal(new URL(f.calls[1].url, 'http://localhost').searchParams.get('cursor'), 'previous');
 });
 
 test('review wait shares one deadline across slow identity and review reads', async t => {

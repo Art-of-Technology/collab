@@ -298,6 +298,25 @@ test('identity-bound review guards custody, authorizes participants and records 
   const waitByCli = await cli('reviewer', ['reviews','wait','--agent','reviewer','--reviewer-id','replacement-id','--wait-seconds','10']);
   assert.ok(waitByCli.items.some(row => row.id === sentByCli.id));
   assert.doesNotMatch(JSON.stringify(waitByCli), /private CLI review/);
+  // More than a page of active work must be traversable without duplicates or a loop.
+  const active = historic.slice(0, 55);
+  await prisma.agentReviewRequest.createMany({ data: active.map(i => ({ id: 'active-r-' + i, workspaceId: 'w', issueId: 'issue', originalHandoffId: 'history-h-' + i, ownerAgentId: 'owner-id', reviewerAgentId: 'replacement-id', requestId: 'active-' + i, repository: 'owner/repo', pullRequestNumber: 7, revision: rev, requestContent: 'active', createdAt: new Date('2021-01-01T00:00:00.000Z') })) });
+  const collected = [], cursors = new Set();
+  let cursor = null, passes = 0;
+  do {
+    const args = ['reviews','wait','--agent','reviewer','--reviewer-id','replacement-id','--wait-seconds','10'];
+    if (cursor) args.push('--cursor', cursor);
+    const page = await cli('reviewer', args);
+    collected.push(...page.items.map(row => row.id));
+    cursor = page.nextCursor;
+    if (cursor) { assert.ok(!cursors.has(cursor), 'continuation never repeats'); cursors.add(cursor); }
+    assert.ok(++passes <= 4, 'pagination terminates');
+  } while (cursor);
+  assert.equal(new Set(collected).size, collected.length, 'each review appears once in a stable pass');
+  assert.ok(active.every(i => collected.includes('active-r-' + i)));
+  assert.ok(collected.includes(sentByCli.id), 'new review is not hidden behind older active work');
+  await prisma.agentReviewRequest.updateMany({ where: { id: { startsWith: 'active-r-' } }, data: { status: 'cancelled', cancelReason: 'fixture cleanup' } });
+
   await cli('reviewer',['reviews','claim',sentByCli.id,'--agent','reviewer']);
   await cli('reviewer',['reviews','reply',sentByCli.id,'--agent','reviewer','--verdict','approved','--reviewed-revision',rev,'--content','CLI reply']);
   const readByCli = await cli('owner',['reviews','get',sentByCli.id,'--agent','owner']);

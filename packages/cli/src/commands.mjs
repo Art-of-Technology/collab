@@ -37,10 +37,10 @@ export const commands = {
     requiredQuery: ['agent'], constraints: { agent: { pattern: '^[a-z0-9][a-z0-9_-]{0,63}$' }, limit: { minimum: 1, maximum: 50 }, cursor: { minLength: 1, maxLength: 4096, pattern: '^[A-Za-z0-9_-]+$' } },
     description: 'List reviews for this agent; pass the returned nextCursor as --cursor to read the next page.',
   }),
-  'reviews wait': command('GET', 'agents/reviews', {}, { agent: string }, {
+  'reviews wait': command('GET', 'agents/reviews', {}, { agent: string, cursor: string }, {
     requiredQuery: ['agent'], wait: true, localOptions: { reviewerId: string }, requiredOptions: ['reviewerId'],
-    constraints: { agent: { pattern: '^[a-z0-9][a-z0-9_-]{0,63}$' } },
-    description: 'Poll read-only for pending or claimed reviews addressed to --reviewer-id (the immutable ID from agents list). Returns only IDs and statuses, never claims or wakes.',
+    constraints: { agent: { pattern: '^[a-z0-9][a-z0-9_-]{0,63}$' }, cursor: { minLength: 1, maxLength: 4096, pattern: '^[A-Za-z0-9_-]+$' } },
+    description: 'Poll read-only for pending or claimed reviews addressed to --reviewer-id. Follow nextCursor with --cursor to see all pages; null ends the cycle. Never claims or wakes.',
   }),
   'reviews get': command('GET', 'agents/reviews/:id', {}, { agent: string }, { requiredQuery: ['agent'], constraints: { agent: { pattern: '^[a-z0-9][a-z0-9_-]{0,63}$' } } }),
   'reviews claim': command('PATCH', 'agents/reviews/:id', { agent: string }, {}, { action: 'claim', required: ['agent'] }),

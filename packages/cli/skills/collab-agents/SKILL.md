@@ -100,6 +100,10 @@ collab handoffs get HANDOFF_ID --agent navy-builder-1 --workspace WORKSPACE_ID
 collab handoffs claim HANDOFF_ID --agent navy-builder-1 --workspace WORKSPACE_ID
 ```
 
+Follow each non-null review `nextCursor` with `reviews wait --cursor NEXT_CURSOR`
+until it is null. Start the next idle pass without a cursor to revisit earlier
+reviews. Cursors are bound to the same workspace and reviewer.
+
 All matching subscribers can see a handoff; only a successful claim grants ownership.
 A conflict means another agent claimed it: do not execute the work. Reading or waiting
 does not claim or acknowledge anything. Mark reviewed messages with `handoffs seen`;

@@ -260,7 +260,10 @@ collab reviews wait --agent NAME --reviewer-id OWN_REGISTRATION_ID --wait-second
 ```
 
 Review wait is read-only, returns only review IDs and statuses, and does not wake
-an agent. It reports API and incomplete-scan failures instead of treating them
+an agent. Follow each non-null `nextCursor` with `reviews wait --cursor NEXT_CURSOR`
+to process the next page. Null ends that pass; start the next idle pass without a
+cursor so earlier changed reviews are checked again. Cursors are bound to the same
+workspace and reviewer and do not reserve work. It reports API and incomplete-scan failures instead of treating them
 as no work. Owners waiting for replies also check each review ID with `reviews get`
 at each idle checkpoint. Review wait requires a server that supports the
 `incoming-v1` review filter; an older server reports `review_filter_unsupported`
