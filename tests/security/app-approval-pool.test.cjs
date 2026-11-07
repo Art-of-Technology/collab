@@ -37,8 +37,11 @@ test('invalid JWKS fails without opening a transaction or changing the app', asy
 
 for (const [name, mutate] of [
   ['status', app => { app.status = 'REJECTED'; }],
+  ['name', app => { app.name = 'Changed'; }],
+  ['visibility', app => { app.visibility = 'PRIVATE'; }],
   ['manifest', app => { app.versions[0].manifest.oauth.jwks_uri = 'https://changed.test/jwks'; }],
   ['latest version', app => { app.versions[0].id = 'new-version'; }],
+  ['version metadata', app => { app.versions[0].version = '2.0.0'; }],
   ['OAuth client', app => { app.oauthClient = { id: 'concurrent-client' }; }],
 ]) test(`approval rejects a concurrently changed ${name} without writes`, async () => {
   const f = fixture({ mutate }); assert.equal((await f.run()).status, 409); assert.equal(f.state.writes, 0);

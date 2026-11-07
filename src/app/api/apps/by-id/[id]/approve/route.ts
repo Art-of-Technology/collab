@@ -79,9 +79,7 @@ export async function POST(
         where: { id },
         include: { versions: { orderBy: { createdAt: 'desc' }, take: 1 }, oauthClient: true }
       });
-      if (!current || current.status !== 'IN_REVIEW' || current.versions[0]?.id !== latestVersion.id ||
-          !isDeepStrictEqual(current.versions[0].manifest, latestVersion.manifest) ||
-          !isDeepStrictEqual(current.oauthClient, app.oauthClient)) throw new ApprovalChanged();
+      if (!isDeepStrictEqual(current, app)) throw new ApprovalChanged();
 
       // Update app status
       await tx.app.update({
