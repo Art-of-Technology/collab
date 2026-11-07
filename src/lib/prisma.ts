@@ -1,5 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
-import { databaseDiagnosticsExtension, instrumentDatabaseEngine, withTransactionDiagnostics } from './database-diagnostics';
+import { databaseDiagnosticsExtension, withTransactionDiagnostics } from './database-diagnostics';
 import { issueVisibilityExtension } from './issue-visibility';
 
 // Credentials require an explicit select at the authentication/integration boundary.
@@ -10,7 +10,6 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient<typeof optio
 
 // Bypass visibility only for the trash lifecycle and retained-relationship integrity guards.
 const basePrisma = globalForPrisma.prisma || new PrismaClient(options);
-instrumentDatabaseEngine(basePrisma);
 const diagnosticPrisma = basePrisma.$extends(databaseDiagnosticsExtension);
 const visiblePrisma = diagnosticPrisma.$extends(issueVisibilityExtension(Prisma.dmmf.datamodel.models));
 export const issueTrashPrisma = withTransactionDiagnostics(diagnosticPrisma) as unknown as typeof basePrisma;

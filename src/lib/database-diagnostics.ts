@@ -33,26 +33,6 @@ function recordOperation(duration: number) {
   scheduleSummary();
 }
 
-// Prisma fans a single engine batch failure out to multiple query errors.
-export function instrumentDatabaseEngine(client: any) {
-  const engine = client._engine;
-  const marker = Symbol.for('collab.databaseDiagnostics');
-  if (!engine || engine[marker]) return;
-  engine[marker] = true;
-  for (const method of ['request', 'requestBatch'] as const) {
-    const original = engine[method];
-    engine[method] = async function (this: any, ...args: any[]) {
-      try { return await original.apply(this, args); }
-      catch (error) {
-        if (isPoolTimeout(error)) {
-          try { poolTimeoutOperations++; scheduleSummary(); } catch { /* Preserve the original error. */ }
-        }
-        throw error;
-      }
-    };
-  }
-}
-
 function recordTransactionStart(duration: number, failed: boolean, error?: unknown) {
   if (duration >= 1000) slowTransactionStarts++;
   if (failed) transactionStartFailures++;
@@ -68,6 +48,11 @@ export const databaseDiagnosticsExtension = {
       const start = performance.now();
       try {
         return await query(args);
+      } catch (error) {
+        if (isPoolTimeout(error)) {
+          try { poolTimeoutOperations++; scheduleSummary(); } catch { /* Preserve the original error. */ }
+        }
+        throw error;
       } finally {
         const duration = performance.now() - start;
         if (duration >= 1000) {

@@ -9,13 +9,12 @@ test('real Prisma pool timeout is counted without changing query and transaction
   url.searchParams.set('connection_limit', '1');
   url.searchParams.set('pool_timeout', '1');
   const logs = [], timers = [];
-  const { databaseDiagnosticsExtension, instrumentDatabaseEngine, withTransactionDiagnostics } = load('src/lib/database-diagnostics.ts', {}, {
+  const { databaseDiagnosticsExtension, withTransactionDiagnostics } = load('src/lib/database-diagnostics.ts', {}, {
     performance,
     setTimeout: fn => { timers.push(fn); return { unref() {} }; },
     console: { warn: (...values) => logs.push(values) },
   });
   const base = new PrismaClient({ datasources: { db: { url: url.href } } });
-  instrumentDatabaseEngine(base);
   const diagnostic = base.$extends(databaseDiagnosticsExtension);
   const { issueVisibilityExtension } = load('src/lib/issue-visibility.ts');
   const raw = withTransactionDiagnostics(diagnostic);
@@ -58,7 +57,7 @@ test('real Prisma pool timeout is counted without changing query and transaction
       await assert.rejects(prisma.$queryRawUnsafe('SELECT 1'), error => error.code === 'P2024');
       assert.equal(timers.length, 1);
       timers[0]();
-      assert.equal(logs[0][1].poolTimeoutOperations, 4);
+      assert.equal(logs[0][1].poolTimeoutOperations, 6);
       const independent = await Promise.allSettled([
         prisma.$queryRawUnsafe('SELECT 1'), prisma.$queryRawUnsafe('SELECT 2'),
       ]);

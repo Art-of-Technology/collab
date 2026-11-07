@@ -5,14 +5,12 @@ const { load } = require('./helpers.cjs');
 function fixture() {
   let clock = 0;
   const scheduled = [], logs = [];
-  const { databaseDiagnosticsExtension, instrumentDatabaseEngine, withTransactionDiagnostics } = load('src/lib/database-diagnostics.ts', {}, {
+  const { databaseDiagnosticsExtension, withTransactionDiagnostics } = load('src/lib/database-diagnostics.ts', {}, {
     performance: { now: () => clock },
     setTimeout: (fn, ms) => { const timer = { fn, ms, unref() {} }; scheduled.push(timer); return timer; },
     console: { warn: (...args) => logs.push(args) },
   });
-  const engine = { request: (query, args) => query(args), requestBatch: async () => {} };
-  instrumentDatabaseEngine({ _engine: engine });
-  const run = ({ args, query }) => databaseDiagnosticsExtension.query.$allOperations({ args, query: value => engine.request(query, value) });
+  const run = ({ args, query }) => databaseDiagnosticsExtension.query.$allOperations({ args, query });
   return { scheduled, logs, run, withTransactionDiagnostics, setTime: value => { clock = value; } };
 }
 
