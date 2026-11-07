@@ -7,6 +7,11 @@ PostgreSQL database from the current schema and explicitly baselines that
 history. It does not repair historical shadow-database replay, upgrade an
 existing installation or authorize production changes.
 
+The current review schema and migration are not yet qualified by the bootstrap
+contract. The script refuses this source until the bootstrap supplements and
+contract are requalified, including the review guards. See the [review rollout
+prerequisite](agent-review-contract.md#rollout-prerequisite).
+
 The contract includes agent handoffs, transfer offers, Git provider connections
 and issue Trash. Their modeled tables, indexes and foreign keys are represented
 by the current Prisma schema; transfer guards and the pending-offer partial index
@@ -122,11 +127,11 @@ variables and populated/custom-schema refusal, and injects a lost acknowledgment
 after a real COMMIT. It never selects an existing application database.
 
 
-## Current source qualification and restore boundary
+## Qualification and restore boundary
 
 The bootstrap contract is the authoritative list of admitted migrations and
-their checksums. It retains the exact Ready, Version provenance and transfer
-guard and index supplements.
+their checksums. The last qualified recipe retains the exact Ready, Version
+provenance and transfer guard and index supplements.
 Historical migrations are unchanged. Fresh schema generation installs the Trash
 columns, durable audit table and restrictive Issue project/workspace foreign
 keys directly; it does not replay the Trash migration's ALTER statements.
