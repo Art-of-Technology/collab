@@ -125,88 +125,98 @@ export async function PATCH(
 
     const updates = validation.data;
 
-    // Get the current version
-    const currentVersion = await prisma.appVersion.findFirst({
-      where: {
-        id: versionId,
-        appId: id,
-      },
-      include: {
-        app: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "App" WHERE id = ${id} FOR UPDATE`;
+      // Get the current version
+      const currentVersion = await tx.appVersion.findFirst({
+        where: {
+          id: versionId,
+          appId: id,
+        },
+        include: {
+          app: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
           },
         },
-      },
+      });
+
+      if (!currentVersion) {
+        return null;
+      }
+
+      // Parse current manifest
+      const currentManifest = currentVersion.manifest as Prisma.JsonObject;
+
+      // Build updated manifest
+      const updatedManifest: Prisma.JsonObject = {
+        ...currentManifest,
+        ...(updates.entrypoint_url && { entrypoint_url: updates.entrypoint_url }),
+        ...(updates.name && { name: updates.name }),
+        ...(updates.description !== undefined && { description: updates.description }),
+        ...(updates.icon_url !== undefined && { icon_url: updates.icon_url }),
+        ...(updates.version && { version: updates.version }),
+      };
+
+      // Handle OAuth updates
+      if (updates.oauth) {
+        const currentOAuth = (currentManifest.oauth as Prisma.JsonObject) || {};
+        updatedManifest.oauth = {
+          ...currentOAuth,
+          ...(updates.oauth.redirect_uris && { redirect_uris: updates.oauth.redirect_uris }),
+        };
+      }
+
+      // Handle CSP updates
+      if (updates.csp) {
+        const currentCsp = (currentManifest.csp as Prisma.JsonObject) || {};
+        updatedManifest.csp = {
+          ...currentCsp,
+          ...(updates.csp.connectSrc && { connectSrc: updates.csp.connectSrc }),
+          ...(updates.csp.imgSrc && { imgSrc: updates.csp.imgSrc }),
+          ...(updates.csp.frameAncestors && { frameAncestors: updates.csp.frameAncestors }),
+        };
+      }
+
+      // Update the version manifest
+      const updated = await tx.appVersion.update({
+        where: { id: versionId },
+        data: {
+          manifest: updatedManifest,
+        },
+      });
+
+      // Also update app-level fields if name or icon changed
+      if (updates.name || updates.icon_url !== undefined) {
+        await tx.app.update({
+          where: { id },
+          data: {
+            ...(updates.name && { name: updates.name }),
+            ...(updates.icon_url !== undefined && { iconUrl: updates.icon_url }),
+          },
+        });
+      }
+
+      // Update OAuth client redirect URIs if changed
+      if (updates.oauth?.redirect_uris) {
+        await tx.appOAuthClient.updateMany({
+          where: { appId: id },
+          data: {
+            redirectUris: updates.oauth.redirect_uris,
+          },
+        });
+      }
+
+      return { currentVersion, updated };
     });
 
-    if (!currentVersion) {
+    if (!result) {
       return NextResponse.json({ error: 'Version not found' }, { status: 404 });
     }
-
-    // Parse current manifest
-    const currentManifest = currentVersion.manifest as Prisma.JsonObject;
-
-    // Build updated manifest
-    const updatedManifest: Prisma.JsonObject = {
-      ...currentManifest,
-      ...(updates.entrypoint_url && { entrypoint_url: updates.entrypoint_url }),
-      ...(updates.name && { name: updates.name }),
-      ...(updates.description !== undefined && { description: updates.description }),
-      ...(updates.icon_url !== undefined && { icon_url: updates.icon_url }),
-      ...(updates.version && { version: updates.version }),
-    };
-
-    // Handle OAuth updates
-    if (updates.oauth) {
-      const currentOAuth = (currentManifest.oauth as Prisma.JsonObject) || {};
-      updatedManifest.oauth = {
-        ...currentOAuth,
-        ...(updates.oauth.redirect_uris && { redirect_uris: updates.oauth.redirect_uris }),
-      };
-    }
-
-    // Handle CSP updates
-    if (updates.csp) {
-      const currentCsp = (currentManifest.csp as Prisma.JsonObject) || {};
-      updatedManifest.csp = {
-        ...currentCsp,
-        ...(updates.csp.connectSrc && { connectSrc: updates.csp.connectSrc }),
-        ...(updates.csp.imgSrc && { imgSrc: updates.csp.imgSrc }),
-        ...(updates.csp.frameAncestors && { frameAncestors: updates.csp.frameAncestors }),
-      };
-    }
-
-    // Update the version manifest
-    const updated = await prisma.appVersion.update({
-      where: { id: versionId },
-      data: {
-        manifest: updatedManifest,
-      },
-    });
-
-    // Also update app-level fields if name or icon changed
-    if (updates.name || updates.icon_url !== undefined) {
-      await prisma.app.update({
-        where: { id },
-        data: {
-          ...(updates.name && { name: updates.name }),
-          ...(updates.icon_url !== undefined && { iconUrl: updates.icon_url }),
-        },
-      });
-    }
-
-    // Update OAuth client redirect URIs if changed
-    if (updates.oauth?.redirect_uris) {
-      await prisma.appOAuthClient.updateMany({
-        where: { appId: id },
-        data: {
-          redirectUris: updates.oauth.redirect_uris,
-        },
-      });
-    }
+    const { currentVersion, updated } = result;
 
     console.log(`🔧 App Manifest Updated: ${currentVersion.app.name}`, {
       appId: id,

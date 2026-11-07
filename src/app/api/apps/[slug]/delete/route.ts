@@ -61,6 +61,8 @@ export async function DELETE(
 
     // Delete app and all related data in a transaction
     await prisma.$transaction(async (tx) => {
+      // Match approval and manifest submission: lock the parent before its children.
+      await tx.$queryRaw`SELECT id FROM "App" WHERE id = ${app.id} FOR UPDATE`;
       // Delete authorization codes
       if (app.oauthClient) {
         await tx.appOAuthAuthorizationCode.deleteMany({

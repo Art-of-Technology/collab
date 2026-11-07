@@ -40,7 +40,8 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 4. **Review & Approval**
    - System admins review your app for security and compliance.
    - OAuth configuration from your manifest is applied to your existing credentials.
-   - Approved apps move to `PUBLISHED` status and become available for installation.
+   - Approval returns the app to `DRAFT`; publishing is a separate action that makes it available for installation.
+   - If the app changes during approval, the API returns HTTP 409; review the current app and try again.
 
 5. **Manage & Update**
    - `/dev/apps/[slug]` displays credentials, manifest details, installation analytics, and webhook settings.

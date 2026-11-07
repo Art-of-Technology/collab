@@ -3,8 +3,11 @@ import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { generateClientCredentials, encryptToken } from '@/lib/apps/crypto';
 import { validateJWKS } from '@/lib/apps/jwks';
+import { isDeepStrictEqual } from 'node:util';
 
 import { prisma } from '@/lib/prisma';
+
+class ApprovalChanged extends Error {}
 
 export async function POST(
   request: NextRequest,
@@ -51,8 +54,33 @@ export async function POST(
 
     const manifest = latestVersion.manifest as any;
 
+    // External validation and key derivation do not need a database connection.
+    const createClient = Boolean(manifest.oauth && !app.oauthClient);
+    const clientType = manifest.oauth?.client_type?.toLowerCase() === 'public' ? 'public' : 'confidential';
+    const authMethod = manifest.oauth?.token_endpoint_auth_method ||
+      (clientType === 'public' ? 'none' : 'client_secret_basic');
+    let jwksValidated = false;
+    if (createClient && authMethod === 'private_key_jwt' && manifest.oauth.jwks_uri) {
+      const validation = await validateJWKS(manifest.oauth.jwks_uri);
+      if (!validation.valid) throw new Error(`JWKS validation failed: ${validation.error}`);
+      jwksValidated = true;
+    }
+    const credentials = createClient ? await generateClientCredentials() : null;
+    const clientSecret = credentials && clientType === 'confidential' && authMethod === 'client_secret_basic'
+      ? await encryptToken(credentials.clientSecret) : null;
+
     // Start transaction
     await prisma.$transaction(async (tx) => {
+      // Prevent a concurrent manifest/client change from invalidating the external check.
+      await tx.$queryRaw`SELECT id FROM "App" WHERE id = ${id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM "AppVersion" WHERE "appId" = ${id} FOR SHARE`;
+      await tx.$queryRaw`SELECT id FROM "AppOAuthClient" WHERE "appId" = ${id} FOR SHARE`;
+      const current = await tx.app.findUnique({
+        where: { id },
+        include: { versions: { orderBy: { createdAt: 'desc' }, take: 1 }, oauthClient: true }
+      });
+      if (!isDeepStrictEqual(current, app)) throw new ApprovalChanged();
+
       // Update app status
       await tx.app.update({
         where: { id },
@@ -60,30 +88,7 @@ export async function POST(
       });
 
       // Generate OAuth credentials if needed and not already present
-      if (manifest.oauth && !app.oauthClient) {
-        const clientType = manifest.oauth.client_type?.toLowerCase() === 'public' ? 'public' : 'confidential';
-        const authMethod = manifest.oauth.token_endpoint_auth_method || 
-          (clientType === 'public' ? 'none' : 'client_secret_basic');
-        
-        // Validate JWKS for private_key_jwt clients
-        let jwksValidated = false;
-        if (authMethod === 'private_key_jwt' && manifest.oauth.jwks_uri) {
-          const jwksValidation = await validateJWKS(manifest.oauth.jwks_uri);
-          if (!jwksValidation.valid) {
-            throw new Error(`JWKS validation failed: ${jwksValidation.error}`);
-          }
-          jwksValidated = true;
-        }
-        
-        // Generate credentials based on auth method
-        const credentials = await generateClientCredentials();
-        let clientSecret: Awaited<ReturnType<typeof encryptToken>> | null = null;
-        
-        // Only generate and store client secret for client_secret_basic
-        if (clientType === 'confidential' && authMethod === 'client_secret_basic') {
-          clientSecret = (await encryptToken(credentials.clientSecret));
-        }
-        
+      if (credentials) {
         await tx.appOAuthClient.create({
           data: {
             appId: id,
@@ -125,6 +130,9 @@ export async function POST(
     });
 
   } catch (error) {
+    if (error instanceof ApprovalChanged) {
+      return NextResponse.json({ error: 'App changed during approval; review and try again' }, { status: 409 });
+    }
     console.error('Error approving app:', error);
 
     return NextResponse.json(
