@@ -203,7 +203,7 @@ export async function actOnReview(context: AppAuthContext, reviewId: string, inp
     if (actor.id !== originalActorId) throw notFound();
     assertReviewWorker(actor.managedWorker, input.generation);
     const freshCounterpart = counterpartId ? await db.agentRegistration.findFirst({ where: { id: counterpartId, workspaceId: context.workspace.id } }) : null;
-    const allowUnavailableReviewer = actor.id === ownerId && input.action === 'cancel';
+    const allowUnavailableReviewer = actor.id === ownerId && (input.action === 'cancel' || input.action === 'release_hold');
     if (!allowUnavailableReviewer && (!counterpart || !freshCounterpart || counterpart.id !== freshCounterpart.id || counterpart.userId !== freshCounterpart.userId)) throw notFound();
     await lockTransferAccessProjects(db, context.workspace.id, initial.issueId);
     const issue = await accessibleIssue(db, context, initial.issueId, actor.userId);
