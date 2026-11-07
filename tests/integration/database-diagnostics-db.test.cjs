@@ -9,12 +9,13 @@ test('real Prisma pool timeout is counted without changing query and transaction
   url.searchParams.set('connection_limit', '1');
   url.searchParams.set('pool_timeout', '1');
   const logs = [], timers = [];
-  const { databaseDiagnosticsExtension, withTransactionDiagnostics } = load('src/lib/database-diagnostics.ts', {}, {
+  const { databaseDiagnosticsExtension, instrumentDatabaseEngine, withTransactionDiagnostics } = load('src/lib/database-diagnostics.ts', {}, {
     performance,
     setTimeout: fn => { timers.push(fn); return { unref() {} }; },
     console: { warn: (...values) => logs.push(values) },
   });
   const base = new PrismaClient({ datasources: { db: { url: url.href } } });
+  instrumentDatabaseEngine(base);
   const diagnostic = base.$extends(databaseDiagnosticsExtension);
   const { issueVisibilityExtension } = load('src/lib/issue-visibility.ts');
   const raw = withTransactionDiagnostics(diagnostic);
@@ -55,13 +56,23 @@ test('real Prisma pool timeout is counted without changing query and transaction
         assert.equal(result.reason.code, 'P2024');
       }
       await assert.rejects(prisma.$queryRawUnsafe('SELECT 1'), error => error.code === 'P2024');
+      assert.equal(timers.length, 1);
+      timers[0]();
+      assert.equal(logs[0][1].poolTimeoutOperations, 4);
+      const independent = await Promise.allSettled([
+        prisma.$queryRawUnsafe('SELECT 1'), prisma.$queryRawUnsafe('SELECT 2'),
+      ]);
+      for (const result of independent) {
+        assert.equal(result.status, 'rejected');
+        assert.equal(result.reason.code, 'P2024');
+      }
     } finally {
       release();
       await held;
     }
-    assert.equal(timers.length, 1);
-    timers[0]();
-    assert.equal(logs[0][1].poolTimeoutOperations, 6);
+    assert.equal(timers.length, 2);
+    timers[1]();
+    assert.equal(logs[1][1].poolTimeoutOperations, 2);
     assert.equal(logs[0][1].poolTimeoutTransactionStarts, 0);
     assert.equal(logs[0][1].transactionStartFailures, 1);
     assert.ok(logs[0][1].slowOperations >= 1);

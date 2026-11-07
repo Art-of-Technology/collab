@@ -27,11 +27,30 @@ function isPoolTimeout(error: unknown) {
   } catch { return false; }
 }
 
-function recordOperation(duration: number, timedOut: boolean) {
+function recordOperation(duration: number) {
   if (duration >= 1000) slowOperations++;
-  if (timedOut) poolTimeoutOperations++;
   maxOperationMs = Math.max(maxOperationMs, Math.round(duration));
   scheduleSummary();
+}
+
+// Prisma fans a single engine batch failure out to multiple query errors.
+export function instrumentDatabaseEngine(client: any) {
+  const engine = client._engine;
+  const marker = Symbol.for('collab.databaseDiagnostics');
+  if (!engine || engine[marker]) return;
+  engine[marker] = true;
+  for (const method of ['request', 'requestBatch'] as const) {
+    const original = engine[method];
+    engine[method] = async function (this: any, ...args: any[]) {
+      try { return await original.apply(this, args); }
+      catch (error) {
+        if (isPoolTimeout(error)) {
+          try { poolTimeoutOperations++; scheduleSummary(); } catch { /* Preserve the original error. */ }
+        }
+        throw error;
+      }
+    };
+  }
 }
 
 function recordTransactionStart(duration: number, failed: boolean, error?: unknown) {
@@ -47,16 +66,12 @@ export const databaseDiagnosticsExtension = {
   query: {
     async $allOperations({ args, query }: { args: any; query: (args: any) => Promise<any> }) {
       const start = performance.now();
-      let timedOut = false;
       try {
         return await query(args);
-      } catch (error) {
-        timedOut = isPoolTimeout(error);
-        throw error;
       } finally {
         const duration = performance.now() - start;
-        if (timedOut || duration >= 1000) {
-          try { recordOperation(duration, timedOut); } catch { /* Diagnostics must not affect a query. */ }
+        if (duration >= 1000) {
+          try { recordOperation(duration); } catch { /* Diagnostics must not affect a query. */ }
         }
       }
     },
