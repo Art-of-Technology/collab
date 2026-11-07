@@ -330,9 +330,15 @@ async function main() {
   };
   if (name === 'reviews wait') {
     const deadline = Date.now() + waitSeconds * 1000;
+    const remainingBudget = () => {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new CliError('review_scan_incomplete', 'The review scan did not finish in time. Use reviews list and follow every nextCursor.', 5);
+      return Math.min(timeout, remaining);
+    };
     const verifyIdentity = async () => {
       const q = new URLSearchParams(query);
-      const result = await request(selected.base, `/api/apps/auth/agents/worker?${q}`, { token: selected.token, timeout: Math.min(timeout, Math.max(1000, deadline - Date.now())) });
+      const result = await request(selected.base, `/api/apps/auth/agents/worker?${q}`, { token: selected.token, timeout: remainingBudget() });
+      remainingBudget();
       if (result?.agent?.id !== options['reviewer-id'] || result?.agent?.name !== query.get('agent')) throw new CliError('reviewer_identity_mismatch', 'The reviewer ID does not match this owned agent registration. Check agents list.', 5);
     };
     for (;;) {
@@ -340,10 +346,10 @@ async function main() {
       let cursor;
       const seen = new Set();
       for (let page = 0; page < 100; page++) {
-        if (page > 0 && deadline - Date.now() < 1000) throw new CliError('review_scan_incomplete', 'The review scan did not finish in time. Use reviews list and follow every nextCursor.', 5);
         const q = new URLSearchParams(query); q.set('limit', '50');
         if (cursor) q.set('cursor', cursor);
-        const result = await request(selected.base, `/api/apps/auth/agents/reviews?${q}`, { token: selected.token, timeout: Math.min(timeout, Math.max(1000, deadline - Date.now())) });
+        const result = await request(selected.base, `/api/apps/auth/agents/reviews?${q}`, { token: selected.token, timeout: remainingBudget() });
+        remainingBudget();
         if (!Array.isArray(result?.items) || result.items.length > 50 || !(result.nextCursor === null || (typeof result.nextCursor === 'string' && /^[A-Za-z0-9_-]{1,4096}$/.test(result.nextCursor))) || result.items.some(item => !item || !/^[A-Za-z0-9_-]{1,128}$/.test(item.id || '') || !(item.reviewerAgentId === null || typeof item.reviewerAgentId === 'string') || !['pending', 'claimed', 'replied', 'resolved', 'cancelled'].includes(item.status))) {
           throw new CliError('invalid_response', 'Unexpected review page; review discovery stopped.', 5);
         }
