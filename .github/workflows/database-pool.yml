@@ -1,0 +1,51 @@
+name: Database pool regressions
+on:
+  pull_request:
+    paths: &paths
+      - 'src/app/api/apps/**'
+      - 'src/lib/database-diagnostics.ts'
+      - 'src/lib/prisma.ts'
+      - 'src/lib/issue-visibility.ts'
+      - 'prisma/**'
+      - 'tests/integration/app-approval-concurrency.test.cjs'
+      - 'tests/integration/database-diagnostics-db.test.cjs'
+      - 'tests/security/helpers.cjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/database-pool.yml'
+  push:
+    branches: [main]
+    paths: *paths
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: collab
+          POSTGRES_PASSWORD: collab
+          POSTGRES_DB: collab_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npx prisma generate
+      - name: Install local PostgreSQL test binaries
+        run: sudo apt-get update && sudo apt-get install -y postgresql
+      - run: npm run test:database-pool
+        env:
+          COLLAB_DIAGNOSTICS_TEST_DATABASE_URL: postgresql://collab:collab@localhost:5432/collab_test
