@@ -90,8 +90,9 @@ Recovery is an explicit operator investigation, not an automatic retry:
 2. Compare the actual schema with the reviewed Prisma model and inspect the
    Ready state CHECK, partial unique index and restrictive project foreign key,
    plus the six enabled Version function/trigger pairs, all transfer guard
-   functions and enabled triggers, and the pending-offer partial unique index on
-   their expected tables.
+   functions and enabled triggers, the pending-offer partial unique index, and
+   the review constraints, indexes, functions and enabled triggers on their
+   expected tables, comparing their definitions with the review migration.
    Verify `Version.issueAccessInvalidated` is non-null with default false.
    The expected catalog is defined by the pinned schema, original supplement SQL
    and `prisma/bootstrap-contract.json`; actual native readback is still required.
@@ -129,8 +130,8 @@ after a real COMMIT. It never selects an existing application database.
 ## Qualification and restore boundary
 
 The bootstrap contract is the authoritative list of admitted migrations and
-their checksums. The last qualified recipe retains the exact Ready, Version
-provenance and transfer guard and index supplements.
+their checksums. The recipe retains the exact Ready, Version provenance,
+transfer and review guard and index supplements.
 Historical migrations are unchanged. Fresh schema generation installs the Trash
 columns, durable audit table and restrictive Issue project/workspace foreign
 keys directly; it does not replay the Trash migration's ALTER statements.
@@ -144,6 +145,8 @@ The native fixture verifies exact baseline names/checksums, a complete model
 diff, all six Version catalog pairs, the new modeled tables, nullable Trash
 columns, restrictive parent foreign keys and audit indexes. It also verifies
 that the audit table has no foreign keys that could cascade away its snapshots.
+It compares review constraints, indexes, functions and triggers with a database
+built from the migration and exercises the review guards against PostgreSQL.
 It retains the status/no-op deploy, populated/custom-schema refusal and lost
 COMMIT acknowledgment checks. A passing disposable local fixture qualifies this
 bootstrap recipe; it is not a production migration or restore receipt.
