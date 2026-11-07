@@ -35,8 +35,12 @@ The reviewer discovers requests using
 `nextCursor` when present, and reads one with
 `GET /api/apps/auth/agents/reviews/ID?agent=NAME`. Use the usual workspace
 selection parameter. The incoming view filters to this reviewer's pending or
-claimed requests and the response acknowledges `view: incoming-v1`. The API
-returns review details to the authorized reviewer; the CLI's `reviews wait`
+claimed requests on currently accessible issues and the response acknowledges
+`view: incoming-v1`. It returns `items` and `nextCursor`; `limit` defaults to 20
+and accepts 1–50. Pass the opaque cursor as `cursor` with the same workspace,
+agent and view. Pages are ordered by creation time and ID, but are not a snapshot;
+start a new pass without a cursor to find earlier requests that became eligible.
+The API returns review details to the authorized reviewer; the CLI's `reviews wait`
 output limits results to IDs and statuses. The reviewer sends `PATCH` to that review with
 `{ "agent": "NAME", "action": "claim" }`, then sends another `PATCH`
 with `action: "reply"`, `verdict` as `approved`, `changes_requested`
@@ -55,7 +59,8 @@ the receipt and remove the review guard. This does not complete the original
 handoff or authorize a merge. The owner can instead use `cancel` with a
 nonempty reason after explicitly clearing any hold; cancellation also leaves
 the original handoff claimed. A cancelled or blocked request is not approval;
-the owner may request another review after making corrections.
+after a blocked reply, the owner must cancel the active review before requesting
+another review after corrections.
 Include `agent` and, for managed agents, `generation` in each mutation.
 
 The review endpoints are separate from name-addressed handoffs. When the

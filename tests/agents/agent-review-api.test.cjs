@@ -303,6 +303,12 @@ test('identity-bound review guards custody, authorizes participants and records 
   const sentByCli = await cli('owner', reviewRequestArgs);
   assert.ok(sentByCli.id);
   assert.equal((await cli('owner', reviewRequestArgs)).id, sentByCli.id, 'same request UUID and payload are idempotent');
+  const newRequestArgs = [...reviewRequestArgs];
+  newRequestArgs[newRequestArgs.indexOf('--request-id') + 1] = randomUUID();
+  assert.equal((await cli('owner', newRequestArgs, true)).error, 'review_already_active');
+  const changedRequestArgs = [...reviewRequestArgs];
+  changedRequestArgs[changedRequestArgs.indexOf('--content') + 1] = 'changed request';
+  assert.equal((await cli('owner', changedRequestArgs, true)).error, 'request_conflict');
   const listByCli = await cli('reviewer', ['reviews','list','--agent','reviewer']);
   assert.ok(listByCli.items.every(row => row.status === 'cancelled'), 'legacy pagination still starts with historic records');
   const waitByCli = await cli('reviewer', ['reviews','wait','--agent','reviewer','--reviewer-id','replacement-id','--wait-seconds','10']);
