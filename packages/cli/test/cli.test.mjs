@@ -293,8 +293,7 @@ test('review wait forwards the continuation and refuses a repeated cursor with r
       assert.equal(new URL(req.url, 'http://localhost').searchParams.has('cursor'), false);
       return res.end('{"agent":{"id":"reviewer-id","name":"reviewer"}}');
     }
-    const cursor = new URL(req.url, 'http://localhost').searchParams.get('cursor');
-    return res.end(JSON.stringify({ view: 'incoming-v1', items: [{ id: 'mine', reviewerAgentId: 'reviewer-id', status: 'pending' }], nextCursor: cursor }));
+    return res.end(JSON.stringify({ view: 'incoming-v1', items: [{ id: 'mine', reviewerAgentId: 'reviewer-id', status: 'pending' }], nextCursor: 'previous' }));
   });
   const result = await f.run(['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--cursor', 'previous', '--wait-seconds', '3']);
   assert.equal(result.error.error, 'invalid_response');
@@ -302,27 +301,25 @@ test('review wait forwards the continuation and refuses a repeated cursor with r
 });
 
 test('review wait shares one deadline across slow identity and review reads', async t => {
-  const args = ['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '1'];
-  const slowPage = await fixture(t, (req, res) => {
-    const identity = req.url.includes('/agents/worker?');
-    setTimeout(() => res.end(identity ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[],"nextCursor":null}'), 650);
-  });
-  const start = Date.now();
-  const result = await slowPage.run(args);
-  assert.notEqual(result.code, 0);
-  assert.ok(['transport_failed', 'review_scan_incomplete'].includes(result.error.error));
-  assert.equal(slowPage.calls.length, 2, 'no final identity read after a slow page exceeds the deadline');
-  assert.ok(Date.now() - start < 1750, 'the second read cannot start a fresh one-second timeout');
-
-  const slowFinalIdentity = await fixture(t, (req, res, _body, calls) => {
-    const identity = req.url.includes('/agents/worker?');
-    const delayMs = calls.length === 1 ? 0 : 650;
-    setTimeout(() => res.end(identity ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[],"nextCursor":null}'), delayMs);
-  });
-  const finalResult = await slowFinalIdentity.run(args);
-  assert.notEqual(finalResult.code, 0);
-  assert.ok(['transport_failed', 'review_scan_incomplete'].includes(finalResult.error.error));
-  assert.equal(slowFinalIdentity.calls.length, 3);
+  const args = ['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '5'];
+  for (const slowFinalIdentity of [false, true]) {
+    let releaseResponse;
+    const responseReleased = new Promise(resolve => { releaseResponse = resolve; });
+    const f = await fixture(t, (req, res, _body, calls) => {
+      const identity = req.url.includes('/agents/worker?');
+      const lastRead = calls.length === (slowFinalIdentity ? 3 : 2);
+      const delayMs = slowFinalIdentity && calls.length === 1 ? 0 : 3000;
+      setTimeout(() => {
+        if (lastRead) releaseResponse(res.destroyed);
+        res.end(identity ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[],"nextCursor":null}');
+      }, delayMs);
+    });
+    const result = await f.run(args);
+    assert.notEqual(result.code, 0);
+    assert.ok(['transport_failed', 'review_scan_incomplete'].includes(result.error.error));
+    assert.equal(f.calls.length, slowFinalIdentity ? 3 : 2);
+    assert.equal(await responseReleased, true, 'the shared deadline aborts the final read before its response');
+  }
 });
 
 test('the owner can check a specific review reply and missing records stay errors', async t => {
