@@ -352,6 +352,11 @@ export async function createTransferOffer(context: AppAuthContext, input: z.infe
     if (await db.agentTransferOffer.findFirst({ where: { parentId: current.id, status: 'pending' } })) {
       throw new HandoffError('offer_pending', 'Cancel the existing offer before sending another', 409);
     }
+    // Older databases have no review table; the migration must precede review traffic.
+    const [reviewTable] = await db.$queryRaw<Array<{ installed: boolean }>>`SELECT to_regclass('public."AgentReviewRequest"') IS NOT NULL AS installed`;
+    if (reviewTable?.installed && await db.agentReviewRequest.findFirst({ where: { originalHandoffId: current.id, status: { in: ['pending', 'claimed', 'replied'] } }, select: { id: true } })) {
+      throw new HandoffError('review_already_active', 'Resolve or cancel the active review before offering this handoff', 409);
+    }
     const offer = await db.agentTransferOffer.create({ data: { workspaceId: context.workspace.id, issueId: current.issueId,
       parentId: current.id, senderId: sender.id, recipientId: recipient.id, recipientName: recipient.name, requestId: input.requestId, content: input.content } });
     await activity(db, context, sender, current.issue, current.id, 'transfer_offered', undefined, { offerId: offer.id, recipient: recipient.name });

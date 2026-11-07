@@ -59,6 +59,23 @@ INSERT INTO "AgentHandoff" (id, "workspaceId", "issueId", "sourceKey", content, 
   assert.ok(grantRecipe, 'the executable grant is documented');
   success(grantRecipe[1].replace('verified_role_name', 'review_runtime'));
   success('GRANT SELECT ON "AgentReviewRequest" TO legacy_runtime; GRANT SELECT, UPDATE ON "AgentReviewRequest" TO cleanup_runtime;');
+  // Review API admission locks all four tables in ROW EXCLUSIVE mode.
+  const lockRecipe = readFileSync(resolve('docs/agent-review-contract.md'), 'utf8')
+    .match(/```sql\n(SELECT table_name,[\s\S]*?)\n```/);
+  assert.ok(lockRecipe, 'the table-lock privilege readback is documented');
+  for (const table of ['AgentReviewRequest', 'AgentHandoff', 'AgentTransferOffer', 'AgentRegistration']) {
+    success(`REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON "${table}" FROM review_runtime;`);
+    if (table === 'AgentHandoff') success('GRANT UPDATE ("updatedAt") ON "AgentHandoff" TO review_runtime;');
+    const attempt = `SET ROLE review_runtime; BEGIN; LOCK TABLE "${table}" IN ROW EXCLUSIVE MODE; ROLLBACK;`;
+    const denied = sql(attempt);
+    assert.notEqual(denied.status, 0, `${table} requires table-level lock privileges`);
+    assert.match(denied.stderr, new RegExp(`permission denied for table ${table}`));
+    assert.ok(success(`SET ROLE review_runtime; ${lockRecipe[1]}`).split('\n').includes(`${table}|f`));
+    success(`GRANT UPDATE ON "${table}" TO review_runtime;`);
+    success(attempt);
+    assert.ok(success(`SET ROLE review_runtime; ${lockRecipe[1]}`).split('\n').includes(`${table}|t`));
+    success(`GRANT INSERT${table === 'AgentReviewRequest' ? '' : ', DELETE'} ON "${table}" TO review_runtime;`);
+  }
   for (const [actor, expected] of [['review_runtime', 't|t|t|t|f'], ['legacy_runtime', 't|t|f|f|f'], ['cleanup_runtime', 't|t|f|t|f']]) {
     const privileges = success(`SET ROLE ${actor}; SELECT has_schema_privilege(current_user, 'public', 'USAGE'), has_table_privilege(current_user, 'public."AgentReviewRequest"', 'SELECT'), has_table_privilege(current_user, 'public."AgentReviewRequest"', 'INSERT'), has_table_privilege(current_user, 'public."AgentReviewRequest"', 'UPDATE'), has_table_privilege(current_user, 'public."AgentReviewRequest"', 'DELETE');`);
     assert.equal(privileges.trim(), expected);

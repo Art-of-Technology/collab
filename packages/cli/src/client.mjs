@@ -169,10 +169,15 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
           review_held: 'Read the current hold and explicitly release it before cancelling this review.',
           repository_mismatch: 'The requested repository does not match the project repository.',
           review_already_active: 'This handoff already has an active review. Read it before taking further action.',
+          transfer_offer_pending: 'Accept or cancel the pending transfer offer before requesting review.',
           request_conflict: 'This request conflicts with existing review work. Read the review and reuse its original request ID and payload only when retrying the same request.',
           coordinator_review_unsupported: 'Coordinator-managed workers cannot use review mutations yet. Keep their existing claim and report the blocker.',
         };
         if (Object.hasOwn(reviewConflicts, remoteCode)) { code = remoteCode; retrievalMessage = reviewConflicts[remoteCode]; }
+      }
+      if (response.status === 409 && remoteCode === 'review_already_active' && /^\/api\/apps\/auth\/agents\/transfer-offers(?:\/[^/?]+)?(?:\?|$)/.test(endpoint) &&
+          /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
+        code = remoteCode; retrievalMessage = 'Resolve or cancel the active review before offering this handoff.';
       }
       if (method === 'POST' && body?.event === 'configure' && /^\/api\/apps\/auth\/agents\/worker(?:\?|$)/.test(endpoint) &&
           response.headers.get('content-type')?.includes('application/json')) {

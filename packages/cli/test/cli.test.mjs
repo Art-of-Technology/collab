@@ -130,6 +130,22 @@ test('review request explains an existing active review without exposing server 
   assert.equal(f.calls.length, 1);
 });
 
+test('review and transfer conflicts explain the existing work without exposing server text', async t => {
+  const f = await fixture(t, (req, res) => {
+    res.writeHead(409);
+    res.end(JSON.stringify({ error: req.url.includes('/reviews') ? 'transfer_offer_pending' : 'review_already_active', error_description: 'PRIVATE_SENTINEL' }));
+  });
+  const review = await f.run(['reviews', 'request', '--agent', 'author', '--handoff-id', 'h', '--reviewer-agent-id', 'peer-id',
+    '--request-id', '12345678-1234-4234-8234-123456789012', '--repository', 'org/repo', '--pull-request-number', '1', '--revision', 'c'.repeat(40), '--content', 'Review']);
+  assert.equal(review.error.error, 'transfer_offer_pending');
+  assert.match(review.error.message, /pending transfer offer/);
+  const transfer = await f.run(['transfers', 'offer', '--agent', 'author', '--handoff-id', 'h', '--to-agent', 'peer', '--request-id', '12345678-1234-4234-8234-123456789012', '--content', 'Transfer']);
+  assert.equal(transfer.error.error, 'review_already_active');
+  assert.match(transfer.error.message, /active review/);
+  assert.ok(!(review.stderr + transfer.stderr).includes('PRIVATE_SENTINEL'));
+  assert.equal(f.calls.length, 2);
+});
+
 test('a review denied by workspace scope fails without retry or leaking server details', async t => {
   const f = await fixture(t, (_req, res) => {
     res.writeHead(403); res.end(JSON.stringify({ error: 'forbidden', error_description: 'PRIVATE_SENTINEL' }));

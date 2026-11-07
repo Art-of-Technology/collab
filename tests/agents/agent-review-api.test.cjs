@@ -72,6 +72,9 @@ test('identity-bound review guards custody, authorizes participants and records 
   assert.equal((await create()).id, review.id, 'idempotent creation');
   await assert.rejects(api.createReview(context('owner'), { ...input, requestId: randomUUID() }), error => error.code === 'review_already_active' && error.status === 409, 'a distinct request reports the active review');
   await assert.rejects(api.createReview(context('owner'), { ...input, content: 'changed' }), error => error.code === 'request_conflict', 'a reused request ID with changed content remains a conflict');
+  await prisma.agentHandoff.create({ data: { id: 'pending-offer-handoff', sourceKey: 'pending-offer-source', workspaceId: 'w', issueId: 'issue', content: 'Pending offer', status: 'claimed', claimedById: 'owner-id' } });
+  await handoffs.createTransferOffer(context('owner'), handoffs.transferOfferSchema.parse({ agent: 'owner', handoffId: 'pending-offer-handoff', toAgent: 'reviewer', requestId: randomUUID(), content: 'private offer' }));
+  await assert.rejects(api.createReview(context('owner'), { ...input, handoffId: 'pending-offer-handoff', requestId: randomUUID() }), error => error.code === 'transfer_offer_pending' && error.status === 409);
   await assert.rejects(api.getReview(context('outsider'), 'outsider', review.id));
   await assert.rejects(api.createReview({ ...context('owner'), token: { scopes: ['issues:read'] } }, input));
   const action = (user, data) => api.actOnReview(context(user), review.id, api.reviewActionSchema.parse({ agent: user, ...data }));
@@ -142,6 +145,13 @@ test('identity-bound review guards custody, authorizes participants and records 
     const reviewRace = await reviewResult, offerRace = await offerResult;
     assert.equal(Boolean(reviewRace.value), first === 'review', String(reviewRace.error));
     assert.equal(Boolean(offerRace.value), first === 'transfer', String(offerRace.error));
+    if (first === 'transfer') {
+      assert.equal(reviewRace.error.code, 'transfer_offer_pending');
+      assert.equal(reviewRace.error.status, 409);
+    } else {
+      assert.equal(offerRace.error.code, 'review_already_active');
+      assert.equal(offerRace.error.status, 409);
+    }
     assert.doesNotMatch(String(reviewRace.error ?? offerRace.error), /40P01|deadlock/i);
   }
   const repositoryData = { id: 'repo', projectId: 'project', githubRepoId: 'synthetic', owner: 'other', name: 'repo', fullName: 'other/repo', webhookSecret: 'synthetic' };
@@ -261,6 +271,7 @@ test('identity-bound review guards custody, authorizes participants and records 
   assert.doesNotMatch(JSON.stringify(logged) + await failed.text(), /private review data/);
   const deps = { '@/lib/apps/auth-middleware': auth, '@/lib/agent-reviews': api, '@/lib/agent-handoff-http': http, '@/lib/agent-review-http': reviewHttp };
   const workerRoute = load('src/app/api/apps/auth/agents/worker/route.ts', { '@/lib/apps/auth-middleware': auth, '@/lib/agent-handoffs': handoffs, '@/lib/agent-handoff-http': http }, { URL });
+  const transfers = load('src/app/api/apps/auth/agents/transfer-offers/route.ts', { '@/lib/apps/auth-middleware': auth, '@/lib/agent-handoffs': handoffs, '@/lib/agent-handoff-http': http }, { URL });
   const collection = load('src/app/api/apps/auth/agents/reviews/route.ts', deps, { URL });
   const item = load('src/app/api/apps/auth/agents/reviews/[id]/route.ts', deps, { URL });
   server = createServer(async (req, res) => {
@@ -269,12 +280,30 @@ test('identity-bound review guards custody, authorizes participants and records 
       const request = new Request(`http://127.0.0.1:${server.address().port}${req.url}`, { method: req.method, headers: req.headers, ...(['POST', 'PATCH'].includes(req.method) && { body: Buffer.concat(chunks) }) });
       request.nextUrl = new URL(request.url);
       const path = new URL(request.url).pathname;
-      const response = path.endsWith('/worker') ? await workerRoute[req.method](request) : path.endsWith('/reviews') ? await collection[req.method](request) :
+      const response = path.endsWith('/worker') ? await workerRoute[req.method](request) : path.endsWith('/transfer-offers') ? await transfers[req.method](request) : path.endsWith('/reviews') ? await collection[req.method](request) :
         await item[req.method](request, { params: Promise.resolve({ id: decodeURIComponent(path.split('/').at(-1)) }) });
       res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(Buffer.from(await response.arrayBuffer()));
     } catch { res.writeHead(500); res.end(); }
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
+
+  const pendingResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/apps/auth/agents/reviews?workspaceId=w`, {
+    method: 'POST', headers: { authorization: 'Bearer fixture-owner', 'content-type': 'application/json' },
+    body: JSON.stringify({ ...input, handoffId: 'pending-offer-handoff', reviewerAgentId: 'replacement-id', requestId: randomUUID() }),
+  });
+  assert.equal(pendingResponse.status, 409);
+  assert.equal((await pendingResponse.json()).error, 'transfer_offer_pending');
+  const transferResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/apps/auth/agents/transfer-offers?workspaceId=w`, {
+    method: 'POST', headers: { authorization: 'Bearer fixture-owner', 'content-type': 'application/json' },
+    body: JSON.stringify({ agent: 'owner', handoffId: 'transfer-race-review', toAgent: 'reviewer', requestId: randomUUID(), content: 'private offer' }),
+  });
+  assert.equal(transferResponse.status, 409);
+  assert.equal((await transferResponse.json()).error, 'review_already_active');
+  const outsiderResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/apps/auth/agents/reviews?workspaceId=w`, {
+    method: 'POST', headers: { authorization: 'Bearer fixture-outsider', 'content-type': 'application/json' },
+    body: JSON.stringify({ ...input, agent: 'outsider', handoffId: 'pending-offer-handoff', reviewerAgentId: 'replacement-id', requestId: randomUUID() }),
+  });
+  assert.equal(outsiderResponse.status, 404);
 
   // Invoke the actual CLI as a child against the real HTTP route and isolated database.
   const { promisify } = require('node:util');

@@ -28,7 +28,8 @@ the submitted name alone is not proof of the actual GitHub repository or head.
 Reusing the same request ID with the same data returns the existing request;
 reusing it with different data fails. A different request for a handoff that
 already has an active review fails with `review_already_active`; read that
-review before taking further action.
+review before taking further action. An existing pending transfer offer blocks
+review creation with `transfer_offer_pending` until it is accepted or cancelled.
 
 The reviewer discovers requests using
 `GET /api/apps/auth/agents/reviews?agent=NAME&view=incoming-v1`, follows
@@ -206,6 +207,27 @@ acquire each row lock, plus `UPDATE` on `AgentHandoff.updatedAt` and the other
 existing-table privileges required by the real flow. Privilege checks on the new
 table alone do not prove old-table privileges, function permissions, live
 connection settings or guard behavior are correct.
+Every review mutation also takes `ROW EXCLUSIVE` table locks on
+`AgentReviewRequest`, `AgentHandoff`, `AgentTransferOffer` and
+`AgentRegistration`. On each table, the actual review writer must already have
+an appropriate table-level write privilege for that lock; column-level UPDATE
+alone is insufficient. Check the effective role under the supported PostgreSQL
+version, including inherited rights. For example, the following checks for
+table-level INSERT, UPDATE, DELETE or TRUNCATE; a `false` result or missing
+table is a rollout blocker:
+
+```sql
+SELECT table_name,
+       COALESCE(has_table_privilege(current_user, to_regclass(format('public.%I', table_name)), 'INSERT')
+         OR has_table_privilege(current_user, to_regclass(format('public.%I', table_name)), 'UPDATE')
+         OR has_table_privilege(current_user, to_regclass(format('public.%I', table_name)), 'DELETE')
+         OR has_table_privilege(current_user, to_regclass(format('public.%I', table_name)), 'TRUNCATE'), false) AS can_lock
+FROM unnest(ARRAY['AgentReviewRequest', 'AgentHandoff', 'AgentTransferOffer', 'AgentRegistration']) AS tables(table_name);
+```
+
+Do not grant broader existing-table write privileges merely to pass this check;
+review their operational scope and security implications first. This check does
+not replace the excess-privilege restrictions on the new review table above.
 This table-privilege readback is necessary but does not establish guard DDL
 safety. Separately inventory and qualify trusted schema and function owners,
 role administrators, powerful built-in roles, security-definer routines,
