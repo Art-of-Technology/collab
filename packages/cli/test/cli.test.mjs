@@ -222,6 +222,78 @@ test('handoff and transfer request IDs match server UUID validation before dispa
   assert.equal(json.code, 0, json.stderr);
 });
 
+test('review wait scans pages and returns only pending or claimed IDs for the exact reviewer', async t => {
+  const f = await fixture(t, (req, res) => {
+    if (req.url.includes('/agents/worker?')) return res.end(JSON.stringify({ agent: { id: 'reviewer-id', name: 'reviewer' } }));
+    const cursor = new URL(req.url, 'http://localhost').searchParams.get('cursor');
+    res.end(JSON.stringify(cursor ? { items: [{ id: 'mine', reviewerAgentId: 'reviewer-id', status: 'pending', content: 'PRIVATE_SENTINEL' },
+      { id: 'other', reviewerAgentId: 'other-id', status: 'claimed' }], nextCursor: null } :
+      { items: [{ id: 'old', reviewerAgentId: null, status: 'cancelled' }], nextCursor: 'next_page' }));
+  });
+  const result = await f.run(['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '3', '--workspace', 'w']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.data, { items: [{ id: 'mine', status: 'pending' }], timedOut: false });
+  assert.ok(!result.stdout.includes('PRIVATE_SENTINEL'));
+  assert.equal(f.calls.length, 4);
+  assert.ok(f.calls.every(call => call.method === 'GET' && call.url.includes('workspaceId=w')));
+  assert.equal(new URL(f.calls[2].url, 'http://localhost').searchParams.get('cursor'), 'next_page');
+});
+
+test('review wait polls arrivals, times out empty and refuses old servers or invalid pages', async t => {
+  const args = ['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '3'];
+  const arrival = await fixture(t, (req, res, _body, calls) => req.url.includes('/agents/worker?')
+    ? res.end(JSON.stringify({ agent: { id: 'reviewer-id', name: 'reviewer' } }))
+    : res.end(JSON.stringify({ items: calls.filter(call => call.url.includes('/agents/reviews?')).length < 2 ? [] :
+      [{ id: 'mine', reviewerAgentId: 'reviewer-id', status: 'claimed', content: 'PRIVATE_SENTINEL' }], nextCursor: null })));
+  const found = await arrival.run(args);
+  assert.deepEqual(found.data, { items: [{ id: 'mine', status: 'claimed' }], timedOut: false });
+  assert.equal(arrival.calls.filter(call => call.url.includes('/agents/reviews?')).length, 2);
+  const empty = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"items":[],"nextCursor":null}'));
+  const timedOut = await empty.run([...args.slice(0, -1), '1']);
+  assert.deepEqual(timedOut.data, { items: [], timedOut: true });
+  const old = await fixture(t, (req, res) => { if (req.url.includes('/agents/worker?')) return res.end('{"agent":{"id":"reviewer-id","name":"reviewer"}}'); res.writeHead(404); res.end('{}'); });
+  const unsupported = await old.run(args);
+  assert.notEqual(unsupported.code, 0); assert.equal(unsupported.error.error, 'not_found');
+  const malformed = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"items":[],"nextCursor":"repeat"}'));
+  const invalid = await malformed.run(args);
+  assert.notEqual(invalid.code, 0); assert.equal(invalid.error.error, 'invalid_response');
+  assert.equal(malformed.calls.length, 3);
+  assert.notEqual((await malformed.run(['reviews', 'wait', '--agent', 'reviewer'])).code, 0);
+  assert.equal(malformed.calls.length, 3);
+  const wrongIdentity = await fixture(t, (_req, res) => res.end('{"agent":{"id":"different-id","name":"reviewer"}}'));
+  const mismatch = await wrongIdentity.run(args);
+  assert.equal(mismatch.error.error, 'reviewer_identity_mismatch');
+  assert.equal(wrongIdentity.calls.length, 1);
+  const changed = await fixture(t, (req, res, _body, calls) => {
+    if (req.url.includes('/agents/worker?')) return res.end(JSON.stringify({ agent: { id: calls.length === 1 ? 'reviewer-id' : 'new-id', name: 'reviewer' } }));
+    res.end('{"items":[],"nextCursor":null}');
+  });
+  assert.equal((await changed.run(args)).error.error, 'reviewer_identity_mismatch');
+});
+
+test('review wait reports an incomplete scan instead of a false empty result', async t => {
+  const f = await fixture(t, (req, res, _body, calls) => {
+    if (req.url.includes('/agents/worker?')) return res.end('{"agent":{"id":"reviewer-id","name":"reviewer"}}');
+    return res.end(JSON.stringify({ items: [], nextCursor: `next_${calls.length}` }));
+  });
+  const result = await f.run(['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '10']);
+  assert.equal(result.error.error, 'review_scan_incomplete');
+  assert.equal(f.calls.filter(call => call.url.includes('/agents/reviews?')).length, 100);
+});
+
+test('the owner can check a specific review reply and missing records stay errors', async t => {
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ id: 'review-1', status: 'replied', responseOutcome: 'blocked',
+    reviewedRevision: 'a'.repeat(40), holdReason: 'Waiting for CI', holdVersion: 2 })));
+  const args = ['reviews', 'get', 'review-1', '--agent', 'author', '--workspace', 'w'];
+  const result = await f.run(args);
+  assert.equal(result.data.status, 'replied'); assert.equal(result.data.responseOutcome, 'blocked');
+  assert.equal(result.data.holdVersion, 2); assert.equal(result.data.reviewedRevision, 'a'.repeat(40));
+  assert.equal(f.calls.length, 1); assert.equal(f.calls[0].method, 'GET');
+  const missing = await fixture(t, (_req, res) => { res.writeHead(404); res.end('{}'); });
+  const error = await missing.run(args);
+  assert.equal(error.error.error, 'not_found'); assert.equal(missing.calls.length, 1);
+});
+
 test('inbox wait is bounded, returns arriving work, and never marks or claims it', async t => {
   const f = await fixture(t, (_req, res, _body, calls) => res.end(JSON.stringify({ items: calls.length < 2 ? [] : [{ id: 'new-work' }], hasMore: false })));
   const result = await f.run(['inbox', 'wait', '--agent', 'reviewer', '--wait-seconds', '3']);

@@ -88,12 +88,14 @@ Collab, and verify a real agent response before calling a wake-up successful.
 
 ## Receive and claim
 
-When idle, wait for work with one bounded command. When busy, check the inbox at a
-safe checkpoint, such as after finishing a test or commit. This skill cannot inject
-notifications into an actively generating model or start stopped agents.
+At startup and each idle checkpoint, check both handoffs and identity-bound reviews;
+they are separate queues. When busy, check at a safe checkpoint, such as after a
+test or commit. This skill cannot inject notifications into an actively generating
+model or start stopped agents.
 
 ```sh
 collab inbox wait --agent navy-builder-1 --wait-seconds 30 --workspace WORKSPACE_ID
+collab reviews wait --agent navy-builder-1 --reviewer-id OWN_REGISTRATION_ID --wait-seconds 30 --workspace WORKSPACE_ID
 collab handoffs get HANDOFF_ID --agent navy-builder-1 --workspace WORKSPACE_ID
 collab handoffs claim HANDOFF_ID --agent navy-builder-1 --workspace WORKSPACE_ID
 ```
@@ -105,6 +107,19 @@ use `handoffs ack` only when an acknowledgement is requested and appropriate. AC
 not ownership or completion. Process the returned batch, then read again when `hasMore`
 is true; marking seen advances the unseen inbox. Mark notifications claimed by another
 agent seen after inspecting them so they do not keep filling your inbox.
+
+Get `OWN_REGISTRATION_ID` from `collab agents list`. Each wait is finite (1–60
+seconds); while idle, repeat both waits, handling work from either before waiting
+again. Review wait reports only IDs and statuses for pending or claimed reviews
+addressed to that exact registration. Use `reviews get` to read one and
+`reviews claim` before reviewing. It neither wakes an agent nor changes a review. An older
+server without the review API returns an error, not an empty queue. Authentication,
+permission, invalid-page or incomplete-scan errors also mean discovery is
+unconfirmed: report the problem rather than assuming there is no review. For an
+incomplete scan, use `reviews list` and follow every `nextCursor`; its output can
+contain private review content. Neither inbox wait nor inbox watch includes reviews.
+Review wait confirms the supplied ID against the owned registration and stops on
+an identity mismatch.
 
 ## Rebuild context before working
 
@@ -193,6 +208,20 @@ release a review hold, use `reviews hold` or `reviews release-hold` with the
 the version changed, read the review again and reconcile before another action;
 never reuse an old action against a newer hold. Clear an active hold explicitly
 before `reviews cancel`; cancellation leaves the original claim intact.
+
+After requesting review, save the review ID and run the following at startup and
+each idle checkpoint, including after each bounded inbox wait:
+
+```sh
+collab reviews get REVIEW_ID --agent AUTHOR --workspace WORKSPACE_ID
+```
+
+Check its status for a reply or
+cancellation and its hold fields; an API error or missing record is a blocker,
+not a pending or approved result. Once replied, read the verdict and exact
+reviewed revision before taking action. This periodic check is manual; it does
+not wake the owner or claim anything. Do not treat a review receipt as proof that
+the current PR head, required GitHub approvals, checks or holds are clear.
 
 `reviews resolve` acknowledges an approved receipt and removes its review
 guard; it neither completes the handoff nor authorizes a merge. The owner must

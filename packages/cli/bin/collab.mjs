@@ -273,6 +273,9 @@ async function main() {
   if (timeout < 1000 || timeout > 120000) throw new CliError('invalid_timeout', 'Timeout must be 1..120 seconds.');
   const waitSeconds = spec.wait ? converted(options['wait-seconds'] ?? '30', 'integer') : 0;
   if (spec.wait && (waitSeconds < 1 || waitSeconds > 60)) throw new CliError('invalid_timeout', 'Wait must be 1..60 seconds.');
+  if (name === 'reviews wait' && !/^[a-zA-Z0-9_-]{1,128}$/.test(options['reviewer-id'] || '')) {
+    throw new CliError('invalid_value', '--reviewer-id must be the immutable registration ID from agents list.');
+  }
   if (spec.action) body.action = spec.action;
   const payload = Object.keys(spec.fields).length ? body : undefined;
   const apiPath = () => `/api/apps/auth/${endpoint}${query.size ? `?${query}` : ''}`;
@@ -325,6 +328,39 @@ async function main() {
     if (name === 'notes get' && ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'].includes(result?.type)) throw new CliError('unsupported_note_type', 'Secret document output is not available through this CLI.', 4);
     return result;
   };
+  if (name === 'reviews wait') {
+    const deadline = Date.now() + waitSeconds * 1000;
+    const verifyIdentity = async () => {
+      const q = new URLSearchParams(query);
+      const result = await request(selected.base, `/api/apps/auth/agents/worker?${q}`, { token: selected.token, timeout: Math.min(timeout, Math.max(1000, deadline - Date.now())) });
+      if (result?.agent?.id !== options['reviewer-id'] || result?.agent?.name !== query.get('agent')) throw new CliError('reviewer_identity_mismatch', 'The reviewer ID does not match this owned agent registration. Check agents list.', 5);
+    };
+    for (;;) {
+      await verifyIdentity();
+      let cursor;
+      const seen = new Set();
+      for (let page = 0; page < 100; page++) {
+        if (page > 0 && deadline - Date.now() < 1000) throw new CliError('review_scan_incomplete', 'The review scan did not finish in time. Use reviews list and follow every nextCursor.', 5);
+        const q = new URLSearchParams(query); q.set('limit', '50');
+        if (cursor) q.set('cursor', cursor);
+        const result = await request(selected.base, `/api/apps/auth/agents/reviews?${q}`, { token: selected.token, timeout: Math.min(timeout, Math.max(1000, deadline - Date.now())) });
+        if (!Array.isArray(result?.items) || result.items.length > 50 || !(result.nextCursor === null || (typeof result.nextCursor === 'string' && /^[A-Za-z0-9_-]{1,4096}$/.test(result.nextCursor))) || result.items.some(item => !item || !/^[A-Za-z0-9_-]{1,128}$/.test(item.id || '') || !(item.reviewerAgentId === null || typeof item.reviewerAgentId === 'string') || !['pending', 'claimed', 'replied', 'resolved', 'cancelled'].includes(item.status))) {
+          throw new CliError('invalid_response', 'Unexpected review page; review discovery stopped.', 5);
+        }
+        const items = result.items.filter(item => item.reviewerAgentId === options['reviewer-id'] && ['pending', 'claimed'].includes(item.status)).map(item => ({ id: item.id, status: item.status }));
+        if (items.length) { await verifyIdentity(); return { items, timedOut: false }; }
+        if (!result.nextCursor) break;
+        if (seen.has(result.nextCursor)) throw new CliError('invalid_response', 'Repeated review cursor; review discovery stopped.', 5);
+        seen.add(result.nextCursor); cursor = result.nextCursor;
+        if (page === 99) throw new CliError('review_scan_incomplete', 'The review scan exceeded 100 pages. Use reviews list and follow every nextCursor.', 5);
+      }
+      await verifyIdentity();
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return { items: [], timedOut: true };
+      await delay(Math.min(1000, remaining));
+      if (Date.now() >= deadline) return { items: [], timedOut: true };
+    }
+  }
   if (spec.wait) {
     const deadline = Date.now() + waitSeconds * 1000;
     let last;
