@@ -31,7 +31,9 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
   execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', username, '-d', 'postgres'], { input: trigger, stdio: ['pipe', 'pipe', 'pipe'] });
   prisma = new PrismaClient({ datasources: { db: { url } } });
   class TestPrismaClient extends PrismaClient { constructor(options) { super({ ...options, datasources: { db: { url } } }); } }
-  servicePrisma = load('src/lib/prisma.ts', { '@prisma/client': { Prisma, PrismaClient: TestPrismaClient }, './issue-visibility': load('src/lib/issue-visibility.ts') }, { global: {}, process: { env: { NODE_ENV: 'production' } } }).prisma;
+  servicePrisma = load('src/lib/prisma.ts', { '@prisma/client': { Prisma, PrismaClient: TestPrismaClient },
+    './database-diagnostics': load('src/lib/database-diagnostics.ts', {}, { performance, setTimeout, console }),
+    './issue-visibility': load('src/lib/issue-visibility.ts') }, { global: {}, process: { env: { NODE_ENV: 'production' } } }).prisma;
   const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma: servicePrisma } });
   const service = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'),
     '@/lib/prisma': { prisma: servicePrisma }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date, Buffer });

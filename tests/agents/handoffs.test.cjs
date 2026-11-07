@@ -32,6 +32,7 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     constructor(options) { super({ ...options, datasources: { db: { url } } }); }
   }
   publicPrisma = load('src/lib/prisma.ts', { '@prisma/client': { Prisma, PrismaClient: TestPrismaClient },
+    './database-diagnostics': load('src/lib/database-diagnostics.ts', {}, { performance, setTimeout, console }),
     './issue-visibility': load('src/lib/issue-visibility.ts') }, { global: {}, process: { env: { NODE_ENV: 'production' } } }).prisma;
   // Exercise the additive migration itself against existing rows, rather than only db push.
   await prisma.$executeRawUnsafe('DROP TABLE "AgentTransferOffer", "AgentReceipt", "AgentHandoff", "AgentRegistration"');
