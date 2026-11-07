@@ -1,6 +1,7 @@
 // Timings cover the whole Prisma operation; they do not isolate connection-pool wait.
 let slowOperations = 0;
-let poolTimeouts = 0;
+let poolTimeoutOperations = 0;
+let poolTimeoutTransactionStarts = 0;
 let maxOperationMs = 0;
 let slowTransactionStarts = 0;
 let transactionStartFailures = 0;
@@ -10,9 +11,9 @@ let pending: ReturnType<typeof setTimeout> | undefined;
 function scheduleSummary() {
   if (pending) return;
   pending = setTimeout(() => {
-    const summary = { slowOperations, poolTimeouts, maxOperationMs, slowTransactionStarts,
+    const summary = { slowOperations, poolTimeoutOperations, poolTimeoutTransactionStarts, maxOperationMs, slowTransactionStarts,
       transactionStartFailures, maxTransactionStartMs, windowMs: 60000 };
-    slowOperations = 0; poolTimeouts = 0; maxOperationMs = 0;
+    slowOperations = 0; poolTimeoutOperations = 0; poolTimeoutTransactionStarts = 0; maxOperationMs = 0;
     slowTransactionStarts = 0; transactionStartFailures = 0; maxTransactionStartMs = 0; pending = undefined;
     try { console.warn('[database-diagnostics]', summary); } catch { /* Logging must not affect the process. */ }
   }, 60000);
@@ -28,7 +29,7 @@ function isPoolTimeout(error: unknown) {
 
 function recordOperation(duration: number, timedOut: boolean) {
   if (duration >= 1000) slowOperations++;
-  if (timedOut) poolTimeouts++;
+  if (timedOut) poolTimeoutOperations++;
   maxOperationMs = Math.max(maxOperationMs, Math.round(duration));
   scheduleSummary();
 }
@@ -36,7 +37,7 @@ function recordOperation(duration: number, timedOut: boolean) {
 function recordTransactionStart(duration: number, failed: boolean, error?: unknown) {
   if (duration >= 1000) slowTransactionStarts++;
   if (failed) transactionStartFailures++;
-  if (failed && isPoolTimeout(error)) poolTimeouts++;
+  if (failed && isPoolTimeout(error)) poolTimeoutTransactionStarts++;
   maxTransactionStartMs = Math.max(maxTransactionStartMs, Math.round(duration));
   scheduleSummary();
 }

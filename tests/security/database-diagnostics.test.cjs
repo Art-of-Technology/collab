@@ -27,7 +27,7 @@ test('aggregates slow operations and pool timeouts without query, error, or argu
   assert.equal(f.scheduled.length, 1);
   assert.equal(f.scheduled[0].ms, 60000);
   f.scheduled[0].fn();
-  assert.deepEqual(JSON.parse(JSON.stringify(f.logs)), [['[database-diagnostics]', { slowOperations: 2, poolTimeouts: 1, maxOperationMs: 5500, slowTransactionStarts: 0, transactionStartFailures: 0, maxTransactionStartMs: 0, windowMs: 60000 }]]);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.logs)), [['[database-diagnostics]', { slowOperations: 2, poolTimeoutOperations: 1, poolTimeoutTransactionStarts: 0, maxOperationMs: 5500, slowTransactionStarts: 0, transactionStartFailures: 0, maxTransactionStartMs: 0, windowMs: 60000 }]]);
   assert.doesNotMatch(JSON.stringify(f.logs), /private/);
   await f.run({ args: {}, query: async () => { f.setTime(7500); return true; } });
   assert.equal(f.scheduled.length, 2);
@@ -45,7 +45,7 @@ test('errorCode timeout is counted even when the operation finishes quickly', as
   const f = fixture(), error = { errorCode: 'P2024' };
   await assert.rejects(f.run({ args: {}, query: async () => { throw error; } }), value => value === error);
   f.scheduled[0].fn();
-  assert.equal(f.logs[0][1].poolTimeouts, 1);
+  assert.equal(f.logs[0][1].poolTimeoutOperations, 1);
   assert.equal(f.logs[0][1].slowOperations, 0);
 });
 
@@ -71,7 +71,8 @@ test('transaction start failures are recorded once without claiming they are poo
   assert.equal(called, false);
   f.scheduled[0].fn();
   assert.equal(f.logs[0][1].transactionStartFailures, 1);
-  assert.equal(f.logs[0][1].poolTimeouts, 0);
+  assert.equal(f.logs[0][1].poolTimeoutOperations, 0);
+  assert.equal(f.logs[0][1].poolTimeoutTransactionStarts, 0);
   assert.equal(f.logs[0][1].maxTransactionStartMs, 500);
   assert.doesNotMatch(JSON.stringify(f.logs), /sensitive/);
 });
@@ -89,6 +90,20 @@ test('a query timeout propagated out of a started transaction is not double coun
   const client = f.withTransactionDiagnostics(original);
   await assert.rejects(client.$transaction(async () => f.run({ args: {}, query: async () => { throw error; } })), value => value === error);
   f.scheduled[0].fn();
-  assert.equal(f.logs[0][1].poolTimeouts, 1);
+  assert.equal(f.logs[0][1].poolTimeoutOperations, 1);
+  assert.equal(f.logs[0][1].poolTimeoutTransactionStarts, 0);
   assert.equal(f.logs[0][1].transactionStartFailures, 0);
+});
+
+test('independent P2024 failures remain separate at their observed boundaries', async () => {
+  const f = fixture(), errors = [{ code: 'P2024' }, { code: 'P2024' }, { code: 'P2024' }];
+  for (const error of errors.slice(0, 2)) {
+    await assert.rejects(f.run({ args: {}, query: async () => { throw error; } }), value => value === error);
+  }
+  const client = f.withTransactionDiagnostics({ $transaction: async () => { throw errors[2]; } });
+  await assert.rejects(client.$transaction(() => {}), value => value === errors[2]);
+  f.scheduled[0].fn();
+  assert.equal(f.logs[0][1].poolTimeoutOperations, 2);
+  assert.equal(f.logs[0][1].poolTimeoutTransactionStarts, 1);
+  assert.equal(f.logs[0][1].transactionStartFailures, 1);
 });

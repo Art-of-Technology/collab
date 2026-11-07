@@ -19,8 +19,9 @@ test('real Prisma pool timeout is counted without changing query and transaction
   const { issueVisibilityExtension } = load('src/lib/issue-visibility.ts');
   const raw = withTransactionDiagnostics(diagnostic);
   const prisma = withTransactionDiagnostics(diagnostic.$extends(issueVisibilityExtension(Prisma.dmmf.datamodel.models)));
-  let ready;
+  let ready, release;
   const started = new Promise(resolve => { ready = resolve; });
+  const released = new Promise(resolve => { release = resolve; });
   try {
     assert.deepEqual(await prisma.$queryRawUnsafe('SELECT 1 AS value'), [{ value: 1 }]);
     const array = await prisma.$transaction([prisma.$queryRawUnsafe('SELECT 1 AS value'), prisma.$queryRawUnsafe('SELECT 2 AS value')], { isolationLevel: 'ReadCommitted' });
@@ -35,16 +36,33 @@ test('real Prisma pool timeout is counted without changing query and transaction
       throw aborted;
     }), error => error === aborted);
     assert.deepEqual(await prisma.$queryRawUnsafe("SELECT to_regclass('pg_temp.diagnostics_rollback_fixture')::text AS name"), [{ name: null }]);
-    const held = raw.$transaction(async tx => { ready(); await tx.$queryRawUnsafe('SELECT 1 FROM pg_sleep(3)'); });
+    const held = raw.$transaction(async () => { ready(); await released; }, { timeout: 20000 });
     await started;
-    let entered = false;
-    await assert.rejects(prisma.$transaction(async () => { entered = true; }, { maxWait: 500 }), error => error.code === 'P2028');
-    assert.equal(entered, false);
-    await assert.rejects(prisma.$queryRawUnsafe('SELECT 1'), error => error.code === 'P2024');
-    await held;
+    try {
+      let entered = false;
+      await assert.rejects(prisma.$transaction(async () => { entered = true; }, { maxWait: 500 }), error => error.code === 'P2028');
+      assert.equal(entered, false);
+      await assert.rejects(prisma.$queryRawUnsafe('SELECT 1'), error => error.code === 'P2024');
+      await assert.rejects(prisma.$transaction([
+        prisma.$queryRawUnsafe('SELECT 1'), prisma.$queryRawUnsafe('SELECT 2'),
+      ]), error => error.code === 'P2024');
+      const batched = await Promise.allSettled([
+        prisma.user.findUnique({ where: { id: 'one' } }),
+        prisma.user.findUnique({ where: { id: 'two' } }),
+      ]);
+      for (const result of batched) {
+        assert.equal(result.status, 'rejected');
+        assert.equal(result.reason.code, 'P2024');
+      }
+      await assert.rejects(prisma.$queryRawUnsafe('SELECT 1'), error => error.code === 'P2024');
+    } finally {
+      release();
+      await held;
+    }
     assert.equal(timers.length, 1);
     timers[0]();
-    assert.equal(logs[0][1].poolTimeouts, 1);
+    assert.equal(logs[0][1].poolTimeoutOperations, 6);
+    assert.equal(logs[0][1].poolTimeoutTransactionStarts, 0);
     assert.equal(logs[0][1].transactionStartFailures, 1);
     assert.ok(logs[0][1].slowOperations >= 1);
     assert.doesNotMatch(JSON.stringify(logs), /pg_sleep|SELECT|postgres/);

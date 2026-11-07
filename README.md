@@ -123,6 +123,9 @@ Collab is designed to streamline internal communication and work tracking by off
    transaction starts (at least one second), confirmed Prisma P2024 timeouts,
    or transaction-start failures. Summaries aggregate counts and maximum timings
    over a 60-second window without SQL, parameters, identities or credentials.
+   `poolTimeoutOperations` counts operations reporting P2024, not unique timeout
+   incidents: one failed batch can affect multiple operations. P2024 transaction
+   starts are counted separately in `poolTimeoutTransactionStarts`.
    These client-observed timings include more than connection-pool wait.
 
    #### Authentication (NextAuth.js)
