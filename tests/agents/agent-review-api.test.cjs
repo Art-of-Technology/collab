@@ -10,7 +10,7 @@ const { once } = require('node:events');
 const { PrismaClient } = require('@prisma/client');
 const { load } = require('../security/helpers.cjs');
 
-test('identity-bound review guards custody, authorizes participants and records no private activity', { timeout: 30000 }, async t => {
+test('identity-bound review guards custody, authorizes participants and records no private activity', { timeout: 120000 }, async t => {
   const directory = mkdtempSync(join(tmpdir(), 'collab-review-api-'));
   const bindir = execFileSync('pg_config', ['--bindir'], { encoding: 'utf8' }).trim();
   let started = false, prisma, server;
@@ -250,19 +250,62 @@ test('identity-bound review guards custody, authorizes participants and records 
   assert.equal(failed.status, 503);
   assert.doesNotMatch(JSON.stringify(logged) + await failed.text(), /private review data/);
   const deps = { '@/lib/apps/auth-middleware': auth, '@/lib/agent-reviews': api, '@/lib/agent-handoff-http': http, '@/lib/agent-review-http': reviewHttp };
+  const workerRoute = load('src/app/api/apps/auth/agents/worker/route.ts', { '@/lib/apps/auth-middleware': auth, '@/lib/agent-handoffs': handoffs, '@/lib/agent-handoff-http': http }, { URL });
   const collection = load('src/app/api/apps/auth/agents/reviews/route.ts', deps, { URL });
   const item = load('src/app/api/apps/auth/agents/reviews/[id]/route.ts', deps, { URL });
   server = createServer(async (req, res) => {
     try {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
       const request = new Request(`http://127.0.0.1:${server.address().port}${req.url}`, { method: req.method, headers: req.headers, ...(['POST', 'PATCH'].includes(req.method) && { body: Buffer.concat(chunks) }) });
+      request.nextUrl = new URL(request.url);
       const path = new URL(request.url).pathname;
-      const response = path.endsWith('/reviews') ? await collection[req.method](request) :
+      const response = path.endsWith('/worker') ? await workerRoute[req.method](request) : path.endsWith('/reviews') ? await collection[req.method](request) :
         await item[req.method](request, { params: Promise.resolve({ id: decodeURIComponent(path.split('/').at(-1)) }) });
       res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(Buffer.from(await response.arrayBuffer()));
     } catch { res.writeHead(500); res.end(); }
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
+
+  // Invoke the actual CLI as a child against the real HTTP route and isolated database.
+  const { promisify } = require('node:util');
+  const runCli = promisify(require('node:child_process').execFile);
+  const cliEnv = { ...process.env, COLLAB_URL: `http://127.0.0.1:${server.address().port}`, COLLAB_CONFIG_DIR: join(directory, 'cli-config') };
+  const cli = async (user, args, fail = false) => {
+    let out;
+    try {
+      out = await runCli(process.execPath, [resolve('packages/cli/bin/collab.mjs'), ...args, '--workspace', 'w'], { env: { ...cliEnv, COLLAB_TOKEN: `fixture-${user}` }, timeout: 12000 });
+    } catch (e) {
+      if (!fail) throw e;
+      return JSON.parse(e.stderr);
+    }
+    assert.equal(fail, false, 'expected CLI command to fail');
+    return JSON.parse(out.stdout);
+  };
+  await prisma.agentHandoff.create({ data: { id: 'cli-handoff', sourceKey: 'cli-source', workspaceId: 'w', issueId: 'issue', content: 'CLI original', status: 'claimed', claimedById: 'owner-id' } });
+  const idempotency = randomUUID();
+  const reviewRequestArgs = ['reviews','request','--agent','owner','--handoff-id','cli-handoff','--reviewer-agent-id','replacement-id','--request-id',idempotency,'--repository','owner/repo','--pull-request-number','7','--revision',rev,'--content','private CLI review'];
+  const sentByCli = await cli('owner', reviewRequestArgs);
+  assert.ok(sentByCli.id);
+  assert.equal((await cli('owner', reviewRequestArgs)).id, sentByCli.id, 'same request UUID and payload are idempotent');
+  const listByCli = await cli('reviewer', ['reviews','list','--agent','reviewer']);
+  assert.ok(listByCli.items.some(row => row.id === sentByCli.id));
+  const waitByCli = await cli('reviewer', ['reviews','wait','--agent','reviewer','--reviewer-id','replacement-id','--wait-seconds','10']);
+  assert.ok(waitByCli.items.some(row => row.id === sentByCli.id));
+  assert.doesNotMatch(JSON.stringify(waitByCli), /private CLI review/);
+  await cli('reviewer',['reviews','claim',sentByCli.id,'--agent','reviewer']);
+  await cli('reviewer',['reviews','reply',sentByCli.id,'--agent','reviewer','--verdict','approved','--reviewed-revision',rev,'--content','CLI reply']);
+  const readByCli = await cli('owner',['reviews','get',sentByCli.id,'--agent','owner']);
+  assert.equal(readByCli.review.status,'replied');
+  assert.equal(readByCli.review.responseOutcome,'approved');
+  await cli('owner',['reviews','hold',sentByCli.id,'--agent','owner','--reason','first hold','--expected-hold-version','0']);
+  await cli('owner',['reviews','release-hold',sentByCli.id,'--agent','owner','--expected-hold-version','1']);
+  await cli('owner',['reviews','hold',sentByCli.id,'--agent','owner','--reason','second hold','--expected-hold-version','2']);
+  const stale = await cli('owner',['reviews','release-hold',sentByCli.id,'--agent','owner','--expected-hold-version','1'],true);
+  assert.equal(stale.error, 'hold_changed');
+  const currentByCli = await cli('owner',['reviews','get',sentByCli.id,'--agent','owner']);
+  assert.equal(currentByCli.review.holdReason,'second hold');
+  assert.equal(currentByCli.review.holdVersion,3);
+  assert.equal((await prisma.agentHandoff.findUniqueOrThrow({ where: {id:'cli-handoff'} })).status,'claimed');
   const base = `http://127.0.0.1:${server.address().port}/api/apps/auth/agents/reviews`;
   const request = (path, token, method = 'GET', body) => fetch(base + path, { method, headers: { ...(token && { authorization: `Bearer ${token}` }), ...(body && { 'content-type': 'application/json' }) }, ...(body && { body: JSON.stringify(body) }) });
   await prisma.agentHandoff.create({ data: { id: 'handoff3', sourceKey: 'source3', workspaceId: 'w', issueId: 'issue', content: 'Third', status: 'claimed', claimedById: 'owner-id' } });
