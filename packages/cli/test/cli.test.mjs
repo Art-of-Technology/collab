@@ -33,6 +33,93 @@ test('manual transfer offer commands preserve recipient, request identity and ex
   assert.notEqual((await f.run(['transfers', 'offer', '--agent', 'owner', '--handoff-id', 'original', '--to-agent', 'peer', '--content', 'No identity'])).code, 0);
 });
 
+test('manual review commands send the exact reviewer, revision and hold version without a handoff mutation', async t => {
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ items: [], nextCursor: 'next_cursor' })));
+  const requestId = '12345678-1234-4234-8234-123456789012', revision = 'a'.repeat(40);
+  const requestArgs = ['reviews', 'request', '--agent', 'author', '--handoff-id', 'claim-1', '--reviewer-agent-id', 'reviewer-id',
+    '--request-id', requestId, '--repository', 'org/repo', '--pull-request-number', '42', '--revision', revision,
+    '--content-file', '-', '--workspace', 'w'];
+  assert.equal((await f.run(requestArgs, { input: 'Review this exact head 📝' })).code, 0);
+  const first = f.calls.at(-1);
+  assert.equal(first.method, 'POST'); assert.equal(first.url, '/api/apps/auth/agents/reviews?workspaceId=w');
+  assert.deepEqual(JSON.parse(first.body), { agent: 'author', handoffId: 'claim-1', reviewerAgentId: 'reviewer-id', requestId,
+    repository: 'org/repo', pullRequestNumber: 42, revision, content: 'Review this exact head 📝' });
+  assert.equal((await f.run(requestArgs, { input: 'Review this exact head 📝' })).code, 0);
+  assert.equal(f.calls.at(-1).body, first.body, 'an explicit retry preserves the request ID and payload');
+  assert.equal((await f.run(['reviews', 'list', '--agent', 'reviewer', '--limit', '10', '--cursor', 'next_cursor', '--workspace', 'w'])).code, 0);
+  assert.equal(f.calls.at(-1).url, '/api/apps/auth/agents/reviews?workspaceId=w&agent=reviewer&limit=10&cursor=next_cursor');
+  assert.equal((await f.run(['reviews', 'get', 'review-1', '--agent', 'author', '--workspace', 'w'])).code, 0);
+  assert.equal(f.calls.at(-1).url, '/api/apps/auth/agents/reviews/review-1?workspaceId=w&agent=author');
+  const actions = [
+    [['claim', 'review-1', '--agent', 'reviewer'], { agent: 'reviewer', action: 'claim' }],
+    [['reply', 'review-1', '--agent', 'reviewer', '--verdict', 'approved', '--reviewed-revision', revision, '--content', 'Reviewed'],
+      { agent: 'reviewer', verdict: 'approved', reviewedRevision: revision, content: 'Reviewed', action: 'reply' }],
+    [['hold', 'review-1', '--agent', 'author', '--reason', 'Waiting for checks', '--expected-hold-version', '0'],
+      { agent: 'author', reason: 'Waiting for checks', expectedHoldVersion: 0, action: 'hold' }],
+    [['release-hold', 'review-1', '--agent', 'author', '--expected-hold-version', '1'],
+      { agent: 'author', expectedHoldVersion: 1, action: 'release_hold' }],
+    [['resolve', 'review-1', '--agent', 'author'], { agent: 'author', action: 'resolve' }],
+    [['cancel', 'review-1', '--agent', 'author', '--reason', 'Superseded'], { agent: 'author', reason: 'Superseded', action: 'cancel' }],
+  ];
+  for (const [args, body] of actions) {
+    const result = await f.run(['reviews', ...args, '--workspace', 'w']);
+    assert.equal(result.code, 0, result.stderr);
+    const call = f.calls.at(-1);
+    assert.equal(call.method, 'PATCH'); assert.equal(call.url, '/api/apps/auth/agents/reviews/review-1?workspaceId=w');
+    assert.deepEqual(JSON.parse(call.body), body);
+  }
+  assert.ok(f.calls.every(call => !call.url.includes('handoffs/')), 'review commands must not complete or transfer the original claim');
+});
+
+test('review commands reject malformed identity, revision, verdict, hold versions and content before HTTP', async t => {
+  const f = await fixture(t), revision = 'b'.repeat(40);
+  const body = { agent: 'author', handoffId: 'h', reviewerAgentId: 'reviewer-id', requestId: '12345678-1234-4234-8234-123456789012',
+    repository: 'org/repo', pullRequestNumber: 42, revision, content: 'Review' };
+  for (const bad of [
+    { reviewerAgentId: '' }, { reviewerAgentId: 'not a stable ID' }, { requestId: 'probe-name' },
+    { repository: 'https://example.com/org/repo' }, { pullRequestNumber: 0 }, { pullRequestNumber: 2147483648 },
+    { revision: 'b'.repeat(39) }, { revision: 'B'.repeat(40) }, { content: ' '.repeat(3) }, { content: '\u0000' }, { content: '\ud800' }, { content: 'x'.repeat(16001) },
+  ]) {
+    const result = await f.run(['reviews', 'request', '--input', '-'], { input: JSON.stringify({ ...body, ...bad }) });
+    assert.notEqual(result.code, 0);
+  }
+  for (const args of [
+    ['reply', 'r', '--agent', 'peer', '--verdict', 'maybe', '--reviewed-revision', revision, '--content', 'x'],
+    ['reply', 'r', '--agent', 'peer', '--verdict', 'approved', '--reviewed-revision', 'short', '--content', 'x'],
+    ['hold', 'r', '--agent', 'author', '--reason', 'x', '--expected-hold-version', '-1'],
+    ['release-hold', 'r', '--agent', 'author'],
+    ['cancel', 'r', '--agent', 'author', '--reason', '   '],
+    ['list', '--agent', 'peer', '--cursor', 'bad cursor'],
+  ]) assert.notEqual((await f.run(['reviews', ...args])).code, 0);
+  assert.equal(f.calls.length, 0);
+});
+
+test('review errors stay sanitized and uncertain writes are never retried automatically', async t => {
+  const f = await fixture(t, (req, res, _body, calls) => {
+    if (req.method === 'POST') { res.writeHead(503); res.end(JSON.stringify({ error: 'review_unavailable', error_description: 'PRIVATE_SENTINEL' })); }
+    else { res.writeHead(409); res.end(JSON.stringify({ error: 'hold_changed', error_description: 'PRIVATE_SENTINEL' })); }
+  });
+  const args = ['reviews', 'request', '--agent', 'author', '--handoff-id', 'h', '--reviewer-agent-id', 'peer-id',
+    '--request-id', '12345678-1234-4234-8234-123456789012', '--repository', 'org/repo', '--pull-request-number', '1', '--revision', 'c'.repeat(40), '--content', 'Review'];
+  const result = await f.run(args);
+  assert.equal(result.error.error, 'outcome_unknown'); assert.equal(f.calls.length, 1);
+  assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  const hold = await f.run(['reviews', 'release-hold', 'r', '--agent', 'author', '--expected-hold-version', '0']);
+  assert.equal(hold.error.error, 'hold_changed'); assert.match(hold.error.message, /Read this review again/);
+  assert.ok(!hold.stderr.includes('PRIVATE_SENTINEL')); assert.equal(f.calls.length, 2);
+});
+
+test('a review denied by workspace scope fails without retry or leaking server details', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(403); res.end(JSON.stringify({ error: 'forbidden', error_description: 'PRIVATE_SENTINEL' }));
+  });
+  const result = await f.run(['reviews', 'get', 'review-1', '--agent', 'reviewer', '--workspace', 'other-workspace']);
+  assert.notEqual(result.code, 0);
+  assert.equal(f.calls.length, 1);
+  assert.match(f.calls[0].url, /workspaceId=other-workspace/);
+  assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+});
+
 test('agent registration, handoff and claim commands send scoped fixed API requests', async t => {
   const f = await fixture(t);
   assert.equal((await f.run(['agents', 'register', '--name', 'builder-a', '--label-ids', '["role-build"]', '--workspace', 'w'])).code, 0);

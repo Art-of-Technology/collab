@@ -28,6 +28,33 @@ export const commands = {
   ...Object.fromEntries(['accept', 'cancel'].map(action => [
     `transfers ${action}`, command('PATCH', 'agents/transfer-offers/:id', { agent: string }, {}, { action, required: ['agent'] }),
   ])),
+  'reviews request': command('POST', 'agents/reviews', { agent: string, handoffId: string, reviewerAgentId: string, requestId: string,
+    repository: string, pullRequestNumber: integer, revision: string, content: string }, {}, {
+    required: ['agent', 'handoffId', 'reviewerAgentId', 'requestId', 'repository', 'pullRequestNumber', 'revision', 'content'],
+    description: 'Request review without releasing your handoff. Use the reviewer registration ID from agents list and reuse the UUID request ID for retries.',
+  }),
+  'reviews list': command('GET', 'agents/reviews', {}, { agent: string, limit: integer, cursor: string }, {
+    requiredQuery: ['agent'], constraints: { agent: { pattern: '^[a-z0-9][a-z0-9_-]{0,63}$' }, limit: { minimum: 1, maximum: 50 }, cursor: { minLength: 1, maxLength: 4096, pattern: '^[A-Za-z0-9_-]+$' } },
+    description: 'List reviews for this agent; pass the returned nextCursor as --cursor to read the next page.',
+  }),
+  'reviews get': command('GET', 'agents/reviews/:id', {}, { agent: string }, { requiredQuery: ['agent'], constraints: { agent: { pattern: '^[a-z0-9][a-z0-9_-]{0,63}$' } } }),
+  'reviews claim': command('PATCH', 'agents/reviews/:id', { agent: string }, {}, { action: 'claim', required: ['agent'] }),
+  'reviews reply': command('PATCH', 'agents/reviews/:id', { agent: string, verdict: string, reviewedRevision: string, content: string }, {}, {
+    action: 'reply', required: ['agent', 'verdict', 'reviewedRevision', 'content'],
+    description: 'Reply as the claimed reviewer with approved, changes_requested or blocked and the exact requested revision.',
+  }),
+  'reviews hold': command('PATCH', 'agents/reviews/:id', { agent: string, reason: string, expectedHoldVersion: integer }, {}, {
+    action: 'hold', required: ['agent', 'reason', 'expectedHoldVersion'], description: 'Use the holdVersion last read from this review; read it again after an uncertain result.',
+  }),
+  'reviews release-hold': command('PATCH', 'agents/reviews/:id', { agent: string, expectedHoldVersion: integer }, {}, {
+    action: 'release_hold', required: ['agent', 'expectedHoldVersion'], description: 'Clear a hold only using the version last read. A stale version never clears a newer hold.',
+  }),
+  'reviews cancel': command('PATCH', 'agents/reviews/:id', { agent: string, reason: string }, {}, {
+    action: 'cancel', required: ['agent', 'reason'], description: 'Cancel a review after clearing any hold; the original handoff remains claimed.',
+  }),
+  'reviews resolve': command('PATCH', 'agents/reviews/:id', { agent: string }, {}, {
+    action: 'resolve', required: ['agent'], description: 'Acknowledge an approved review receipt. Independently verify the current PR, required reviews, checks and holds before merging.',
+  }),
   ...Object.fromEntries(['seen', 'ack', 'claim', 'progress', 'release', 'complete'].map(action => [
     `handoffs ${action}`, command('PATCH', 'agents/handoffs/:id', { agent: string, content: string }, {}, { action, required: ['agent', ...(['progress', 'release', 'complete'].includes(action) ? ['content'] : [])] }),
   ])),

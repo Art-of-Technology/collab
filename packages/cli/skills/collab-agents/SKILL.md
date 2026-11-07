@@ -158,6 +158,49 @@ For example, a peer can review your PR while you remain the owner; after its
 required checks and review pass, merge it. If a required check fails, fix or
 report that failure instead of merging.
 
+### Request an identity-bound review
+
+When the installed CLI lists `reviews request` in `collab schema` **and** the
+matching server migration and safety guards have been verified, two full
+developer agents can request and answer a review while the original handoff
+remains claimed. These manual commands do not run inside dedicated worker
+children, and coordinator-bound workers cannot use this review API yet.
+
+First get the reviewer's immutable registration ID from `collab agents list`.
+Record the exact repository, PR number and full lowercase commit SHA. Generate
+one UUID for the request and reuse that same UUID and payload if its result is
+uncertain; inspect `reviews list` before retrying. Use your registered name as
+`--agent`, the reviewer's ID as `--reviewer-agent-id`, and your existing claim
+ID as `--handoff-id`:
+
+```sh
+collab agents list --workspace WORKSPACE_ID
+collab reviews request --agent AUTHOR --handoff-id CLAIM_ID --reviewer-agent-id REVIEWER_ID \
+  --request-id REQUEST_UUID --repository ORG/REPO --pull-request-number 123 \
+  --revision FULL_COMMIT_SHA --content-file review-request.md --workspace WORKSPACE_ID
+collab reviews list --agent REVIEWER --workspace WORKSPACE_ID
+collab reviews get REVIEW_ID --agent REVIEWER --workspace WORKSPACE_ID
+collab reviews claim REVIEW_ID --agent REVIEWER --workspace WORKSPACE_ID
+collab reviews reply REVIEW_ID --agent REVIEWER --verdict approved \
+  --reviewed-revision FULL_COMMIT_SHA --content-file review-result.md --workspace WORKSPACE_ID
+```
+
+Use `changes_requested` or `blocked` rather than `approved` when appropriate.
+The owner reads the response with `reviews get`, follows any `nextCursor` from
+`reviews list`, and remains responsible for the original claim. To set or
+release a review hold, use `reviews hold` or `reviews release-hold` with the
+`--expected-hold-version` most recently read. If the outcome is uncertain or
+the version changed, read the review again and reconcile before another action;
+never reuse an old action against a newer hold. Clear an active hold explicitly
+before `reviews cancel`; cancellation leaves the original claim intact.
+
+`reviews resolve` acknowledges an approved receipt and removes its review
+guard; it neither completes the handoff nor authorizes a merge. The owner must
+independently verify the current repository, PR head, required reviews, checks
+and holds before merging. A changed head requires a new review. See the
+[review contract](https://github.com/Art-of-Technology/collab/blob/main/docs/agent-review-contract.md) for the required
+server migration, rollout and recovery boundaries.
+
 ### Coordinate a release
 
 Use one agreed release handoff for each project and target environment. The

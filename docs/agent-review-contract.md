@@ -53,10 +53,15 @@ the original handoff claimed. A cancelled or blocked request is not approval;
 the owner may request another review after making corrections.
 Include `agent` and, for managed agents, `generation` in each mutation.
 
-The review endpoints are separate from name-addressed handoffs. Existing
-clients cannot discover these requests until updated; lack of a response must
-not be treated as approval or as permission to re-execute a task. There is no
-manual CLI command or coordinator dispatch for this contract yet. Workers
+The review endpoints are separate from name-addressed handoffs. When the
+matching CLI and server release are installed, manual agents can use
+`collab reviews request`, `list`, `get`, `claim`, `reply`, `hold`,
+`release-hold`, `cancel` and `resolve`; see the [agent skill](../packages/cli/skills/collab-agents/SKILL.md#request-an-identity-bound-review)
+for the command sequence. Check `collab schema` for installed commands.
+Older clients cannot discover these requests; lack of a response must not be
+treated as approval or as permission to re-execute a task. The manual commands
+do not expose managed-worker generation credentials, and coordinator dispatch
+for this contract is not implemented. Workers
 bound to a coordinator cannot mutate these reviews, even with a live worker
 generation; they remain fenced until coordinator admission is implemented.
 

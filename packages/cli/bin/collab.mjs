@@ -211,7 +211,7 @@ async function main() {
     if (!Object.hasOwn(spec.fields, key) || Object.hasOwn(body, key)) throw new CliError('invalid_input', 'Text file field is unsupported or duplicated.');
     body[key] = await boundedInput(options[`${key}-file`]);
   }
-  if (['handoffs send', 'transfers offer'].includes(name) && body.requestId !== undefined &&
+  if (['handoffs send', 'transfers offer', 'reviews request'].includes(name) && body.requestId !== undefined &&
       (typeof body.requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId))) {
     throw new CliError('invalid_value', '--request-id must be a UUID. Generate one with uuidgen and reuse it for retries.');
   }
@@ -227,6 +227,17 @@ async function main() {
   if (spec.defaultProject && !Object.hasOwn(body, 'projectId') && selected.project) body.projectId = selected.project;
   if (name === 'notes create' && body.projectId && !body.scope) body.scope = 'PROJECT';
   for (const key of spec.required || []) if (body[key] === undefined || body[key] === null || body[key] === '') throw new CliError('required_field', `Missing required --${flagName(key)}.`);
+  if (name.startsWith('reviews ')) {
+    const validText = (value, limit) => typeof value === 'string' && value.trim().length > 0 && value.trim().length <= limit && !/[\u0000\uD800-\uDFFF]/u.test(value);
+    if (body.agent !== undefined && !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(body.agent)) throw new CliError('invalid_value', 'Invalid --agent. Use the registered agent name.');
+    for (const key of ['handoffId', 'reviewerAgentId']) if (body[key] !== undefined && !/^[a-zA-Z0-9_-]{1,128}$/.test(body[key])) throw new CliError('invalid_value', `Invalid --${flagName(key)}. Use the registered immutable ID.`);
+    if (body.repository !== undefined && !/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/.test(body.repository)) throw new CliError('invalid_value', '--repository must be owner/repo.');
+    for (const key of ['revision', 'reviewedRevision']) if (body[key] !== undefined && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(body[key])) throw new CliError('invalid_value', `--${flagName(key)} must be the full lowercase commit SHA.`);
+    if (body.pullRequestNumber !== undefined && (body.pullRequestNumber < 1 || body.pullRequestNumber > 2147483647)) throw new CliError('invalid_value', '--pull-request-number must be a positive integer.');
+    if (body.expectedHoldVersion !== undefined && (body.expectedHoldVersion < 0 || body.expectedHoldVersion > 2147483647)) throw new CliError('invalid_value', '--expected-hold-version must be a nonnegative integer from the review.');
+    if (body.verdict !== undefined && !['approved', 'changes_requested', 'blocked'].includes(body.verdict)) throw new CliError('invalid_value', '--verdict must be approved, changes_requested or blocked.');
+    for (const [key, limit] of [['content', 16000], ['reason', 500]]) if (body[key] !== undefined && !validText(body[key], limit)) throw new CliError('invalid_value', `--${flagName(key)} must be nonempty valid Unicode and at most ${limit} characters.`);
+  }
   if (name === 'handoffs send' && !body.toAgents?.length && !body.toLabels?.length) {
     throw new CliError('required_field', 'Supply at least one recipient with --to-agents or --to-labels as a JSON array. --agent is the sender.');
   }
@@ -243,7 +254,7 @@ async function main() {
     if ((constraint.enum && !constraint.enum.includes(value)) ||
       (constraint.minimum !== undefined && Number(value) < constraint.minimum) || (constraint.maximum !== undefined && Number(value) > constraint.maximum) ||
       (constraint.minLength !== undefined && value.trim().length < constraint.minLength) || (constraint.maxLength !== undefined && value.length > constraint.maxLength) ||
-      (constraint.format === 'date-time' && !validDateTime(value))) {
+      (constraint.format === 'date-time' && !validDateTime(value)) || (constraint.pattern && !new RegExp(constraint.pattern).test(value))) {
       throw new CliError('invalid_value', `Invalid --${flagName(key)}. See collab schema for supported values and bounds.`);
     }
   }

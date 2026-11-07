@@ -160,6 +160,19 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
     let retrievalMessage, configureRejected = false;
     try {
       const remoteCode = JSON.parse(text).error;
+      if (response.status === 409 && /^\/api\/apps\/auth\/agents\/reviews(?:\/[^/?]+)?(?:\?|$)/.test(endpoint) &&
+          /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
+        const reviewConflicts = {
+          hold_changed: 'The hold changed. Read this review again and reconcile the earlier action before making another change.',
+          revision_mismatch: 'The response must match the exact requested commit revision.',
+          review_not_ready: 'The review must be approved for the requested revision and any hold cleared before it can be resolved.',
+          review_held: 'Read the current hold and explicitly release it before cancelling this review.',
+          repository_mismatch: 'The requested repository does not match the project repository.',
+          request_conflict: 'This request conflicts with existing review work. Read the review and reuse its original request ID and payload only when retrying the same request.',
+          coordinator_review_unsupported: 'Coordinator-managed workers cannot use review mutations yet. Keep their existing claim and report the blocker.',
+        };
+        if (Object.hasOwn(reviewConflicts, remoteCode)) { code = remoteCode; retrievalMessage = reviewConflicts[remoteCode]; }
+      }
       if (method === 'POST' && body?.event === 'configure' && /^\/api\/apps\/auth\/agents\/worker(?:\?|$)/.test(endpoint) &&
           response.headers.get('content-type')?.includes('application/json')) {
         const rejections = { invalid_request: 400, invalid_json: 400, body_too_large: 413, invalid_labels: 400,

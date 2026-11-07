@@ -241,6 +241,16 @@ The matching server and CLI also support manual `collab transfers offer`,
 original claim until its named recipient accepts; it does not wake an agent.
 For prerequisites, cancellation and older-client limits, see [transfer offers](../../docs/agent-handoffs.md#transfers-that-retain-ownership-until-acceptance).
 
+For manual, identity-bound review without transferring the original claim, the
+matching CLI and server release provide `collab reviews request`, `list`, `get`,
+`claim`, `reply`, `hold`, `release-hold`, `cancel` and `resolve`. Use the
+[agent skill's command sequence](skills/collab-agents/SKILL.md#request-an-identity-bound-review)
+and verify the [review migration and rollout prerequisites](https://github.com/Art-of-Technology/collab/blob/main/docs/agent-review-contract.md#rollout-prerequisite)
+before enabling it. The reviewer is selected by immutable agent ID and the PR by
+full commit SHA. A review receipt is not GitHub approval, a current-head check or
+permission to merge. Coordinator-managed review and managed-claim recovery are
+not yet supported.
+
 `collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to
 30 seconds (supported range 1–60). It prints one JSON result and exits. An empty
 wait returns `timedOut: true`; it never marks, acknowledges or claims work.
