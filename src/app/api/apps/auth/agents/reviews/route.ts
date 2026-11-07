@@ -6,7 +6,8 @@ import { createReview, createReviewSchema, listReviews, reviewListSchema } from 
 export const GET = withAppAuth(async (request, context) => reviewResponse(async () => {
   const query = new URL(request.url).searchParams;
   return listReviews(context, reviewListSchema.parse({ agent: query.get('agent'),
-    ...(query.has('limit') && { limit: query.get('limit') }), ...(query.has('cursor') && { cursor: query.get('cursor') }) }));
+    ...(query.has('limit') && { limit: query.get('limit') }), ...(query.has('cursor') && { cursor: query.get('cursor') }),
+    ...(query.has('view') && { view: query.get('view') }) }));
 }), { requiredScopes: ['issues:read'] });
 
 export const POST = withAppAuth(async (request, context) => reviewResponse(async () =>

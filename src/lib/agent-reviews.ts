@@ -25,8 +25,9 @@ export const reviewActionSchema = z.discriminatedUnion('action', [
   z.object({ agent: agentName, generation: z.string().uuid().optional(), action: z.literal('cancel'), reason: privateText(500) }).strict(),
 ]);
 export const reviewListSchema = z.object({ agent: agentName, limit: z.coerce.number().int().min(1).max(50).default(20),
-  cursor: z.string().max(4096).regex(/^[A-Za-z0-9_-]+$/).optional() }).strict();
+  cursor: z.string().max(4096).regex(/^[A-Za-z0-9_-]+$/).optional(), view: z.literal('incoming-v1').optional() }).strict();
 const cursorSchema = z.tuple([id, id, z.string().datetime(), id]);
+const incomingCursorSchema = z.tuple([id, id, z.literal('incoming-v1'), z.string().datetime(), id]);
 const notFound = () => new HandoffError('review_not_found', 'Review not found or access denied', 404);
 function needRead(context: AppAuthContext) {
   if (!hasScope('issues:read', context.token.scopes)) throw new HandoffError('insufficient_scope', 'Reviews require issues:read', 403);
@@ -152,19 +153,23 @@ export async function listReviews(context: AppAuthContext, query: z.infer<typeof
     try {
       const bytes = Buffer.from(query.cursor, 'base64url');
       if (bytes.toString('base64url') !== query.cursor) throw new Error();
-      const [workspace, agentId, timestamp, lastId] = cursorSchema.parse(JSON.parse(bytes.toString('utf8')));
+      const raw = JSON.parse(bytes.toString('utf8'));
+      const [workspace, agentId, timestamp, lastId] = query.view
+        ? (([w, a, , t, i]) => [w, a, t, i] as const)(incomingCursorSchema.parse(raw))
+        : cursorSchema.parse(raw);
       const createdAt = new Date(timestamp);
       if (workspace !== context.workspace.id || agentId !== agent.id || createdAt.toISOString() !== timestamp) throw new Error();
       position = { createdAt, id: lastId };
     } catch { throw new HandoffError('invalid_cursor', 'Invalid review cursor'); }
   }
   const items = await prisma.agentReviewRequest.findMany({ where: { workspaceId: context.workspace.id,
-    OR: [{ ownerAgentId: agent.id }, { reviewerAgentId: agent.id }], issue: issueScope(context),
+    ...(query.view ? { reviewerAgentId: agent.id, status: { in: ['pending', 'claimed'] } }
+      : { OR: [{ ownerAgentId: agent.id }, { reviewerAgentId: agent.id }] }), issue: issueScope(context),
     ...(position && { AND: [{ OR: [{ createdAt: { gt: position.createdAt } }, { createdAt: position.createdAt, id: { gt: position.id } }] }] }),
   }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: query.limit + 1 });
   const page = items.slice(0, query.limit), last = page.at(-1);
-  return { items: page, nextCursor: items.length > query.limit && last ? Buffer.from(JSON.stringify([
-    context.workspace.id, agent.id, last.createdAt.toISOString(), last.id,
+  return { ...(query.view && { view: query.view }), items: page, nextCursor: items.length > query.limit && last ? Buffer.from(JSON.stringify([
+    context.workspace.id, agent.id, ...(query.view ? [query.view] : []), last.createdAt.toISOString(), last.id,
   ])).toString('base64url') : null };
 }
 

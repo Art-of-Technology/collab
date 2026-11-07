@@ -226,9 +226,8 @@ test('review wait scans pages and returns only pending or claimed IDs for the ex
   const f = await fixture(t, (req, res) => {
     if (req.url.includes('/agents/worker?')) return res.end(JSON.stringify({ agent: { id: 'reviewer-id', name: 'reviewer' } }));
     const cursor = new URL(req.url, 'http://localhost').searchParams.get('cursor');
-    res.end(JSON.stringify(cursor ? { items: [{ id: 'mine', reviewerAgentId: 'reviewer-id', status: 'pending', content: 'PRIVATE_SENTINEL' },
-      { id: 'other', reviewerAgentId: 'other-id', status: 'claimed' }], nextCursor: null } :
-      { items: [{ id: 'old', reviewerAgentId: null, status: 'cancelled' }], nextCursor: 'next_page' }));
+    res.end(JSON.stringify(cursor ? { view: 'incoming-v1', items: [{ id: 'mine', reviewerAgentId: 'reviewer-id', status: 'pending', content: 'PRIVATE_SENTINEL' }], nextCursor: null } :
+      { view: 'incoming-v1', items: [], nextCursor: 'next_page' }));
   });
   const result = await f.run(['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '3', '--workspace', 'w']);
   assert.equal(result.code, 0, result.stderr);
@@ -243,18 +242,25 @@ test('review wait polls arrivals, times out empty and refuses old servers or inv
   const args = ['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '3'];
   const arrival = await fixture(t, (req, res, _body, calls) => req.url.includes('/agents/worker?')
     ? res.end(JSON.stringify({ agent: { id: 'reviewer-id', name: 'reviewer' } }))
-    : res.end(JSON.stringify({ items: calls.filter(call => call.url.includes('/agents/reviews?')).length < 2 ? [] :
+    : res.end(JSON.stringify({ view: 'incoming-v1', items: calls.filter(call => call.url.includes('/agents/reviews?')).length < 2 ? [] :
       [{ id: 'mine', reviewerAgentId: 'reviewer-id', status: 'claimed', content: 'PRIVATE_SENTINEL' }], nextCursor: null })));
   const found = await arrival.run(args);
   assert.deepEqual(found.data, { items: [{ id: 'mine', status: 'claimed' }], timedOut: false });
   assert.equal(arrival.calls.filter(call => call.url.includes('/agents/reviews?')).length, 2);
-  const empty = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"items":[],"nextCursor":null}'));
+  const empty = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[],"nextCursor":null}'));
   const timedOut = await empty.run([...args.slice(0, -1), '1']);
   assert.deepEqual(timedOut.data, { items: [], timedOut: true });
   const old = await fixture(t, (req, res) => { if (req.url.includes('/agents/worker?')) return res.end('{"agent":{"id":"reviewer-id","name":"reviewer"}}'); res.writeHead(404); res.end('{}'); });
   const unsupported = await old.run(args);
   assert.notEqual(unsupported.code, 0); assert.equal(unsupported.error.error, 'not_found');
-  const malformed = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"items":[],"nextCursor":"repeat"}'));
+  const oldIgnoringFilter = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"items":[],"nextCursor":null}'));
+  const ignored = await oldIgnoringFilter.run(args);
+  assert.equal(ignored.error.error, 'review_filter_unsupported');
+  const oldUnfiltered = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"items":[{"id":"old","reviewerAgentId":"reviewer-id","status":"cancelled"}],"nextCursor":null}'));
+  assert.equal((await oldUnfiltered.run(args)).error.error, 'review_filter_unsupported');
+  const wrongRows = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[{"id":"other","reviewerAgentId":"other-id","status":"pending"}],"nextCursor":null}'));
+  assert.equal((await wrongRows.run(args)).error.error, 'invalid_response');
+  const malformed = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[],"nextCursor":"repeat"}'));
   const invalid = await malformed.run(args);
   assert.notEqual(invalid.code, 0); assert.equal(invalid.error.error, 'invalid_response');
   assert.equal(malformed.calls.length, 3);
@@ -266,7 +272,7 @@ test('review wait polls arrivals, times out empty and refuses old servers or inv
   assert.equal(wrongIdentity.calls.length, 1);
   const changed = await fixture(t, (req, res, _body, calls) => {
     if (req.url.includes('/agents/worker?')) return res.end(JSON.stringify({ agent: { id: calls.length === 1 ? 'reviewer-id' : 'new-id', name: 'reviewer' } }));
-    res.end('{"items":[],"nextCursor":null}');
+    res.end('{"view":"incoming-v1","items":[],"nextCursor":null}');
   });
   assert.equal((await changed.run(args)).error.error, 'reviewer_identity_mismatch');
 });
@@ -274,7 +280,7 @@ test('review wait polls arrivals, times out empty and refuses old servers or inv
 test('review wait reports an incomplete scan instead of a false empty result', async t => {
   const f = await fixture(t, (req, res, _body, calls) => {
     if (req.url.includes('/agents/worker?')) return res.end('{"agent":{"id":"reviewer-id","name":"reviewer"}}');
-    return res.end(JSON.stringify({ items: [], nextCursor: `next_${calls.length}` }));
+    return res.end(JSON.stringify({ view: 'incoming-v1', items: [], nextCursor: `next_${calls.length}` }));
   });
   const result = await f.run(['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '10']);
   assert.equal(result.error.error, 'review_scan_incomplete');
@@ -285,7 +291,7 @@ test('review wait shares one deadline across slow identity and review reads', as
   const args = ['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '1'];
   const slowPage = await fixture(t, (req, res) => {
     const identity = req.url.includes('/agents/worker?');
-    setTimeout(() => res.end(identity ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"items":[],"nextCursor":null}'), 650);
+    setTimeout(() => res.end(identity ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[],"nextCursor":null}'), 650);
   });
   const start = Date.now();
   const result = await slowPage.run(args);
@@ -297,7 +303,7 @@ test('review wait shares one deadline across slow identity and review reads', as
   const slowFinalIdentity = await fixture(t, (req, res, _body, calls) => {
     const identity = req.url.includes('/agents/worker?');
     const delayMs = calls.length === 1 ? 0 : 650;
-    setTimeout(() => res.end(identity ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"items":[],"nextCursor":null}'), delayMs);
+    setTimeout(() => res.end(identity ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[],"nextCursor":null}'), delayMs);
   });
   const finalResult = await slowFinalIdentity.run(args);
   assert.notEqual(finalResult.code, 0);

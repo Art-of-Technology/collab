@@ -262,7 +262,9 @@ collab reviews wait --agent NAME --reviewer-id OWN_REGISTRATION_ID --wait-second
 Review wait is read-only, returns only review IDs and statuses, and does not wake
 an agent. It reports API and incomplete-scan failures instead of treating them
 as no work. Owners waiting for replies also check each review ID with `reviews get`
-at each idle checkpoint.
+at each idle checkpoint. Review wait requires a server that supports the
+`incoming-v1` review filter; an older server reports `review_filter_unsupported`
+instead of silently missing work.
 
 `collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to
 30 seconds (supported range 1–60). It prints one JSON result and exits. An empty

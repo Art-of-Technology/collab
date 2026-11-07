@@ -346,14 +346,15 @@ async function main() {
       let cursor;
       const seen = new Set();
       for (let page = 0; page < 100; page++) {
-        const q = new URLSearchParams(query); q.set('limit', '50');
+        const q = new URLSearchParams(query); q.set('limit', '50'); q.set('view', 'incoming-v1');
         if (cursor) q.set('cursor', cursor);
         const result = await request(selected.base, `/api/apps/auth/agents/reviews?${q}`, { token: selected.token, timeout: remainingBudget() });
         remainingBudget();
-        if (!Array.isArray(result?.items) || result.items.length > 50 || !(result.nextCursor === null || (typeof result.nextCursor === 'string' && /^[A-Za-z0-9_-]{1,4096}$/.test(result.nextCursor))) || result.items.some(item => !item || !/^[A-Za-z0-9_-]{1,128}$/.test(item.id || '') || !(item.reviewerAgentId === null || typeof item.reviewerAgentId === 'string') || !['pending', 'claimed', 'replied', 'resolved', 'cancelled'].includes(item.status))) {
+        if (result?.view !== 'incoming-v1') throw new CliError('review_filter_unsupported', 'This server does not support safe incoming review discovery. Update the server before using reviews wait.', 5);
+        if (!Array.isArray(result?.items) || result.items.length > 50 || !(result.nextCursor === null || (typeof result.nextCursor === 'string' && /^[A-Za-z0-9_-]{1,4096}$/.test(result.nextCursor))) || result.items.some(item => !item || !/^[A-Za-z0-9_-]{1,128}$/.test(item.id || '') || item.reviewerAgentId !== options['reviewer-id'] || !['pending', 'claimed'].includes(item.status))) {
           throw new CliError('invalid_response', 'Unexpected review page; review discovery stopped.', 5);
         }
-        const items = result.items.filter(item => item.reviewerAgentId === options['reviewer-id'] && ['pending', 'claimed'].includes(item.status)).map(item => ({ id: item.id, status: item.status }));
+        const items = result.items.map(item => ({ id: item.id, status: item.status }));
         if (items.length) { await verifyIdentity(); return { items, timedOut: false }; }
         if (!result.nextCursor) break;
         if (seen.has(result.nextCursor)) throw new CliError('invalid_response', 'Repeated review cursor; review discovery stopped.', 5);
