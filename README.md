@@ -119,10 +119,11 @@ Collab is designed to streamline internal communication and work tracking by off
    DATABASE_URL="postgresql://username:password@localhost:5432/collab_db"
    ```
 
-   The server emits `[database-diagnostics]` warnings after slow operations or
-   transaction starts (at least one second), confirmed Prisma P2024 timeouts,
-   or transaction-start failures. Summaries aggregate counts and maximum timings
-   over a 60-second window without SQL, parameters, identities or credentials.
+   The server emits `[database-diagnostics]` warnings for slow operations or
+   interactive transaction starts (at least one second), confirmed Prisma P2024
+   timeouts, or interactive transaction-start failures. Summaries aggregate counts
+   and maximum timings over 60 seconds from the first qualifying event, without
+   SQL, parameters, identities, credentials or error messages.
    `poolTimeoutOperations` counts operations reporting P2024, not unique timeout
    incidents: one failed batch can affect multiple operations. P2024 transaction
    starts are counted separately in `poolTimeoutTransactionStarts`.
