@@ -119,6 +119,12 @@ Collab is designed to streamline internal communication and work tracking by off
    DATABASE_URL="postgresql://username:password@localhost:5432/collab_db"
    ```
 
+   The server emits `[database-diagnostics]` warnings after slow operations or
+   transaction starts (at least one second), confirmed Prisma P2024 timeouts,
+   or transaction-start failures. Summaries aggregate counts and maximum timings
+   over a 60-second window without SQL, parameters, identities or credentials.
+   These client-observed timings include more than connection-pool wait.
+
    #### Authentication (NextAuth.js)
    ```bash
    NEXTAUTH_URL="http://localhost:3000"  # Your app's URL
