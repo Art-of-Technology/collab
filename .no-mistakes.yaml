@@ -1,4 +1,6 @@
 # The /** matcher includes the root path itself and excludes nested instruction files.
+# Only the trusted default-branch policy is active; this branch policy takes effect
+# after merge. Protection covers automatic staging, not changes already committed.
 protected_paths:
   - 'AGENTS.md/**'
   - 'CLAUDE.md/**'
@@ -21,9 +23,11 @@ test:
     or full application startup is needed only when the changed behavior
     requires it.
 
-    Keep dependency caches, logs and temporary files outside the checkout. If
-    a Next.js dev server is needed, use a disposable copy outside the checkout
-    with generated agent rules disabled there. Clean up only files the test made.
+    Put caches, logs, databases and generated test output beneath a dedicated
+    platform-appropriate temporary directory outside the checkout; on macOS,
+    use /private/tmp. Never start Next.js dev in a checkout. If needed, use a
+    disposable non-Git source copy outside the checkout with generated agent
+    rules disabled there. Clean up only files the test made.
 
     For server or access-control changes, exercise the applicable API and
     security tests with an isolated database and synthetic credentials. For UI
