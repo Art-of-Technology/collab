@@ -517,6 +517,84 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     await prisma.workspaceMember.updateMany({ where: { userId: 'bob', workspaceId: 'w' }, data: { status: true } });
   });
 
+  await t.test('actual CLI performs manual offer and idempotent acceptance with synthetic identities over loopback', async () => {
+    const { createServer } = require('node:http');
+    const { spawn } = require('node:child_process');
+    const http = load('src/lib/agent-handoff-http.ts', { './agent-handoffs': service, zod: require('zod'), 'next/server': { NextResponse: Response } }, { Buffer });
+    const auth = { withAppAuth: fn => fn };
+    const routes = load('src/app/api/apps/auth/agents/transfer-offers/route.ts', {
+      '@/lib/apps/auth-middleware': auth, '@/lib/agent-handoffs': service, '@/lib/agent-handoff-http': http,
+    }, { URL });
+    const detail = load('src/app/api/apps/auth/agents/transfer-offers/[id]/route.ts', {
+      '@/lib/apps/auth-middleware': auth, '@/lib/agent-handoffs': service, '@/lib/agent-handoff-http': http,
+    });
+    const actors = { 'Bearer synthetic-alice': alice, 'Bearer synthetic-bob': bob, 'Bearer synthetic-carol': carol };
+    const server = createServer(async (req, res) => {
+      try {
+        const ctx = actors[req.headers.authorization];
+        if (!ctx) { res.writeHead(401); return res.end(); }
+        const u = new URL(req.url, 'http://127.0.0.1');
+        const chunks = []; for await (const chunk of req) chunks.push(chunk);
+        const data = Buffer.concat(chunks).toString();
+        const request = new Request(u, { method: req.method, ...(data ? { body: data } : {}) });
+        let response;
+        if (u.pathname === '/api/apps/auth/agents/transfer-offers') response = await routes[req.method](request, ctx);
+        else {
+          const match = /^\/api\/apps\/auth\/agents\/transfer-offers\/([^/]+)$/.exec(u.pathname);
+          if (!match || req.method !== 'PATCH') { res.writeHead(404); return res.end(); }
+          response = await detail.PATCH(request, ctx, { params: Promise.resolve({ id: match[1] }) });
+        }
+        res.writeHead(response.status, { 'content-type': 'application/json' }); res.end(await response.text());
+      } catch { res.writeHead(500); res.end(JSON.stringify({ error: 'fixture_failed' })); }
+    });
+    const cfg = mkdtempSync(join(tmpdir(), 'manual-transfer-cli-'));
+    try {
+      await new Promise((resolveListen, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => { server.off('error', reject); resolveListen(); });
+      });
+      const badMethod = await fetch(`http://127.0.0.1:${server.address().port}/api/apps/auth/agents/transfer-offers`, {
+        method: 'DELETE', headers: { authorization: 'Bearer synthetic-alice' },
+      });
+      assert.equal(badMethod.status, 500); assert.deepEqual(await badMethod.json(), { error: 'fixture_failed' });
+      const cli = resolve('packages/cli/bin/collab.mjs');
+      const run = (actor, args) => new Promise((resolveResult, reject) => {
+        const env = { PATH: process.env.PATH, COLLAB_CONFIG_DIR: cfg,
+          COLLAB_URL: `http://127.0.0.1:${server.address().port}`, COLLAB_TOKEN: `synthetic-${actor}` };
+        const proc = spawn(process.execPath, [cli, ...args, '--workspace', 'w'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+        let stdout = '', stderr = ''; proc.stdout.on('data', x => stdout += x); proc.stderr.on('data', x => stderr += x);
+        const timer = setTimeout(() => proc.kill(), 10_000);
+        proc.on('error', error => { clearTimeout(timer); reject(error); });
+        proc.on('close', code => { clearTimeout(timer); resolveResult({ code, stdout, stderr }); });
+      });
+      const handoff = await original(), requestId = randomUUID();
+      const args = ['transfers', 'offer', '--agent', 'alice', '--handoff-id', handoff.id, '--to-agent', 'bob', '--request-id', requestId, '--content', 'Owner stopped; explicit handoff'];
+      const first = await run('alice', args); assert.equal(first.code, 0, first.stderr);
+      const offered = JSON.parse(first.stdout), offerId = offered.id;
+      assert.ok(offerId); assert.equal((await parent(handoff)).claimedById, handoff.claimedById);
+      const retry = await run('alice', args); assert.equal(retry.code, 0, retry.stderr); assert.equal(JSON.parse(retry.stdout).id, offerId);
+      const list = await run('bob', ['transfers', 'list', '--agent', 'bob']); assert.equal(list.code, 0, list.stderr);
+      assert.ok(JSON.parse(list.stdout).items.some(x => x.id === offerId));
+      const denied = await run('carol', ['transfers', 'accept', offerId, '--agent', 'carol']);
+      assert.notEqual(denied.code, 0); assert.equal(JSON.parse(denied.stderr).status, 404);
+      assert.equal((await parent(handoff)).claimedById, handoff.claimedById);
+      const accepts = await Promise.all([run('bob', ['transfers', 'accept', offerId, '--agent', 'bob']), run('bob', ['transfers', 'accept', offerId, '--agent', 'bob'])]);
+      for (const result of accepts) assert.equal(result.code, 0, result.stderr);
+      const success = accepts.map(x => JSON.parse(x.stdout));
+      assert.equal(success[0].handoff.id, success[1].handoff.id);
+      for (const result of success) assert.equal(result.handoff.afterId, handoff.id);
+      const originalRow = await parent(handoff); assert.equal(originalRow.status, 'completed');
+      const successor = await prisma.agentHandoff.findUniqueOrThrow({ where: { id: success[0].handoff.id } });
+      const bobRegistration = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'bob' } } });
+      assert.equal(successor.afterId, handoff.id);
+      assert.equal(successor.status, 'claimed'); assert.equal(successor.claimedById, bobRegistration.id);
+      assert.equal(await prisma.agentHandoff.count({ where: { afterId: handoff.id, status: 'claimed' } }), 1);
+    } finally {
+      if (server.listening) await new Promise(resolveClose => server.close(resolveClose));
+      rmSync(cfg, { recursive: true, force: true });
+    }
+  });
+
   await t.test('HTTP routes apply their scope contracts and accept a paged CLI workspace query', async () => {
     const row = await original();
     const http = load('src/lib/agent-handoff-http.ts', { './agent-handoffs': service, zod: require('zod'), 'next/server': { NextResponse: Response } }, { Buffer });
