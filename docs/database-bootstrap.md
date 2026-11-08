@@ -137,9 +137,9 @@ columns, durable audit table and restrictive Issue project/workspace foreign
 keys directly; it does not replay the Trash migration's ALTER statements.
 
 `node --test tests/security/bootstrap-recipe.test.cjs` executes the actual CLI
-with process doubles. It checks exact emitted supplement bytes, one guarded
-transaction followed by one ordered native baseline command per admitted migration, target/env
-handling, drift refusal and no retry after simulated failures. These doubles do
+with process doubles. It checks the emitted transaction boundaries and guard markers,
+one ordered native baseline command per admitted migration, target/env handling,
+drift refusal and no retry after simulated failures. These doubles do
 not execute PostgreSQL or prove transaction, catalog or trigger behavior.
 The native fixture verifies exact baseline names/checksums, a complete model
 diff, all six Version catalog pairs, the new modeled tables, nullable Trash
