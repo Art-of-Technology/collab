@@ -137,7 +137,7 @@ columns, durable audit table and restrictive Issue project/workspace foreign
 keys directly; it does not replay the Trash migration's ALTER statements.
 
 `node --test tests/security/bootstrap-recipe.test.cjs` executes the actual CLI
-with process doubles. It checks the emitted transaction boundaries and guard markers,
+with process doubles. It checks the emitted transaction boundaries and empty-database guard,
 one ordered native baseline command per admitted migration, target/env handling,
 drift refusal and no retry after simulated failures. These doubles do
 not execute PostgreSQL or prove transaction, catalog or trigger behavior.
@@ -145,8 +145,9 @@ The native fixture verifies exact baseline names/checksums, a complete model
 diff, all six Version catalog pairs, the new modeled tables, nullable Trash
 columns, restrictive parent foreign keys and audit indexes. It also verifies
 that the audit table has no foreign keys that could cascade away its snapshots.
-It compares review constraints, indexes, functions and triggers with a database
-built from the migration and exercises the review guards against PostgreSQL.
+It compares Ready, Version, transfer and review safeguard definitions with a
+separate database built from the original migrations, and exercises the review
+guards against PostgreSQL.
 It retains the status/no-op deploy, populated/custom-schema refusal and lost
 COMMIT acknowledgment checks. A passing disposable local fixture qualifies this
 bootstrap recipe; it is not a production migration or restore receipt.
