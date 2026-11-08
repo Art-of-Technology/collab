@@ -127,6 +127,46 @@ test('identity-bound review guards custody, authorizes participants and records 
     }
     assert.fail('Expected database lock wait was not observed');
   }
+  for (const operation of ['close', 'pass']) {
+    const handoffId = 'stale-owner-' + operation;
+    await prisma.agentHandoff.create({ data: { id: handoffId, sourceKey: handoffId, workspaceId: 'w', issueId: 'issue', content: 'Stale owner', status: 'claimed', claimedById: 'owner-id' } });
+    let staleResult, currentReview;
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${handoffId} FOR UPDATE`;
+      staleResult = (operation === 'close' ? handoffs.actOnHandoff(context('owner'), handoffId, handoffs.actionSchema.parse({ agent: 'owner', action: 'complete', content: 'Done' })) :
+        handoffs.sendHandoff(context('owner'), handoffs.sendSchema.parse({ agent: 'owner', issue: 'SBK-1', content: 'Pass', toAgents: ['reviewer'], afterId: handoffId }))).then(value => ({ value }), error => ({ error }));
+      await waitForBlocked(1);
+      await tx.agentHandoff.update({ where: { id: handoffId }, data: { claimedById: 'replacement-id' } });
+      currentReview = await tx.agentReviewRequest.create({ data: { workspaceId: 'w', issueId: 'issue', originalHandoffId: handoffId, ownerAgentId: 'replacement-id', reviewerAgentId: 'outsider-id', requestId: randomUUID(), repository: 'owner/repo', pullRequestNumber: 7, revision: rev, requestContent: 'private current review' } });
+    }, { timeout: 10000 });
+    const stale = await staleResult;
+    assert.equal(stale.error?.code, 'claim_required');
+    assert.doesNotMatch(String(stale.error), /review|private/i);
+    await api.actOnReview(context('reviewer'), currentReview.id, api.reviewActionSchema.parse({ agent: 'reviewer', action: 'cancel', reason: 'Test complete' }));
+  }
+  for (const first of ['review', 'close']) {
+    const handoffId = 'close-race-' + first;
+    await prisma.agentHandoff.create({ data: { id: handoffId, sourceKey: handoffId, workspaceId: 'w', issueId: 'issue', content: 'Concurrent close', status: 'claimed', claimedById: 'owner-id' } });
+    const runReview = () => api.createReview(context('owner'), { ...input, handoffId, reviewerAgentId: 'replacement-id', requestId: randomUUID() }).then(value => ({ value }), error => ({ error }));
+    const runClose = () => handoffs.actOnHandoff(context('owner'), handoffId, handoffs.actionSchema.parse({ agent: 'owner', action: 'complete', content: 'Done' })).then(value => ({ value }), error => ({ error }));
+    let reviewResult, closeResult;
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${handoffId} FOR UPDATE`;
+      if (first === 'review') reviewResult = runReview(); else closeResult = runClose();
+      await waitForBlocked(1);
+      if (first === 'review') closeResult = runClose(); else reviewResult = runReview();
+      await waitForBlocked(2);
+    }, { timeout: 10000 });
+    const reviewed = await reviewResult, closed = await closeResult;
+    if (first === 'review') {
+      assert.ok(reviewed.value, String(reviewed.error));
+      assert.equal(closed.error?.code, 'review_already_active'); assert.equal(closed.error?.status, 409);
+    } else {
+      assert.ok(closed.value, String(closed.error));
+      assert.ok(reviewed.error, 'a review cannot start on a completed claim');
+    }
+    assert.doesNotMatch(String(reviewed.error ?? closed.error), /40P01|deadlock/i);
+  }
   for (const first of ['review', 'transfer']) {
     const handoffId = 'transfer-race-' + first;
     await prisma.agentHandoff.create({ data: { id: handoffId, sourceKey: handoffId, workspaceId: 'w', issueId: 'issue', content: 'Concurrent transfer', status: 'claimed', claimedById: 'owner-id' } });
@@ -272,6 +312,8 @@ test('identity-bound review guards custody, authorizes participants and records 
   const deps = { '@/lib/apps/auth-middleware': auth, '@/lib/agent-reviews': api, '@/lib/agent-handoff-http': http, '@/lib/agent-review-http': reviewHttp };
   const workerRoute = load('src/app/api/apps/auth/agents/worker/route.ts', { '@/lib/apps/auth-middleware': auth, '@/lib/agent-handoffs': handoffs, '@/lib/agent-handoff-http': http }, { URL });
   const transfers = load('src/app/api/apps/auth/agents/transfer-offers/route.ts', { '@/lib/apps/auth-middleware': auth, '@/lib/agent-handoffs': handoffs, '@/lib/agent-handoff-http': http }, { URL });
+  const handoffItem = load('src/app/api/apps/auth/agents/handoffs/[id]/route.ts', { '@/lib/apps/auth-middleware': auth, '@/lib/agent-handoffs': handoffs, '@/lib/agent-handoff-http': http }, { URL });
+  const handoffCollection = load('src/app/api/apps/auth/agents/handoffs/route.ts', { '@/lib/apps/auth-middleware': auth, '@/lib/agent-handoffs': handoffs, '@/lib/agent-handoff-http': http }, { URL });
   const collection = load('src/app/api/apps/auth/agents/reviews/route.ts', deps, { URL });
   const item = load('src/app/api/apps/auth/agents/reviews/[id]/route.ts', deps, { URL });
   server = createServer(async (req, res) => {
@@ -280,7 +322,7 @@ test('identity-bound review guards custody, authorizes participants and records 
       const request = new Request(`http://127.0.0.1:${server.address().port}${req.url}`, { method: req.method, headers: req.headers, ...(['POST', 'PATCH'].includes(req.method) && { body: Buffer.concat(chunks) }) });
       request.nextUrl = new URL(request.url);
       const path = new URL(request.url).pathname;
-      const response = path.endsWith('/worker') ? await workerRoute[req.method](request) : path.endsWith('/transfer-offers') ? await transfers[req.method](request) : path.endsWith('/reviews') ? await collection[req.method](request) :
+      const response = path.includes('/handoffs/') ? await handoffItem[req.method](request, { params: Promise.resolve({ id: decodeURIComponent(path.split('/').at(-1)) }) }) : path.endsWith('/handoffs') ? await handoffCollection[req.method](request) : path.endsWith('/worker') ? await workerRoute[req.method](request) : path.endsWith('/transfer-offers') ? await transfers[req.method](request) : path.endsWith('/reviews') ? await collection[req.method](request) :
         await item[req.method](request, { params: Promise.resolve({ id: decodeURIComponent(path.split('/').at(-1)) }) });
       res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(Buffer.from(await response.arrayBuffer()));
     } catch { res.writeHead(500); res.end(); }
@@ -299,6 +341,55 @@ test('identity-bound review guards custody, authorizes participants and records 
   });
   assert.equal(transferResponse.status, 409);
   assert.equal((await transferResponse.json()).error, 'review_already_active');
+  await prisma.agentHandoff.createMany({ data: [
+    { id: 'http-review-handoff', sourceKey: 'http-review', workspaceId: 'w', issueId: 'issue', content: 'Original', status: 'claimed', claimedById: 'owner-id', recipientNames: ['outsider'] },
+    { id: 'http-replacement', sourceKey: 'http-replacement', workspaceId: 'w', issueId: 'issue', content: 'Replacement', status: 'open' },
+  ] });
+  const guardedReview = await api.createReview(context('owner'), { ...input, handoffId: 'http-review-handoff', reviewerAgentId: 'replacement-id', requestId: randomUUID() });
+  for (const status of ['pending', 'claimed', 'replied']) {
+    if (status === 'claimed') await api.actOnReview(context('reviewer'), guardedReview.id, api.reviewActionSchema.parse({ agent: 'reviewer', action: 'claim' }));
+    if (status === 'replied') await api.actOnReview(context('reviewer'), guardedReview.id, api.reviewActionSchema.parse({ agent: 'reviewer', action: 'reply', verdict: 'approved', reviewedRevision: rev, content: 'private response' }));
+    for (const action of ['complete', 'release', 'supersede']) {
+      const response = await fetch(`http://127.0.0.1:${server.address().port}/api/apps/auth/agents/handoffs/http-review-handoff?workspaceId=w`, {
+        method: 'PATCH', headers: { authorization: 'Bearer fixture-owner', 'content-type': 'application/json' },
+        body: JSON.stringify({ agent: 'owner', action, content: 'finish work', ...(action === 'supersede' && { replacementId: 'http-replacement' }) }),
+      });
+      assert.equal(response.status, 409, `${status} review blocks ${action}`);
+      const body = await response.json();
+      assert.equal(body.error, 'review_already_active');
+      assert.doesNotMatch(JSON.stringify(body), /private (request|response)/);
+    }
+    const passOn = await fetch(`http://127.0.0.1:${server.address().port}/api/apps/auth/agents/handoffs?workspaceId=w`, {
+      method: 'POST', headers: { authorization: 'Bearer fixture-owner', 'content-type': 'application/json' },
+      body: JSON.stringify({ agent: 'owner', issue: 'SBK-1', content: 'Pass work', toAgents: ['reviewer'], afterId: 'http-review-handoff', requestId: randomUUID() }),
+    });
+    assert.equal(passOn.status, 409); assert.equal((await passOn.json()).error, 'review_already_active');
+    const unchanged = await prisma.agentHandoff.findUniqueOrThrow({ where: { id: 'http-review-handoff' } });
+    assert.equal(unchanged.status, 'claimed'); assert.equal(unchanged.claimedById, 'owner-id');
+  }
+  const deniedClose = await fetch(`http://127.0.0.1:${server.address().port}/api/apps/auth/agents/handoffs/http-review-handoff?workspaceId=w`, {
+    method: 'PATCH', headers: { authorization: 'Bearer fixture-outsider', 'content-type': 'application/json' },
+    body: JSON.stringify({ agent: 'owner', action: 'complete', content: 'finish work' }),
+  });
+  assert.equal(deniedClose.status, 404);
+  assert.doesNotMatch(await deniedClose.text(), /review_already_active|private (request|response)/);
+  const deniedPass = await fetch(`http://127.0.0.1:${server.address().port}/api/apps/auth/agents/handoffs?workspaceId=w`, {
+    method: 'POST', headers: { authorization: 'Bearer fixture-outsider', 'content-type': 'application/json' },
+    body: JSON.stringify({ agent: 'owner', issue: 'SBK-1', content: 'Pass', toAgents: ['reviewer'], afterId: 'http-review-handoff' }),
+  });
+  assert.equal(deniedPass.status, 404);
+  assert.doesNotMatch(await deniedPass.text(), /review_already_active|private (request|response)/);
+  for (const operation of ['complete', 'pass']) {
+    const visibleNonOwner = await fetch(`http://127.0.0.1:${server.address().port}/api/apps/auth/agents/handoffs${operation === 'complete' ? '/http-review-handoff' : ''}?workspaceId=w`, {
+      method: operation === 'complete' ? 'PATCH' : 'POST', headers: { authorization: 'Bearer fixture-outsider', 'content-type': 'application/json' },
+      body: JSON.stringify(operation === 'complete' ? { agent: 'outsider', action: 'complete', content: 'Done' } :
+        { agent: 'outsider', issue: 'SBK-1', content: 'Pass', toAgents: ['reviewer'], afterId: 'http-review-handoff' }),
+    });
+    assert.equal(visibleNonOwner.status, 409);
+    const body = await visibleNonOwner.json();
+    assert.equal(body.error, 'claim_required');
+    assert.doesNotMatch(JSON.stringify(body), /review_already_active|private (request|response)/);
+  }
   const outsiderResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/apps/auth/agents/reviews?workspaceId=w`, {
     method: 'POST', headers: { authorization: 'Bearer fixture-outsider', 'content-type': 'application/json' },
     body: JSON.stringify({ ...input, agent: 'outsider', handoffId: 'pending-offer-handoff', reviewerAgentId: 'replacement-id', requestId: randomUUID() }),
@@ -320,6 +411,10 @@ test('identity-bound review guards custody, authorizes participants and records 
     assert.equal(fail, false, 'expected CLI command to fail');
     return JSON.parse(out.stdout);
   };
+  const cliClose = await cli('owner', ['handoffs', 'complete', 'http-review-handoff', '--agent', 'owner', '--content', 'done'], true);
+  assert.equal(cliClose.error, 'review_already_active'); assert.match(cliClose.message, /Resolve or cancel the active review/);
+  const cliPass = await cli('owner', ['handoffs', 'send', '--agent', 'owner', '--issue', 'SBK-1', '--content', 'pass', '--to-agents', '["reviewer"]', '--after-id', 'http-review-handoff'], true);
+  assert.equal(cliPass.error, 'review_already_active'); assert.match(cliPass.message, /Resolve or cancel the active review/);
   // More than 100 legacy pages precede a fresh incoming review.
   const historic = Array.from({ length: 5001 }, (_, i) => i.toString().padStart(5, '0'));
   const past = new Date('2020-01-01T00:00:00.000Z');

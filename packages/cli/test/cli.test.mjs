@@ -162,6 +162,22 @@ test('review and transfer conflicts explain the existing work without exposing s
   assert.equal(f.calls.length, 2);
 });
 
+test('handoff review conflicts use fixed guidance only on handoff endpoints', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(409); res.end(JSON.stringify({ error: 'review_already_active', error_description: 'PRIVATE_SENTINEL' }));
+  });
+  const close = await f.run(['handoffs', 'complete', 'h', '--agent', 'author', '--content', 'Done']);
+  const pass = await f.run(['handoffs', 'send', '--agent', 'author', '--issue', 'APP-1', '--content', 'Pass', '--to-agents', '["peer"]', '--after-id', 'h']);
+  for (const result of [close, pass]) {
+    assert.equal(result.error.error, 'review_already_active');
+    assert.match(result.error.message, /Resolve or cancel the active review/);
+    assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  }
+  const unrelated = await f.run(['agents', 'list']);
+  assert.equal(unrelated.error.error, 'conflict');
+  assert.ok(!unrelated.stderr.includes('PRIVATE_SENTINEL'));
+});
+
 test('a review denied by workspace scope fails without retry or leaking server details', async t => {
   const f = await fixture(t, (_req, res) => {
     res.writeHead(403); res.end(JSON.stringify({ error: 'forbidden', error_description: 'PRIVATE_SENTINEL' }));

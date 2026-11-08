@@ -261,6 +261,14 @@ export async function reportWatcher(context: AppAuthContext, input: z.infer<type
   });
 }
 
+async function requireNoActiveReview(db: Prisma.TransactionClient, handoffId: string) {
+  // Old databases lack this table; callers hold the handoff lock before this check.
+  const [reviewTable] = await db.$queryRaw<Array<{ installed: boolean }>>`SELECT to_regclass('public."AgentReviewRequest"') IS NOT NULL AS installed`;
+  if (reviewTable?.installed && await db.agentReviewRequest.findFirst({ where: { originalHandoffId: handoffId, status: { in: ['pending', 'claimed', 'replied'] } }, select: { id: true } })) {
+    throw new HandoffError('review_already_active', 'Resolve or cancel the active review before changing this claim', 409);
+  }
+}
+
 export async function sendHandoff(context: AppAuthContext, input: z.infer<typeof sendSchema>) {
   return prisma.$transaction(async db => {
     await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND name = ${input.agent} FOR UPDATE`;
@@ -286,10 +294,12 @@ export async function sendHandoff(context: AppAuthContext, input: z.infer<typeof
       const prior = await visibleHandoff(db, context, agent, input.afterId);
       if (prior.issueId !== issue.id) throw new HandoffError('invalid_chain', 'A handoff chain must stay on the same issue');
       if (prior.status === 'claimed' && prior.claimedById === agent.id) {
-        await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${prior.id} AND "workspaceId" = ${context.workspace.id} AND "claimedById" = ${agent.id} FOR UPDATE`;
+        const locked = await db.$queryRaw<Array<{ id: string }>>`SELECT id FROM "AgentHandoff" WHERE id = ${prior.id} AND "workspaceId" = ${context.workspace.id} AND status = 'claimed' AND "claimedById" = ${agent.id} FOR UPDATE`;
+        if (!locked.length) throw new HandoffError('claim_required', 'Claim the previous handoff before passing it on', 409);
         if (await db.agentTransferOffer.findFirst({ where: { parentId: prior.id, status: 'pending' }, select: { id: true } })) {
           throw new HandoffError('transfer_offer_pending', 'Accept or cancel the pending transfer offer before changing this claim', 409);
         }
+        await requireNoActiveReview(db, prior.id);
       }
       const released = await db.agentHandoff.updateMany({ where: { id: prior.id, status: 'claimed', claimedById: agent.id }, data: { status: 'completed' } });
       if (!released.count) throw new HandoffError('claim_required', 'Claim the previous handoff before passing it on', 409);
@@ -539,10 +549,12 @@ export async function actOnHandoff(context: AppAuthContext, id: string, input: z
     if (lease) await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${id} FOR UPDATE`;
     const handoff = await visibleHandoff(db, context, agent, id);
     if (['complete', 'release', 'supersede'].includes(input.action) && handoff.status === 'claimed' && handoff.claimedById === agent.id) {
-      await db.$queryRaw`SELECT id FROM "AgentHandoff" WHERE id = ${id} AND "workspaceId" = ${context.workspace.id} AND "claimedById" = ${agent.id} FOR UPDATE`;
+      const locked = await db.$queryRaw<Array<{ id: string }>>`SELECT id FROM "AgentHandoff" WHERE id = ${id} AND "workspaceId" = ${context.workspace.id} AND status = 'claimed' AND "claimedById" = ${agent.id} FOR UPDATE`;
+      if (!locked.length) throw new HandoffError('claim_required', 'Only the current claimant may update this work', 409);
       if (await db.agentTransferOffer.findFirst({ where: { parentId: id, status: 'pending' }, select: { id: true } })) {
         throw new HandoffError('transfer_offer_pending', 'Accept or cancel the pending transfer offer before changing this claim', 409);
       }
+      await requireNoActiveReview(db, id);
     }
     if (input.action === 'supersede') {
       if (handoff.status === 'superseded' && handoff.supersededById === input.replacementId) return handoff;
