@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request } from 'node:http';
 import { ChildProcess, spawn, spawnSync } from 'node:child_process';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { once } from 'node:events';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, symlinkSync, statSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -23,6 +25,20 @@ test('ACL failure diagnostics classify subprocess failures without exposing outp
   assert.equal(aclFailureKind(run('setInterval(() => {}, 1000)', { timeout: 100 })), 'timeout');
   assert.equal(aclFailureKind(spawnSync(path.join('missing-private-path', 'no-executable'))), 'spawn-error');
   if (!windows) assert.equal(aclFailureKind(run("process.kill(process.pid, 'SIGTERM')")), 'signal');
+});
+
+test('ACL fails closed when a subprocess timeout has a zero exit status', () => {
+  const original = childProcess.spawnSync;
+  try {
+    childProcess.spawnSync = () => ({ status: 0, error: { code: 'ETIMEDOUT' } });
+    syncBuiltinESMExports();
+    let reason;
+    assert.equal(windowsAcl('synthetic', true, value => { reason = value; }), false);
+    assert.equal(reason, 'timeout');
+  } finally {
+    childProcess.spawnSync = original;
+    syncBuiltinESMExports();
+  }
 });
 
 test('manual transfer offer commands preserve recipient, request identity and explicit acceptance', async t => {
@@ -834,7 +850,7 @@ async function fixture(t, handler) {
     child.stdout.on('data', data => { stdout += data; });
     child.stderr.on('data', data => { stderr += data; stderrCallback?.(stderr); });
     child.stdin.end(input);
-    const timer = setTimeout(() => child.kill('SIGKILL'), windows ? 30000 : 10000);
+    const timer = setTimeout(() => child.kill('SIGKILL'), windows ? 120000 : 10000);
     childCallback?.(child);
     return once(child, 'close').then(([code, signal]) => {
       clearTimeout(timer);

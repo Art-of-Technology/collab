@@ -47,7 +47,7 @@ export function windowsAcl(target, create = false, onFailure) {
   const result = spawnSync(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {
     input: JSON.stringify({ path: target, create }), encoding: 'utf8', windowsHide: true, timeout: 30000, maxBuffer: 4096,
   });
-  if (result.status === 0) return true;
+  if (!result.error && result.status === 0) return true;
   if (onFailure) onFailure(aclFailureKind(result));
   return false;
 }
