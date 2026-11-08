@@ -1,6 +1,7 @@
-# The /** matcher includes the root path itself and excludes nested instruction files.
-# Only the trusted default-branch policy is active; this branch policy takes effect
-# after merge. Protection covers automatic staging, not changes already committed.
+# The /** matcher includes the root path itself and excludes nested
+# instruction files. Only the trusted default-branch policy is active; this
+# branch policy takes effect after merge. Protection covers automatic staging,
+# not changes already committed.
 protected_paths:
   - 'AGENTS.md/**'
   - 'CLAUDE.md/**'
