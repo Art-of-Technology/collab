@@ -61,7 +61,7 @@ backfill is deliberately not replayed into an empty bootstrap. Existing database
 must run the original migration, including its conservative invalidation. The modeled project foreign
 key preserves delete restriction. Do not substitute `db push` for bootstrap or
 reviewed upgrade migrations: it does not install the unmodeled constraints and
-Version or transfer functions/triggers. No reset is used.
+Version, transfer or review functions/triggers. No reset is used.
 
 After schema creation, native `prisma migrate resolve --applied` records each
 retained historical migration. These are baselines, not claims that historical
