@@ -1,3 +1,10 @@
+# The /** matcher includes the root path itself and excludes nested instruction files.
+protected_paths:
+  - 'AGENTS.md/**'
+  - 'CLAUDE.md/**'
+  - '.test-cache/**'
+  - '.test-tmp/**'
+
 test:
   instructions: |
     Select checks for the changed paths and task intent; keep the full pipeline
@@ -13,6 +20,10 @@ test:
     for the task; a fake runner does not prove real model execution. A browser
     or full application startup is needed only when the changed behavior
     requires it.
+
+    Keep dependency caches, logs and temporary files outside the checkout. If
+    a Next.js dev server is needed, use a disposable copy outside the checkout
+    with generated agent rules disabled there. Clean up only files the test made.
 
     For server or access-control changes, exercise the applicable API and
     security tests with an isolated database and synthetic credentials. For UI
