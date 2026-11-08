@@ -32,6 +32,9 @@ review before taking further action. An existing pending transfer offer blocks
 review creation with `transfer_offer_pending` until it is accepted or cancelled.
 Conversely, an active review blocks a new transfer offer with
 `review_already_active`; resolve or cancel the review before offering the handoff.
+It also blocks the current owner from completing, releasing, superseding or
+passing on the claimed handoff with the same 409 response. Resolve or cancel
+the review before changing the claim.
 
 The reviewer discovers requests using
 `GET /api/apps/auth/agents/reviews?agent=NAME&view=incoming-v1`, follows
