@@ -545,7 +545,7 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
           response = await detail.PATCH(request, ctx, { params: Promise.resolve({ id: match[1] }) });
         }
         res.writeHead(response.status, { 'content-type': 'application/json' }); res.end(await response.text());
-      } catch (error) { res.writeHead(500); res.end(JSON.stringify({ error: String(error) })); }
+      } catch { res.writeHead(500); res.end(JSON.stringify({ error: 'fixture_failed' })); }
     });
     const cfg = mkdtempSync(join(tmpdir(), 'manual-transfer-cli-'));
     try {
@@ -553,6 +553,10 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
         server.once('error', reject);
         server.listen(0, '127.0.0.1', () => { server.off('error', reject); resolveListen(); });
       });
+      const badMethod = await fetch(`http://127.0.0.1:${server.address().port}/api/apps/auth/agents/transfer-offers`, {
+        method: 'DELETE', headers: { authorization: 'Bearer synthetic-alice' },
+      });
+      assert.equal(badMethod.status, 500); assert.deepEqual(await badMethod.json(), { error: 'fixture_failed' });
       const cli = resolve('packages/cli/bin/collab.mjs');
       const run = (actor, args) => new Promise((resolveResult, reject) => {
         const env = { PATH: process.env.PATH, COLLAB_CONFIG_DIR: cfg,
