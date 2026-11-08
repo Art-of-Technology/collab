@@ -47,6 +47,15 @@ try {
   const pendingSerializationMigration = rows.find(row => row.name === '20261031000300_pending_offer_serialization').sql;
   if (!pendingSerializationMigration.startsWith('BEGIN;\n') || !pendingSerializationMigration.endsWith('COMMIT;\n')) throw new Error('Pending offer supplements need review.');
   const pendingSerializationSupplements = pendingSerializationMigration.slice('BEGIN;\n'.length, -'COMMIT;\n'.length);
+  const review = rows.find(row => row.name === '20261107000100_agent_review_guard')?.sql;
+  const reviewNames = ['status', 'pr', 'hold_version', 'repository', 'revision', 'content', 'response', 'resolution', 'cancellation', 'distinct_agents'];
+  const reviewChecks = [...(review ?? '').matchAll(/^  (CONSTRAINT "AgentReviewRequest_([a-z_]+)_check" CHECK [\s\S]*?)(?=,\n  CONSTRAINT|\n\);)/gm)];
+  const reviewIndex = review?.match(/^CREATE UNIQUE INDEX "AgentReviewRequest_one_active_per_handoff"[^;]*;/m)?.[0];
+  const reviewStart = review?.indexOf('CREATE FUNCTION "guard_review_request"') ?? -1;
+  if (!review?.startsWith('BEGIN;\n') || !review.endsWith('COMMIT;\n') || reviewStart < 0 || !reviewIndex ||
+      JSON.stringify(reviewChecks.map(match => match[2])) !== JSON.stringify(reviewNames)) throw new Error('Review guard supplements need review.');
+  const reviewSupplements = reviewChecks.map(match => `ALTER TABLE "AgentReviewRequest" ADD ${match[1]};`).join('\n') +
+    '\n' + reviewIndex + '\n' + review.slice(reviewStart, -'COMMIT;\n'.length);
   // Reuse the exact unmodeled SQL contracts; fail closed if their format changes.
   const stateCheck = ready.match(/^  CONSTRAINT "ForgeExecutionAttempt_state_check" CHECK .+$/m)?.[0].trim();
   const activeIndex = ready.match(/^CREATE UNIQUE INDEX "ForgeExecutionAttempt_active_issue_key"[\s\S]*?;/m)?.[0];
@@ -73,6 +82,7 @@ ${transferSupplements}
 ${transferWorkerSupplements}
 ${transferRecipientSupplements}
 ${pendingSerializationSupplements}
+${reviewSupplements}
 COMMIT;
 `;
   // Keep credentials out of command arguments, logs and generated files.

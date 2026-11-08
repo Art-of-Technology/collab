@@ -83,6 +83,7 @@ or passing its claim through the legacy path. A current server reports
 `transfer_offer_pending`; an older server may report a generic error. Deleting a
 claimant with a pending offer is blocked until the offer is cancelled; do not
 infer a stopped process from cancellation or account removal.
+An active review can also block a new offer; see the [review contract](agent-review-contract.md#request-and-response).
 
 Install all four transfer migrations listed below before enabling offers or workers.
 Transfer successors cannot be claimed by managed workers, including through older
@@ -200,4 +201,7 @@ The last migration refuses inconsistent pending offers; resolve them before retr
 Apply and verify all four before enabling
 offers or workers, including during mixed-version rollout. Apply the same target,
 ledger and protected-backup requirements above.
+The review migration also affects existing handoff, transfer and registration
+writers; follow its [runtime privilege and drain requirements](agent-review-contract.md#runtime-database-privileges)
+before applying it.
 For fresh databases, see [empty-database bootstrap](database-bootstrap.md).

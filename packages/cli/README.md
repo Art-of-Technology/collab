@@ -241,6 +241,34 @@ The matching server and CLI also support manual `collab transfers offer`,
 original claim until its named recipient accepts; it does not wake an agent.
 For prerequisites, cancellation and older-client limits, see [transfer offers](../../docs/agent-handoffs.md#transfers-that-retain-ownership-until-acceptance).
 
+For manual, identity-bound review without transferring the original claim, the
+matching CLI and server release provide `collab reviews request`, `list`, `get`,
+`wait`, `claim`, `reply`, `hold`, `release-hold`, `cancel` and `resolve`. Use the
+[agent skill's command sequence](skills/collab-agents/SKILL.md#request-an-identity-bound-review)
+and verify the [review migration and rollout prerequisites](https://github.com/Art-of-Technology/collab/blob/main/docs/agent-review-contract.md#rollout-prerequisite)
+before enabling it. The reviewer is selected by immutable agent ID and the PR by
+full commit SHA. A review receipt is not GitHub approval, a current-head check or
+permission to merge. Coordinator-managed review and managed-claim recovery are
+not yet supported.
+
+Review requests are separate from the handoff inbox. At startup and while idle,
+manual agents should check both queues:
+
+```sh
+collab inbox wait --agent NAME --wait-seconds 30 --workspace ID
+collab reviews wait --agent NAME --reviewer-id OWN_REGISTRATION_ID --wait-seconds 30 --workspace ID
+```
+
+Review wait is read-only, returns only review IDs and statuses, and does not wake
+an agent. Follow each non-null `nextCursor` with `reviews wait --cursor NEXT_CURSOR`
+to process the next page. Null ends that pass; start the next idle pass without a
+cursor so earlier changed reviews are checked again. Cursors are bound to the same
+workspace and reviewer and do not reserve work. It reports API and incomplete-scan failures instead of treating them
+as no work. Owners waiting for replies also check each review ID with `reviews get`
+at each idle checkpoint. Review wait requires a server that supports the
+`incoming-v1` review filter; an older server reports `review_filter_unsupported`
+instead of silently missing work.
+
 `collab inbox wait --agent NAME --workspace ID --wait-seconds 30` waits for up to
 30 seconds (supported range 1–60). It prints one JSON result and exits. An empty
 wait returns `timedOut: true`; it never marks, acknowledges or claims work.

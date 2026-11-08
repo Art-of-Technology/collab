@@ -7,6 +7,10 @@ PostgreSQL database from the current schema and explicitly baselines that
 history. It does not repair historical shadow-database replay, upgrade an
 existing installation or authorize production changes.
 
+The review schema and guards are installed as part of the bootstrap transaction.
+Runtime roles still require separately qualified privileges; see the [review
+rollout prerequisite](agent-review-contract.md#rollout-prerequisite).
+
 The contract includes agent handoffs, transfer offers, Git provider connections
 and issue Trash. Their modeled tables, indexes and foreign keys are represented
 by the current Prisma schema; transfer guards and the pending-offer partial index
@@ -57,7 +61,7 @@ backfill is deliberately not replayed into an empty bootstrap. Existing database
 must run the original migration, including its conservative invalidation. The modeled project foreign
 key preserves delete restriction. Do not substitute `db push` for bootstrap or
 reviewed upgrade migrations: it does not install the unmodeled constraints and
-Version or transfer functions/triggers. No reset is used.
+Version, transfer or review functions/triggers. No reset is used.
 
 After schema creation, native `prisma migrate resolve --applied` records each
 retained historical migration. These are baselines, not claims that historical
@@ -86,8 +90,9 @@ Recovery is an explicit operator investigation, not an automatic retry:
 2. Compare the actual schema with the reviewed Prisma model and inspect the
    Ready state CHECK, partial unique index and restrictive project foreign key,
    plus the six enabled Version function/trigger pairs, all transfer guard
-   functions and enabled triggers, and the pending-offer partial unique index on
-   their expected tables.
+   functions and enabled triggers, the pending-offer partial unique index, and
+   the review constraints, indexes, functions and enabled triggers on their
+   expected tables, comparing their definitions with the review migration.
    Verify `Version.issueAccessInvalidated` is non-null with default false.
    The expected catalog is defined by the pinned schema, original supplement SQL
    and `prisma/bootstrap-contract.json`; actual native readback is still required.
@@ -122,24 +127,27 @@ variables and populated/custom-schema refusal, and injects a lost acknowledgment
 after a real COMMIT. It never selects an existing application database.
 
 
-## Current source qualification and restore boundary
+## Qualification and restore boundary
 
 The bootstrap contract is the authoritative list of admitted migrations and
-their checksums. It retains the exact Ready, Version provenance and transfer
-guard and index supplements.
+their checksums. The recipe retains the exact Ready, Version provenance,
+transfer and review guard and index supplements.
 Historical migrations are unchanged. Fresh schema generation installs the Trash
 columns, durable audit table and restrictive Issue project/workspace foreign
 keys directly; it does not replay the Trash migration's ALTER statements.
 
 `node --test tests/security/bootstrap-recipe.test.cjs` executes the actual CLI
-with process doubles. It checks exact emitted supplement bytes, one guarded
-transaction followed by one ordered native baseline command per admitted migration, target/env
-handling, drift refusal and no retry after simulated failures. These doubles do
+with process doubles. It checks the emitted transaction boundaries and empty-database guard,
+one ordered native baseline command per admitted migration, target/env handling,
+drift refusal and no retry after simulated failures. These doubles do
 not execute PostgreSQL or prove transaction, catalog or trigger behavior.
 The native fixture verifies exact baseline names/checksums, a complete model
 diff, all six Version catalog pairs, the new modeled tables, nullable Trash
 columns, restrictive parent foreign keys and audit indexes. It also verifies
 that the audit table has no foreign keys that could cascade away its snapshots.
+It compares Ready, Version, transfer and review safeguard definitions with a
+separate database built from the original migrations, and exercises the review
+guards against PostgreSQL.
 It retains the status/no-op deploy, populated/custom-schema refusal and lost
 COMMIT acknowledgment checks. A passing disposable local fixture qualifies this
 bootstrap recipe; it is not a production migration or restore receipt.

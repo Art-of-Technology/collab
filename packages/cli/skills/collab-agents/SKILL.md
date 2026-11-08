@@ -88,15 +88,21 @@ Collab, and verify a real agent response before calling a wake-up successful.
 
 ## Receive and claim
 
-When idle, wait for work with one bounded command. When busy, check the inbox at a
-safe checkpoint, such as after finishing a test or commit. This skill cannot inject
-notifications into an actively generating model or start stopped agents.
+At startup and each idle checkpoint, check both handoffs and identity-bound reviews;
+they are separate queues. When busy, check at a safe checkpoint, such as after a
+test or commit. This skill cannot inject notifications into an actively generating
+model or start stopped agents.
 
 ```sh
 collab inbox wait --agent navy-builder-1 --wait-seconds 30 --workspace WORKSPACE_ID
+collab reviews wait --agent navy-builder-1 --reviewer-id OWN_REGISTRATION_ID --wait-seconds 30 --workspace WORKSPACE_ID
 collab handoffs get HANDOFF_ID --agent navy-builder-1 --workspace WORKSPACE_ID
 collab handoffs claim HANDOFF_ID --agent navy-builder-1 --workspace WORKSPACE_ID
 ```
+
+Follow each non-null review `nextCursor` with `reviews wait --cursor NEXT_CURSOR`
+until it is null. Start the next idle pass without a cursor to revisit earlier
+reviews. Cursors are bound to the same workspace and reviewer.
 
 All matching subscribers can see a handoff; only a successful claim grants ownership.
 A conflict means another agent claimed it: do not execute the work. Reading or waiting
@@ -105,6 +111,19 @@ use `handoffs ack` only when an acknowledgement is requested and appropriate. AC
 not ownership or completion. Process the returned batch, then read again when `hasMore`
 is true; marking seen advances the unseen inbox. Mark notifications claimed by another
 agent seen after inspecting them so they do not keep filling your inbox.
+
+Get `OWN_REGISTRATION_ID` from `collab agents list`. Each wait is finite (1–60
+seconds); while idle, repeat both waits, handling work from either before waiting
+again. Review wait reports only IDs and statuses for pending or claimed reviews
+addressed to that exact registration. Use `reviews get` to read one and
+`reviews claim` before reviewing. It neither wakes an agent nor changes a review. An older
+server without the review API returns an error, not an empty queue. Authentication,
+permission, invalid-page or incomplete-scan errors also mean discovery is
+unconfirmed: report the problem rather than assuming there is no review. For an
+incomplete scan, use `reviews list` and follow every `nextCursor`; its output can
+contain private review content. Neither inbox wait nor inbox watch includes reviews.
+Review wait confirms the supplied ID against the owned registration and stops on
+an identity mismatch.
 
 ## Rebuild context before working
 
@@ -157,6 +176,63 @@ exact blocker and keep working within your authority.
 For example, a peer can review your PR while you remain the owner; after its
 required checks and review pass, merge it. If a required check fails, fix or
 report that failure instead of merging.
+
+### Request an identity-bound review
+
+When the installed CLI lists `reviews request` in `collab schema` **and** the
+matching server migration and safety guards have been verified, two full
+developer agents can request and answer a review while the original handoff
+remains claimed. These manual commands do not run inside dedicated worker
+children, and coordinator-bound workers cannot use this review API yet.
+
+First get the reviewer's immutable registration ID from `collab agents list`.
+Record the exact repository, PR number and full lowercase commit SHA. Generate
+one UUID for the request and reuse that same UUID and payload if its result is
+uncertain; inspect `reviews list` before retrying. Use your registered name as
+`--agent`, the reviewer's ID as `--reviewer-agent-id`, and your existing claim
+ID as `--handoff-id`:
+
+```sh
+collab agents list --workspace WORKSPACE_ID
+collab reviews request --agent AUTHOR --handoff-id CLAIM_ID --reviewer-agent-id REVIEWER_ID \
+  --request-id REQUEST_UUID --repository ORG/REPO --pull-request-number 123 \
+  --revision FULL_COMMIT_SHA --content-file review-request.md --workspace WORKSPACE_ID
+collab reviews list --agent REVIEWER --workspace WORKSPACE_ID
+collab reviews get REVIEW_ID --agent REVIEWER --workspace WORKSPACE_ID
+collab reviews claim REVIEW_ID --agent REVIEWER --workspace WORKSPACE_ID
+collab reviews reply REVIEW_ID --agent REVIEWER --verdict approved \
+  --reviewed-revision FULL_COMMIT_SHA --content-file review-result.md --workspace WORKSPACE_ID
+```
+
+Use `changes_requested` or `blocked` rather than `approved` when appropriate.
+The owner reads the response with `reviews get`, follows any `nextCursor` from
+`reviews list`, and remains responsible for the original claim. To set or
+release a review hold, use `reviews hold` or `reviews release-hold` with the
+`--expected-hold-version` most recently read. If the outcome is uncertain or
+the version changed, read the review again and reconcile before another action;
+never reuse an old action against a newer hold. Clear an active hold explicitly
+before `reviews cancel`; cancellation leaves the original claim intact.
+
+After requesting review, save the review ID and run the following at startup and
+each idle checkpoint, including after each bounded inbox wait:
+
+```sh
+collab reviews get REVIEW_ID --agent AUTHOR --workspace WORKSPACE_ID
+```
+
+Check its status for a reply or
+cancellation and its hold fields; an API error or missing record is a blocker,
+not a pending or approved result. Once replied, read the verdict and exact
+reviewed revision before taking action. This periodic check is manual; it does
+not wake the owner or claim anything. Do not treat a review receipt as proof that
+the current PR head, required GitHub approvals, checks or holds are clear.
+
+`reviews resolve` acknowledges an approved receipt and removes its review
+guard; it neither completes the handoff nor authorizes a merge. The owner must
+independently verify the current repository, PR head, required reviews, checks
+and holds before merging. A changed head requires a new review. See the
+[review contract](https://github.com/Art-of-Technology/collab/blob/main/docs/agent-review-contract.md) for the required
+server migration, rollout and recovery boundaries.
 
 ### Coordinate a release
 

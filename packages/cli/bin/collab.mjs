@@ -211,7 +211,7 @@ async function main() {
     if (!Object.hasOwn(spec.fields, key) || Object.hasOwn(body, key)) throw new CliError('invalid_input', 'Text file field is unsupported or duplicated.');
     body[key] = await boundedInput(options[`${key}-file`]);
   }
-  if (['handoffs send', 'transfers offer'].includes(name) && body.requestId !== undefined &&
+  if (['handoffs send', 'transfers offer', 'reviews request'].includes(name) && body.requestId !== undefined &&
       (typeof body.requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.requestId))) {
     throw new CliError('invalid_value', '--request-id must be a UUID. Generate one with uuidgen and reuse it for retries.');
   }
@@ -227,6 +227,17 @@ async function main() {
   if (spec.defaultProject && !Object.hasOwn(body, 'projectId') && selected.project) body.projectId = selected.project;
   if (name === 'notes create' && body.projectId && !body.scope) body.scope = 'PROJECT';
   for (const key of spec.required || []) if (body[key] === undefined || body[key] === null || body[key] === '') throw new CliError('required_field', `Missing required --${flagName(key)}.`);
+  if (name.startsWith('reviews ')) {
+    const validText = (value, limit) => typeof value === 'string' && value.trim().length > 0 && value.trim().length <= limit && !/[\u0000\uD800-\uDFFF]/u.test(value);
+    if (body.agent !== undefined && !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(body.agent)) throw new CliError('invalid_value', 'Invalid --agent. Use the registered agent name.');
+    for (const key of ['handoffId', 'reviewerAgentId']) if (body[key] !== undefined && !/^[a-zA-Z0-9_-]{1,128}$/.test(body[key])) throw new CliError('invalid_value', `Invalid --${flagName(key)}. Use the registered immutable ID.`);
+    if (body.repository !== undefined && !/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/.test(body.repository)) throw new CliError('invalid_value', '--repository must be owner/repo.');
+    for (const key of ['revision', 'reviewedRevision']) if (body[key] !== undefined && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(body[key])) throw new CliError('invalid_value', `--${flagName(key)} must be the full lowercase commit SHA.`);
+    if (body.pullRequestNumber !== undefined && (body.pullRequestNumber < 1 || body.pullRequestNumber > 2147483647)) throw new CliError('invalid_value', '--pull-request-number must be a positive integer.');
+    if (body.expectedHoldVersion !== undefined && (body.expectedHoldVersion < 0 || body.expectedHoldVersion > 2147483647)) throw new CliError('invalid_value', '--expected-hold-version must be a nonnegative integer from the review.');
+    if (body.verdict !== undefined && !['approved', 'changes_requested', 'blocked'].includes(body.verdict)) throw new CliError('invalid_value', '--verdict must be approved, changes_requested or blocked.');
+    for (const [key, limit] of [['content', 16000], ['reason', 500]]) if (body[key] !== undefined && !validText(body[key], limit)) throw new CliError('invalid_value', `--${flagName(key)} must be nonempty valid Unicode and at most ${limit} characters.`);
+  }
   if (name === 'handoffs send' && !body.toAgents?.length && !body.toLabels?.length) {
     throw new CliError('required_field', 'Supply at least one recipient with --to-agents or --to-labels as a JSON array. --agent is the sender.');
   }
@@ -243,7 +254,7 @@ async function main() {
     if ((constraint.enum && !constraint.enum.includes(value)) ||
       (constraint.minimum !== undefined && Number(value) < constraint.minimum) || (constraint.maximum !== undefined && Number(value) > constraint.maximum) ||
       (constraint.minLength !== undefined && value.trim().length < constraint.minLength) || (constraint.maxLength !== undefined && value.length > constraint.maxLength) ||
-      (constraint.format === 'date-time' && !validDateTime(value))) {
+      (constraint.format === 'date-time' && !validDateTime(value)) || (constraint.pattern && !new RegExp(constraint.pattern).test(value))) {
       throw new CliError('invalid_value', `Invalid --${flagName(key)}. See collab schema for supported values and bounds.`);
     }
   }
@@ -262,6 +273,9 @@ async function main() {
   if (timeout < 1000 || timeout > 120000) throw new CliError('invalid_timeout', 'Timeout must be 1..120 seconds.');
   const waitSeconds = spec.wait ? converted(options['wait-seconds'] ?? '30', 'integer') : 0;
   if (spec.wait && (waitSeconds < 1 || waitSeconds > 60)) throw new CliError('invalid_timeout', 'Wait must be 1..60 seconds.');
+  if (name === 'reviews wait' && !/^[a-zA-Z0-9_-]{1,128}$/.test(options['reviewer-id'] || '')) {
+    throw new CliError('invalid_value', '--reviewer-id must be the immutable registration ID from agents list.');
+  }
   if (spec.action) body.action = spec.action;
   const payload = Object.keys(spec.fields).length ? body : undefined;
   const apiPath = () => `/api/apps/auth/${endpoint}${query.size ? `?${query}` : ''}`;
@@ -314,6 +328,47 @@ async function main() {
     if (name === 'notes get' && ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'].includes(result?.type)) throw new CliError('unsupported_note_type', 'Secret document output is not available through this CLI.', 4);
     return result;
   };
+  if (name === 'reviews wait') {
+    const deadline = Date.now() + waitSeconds * 1000;
+    const remainingBudget = () => {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new CliError('review_scan_incomplete', 'The review scan did not finish in time. Use reviews list and follow every nextCursor.', 5);
+      return Math.min(timeout, remaining);
+    };
+    const verifyIdentity = async () => {
+      const q = new URLSearchParams(query); q.delete('cursor');
+      const result = await request(selected.base, `/api/apps/auth/agents/worker?${q}`, { token: selected.token, timeout: remainingBudget() });
+      remainingBudget();
+      if (result?.agent?.id !== options['reviewer-id'] || result?.agent?.name !== query.get('agent')) throw new CliError('reviewer_identity_mismatch', 'The reviewer ID does not match this owned agent registration. Check agents list.', 5);
+    };
+    for (;;) {
+      await verifyIdentity();
+      let cursor = query.get('cursor') || undefined;
+      const seen = new Set();
+      for (let page = 0; page < 100; page++) {
+        const q = new URLSearchParams(query); q.set('limit', '50'); q.set('view', 'incoming-v1');
+        if (cursor) q.set('cursor', cursor);
+        const result = await request(selected.base, `/api/apps/auth/agents/reviews?${q}`, { token: selected.token, timeout: remainingBudget() });
+        remainingBudget();
+        if (result?.view !== 'incoming-v1') throw new CliError('review_filter_unsupported', 'This server does not support safe incoming review discovery. Update the server before using reviews wait.', 5);
+        if (!Array.isArray(result?.items) || result.items.length > 50 || !(result.nextCursor === null || (typeof result.nextCursor === 'string' && /^[A-Za-z0-9_-]{1,4096}$/.test(result.nextCursor))) || result.items.some(item => !item || !/^[A-Za-z0-9_-]{1,128}$/.test(item.id || '') || item.reviewerAgentId !== options['reviewer-id'] || !['pending', 'claimed'].includes(item.status))) {
+          throw new CliError('invalid_response', 'Unexpected review page; review discovery stopped.', 5);
+        }
+        const items = result.items.map(item => ({ id: item.id, status: item.status }));
+        if (result.nextCursor && result.nextCursor === cursor) throw new CliError('invalid_response', 'Repeated review cursor; review discovery stopped.', 5);
+        if (items.length) { await verifyIdentity(); return { items, nextCursor: result.nextCursor, timedOut: false }; }
+        if (!result.nextCursor) break;
+        if (seen.has(result.nextCursor)) throw new CliError('invalid_response', 'Repeated review cursor; review discovery stopped.', 5);
+        seen.add(result.nextCursor); cursor = result.nextCursor;
+        if (page === 99) throw new CliError('review_scan_incomplete', 'The review scan exceeded 100 pages. Use reviews list and follow every nextCursor.', 5);
+      }
+      await verifyIdentity();
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return { items: [], nextCursor: null, timedOut: true };
+      await delay(Math.min(1000, remaining));
+      if (Date.now() >= deadline) return { items: [], nextCursor: null, timedOut: true };
+    }
+  }
   if (spec.wait) {
     const deadline = Date.now() + waitSeconds * 1000;
     let last;

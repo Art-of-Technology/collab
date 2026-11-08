@@ -30,6 +30,8 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
   const trigger = migration.slice(migration.indexOf('CREATE FUNCTION "guard_pending_transfer_offer"'));
   execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', username, '-d', 'postgres'], { input: trigger, stdio: ['pipe', 'pipe', 'pipe'] });
   prisma = new PrismaClient({ datasources: { db: { url } } });
+  // Legacy installations may not yet have the review table.
+  await prisma.$executeRawUnsafe('DROP TABLE "AgentReviewRequest" CASCADE');
   class TestPrismaClient extends PrismaClient { constructor(options) { super({ ...options, datasources: { db: { url } } }); } }
   servicePrisma = load('src/lib/prisma.ts', { '@prisma/client': { Prisma, PrismaClient: TestPrismaClient },
     './database-diagnostics': load('src/lib/database-diagnostics.ts', {}, { performance, setTimeout, console }),

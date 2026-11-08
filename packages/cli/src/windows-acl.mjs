@@ -35,10 +35,19 @@ try {
 } catch { exit 1 }
 `;
 
-export function windowsAcl(target, create = false) {
+export function aclFailureKind(result) {
+  if (result.error?.code === 'ETIMEDOUT') return 'timeout';
+  if (result.error) return 'spawn-error';
+  if (result.signal) return 'signal';
+  return 'nonzero-exit';
+}
+
+export function windowsAcl(target, create = false, onFailure) {
   const powershell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   const result = spawnSync(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {
-    input: JSON.stringify({ path: target, create }), encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 4096,
+    input: JSON.stringify({ path: target, create }), encoding: 'utf8', windowsHide: true, timeout: 30000, maxBuffer: 4096,
   });
-  return result.status === 0;
+  if (!result.error && result.status === 0) return true;
+  if (onFailure) onFailure(aclFailureKind(result));
+  return false;
 }

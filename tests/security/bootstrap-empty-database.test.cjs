@@ -35,12 +35,12 @@ test('bootstrap requires explicit empty-database intent before any connection', 
   assert.equal(result.status, 1); assert.match(result.stderr, /Use --empty-database-only/);
 });
 
-test('native fresh bootstrap, subsequent migrations, and populated-target refusal', { skip: !process.env.COLLAB_BOOTSTRAP_TEST_SERVER_URL, timeout: 180000 }, () => {
+test('native fresh bootstrap, subsequent migrations, and populated-target refusal', { skip: !process.env.COLLAB_BOOTSTRAP_TEST_SERVER_URL, timeout: 300000 }, () => {
   const server = new URL(process.env.COLLAB_BOOTSTRAP_TEST_SERVER_URL);
   assert.ok(['127.0.0.1', '[::1]'].includes(server.hostname), 'only a disposable loopback test server is allowed');
   assert.ok(server.searchParams.getAll('sslmode').length === 1 && ['disable', 'require'].includes(server.searchParams.get('sslmode')), 'fixture requires explicit sslmode');
   const pg = { PGSSLMODE: server.searchParams.get('sslmode'), PGHOST: server.hostname.replace(/^\[|\]$/g, ''), PGPORT: server.port || '5432', PGUSER: decodeURIComponent(server.username), PGPASSWORD: decodeURIComponent(server.password), PGDATABASE: decodeURIComponent(server.pathname.slice(1)) };
-  const names = ['fresh', 'legacy', 'namespace', 'unknown'].map(kind => 'collab_bootstrap_test_' + kind + '_' + randomUUID().replaceAll('-', ''));
+  const names = ['fresh', 'legacy', 'namespace', 'unknown', 'reference'].map(kind => 'collab_bootstrap_test_' + kind + '_' + randomUUID().replaceAll('-', ''));
   const query = (name, sql) => {
     const result = run('psql', ['-X', '-At', '-v', 'ON_ERROR_STOP=1', '-c', sql], { ...pg, PGDATABASE: name });
     assert.equal(result.status, 0, 'fixture SQL must succeed'); return result.stdout.trim();
@@ -49,7 +49,7 @@ test('native fresh bootstrap, subsequent migrations, and populated-target refusa
   const wrapper = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-bootstrap-ack-'));
   try {
     for (const name of names) assert.equal(run('createdb', [name], pg).status, 0, 'create isolated database');
-    const [fresh, legacy, namespace, unknown] = names;
+    const [fresh, legacy, namespace, unknown, reference] = names;
     assert.equal(run(process.execPath, ['scripts/bootstrap-empty-database.mjs', '--empty-database-only'], { ...target(fresh), PGHOSTADDR: '127.0.0.2', PGHOST: 'ignored.example.test', PGPORT: '1', PGDATABASE: 'ignored' }).status, 0, 'bootstrap a truly empty target');
     for (const command of ['status', 'deploy']) assert.equal(run(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', command], target(fresh)).status, 0, 'native migration command succeeds after baseline');
     assert.equal(query(fresh, 'SELECT migration_name || \':\' || checksum FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name'), contract.migrations.map(row => row.name + ':' + row.sha256).join('\n'));
@@ -72,6 +72,28 @@ test('native fresh bootstrap, subsequent migrations, and populated-target refusa
       assert.equal(query(fresh, `SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_proc p ON p.oid=t.tgfoid WHERE n.nspname='public' AND c.relname='${table}' AND t.tgname='${name}' AND p.proname='${name}' AND NOT t.tgisinternal AND t.tgenabled='O'`), '1');
     }
     assert.equal(query(fresh, `SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname='AgentTransferOffer_one_pending_parent' AND i.indisunique AND i.indpred IS NOT NULL`), '1');
+    assert.equal(run(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--skip-generate'], target(reference)).status, 0, 'build a separate migration reference');
+    query(reference, 'DROP TABLE "AgentReviewRequest", "AgentTransferOffer", "ForgeExecutionAttempt" CASCADE; ALTER TABLE "Version" DROP COLUMN "issueAccessInvalidated"');
+    for (const name of ['20260924010000_forge_execution_attempt', '20260924130000_version_access_invalidation', '20261030000200_agent_transfer_offer', '20261031000100_transfer_worker_guard', '20261031000200_transfer_recipient_guard', '20261031000300_pending_offer_serialization', '20261107000100_agent_review_guard']) {
+      assert.equal(run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-f', path.join(root, 'prisma/migrations', name, 'migration.sql')], { ...pg, PGDATABASE: reference }).status, 0, 'apply the actual migration to the reference');
+    }
+    const reviewCatalog = `SELECT 'constraint:' || conname || ':' || pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='"AgentReviewRequest"'::regclass
+      UNION ALL SELECT 'index:' || c.relname || ':' || pg_get_indexdef(c.oid) FROM pg_class c JOIN pg_index i ON i.indexrelid=c.oid WHERE i.indrelid='"AgentReviewRequest"'::regclass
+      UNION ALL SELECT 'trigger:' || t.tgname || ':' || pg_get_triggerdef(t.oid) FROM pg_trigger t WHERE NOT t.tgisinternal AND t.tgname IN ('guard_review_request','guard_pending_review_claim','guard_review_against_transfer','cancel_reviews_on_owner_delete')
+      UNION ALL SELECT 'function:' || p.proname || ':' || pg_get_functiondef(p.oid) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ('guard_review_request','guard_pending_review_claim','guard_review_against_transfer','cancel_reviews_on_owner_delete') ORDER BY 1`;
+    assert.equal(query(fresh, reviewCatalog), query(reference, reviewCatalog), 'bootstrap review guards, constraints and indexes match the real migration');
+    assert.equal(query(fresh, `SELECT count(*) FROM pg_constraint WHERE conrelid='"AgentReviewRequest"'::regclass AND contype='c'`), '10');
+    const oldGuardNames = ['retain_version_access_invalidation', 'invalidate_child_version_access', 'invalidate_unlinked_version_access', 'invalidate_issue_version_access', 'invalidate_project_version_access', 'invalidate_status_version_access', 'guard_pending_transfer_offer', 'guard_transfer_managed_claim', 'guard_transfer_worker_conversion', 'serialize_pending_transfer_offer'];
+    const oldGuards = oldGuardNames.map(name => `'${name}'`).join(',');
+    const oldCatalog = `SELECT 'check:' || conname || ':' || convalidated::text || ':' || pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='"ForgeExecutionAttempt"'::regclass AND conname='ForgeExecutionAttempt_state_check'
+      UNION ALL SELECT 'index:' || c.relname || ':' || i.indisvalid::text || ':' || i.indisready::text || ':' || pg_get_indexdef(c.oid) FROM pg_class c JOIN pg_index i ON i.indexrelid=c.oid WHERE c.relname IN ('ForgeExecutionAttempt_active_issue_key','AgentTransferOffer_one_pending_parent') AND i.indrelid IN ('"ForgeExecutionAttempt"'::regclass,'"AgentTransferOffer"'::regclass)
+      UNION ALL SELECT 'trigger:' || t.tgname || ':' || t.tgenabled::text || ':' || pg_get_triggerdef(t.oid) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND NOT t.tgisinternal AND t.tgname IN (${oldGuards})
+      UNION ALL SELECT 'function:' || p.proname || ':' || pg_get_functiondef(p.oid) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN (${oldGuards}) ORDER BY 1`;
+    const migratedGuards = query(reference, oldCatalog);
+    assert.equal(migratedGuards.split('\n').filter(line => /^(check|index|trigger|function):/.test(line)).length, 23, 'reference has the Ready, Version and transfer safeguards');
+    assert.equal(query(fresh, oldCatalog), migratedGuards, 'bootstrap Ready, Version and transfer safeguards match full migrations');
+    const guardTests = run(process.execPath, ['--test', '--test-concurrency=1', 'tests/integration/agent-review-guard-db.test.cjs'], { COLLAB_REVIEW_GUARD_TEST_DATABASE_URL: new URL(target(fresh).DATABASE_URL).href, COLLAB_REQUIRE_REVIEW_GUARD_DB: '1' });
+    assert.equal(guardTests.status, 0, 'review guards enforce actual lifecycle and concurrency behavior after bootstrap');
     for (const { name, table } of catalog.versionFunctionsAndTriggers) {
       assert.equal(query(fresh, `SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname='${name}' AND p.prorettype='trigger'::regtype`), '1');
       assert.equal(query(fresh, `SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_proc p ON p.oid=t.tgfoid WHERE n.nspname='public' AND c.relname='${table}' AND t.tgname='${name}' AND p.proname='${name}' AND NOT t.tgisinternal AND t.tgenabled='O'`), '1');

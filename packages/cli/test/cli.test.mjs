@@ -2,19 +2,44 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request } from 'node:http';
 import { ChildProcess, spawn, spawnSync } from 'node:child_process';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { once } from 'node:events';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, symlinkSync, statSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { windowsAcl } from '../src/windows-acl.mjs';
+import { aclFailureKind, windowsAcl } from '../src/windows-acl.mjs';
 import { commands } from '../src/commands.mjs';
 import { watchInbox } from '../src/inbox-watch.mjs';
 
 const bin = fileURLToPath(new URL('../bin/collab.mjs', import.meta.url));
 const executable = process.env.COLLAB_CLI_EXECUTABLE;
 const windows = process.platform === 'win32';
+
+test('ACL failure diagnostics classify subprocess failures without exposing output', () => {
+  const run = (code, options = {}) => spawnSync(process.execPath, ['-e', code], { encoding: 'utf8', ...options });
+  const exited = run("process.stderr.write('PRIVATE_SENTINEL'); process.exit(7)");
+  assert.equal(aclFailureKind(exited), 'nonzero-exit');
+  assert.equal(aclFailureKind(run('setInterval(() => {}, 1000)', { timeout: 100 })), 'timeout');
+  assert.equal(aclFailureKind(spawnSync(path.join('missing-private-path', 'no-executable'))), 'spawn-error');
+  if (!windows) assert.equal(aclFailureKind(run("process.kill(process.pid, 'SIGTERM')")), 'signal');
+});
+
+test('ACL fails closed when a subprocess timeout has a zero exit status', () => {
+  const original = childProcess.spawnSync;
+  try {
+    childProcess.spawnSync = () => ({ status: 0, error: { code: 'ETIMEDOUT' } });
+    syncBuiltinESMExports();
+    let reason;
+    assert.equal(windowsAcl('synthetic', true, value => { reason = value; }), false);
+    assert.equal(reason, 'timeout');
+  } finally {
+    childProcess.spawnSync = original;
+    syncBuiltinESMExports();
+  }
+});
 
 test('manual transfer offer commands preserve recipient, request identity and explicit acceptance', async t => {
   const f = await fixture(t);
@@ -31,6 +56,137 @@ test('manual transfer offer commands preserve recipient, request identity and ex
     assert.deepEqual(JSON.parse(f.calls.at(-1).body), { agent: 'peer', action });
   }
   assert.notEqual((await f.run(['transfers', 'offer', '--agent', 'owner', '--handoff-id', 'original', '--to-agent', 'peer', '--content', 'No identity'])).code, 0);
+});
+
+test('manual review commands send the exact reviewer, revision and hold version without a handoff mutation', async t => {
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ items: [], nextCursor: 'next_cursor' })));
+  const requestId = '12345678-1234-4234-8234-123456789012', revision = 'a'.repeat(40);
+  const requestArgs = ['reviews', 'request', '--agent', 'author', '--handoff-id', 'claim-1', '--reviewer-agent-id', 'reviewer-id',
+    '--request-id', requestId, '--repository', 'org/repo', '--pull-request-number', '42', '--revision', revision,
+    '--content-file', '-', '--workspace', 'w'];
+  assert.equal((await f.run(requestArgs, { input: 'Review this exact head 📝' })).code, 0);
+  const first = f.calls.at(-1);
+  assert.equal(first.method, 'POST'); assert.equal(first.url, '/api/apps/auth/agents/reviews?workspaceId=w');
+  assert.deepEqual(JSON.parse(first.body), { agent: 'author', handoffId: 'claim-1', reviewerAgentId: 'reviewer-id', requestId,
+    repository: 'org/repo', pullRequestNumber: 42, revision, content: 'Review this exact head 📝' });
+  assert.equal((await f.run(requestArgs, { input: 'Review this exact head 📝' })).code, 0);
+  assert.equal(f.calls.at(-1).body, first.body, 'an explicit retry preserves the request ID and payload');
+  assert.equal((await f.run(['reviews', 'list', '--agent', 'reviewer', '--limit', '10', '--cursor', 'next_cursor', '--workspace', 'w'])).code, 0);
+  assert.equal(f.calls.at(-1).url, '/api/apps/auth/agents/reviews?workspaceId=w&agent=reviewer&limit=10&cursor=next_cursor');
+  assert.equal((await f.run(['reviews', 'get', 'review-1', '--agent', 'author', '--workspace', 'w'])).code, 0);
+  assert.equal(f.calls.at(-1).url, '/api/apps/auth/agents/reviews/review-1?workspaceId=w&agent=author');
+  const actions = [
+    [['claim', 'review-1', '--agent', 'reviewer'], { agent: 'reviewer', action: 'claim' }],
+    [['reply', 'review-1', '--agent', 'reviewer', '--verdict', 'approved', '--reviewed-revision', revision, '--content', 'Reviewed'],
+      { agent: 'reviewer', verdict: 'approved', reviewedRevision: revision, content: 'Reviewed', action: 'reply' }],
+    [['hold', 'review-1', '--agent', 'author', '--reason', 'Waiting for checks', '--expected-hold-version', '0'],
+      { agent: 'author', reason: 'Waiting for checks', expectedHoldVersion: 0, action: 'hold' }],
+    [['release-hold', 'review-1', '--agent', 'author', '--expected-hold-version', '1'],
+      { agent: 'author', expectedHoldVersion: 1, action: 'release_hold' }],
+    [['resolve', 'review-1', '--agent', 'author'], { agent: 'author', action: 'resolve' }],
+    [['cancel', 'review-1', '--agent', 'author', '--reason', 'Superseded'], { agent: 'author', reason: 'Superseded', action: 'cancel' }],
+  ];
+  for (const [args, body] of actions) {
+    const result = await f.run(['reviews', ...args, '--workspace', 'w']);
+    assert.equal(result.code, 0, result.stderr);
+    const call = f.calls.at(-1);
+    assert.equal(call.method, 'PATCH'); assert.equal(call.url, '/api/apps/auth/agents/reviews/review-1?workspaceId=w');
+    assert.deepEqual(JSON.parse(call.body), body);
+  }
+  assert.ok(f.calls.every(call => !call.url.includes('handoffs/')), 'review commands must not complete or transfer the original claim');
+});
+
+test('review commands reject malformed identity, revision, verdict, hold versions and content before HTTP', async t => {
+  const f = await fixture(t), revision = 'b'.repeat(40);
+  const body = { agent: 'author', handoffId: 'h', reviewerAgentId: 'reviewer-id', requestId: '12345678-1234-4234-8234-123456789012',
+    repository: 'org/repo', pullRequestNumber: 42, revision, content: 'Review' };
+  for (const bad of [
+    { reviewerAgentId: '' }, { reviewerAgentId: 'not a stable ID' }, { requestId: 'probe-name' },
+    { repository: 'https://example.com/org/repo' }, { pullRequestNumber: 0 }, { pullRequestNumber: 2147483648 },
+    { revision: 'b'.repeat(39) }, { revision: 'B'.repeat(40) }, { content: ' '.repeat(3) }, { content: '\u0000' }, { content: '\ud800' }, { content: 'x'.repeat(16001) },
+  ]) {
+    const result = await f.run(['reviews', 'request', '--input', '-'], { input: JSON.stringify({ ...body, ...bad }) });
+    assert.notEqual(result.code, 0);
+  }
+  for (const args of [
+    ['reply', 'r', '--agent', 'peer', '--verdict', 'maybe', '--reviewed-revision', revision, '--content', 'x'],
+    ['reply', 'r', '--agent', 'peer', '--verdict', 'approved', '--reviewed-revision', 'short', '--content', 'x'],
+    ['hold', 'r', '--agent', 'author', '--reason', 'x', '--expected-hold-version', '-1'],
+    ['release-hold', 'r', '--agent', 'author'],
+    ['cancel', 'r', '--agent', 'author', '--reason', '   '],
+    ['list', '--agent', 'peer', '--cursor', 'bad cursor'],
+  ]) assert.notEqual((await f.run(['reviews', ...args])).code, 0);
+  assert.equal(f.calls.length, 0);
+});
+
+test('review errors stay sanitized and uncertain writes are never retried automatically', async t => {
+  const f = await fixture(t, (req, res, _body, calls) => {
+    if (req.method === 'POST') { res.writeHead(503); res.end(JSON.stringify({ error: 'review_unavailable', error_description: 'PRIVATE_SENTINEL' })); }
+    else { res.writeHead(409); res.end(JSON.stringify({ error: 'hold_changed', error_description: 'PRIVATE_SENTINEL' })); }
+  });
+  const args = ['reviews', 'request', '--agent', 'author', '--handoff-id', 'h', '--reviewer-agent-id', 'peer-id',
+    '--request-id', '12345678-1234-4234-8234-123456789012', '--repository', 'org/repo', '--pull-request-number', '1', '--revision', 'c'.repeat(40), '--content', 'Review'];
+  const result = await f.run(args);
+  assert.equal(result.error.error, 'outcome_unknown'); assert.equal(f.calls.length, 1);
+  assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  const hold = await f.run(['reviews', 'release-hold', 'r', '--agent', 'author', '--expected-hold-version', '0']);
+  assert.equal(hold.error.error, 'hold_changed'); assert.match(hold.error.message, /Read this review again/);
+  assert.ok(!hold.stderr.includes('PRIVATE_SENTINEL')); assert.equal(f.calls.length, 2);
+});
+
+test('review request explains an existing active review without exposing server text', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(409); res.end(JSON.stringify({ error: 'review_already_active', error_description: 'PRIVATE_SENTINEL' }));
+  });
+  const result = await f.run(['reviews', 'request', '--agent', 'author', '--handoff-id', 'h', '--reviewer-agent-id', 'peer-id',
+    '--request-id', '12345678-1234-4234-8234-123456789012', '--repository', 'org/repo', '--pull-request-number', '1', '--revision', 'c'.repeat(40), '--content', 'Review']);
+  assert.equal(result.error.error, 'review_already_active');
+  assert.match(result.error.message, /already has an active review/);
+  assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  assert.equal(f.calls.length, 1);
+});
+
+test('review and transfer conflicts explain the existing work without exposing server text', async t => {
+  const f = await fixture(t, (req, res) => {
+    res.writeHead(409);
+    res.end(JSON.stringify({ error: req.url.includes('/reviews') ? 'transfer_offer_pending' : 'review_already_active', error_description: 'PRIVATE_SENTINEL' }));
+  });
+  const review = await f.run(['reviews', 'request', '--agent', 'author', '--handoff-id', 'h', '--reviewer-agent-id', 'peer-id',
+    '--request-id', '12345678-1234-4234-8234-123456789012', '--repository', 'org/repo', '--pull-request-number', '1', '--revision', 'c'.repeat(40), '--content', 'Review']);
+  assert.equal(review.error.error, 'transfer_offer_pending');
+  assert.match(review.error.message, /pending transfer offer/);
+  const transfer = await f.run(['transfers', 'offer', '--agent', 'author', '--handoff-id', 'h', '--to-agent', 'peer', '--request-id', '12345678-1234-4234-8234-123456789012', '--content', 'Transfer']);
+  assert.equal(transfer.error.error, 'review_already_active');
+  assert.match(transfer.error.message, /active review/);
+  assert.ok(!(review.stderr + transfer.stderr).includes('PRIVATE_SENTINEL'));
+  assert.equal(f.calls.length, 2);
+});
+
+test('handoff review conflicts use fixed guidance only on handoff endpoints', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(409); res.end(JSON.stringify({ error: 'review_already_active', error_description: 'PRIVATE_SENTINEL' }));
+  });
+  const close = await f.run(['handoffs', 'complete', 'h', '--agent', 'author', '--content', 'Done']);
+  const pass = await f.run(['handoffs', 'send', '--agent', 'author', '--issue', 'APP-1', '--content', 'Pass', '--to-agents', '["peer"]', '--after-id', 'h']);
+  for (const result of [close, pass]) {
+    assert.equal(result.error.error, 'review_already_active');
+    assert.match(result.error.message, /Resolve or cancel the active review/);
+    assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  }
+  const unrelated = await f.run(['agents', 'list']);
+  assert.equal(unrelated.error.error, 'conflict');
+  assert.ok(!unrelated.stderr.includes('PRIVATE_SENTINEL'));
+});
+
+test('a review denied by workspace scope fails without retry or leaking server details', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(403); res.end(JSON.stringify({ error: 'forbidden', error_description: 'PRIVATE_SENTINEL' }));
+  });
+  const result = await f.run(['reviews', 'get', 'review-1', '--agent', 'reviewer', '--workspace', 'other-workspace']);
+  assert.notEqual(result.code, 0);
+  assert.equal(f.calls.length, 1);
+  assert.match(f.calls[0].url, /workspaceId=other-workspace/);
+  assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
 });
 
 test('agent registration, handoff and claim commands send scoped fixed API requests', async t => {
@@ -133,6 +289,119 @@ test('handoff and transfer request IDs match server UUID validation before dispa
     input: JSON.stringify({ agent: 'builder-a', issue: 'APP-1', content: 'Review', toAgents: ['reviewer'], requestId: validIds[0] }),
   });
   assert.equal(json.code, 0, json.stderr);
+});
+
+test('review wait scans pages and returns only pending or claimed IDs for the exact reviewer', async t => {
+  const f = await fixture(t, (req, res) => {
+    if (req.url.includes('/agents/worker?')) return res.end(JSON.stringify({ agent: { id: 'reviewer-id', name: 'reviewer' } }));
+    const cursor = new URL(req.url, 'http://localhost').searchParams.get('cursor');
+    res.end(JSON.stringify(cursor ? { view: 'incoming-v1', items: [{ id: 'mine', reviewerAgentId: 'reviewer-id', status: 'pending', content: 'PRIVATE_SENTINEL' }], nextCursor: null } :
+      { view: 'incoming-v1', items: [], nextCursor: 'next_page' }));
+  });
+  const result = await f.run(['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '3', '--workspace', 'w']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.data, { items: [{ id: 'mine', status: 'pending' }], nextCursor: null, timedOut: false });
+  assert.ok(!result.stdout.includes('PRIVATE_SENTINEL'));
+  assert.equal(f.calls.length, 4);
+  assert.ok(f.calls.every(call => call.method === 'GET' && call.url.includes('workspaceId=w')));
+  assert.equal(new URL(f.calls[2].url, 'http://localhost').searchParams.get('cursor'), 'next_page');
+});
+
+test('review wait polls arrivals, times out empty and refuses old servers or invalid pages', async t => {
+  const args = ['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '3'];
+  const arrival = await fixture(t, (req, res, _body, calls) => req.url.includes('/agents/worker?')
+    ? res.end(JSON.stringify({ agent: { id: 'reviewer-id', name: 'reviewer' } }))
+    : res.end(JSON.stringify({ view: 'incoming-v1', items: calls.filter(call => call.url.includes('/agents/reviews?')).length < 2 ? [] :
+      [{ id: 'mine', reviewerAgentId: 'reviewer-id', status: 'claimed', content: 'PRIVATE_SENTINEL' }], nextCursor: null })));
+  const found = await arrival.run(args);
+  assert.deepEqual(found.data, { items: [{ id: 'mine', status: 'claimed' }], nextCursor: null, timedOut: false });
+  assert.equal(arrival.calls.filter(call => call.url.includes('/agents/reviews?')).length, 2);
+  const empty = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[],"nextCursor":null}'));
+  const timedOut = await empty.run([...args.slice(0, -1), '1']);
+  assert.deepEqual(timedOut.data, { items: [], nextCursor: null, timedOut: true });
+  const old = await fixture(t, (req, res) => { if (req.url.includes('/agents/worker?')) return res.end('{"agent":{"id":"reviewer-id","name":"reviewer"}}'); res.writeHead(404); res.end('{}'); });
+  const unsupported = await old.run(args);
+  assert.notEqual(unsupported.code, 0); assert.equal(unsupported.error.error, 'not_found');
+  const oldIgnoringFilter = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"items":[],"nextCursor":null}'));
+  const ignored = await oldIgnoringFilter.run(args);
+  assert.equal(ignored.error.error, 'review_filter_unsupported');
+  const oldUnfiltered = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"items":[{"id":"old","reviewerAgentId":"reviewer-id","status":"cancelled"}],"nextCursor":null}'));
+  assert.equal((await oldUnfiltered.run(args)).error.error, 'review_filter_unsupported');
+  const wrongRows = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[{"id":"other","reviewerAgentId":"other-id","status":"pending"}],"nextCursor":null}'));
+  assert.equal((await wrongRows.run(args)).error.error, 'invalid_response');
+  const malformed = await fixture(t, (req, res) => res.end(req.url.includes('/agents/worker?') ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[],"nextCursor":"repeat"}'));
+  const invalid = await malformed.run(args);
+  assert.notEqual(invalid.code, 0); assert.equal(invalid.error.error, 'invalid_response');
+  assert.equal(malformed.calls.length, 3);
+  assert.notEqual((await malformed.run(['reviews', 'wait', '--agent', 'reviewer'])).code, 0);
+  assert.equal(malformed.calls.length, 3);
+  const wrongIdentity = await fixture(t, (_req, res) => res.end('{"agent":{"id":"different-id","name":"reviewer"}}'));
+  const mismatch = await wrongIdentity.run(args);
+  assert.equal(mismatch.error.error, 'reviewer_identity_mismatch');
+  assert.equal(wrongIdentity.calls.length, 1);
+  const changed = await fixture(t, (req, res, _body, calls) => {
+    if (req.url.includes('/agents/worker?')) return res.end(JSON.stringify({ agent: { id: calls.length === 1 ? 'reviewer-id' : 'new-id', name: 'reviewer' } }));
+    res.end('{"view":"incoming-v1","items":[],"nextCursor":null}');
+  });
+  assert.equal((await changed.run(args)).error.error, 'reviewer_identity_mismatch');
+});
+
+test('review wait reports an incomplete scan instead of a false empty result', async t => {
+  const f = await fixture(t, (req, res, _body, calls) => {
+    if (req.url.includes('/agents/worker?')) return res.end('{"agent":{"id":"reviewer-id","name":"reviewer"}}');
+    return res.end(JSON.stringify({ view: 'incoming-v1', items: [], nextCursor: `next_${calls.length}` }));
+  });
+  const result = await f.run(['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '10']);
+  assert.equal(result.error.error, 'review_scan_incomplete');
+  assert.equal(f.calls.filter(call => call.url.includes('/agents/reviews?')).length, 100);
+});
+
+test('review wait forwards the continuation and refuses a repeated cursor with results', async t => {
+  const f = await fixture(t, (req, res) => {
+    if (req.url.includes('/agents/worker?')) {
+      assert.equal(new URL(req.url, 'http://localhost').searchParams.has('cursor'), false);
+      return res.end('{"agent":{"id":"reviewer-id","name":"reviewer"}}');
+    }
+    return res.end(JSON.stringify({ view: 'incoming-v1', items: [{ id: 'mine', reviewerAgentId: 'reviewer-id', status: 'pending' }], nextCursor: 'previous' }));
+  });
+  const result = await f.run(['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--cursor', 'previous', '--wait-seconds', '3']);
+  assert.equal(result.error.error, 'invalid_response');
+  assert.equal(new URL(f.calls[1].url, 'http://localhost').searchParams.get('cursor'), 'previous');
+});
+
+test('review wait shares one deadline across slow identity and review reads', async t => {
+  const args = ['reviews', 'wait', '--agent', 'reviewer', '--reviewer-id', 'reviewer-id', '--wait-seconds', '5'];
+  for (const slowFinalIdentity of [false, true]) {
+    let releaseResponse;
+    const responseReleased = new Promise(resolve => { releaseResponse = resolve; });
+    const f = await fixture(t, (req, res, _body, calls) => {
+      const identity = req.url.includes('/agents/worker?');
+      const lastRead = calls.length === (slowFinalIdentity ? 3 : 2);
+      const delayMs = slowFinalIdentity && calls.length === 1 ? 0 : 3000;
+      setTimeout(() => {
+        if (lastRead) releaseResponse(res.destroyed);
+        res.end(identity ? '{"agent":{"id":"reviewer-id","name":"reviewer"}}' : '{"view":"incoming-v1","items":[],"nextCursor":null}');
+      }, delayMs);
+    });
+    const result = await f.run(args);
+    assert.notEqual(result.code, 0);
+    assert.ok(['transport_failed', 'review_scan_incomplete'].includes(result.error.error));
+    assert.equal(f.calls.length, slowFinalIdentity ? 3 : 2);
+    assert.equal(await responseReleased, true, 'the shared deadline aborts the final read before its response');
+  }
+});
+
+test('the owner can check a specific review reply and missing records stay errors', async t => {
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ id: 'review-1', status: 'replied', responseOutcome: 'blocked',
+    reviewedRevision: 'a'.repeat(40), holdReason: 'Waiting for CI', holdVersion: 2 })));
+  const args = ['reviews', 'get', 'review-1', '--agent', 'author', '--workspace', 'w'];
+  const result = await f.run(args);
+  assert.equal(result.data.status, 'replied'); assert.equal(result.data.responseOutcome, 'blocked');
+  assert.equal(result.data.holdVersion, 2); assert.equal(result.data.reviewedRevision, 'a'.repeat(40));
+  assert.equal(f.calls.length, 1); assert.equal(f.calls[0].method, 'GET');
+  const missing = await fixture(t, (_req, res) => { res.writeHead(404); res.end('{}'); });
+  const error = await missing.run(args);
+  assert.equal(error.error.error, 'not_found'); assert.equal(missing.calls.length, 1);
 });
 
 test('inbox wait is bounded, returns arriving work, and never marks or claims it', async t => {
@@ -561,13 +830,21 @@ function grantEveryoneRead(file) {
   assert.equal(result.status, 0, result.stderr);
 }
 function writeCredentials(file, contents) {
-  if (windows && !existsSync(file)) assert.equal(windowsAcl(file, 'file'), true, 'create owned private credential fixture');
+  if (windows && !existsSync(file)) {
+    let failure;
+    const created = windowsAcl(file, 'file', kind => { failure = kind; });
+    assert.equal(created, true, `create owned private credential fixture: ${failure}`);
+  }
   writeFileSync(file, contents, { mode: 0o600 });
 }
 async function fixture(t, handler) {
   const temporary = mkdtempSync(path.join(tmpdir(), 'collab-cli-test-'));
   const dir = windows ? path.join(temporary, 'private-state') : temporary;
-  if (windows) assert.equal(windowsAcl(dir, true), true, 'create private Windows fixture');
+  if (windows) {
+    let failure;
+    const created = windowsAcl(dir, true, kind => { failure = kind; });
+    assert.equal(created, true, `create private Windows fixture: ${failure}`);
+  }
   const calls = [];
   const server = createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -589,7 +866,7 @@ async function fixture(t, handler) {
     child.stdout.on('data', data => { stdout += data; });
     child.stderr.on('data', data => { stderr += data; stderrCallback?.(stderr); });
     child.stdin.end(input);
-    const timer = setTimeout(() => child.kill('SIGKILL'), windows ? 30000 : 10000);
+    const timer = setTimeout(() => child.kill('SIGKILL'), windows ? 120000 : 10000);
     childCallback?.(child);
     return once(child, 'close').then(([code, signal]) => {
       clearTimeout(timer);
