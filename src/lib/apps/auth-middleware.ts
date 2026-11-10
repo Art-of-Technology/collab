@@ -336,7 +336,7 @@ async function matchAccessToken(token: string, fingerprint: string, verified?: V
       // Decrypt the stored token
       const storedTokenData = Buffer.from(appToken.accessToken, 'base64');
       // An unchanged remembered row still holds the ciphertext this token decrypted to.
-      decryptedToken = verified?.id === appToken.id && verified.accessToken === appToken.accessToken
+      decryptedToken = verified && verified.id === appToken.id && verified.accessToken === appToken.accessToken
         ? token : await decryptToken(storedTokenData);
     } catch (error) {
       if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'TOKEN_ENCRYPTION_CONFIGURATION') throw error;
