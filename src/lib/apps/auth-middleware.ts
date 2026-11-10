@@ -347,9 +347,11 @@ async function matchAccessToken(token: string, fingerprint: string, verified?: V
 
     // Compare with provided token
     if (decryptedToken === token) {
-      // Bounded: a cleared entry only costs that token one more scan.
-      if (verifiedTokens.size >= 1000) verifiedTokens.clear();
-      verifiedTokens.set(fingerprint, { id: appToken.id, accessToken: appToken.accessToken });
+      if (!verified) {
+        // Bounded: the oldest entry makes room, costing only that token one more scan.
+        if (verifiedTokens.size >= 1000) verifiedTokens.delete(verifiedTokens.keys().next().value!);
+        verifiedTokens.set(fingerprint, { id: appToken.id, accessToken: appToken.accessToken });
+      }
       // Check if this is a system app token (no installation)
       if (!appToken.installation && appToken.app && appToken.workspace) {
         // System app token - verify it's actually a system app
