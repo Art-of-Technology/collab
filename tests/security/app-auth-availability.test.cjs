@@ -84,9 +84,10 @@ test('a remembered token stays remembered when others repeat or arrive at the 10
   derivations = 0;
   await f.invoke('bearer-500'); await f.invoke('bearer-999');
   assert.equal(derivations, 0);
-  await f.invoke('bearer-1000');
+  const responses = await Promise.all([f.invoke('bearer-1000'), f.invoke('bearer-1000')]);
+  assert.deepEqual(responses.map(response => response.status), [200, 200]);
   derivations = 0;
-  await f.invoke('bearer-999');
+  await f.invoke('bearer-1'); await f.invoke('bearer-999');
   assert.equal(derivations, 0);
   // Only the oldest entry made room: its next request checks stored tokens again.
   await f.invoke('bearer-0');

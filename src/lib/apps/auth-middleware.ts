@@ -347,7 +347,7 @@ async function matchAccessToken(token: string, fingerprint: string, verified?: V
 
     // Compare with provided token
     if (decryptedToken === token) {
-      if (!verified) {
+      if (!verified && !verifiedTokens.has(fingerprint)) {
         // Bounded: the oldest entry makes room, costing only that token one more scan.
         if (verifiedTokens.size >= 1000) verifiedTokens.delete(verifiedTokens.keys().next().value!);
         verifiedTokens.set(fingerprint, { id: appToken.id, accessToken: appToken.accessToken });
