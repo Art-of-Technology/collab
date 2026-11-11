@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { RichEditor } from './RichEditor';
 import { FloatingSelectionMenu, SlashCommandMenu, AIImprovePopover } from './components';
-import { SlashCommandsExtension, SubIssueCreationExtension, AIImproveExtension, LinkPreviewExtension } from './extensions';
+import { SlashCommandsExtension, SubIssueCreationExtension, AIImproveExtension, LinkPreviewExtension, MermaidPreviewExtension } from './extensions';
 import { parseMarkdownToTipTap } from './utils/ai-improve';
 import {
   Heading1,
@@ -54,6 +54,8 @@ interface IssueRichEditorProps {
   issueId?: string;
   isIssueDescription?: boolean;
   renderMarkdown?: boolean;
+  /** Show Mermaid code blocks as diagrams above their source. */
+  renderDiagrams?: boolean;
 
   // Feature flags
   enableSlashCommands?: boolean;
@@ -145,6 +147,7 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
   issueId,
   isIssueDescription = false,
   renderMarkdown = false,
+  renderDiagrams = false,
 }, ref) => {
   const editorRef = useRef<RichEditorRef>(null);
   const parseMarkdown = isIssueDescription || renderMarkdown;
@@ -746,6 +749,8 @@ export const IssueRichEditor = React.forwardRef<RichEditorRef, IssueRichEditorPr
 
   // Add link preview extension
   additionalExtensions.push(LinkPreviewExtension);
+
+  if (renderDiagrams) additionalExtensions.push(MermaidPreviewExtension);
 
     // Wait for collaboration to be ready before rendering editor to prevent flicker
     // Don't wait if collaboration failed - render editor without collaboration

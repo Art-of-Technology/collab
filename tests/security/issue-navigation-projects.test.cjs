@@ -56,6 +56,7 @@ async function mounted(file, overrides, props, run) {
     setTimeout: (fn, delay) => { const timer = setTimeout(fn, delay); timers.add(timer); return timer; }, clearTimeout,
     fetch: async () => Response.json({ labels: [], isFollowing: false }),
   };
+  deps['@/lib/mermaid-diagrams'] = load('src/lib/mermaid-diagrams.ts', { './mermaid-renderer-url': { rendererUrl: '' } }, globals);
   deps['@/components/RichEditor/RichTextRenderer'] = load('src/components/RichEditor/RichTextRenderer.tsx', deps, globals);
   const loadedModule = load(file, deps, globals);
   const Component = loadedModule.default || loadedModule.IssueDetailContent || loadedModule.RichTextRenderer;

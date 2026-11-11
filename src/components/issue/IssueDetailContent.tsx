@@ -1250,7 +1250,7 @@ export function IssueDetailContent({
                   issueId={issue.id}
                 /> : (
                   <div className="min-h-[200px] break-words overflow-x-auto">
-                    {description ? <RichTextRenderer content={renderedDescription} className="prose-base" /> : (
+                    {description ? <RichTextRenderer content={renderedDescription} className="prose-base" diagrams /> : (
                       <p className="text-base text-collab-400">No description yet.</p>
                     )}
                   </div>

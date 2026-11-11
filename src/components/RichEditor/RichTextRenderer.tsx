@@ -3,13 +3,16 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { renderDiagrams } from '@/lib/mermaid-diagrams';
 
 interface RichTextRendererProps {
   content: string;
   className?: string;
+  /** Draw Mermaid code blocks as diagrams. */
+  diagrams?: boolean;
 }
 
-export function RichTextRenderer({ content, className }: RichTextRendererProps) {
+export function RichTextRenderer({ content, className, diagrams = false }: RichTextRendererProps) {
   const { currentWorkspace } = useWorkspace();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -85,6 +88,11 @@ export function RichTextRenderer({ content, className }: RichTextRendererProps) 
       };
     }
   }, [currentWorkspace?.slug, handleIssueMentionClick]);
+
+  // The container's markup is replaced whenever content changes, so diagrams are drawn again then.
+  useEffect(() => {
+    if (diagrams && containerRef.current) renderDiagrams(containerRef.current);
+  }, [diagrams, content]);
 
   return (
     <>

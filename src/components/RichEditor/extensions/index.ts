@@ -8,3 +8,4 @@ export { SlashCommandsExtension } from './slash-commands-extension';
 export { SubIssueCreationExtension } from './sub-issue-creation-extension';
 export { SaveDiscardExtension } from './save-discard-extension';
 export { LinkPreviewExtension } from './link-preview-extension';
+export { MermaidPreviewExtension } from './mermaid-preview-extension';

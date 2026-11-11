@@ -655,3 +655,18 @@ textarea::selection {
   white-space: nowrap;
   border-width: 0;
 }
+
+/* Mermaid diagrams drawn from code blocks; a wide diagram scrolls inside its own block */
+.mermaid-diagram {
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+
+.mermaid-diagram svg {
+  max-width: none;
+}
+
+.mermaid-diagram[data-state="error"] {
+  font-size: 0.75rem;
+  color: hsl(var(--destructive));
+}
