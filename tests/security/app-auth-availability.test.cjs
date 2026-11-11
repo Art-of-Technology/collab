@@ -14,7 +14,7 @@ function fixture({ rows = [token], scanError, userError, workspaceError, decrypt
     appToken: { findMany: async ({ where }) => {
       assert.equal(where.isRevoked, false);
       if (scanError) throw scanError;
-      return rows.filter(row => !row.isRevoked);
+      return rows.filter(row => !row.isRevoked && (!('id' in where) || row.id === where.id && row.accessToken === where.accessToken));
     } },
     user: { findUnique: async () => { if (userError) throw userError; return { id: 'alice', name: 'Alice', email: null }; } },
     app: { findUnique: async () => { if (appError) throw appError; return { isSystemApp: true }; } },
@@ -74,6 +74,24 @@ test('missing, invalid, and revoked credentials remain unauthorized', async () =
   for (const [options, bearer] of [[{}, null], [{}, 'wrong'], [{ rows: [{ ...token, isRevoked: true }] }, 'bearer']]) {
     const f = fixture(options); assert.equal((await f.invoke(bearer)).status, 401); assert.equal(f.calls(), 0);
   }
+});
+
+test('a remembered token stays remembered when others repeat or arrive at the 1000-entry bound', async () => {
+  const rows = Array.from({ length: 1001 }, (_, i) => ({ ...token, id: `token-${i}`, accessToken: Buffer.from(`bearer-${i}`).toString('base64') }));
+  let derivations = 0;
+  const f = fixture({ rows, decrypt: async value => { derivations++; return String(value); } });
+  for (let i = 0; i < 1000; i++) assert.equal((await f.invoke(`bearer-${i}`)).status, 200);
+  derivations = 0;
+  await f.invoke('bearer-500'); await f.invoke('bearer-999');
+  assert.equal(derivations, 0);
+  const responses = await Promise.all([f.invoke('bearer-1000'), f.invoke('bearer-1000')]);
+  assert.deepEqual(responses.map(response => response.status), [200, 200]);
+  derivations = 0;
+  await f.invoke('bearer-1'); await f.invoke('bearer-999');
+  assert.equal(derivations, 0);
+  // Only the oldest entry made room: its next request checks stored tokens again.
+  await f.invoke('bearer-0');
+  assert.equal(derivations, 1);
 });
 
 test('valid system and installed tokens still reach the handler', async () => {

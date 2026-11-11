@@ -8,6 +8,7 @@ import { authErrorDiagnostics } from '@/lib/auth-error-diagnostics';
  * context for API requests from third-party applications.
  */
 
+import { createHash } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { decryptToken, getEncryptionKey } from '@/lib/apps/crypto';
 import { hasScope, hasAllScopes, hasAnyScope, normalizeScopes } from '@/lib/oauth-scopes';
@@ -244,11 +245,30 @@ export async function authenticateAppRequest(
  * 1. Multiple tokens per installation (regular apps)
  * 2. System app tokens (no installation required)
  */
+type VerifiedToken = { id: string; accessToken: string };
+// shortcut: remembers which stored row a presented token already decrypted to, so a repeat request
+// skips the scrypt scan. A token this process has not seen still scans every stored token; move to
+// an indexed token-hash column when that first request must be bounded too.
+const verifiedTokens = new Map<string, VerifiedToken>();
+
 async function findInstallationByAccessToken(token: string) {
+  const fingerprint = createHash('sha256').update(token).digest('base64');
+  const verified = verifiedTokens.get(fingerprint);
+  if (verified) {
+    const installation = await matchAccessToken(token, fingerprint, verified);
+    if (installation) return installation;
+    // Revoked, rotated or removed since it was remembered: check every stored token again.
+    verifiedTokens.delete(fingerprint);
+  }
+  return matchAccessToken(token, fingerprint);
+}
+
+async function matchAccessToken(token: string, fingerprint: string, verified?: VerifiedToken) {
   getEncryptionKey();
   // Find tokens from active installations OR system app tokens
   const appTokens = await prisma.appToken.findMany({
     where: {
+      ...(verified && { id: verified.id, accessToken: verified.accessToken }),
       isRevoked: false,
       OR: [
         // Regular app tokens (linked to installation)
@@ -315,7 +335,9 @@ async function findInstallationByAccessToken(token: string) {
     try {
       // Decrypt the stored token
       const storedTokenData = Buffer.from(appToken.accessToken, 'base64');
-      decryptedToken = await decryptToken(storedTokenData);
+      // An unchanged remembered row still holds the ciphertext this token decrypted to.
+      decryptedToken = verified && verified.id === appToken.id && verified.accessToken === appToken.accessToken
+        ? token : await decryptToken(storedTokenData);
     } catch (error) {
       if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'TOKEN_ENCRYPTION_CONFIGURATION') throw error;
       // A damaged token must not block other valid tokens.
@@ -325,6 +347,11 @@ async function findInstallationByAccessToken(token: string) {
 
     // Compare with provided token
     if (decryptedToken === token) {
+      if (!verified && !verifiedTokens.has(fingerprint)) {
+        // Bounded: the oldest entry makes room, costing only that token one more scan.
+        if (verifiedTokens.size >= 1000) verifiedTokens.delete(verifiedTokens.keys().next().value!);
+        verifiedTokens.set(fingerprint, { id: appToken.id, accessToken: appToken.accessToken });
+      }
       // Check if this is a system app token (no installation)
       if (!appToken.installation && appToken.app && appToken.workspace) {
         // System app token - verify it's actually a system app
