@@ -1,6 +1,8 @@
 const { test, assert, load } = require('./helpers.cjs');
 
-const { diagramSource } = load('src/lib/mermaid-diagrams.ts');
+// The renderer's address comes from the bundler; any value stands in for it here.
+const RENDERER_URL = { './mermaid-renderer-url': { rendererUrl: '/renderer.js' } };
+const { diagramSource } = load('src/lib/mermaid-diagrams.ts', RENDERER_URL);
 
 for (const [label, language, text, expected] of [
   ['a block tagged mermaid', 'mermaid', 'flowchart LR\n  A --> B\n', 'flowchart LR\n  A --> B'],
@@ -39,10 +41,11 @@ const { StarterKit } = require('@tiptap/starter-kit');
 function diagrams(render) {
   const calls = [];
   const mermaid = { initialize: config => calls.push(config), render: async (...input) => (calls.push(input), render(...input)) };
+  // The page already has the renderer, as it does after the first diagram's script has loaded.
   const loaded = load('src/lib/mermaid-diagrams.ts', {
-    mermaid: { __esModule: true, default: mermaid },
+    ...RENDERER_URL,
     dompurify: { __esModule: true, default: require('dompurify')(dom.window) },
-  }, { document });
+  }, { document, window: { mermaid } });
   return { ...loaded, calls };
 }
 

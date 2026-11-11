@@ -1,5 +1,13 @@
 // Mermaid diagrams for rendered code blocks. Stored content is never changed; the renderer is
 // downloaded only when a page actually contains a diagram.
+import type { Mermaid } from 'mermaid';
+import { rendererUrl } from './mermaid-renderer-url';
+
+declare global {
+  interface Window {
+    mermaid?: Mermaid;
+  }
+}
 
 const FIRST_LINE = /^(?:(?:flowchart|graph)\s+(?:TB|TD|BT|RL|LR)\b|(?:sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|gantt|journey|gitGraph|mindmap|timeline)\b|pie(?:\s+(?:title|showData)\b|$))/;
 
@@ -12,6 +20,25 @@ export function diagramSource(language: string | null | undefined, text: string)
   // Untagged blocks count only when their first content line opens a diagram.
   const first = source.split('\n').map(line => line.trim()).find(line => line && !line.startsWith('%%')) ?? '';
   return FIRST_LINE.test(first) ? source : null;
+}
+
+let renderer: Promise<Mermaid> | undefined;
+
+// The renderer is the package's prebuilt file, added to the page as a script the first time a
+// diagram is drawn. Compiling its sources took the production build past its memory limit.
+function loadRenderer(): Promise<Mermaid> {
+  if (window.mermaid) return Promise.resolve(window.mermaid);
+  return (renderer ??= new Promise<Mermaid>((resolve, reject) => {
+    const failed = () => {
+      renderer = undefined;
+      reject(new Error('the diagram renderer did not load'));
+    };
+    const script = document.createElement('script');
+    script.src = rendererUrl;
+    script.onload = () => (window.mermaid ? resolve(window.mermaid) : failed());
+    script.onerror = failed;
+    document.head.append(script);
+  }));
 }
 
 const rendered = new Map<string, string>();
@@ -39,7 +66,7 @@ export function diagramElement(source: string, onResult?: (drawn: boolean) => vo
   }
   void (async () => {
     try {
-      const [{ default: mermaid }, { default: DOMPurify }] = await Promise.all([import('mermaid'), import('dompurify')]);
+      const [mermaid, { default: DOMPurify }] = await Promise.all([loadRenderer(), import('dompurify')]);
       // Strict mode encodes markup in labels and disables click handlers; SVG text labels keep the
       // output free of embedded HTML, so the second sanitizing pass can use the plain SVG profile.
       mermaid.initialize({
