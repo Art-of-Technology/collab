@@ -98,7 +98,10 @@ export function renderDiagrams(container: HTMLElement): void {
   container.querySelectorAll<HTMLElement>('pre > code').forEach(code => {
     const pre = code.parentElement as HTMLElement;
     if (pre.previousElementSibling?.classList.contains('mermaid-diagram')) return;
-    const source = diagramSource(/(?:^|\s)language-(\S+)/.exec(code.className)?.[1], code.textContent ?? '');
+    // The description renderer can turn a code block's line breaks into <br> elements, which textContent drops.
+    const text = code.cloneNode(true) as HTMLElement;
+    text.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+    const source = diagramSource(/(?:^|\s)language-(\S+)/.exec(code.className)?.[1], text.textContent ?? '');
     if (source) pre.before(diagramElement(source, drawn => { pre.hidden = drawn; }));
   });
 }

@@ -75,6 +75,17 @@ test('a diagram block in rendered content is replaced by its drawing, once', asy
   assert.equal(ordinary.hidden, false);
 });
 
+test('a diagram whose line breaks arrive as <br> elements is drawn from the source as it was written', async () => {
+  // The description renderer can turn the line breaks inside a code block into <br> elements.
+  const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') });
+  const { renderDiagrams, calls } = diagrams(async () => ({ svg: '<svg><text>Users</text></svg>' }));
+  // That happens when the description opens with plain text and the block follows on the same line.
+  const container = rendered(commentHtml(`Failover plan ${FLOWCHART}`));
+  renderDiagrams(container);
+  await drawn();
+  assert.deepEqual(calls.filter(Array.isArray).map(([, source]) => source), ['flowchart LR\n  A --> B']);
+});
+
 test('content without a diagram never reaches the renderer', async () => {
   const { renderDiagrams, calls } = diagrams(async () => ({ svg: '<svg></svg>' }));
   const container = rendered(ORDINARY);
