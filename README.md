@@ -304,6 +304,14 @@ is sanitized before rendering; mentions remain interactive. Saved preview cards
 and plain-link previews appear as URL links in read mode. Images remain inline
 without a click-to-open viewer, including in issue comments.
 
+Mermaid code blocks render as diagrams in issue descriptions and Notes. Untagged
+blocks also render when their first non-blank, non-comment line starts with a
+recognized diagram declaration, such as `flowchart LR` or `sequenceDiagram`.
+In Notes, the editable source remains visible below the preview; in issue read
+mode, it is hidden after a successful render. Invalid diagrams leave the source
+visible with a short error. Wide diagrams scroll within their block. Comments do
+not render diagrams, and stored content and API and CLI output are unchanged.
+
 Choose **Edit description** to make changes. Changes autosave as rich-editor HTML;
 **Done** becomes available once the current content is saved and returns to read
 mode. Opening or previewing a description leaves its stored value unchanged.
