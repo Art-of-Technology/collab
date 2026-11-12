@@ -43,6 +43,12 @@ function tryParseJSON(content: string): unknown | null {
   }
 }
 
+// The workspace tools return people and projects as objects; a card shows only the name.
+function nameOf(value: unknown): string {
+  if (typeof value === "string") return value;
+  return ((value as { name?: string } | null)?.name || "") as string;
+}
+
 /** Normalize an issue object from MCP response into IssueData */
 function normalizeIssue(raw: Record<string, unknown>): IssueData {
   return {
@@ -51,8 +57,8 @@ function normalizeIssue(raw: Record<string, unknown>): IssueData {
     status: (raw.status || raw.state || "") as string,
     priority: (raw.priority || "") as string,
     type: (raw.type || raw.issueType || "") as string,
-    assignee: (raw.assignee || raw.assigneeName || "") as string,
-    project: (raw.project || raw.projectName || "") as string,
+    assignee: nameOf(raw.assignee) || ((raw.assigneeName || "") as string),
+    project: nameOf(raw.project) || ((raw.projectName || "") as string),
   };
 }
 
@@ -115,14 +121,15 @@ function ProjectCard({ project }: { project: Record<string, unknown> }) {
   const { currentWorkspace } = useWorkspace();
 
   const name = (project.name || "Untitled Project") as string;
-  const prefix = (project.prefix || project.key || "") as string;
+  const prefix = (project.issuePrefix || project.prefix || project.key || "") as string;
   const description = (project.description || "") as string;
-  const issueCount = project.issueCount as number | undefined;
+  const issueCount = (project.stats as { issueCount?: number } | undefined)?.issueCount ?? project.issueCount as number | undefined;
+  const destination = project.slug || prefix || project.id;
 
   const handleClick = () => {
-    if (currentWorkspace?.slug && (project.id || prefix)) {
+    if (currentWorkspace?.slug && destination) {
       router.push(
-        `/${currentWorkspace.slug}/projects/${prefix || project.id}`
+        `/${currentWorkspace.slug}/projects/${destination}`
       );
     }
   };
@@ -341,7 +348,7 @@ export default function ToolResultRenderer({
 
     // Issue list tools
     if (
-      /find_issues|find_issues_by_activity|list_issues|search_issues|get_project_issues|filter_issues/i.test(
+      /find_issues|find_issues_by_activity|list_issues|search_issues|get_project_issues|filter_issues|issues_list/i.test(
         toolName
       )
     ) {
@@ -364,7 +371,7 @@ export default function ToolResultRenderer({
     }
 
     // Single issue tools
-    if (/get_issue|create_issue|update_issue/i.test(toolName)) {
+    if (/get_issue|create_issue|update_issue|issues_get|issues_create|issues_update/i.test(toolName)) {
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         const issue = normalizeIssue(parsed as Record<string, unknown>);
         if (issue.key || issue.title) {
@@ -380,7 +387,7 @@ export default function ToolResultRenderer({
     }
 
     // Project tools
-    if (/list_projects|get_projects/i.test(toolName)) {
+    if (/list_projects|get_projects|projects_list/i.test(toolName)) {
       if (Array.isArray(parsed)) {
         return (
           <ProjectList
@@ -407,7 +414,7 @@ export default function ToolResultRenderer({
     }
 
     // Label tools
-    if (/list_labels|create_label|get_labels/i.test(toolName)) {
+    if (/list_labels|create_label|get_labels|labels_list/i.test(toolName)) {
       if (Array.isArray(parsed)) {
         return (
           <LabelList labels={parsed as Array<Record<string, unknown>>} />
@@ -430,7 +437,7 @@ export default function ToolResultRenderer({
 
     // Member tools
     if (
-      /list_members|get_member|get_members|get_current_user/i.test(toolName)
+      /list_members|get_member|get_members|get_current_user|whoami/i.test(toolName)
     ) {
       if (Array.isArray(parsed)) {
         return (

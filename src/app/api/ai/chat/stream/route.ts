@@ -3,8 +3,9 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { getDefaultAgent, getAgent } from '@/lib/ai/agents/registry';
-import { getMcpToken, invalidateMcpToken } from '@/lib/ai/mcp-token';
-import { createMcpSession, McpClientSession, ClaudeTool } from '@/lib/ai/mcp-client';
+import { getMcpToken, refreshMcpToken } from '@/lib/ai/mcp-token';
+import { MCP_SCOPES } from '@/lib/mcp-oauth';
+import { runTool, toolsFor } from '@/lib/mcp-tools';
 import { coclawRetired } from '@/lib/coclaw-retired';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
@@ -93,10 +94,7 @@ export async function POST(req: Request) {
     }
 
     // Token refresh callback — invalidates cached/DB tokens and provisions fresh one
-    const refreshMcpToken = async (): Promise<string> => {
-      await invalidateMcpToken(prisma, currentUser.id, workspace.id);
-      return getMcpToken(prisma, currentUser.id, workspace.id);
-    };
+    const refreshToken = () => refreshMcpToken(prisma, currentUser.id, workspace.id, mcpToken);
 
     // Save user message to conversation
     let convoId = conversationId;
@@ -148,7 +146,8 @@ export async function POST(req: Request) {
       webSearchEnabled || false,
       convoId,
       agent,
-      refreshMcpToken
+      refreshToken,
+      req.url
     );
 
     return new Response(stream, {
@@ -212,8 +211,8 @@ function buildSystemPrompt(
 }
 
 /**
- * Create a ReadableStream that connects to Anthropic's API
- * with client-side MCP handling (tools are called directly by us).
+ * Create a ReadableStream that connects to Anthropic's API.
+ * Workspace tools are the MCP tools, run in-process as the signed-in member (src/lib/mcp-tools.ts).
  */
 function createAnthropicStreamWithMcp(
   systemPrompt: string,
@@ -222,7 +221,8 @@ function createAnthropicStreamWithMcp(
   webSearchEnabled: boolean,
   conversationId: string | undefined,
   agent: { slug: string; name: string; color: string; avatar?: string },
-  refreshMcpToken?: () => Promise<string>
+  refreshMcpToken: () => Promise<string>,
+  requestUrl: string
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
@@ -233,8 +233,9 @@ function createAnthropicStreamWithMcp(
 
   return new ReadableStream({
     async start(controller) {
-      let mcpSession: McpClientSession | null = null;
-      let mcpTools: ClaudeTool[] = [];
+      const scopes = [...MCP_SCOPES];
+      let token = mcpToken;
+      let mcpTools: Array<{ name: string; description: string; input_schema: Record<string, unknown> }> = [];
       let mcpFallback = false;
 
       try {
@@ -244,29 +245,34 @@ function createAnthropicStreamWithMcp(
           agent: { slug: agent.slug, name: agent.name, color: agent.color },
         });
 
-        // Initialize MCP session and get tools
+        // Prove the token works before offering tools. A dead token is replaced once; any other
+        // failure (an outage, say) leaves the token alone, because replacing it revokes it everywhere.
+        const check = async (candidate: string) => {
+          const result = await runTool('whoami', {}, `Bearer ${candidate}`, requestUrl, scopes);
+          if (!result.isError) return 'usable';
+          let code: unknown;
+          try { code = JSON.parse(result.content[0]?.text ?? '').error; } catch { /* not an API error body */ }
+          return ['invalid_token', 'token_expired', 'missing_token'].includes(code as string) ? 'dead' : 'unavailable';
+        };
         try {
-          mcpSession = await createMcpSession(mcpToken);
-          mcpTools = mcpSession.convertToolsToClaudeFormat();
-
-        } catch (mcpError) {
-          console.error('[stream] Failed to initialize MCP session:', mcpError);
-
-          // Try refreshing token and retry once
-          if (refreshMcpToken) {
-            try {
-
-              const freshToken = await refreshMcpToken();
-              mcpSession = await createMcpSession(freshToken);
-              mcpTools = mcpSession.convertToolsToClaudeFormat();
-
-            } catch (retryError) {
-              console.error('[stream] MCP retry failed:', retryError);
-              mcpFallback = true;
-            }
-          } else {
-            mcpFallback = true;
+          let state = await check(token);
+          if (state === 'dead') {
+            token = await refreshMcpToken();
+            state = await check(token);
           }
+          mcpFallback = state !== 'usable';
+        } catch (mcpError) {
+          console.error('[stream] Workspace tools are unavailable:', mcpError);
+          mcpFallback = true;
+        }
+        if (!mcpFallback) {
+          // The assistant works in this chat's workspace only. Text it reads could ask for another of
+          // the member's workspaces, so the model gets no tool that lists them, is not offered that
+          // argument and cannot pass it.
+          mcpTools = toolsFor(scopes).filter((tool) => tool.name !== 'workspaces_list').map((tool) => {
+            const { workspaceId: _otherWorkspace, ...properties } = (tool.schema.properties ?? {}) as Record<string, unknown>;
+            return { name: tool.name, description: tool.description, input_schema: { ...tool.schema, properties } };
+          });
         }
 
         if (mcpFallback) {
@@ -519,7 +525,7 @@ function createAnthropicStreamWithMcp(
 
           // Handle tool calls — execute them and continue conversation
 
-          if (stopReason === 'tool_use' && pendingToolCalls.length > 0 && mcpSession) {
+          if (stopReason === 'tool_use' && pendingToolCalls.length > 0 && mcpTools.length > 0) {
             continueLoop = true;
 
             // Build assistant message — strip streaming metadata (index, _inputJson, etc.)
@@ -552,25 +558,25 @@ function createAnthropicStreamWithMcp(
 
 
               try {
-                const result = await mcpSession.callTool(toolCall.name, toolCall.input || {});
-
-                // Extract text content from result
-                const textContent = result.content
-                  .filter((c) => c.type === 'text')
-                  .map((c) => c.text)
-                  .join('\n');
+                const { workspaceId: _otherWorkspace, ...input } = (toolCall.input || {}) as Record<string, unknown>;
+                // Only a tool that was offered runs, whatever name the model sends.
+                const result = mcpTools.some((tool) => tool.name === toolCall.name)
+                  ? await runTool(toolCall.name, input, `Bearer ${token}`, requestUrl, scopes)
+                  : { content: [{ type: 'text', text: JSON.stringify({ error: 'unknown_tool', error_description: `Tool ${toolCall.name} is not available.` }) }], isError: true };
+                const isError = !!result.isError;
+                const textContent = result.content.map((c) => c.text).join('\n');
 
                 sendEvent(controller, {
                   type: 'tool_result',
                   toolUseId: toolCall.id,
-                  isError: result.isError,
+                  isError,
                   content: textContent,
                 });
 
                 toolResults.push({
                   type: 'tool_result',
                   tool_use_id: toolCall.id,
-                  is_error: result.isError,
+                  is_error: isError,
                   content: textContent,
                 });
               } catch (toolError) {
@@ -605,11 +611,6 @@ function createAnthropicStreamWithMcp(
             // Normal completion
             continueLoop = false;
           }
-        }
-
-        // Close MCP session
-        if (mcpSession) {
-          await mcpSession.close();
         }
 
         // Send conversation ID
@@ -647,15 +648,6 @@ function createAnthropicStreamWithMcp(
         controller.close();
       } catch (error) {
         console.error('Stream processing error:', error);
-
-        // Clean up MCP session on error
-        if (mcpSession) {
-          try {
-            await mcpSession.close();
-          } catch {
-            // Ignore cleanup errors
-          }
-        }
 
         sendEvent(controller, {
           type: 'error',

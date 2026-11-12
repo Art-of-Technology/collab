@@ -226,14 +226,14 @@ node scripts/setup-cli-oauth-client.mjs --apply
 
 The apply operation transactionally creates only the dedicated `collab-cli` system app, its public OAuth client and scopes. Existing matching registrations are reused; conflicting registrations are refused without modification. No user tokens are minted, no account is linked and no schema migration is required. Each user still authorizes access in the browser. Existing system-app redirect policy allows dynamic loopback callback ports. `workspace:write` is required by the existing label-create endpoint; comments use the existing `issues:read`/`issues:write` scopes, and no separate comments or secrets scopes are requested.
 
-Agent tokens require additional system apps, including registrations for future integrations. Inspect them, then create them once in the same database environment:
+Agent tokens, the MCP connector and the in-app assistant require additional system apps. Inspect them, then create them once in the same database environment:
 
 ```sh
 node scripts/setup-agent-apps.mjs
 node scripts/setup-agent-apps.mjs --apply
 ```
 
-The apply operation creates `collab-agent` (agent tokens, no OAuth client), `collab-connector` (a public OAuth client for a future Claude connector) and `collab-assistant` (for future in-app assistant tokens) in one transaction. Matching registrations are reused; a differing one refuses the whole run. Until it has run, the Agent tokens page says so and creating a token returns 503.
+The apply operation creates `collab-agent` (agent tokens, no OAuth client), `collab-connector` (a public OAuth client for the MCP connector) and `collab-assistant` (in-app assistant tokens) in one transaction. Matching registrations are reused; a differing one refuses the whole run. Until it has run, the Agent tokens page says so and creating a token returns 503. For the connector and assistant, see the [MCP guide](../../docs/mcp-remote.md).
 
 ## Validation and release
 
