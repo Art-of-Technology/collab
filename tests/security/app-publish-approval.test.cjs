@@ -33,13 +33,15 @@ function fixture({ status = 'DRAFT', approved = null } = {}) {
   deps['@/lib/session'] = load('src/lib/session.ts', deps, globals);
   const publish = load('src/app/api/apps/by-id/[id]/publish/route.ts', deps, globals);
   const approval = load('src/app/api/apps/by-id/[id]/approve/route.ts', deps, globals);
+  const rejection = load('src/app/api/apps/by-id/[id]/reject/route.ts', deps, globals);
   const as = id => { state.session = id ? { user: { id, role: users.find(row => row.id === id).role } } : null; };
   const params = { params: Promise.resolve({ id: 'app' }) };
   const set = async (who, target) => { as(who); return (await publish.PATCH({ json: async () => ({ status: target }) }, params)).status; };
   const approve = async () => { as('root'); return (await approval.POST({}, params)).status; };
+  const reject = async () => { as('root'); return (await rejection.POST({ json: async () => ({ reason: 'Not ready' }) }, params)).status; };
   // What submitting a manifest does: a new newest version, back to review.
   const submit = id => { app.versions.unshift({ id, manifest: {} }); app.status = 'IN_REVIEW'; };
-  return { app, state, set, approve, submit };
+  return { app, state, set, approve, reject, submit };
 }
 
 test('stale transitions cannot overwrite newer app state', async () => {
@@ -48,6 +50,8 @@ test('stale transitions cannot overwrite newer app state', async () => {
     ['PUBLISHED', f => f.set('alice', 'DRAFT'), f => { f.app.status = 'SUSPENDED'; }, 'SUSPENDED'],
     ['IN_REVIEW', f => f.approve(), f => { f.app.status = 'DRAFT'; }, 'DRAFT'],
     ['IN_REVIEW', f => f.approve(), f => f.submit('v2'), 'IN_REVIEW'],
+    // An approval and the owner's publish landed while a rejection was on its way.
+    ['IN_REVIEW', f => f.reject(), f => { f.app.status = 'PUBLISHED'; }, 'PUBLISHED'],
   ]) {
     const f = fixture({ status, approved: 'v1' });
     f.state.beforeUpdate = () => { change(f); f.app.updatedAt = new Date(1); };
@@ -103,4 +107,14 @@ test('a system admin who publishes a draft records that version as approved', as
   assert.equal(f.app.approvedVersionId, 'v1');
   assert.equal(await f.set('alice', 'DRAFT'), 200);
   assert.equal(await f.set('alice', 'PUBLISHED'), 200);
+});
+
+test('a rejection in time sends the app back and leaves the newest version unapproved', async () => {
+  const f = fixture({ status: 'PUBLISHED', approved: 'v1' });
+  f.submit('v2');
+  assert.equal(await f.reject(), 200);
+  assert.equal(JSON.stringify([f.app.status, f.app.approvedVersionId]), JSON.stringify(['REJECTED', 'v1']));
+  assert.equal(await f.set('alice', 'DRAFT'), 200);
+  assert.equal(await f.set('alice', 'PUBLISHED'), 403, 'the rejected version cannot be published');
+  assert.equal(await f.reject(), 400, 'only an app in review can be rejected');
 });
