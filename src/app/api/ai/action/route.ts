@@ -10,6 +10,7 @@ import { findIssueByIdOrKey, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { updateIssue } from '@/lib/issue-mutation';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, createRefusal, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
+import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
 
 export async function POST(req: Request) {
   try {
@@ -146,6 +147,10 @@ export async function POST(req: Request) {
           priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
           projectId: z.string().min(1).optional(),
           assigneeId: z.string().min(1).optional(),
+          dueDate: z.string().datetime().optional(),
+          startDate: z.string().datetime().optional(),
+          storyPoints: z.number().int().positive().optional(),
+          labels: z.array(z.string()).optional(),
         }).strict().safeParse(action.params);
         if (!parsedParams.success) {
           return NextResponse.json({ error: 'Invalid issue creation' }, { status: 400 });
@@ -197,7 +202,7 @@ export async function POST(req: Request) {
 
         const issue = await prisma.$transaction(async (tx) => {
           const issueKey = await allocateIssueKey(tx, project.id);
-          return tx.issue.create({
+          const created = await tx.issue.create({
             data: {
               title: params.title,
               description: params.description || '',
@@ -209,6 +214,10 @@ export async function POST(req: Request) {
               workspaceId: workspace.id,
               reporterId: currentUser.id,
               assigneeId: params.assigneeId,
+              dueDate: params.dueDate ? new Date(params.dueDate) : null,
+              startDate: params.startDate ? new Date(params.startDate) : null,
+              storyPoints: params.storyPoints,
+              labels: params.labels?.length ? { connect: params.labels.map(id => ({ id })) } : undefined,
             },
             select: {
               id: true,
@@ -216,13 +225,18 @@ export async function POST(req: Request) {
               issueKey: true,
               status: true,
               priority: true,
+              workspaceId: true,
+              projectId: true,
+              labels: { select: { id: true } },
             },
           });
+          if (params.labels?.length) await enqueueLabelHandoff(tx, currentUser.id, created, []);
+          return created;
         });
 
         return NextResponse.json({
           success: true,
-          data: issue,
+          data: { id: issue.id, title: issue.title, issueKey: issue.issueKey, status: issue.status, priority: issue.priority },
           navigateTo: `${workspaceBase}/issues/${issue.issueKey}`,
           message: `Created issue ${issue.issueKey}: ${issue.title}`,
         });
@@ -277,6 +291,7 @@ export async function POST(req: Request) {
         }, { status: 400 });
     }
   } catch (error) {
+    if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
     if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error('Error in AI action API:', error);
     return NextResponse.json(

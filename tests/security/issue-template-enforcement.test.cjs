@@ -76,7 +76,7 @@ const issueRow = (type, description, fields = {}) => ({
 
 // One workspace with one stored issue, the real routes, and counters for what they write.
 function workspace({ enforced = true, issue = null, templates = STANDARD_TEMPLATES } = {}) {
-  const state = { issue, created: [], updated: [] };
+  const state = { issue, created: [], updated: [], beforeTransaction: null, transactionOptions: null };
   const db = {
     workspace: { findFirst: async () => ({ id: 'workspace', slug: 'workspace' }) },
     project: { findFirst: async () => ({ id: PROJECT, workspaceId: 'workspace' }) },
@@ -92,7 +92,11 @@ function workspace({ enforced = true, issue = null, templates = STANDARD_TEMPLAT
     issueAssignee: { deleteMany: async () => ({}) },
     issueFollower: { findMany: async () => [] },
     projectFollower: { findMany: async () => [] },
-    $transaction: async operation => operation(db),
+    $transaction: async (operation, options) => {
+      state.transactionOptions = options;
+      if (state.beforeTransaction) state.beforeTransaction();
+      return operation(db);
+    },
   };
   const dependencies = {
     'next/server': { NextResponse: Response }, zod,
@@ -208,6 +212,31 @@ test('unassigning cannot take away an assignee that the template requires', asyn
     assert.equal((await free.unassign()).status, 200);
     assert.equal(free.state.updated.length, 1);
   }
+});
+
+test('unassignment checks the issue again inside a serializable transaction', async () => {
+  const templates = { ...STANDARD_TEMPLATES, TASK: { ...STANDARD_TEMPLATES.TASK, requiredFields: ['assigneeId'] } };
+  const on = workspace({ templates, issue: issueRow('TASK', 'Old free text', { assigneeId: 'someone' }) });
+  on.state.beforeTransaction = () => { on.state.issue.description = complete('TASK'); };
+  const response = await on.unassign();
+  assert.equal(response.status, 422);
+  assert.deepEqual((await response.json()).missing_fields, ['assigneeId']);
+  assert.equal(on.state.transactionOptions.isolationLevel, 'Serializable');
+  assert.deepEqual(on.state.updated, []);
+});
+
+test('assistant creation accepts and stores required template fields', async () => {
+  const templates = { ...STANDARD_TEMPLATES, MILESTONE: { ...STANDARD_TEMPLATES.MILESTONE, requiredFields: ['dueDate', 'startDate', 'storyPoints', 'labels'] } };
+  const on = workspace({ templates });
+  const fields = { dueDate: '2026-12-01T00:00:00.000Z', startDate: '2026-11-01T00:00:00.000Z', storyPoints: 3, labels: ['label'] };
+  const response = await on.assistant('create_issue', { title: 'New', type: 'MILESTONE', description: complete('MILESTONE'), ...fields });
+  assert.equal(response.status, 200);
+  const created = on.state.created[0];
+  assert.equal(created.dueDate.toISOString(), fields.dueDate);
+  assert.equal(created.startDate.toISOString(), fields.startDate);
+  assert.equal(created.storyPoints, 3);
+  assert.deepEqual(plain(created.labels), { connect: [{ id: 'label' }] });
+  assert.equal((await on.assistant('create_issue', { title: 'New', type: 'MILESTONE', description: complete('MILESTONE'), ...fields, dueDate: 'invalid' })).status, 400);
 });
 
 test('with enforcement off, an agent edit is never refused', async () => {
