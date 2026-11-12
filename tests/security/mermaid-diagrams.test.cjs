@@ -32,7 +32,12 @@ const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 const { document } = dom.window;
 dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
-dom.window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+// As in a browser, closing a dialog reports it with a close event a moment later.
+dom.window.HTMLDialogElement.prototype.close = function () {
+  if (!this.open) return;
+  this.open = false;
+  setTimeout(() => this.dispatchEvent(new dom.window.Event('close')));
+};
 // The editor reads these when it is first required.
 for (const name of ['window', 'document', 'navigator', 'Node', 'Element', 'HTMLElement', 'MutationObserver', 'getComputedStyle', 'DOMParser']) {
   Object.defineProperty(globalThis, name, { value: name === 'window' ? dom.window : dom.window[name], configurable: true, writable: true });
@@ -228,6 +233,37 @@ for (const modal of [true, false]) {
     }
   });
 }
+
+test('a drawing comes back to its block when the browser closes the covering view by itself', async () => {
+  const box = await wideDrawing();
+  press(box, 'Full screen');
+  await drawn();
+  // What a back gesture or another close request from the browser does: no key or control of ours is involved.
+  box.querySelector('dialog').close();
+  await drawn();
+  assert.equal(box.isConnected, true);
+  assert.equal(box.classList.contains('mermaid-diagram-full'), false);
+  assert.equal(box.querySelector(':scope > .mermaid-diagram-canvas > svg text').textContent, 'Users');
+  assert.equal(box.querySelector('dialog'), null);
+  assert.equal(sizing(box).width, '100%');
+  press(box, 'Full screen');
+  await drawn();
+  assert.equal(box.querySelector('dialog').open, true);
+});
+
+test('fitting to the window may shrink a very wide drawing below one tenth', async () => {
+  const { renderDiagrams } = diagrams(async () => ({ svg: '<svg viewBox="0 0 20000 400"><text>Users</text></svg>' }));
+  const container = rendered(FLOWCHART);
+  renderDiagrams(container);
+  await drawn();
+  const box = container.querySelector('.mermaid-diagram');
+  press(box, 'Full screen');
+  await drawn();
+  const canvas = box.querySelector('.mermaid-diagram-canvas');
+  Object.defineProperties(canvas, { clientWidth: { value: 1000 }, clientHeight: { value: 800 } });
+  press(box, 'Fit to window');
+  assert.deepEqual([sizing(box).width, sizing(box).level], ['1000px', '5%']);
+});
 
 // The stylesheet's diagram rules decide whether a diagram's source is displayed in the note editor.
 const styles = require('node:fs').readFileSync(require('node:path').resolve(process.env.SECURITY_TEST_ROOT || `${__dirname}/../..`, 'src/app/globals.css'), 'utf8');

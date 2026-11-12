@@ -52,8 +52,10 @@ function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement
   bar.className = 'mermaid-diagram-bar';
   const dialog = document.createElement('dialog');
   const placeholder = document.createComment('diagram');
+  // The browser can close a modal dialog by itself (a back gesture, for example); bring the drawing back then too.
+  dialog.addEventListener('close', () => setFull(false));
   const observer = new MutationObserver(() => {
-    if (dialog.open ? !box.isConnected : !placeholder.isConnected) {
+    if (dialog.parentNode ? !box.isConnected : !placeholder.isConnected) {
       observer.disconnect();
       window.removeEventListener('keydown', escapeFallback, true);
       if (dialog.open) dialog.close();
@@ -71,7 +73,7 @@ function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement
   level.dataset.zoom = '';
   let zoom = 1;
   const setZoom = (next: number) => {
-    zoom = Math.min(8, Math.max(0.1, next));
+    zoom = Math.min(8, Math.max(0.01, next));
     Object.assign(drawing.style, { width: `${Math.round(width * zoom)}px`, maxWidth: 'none', minWidth: '0px' });
     level.textContent = `${Math.round(zoom * 100)}%`;
   };
@@ -96,12 +98,12 @@ function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement
     return button;
   };
   const setFull = (full: boolean) => {
-    if (!full && (dialog.open || placeholder.parentNode)) {
+    if (!full && (dialog.parentNode || placeholder.parentNode)) {
       observer.disconnect();
       window.removeEventListener('keydown', escapeFallback, true);
-      if (dialog.open) {
-        dialog.close();
+      if (dialog.parentNode) {
         box.replaceChildren(...Array.from(dialog.childNodes));
+        if (dialog.open) dialog.close();
       } else {
         placeholder.replaceWith(box);
         delete box.dataset.windowFallback;
