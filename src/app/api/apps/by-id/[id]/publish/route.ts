@@ -123,30 +123,42 @@ export async function PATCH(
     }
 
     // Use transaction to update app status
+    const updatedAt = new Date();
     const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "App" WHERE id = ${id} FOR UPDATE`;
+      const current = await tx.app.findUnique({
+        where: { id },
+        include: { versions: { orderBy: { createdAt: 'desc' }, take: 1 } }
+      });
+      if (!current || current.status !== currentStatus || current.updatedAt.getTime() !== existingApp.updatedAt.getTime() ||
+          current.versions[0]?.id !== latestVersion.id || current.approvedVersionId !== existingApp.approvedVersionId) return false;
 
       // Update app status
-      const updatedApp = await tx.app.update({
-        where: { id },
+      const updated = await tx.app.updateMany({
+        where: { id, status: currentStatus, updatedAt: existingApp.updatedAt, ...(isAdmin ? {} : appOwnerWhere(actor.id)) },
         data: { 
           status,
           // Publishing by an administrator is an approval of this version too
           ...(targetStatus === AppStatus.PUBLISHED ? { approvedVersionId: latestVersion.id } : {}),
-          updatedAt: new Date()
+          updatedAt
         }
       });
 
-      return updatedApp;
+      return updated.count === 1;
     });
+
+    if (!result) {
+      return NextResponse.json({ error: 'App changed or access revoked' }, { status: 409 });
+    }
 
     return NextResponse.json({
       success: true,
       app: {
-        id: result.id,
-        name: result.name,
-        slug: result.slug,
-        status: result.status,
-        updatedAt: result.updatedAt
+        id: existingApp.id,
+        name: existingApp.name,
+        slug: existingApp.slug,
+        status,
+        updatedAt
       }
     });
 

@@ -5,13 +5,19 @@ function fixture({ status = 'DRAFT', approved = null } = {}) {
   const users = [{ id: 'alice', role: 'DEVELOPER' }, { id: 'root', role: 'SYSTEM_ADMIN' }]
     .map(user => ({ ...user, createdAt: new Date(), updatedAt: new Date(), emailVerified: null }));
   // Newest first, as the routes ask for them.
-  const app = { id: 'app', slug: 'app', name: 'App', userId: 'alice', status, approvedVersionId: approved, oauthClient: null,
+  const app = { id: 'app', slug: 'app', name: 'App', userId: 'alice', status, approvedVersionId: approved, oauthClient: null, updatedAt: new Date(0),
     versions: [{ id: 'v1', manifest: {} }] };
-  const state = { session: null };
+  const state = { session: null, beforeUpdate: null };
   const read = async ({ where }) => matches(app, where) ? { ...app, versions: app.versions.slice(0, 1) } : null;
   const prisma = {
     user: { findUnique: async ({ where }) => users.find(row => row.id === where.id) ?? null },
-    app: { findUnique: read, findFirst: read, update: async ({ data }) => Object.assign(app, data) },
+    $queryRaw: async () => [],
+    app: { findUnique: read, findFirst: read, updateMany: async ({ where, data }) => {
+      if (state.beforeUpdate) { const change = state.beforeUpdate; state.beforeUpdate = null; change(); }
+      if (!matches(app, where)) return { count: 0 };
+      Object.assign(app, data, { updatedAt: data.updatedAt || new Date(app.updatedAt.getTime() + 1) });
+      return { count: 1 };
+    } },
     $transaction: async run => run(prisma),
   };
   const json = (body, init = {}) => ({ body, status: init.status ?? 200 });
@@ -33,8 +39,23 @@ function fixture({ status = 'DRAFT', approved = null } = {}) {
   const approve = async () => { as('root'); return (await approval.POST({}, params)).status; };
   // What submitting a manifest does: a new newest version, back to review.
   const submit = id => { app.versions.unshift({ id, manifest: {} }); app.status = 'IN_REVIEW'; };
-  return { app, set, approve, submit };
+  return { app, state, set, approve, submit };
 }
+
+test('stale transitions cannot overwrite newer app state', async () => {
+  for (const [status, action, change, expected] of [
+    ['DRAFT', f => f.set('alice', 'PUBLISHED'), f => f.submit('v2'), 'IN_REVIEW'],
+    ['PUBLISHED', f => f.set('alice', 'DRAFT'), f => { f.app.status = 'SUSPENDED'; }, 'SUSPENDED'],
+    ['IN_REVIEW', f => f.approve(), f => { f.app.status = 'DRAFT'; }, 'DRAFT'],
+    ['IN_REVIEW', f => f.approve(), f => f.submit('v2'), 'IN_REVIEW'],
+  ]) {
+    const f = fixture({ status, approved: 'v1' });
+    f.state.beforeUpdate = () => { change(f); f.app.updatedAt = new Date(1); };
+    assert.equal(await action(f), 409);
+    assert.equal(f.app.status, expected);
+    assert.equal(f.app.approvedVersionId, 'v1');
+  }
+});
 
 test('an owner cannot publish a version that no administrator approved', async () => {
   const f = fixture();
