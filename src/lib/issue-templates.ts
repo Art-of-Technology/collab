@@ -124,5 +124,31 @@ export function templateBody(template: IssueTemplate, format: 'html' | 'markdown
     `## ${section.title}\n\n<!-- ${section.guidance.replace(/-(?=-)/g, '- ')}${section.required ? '' : ' (optional)'} -->\n`).join('\n');
 }
 
+/**
+ * Checks and tidies a template that a workspace admin wants to save. A type may have no sections
+ * at all, which leaves it without a template.
+ */
+export function validateTemplateInput(input: unknown): { sections: TemplateSection[]; requiredFields: TemplateField[] } | { error: string } {
+  const { sections, requiredFields } = (input ?? {}) as { sections?: unknown; requiredFields?: unknown };
+  if (!Array.isArray(sections)) return { error: 'The sections of a template must be a list.' };
+  if (sections.length > 20) return { error: 'A template has at most 20 sections.' };
+  const titles = new Set<string>();
+  const tidy: TemplateSection[] = [];
+  for (const section of sections as Array<Partial<Record<keyof TemplateSection, unknown>> | null>) {
+    const title = typeof section?.title === 'string' ? section.title.trim() : '';
+    const guidance = typeof section?.guidance === 'string' ? section.guidance.trim() : '';
+    // A title is matched against headings by its letters and digits, so it needs some.
+    if (!comparable(title) || title.length > 80) return { error: 'Every section needs a title of 1 to 80 characters with letters or digits in it.' };
+    if (guidance.length > 500) return { error: `The guidance for "${title}" is longer than 500 characters.` };
+    if (titles.has(comparable(title))) return { error: `The section title "${title}" is used more than once.` };
+    titles.add(comparable(title));
+    tidy.push({ title, required: section?.required === true, guidance });
+  }
+  if (!Array.isArray(requiredFields) || requiredFields.some(field => !TEMPLATE_FIELDS.includes(field as TemplateField))) {
+    return { error: `Required fields must be chosen from: ${TEMPLATE_FIELDS.join(', ')}.` };
+  }
+  return { sections: tidy, requiredFields: TEMPLATE_FIELDS.filter(field => requiredFields.includes(field)) };
+}
+
 /** A template as the read routes return it: with a Markdown body ready to fill in. */
 export const withBody = (template: IssueTemplate) => ({ ...template, body: templateBody(template, 'markdown') });
