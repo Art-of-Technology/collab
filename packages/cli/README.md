@@ -177,7 +177,17 @@ Use `collab auth login --read-only` for an agent that only needs to inspect proj
 
 **Logout removes local credentials only.** The current server revocation endpoint does not revoke system-app tokens, so the CLI does not pretend otherwise. Ask the deployment administrator to revoke the CLI token if it must stop working elsewhere. Existing MCP tokens are separate.
 
-For headless use, inject an existing Collab OAuth bearer token through your credential manager as `COLLAB_TOKEN`, together with an explicit `COLLAB_URL`. Use `COLLAB_WORKSPACE`/`COLLAB_PROJECT` or per-command flags for context. Do not put tokens in command arguments, repository files, Notes or issue comments. Maestro ID/access tokens are not Collab API tokens.
+For headless use, inject a Collab bearer token through your credential manager as `COLLAB_TOKEN`, together with an explicit `COLLAB_URL`. No profile file or browser login is needed: `collab whoami` and every ordinary command work with those two variables alone. Use `COLLAB_WORKSPACE`/`COLLAB_PROJECT` or per-command flags for context. Do not put tokens in command arguments, repository files, Notes or issue comments. Maestro ID/access tokens are not Collab API tokens.
+
+### Agent tokens
+
+An agent that is not a person, such as a shared assistant on another platform, should use an **agent token** instead of someone's login:
+
+1. A workspace owner, or a member whose role holds *Manage Workspace Permissions*, opens the workspace's **Settings**, then **Agent tokens** (`/workspaces/WORKSPACE_ID/settings/agent-tokens`), and creates a token with a name, an access level (read only, or read and write) and a lifetime of 30, 90 or 365 days.
+2. The token is shown once. Store it in the agent's secret manager and inject it as `COLLAB_TOKEN` with `COLLAB_URL`, or as a Bearer credential for the API.
+3. To stop it, revoke it on the same page. Revocation takes effect at once.
+
+Each token belongs to a service account named after it: a workspace member with no email that cannot sign in. Issues, comments and Notes the agent writes show that name. The account can use only the workspace the token was created in, and switching the member off in the Members list pauses its tokens. `worker`, `coordinator` and `config set` still need a saved login and refuse `COLLAB_TOKEN`.
 
 `COLLAB_CONFIG_DIR` overrides the private state directory. `--timeout SECONDS` sets a per-request timeout from 1 to 120 (default 30) for ordinary API commands; worker commands use their own request deadlines. HTTP bodies are capped at 8 MiB. Ordinary API commands never retry automatically. Dedicated workers have the bounded read and lease retries described under [recovery](#limits-monitoring-and-recovery); they do not retry uncertain task mutations.
 
@@ -203,6 +213,15 @@ node scripts/setup-cli-oauth-client.mjs --apply
 ```
 
 The apply operation transactionally creates only the dedicated `collab-cli` system app, its public OAuth client and scopes. Existing matching registrations are reused; conflicting registrations are refused without modification. No user tokens are minted, no account is linked and no schema migration is required. Each user still authorizes access in the browser. Existing system-app redirect policy allows dynamic loopback callback ports. `workspace:write` is required by the existing label-create endpoint; comments use the existing `issues:read`/`issues:write` scopes, and no separate comments or secrets scopes are requested.
+
+Agent tokens and Claude connectors use three more system apps. Inspect them, then create them once in the same database environment:
+
+```sh
+node scripts/setup-agent-apps.mjs
+node scripts/setup-agent-apps.mjs --apply
+```
+
+The apply operation creates `collab-agent` (agent tokens, no OAuth client), `collab-connector` (the public OAuth client for personal sign-in from Claude) and `collab-assistant` (tokens the in-app assistant mints for the signed-in user) in one transaction. Matching registrations are reused; a differing one refuses the whole run. Until it has run, the Agent tokens page says so and creating a token returns 503.
 
 ## Validation and release
 
