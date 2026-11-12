@@ -457,6 +457,189 @@ npm run dev</code></pre>
     defaultTags: ['retrospective', 'sprint', 'team'],
     order: 8,
   },
+  {
+    name: 'Use Case Specification',
+    description: 'One use case in full: who, when, the normal path and what can go differently',
+    icon: 'Workflow',
+    titleTemplate: 'Use case: {{title}}',
+    contentTemplate: `<h2>Scope and level</h2>
+<p>[The system or part of it this covers, and whether this is a user goal or a smaller step within one.]</p>
+
+<h2>Primary actor</h2>
+<p>[Who or what starts this and wants the outcome.]</p>
+
+<h2>Stakeholders and interests</h2>
+<ul>
+<li>[Stakeholder] - [What they need from this]</li>
+</ul>
+
+<h2>Preconditions</h2>
+<ul>
+<li>[What must already be true before it starts]</li>
+</ul>
+
+<h2>Trigger</h2>
+<p>[The event that starts it.]</p>
+
+<h2>Main success scenario</h2>
+<ol>
+<li>[Step 1]</li>
+<li>[Step 2]</li>
+<li>[Step 3]</li>
+</ol>
+
+<h2>Extensions</h2>
+<ul>
+<li>[Step number and condition] - [What happens instead]</li>
+</ul>
+
+<h2>Postconditions</h2>
+<ul>
+<li>[What is true when it ends well]</li>
+<li>[What is guaranteed even when it fails]</li>
+</ul>
+
+<h2>Open questions</h2>
+<ul>
+<li>[Question] - [Who can answer it]</li>
+</ul>`,
+    defaultType: NoteType.GENERAL,
+    defaultScope: NoteScope.WORKSPACE,
+    defaultTags: ['use-case', 'requirements'],
+    order: 9,
+  },
+  {
+    name: 'Product Requirements',
+    description: 'What to build and why, before deciding how',
+    icon: 'ClipboardList',
+    titleTemplate: 'PRD: {{title}}',
+    contentTemplate: `<h2>Problem</h2>
+<p>[What is wrong or missing today, for whom, and how you know.]</p>
+
+<h2>Goals</h2>
+<ul>
+<li>[Outcome 1]</li>
+</ul>
+
+<h2>Non-goals</h2>
+<ul>
+<li>[What this deliberately leaves out]</li>
+</ul>
+
+<h2>Users</h2>
+<p>[Who will use it and in what situation.]</p>
+
+<h2>Requirements</h2>
+<table>
+<tr><th>Requirement</th><th>Priority</th><th>Notes</th></tr>
+<tr><td>[What the product must do]</td><td>[Must/Should/Could]</td><td>[Detail or constraint]</td></tr>
+</table>
+
+<h2>Success measures</h2>
+<ul>
+<li>[Measure] - [Target and when it is checked]</li>
+</ul>
+
+<h2>Risks</h2>
+<ul>
+<li>[Risk] - [How it is reduced]</li>
+</ul>
+
+<h2>Open questions</h2>
+<ul>
+<li>[Question] - [Who can answer it]</li>
+</ul>`,
+    defaultType: NoteType.GENERAL,
+    defaultScope: NoteScope.WORKSPACE,
+    defaultTags: ['prd', 'requirements', 'product'],
+    order: 10,
+  },
+  {
+    name: 'Test Plan',
+    description: 'What will be tested, how, and when testing is done',
+    icon: 'FlaskConical',
+    titleTemplate: 'Test plan: {{title}}',
+    contentTemplate: `<h2>Scope</h2>
+<p>[The features, changes or release this plan covers.]</p>
+
+<h2>Not tested</h2>
+<ul>
+<li>[What is left out] - [Why]</li>
+</ul>
+
+<h2>Approach</h2>
+<p>[The kinds of testing used and what each one is for: automated, manual, exploratory, load.]</p>
+
+<h2>Environments and data</h2>
+<ul>
+<li>[Environment] - [Data and accounts it needs]</li>
+</ul>
+
+<h2>Entry criteria</h2>
+<ul>
+<li>[What must be true before testing starts]</li>
+</ul>
+
+<h2>Exit criteria</h2>
+<ul>
+<li>[What must be true to call testing done]</li>
+</ul>
+
+<h2>Risks</h2>
+<ul>
+<li>[Risk] - [What is done about it]</li>
+</ul>`,
+    defaultType: NoteType.GENERAL,
+    defaultScope: NoteScope.WORKSPACE,
+    defaultTags: ['test-plan', 'quality'],
+    order: 11,
+  },
+  {
+    name: 'Incident Review',
+    description: 'Blameless review of an incident: what happened, why, and what changes',
+    icon: 'Siren',
+    titleTemplate: 'Incident review: {{title}} ({{date}})',
+    contentTemplate: `<p><em>This review is blameless. It describes what the system and the process allowed, not who did it.</em></p>
+
+<h2>Summary</h2>
+<p>[What happened, in two or three sentences.]</p>
+
+<h2>Impact</h2>
+<ul>
+<li><strong>Who was affected:</strong> [Users, customers, teams]</li>
+<li><strong>How long:</strong> [Start and end, with time zone]</li>
+<li><strong>What they saw:</strong> [Errors, slowness, lost data]</li>
+</ul>
+
+<h2>Timeline</h2>
+<table>
+<tr><th>Time</th><th>Event</th></tr>
+<tr><td>[HH:MM]</td><td>[What happened or what was done]</td></tr>
+</table>
+
+<h2>Root cause</h2>
+<p>[The chain of causes, down to the one that can be changed.]</p>
+
+<h2>What went well</h2>
+<ul>
+<li>[What helped detect or limit it]</li>
+</ul>
+
+<h2>What went badly</h2>
+<ul>
+<li>[What delayed detection or recovery]</li>
+</ul>
+
+<h2>Follow-up actions</h2>
+<table>
+<tr><th>Action</th><th>Owner</th><th>Due</th></tr>
+<tr><td>[Action 1]</td><td>[Name]</td><td>[Date]</td></tr>
+</table>`,
+    defaultType: NoteType.TROUBLESHOOT,
+    defaultScope: NoteScope.WORKSPACE,
+    defaultTags: ['incident', 'postmortem'],
+    order: 12,
+  },
 ];
 
 /**
