@@ -109,16 +109,16 @@ const headingParts = (description: string | null | undefined) =>
 const visible = (html: string) => /<img\b/i.test(html)
   || plainText(html).replace(/&nbsp;/gi, ' ').replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '').trim() !== '';
 
-// Whether a description is exactly a template's headings, in order, with nothing written under them.
-function untouched(description: string, template: IssueTemplate | null): boolean {
-  if (!template) return false;
-  const parts = headingParts(description);
-  const expected = headingParts(templateBody(template, 'html'));
-  return parts.length === expected.length
-    && parts.every((part, index) => index % 2 === 0
-      ? !visible(part) && !/<hr\b/i.test(part)
-      : !/<(?:img|hr)\b/i.test(part) && plainText(part) === plainText(expected[index]));
-}
+// A description without what the editor adds on its own: tag attributes, empty paragraphs and space between tags.
+const bare = (html: string) => html
+  .replace(/<(\/?[a-z][a-z0-9]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi, '<$1>')
+  .replace(/<p>(?:\s|&nbsp;|<br>)*<\/p>/gi, '')
+  .replace(/>\s+</g, '><').trim();
+
+// Whether a description is exactly the headings a web form pre-fills for a template. Any change a
+// person makes, to a heading or under one, makes it theirs.
+const untouched = (description: string, template: IssueTemplate | null) =>
+  template !== null && bare(description) === templateBody(template, 'html');
 
 /**
  * The description a web form shows after the issue type is chosen or changed: the new type's
@@ -126,9 +126,7 @@ function untouched(description: string, template: IssueTemplate | null): boolean
  * template whose headings the form put there before.
  */
 export function nextDescription(current: string, previous: IssueTemplate | null, next: IssueTemplate | null): string {
-  const parts = headingParts(current);
-  const empty = parts.length === 1 && !visible(parts[0]) && !/<hr\b/i.test(parts[0]);
-  return empty || untouched(current, previous) ? (next ? templateBody(next, 'html') : '') : current;
+  return bare(current) === '' || untouched(current, previous) ? (next ? templateBody(next, 'html') : '') : current;
 }
 
 /** What a web form stores: nothing when the description is still only the headings it was given. */

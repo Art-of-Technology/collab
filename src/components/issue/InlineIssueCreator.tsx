@@ -72,7 +72,10 @@ export function InlineIssueCreator({
   const [selectedIssues, setSelectedIssues] = useState<any[]>([]);
   const [isLinking, setIsLinking] = useState(false);
   // Templates are read only once the form is opened.
-  const templateForm = useIssueTemplateForm(isExpanded ? workspaceId : undefined, type, description, setDescription, { priority, assigneeId, labels: labelIds, dueDate });
+  const templateForm = useIssueTemplateForm({
+    workspaceId: isExpanded ? workspaceId : undefined, type, description, setDescription,
+    fields: { priority, assigneeId, labels: labelIds, dueDate },
+  });
 
   const titleInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);

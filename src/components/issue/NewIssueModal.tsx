@@ -110,7 +110,11 @@ export default function NewIssueModal({
 
   const canCreate = title.trim().length > 0 && !!selectedProjectId;
   // Templates are read only while the form is open; it stays mounted on every page.
-  const templateForm = useIssueTemplateForm(open ? workspaceId : undefined, issueType, description, setDescription, { priority, assigneeId, labels, dueDate });
+  const templateForm = useIssueTemplateForm({
+    workspaceId: open ? workspaceId : undefined, type: issueType, description, setDescription,
+    fields: { priority, assigneeId, labels, dueDate },
+  });
+  const { stored: storedDescription, starting: startingDescription } = templateForm;
 
   // Toggle fullscreen mode
   const toggleFullscreen = useCallback(() => {
@@ -179,7 +183,7 @@ export default function NewIssueModal({
     
     try {
       // Create main issue first
-      const text = templateForm.stored(description).trim();
+      const text = storedDescription(description).trim();
       const normalizedDescription = text ? normalizeDescriptionHTML(text) : undefined;
       const result = await createIssueMutation.mutateAsync({
         title: title.trim(),
@@ -265,7 +269,7 @@ export default function NewIssueModal({
       if (createMore) {
         // Reset form but keep modal open
         setTitle("");
-        setDescription(templateForm.starting(issueType));
+        setDescription(startingDescription(issueType));
         setStatus(defaultStatus);
         setPriority(undefined);
         setAssigneeId(undefined);
@@ -282,7 +286,7 @@ export default function NewIssueModal({
         onOpenChange(false);
         // Reset form
         setTitle("");
-        setDescription(templateForm.starting("TASK"));
+        setDescription(startingDescription("TASK"));
         setStatus(defaultStatus);
         setPriority(undefined);
         setAssigneeId(undefined);
@@ -316,7 +320,7 @@ export default function NewIssueModal({
     } finally {
       setCreating(false);
     }
-  }, [canCreate, selectedProjectId, createIssueMutation, title, description, issueType, status, priority, workspaceId, assigneeId, currentUserId, labels, dueDate, relations, createMore, defaultStatus, onOpenChange, onCreated, projectId, toast, queryClient, templateForm]);
+  }, [canCreate, selectedProjectId, createIssueMutation, title, description, issueType, status, priority, workspaceId, assigneeId, currentUserId, labels, dueDate, relations, createMore, defaultStatus, onOpenChange, onCreated, projectId, toast, queryClient, storedDescription, startingDescription]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

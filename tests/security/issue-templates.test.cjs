@@ -254,9 +254,26 @@ test('edited headings and visible dividers survive type changes and creation', (
     bugHeadings.replace('</h2>', '</h2><hr>'),
     bugHeadings.replace('Summary', 'Summary<img src="https://example.com/image.png">'),
     '<hr>',
+    // A changed heading level, formatting inside a heading, and anything else the editor can put under one.
+    bugHeadings.replace('<h2>Summary</h2>', '<h3>Summary</h3>'),
+    bugHeadings.replace('Summary', '<strong>Summary</strong>'),
+    bugHeadings.replace('</h2>', '</h2><div data-youtube-video><iframe src="https://www.youtube.com/embed/x"></iframe></div>'),
+    bugHeadings.replace('</h2>', '</h2><ul><li><p></p></li></ul>'),
+    bugHeadings.replace('<h2>Summary</h2>', ''),
+    `${bugHeadings}<h2>Summary</h2>`,
   ]) {
     assert.equal(nextDescription(description, BUG, STORY), description);
     assert.equal(nextDescription(description, BUG, null), description);
     assert.equal(storedDescription(description, BUG), description);
   }
+});
+
+test('what the editor adds on its own does not count as an edit', () => {
+  const fromEditor = `${bugHeadings.replaceAll('<h2>', '<h2 class="heading" data-id="a>b">').replaceAll('</h2>', '</h2>\n')}<p><br class="ProseMirror-trailingBreak"></p><p> </p>`;
+  assert.equal(nextDescription(fromEditor, BUG, STORY), templateBody(STORY, 'html'));
+  assert.equal(storedDescription(fromEditor, BUG), '');
+  for (const empty of ['<p>&nbsp;</p>', '<p><br /></p>\n<p></p>']) assert.equal(nextDescription(empty, null, BUG), bugHeadings, empty);
+  // A title with characters that HTML escapes is still recognised as untouched.
+  const odd = { ...BUG, sections: [{ title: 'Q&A <now>', required: true, guidance: '' }] };
+  assert.equal(storedDescription(templateBody(odd, 'html'), odd), '');
 });
