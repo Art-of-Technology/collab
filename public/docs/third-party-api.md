@@ -241,18 +241,21 @@ Both endpoints require `issues:read` and active access to the selected workspace
 
 The built-in standards cover BUG, STORY, EPIC, MILESTONE and TASK. Type matching is case-insensitive; SUBTASK and unknown types return 404 with `template_not_found`. A workspace can replace the standard for each supported type; an invalid stored template falls back to the standard. The `enforced` field reports the workspace setting.
 
-When `enforced` is `true`, `POST /api/apps/auth/issues` and `PATCH /api/apps/auth/issues/{issueId}` answer 422 and write nothing if the issue would lack something its template requires:
+When `enforced` is `true`, `POST /api/apps/auth/issues` and `PATCH /api/apps/auth/issues/{issueId}` can answer 422 and write nothing when template requirements are missing, subject to the update rule below. For example, a workspace with a custom BUG template containing only these two sections might receive:
 
 ```json
 {
   "error": "template_required",
   "error_description": "Missing required sections: Environment. Missing required fields: priority. Write each section as a heading. Get the template with \"collab templates get BUG\".",
   "issue_type": "BUG",
-  "template_version": 1,
+  "template_version": 2,
   "missing_sections": ["Environment"],
   "missing_fields": ["priority"],
   "template": {
-    "sections": [{ "title": "Summary", "required": true, "guidance": "What is wrong, in one or two sentences." }],
+    "sections": [
+      { "title": "Summary", "required": true, "guidance": "What is wrong?" },
+      { "title": "Environment", "required": true, "guidance": "Where does it happen?" }
+    ],
     "requiredFields": ["priority"]
   }
 }
