@@ -1090,11 +1090,17 @@ absent) and workspace ownership or active membership (`status: true`). Inactive
 non-owners and foreign users receive 403 before issue reads or creation.
 On creation, `reporterId` may be omitted or must equal the authenticated local
 user ID; any other supplied value returns 403. The stored reporter always comes
-from the session. For the creation UI, see [Usage](../../README.md#usage), and for
+from the session. A truthy `parentId` must be a string identifying an
+issue in the authorized workspace; another project in that workspace is allowed.
+A nonexistent or foreign parent, or a truthy non-string value, returns 400 with
+`{"error":"Invalid parent issue"}` before the parent reaches the Forge write guard.
+For the creation UI, see [Usage](../../README.md#usage), and for
 Forge-connected projects, see the [legacy write guard](../forge-legacy-write-guard.md).
 
 The [native Maestro fixture](../../tests/native-maestro-link.test.cjs) covers
-these guards with modeled collaborators. Detail editing, relation selectors,
+identity and reporter guards with modeled collaborators. The
+[handoffs fixture](../../tests/agents/handoffs.test.cjs) covers parent validation
+against a database. Detail editing, relation selectors,
 project privacy and post-check revocation remain separate policy surfaces;
 these collection guards are not a whole-app tenant audit.
 
