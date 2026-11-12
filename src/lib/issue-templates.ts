@@ -83,6 +83,7 @@ export function templateFor(templates: Record<TemplatedIssueType, IssueTemplate>
 
 // Extract comparison text, not HTML for rendering.
 const plainText = (text: string) => text.split(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g).join('');
+const escapeHeading = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // Heading text as it is compared: no markup, lower case, single spaces, no punctuation at the ends.
 const comparable = (text: string) => plainText(text).replace(/&nbsp;/gi, ' ').toLowerCase()
   .replace(/\s+/g, ' ').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
@@ -100,7 +101,7 @@ export function missingSections(template: IssueTemplate, description: string | n
     const content = parts[index + 1];
     if (/<img\b/i.test(content) || plainText(content).replace(/&nbsp;/gi, ' ').replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '').trim()) filled.add(comparable(parts[index]));
   }
-  return template.sections.filter(section => section.required && !filled.has(comparable(section.title))).map(section => section.title);
+  return template.sections.filter(section => section.required && !filled.has(comparable(escapeHeading(section.title)))).map(section => section.title);
 }
 
 /** The required fields that have no value. An empty text or an empty list is no value. */
@@ -118,10 +119,10 @@ export function missingFields(template: IssueTemplate, values: Partial<Record<Te
  */
 export function templateBody(template: IssueTemplate, format: 'html' | 'markdown'): string {
   if (format === 'html') {
-    return template.sections.map(section => `<h2>${section.title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h2>`).join('');
+    return template.sections.map(section => `<h2>${escapeHeading(section.title)}</h2>`).join('');
   }
   return template.sections.map(section =>
-    `## ${section.title}\n\n<!-- ${section.guidance.replace(/-(?=-)/g, '- ')}${section.required ? '' : ' (optional)'} -->\n`).join('\n');
+    `## ${section.title.replace(/[!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~\r\n]/g, char => `&#${char.charCodeAt(0)};`)}\n\n<!-- ${section.guidance.replace(/-(?=-)/g, '- ')}${section.required ? '' : ' (optional)'} -->\n`).join('\n');
 }
 
 /**
@@ -136,13 +137,14 @@ export function validateTemplateInput(input: unknown): { sections: TemplateSecti
   const tidy: TemplateSection[] = [];
   for (const section of sections as Array<Partial<Record<keyof TemplateSection, unknown>> | null>) {
     const title = typeof section?.title === 'string' ? section.title.trim() : '';
-    const guidance = typeof section?.guidance === 'string' ? section.guidance.trim() : '';
+    if (typeof section?.required !== 'boolean' || typeof section?.guidance !== 'string') return { error: 'Every section needs a required flag and guidance text.' };
+    const guidance = section.guidance.trim();
     // A title is matched against headings by its letters and digits, so it needs some.
     if (!comparable(title) || title.length > 80) return { error: 'Every section needs a title of 1 to 80 characters with letters or digits in it.' };
     if (guidance.length > 500) return { error: `The guidance for "${title}" is longer than 500 characters.` };
     if (titles.has(comparable(title))) return { error: `The section title "${title}" is used more than once.` };
     titles.add(comparable(title));
-    tidy.push({ title, required: section?.required === true, guidance });
+    tidy.push({ title, required: section.required, guidance });
   }
   if (!Array.isArray(requiredFields) || requiredFields.some(field => !TEMPLATE_FIELDS.includes(field as TemplateField))) {
     return { error: `Required fields must be chosen from: ${TEMPLATE_FIELDS.join(', ')}.` };

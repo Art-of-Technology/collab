@@ -69,6 +69,16 @@ test('a stored template that no longer passes the checks gives way to the standa
   assert.deepEqual(plain(templates), plain(STANDARD_TEMPLATES));
 });
 
+test('malformed section properties are refused on save and fall back when stored', async () => {
+  for (const section of [{ title: 'Summary', required: 'true', guidance: '' }, { title: 'Summary', required: true, guidance: 42 }]) {
+    const input = { sections: [section], requiredFields: [] };
+    const admin = workspace({ rows: [{ issueType: 'BUG', ...input }] });
+    assert.deepEqual(plain((await admin.store.getWorkspaceTemplates('workspace-one')).templates.BUG), plain(STANDARD_TEMPLATES.BUG));
+    assert.equal((await admin.put({ type: 'BUG', ...input })).status, 400);
+    assert.deepEqual(admin.state.writes, []);
+  }
+});
+
 test('saving a type stores it with a rising version, and resetting brings the standard back', async () => {
   const { state, store } = workspace();
   const first = await store.saveWorkspaceTemplate('workspace-one', 'BUG', edited, 'admin');
@@ -117,7 +127,7 @@ test('a manager saves a template, and resets it to the standard', async () => {
 
 test('a template that breaks the rules, or a type without templates, is refused and nothing is stored', async () => {
   const admin = workspace();
-  const invalid = await admin.put({ type: 'BUG', sections: [{ title: 'A' }, { title: 'a' }], requiredFields: [] });
+  const invalid = await admin.put({ type: 'BUG', sections: [{ title: 'A', required: true, guidance: '' }, { title: 'a', required: true, guidance: '' }], requiredFields: [] });
   assert.equal(invalid.status, 400);
   assert.match((await invalid.json()).error, /more than once/);
   for (const type of ['SUBTASK', 'nope', undefined]) assert.equal((await admin.put({ type, ...edited })).status, 400, String(type));

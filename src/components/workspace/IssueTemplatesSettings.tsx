@@ -66,6 +66,7 @@ export default function IssueTemplatesSettings({ workspaceId, initialTemplates }
         const working = busy === draft.type;
         return (
           <TabsContent key={draft.type} value={draft.type} className="space-y-4">
+            <fieldset disabled={busy !== null} className="space-y-4">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -170,6 +171,7 @@ export default function IssueTemplatesSettings({ workspaceId, initialTemplates }
                 Reset to standard
               </Button>
             </div>
+            </fieldset>
           </TabsContent>
         );
       })}
