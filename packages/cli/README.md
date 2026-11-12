@@ -187,7 +187,9 @@ An agent that is not a person, such as a shared assistant on another platform, s
 2. The token is shown once. Store it in the agent's secret manager and inject it as `COLLAB_TOKEN` with `COLLAB_URL`, or as a Bearer credential for the API.
 3. To stop it, revoke it on the same page. Revocation takes effect at once.
 
-Each token belongs to a service account named after it: a workspace member with no email that cannot sign in. Issues, comments and Notes the agent writes show that name. The account can use only the workspace the token was created in. Switching the member off in the Members list pauses its tokens. While a switched-off account still has usable tokens, creating another token with its name is refused: switch the member back on, or revoke those tokens first. Once none is usable, a new token switches the account back on. `worker`, `coordinator` and `config set` still need a saved login and refuse `COLLAB_TOKEN`.
+Each token belongs to a service account named after it: a workspace member with no email that cannot sign in. Creating another token with the same name in the workspace reuses that account. Issues, comments and Notes the agent writes show that name. The account can use only the workspace the token was created in. Switching the member off in the Members list pauses its tokens. While a switched-off account still has usable tokens, creating another token with its name is refused: switch the member back on, or revoke those tokens first. Once none is usable, a new token switches the account back on. Revoking the last usable token switches the member off. `worker`, `coordinator` and `config set` still need a saved login and refuse `COLLAB_TOKEN`.
+
+The creation API accepts `access` as `read` or `write` and `expiresInDays` from 1 to 365; defaults are `read` and 90 days. The settings page offers the three lifetimes above.
 
 `COLLAB_CONFIG_DIR` overrides the private state directory. `--timeout SECONDS` sets a per-request timeout from 1 to 120 (default 30) for ordinary API commands; worker commands use their own request deadlines. HTTP bodies are capped at 8 MiB. Ordinary API commands never retry automatically. Dedicated workers have the bounded read and lease retries described under [recovery](#limits-monitoring-and-recovery); they do not retry uncertain task mutations.
 
@@ -214,7 +216,7 @@ node scripts/setup-cli-oauth-client.mjs --apply
 
 The apply operation transactionally creates only the dedicated `collab-cli` system app, its public OAuth client and scopes. Existing matching registrations are reused; conflicting registrations are refused without modification. No user tokens are minted, no account is linked and no schema migration is required. Each user still authorizes access in the browser. Existing system-app redirect policy allows dynamic loopback callback ports. `workspace:write` is required by the existing label-create endpoint; comments use the existing `issues:read`/`issues:write` scopes, and no separate comments or secrets scopes are requested.
 
-Agent tokens and Claude connectors use three more system apps. Inspect them, then create them once in the same database environment:
+Agent tokens require additional system apps, including registrations for future integrations. Inspect them, then create them once in the same database environment:
 
 ```sh
 node scripts/setup-agent-apps.mjs
