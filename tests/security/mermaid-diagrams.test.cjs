@@ -174,31 +174,54 @@ test('the source of a diagram opens and closes with the control under it', async
   const { plain, withDiagrams, source, control, close } = noteEditors(drawing);
   await drawn();
   assert.deepEqual([control().textContent, control().getAttribute('aria-expanded')], ['Show source', 'false']);
+  control().focus();
   control().click();
   assert.equal(displayed(source()), true);
   assert.deepEqual([control().textContent, control().getAttribute('aria-expanded')], ['Hide source', 'true']);
+  assert.equal(document.activeElement, control());
   control().click();
   assert.equal(displayed(source()), false);
+  assert.equal(document.activeElement, control());
   assert.equal(withDiagrams.getHTML(), plain.getHTML());
   close();
 });
 
 test('the source of a diagram is shown while the cursor is in it', async () => {
-  const { withDiagrams, source, close } = noteEditors(drawing);
+  const { withDiagrams, source, control, close } = noteEditors(drawing);
   await drawn();
   let block;
   withDiagrams.state.doc.descendants((node, position) => { if (block === undefined && node.type.name === 'codeBlock') block = position; });
   withDiagrams.commands.setTextSelection(block + 2);
   assert.equal(displayed(source()), true);
+  assert.deepEqual([control().textContent, control().getAttribute('aria-expanded'), control().disabled], ['Hide source', 'true', true]);
   withDiagrams.commands.setTextSelection(1);
   assert.equal(displayed(source()), false);
+  assert.deepEqual([control().textContent, control().getAttribute('aria-expanded'), control().disabled], ['Show source', 'false', false]);
   close();
 });
 
 test('a diagram that cannot be drawn in the note editor keeps its source in view under a short reason', async () => {
-  const { preview, source, close } = noteEditors(async () => { throw new Error('Parse error on line 2:\nsequenceDiagram'); });
+  const { preview, source, control, close } = noteEditors(async () => { throw new Error('Parse error on line 2:\nsequenceDiagram'); });
   await drawn();
   assert.equal(preview().querySelector('.mermaid-diagram').textContent, 'Diagram could not be drawn: Parse error on line 2:');
   assert.equal(displayed(source()), true);
+  assert.deepEqual([control().textContent, control().getAttribute('aria-expanded'), control().disabled], ['Hide source', 'true', true]);
+  close();
+});
+
+test('an open diagram follows insertions but does not transfer to a following diagram when deleted', async () => {
+  const { withDiagrams, control, close } = noteEditors(drawing);
+  await drawn();
+  let block;
+  withDiagrams.state.doc.descendants((node, position) => { if (block === undefined && node.type.name === 'codeBlock') block = position; });
+  const original = withDiagrams.state.doc.nodeAt(block);
+  withDiagrams.view.dispatch(withDiagrams.state.tr.insert(block + original.nodeSize, original));
+  control().click();
+  withDiagrams.view.dispatch(withDiagrams.state.tr.insertText('x', 1));
+  let controls = withDiagrams.view.dom.querySelectorAll('.mermaid-preview button');
+  assert.deepEqual([...controls].map(button => button.getAttribute('aria-expanded')), ['true', 'false']);
+  withDiagrams.view.dispatch(withDiagrams.state.tr.delete(block + 1, block + 1 + original.nodeSize));
+  controls = withDiagrams.view.dom.querySelectorAll('.mermaid-preview button');
+  assert.deepEqual([...controls].map(button => button.getAttribute('aria-expanded')), ['false']);
   close();
 });
