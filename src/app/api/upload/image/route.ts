@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cloudinary } from '@/utils/cloudinary-server';
+import { getCurrentUser } from '@/lib/session';
 
 /**
  * API route handler for uploading images to Cloudinary
@@ -8,6 +9,10 @@ import { cloudinary } from '@/utils/cloudinary-server';
  */
 export async function POST(req: NextRequest) {
   try {
+    const actor = await getCurrentUser();
+    if (!actor) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { image, filename } = await req.json();
     
     if (!image) {

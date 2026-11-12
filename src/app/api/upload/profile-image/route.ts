@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cloudinary } from '@/utils/cloudinary-server';
+import { getCurrentUser } from '@/lib/session';
 
 /**
  * API route handler for uploading profile images from URLs to Cloudinary
@@ -8,6 +9,10 @@ import { cloudinary } from '@/utils/cloudinary-server';
  */
 export async function POST(req: NextRequest) {
   try {
+    const actor = await getCurrentUser();
+    if (!actor) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { imageUrl, filename, userId } = await req.json();
     
     if (!imageUrl || !filename || !userId) {
@@ -15,6 +20,11 @@ export async function POST(req: NextRequest) {
         { error: 'Image URL, filename, and userId are required' },
         { status: 400 }
       );
+    }
+
+    // The file name carries the user's id (see generateProfileImageFilename), so a user can only write their own.
+    if (userId !== actor.id || !String(filename).startsWith('profile_') || !String(filename).includes(`_${actor.id}_`)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Validate that it's a valid image URL

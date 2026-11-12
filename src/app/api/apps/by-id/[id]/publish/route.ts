@@ -3,6 +3,8 @@ import { AppStatus } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/session';
+import { appOwnerWhere } from '@/lib/apps/ownership';
 
 const PublishRequestSchema = z.object({
   status: z.enum(['IN_REVIEW', 'PUBLISHED', 'DRAFT', 'SUSPENDED', 'REJECTED'], {
@@ -16,14 +18,19 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const actor = await getCurrentUser();
+    if (!actor) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     // Parse and validate request body
     const body = await request.json();
     const { status } = PublishRequestSchema.parse(body);
 
     // Check if app exists and get latest version
-    const existingApp = await prisma.app.findUnique({
-      where: { id },
+    // The status belongs to the app's owner and to system admins; for anyone else the app does not exist.
+    const existingApp = await prisma.app.findFirst({
+      where: { id, ...(actor.role === 'SYSTEM_ADMIN' ? {} : appOwnerWhere(actor.id)) },
       include: {
         versions: {
           orderBy: { createdAt: 'desc' },
