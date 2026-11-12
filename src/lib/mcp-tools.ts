@@ -75,7 +75,7 @@ function tool(
   properties: Record<string, unknown> = {}, required: string[] = [], extra: Partial<McpTool> = {},
 ): McpTool {
   const schema = { type: 'object', additionalProperties: false, ...(required.length ? { required } : {}), properties: { ...properties, workspaceId } };
-  return { name, description, scopes, method, path, handler, schema, input: fromJsonSchema(schema as Parameters<typeof fromJsonSchema>[0]), ...extra };
+  return { name, description: description + DATA, scopes, method, path, handler, schema, input: fromJsonSchema(schema as Parameters<typeof fromJsonSchema>[0]), ...extra };
 }
 
 export const tools: McpTool[] = [
@@ -84,10 +84,10 @@ export const tools: McpTool[] = [
   tool('projects_list', 'Projects in the workspace.', ['projects:read'], 'GET', 'projects', projects.GET, { search: text, includeArchived: flag }),
   tool('projects_statuses', 'The statuses an issue can have in a project.', ['projects:read'], 'GET', 'projects/:projectId/statuses', projectStatuses.GET, { projectId: id }, ['projectId']),
   tool('labels_list', 'Labels in the workspace, with the IDs that issues_create and issues_update take.', ['workspace:read'], 'GET', 'labels', labels.GET, { search: text }),
-  tool('issues_list', `List issues, newest first, with filters and paging.${DATA}`, ['issues:read'], 'GET', 'issues', issues.GET, {
+  tool('issues_list', 'List issues, newest first, with filters and paging.', ['issues:read'], 'GET', 'issues', issues.GET, {
     projectId: id, assigneeId: id, status: text, type: issueType, priority, search: text, page: integer(1), limit: integer(1, 100),
   }),
-  tool('issues_get', `One issue with its details.${DATA}`, ['issues:read'], 'GET', 'issues/:issueIdOrKey', issue.GET, { issueIdOrKey }, ['issueIdOrKey']),
+  tool('issues_get', 'One issue with its details.', ['issues:read'], 'GET', 'issues/:issueIdOrKey', issue.GET, { issueIdOrKey }, ['issueIdOrKey']),
   tool('issues_create', 'Create an issue. The token\'s identity is recorded as its creator.', ['issues:write'], 'POST', 'issues', issues.POST, {
     title: { type: 'string', minLength: 1, maxLength: 200 }, projectId: id, ...issueFields,
   }, ['title', 'projectId']),
@@ -96,7 +96,7 @@ export const tools: McpTool[] = [
     description: orNull(text), assigneeId: orNull(id), parentId: orNull(id), dueDate: orNull(dateTime), startDate: orNull(dateTime),
     storyPoints: orNull(integer(1)), color: orNull(text), progress: integer(0, 100), timeEstimateMinutes: orNull(integer(1)),
   }, ['issueIdOrKey']),
-  tool('comments_list', `Comments on an issue.${DATA}`, ['issues:read'], 'GET', 'issues/:issueIdOrKey/comments', comments.GET, { issueIdOrKey, flat: flag }, ['issueIdOrKey']),
+  tool('comments_list', 'Comments on an issue.', ['issues:read'], 'GET', 'issues/:issueIdOrKey/comments', comments.GET, { issueIdOrKey, flat: flag }, ['issueIdOrKey']),
   tool('comments_add', 'Add a comment to an issue as the token\'s identity.', ['issues:write'], 'POST', 'issues/:issueIdOrKey/comments', comments.POST, {
     issueIdOrKey, content: { type: 'string', minLength: 1 }, parentId: id,
   }, ['issueIdOrKey', 'content']),
@@ -106,10 +106,10 @@ export const tools: McpTool[] = [
   tool('worklogs_add', 'Log time spent on an issue, in minutes.', ['issues:write'], 'POST', 'issues/:issueIdOrKey/work-logs', workLogs.POST, {
     issueIdOrKey, timeSpent: integer(1), description: text, loggedAt: dateTime,
   }, ['issueIdOrKey', 'timeSpent']),
-  tool('notes_list', `List shared Notes. Secret documents and personal Notes are never included.${DATA}`, ['context:read'], 'GET', 'context', notes.GET, {
+  tool('notes_list', 'List shared Notes. Secret documents and personal Notes are never included.', ['context:read'], 'GET', 'context', notes.GET, {
     projectId: id, type: noteType, scope: noteScope, search: text, aiContext: flag, offset: integer(0), limit: integer(1, 100),
   }),
-  tool('notes_get', `One Note. Secret documents are not available.${DATA}`, ['context:read'], 'GET', 'context/:id', note.GET, { id }, ['id'], {
+  tool('notes_get', 'One Note. Secret documents are not available.', ['context:read'], 'GET', 'context/:id', note.GET, { id }, ['id'], {
     refuse: result => SECRET_NOTE_TYPES.includes(result?.type ?? '') ? 'Secret documents are not available through this endpoint.' : undefined,
   }),
   tool('notes_create', 'Create a shared Note. With a projectId it is a project Note unless a scope is given.', ['context:write'], 'POST', 'context', notes.POST, {
@@ -118,12 +118,12 @@ export const tools: McpTool[] = [
     prepare: args => { if (args.projectId && !args.scope) args.scope = 'PROJECT'; },
   }),
   tool('notes_update', 'Change fields of a Note.', ['context:write'], 'PUT', 'context/:id', note.PUT, { id, ...noteFields, projectId: orNull(id) }, ['id']),
-  tool('search', `Search issues, Notes and activity.${DATA}`, ['issues:read', 'context:read'], 'GET', 'search', search.GET, {
+  tool('search', 'Search issues, Notes and activity.', ['issues:read', 'context:read'], 'GET', 'search', search.GET, {
     query: { type: 'string', minLength: 1, maxLength: 500 }, mode: oneOf('exact', 'keyword', 'semantic', 'hybrid', 'fuzzy'), type: oneOf('all', 'issue', 'note', 'activity'),
     projectId: id, status: { type: 'string', minLength: 1, maxLength: 128 }, assigneeId: id, after: dateTime, before: dateTime,
     limit: integer(1, 50), offset: integer(0, 50000), maxTokens: integer(1024, 64000),
   }, ['query'], { anyScope: true }),
-  tool('context_get', `Project context for an agent: with a projectId, the pipeline (status counts, owners, blockers, recent changes, relevant Notes); otherwise the workspace prompts.${DATA}`, ['prompts:read'], 'GET', 'ai-context', aiContext.GET, {
+  tool('context_get', 'Project context for an agent: with a projectId, the pipeline (status counts, owners, blockers, recent changes, relevant Notes); otherwise the workspace prompts.', ['prompts:read'], 'GET', 'ai-context', aiContext.GET, {
     projectId: id, includeKnowledge: flag, includePipeline: flag, limit: integer(1, 50), offset: integer(0, 50000), since: dateTime, maxTokens: integer(2048, 64000),
   }, [], {
     prepare: args => {
