@@ -55,6 +55,8 @@ async function mounted(file, name, props, run, templates = TEMPLATED_TYPES.map(t
     missing: () => [...document.querySelectorAll('[aria-label="Issue template"] [data-state="missing"]')].map(item => item.textContent.split(' (missing)')[0]),
     checklist: () => document.querySelector('[aria-label="Issue template"]'),
     button: text => [...document.querySelectorAll('button')].find(item => item.textContent.trim() === text || item.getAttribute('aria-label') === text),
+    setTemplates: value => { templates = value; },
+    render: async changes => { props = { ...props, ...changes }; await React.act(async () => root.render(React.createElement(Component, props))); },
     click: async text => { assert.ok(page.button(text), `button "${text}"`); await React.act(async () => page.button(text).click()); },
     type: async (label, value) => {
       const field = document.querySelector(`[aria-label="${label}"], [placeholder="${label}"]`);
@@ -163,5 +165,30 @@ test('the inline creator pre-fills, guides and stores the same way', async () =>
     assert.deepEqual([page.created[0].type, page.created[0].description, page.created[0].priority], ['BUG', undefined, 'MEDIUM']);
     // The form stays open for the next one, cleared back to a Task with its headings.
     assert.equal(page.description(), headings('TASK'));
+  });
+});
+
+test('closed forms do not retain headings when templates become unavailable', async () => {
+  await modal(async page => {
+    await page.render({ onOpenChange: open => page.render({ open }) });
+    await page.click('Type BUG');
+    await page.type('Title', 'First');
+    await page.click('Create anyway');
+    page.setTemplates(null);
+    await page.render({ open: true });
+    assert.equal(page.description(), '');
+    await page.type('Title', 'Second');
+    await page.click('Create issue');
+    assert.equal(page.created[1].description, undefined);
+  });
+  await mounted('src/components/issue/InlineIssueCreator.tsx', 'InlineIssueCreator', { workspaceId: 'workspace', projectId: 'project', autoFocus: true }, async page => {
+    await page.click('Type BUG');
+    await page.click('Cancel');
+    page.setTemplates(null);
+    await page.click('Add sub-issue');
+    assert.equal(page.description(), '');
+    await page.type('Issue title', 'Second');
+    await page.click('Create');
+    assert.equal(page.created[0].description, undefined);
   });
 });

@@ -138,7 +138,7 @@ export function InlineIssueCreator({
   const handleCollapse = () => {
     setIsExpanded(false);
     setTitle("");
-    setDescription(templateForm.starting("TASK"));
+    setDescription("");
     setSearchQuery("");
     setSearchResults([]);
     setSelectedIssues([]);

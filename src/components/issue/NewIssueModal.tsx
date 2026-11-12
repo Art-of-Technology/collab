@@ -286,7 +286,7 @@ export default function NewIssueModal({
         onOpenChange(false);
         // Reset form
         setTitle("");
-        setDescription(startingDescription("TASK"));
+        setDescription("");
         setStatus(defaultStatus);
         setPriority(undefined);
         setAssigneeId(undefined);
