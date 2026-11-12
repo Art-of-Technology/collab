@@ -666,6 +666,7 @@ textarea::selection {
 .mermaid-diagram-canvas {
   overflow: auto;
   overscroll-behavior: contain;
+  max-height: min(60vh, 32rem);
 }
 
 .mermaid-diagram-canvas::-webkit-scrollbar {
@@ -702,7 +703,9 @@ textarea::selection {
   display: none;
 }
 
-.mermaid-diagram-full {
+.mermaid-diagram-full:fullscreen,
+.mermaid-diagram-full[data-window-fallback],
+.mermaid-diagram-full > dialog {
   position: fixed;
   inset: 0;
   z-index: 1000;
@@ -710,6 +713,11 @@ textarea::selection {
   flex-direction: column;
   gap: 0.5rem;
   margin: 0;
+  max-width: none;
+  max-height: none;
+  width: 100%;
+  height: 100%;
+  border: 0;
   padding: 1rem;
   pointer-events: auto;
   background: hsl(var(--background));
@@ -718,6 +726,7 @@ textarea::selection {
 .mermaid-diagram-full .mermaid-diagram-canvas {
   flex: 1;
   min-height: 0;
+  max-height: none;
 }
 
 .mermaid-diagram-full .mermaid-diagram-bar {

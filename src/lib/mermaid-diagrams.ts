@@ -50,6 +50,16 @@ const FULL = 'mermaid-diagram-full';
 function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement, width: number, height: number): HTMLElement {
   const bar = document.createElement('div');
   bar.className = 'mermaid-diagram-bar';
+  const dialog = document.createElement('dialog');
+  const placeholder = document.createComment('diagram');
+  const escapeFallback = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      event.preventDefault();
+      setFull(false);
+      toggle.focus();
+    }
+  };
   const level = document.createElement('output');
   level.dataset.zoom = '';
   let zoom = 1;
@@ -79,6 +89,16 @@ function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement
     return button;
   };
   const setFull = (full: boolean) => {
+    if (!full && (dialog.open || placeholder.parentNode)) {
+      window.removeEventListener('keydown', escapeFallback, true);
+      if (dialog.open) {
+        dialog.close();
+        box.replaceChildren(...Array.from(dialog.childNodes));
+      } else {
+        placeholder.replaceWith(box);
+        delete box.dataset.windowFallback;
+      }
+    }
     box.classList.toggle(FULL, full);
     toggle.textContent = full ? 'Exit full screen' : 'Full screen';
     if (full) fitWindow();
@@ -88,7 +108,20 @@ function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement
     if (document.fullscreenElement === box) void document.exitFullscreen();
     else if (box.classList.contains(FULL)) setFull(false);
     // A browser without element full screen, or one that refuses it, gets a block that covers the window.
-    else Promise.resolve().then(() => box.requestFullscreen()).catch(() => setFull(true));
+    else Promise.resolve().then(() => box.requestFullscreen()).catch(() => {
+      if (!box.isConnected) return;
+      if (typeof dialog.showModal === 'function') {
+        dialog.append(...Array.from(box.childNodes));
+        box.append(dialog);
+        dialog.showModal();
+      } else {
+        box.before(placeholder);
+        document.body.append(box);
+        box.dataset.windowFallback = '';
+      }
+      window.addEventListener('keydown', escapeFallback, true);
+      setFull(true);
+    });
   }, false);
   box.addEventListener('fullscreenchange', () => setFull(document.fullscreenElement === box));
   box.addEventListener('keydown', event => {

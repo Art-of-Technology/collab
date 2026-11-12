@@ -31,6 +31,8 @@ for (const [label, language, text] of [
 const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<!doctype html><html><body></body></html>');
 const { document } = dom.window;
+dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+dom.window.HTMLDialogElement.prototype.close = function () { this.open = false; };
 // The editor reads these when it is first required.
 for (const name of ['window', 'document', 'navigator', 'Node', 'Element', 'HTMLElement', 'MutationObserver', 'getComputedStyle', 'DOMParser']) {
   Object.defineProperty(globalThis, name, { value: name === 'window' ? dom.window : dom.window[name], configurable: true, writable: true });
@@ -41,11 +43,12 @@ const { StarterKit } = require('@tiptap/starter-kit');
 function diagrams(render) {
   const calls = [];
   const mermaid = { initialize: config => calls.push(config), render: async (...input) => (calls.push(input), render(...input)) };
+  dom.window.mermaid = mermaid;
   // The page already has the renderer, as it does after the first diagram's script has loaded.
   const loaded = load('src/lib/mermaid-diagrams.ts', {
     ...RENDERER_URL,
     dompurify: { __esModule: true, default: require('dompurify')(dom.window) },
-  }, { document, window: { mermaid } });
+  }, { document, window: dom.window });
   return { ...loaded, calls };
 }
 
@@ -154,8 +157,13 @@ test('a drawing sits in its own scrolling area under a full screen control', asy
 
 test('a drawing opens over the whole window, zooms in steps, and returns to its fitted size', async () => {
   const box = await wideDrawing();
+  const canvas = box.querySelector('.mermaid-diagram-canvas');
+  const parent = box.parentNode;
   press(box, 'Full screen');
   await drawn();
+  assert.equal(box.parentNode, parent);
+  assert.equal(box.querySelector('dialog').open, true);
+  assert.equal(box.querySelector('dialog .mermaid-diagram-canvas'), canvas);
   assert.equal(box.classList.contains('mermaid-diagram-full'), true);
   assert.deepEqual(sizing(box), { width: '1800px', maxWidth: 'none', minWidth: '0px', level: '100%' });
   press(box, 'Zoom in');
@@ -168,6 +176,7 @@ test('a drawing opens over the whole window, zooms in steps, and returns to its 
   press(box, 'Exit full screen');
   await drawn();
   assert.equal(box.classList.contains('mermaid-diagram-full'), false);
+  assert.equal(box.querySelector(':scope > .mermaid-diagram-canvas'), canvas);
   assert.deepEqual(sizing(box), { width: '100%', maxWidth: '1800px', minWidth: '720px', level: '100%' });
 });
 
@@ -178,6 +187,25 @@ test('Escape closes a drawing that covers the window', async () => {
   box.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(box.classList.contains('mermaid-diagram-full'), false);
   assert.equal(sizing(box).width, '100%');
+});
+
+test('without modal dialogs the fallback restores the same drawing to its place', async () => {
+  const box = await wideDrawing();
+  const parent = box.parentNode;
+  const canvas = box.querySelector('.mermaid-diagram-canvas');
+  const showModal = dom.window.HTMLDialogElement.prototype.showModal;
+  dom.window.HTMLDialogElement.prototype.showModal = undefined;
+  try {
+    press(box, 'Full screen');
+    await drawn();
+    assert.equal(box.parentNode, document.body);
+    assert.equal(box.querySelector('.mermaid-diagram-canvas'), canvas);
+    press(box, 'Exit full screen');
+    assert.equal(box.parentNode, parent);
+    assert.equal(box.querySelector('.mermaid-diagram-canvas'), canvas);
+  } finally {
+    dom.window.HTMLDialogElement.prototype.showModal = showModal;
+  }
 });
 
 // The stylesheet's diagram rules decide whether a diagram's source is displayed in the note editor.
