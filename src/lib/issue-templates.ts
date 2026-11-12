@@ -113,10 +113,11 @@ const visible = (html: string) => /<img\b/i.test(html)
 function untouched(description: string, template: IssueTemplate | null): boolean {
   if (!template) return false;
   const parts = headingParts(description);
-  const headings = parts.filter((_, index) => index % 2 === 1).map(comparable);
-  return !parts.some((part, index) => index % 2 === 0 && visible(part))
-    && headings.length === template.sections.length
-    && template.sections.every((section, index) => headings[index] === comparable(escapeHeading(section.title)));
+  const expected = headingParts(templateBody(template, 'html'));
+  return parts.length === expected.length
+    && parts.every((part, index) => index % 2 === 0
+      ? !visible(part) && !/<hr\b/i.test(part)
+      : !/<(?:img|hr)\b/i.test(part) && plainText(part) === plainText(expected[index]));
 }
 
 /**
@@ -126,7 +127,7 @@ function untouched(description: string, template: IssueTemplate | null): boolean
  */
 export function nextDescription(current: string, previous: IssueTemplate | null, next: IssueTemplate | null): string {
   const parts = headingParts(current);
-  const empty = parts.length === 1 && !visible(parts[0]);
+  const empty = parts.length === 1 && !visible(parts[0]) && !/<hr\b/i.test(parts[0]);
   return empty || untouched(current, previous) ? (next ? templateBody(next, 'html') : '') : current;
 }
 

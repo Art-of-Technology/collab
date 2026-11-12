@@ -246,3 +246,17 @@ test('untouched headings are not stored, anything else is stored as written', ()
   assert.equal(storedDescription('<p>Free text</p>', null), '<p>Free text</p>');
   assert.equal(storedDescription('', BUG), '');
 });
+
+test('edited headings and visible dividers survive type changes and creation', () => {
+  for (const description of [
+    bugHeadings.replace('Summary', 'Summary?'),
+    bugHeadings.replace('Summary', 'summary'),
+    bugHeadings.replace('</h2>', '</h2><hr>'),
+    bugHeadings.replace('Summary', 'Summary<img src="https://example.com/image.png">'),
+    '<hr>',
+  ]) {
+    assert.equal(nextDescription(description, BUG, STORY), description);
+    assert.equal(nextDescription(description, BUG, null), description);
+    assert.equal(storedDescription(description, BUG), description);
+  }
+});
