@@ -267,8 +267,9 @@ function createAnthropicStreamWithMcp(
         }
         if (!mcpFallback) {
           // The assistant works in this chat's workspace only. Text it reads could ask for another of
-          // the member's workspaces, so the model is not offered that argument and cannot pass it.
-          mcpTools = toolsFor(scopes).map((tool) => {
+          // the member's workspaces, so the model gets no tool that lists them, is not offered that
+          // argument and cannot pass it.
+          mcpTools = toolsFor(scopes).filter((tool) => tool.name !== 'workspaces_list').map((tool) => {
             const { workspaceId: _otherWorkspace, ...properties } = (tool.schema.properties ?? {}) as Record<string, unknown>;
             return { name: tool.name, description: tool.description, input_schema: { ...tool.schema, properties } };
           });
@@ -558,7 +559,10 @@ function createAnthropicStreamWithMcp(
 
               try {
                 const { workspaceId: _otherWorkspace, ...input } = (toolCall.input || {}) as Record<string, unknown>;
-                const result = await runTool(toolCall.name, input, `Bearer ${token}`, requestUrl, scopes);
+                // Only a tool that was offered runs, whatever name the model sends.
+                const result = mcpTools.some((tool) => tool.name === toolCall.name)
+                  ? await runTool(toolCall.name, input, `Bearer ${token}`, requestUrl, scopes)
+                  : { content: [{ type: 'text', text: JSON.stringify({ error: 'unknown_tool', error_description: `Tool ${toolCall.name} is not available.` }) }], isError: true };
                 const isError = !!result.isError;
                 const textContent = result.content.map((c) => c.text).join('\n');
 

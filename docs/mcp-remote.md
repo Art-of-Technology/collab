@@ -64,7 +64,7 @@ Then sign in from `/mcp`. Claude Code's loopback callback is accepted for this c
 
 A token is offered only the tools its scopes allow, so a read-only token never sees a write tool. Every tool also takes an optional `workspaceId`.
 
-The in-app assistant runs the same tools in-process as the signed-in member, with a token of its own app (`collab-assistant`). It is not offered the `workspaceId` argument, so workspace-scoped calls use the chat's workspace. `workspaces_list` still returns the workspaces the member can use.
+The in-app assistant runs the same tools in-process as the signed-in member, with a token of its own app (`collab-assistant`). It works only in the chat's workspace: it is not offered the `workspaceId` argument or `workspaces_list`, so text it reads cannot steer it into, or make it list, the member's other workspaces.
 
 | Tool | Does | Scope |
 | --- | --- | --- |

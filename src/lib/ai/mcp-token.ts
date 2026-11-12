@@ -8,8 +8,7 @@
  *
  * Resilience: If decryption fails (e.g. APP_TOKENS_KEY rotation), ALL stale
  * tokens for the user+workspace are batch-revoked and a fresh one is issued.
- * The stream route can call invalidateMcpToken() to force re-provisioning
- * when a token stops working.
+ * The stream route calls refreshMcpToken() when a token stops working.
  */
 
 import { randomBytes } from 'crypto';
@@ -20,8 +19,19 @@ const ASSISTANT_APP_SLUG = 'collab-assistant';
 
 // In-memory cache to avoid DB lookups on every message
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
-const refreshes = new Map<string, Promise<string>>();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+// One token operation at a time per member and workspace, so a chat that starts while a dead token is
+// being replaced waits for the replacement instead of creating a token the replacement then revokes.
+// shortcut: per process only, a second replica can still race; lock in the database when production runs more than one.
+const turns = new Map<string, Promise<unknown>>();
+function inTurn<T>(key: string, task: () => Promise<T>): Promise<T> {
+  const result = (turns.get(key) ?? Promise.resolve()).then(task);
+  const done = result.catch(() => undefined);
+  turns.set(key, done);
+  void done.then(() => { if (turns.get(key) === done) turns.delete(key); });
+  return result;
+}
 
 /**
  * Get or create an MCP access token for the given user+workspace.
@@ -32,6 +42,13 @@ export async function getMcpToken(
   userId: string,
   workspaceId: string
 ): Promise<string> {
+  const cacheKey = `${userId}:${workspaceId}`;
+  const cached = tokenCache.get(cacheKey);
+  // A cached token needs no turn; anything else waits for a replacement that may be under way.
+  return cached && cached.expiresAt > Date.now() ? cached.token : inTurn(cacheKey, () => acquire(prisma, userId, workspaceId));
+}
+
+async function acquire(prisma: any, userId: string, workspaceId: string): Promise<string> {
   const cacheKey = `${userId}:${workspaceId}`;
 
   // 1. Check in-memory cache
@@ -72,7 +89,8 @@ export async function getMcpToken(
 
       tokenCache.set(cacheKey, {
         token: decrypted,
-        expiresAt: Date.now() + CACHE_TTL,
+        // Never cached past its own expiry.
+        expiresAt: Math.min(Date.now() + CACHE_TTL, token.tokenExpiresAt?.getTime() ?? Infinity),
       });
       return decrypted;
     } catch {
@@ -94,12 +112,8 @@ export async function getMcpToken(
   return createFreshToken(prisma, mcpApp.id, userId, workspaceId, cacheKey);
 }
 
-/**
- * Invalidate the cached MCP token and revoke it in DB.
- * Call this when the token stops working so the next
- * getMcpToken() call creates a fresh one.
- */
-export async function invalidateMcpToken(
+/** Drop the cached token and revoke the member's assistant tokens for this workspace. */
+async function invalidate(
   prisma: any,
   userId: string,
   workspaceId: string
@@ -127,25 +141,14 @@ export async function invalidateMcpToken(
   }
 }
 
-export async function refreshMcpToken(prisma: any, userId: string, workspaceId: string, failedToken: string): Promise<string> {
-  const key = JSON.stringify([userId, workspaceId]);
-  const pending = refreshes.get(key);
-  if (pending) {
-    await pending;
-    return refreshMcpToken(prisma, userId, workspaceId, failedToken);
-  }
-  const refresh = (async () => {
-    const current = await getMcpToken(prisma, userId, workspaceId);
+/** Replace a token that stopped working. Chats that hit the same dead token share one replacement. */
+export function refreshMcpToken(prisma: any, userId: string, workspaceId: string, failedToken: string): Promise<string> {
+  return inTurn(`${userId}:${workspaceId}`, async () => {
+    const current = await acquire(prisma, userId, workspaceId);
     if (current !== failedToken) return current;
-    await invalidateMcpToken(prisma, userId, workspaceId);
-    return getMcpToken(prisma, userId, workspaceId);
-  })();
-  refreshes.set(key, refresh);
-  try {
-    return await refresh;
-  } finally {
-    refreshes.delete(key);
-  }
+    await invalidate(prisma, userId, workspaceId);
+    return acquire(prisma, userId, workspaceId);
+  });
 }
 
 // ── Internal helpers ──

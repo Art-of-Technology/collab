@@ -24,7 +24,13 @@ function fixture() {
       updateMany: async ({ where, data }) => { const rows = tokens.filter(row => matches(row, where)); rows.forEach(row => Object.assign(row, data)); return { count: rows.length }; },
     },
   };
-  const globals = { Buffer, URL, process: { env: {} }, console: { log: (...args) => logs.push(args), warn: (...args) => logs.push(args), error: (...args) => logs.push(args) } };
+  // A clock a test can move forward; the token module and the API's token check both read it.
+  const clock = { ahead: 0 };
+  class Clock extends Date {
+    constructor(...args) { if (args.length) super(...args); else super(Date.now() + clock.ahead); }
+    static now() { return Date.now() + clock.ahead; }
+  }
+  const globals = { Buffer, URL, Date: Clock, process: { env: {} }, console: { log: (...args) => logs.push(args), warn: (...args) => logs.push(args), error: (...args) => logs.push(args) } };
   const deps = {
     crypto: require('node:crypto'),
     'next/server': { NextResponse: { json: (body, init) => ({ body, status: init?.status ?? 200 }) } },
@@ -39,7 +45,7 @@ function fixture() {
   const fresh = () => load('src/lib/ai/mcp-token.ts', deps, globals);
   const { authenticateAppRequest } = load('src/lib/apps/auth-middleware.ts', deps, globals);
   const auth = (token, scope = 'issues:write') => authenticateAppRequest({ headers: new Headers({ Authorization: `Bearer ${token}` }) }, { requiredScopes: [scope] });
-  return { apps, tokens, logs, prisma, fresh, auth, stored };
+  return { apps, tokens, logs, prisma, fresh, auth, stored, clock };
 }
 
 test('the assistant gets a token for the signed-in member under its own app, with the MCP tool scopes', async () => {
@@ -83,19 +89,19 @@ test('an unpublished or non-system assistant app issues nothing', async () => {
   }
 });
 
-test('invalidating replaces only that member\'s assistant token and leaves every other token alone', async () => {
+test('replacing a token replaces only that member\'s assistant token and leaves every other token alone', async () => {
   const f = fixture();
   const lib = f.fresh();
   f.stored('cli-app', 'alice', 'collab_at_cli');
   f.stored('old-app', 'alice', 'collab_at_old');
   const alice = await lib.getMcpToken(f.prisma, 'alice', 'w1'), bob = await lib.getMcpToken(f.prisma, 'bob', 'w1');
-  await lib.invalidateMcpToken(f.prisma, 'alice', 'w1');
+  const next = await lib.refreshMcpToken(f.prisma, 'alice', 'w1', alice);
   assert.equal((await f.auth(alice)).error.statusCode, 401);
   assert.equal((await f.auth(bob)).success, true);
   assert.equal((await f.auth('collab_at_cli')).success, true, 'a CLI login is untouched');
   assert.equal(f.tokens.find(row => row.appId === 'old-app').isRevoked, false);
-  const next = await lib.getMcpToken(f.prisma, 'alice', 'w1');
   assert.notEqual(next, alice);
+  assert.equal(await lib.getMcpToken(f.prisma, 'alice', 'w1'), next);
   assert.equal((await f.auth(next)).success, true);
 });
 
@@ -112,6 +118,39 @@ test('concurrent and delayed failures of one token share its replacement', async
   assert.equal(await lib.refreshMcpToken(f.prisma, 'alice', 'w1', old), first);
   assert.equal((await f.auth(first)).success, true);
   assert.equal(f.tokens.length, 2);
+});
+
+test('a chat that starts while a dead token is being replaced gets the replacement, not a token the replacement revokes', async () => {
+  const f = fixture();
+  const lib = f.fresh();
+  const dead = await lib.getMcpToken(f.prisma, 'alice', 'w1');
+  f.tokens[0].isRevoked = true; // revoked elsewhere while this process still holds it
+  // Hold the replacement at its revocation step while another chat asks for a token.
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  const updateMany = f.prisma.appToken.updateMany;
+  f.prisma.appToken.updateMany = async args => { await held; return updateMany(args); };
+  const turn = () => new Promise(resolve => setImmediate(resolve));
+  const replacing = lib.refreshMcpToken(f.prisma, 'alice', 'w1', dead);
+  await turn();
+  const starting = lib.getMcpToken(f.prisma, 'alice', 'w1');
+  await turn();
+  release();
+  const [replacement, seen] = await Promise.all([replacing, starting]);
+  assert.equal(seen, replacement);
+  assert.equal((await f.auth(replacement)).success, true);
+  assert.equal(f.tokens.filter(row => !row.isRevoked).length, 1);
+});
+
+test('a token in the cache is not handed out after it expires', async () => {
+  const f = fixture();
+  f.stored('assistant-app', 'alice', 'collab_at_soon'); // expires in a minute
+  const lib = f.fresh();
+  assert.equal(await lib.getMcpToken(f.prisma, 'alice', 'w1'), 'collab_at_soon');
+  f.clock.ahead = 2 * 60_000; // past its expiry, well inside the 30 minute cache window
+  const token = await lib.getMcpToken(f.prisma, 'alice', 'w1');
+  assert.notEqual(token, 'collab_at_soon');
+  assert.equal((await f.auth(token)).success, true);
 });
 
 test('an expired stored token is replaced, never handed out', async () => {

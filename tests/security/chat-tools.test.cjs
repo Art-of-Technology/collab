@@ -4,13 +4,13 @@ const SCOPES = ['issues:read', 'issues:write'];
 const URL_ = 'https://collab.example.test/api/ai/chat/stream';
 
 // The in-app assistant offers the MCP tools to the model and runs them in-process as the signed-in member.
-function fixture({ handshake = [true], tool = { content: [{ type: 'text', text: '{"issues":[{"issueKey":"CLB-1"}]}' }] }, toolInput = '{"limit":5}' } = {}) {
+function fixture({ handshake = [true], tool = { content: [{ type: 'text', text: '{"issues":[{"issueKey":"CLB-1"}]}' }] }, toolName = 'issues_list', toolInput = '{"limit":5}' } = {}) {
   const runs = [], provider = [], invalidated = [], issued = [];
   const agent = { slug: 'cleo', name: 'Cleo', color: '#fff', systemPrompt: 'Test' };
   const sse = events => new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
   const answers = [
     // The model first calls a workspace tool...
-    [{ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_1', name: 'issues_list' } },
+    [{ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_1', name: toolName } },
       { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: toolInput } },
       { type: 'content_block_stop', index: 0 },
       { type: 'message_delta', delta: { stop_reason: 'tool_use' } }],
@@ -41,6 +41,7 @@ function fixture({ handshake = [true], tool = { content: [{ type: 'text', text: 
       toolsFor: () => [
         { name: 'whoami', description: 'The account', schema: { type: 'object', properties: { workspaceId: { type: 'string' } } } },
         { name: 'issues_list', description: 'List issues', schema: { type: 'object', properties: { limit: { type: 'integer' }, workspaceId: { type: 'string' } } } },
+        { name: 'workspaces_list', description: 'Workspaces the account can use', schema: { type: 'object', properties: { workspaceId: { type: 'string' } } } },
       ],
       runTool: async (name, args, authorization, base, scopes) => {
         runs.push({ name, args: { ...args }, authorization, base, scopes: [...scopes] });
@@ -112,6 +113,17 @@ test('the assistant stays in the chat\'s workspace: the model is not offered ano
   await f.chat();
   for (const tool of f.provider[0].tools) assert.equal('workspaceId' in tool.input_schema.properties, false, tool.name);
   assert.deepEqual(f.runs.map(run => run.args), [{}, { limit: 5 }]);
+});
+
+test('the assistant gets no tool that lists the member\'s other workspaces, and a tool it was not offered does not run', async () => {
+  // Text in an issue could tell the model to list the member's other workspaces and post them here.
+  const f = fixture({ toolName: 'workspaces_list', toolInput: '{}' });
+  const { of } = await f.chat();
+  assert.deepEqual(f.provider[0].tools.map(tool => tool.name), ['whoami', 'issues_list']);
+  assert.deepEqual(f.runs.map(run => run.name), ['whoami'], 'only the token check ran');
+  assert.deepEqual(of('tool_result').map(event => [event.toolUseId, event.isError]), [['toolu_1', true]]);
+  assert.equal(f.provider[1].messages.at(-1).content[0].is_error, true);
+  assert.equal(of('done')[0].fullContent, 'Done');
 });
 
 test('an outage while checking the token does not revoke it: the chat goes on without workspace tools', async () => {
