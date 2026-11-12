@@ -1208,6 +1208,23 @@ test('issue deletion stops on denied preview and does not retry uncertain mutati
   assert.deepEqual(failed.calls.map(call => call.method), ['GET', 'DELETE']);
 });
 
+test('template commands read the workspace issue templates by list and by type', async t => {
+  const template = { type: 'BUG', version: 1, standard: true, sections: [{ title: 'Summary', required: true, guidance: 'What is wrong.' }], requiredFields: ['priority'], body: '## Summary\n' };
+  const f = await fixture(t, (req, res) => res.end(JSON.stringify(req.url.includes('/issue-templates/') ? { ...template, enforced: false } : { enforced: false, templates: [template] })));
+  const list = await f.run(['templates', 'list', '--workspace', 'workspace-one']);
+  assert.equal(list.code, 0, list.stderr);
+  assert.deepEqual(list.data, { enforced: false, templates: [template] });
+  const one = await f.run(['templates', 'get', 'BUG', '--workspace', 'workspace-one']);
+  assert.equal(one.code, 0, one.stderr);
+  assert.deepEqual(one.data, { ...template, enforced: false });
+  assert.deepEqual(f.calls.map(({ method, url }) => ({ method, url })), [
+    { method: 'GET', url: '/api/apps/auth/issue-templates?workspaceId=workspace-one' },
+    { method: 'GET', url: '/api/apps/auth/issue-templates/BUG?workspaceId=workspace-one' },
+  ]);
+  assert.notEqual((await f.run(['templates', 'get', '--workspace', 'workspace-one'])).code, 0);
+  assert.equal(f.calls.length, 2);
+});
+
 const notePreview = { id: 'note-one', title: 'Runbook', type: 'RUNBOOK', scope: 'WORKSPACE', projectName: null, updatedAt: '2026-11-01T00:00:00.000Z' };
 const storedNote = { ...notePreview, content: 'private body', author: { id: 'user-one', name: 'Author' }, tags: [] };
 const noteUrl = '/api/apps/auth/context/note-one?workspaceId=workspace-one';
