@@ -65,6 +65,7 @@ export async function createAgentToken(input: {
     // Only accounts this app already owns here are reused: a person who shares the name never is.
     const account = (await serviceAccounts(tx, app.id, input.workspaceId)).find(user => user.name?.trim().toLowerCase() === wanted.toLowerCase())
       ?? await tx.user.create({ data: { name: wanted }, select: { id: true, name: true } });
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${account.id} FOR UPDATE`;
     await tx.workspaceMember.upsert({
       where: { userId_workspaceId: { userId: account.id, workspaceId: input.workspaceId } },
       update: { status: true },
@@ -92,7 +93,9 @@ export async function revokeAgentToken(input: { workspaceId: string; actorId: st
   return prisma.$transaction(async tx => {
     const token = await tx.appToken.findFirst({ where: { id: input.tokenId, ...scope, isRevoked: false }, select: { id: true, userId: true } });
     if (!token) return false;
-    await tx.appToken.updateMany({ where: { id: token.id, ...scope }, data: { isRevoked: true, revokedAt: new Date() } });
+    if (token.userId) await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${token.userId} FOR UPDATE`;
+    const updated = await tx.appToken.updateMany({ where: { id: token.id, ...scope, isRevoked: false }, data: { isRevoked: true, revokedAt: new Date() } });
+    if (!updated.count) return false;
     let name: string | null = null;
     if (token.userId) {
       const live = await tx.appToken.count({ where: { ...scope, userId: token.userId, isRevoked: false, tokenExpiresAt: { gte: new Date() } } });

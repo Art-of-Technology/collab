@@ -14,7 +14,8 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/login');
 
-  const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true, name: true } });
+  const workspace = await prisma.workspace.findUnique({ where: { slug: workspaceId }, select: { id: true, name: true } })
+    ?? await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true, name: true } });
   if (!workspace) notFound();
   const { hasPermission } = await checkUserPermission(session.user.id, workspace.id, Permission.MANAGE_WORKSPACE_PERMISSIONS);
   if (!hasPermission) notFound();

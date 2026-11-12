@@ -74,6 +74,7 @@ function fixture() {
       },
     },
     appAuditLog: { create: async ({ data }) => { audit.push(data); return data; } },
+    $queryRaw: async () => [],
     $transaction: async run => run(prisma),
   };
   const globals = { Buffer, URL, console: { log: (...args) => logs.push(args), warn: (...args) => logs.push(args), error: (...args) => logs.push(args) } };
@@ -288,6 +289,15 @@ test('minting with an existing name issues another token for the same account', 
   assert.notEqual(account(elsewhere), account(first), 'a name is scoped to its workspace');
 });
 
+test('simultaneous revocations of one token record one successful revocation', async () => {
+  const f = fixture();
+  f.as('alice');
+  const { id } = (await f.mint()).body;
+  const results = await Promise.all([f.revoke(id), f.revoke(id)]);
+  assert.deepEqual(results.map(result => result.status).sort(), [200, 404]);
+  assert.equal(f.audit.filter(row => row.action === 'agent_token.revoked').length, 1);
+});
+
 test('a person who shares the name is never reused as the service account', async () => {
   const f = fixture();
   f.as('alice');
@@ -376,6 +386,7 @@ test('the agent tokens page gives an admin the live tokens and never a token val
   f.tokens.find(row => row.id === stale.id).tokenExpiresAt = new Date(Date.now() - 1000);
   const manager = await p.render('w1');
   assert.equal(manager.props.workspaceId, 'w1');
+  assert.equal((await p.render('one')).props.workspaceId, 'w1');
   assert.equal(JSON.stringify(manager.props.tokens.map(row => [row.id, row.name, row.access, row.expired]).sort()),
     JSON.stringify([[fresh.id, 'Claude', 'write', false], [stale.id, 'Old bot', 'read', true]].sort()));
   assert.equal(typeof manager.props.tokens[0].createdAt, 'string');
