@@ -71,4 +71,4 @@ export const config = {
       sizeLimit: '10mb',
     },
   },
-}; 
+};
