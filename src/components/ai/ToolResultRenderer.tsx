@@ -121,14 +121,15 @@ function ProjectCard({ project }: { project: Record<string, unknown> }) {
   const { currentWorkspace } = useWorkspace();
 
   const name = (project.name || "Untitled Project") as string;
-  const prefix = (project.prefix || project.key || "") as string;
+  const prefix = (project.issuePrefix || project.prefix || project.key || "") as string;
   const description = (project.description || "") as string;
-  const issueCount = project.issueCount as number | undefined;
+  const issueCount = (project.stats as { issueCount?: number } | undefined)?.issueCount ?? project.issueCount as number | undefined;
+  const destination = project.slug || prefix || project.id;
 
   const handleClick = () => {
-    if (currentWorkspace?.slug && (project.id || prefix)) {
+    if (currentWorkspace?.slug && destination) {
       router.push(
-        `/${currentWorkspace.slug}/projects/${prefix || project.id}`
+        `/${currentWorkspace.slug}/projects/${destination}`
       );
     }
   };

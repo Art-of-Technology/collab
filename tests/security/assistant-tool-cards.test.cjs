@@ -2,7 +2,7 @@ const { assert, test, readFileSync, resolve, runInNewContext, ts } = require('./
 
 // Which card the chat shows for a tool result, and with what data. The component is run as a plain
 // function: its imports become named markers, so the chosen card and its props can be inspected.
-function renderer() {
+function renderer({ raw = false, push = () => {} } = {}) {
   const markers = new Map();
   const imported = module => new Proxy({}, { get: (_, key) => {
     const id = `${module}:${String(key)}`;
@@ -13,10 +13,13 @@ function renderer() {
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } });
   const exports = {};
   runInNewContext(outputText, { exports, require: name => name === 'react/jsx-runtime' ? require('react/jsx-runtime')
-    : name === 'react' ? { ...require('react'), useMemo: run => run() } : imported(name) });
+    : name === 'react' ? { ...require('react'), useMemo: run => run() }
+    : name === 'next/navigation' ? { useRouter: () => ({ push }) }
+    : name === '@/context/WorkspaceContext' ? { useWorkspace: () => ({ currentWorkspace: { slug: 'team' } }) }
+    : name === '@/lib/utils' ? { cn: (...classes) => classes.join(' ') } : imported(name) });
   return (toolName, value) => {
     const card = exports.default({ toolName, content: typeof value === 'string' ? value : JSON.stringify(value), isError: false }).props.children;
-    return { kind: card.type.name, props: JSON.parse(JSON.stringify(card.props)) };
+    return raw ? card : { kind: card.type.name, props: JSON.parse(JSON.stringify(card.props)) };
   };
 }
 
@@ -30,6 +33,22 @@ test('an issue list from the workspace tools is shown as issue cards with plain 
   assert.equal(listed.kind, 'IssueList');
   // A person or project object would crash the card: only its name is passed on.
   assert.deepEqual(listed.props.issues, [plain, { key: 'CLB-2', title: 'No owner yet', status: '', priority: '', type: '', assignee: '', project: '' }]);
+});
+
+test('project cards open the slug and show API prefix and issue count', () => {
+  const paths = [];
+  const card = renderer({ raw: true, push: path => paths.push(path) });
+  const project = { id: 'p1', slug: 'collab-app', name: 'Collab', issuePrefix: 'CLB', stats: { issueCount: 0 } };
+  for (const value of [[project], { projects: [project] }]) {
+    const list = card('projects_list', value);
+    const projectElement = list.type(list.props).props.children[1].props.children[0].props.children;
+    const button = projectElement.type(projectElement.props);
+    button.props.onClick();
+    const details = button.props.children.props.children[1].props.children;
+    assert.equal(details[0].props.children[1].props.children, 'CLB');
+    assert.deepEqual(Array.from(details[2].props.children), [0, ' issue', 's']);
+  }
+  assert.deepEqual(paths, ['/team/projects/collab-app', '/team/projects/collab-app']);
 });
 
 test('a single issue that was read, created or changed is shown as an issue card', () => {
