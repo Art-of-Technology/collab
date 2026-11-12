@@ -10,7 +10,8 @@ export const MCP_SCOPES = ['user:read', 'workspace:read', 'projects:read', 'issu
 // Read per request and never taken from request headers: a spoofed Host must not become the issuer.
 function publicOrigin(): string | null {
   try {
-    return new URL(process.env.NEXTAUTH_URL ?? '').origin;
+    const url = new URL(process.env.NEXTAUTH_URL ?? '');
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.origin : null;
   } catch {
     return null;
   }

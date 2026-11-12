@@ -63,7 +63,7 @@ test('the origin is read on each request, never fixed when the module loads', as
 });
 
 test('a missing or invalid origin answers 503 and never publishes a broken document', async () => {
-  for (const env of [{}, { NEXTAUTH_URL: '' }, { NEXTAUTH_URL: 'not a url' }, { NEXTAUTH_URL: 'collab.example.test' }]) {
+  for (const env of [{}, { NEXTAUTH_URL: '' }, { NEXTAUTH_URL: 'not a url' }, { NEXTAUTH_URL: 'collab.example.test' }, { NEXTAUTH_URL: 'file:///tmp/collab' }, { NEXTAUTH_URL: 'ftp://collab.example.test' }, { NEXTAUTH_URL: 'blob:https://collab.example.test/id' }]) {
     const f = fixture(env);
     for (const route of [f.server, f.resource, f.resourceForPath]) {
       const response = await route.GET();
