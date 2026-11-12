@@ -514,8 +514,14 @@ export async function workspaceAgentInbox(context: InboxContext, query: { agent?
   if (query.agent && selected.length === 0) throw new HandoffError('agent_not_found', 'Agent not found in this workspace', 404);
   // Both the viewer and the recipient must still be allowed to read the issue.
   // One OR query returns each handoff once, even when multiple agents receive it.
-  const inbox = await readInbox(context, selected.map(agent => ({
-    ...inboxMatch(agent, query.state), issue: issueScope({ ...context, user: { id: agent.userId } }),
+  // The recipient's access is stated once per user, not once per agent: a workspace has many agents
+  // under few users, and repeating it for every agent made PostgreSQL run out of memory.
+  const matchesByUser = new Map<string, Prisma.AgentHandoffWhereInput[]>();
+  for (const agent of selected) {
+    matchesByUser.set(agent.userId, [...(matchesByUser.get(agent.userId) ?? []), inboxMatch(agent, query.state)]);
+  }
+  const inbox = await readInbox(context, [...matchesByUser].map(([userId, matches]) => ({
+    OR: matches, issue: issueScope({ ...context, user: { id: userId } }),
   })), Math.min(50, Math.max(1, query.limit)));
   return { ...inbox, agents: agents.map(agent => ({ name: agent.name, ...(agent.host && agentStatus(agent)) })) };
 }
