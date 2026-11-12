@@ -68,9 +68,8 @@ export async function readAgentFloor(
     ],
   });
   // Preserve the inbox's recipient + viewer access intersection. User IDs and label subscriptions stay on the server.
-  // The statement must not grow with the number of agents: one condition per agent made PostgreSQL
-  // run out of memory. A user's agents are therefore asked about together: four conditions per
-  // user (a workspace has few), each over the list of that user's agents.
+  // One condition per agent made PostgreSQL run out of memory. Ask about each user's agents
+  // together: up to four conditions per user, with agent IDs and names passed as lists.
   const agentsByUser = new Map<string, typeof agents>();
   for (const agent of agents) {
     agentsByUser.set(agent.userId, [...(agentsByUser.get(agent.userId) ?? []), agent]);
