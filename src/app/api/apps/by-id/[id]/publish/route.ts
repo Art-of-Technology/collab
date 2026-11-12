@@ -140,6 +140,7 @@ export async function PATCH(
           status,
           // Publishing by an administrator is an approval of this version too
           ...(targetStatus === AppStatus.PUBLISHED ? { approvedVersionId: latestVersion.id } : {}),
+          ...(targetStatus === AppStatus.REJECTED ? { approvedVersionId: null } : {}),
           updatedAt
         }
       });

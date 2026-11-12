@@ -113,8 +113,22 @@ test('a rejection in time sends the app back and leaves the newest version unapp
   const f = fixture({ status: 'PUBLISHED', approved: 'v1' });
   f.submit('v2');
   assert.equal(await f.reject(), 200);
-  assert.equal(JSON.stringify([f.app.status, f.app.approvedVersionId]), JSON.stringify(['REJECTED', 'v1']));
+  assert.equal(JSON.stringify([f.app.status, f.app.approvedVersionId]), JSON.stringify(['REJECTED', null]));
   assert.equal(await f.set('alice', 'DRAFT'), 200);
   assert.equal(await f.set('alice', 'PUBLISHED'), 403, 'the rejected version cannot be published');
   assert.equal(await f.reject(), 400, 'only an app in review can be rejected');
+});
+
+test('rejecting a previously approved version revokes its approval through either route', async () => {
+  for (const reject of [f => f.reject(), f => f.set('root', 'REJECTED')]) {
+    const f = fixture({ approved: 'v1' });
+    assert.equal(await f.set('alice', 'IN_REVIEW'), 200);
+    assert.equal(await reject(f), 200);
+    assert.equal(f.app.approvedVersionId, null);
+    assert.equal(await f.set('alice', 'DRAFT'), 200);
+    assert.equal(await f.set('alice', 'PUBLISHED'), 403);
+    assert.equal(await f.set('alice', 'IN_REVIEW'), 200);
+    assert.equal(await f.approve(), 200);
+    assert.equal(await f.set('alice', 'PUBLISHED'), 200);
+  }
 });

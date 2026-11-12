@@ -51,6 +51,7 @@ export async function POST(
       where: { id, status: 'IN_REVIEW', updatedAt: app.updatedAt },
       data: { 
         status: 'REJECTED',
+        approvedVersionId: null,
         // You might want to store the rejection reason in a separate field
         // For now, we'll just update the status
       }
