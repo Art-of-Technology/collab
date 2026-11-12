@@ -1048,6 +1048,47 @@ test('retrieval errors retain safe machine codes without echoing provider or rec
   }
 });
 
+test('a template refusal names the missing sections and fields, and passes on nothing else from the server', async t => {
+  const refusal = {
+    error: 'template_required', error_description: 'PRIVATE_SENTINEL', issue_type: 'BUG', template_version: 3,
+    missing_sections: ['Summary', 'x'.repeat(200), 42, 'Steps\nto\u001b reproduce\u0085again\u2028here', ...Array.from({ length: 40 }, (_, index) => `Section ${index}`)],
+    missing_fields: ['priority', 'PRIVATE_SENTINEL', 7, 'dueDate'],
+    template: { sections: [{ title: 'Summary', required: true, guidance: 'PRIVATE_SENTINEL' }], requiredFields: ['priority'] },
+  };
+  const f = await fixture(t, (_req, res) => { res.writeHead(422); res.end(JSON.stringify(refusal)); });
+  for (const args of [['issues', 'create', '--project', 'project-one', '--title', 'Broken', '--type', 'BUG'], ['issues', 'update', 'AGENT-12', '--input', '-'], ['issues', 'assign', 'AGENT-12', '--unassign', 'true']]) {
+    const result = await f.run(args, { input: JSON.stringify({ description: 'Free text' }) });
+    assert.equal(result.code, 5);
+    assert.deepEqual(result.error, {
+      error: 'template_required', status: 422, issueType: 'BUG',
+      message: 'Collab refused the issue: required template sections or fields are missing. Run collab templates get BUG.',
+      missingSections: ['Summary', 'x'.repeat(80), 'Steps to  reproduce again here', ...Array.from({ length: 27 }, (_, index) => `Section ${index}`)],
+      missingFields: ['priority', 'dueDate'],
+    });
+    assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  }
+  // Refused once each: a refusal is never retried.
+  assert.equal(f.calls.length, 3);
+});
+
+test('a refusal that is not a template refusal on an issue write keeps the plain message', async t => {
+  const f = await fixture(t, (req, res) => {
+    res.writeHead(422);
+    res.end(JSON.stringify({ error: req.url.includes('/issues') ? 'something_else' : 'template_required', issue_type: 'not a type', missing_sections: ['PRIVATE_SENTINEL'], missing_fields: ['priority'] }));
+  });
+  for (const args of [['issues', 'create', '--project', 'project-one', '--title', 'Broken'], ['comments', 'add', 'AGENT-12', '--content-file', '-']]) {
+    const result = await f.run(args, { input: 'Text' });
+    assert.deepEqual([result.code, result.error], [5, { error: 'server_error', message: 'Collab refused the request (HTTP 422).', status: 422 }]);
+  }
+  // A type the CLI does not know is not echoed either.
+  const unknown = await fixture(t, (_req, res) => { res.writeHead(422); res.end(JSON.stringify({ error: 'template_required', issue_type: 'PRIVATE_SENTINEL', missing_sections: ['Summary'] })); });
+  const result = await unknown.run(['issues', 'create', '--project', 'project-one', '--title', 'Broken']);
+  assert.deepEqual(result.error, {
+    error: 'template_required', status: 422, missingSections: ['Summary'], missingFields: [],
+    message: 'Collab refused the issue: required template sections or fields are missing. Run collab templates get TYPE.',
+  });
+});
+
 test('switching workspace cannot carry a saved project from another workspace', async t => {
   const f = await fixture(t);
   writeCredentials(path.join(f.dir, 'default.json'), JSON.stringify({ origin: f.url, accessToken: 'synthetic-token', expiresAt: Date.now() + 60000, workspace: 'old-space', project: 'old-project' }));

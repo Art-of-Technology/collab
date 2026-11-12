@@ -29,7 +29,9 @@ For the app-auth API's bounded project overview, see [Project context for agents
 For coordinating agents and monitoring their work in the web inbox, see [Agent handoffs](docs/agent-handoffs.md). To run an owned background agent with usage limits, see [dedicated workers](packages/cli/README.md#dedicated-managed-workers-cli-070).
 For a read-only 3D view of project rooms, registered agents and recorded work, see [Organisation agent floor](docs/agent-organisation-floor.md).
 
-Workspace admins can edit issue templates under **Workspace settings → Issue templates**. Templates apply across the workspace, and each issue type can be reset to its standard. They are advisory; issue creation does not enforce them yet. For the agent-facing response, see the [issue template API reference](public/docs/third-party-api.md#issue-templates).
+Workspace admins can edit issue templates under **Workspace settings → Issue templates**. Templates apply across the workspace, and each issue type can be reset to its standard. Admins can optionally require agents to follow them; templates remain advisory for people in the web app. For details, see the [issue template API reference](public/docs/third-party-api.md#issue-templates).
+
+In the new issue and inline issue forms, the selected type's template pre-fills the description with section headings. A checklist below the editor shows section guidance and marks missing required sections and fields. You can still create the issue with **Create anyway** when required items are missing. If the headings are left untouched, the issue is saved without a description. Subtasks have no template; the forms also work without guidance while templates are unavailable.
 
 <details>
   <summary>Table of Contents</summary>

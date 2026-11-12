@@ -29,7 +29,8 @@ const UpdateIssueSchema = z.object({
   labels: z.array(z.union([z.string().min(1), z.object({ id: z.string().min(1) })])).max(100).optional(),
 }).strict().refine(value => Object.keys(value).length > 0);
 
-export async function updateIssue(userId: string, issueId: string, input: unknown, workspaceId?: string) {
+/** With `unchangedSince`, nothing is written unless the issue's updatedAt still equals it, so a check the caller made on the issue holds for the write. */
+export async function updateIssue(userId: string, issueId: string, input: unknown, workspaceId?: string, unchangedSince?: Date) {
   if (!userId) return { error: 'Unauthorized', status: 401 };
   try {
     const parsed = UpdateIssueSchema.safeParse(input);
@@ -46,6 +47,9 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
 
     if (!existingIssue) {
       return { error: 'Issue not found', status: 404 };
+    }
+    if (unchangedSince && existingIssue.updatedAt.getTime() !== unchangedSince.getTime()) {
+      return { error: 'Issue changed; reload and retry', status: 409 };
     }
     // Check workspace access
     const hasAccess = await userHasWorkspaceAccess(userId, existingIssue.workspaceId);

@@ -26,6 +26,11 @@ export async function getWorkspaceTemplates(workspaceId: string): Promise<Worksp
   return { enforced: workspace?.issueTemplatesEnforced ?? false, templates };
 }
 
+/** Switches the refusal of incomplete agent issues on or off for a workspace. */
+export async function setTemplatesEnforced(workspaceId: string, enforced: boolean): Promise<void> {
+  await prisma.workspace.update({ where: { id: workspaceId }, data: { issueTemplatesEnforced: enforced } });
+}
+
 /** Stores a workspace's own template for a type. `input` has already passed validateTemplateInput. */
 export async function saveWorkspaceTemplate(
   workspaceId: string, type: TemplatedIssueType,

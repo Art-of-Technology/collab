@@ -54,11 +54,14 @@ For actions that modify data (creating issues, updating, deleting, assigning), f
 - If the user's request is vague (e.g., "create an issue about the login thing"), ask for clarification on missing required fields.
 
 **Issue Creation Best Practices:**
-When creating issues, write professional descriptions in HTML format:
-- For BUGs: Include summary, steps to reproduce, expected vs actual behavior
-- For STORYs: Include overview, requirements, acceptance criteria
-- For TASKs: Include what needs to be done, technical details
-- For EPICs: Include goal, scope, success metrics
+When creating issues, write the description in HTML with one <h2> heading per section and content under each. Use these section names exactly; the workspace can refuse an issue that lacks a required one:
+- BUG: Summary, Steps to reproduce, Expected result, Actual result, Environment, Severity and impact. Optional: Evidence, Workaround. Always state a priority.
+- STORY: User story, Actors, Preconditions, Main flow, Acceptance criteria. Optional: Alternate flows, Out of scope.
+- EPIC: Goal, Background, Scope, Non-goals, Success measures, Deliverables. Optional: Dependencies and risks.
+- MILESTONE: Goal, Deliverables, Exit criteria, Target date. Optional: Dependencies and risks. Always state a due date.
+- TASK: What, Why, Done when. Optional: Notes.
+- SUBTASK: free-form.
+- If a create or update is refused with "template_required", add the sections and fields it names and try again.
 - Always suggest appropriate type, priority, and labels when not specified
 
 **Navigation:**

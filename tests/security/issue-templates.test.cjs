@@ -211,3 +211,69 @@ test('templates need the issues read scope and current access to the workspace',
   assert.equal((await denied.json()).error, 'workspace_access_denied');
   assert.equal((await routes({ access: false }).one('bug')).status, 403);
 });
+
+const { nextDescription, storedDescription } = library;
+const STORY = STANDARD_TEMPLATES.STORY;
+const bugHeadings = templateBody(BUG, 'html');
+const typed = bugHeadings.replace('</h2>', '</h2><p>It crashes on save.</p>');
+
+test('an empty description takes the headings of the chosen type', () => {
+  for (const empty of ['', '   ', '<p></p>', '<p><br></p>']) assert.equal(nextDescription(empty, null, BUG), bugHeadings, JSON.stringify(empty));
+  assert.equal(nextDescription('', null, null), '');
+});
+
+test('untouched headings follow a change of type, and are cleared for a type without a template', () => {
+  assert.equal(nextDescription(bugHeadings, BUG, STORY), templateBody(STORY, 'html'));
+  // The editor may hand the headings back with its own attributes and an empty paragraph.
+  assert.equal(nextDescription(`${bugHeadings.replaceAll('<h2>', '<h2 class="heading">')}<p></p>`, BUG, STORY), templateBody(STORY, 'html'));
+  assert.equal(nextDescription(bugHeadings, BUG, null), '');
+});
+
+test('text a person has typed is never replaced', () => {
+  assert.equal(nextDescription(typed, BUG, STORY), typed);
+  assert.equal(nextDescription(typed, BUG, null), typed);
+  assert.equal(nextDescription('<p>Free text</p>', null, BUG), '<p>Free text</p>');
+  // Headings alone are kept too, unless they are exactly the previous type's.
+  assert.equal(nextDescription('<h2>My own heading</h2>', BUG, STORY), '<h2>My own heading</h2>');
+  assert.equal(nextDescription(bugHeadings.replace('<h2>Summary</h2>', ''), BUG, STORY), bugHeadings.replace('<h2>Summary</h2>', ''));
+});
+
+test('untouched headings are not stored, anything else is stored as written', () => {
+  assert.equal(storedDescription(bugHeadings, BUG), '');
+  assert.equal(storedDescription(`${bugHeadings}<p></p>`, BUG), '');
+  assert.equal(storedDescription(typed, BUG), typed);
+  assert.equal(storedDescription(bugHeadings, STORY), bugHeadings);
+  assert.equal(storedDescription('<p>Free text</p>', null), '<p>Free text</p>');
+  assert.equal(storedDescription('', BUG), '');
+});
+
+test('edited headings and visible dividers survive type changes and creation', () => {
+  for (const description of [
+    bugHeadings.replace('Summary', 'Summary?'),
+    bugHeadings.replace('Summary', 'summary'),
+    bugHeadings.replace('</h2>', '</h2><hr>'),
+    bugHeadings.replace('Summary', 'Summary<img src="https://example.com/image.png">'),
+    '<hr>',
+    // A changed heading level, formatting inside a heading, and anything else the editor can put under one.
+    bugHeadings.replace('<h2>Summary</h2>', '<h3>Summary</h3>'),
+    bugHeadings.replace('Summary', '<strong>Summary</strong>'),
+    bugHeadings.replace('</h2>', '</h2><div data-youtube-video><iframe src="https://www.youtube.com/embed/x"></iframe></div>'),
+    bugHeadings.replace('</h2>', '</h2><ul><li><p></p></li></ul>'),
+    bugHeadings.replace('<h2>Summary</h2>', ''),
+    `${bugHeadings}<h2>Summary</h2>`,
+  ]) {
+    assert.equal(nextDescription(description, BUG, STORY), description);
+    assert.equal(nextDescription(description, BUG, null), description);
+    assert.equal(storedDescription(description, BUG), description);
+  }
+});
+
+test('what the editor adds on its own does not count as an edit', () => {
+  const fromEditor = `${bugHeadings.replaceAll('<h2>', '<h2 class="heading" data-id="a>b">').replaceAll('</h2>', '</h2>\n')}<p><br class="ProseMirror-trailingBreak"></p><p> </p>`;
+  assert.equal(nextDescription(fromEditor, BUG, STORY), templateBody(STORY, 'html'));
+  assert.equal(storedDescription(fromEditor, BUG), '');
+  for (const empty of ['<p>&nbsp;</p>', '<p><br /></p>\n<p></p>']) assert.equal(nextDescription(empty, null, BUG), bugHeadings, empty);
+  // A title with characters that HTML escapes is still recognised as untouched.
+  const odd = { ...BUG, sections: [{ title: 'Q&A <now>', required: true, guidance: '' }] };
+  assert.equal(storedDescription(templateBody(odd, 'html'), odd), '');
+});

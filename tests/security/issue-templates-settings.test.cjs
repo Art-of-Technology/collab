@@ -8,10 +8,13 @@ const edited = { sections: [{ title: 'What broke', required: true, guidance: 'On
 
 // A workspace with its stored templates, one signed-in person, and the real store and settings route.
 function workspace({ user = 'admin', canManage = true, member = true, rows = [], enforced = false } = {}) {
-  const state = { rows: rows.map(row => ({ workspaceId: 'workspace-one', version: 2, ...row })), writes: [] };
+  const state = { rows: rows.map(row => ({ workspaceId: 'workspace-one', version: 2, ...row })), writes: [], enforced };
   const same = (row, where) => row.workspaceId === where.workspaceId && row.issueType === where.issueType;
   const prisma = {
-    workspace: { findUnique: async () => ({ issueTemplatesEnforced: enforced }) },
+    workspace: {
+      findUnique: async () => ({ issueTemplatesEnforced: state.enforced }),
+      update: async ({ data }) => { state.writes.push('enforce'); state.enforced = data.issueTemplatesEnforced; return {}; },
+    },
     issueTemplate: {
       findMany: async ({ where }) => state.rows.filter(row => row.workspaceId === where.workspaceId),
       upsert: async ({ where, create, update }) => {
@@ -132,4 +135,20 @@ test('a template that breaks the rules, or a type without templates, is refused 
   assert.match((await invalid.json()).error, /more than once/);
   for (const type of ['SUBTASK', 'nope', undefined]) assert.equal((await admin.put({ type, ...edited })).status, 400, String(type));
   assert.deepEqual(admin.state.writes, []);
+});
+
+test('only a manager switches enforcement for agents, and reading the templates shows it', async () => {
+  const outsider = workspace({ canManage: false });
+  assert.equal((await outsider.put({ enforced: true })).status, 403);
+  assert.deepEqual([outsider.state.writes, outsider.state.enforced], [[], false]);
+
+  const admin = workspace();
+  const on = await admin.put({ enforced: true });
+  assert.deepEqual([on.status, await on.json()], [200, { enforced: true }]);
+  assert.equal((await (await admin.get()).json()).enforced, true);
+  assert.equal((await admin.put({ enforced: false })).status, 200);
+  assert.equal((await (await admin.get()).json()).enforced, false);
+  // Anything but true or false is not a switch.
+  assert.equal((await admin.put({ enforced: 'yes' })).status, 400);
+  assert.deepEqual(admin.state.writes, ['enforce', 'enforce']);
 });

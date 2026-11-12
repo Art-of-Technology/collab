@@ -8,6 +8,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
+import { getWorkspaceTemplates } from '@/lib/issue-template-store';
+import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 
 const AssignIssueSchema = z.object({
   assigneeId: z.string().cuid().optional(),
@@ -59,34 +62,40 @@ export const POST = withAppAuth(
 
       // Handle unassign
       if (data.unassign) {
-        await prisma.issue.update({
-          where: { id: issue.id },
-          data: { assigneeId: null },
-        });
+        const { enforced, templates } = await getWorkspaceTemplates(context.workspace.id);
+        await prisma.$transaction(async tx => {
+          const before = await tx.issue.findUniqueOrThrow({ where: { id: issue.id }, select: ISSUE_SHAPE_SELECT });
+          const refusal = enforced && updateRefusal(templates, issueShape(before), issueShape({ ...before, assigneeId: null }));
+          if (refusal) throw new TemplateRefused(refusal);
+          await tx.issue.update({
+            where: { id: issue.id },
+            data: { assigneeId: null },
+          });
 
-        // Remove from IssueAssignee if exists
-        if (oldAssigneeId) {
-          await prisma.issueAssignee.deleteMany({
-            where: {
-              issueId: issue.id,
-              userId: oldAssigneeId,
+          // Remove from IssueAssignee if exists
+          if (before.assigneeId) {
+            await tx.issueAssignee.deleteMany({
+              where: {
+                issueId: issue.id,
+                userId: before.assigneeId,
+              },
+            });
+          }
+
+          // Log activity
+          await tx.issueActivity.create({
+            data: {
+              action: 'UNASSIGNED',
+              itemType: 'ISSUE',
+              itemId: issue.id,
+              userId: context.user.id,
+              workspaceId: context.workspace.id,
+              fieldName: 'assignee',
+              oldValue: before.assigneeId || '',
+              newValue: '',
             },
           });
-        }
-
-        // Log activity
-        await prisma.issueActivity.create({
-          data: {
-            action: 'UNASSIGNED',
-            itemType: 'ISSUE',
-            itemId: issue.id,
-            userId: context.user.id,
-            workspaceId: context.workspace.id,
-            fieldName: 'assignee',
-            oldValue: oldAssigneeId || '',
-            newValue: '',
-          },
-        });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
         return NextResponse.json({
           message: 'Issue unassigned successfully',
@@ -199,6 +208,8 @@ export const POST = withAppAuth(
         },
       });
     } catch (error) {
+      if (error instanceof TemplateRefused) return NextResponse.json(error.refusal, { status: 422 });
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') return NextResponse.json({ error: 'issue_conflict', error_description: 'Issue changed; reload and retry' }, { status: 409 });
       if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
         return NextResponse.json(
