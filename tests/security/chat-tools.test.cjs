@@ -4,14 +4,14 @@ const SCOPES = ['issues:read', 'issues:write'];
 const URL_ = 'https://collab.example.test/api/ai/chat/stream';
 
 // The in-app assistant offers the MCP tools to the model and runs them in-process as the signed-in member.
-function fixture({ handshake = [true], tool = { content: [{ type: 'text', text: '{"issues":[{"issueKey":"CLB-1"}]}' }] } } = {}) {
+function fixture({ handshake = [true], tool = { content: [{ type: 'text', text: '{"issues":[{"issueKey":"CLB-1"}]}' }] }, toolInput = '{"limit":5}' } = {}) {
   const runs = [], provider = [], invalidated = [], issued = [];
   const agent = { slug: 'cleo', name: 'Cleo', color: '#fff', systemPrompt: 'Test' };
   const sse = events => new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
   const answers = [
     // The model first calls a workspace tool...
     [{ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_1', name: 'issues_list' } },
-      { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"limit":5}' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: toolInput } },
       { type: 'content_block_stop', index: 0 },
       { type: 'message_delta', delta: { stop_reason: 'tool_use' } }],
     // ...then answers in text.
@@ -39,15 +39,15 @@ function fixture({ handshake = [true], tool = { content: [{ type: 'text', text: 
     '@/lib/mcp-oauth': { MCP_SCOPES: SCOPES },
     '@/lib/mcp-tools': {
       toolsFor: () => [
-        { name: 'whoami', description: 'The account', schema: { type: 'object' } },
-        { name: 'issues_list', description: 'List issues', schema: { type: 'object', properties: { limit: { type: 'integer' } } } },
+        { name: 'whoami', description: 'The account', schema: { type: 'object', properties: { workspaceId: { type: 'string' } } } },
+        { name: 'issues_list', description: 'List issues', schema: { type: 'object', properties: { limit: { type: 'integer' }, workspaceId: { type: 'string' } } } },
       ],
       runTool: async (name, args, authorization, base, scopes) => {
         runs.push({ name, args: { ...args }, authorization, base, scopes: [...scopes] });
         if (name !== 'whoami') return tool;
-        return (handshake.length > 1 ? handshake.shift() : handshake[0])
-          ? { content: [{ type: 'text', text: '{"id":"alice"}' }] }
-          : { content: [{ type: 'text', text: '{"error":"invalid_token"}' }], isError: true };
+        const answer = handshake.length > 1 ? handshake.shift() : handshake[0];
+        return answer === true ? { content: [{ type: 'text', text: '{"id":"alice"}' }] }
+          : { content: [{ type: 'text', text: JSON.stringify({ error: answer || 'invalid_token' }) }], isError: true };
       },
     },
   }, {
@@ -56,7 +56,7 @@ function fixture({ handshake = [true], tool = { content: [{ type: 'text', text: 
     fetch: async (_url, init) => { provider.push(JSON.parse(init.body)); return sse(answers[Math.min(provider.length, answers.length) - 1]); },
   });
   const chat = async () => {
-    const response = await POST(new Request(URL_, { method: 'POST', body: JSON.stringify({ message: 'List my issues', context: { workspace: { id: 'w1' } }, agentSlug: 'cleo' }) }));
+    const response = await POST(new Request(URL_, { method: 'POST', body: JSON.stringify({ message: 'List my issues', context: { workspace: { id: 'w1' }, user: { id: 'mallory', name: 'Mallory', email: 'mallory@example.test' } }, agentSlug: 'cleo' }) }));
     const events = (await response.text()).trim().split('\n\n').map(event => JSON.parse(event.slice(6)));
     return { status: response.status, events, of: type => events.filter(event => event.type === type) };
   };
@@ -68,10 +68,10 @@ test('the assistant offers the workspace tools to the model and runs a tool call
   const { status, of } = await f.chat();
   assert.equal(status, 200);
   assert.deepEqual(f.provider[0].tools, [
-    { name: 'whoami', description: 'The account', input_schema: { type: 'object' } },
+    { name: 'whoami', description: 'The account', input_schema: { type: 'object', properties: {} } },
     { name: 'issues_list', description: 'List issues', input_schema: { type: 'object', properties: { limit: { type: 'integer' } } } },
   ]);
-  assert.deepEqual(f.issued, [['alice', 'w1']]);
+  assert.deepEqual(f.issued, [['alice', 'w1']], 'the token is for the signed-in member, whoever the request body names');
   assert.deepEqual(f.runs.filter(run => run.name === 'issues_list'), [{ name: 'issues_list', args: { limit: 5 }, authorization: 'Bearer token-1', base: URL_, scopes: SCOPES }]);
   assert.deepEqual(of('tool_start').map(event => [event.toolName, event.toolUseId]), [['issues_list', 'toolu_1']]);
   assert.deepEqual(of('tool_result').map(event => [event.toolUseId, event.isError, event.content]), [['toolu_1', false, '{"issues":[{"issueKey":"CLB-1"}]}']]);
@@ -104,4 +104,22 @@ test('when no token works the chat goes on without workspace tools and says so',
   assert.match(of('text')[0].content, /Workspace tools are temporarily unavailable/);
   assert.equal(f.provider[0].tools, undefined);
   assert.deepEqual(f.runs.map(run => run.name), ['whoami', 'whoami'], 'no workspace tool runs with a dead token');
+});
+
+test('the assistant stays in the chat\'s workspace: the model is not offered another one and cannot name one', async () => {
+  // Text in an issue could tell the model to look in another of the member's workspaces.
+  const f = fixture({ toolInput: '{"limit":5,"workspaceId":"w2"}' });
+  await f.chat();
+  for (const tool of f.provider[0].tools) assert.equal('workspaceId' in tool.input_schema.properties, false, tool.name);
+  assert.deepEqual(f.runs.map(run => run.args), [{}, { limit: 5 }]);
+});
+
+test('an outage while checking the token does not revoke it: the chat goes on without workspace tools', async () => {
+  const f = fixture({ handshake: ['temporarily_unavailable'] });
+  const { status, of } = await f.chat();
+  assert.equal(status, 200);
+  assert.deepEqual(f.invalidated, [], 'a working token is not thrown away because of a brief outage');
+  assert.deepEqual(f.issued, [['alice', 'w1']]);
+  assert.match(of('text')[0].content, /Workspace tools are temporarily unavailable/);
+  assert.equal(f.provider[0].tools, undefined);
 });

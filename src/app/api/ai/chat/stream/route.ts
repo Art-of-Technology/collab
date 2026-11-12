@@ -248,19 +248,33 @@ function createAnthropicStreamWithMcp(
           agent: { slug: agent.slug, name: agent.name, color: agent.color },
         });
 
-        // Prove the token works before offering tools, and replace it once if it does not.
-        const usable = async (candidate: string) => !(await runTool('whoami', {}, `Bearer ${candidate}`, requestUrl, scopes)).isError;
+        // Prove the token works before offering tools. A dead token is replaced once; any other
+        // failure (an outage, say) leaves the token alone, because replacing it revokes it everywhere.
+        const check = async (candidate: string) => {
+          const result = await runTool('whoami', {}, `Bearer ${candidate}`, requestUrl, scopes);
+          if (!result.isError) return 'usable';
+          let code: unknown;
+          try { code = JSON.parse(result.content[0]?.text ?? '').error; } catch { /* not an API error body */ }
+          return ['invalid_token', 'token_expired', 'missing_token'].includes(code as string) ? 'dead' : 'unavailable';
+        };
         try {
-          if (!(await usable(token))) {
+          let state = await check(token);
+          if (state === 'dead') {
             token = await refreshMcpToken();
-            mcpFallback = !(await usable(token));
+            state = await check(token);
           }
+          mcpFallback = state !== 'usable';
         } catch (mcpError) {
           console.error('[stream] Workspace tools are unavailable:', mcpError);
           mcpFallback = true;
         }
         if (!mcpFallback) {
-          mcpTools = toolsFor(scopes).map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.schema }));
+          // The assistant works in this chat's workspace only. Text it reads could ask for another of
+          // the member's workspaces, so the model is not offered that argument and cannot pass it.
+          mcpTools = toolsFor(scopes).map((tool) => {
+            const { workspaceId: _otherWorkspace, ...properties } = (tool.schema.properties ?? {}) as Record<string, unknown>;
+            return { name: tool.name, description: tool.description, input_schema: { ...tool.schema, properties } };
+          });
         }
 
         if (mcpFallback) {
@@ -546,7 +560,8 @@ function createAnthropicStreamWithMcp(
 
 
               try {
-                const result = await runTool(toolCall.name, toolCall.input || {}, `Bearer ${token}`, requestUrl, scopes);
+                const { workspaceId: _otherWorkspace, ...input } = (toolCall.input || {}) as Record<string, unknown>;
+                const result = await runTool(toolCall.name, input, `Bearer ${token}`, requestUrl, scopes);
                 const isError = !!result.isError;
                 const textContent = result.content.map((c) => c.text).join('\n');
 

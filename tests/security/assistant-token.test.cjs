@@ -98,3 +98,13 @@ test('invalidating replaces only that member\'s assistant token and leaves every
   assert.notEqual(next, alice);
   assert.equal((await f.auth(next)).success, true);
 });
+
+test('an expired stored token is replaced, never handed out', async () => {
+  const f = fixture();
+  f.stored('assistant-app', 'alice', 'collab_at_expired');
+  f.tokens[0].tokenExpiresAt = new Date(Date.now() - 1000);
+  const token = await f.fresh().getMcpToken(f.prisma, 'alice', 'w1');
+  assert.notEqual(token, 'collab_at_expired');
+  assert.equal((await f.auth(token)).success, true);
+  assert.equal(f.tokens[0].isRevoked, true, 'the expired token is revoked');
+});
