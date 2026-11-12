@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { repositoryAccessDenied } from "@/lib/repository-access";
 
 interface Contributor {
   id: string;
@@ -24,6 +25,8 @@ export async function GET(
 ) {
   try {
     const { repositoryId } = await params;
+    const denied = await repositoryAccessDenied(repositoryId);
+    if (denied) return denied;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '10');
     const timeRange = searchParams.get('timeRange') || 'all';
