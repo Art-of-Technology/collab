@@ -305,6 +305,11 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      {canManage && member.user.email && (
+                        <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
+                          <Link href={`/workspaces/${workspaceId}/settings/members/${member.user.id}`}>Workspaces</Link>
+                        </Button>
+                      )}
                       {member.user.id === (localWorkspace?.ownerId || workspace?.ownerId || workspaceData.ownerId) ? (
                         <Badge className="bg-primary hover:bg-primary/90 h-5 px-2 text-xs">Owner</Badge>
                       ) : (
