@@ -40,7 +40,10 @@ We will then take care of the issue as soon as possible.
 ### Local checks
 
 Use the scripts in `package.json`: `npm run lint` runs the Next.js flat ESLint
-configuration; `npm run test:security` runs the behavior regressions. The bootstrap
+configuration; `npm run test:security` runs the behavior regressions. `npm test` runs
+the security and render suites and compares the failing tests with
+`tests/known-failures.txt`: it fails when a test fails that is not listed there, and
+when a listed test passes (delete its line; the list only shrinks). The bootstrap
 suite includes an opt-in native database fixture; see the
 [bootstrap check prerequisites](docs/database-bootstrap.md#runnable-check).
 For a fresh type check after dependency changes, run `npm run prisma:generate`
