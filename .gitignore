@@ -49,3 +49,8 @@ next-env.d.ts
 # Sentry Config File
 .env.sentry-build-plugin
 nul
+
+# Local agent tooling: review pages, audit reports and personal Claude Code settings
+.lavish/
+docs/audits/
+.claude/settings.local.json
