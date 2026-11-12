@@ -14,7 +14,7 @@ function fixture() {
   ];
   const repositories = [{ id: 'r1', project: project('p1', w1) }, { id: 'r2', project: project('p2', w2) }];
   const users = ['alice', 'bob', 'dave', 'erin'].map(id => ({ id, role: 'DEVELOPER', createdAt: new Date(), updatedAt: new Date(), emailVerified: null }));
-  const state = { session: null, reads: [] };
+  const state = { session: null, reads: [], issueError: false };
   const data = name => new Proxy({}, { get: (_, method) => async () => { state.reads.push(`${name}.${String(method)}`); return method === 'count' ? 0 : []; } });
   // Like the database client, a query with select returns only the selected fields.
   const first = rows => async ({ where, select }) => {
@@ -23,7 +23,7 @@ function fixture() {
   };
   const prisma = {
     user: { findUnique: async ({ where }) => users.find(row => row.id === where.id) ?? null },
-    issue: { findFirst: first(issues), findUnique: first(issues) },
+    issue: { findFirst: async args => { if (state.issueError) throw new Error('database unavailable'); return first(issues)(args); }, findUnique: first(issues) },
     repository: { findFirst: first(repositories), findUnique: first(repositories) },
     commit: data('commit'), pullRequest: data('pullRequest'), deployment: data('deployment'), review: data('review'), release: data('release'),
   };
@@ -80,6 +80,20 @@ test('issue ids and keys convert only for issues the caller can use', async () =
   assert.equal((await ask('BBB-1', 'resolve')).body.result, null);
   assert.equal((await ask('i1', 'toId')).body.result, 'i1', 'an id is still returned as given');
   assert.equal((await ask('AAA-1', 'nonsense')).status, 400);
+});
+
+test('issue lookup failures preserve the null result response', async () => {
+  const f = fixture();
+  f.as('alice');
+  f.state.issueError = true;
+  for (const [value, action] of [['AAA-1', 'toId'], ['i1', 'toIssueKey'], ['AAA-1', 'resolve'], ['12345678-1234-1234-1234-123456789abc', 'resolve']]) {
+    const response = await f.get(f.keys, `?value=${value}&action=${action}&workspaceId=w1`);
+    assert.equal(response.status, 200, action);
+    assert.equal(response.body.result, null, action);
+  }
+  const passthrough = await f.get(f.keys, '?value=i1&action=toId');
+  assert.equal(passthrough.status, 200);
+  assert.equal(passthrough.body.result, 'i1');
 });
 
 test('repository data needs a session and access to the repository\'s workspace', async () => {

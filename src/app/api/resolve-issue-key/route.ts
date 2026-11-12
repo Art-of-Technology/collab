@@ -29,13 +29,19 @@ export async function GET(request: NextRequest) {
 
     // One lookup, limited to workspaces the caller can use; the same key can exist in another one.
     const byId = action === 'toIssueKey' || (action === 'resolve' && UUID.test(value));
-    const issue = action === 'toId' && !isIssueKey(value) ? null : await prisma.issue.findFirst({
-      where: {
-        ...(byId ? { id: value } : { issueKey: value, ...(workspaceId ? { workspaceId } : {}) }),
-        ...issueAccessWhere(user.id),
-      },
-      select: { id: true, issueKey: true },
-    });
+    let issue = null;
+    try {
+      issue = action === 'toId' && !isIssueKey(value) ? null : await prisma.issue.findFirst({
+        where: {
+          ...(byId ? { id: value } : { issueKey: value, ...(workspaceId ? { workspaceId } : {}) }),
+          ...issueAccessWhere(user.id),
+        },
+        select: { id: true, issueKey: true },
+      });
+    } catch (error) {
+      console.error('Error resolving issue:', value, error);
+      return NextResponse.json({ result: null });
+    }
 
     let result: string | { id: string; issueKey: string | null } | null = issue;
     if (action === 'toId') {
