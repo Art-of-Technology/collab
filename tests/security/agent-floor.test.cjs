@@ -302,6 +302,16 @@ test("server snapshot enforces workspace and issue/project access, recipient acc
   f.ws.members[0].status = false;
   assert.equal(await f.readAgentFloor("bob", "ws"), null);
 });
+test("the board lists a handoff for each way it can belong to an agent, and no other", async () => {
+  const f = fixture();
+  const only = (id, link) => ({ ...f.handoff(id), claimedById: null, senderId: null, recipientNames: [], labelIds: [], ...link });
+  f.rows.splice(0, f.rows.length,
+    only("claimed", { claimedById: "a" }), only("sent", { senderId: "a" }),
+    only("named", { recipientNames: ["writer"] }), only("labelled", { labelIds: ["review"] }),
+    only("nobody", {}), only("other-label", { labelIds: ["unknown"] }), only("stranger", { recipientNames: ["not-registered"] }));
+  const result = await f.readAgentFloor("alice", "team");
+  assert.deepEqual(Array.from(result.tasks, (task) => task.id).sort(), ["claimed", "labelled", "named", "sent"]);
+});
 test("read endpoint rejects anonymous callers, rechecks membership, and masks internal errors", async () => {
   for (const mode of ["anonymous", "removed", "failure", "ok"]) {
     let reads = 0;
