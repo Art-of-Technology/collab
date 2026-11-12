@@ -390,6 +390,8 @@ model Workspace {
   ownerId             String
   dockEnabled         Boolean               @default(true)
   timeTrackingEnabled Boolean               @default(true)
+  // Whether agents are refused when an issue lacks what its template requires
+  issueTemplatesEnforced Boolean            @default(false)
   customRoles         CustomRole[]
   featureRequests     FeatureRequest[]
   leavePolicies       LeavePolicy[]
@@ -419,6 +421,7 @@ model Workspace {
 
   // Knowledge Base Phase 5 relationships - Templates
   noteTemplates NoteTemplate[]
+  issueTemplates IssueTemplate[]
 
   // Time Tracking relationships
   workLogs            WorkLog[]
@@ -2979,4 +2982,20 @@ model GitConnectionActivity {
   connection GitConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   @@unique([connectionId, kind, externalId])
   @@index([connectionId, date])
+}
+
+// A workspace's own template for one issue type. A type without a row uses the built-in standard.
+model IssueTemplate {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  issueType      IssueType
+  sections       Json // [{ title, required, guidance }], in order
+  requiredFields Json // issue field names that must be set
+  version        Int       @default(1)
+  updatedById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, issueType])
 }
