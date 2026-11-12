@@ -63,6 +63,12 @@ function fixture() {
         rows.forEach(row => Object.assign(row, data));
         return { count: rows.length };
       },
+      updateManyAndReturn: async ({ where, data }) => {
+        const rows = workspaces.flatMap(row => row.members.map(member => ({ member, workspaceId: row.id })))
+          .filter(row => matches({ ...row.member, workspaceId: row.workspaceId }, where));
+        rows.forEach(row => Object.assign(row.member, data));
+        return rows.map(row => ({ workspaceId: row.workspaceId }));
+      },
     },
     rolePermission: { findUnique: async ({ where }) => rolePermissions.find(row => matches(row, where.workspaceId_role_permission)) ?? null },
     appToken: {
@@ -583,6 +589,18 @@ test('expired tokens cannot grant access and a fresh token clears stale grants',
   const fresh = (await f.mint()).body;
   assert.equal((await f.switched(fresh.token, '?workspaceId=w3')).status, 403);
   assert.equal(f.audit.slice(before).filter(row => row.workspaceId === 'w3' && row.action === 'agent_token.workspace_removed').length, 1);
+});
+
+test('an expired token can manage grants while another token is usable', async () => {
+  const f = fixture();
+  f.as('alice');
+  const first = (await f.mint()).body;
+  const second = (await f.mint()).body;
+  f.tokens[0].tokenExpiresAt = new Date(Date.now() - 1000);
+  assert.equal((await f.access(first.id, 'w3')).status, 200);
+  assert.equal((await f.switched(second.token, '?workspaceId=w3')).status, 200);
+  await f.revoke(first.id);
+  assert.equal((await f.access(first.id, 'w3')).status, 404);
 });
 
 test('reactivated memberships have member role and revocation audits every changed workspace', async () => {

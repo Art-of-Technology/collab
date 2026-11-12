@@ -85,8 +85,7 @@ export async function createAgentToken(input: {
       if (live) return { error: 'paused' as const };
     }
     if (!live) {
-      const others = await tx.workspaceMember.findMany({ where: { userId: account.id, status: true, workspaceId: { not: input.workspaceId } }, select: { workspaceId: true } });
-      await tx.workspaceMember.updateMany({ where: { userId: account.id, status: true, workspaceId: { not: input.workspaceId } }, data: { status: false } });
+      const others = await tx.workspaceMember.updateManyAndReturn({ where: { userId: account.id, status: true, workspaceId: { not: input.workspaceId } }, data: { status: false }, select: { workspaceId: true } });
       for (const { workspaceId } of others) await tx.appAuditLog.create({ data: {
         workspaceId, actorId: input.actorId, action: 'agent_token.workspace_removed',
         details: { serviceUserId: account.id, name: account.name, homeWorkspaceId: input.workspaceId },
@@ -130,9 +129,8 @@ export async function revokeAgentToken(input: { workspaceId: string; actorId: st
       // a later token with its name starts again in this workspace only.
       name = (await tx.user.findUnique({ where: { id: token.userId }, select: { name: true } }))?.name ?? null;
       if (!live) {
-        const others = await tx.workspaceMember.findMany({ where: { userId: token.userId, status: true, workspaceId: { not: input.workspaceId } }, select: { workspaceId: true } });
-        await tx.workspaceMember.updateMany({ where: { userId: token.userId, status: true }, data: { status: false } });
-        for (const { workspaceId } of others) await tx.appAuditLog.create({ data: {
+        const changed = await tx.workspaceMember.updateManyAndReturn({ where: { userId: token.userId, status: true }, data: { status: false }, select: { workspaceId: true } });
+        for (const { workspaceId } of changed.filter(row => row.workspaceId !== input.workspaceId)) await tx.appAuditLog.create({ data: {
           workspaceId, actorId: input.actorId, action: 'agent_token.workspace_removed',
           details: { tokenId: token.id, serviceUserId: token.userId, name, homeWorkspaceId: input.workspaceId },
         } });
@@ -164,8 +162,10 @@ export async function setAgentWorkspaceAccess(input: {
     // Revoking locks the same row, so the token is read again: a revocation that switched the account off
     // everywhere must not be followed by this switching it back on.
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
-    if (!await tx.appToken.count({ where: { ...where, ...(input.allowed ? { tokenExpiresAt: { gte: new Date() } } : {}) } })) return false;
+    if (!await tx.appToken.count({ where })) return false;
+    if (input.allowed && !await tx.appToken.count({ where: { appId: app.id, workspaceId: input.workspaceId, userId, isRevoked: false, tokenExpiresAt: { gte: new Date() } } })) return false;
     const key = { userId, workspaceId: input.targetWorkspaceId };
+    await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${userId} AND "workspaceId" = ${input.targetWorkspaceId} FOR UPDATE`;
     const active = !!(await tx.workspaceMember.findUnique({ where: { userId_workspaceId: key }, select: { status: true } }))?.status;
     // Already let in: nothing to do. Not in: nothing to take away, so a workspace the agent never used is not found.
     if (active === input.allowed) return active;

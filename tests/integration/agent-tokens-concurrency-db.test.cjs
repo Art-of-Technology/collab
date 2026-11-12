@@ -148,4 +148,33 @@ test('agent token lifecycle stays consistent under concurrent requests', async t
     assert.equal(overlapping, false);
     assert.equal(await member(other, account), null, 'no membership was created');
   });
+
+  await t.test('concurrent member status changes do not create false transition audits', async () => {
+    for (const operation of ['remove', 'revoke', 'mint', 'grant']) {
+      const home = await workspace(), other = await workspace();
+      const first = await mint(home, `Transition ${operation}`);
+      const [account] = await accounts(home);
+      await allow(home, first.id, other);
+      if (operation === 'mint') await prisma.appToken.update({ where: { id: first.id }, data: { tokenExpiresAt: new Date(0) } });
+      const key = { userId_workspaceId: { userId: account, workspaceId: other } };
+      if (operation === 'grant') await prisma.workspaceMember.update({ where: key, data: { status: false, role: 'ADMIN' } });
+      const before = await prisma.appAuditLog.count({ where: { workspaceId: other } });
+      const changing = prisma.$transaction(async tx => {
+        await tx.workspaceMember.update({ where: key, data: { status: operation === 'grant' } });
+        await sleep(400);
+      }, { timeout: 10_000 });
+      await sleep(100);
+      const result = operation === 'remove' ? await allow(home, first.id, other, false)
+        : operation === 'revoke' ? await revoke(home, first.id)
+        : operation === 'mint' ? await mint(home, `Transition ${operation}`)
+        : await allow(home, first.id, other);
+      await changing;
+      if (operation === 'remove') assert.equal(result, false);
+      if (operation === 'grant') {
+        assert.equal(result, true);
+        assert.equal((await member(other, account)).role, 'ADMIN');
+      }
+      assert.equal(await prisma.appAuditLog.count({ where: { workspaceId: other } }), before, operation);
+    }
+  });
 });
