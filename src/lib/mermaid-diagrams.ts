@@ -56,6 +56,11 @@ export function diagramElement(source: string, onResult?: (drawn: boolean) => vo
   const key = `${dark ? 'dark' : 'light'}:${source}`;
   const show = (svg: string) => {
     box.innerHTML = svg;
+    // Fit the drawing to its block, at its natural size at most. Below two fifths of that size the
+    // labels are too small to read, so from there the block scrolls sideways instead.
+    const drawing = box.querySelector('svg');
+    const natural = Number(drawing?.getAttribute('viewBox')?.split(/[\s,]+/)[2]);
+    if (drawing && natural) Object.assign(drawing.style, { width: '100%', maxWidth: `${natural}px`, minWidth: `${natural * 0.4}px` });
     box.dataset.state = 'drawn';
     onResult?.(true);
   };
@@ -75,8 +80,6 @@ export function diagramElement(source: string, onResult?: (drawn: boolean) => vo
         suppressErrorRendering: true,
         htmlLabels: false,
         theme: dark ? 'dark' : 'default',
-        flowchart: { useMaxWidth: false },
-        sequence: { useMaxWidth: false },
       });
       const { svg } = await mermaid.render(`mermaid-diagram-${++renderCount}`, source);
       const clean = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });

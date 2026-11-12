@@ -121,24 +121,84 @@ test('markup that could run code is removed from a drawing', async () => {
   assert.deepEqual(attributes.filter(({ name, value }) => name.startsWith('on') || /^\s*javascript:/i.test(value)).map(({ name }) => name), []);
 });
 
-test('the note editor draws a diagram above its code block and keeps the saved content the same', async () => {
+test('a drawing is fitted to its block: at most its natural size, and no smaller than two fifths of it', async () => {
+  const { renderDiagrams } = diagrams(async () => ({ svg: '<svg viewBox="0 0 1800 600"><text>Users</text></svg>' }));
+  const container = rendered(FLOWCHART);
+  renderDiagrams(container);
+  await drawn();
+  const { width, maxWidth, minWidth } = container.querySelector('.mermaid-diagram svg').style;
+  assert.deepEqual({ width, maxWidth, minWidth }, { width: '100%', maxWidth: '1800px', minWidth: '720px' });
+});
+
+// The stylesheet's diagram rules decide whether a diagram's source is displayed in the note editor.
+const styles = require('node:fs').readFileSync(require('node:path').resolve(process.env.SECURITY_TEST_ROOT || `${__dirname}/../..`, 'src/app/globals.css'), 'utf8');
+document.head.appendChild(document.createElement('style')).textContent = styles.slice(styles.indexOf('/* Mermaid diagrams'));
+const displayed = element => dom.window.getComputedStyle(element).display !== 'none';
+
+// The note editor with the diagram extension, next to a plain editor with the same content to compare what is saved.
+function noteEditors(render) {
   const { MermaidPreviewExtension } = load('src/components/RichEditor/extensions/mermaid-preview-extension.ts', {
     '@tiptap/core': require('@tiptap/core'),
     '@tiptap/pm/state': require('@tiptap/pm/state'),
     '@tiptap/pm/view': require('@tiptap/pm/view'),
-    '@/lib/mermaid-diagrams': diagrams(async () => ({ svg: '<svg><text>Primary</text></svg>' })),
-  });
+    '@/lib/mermaid-diagrams': diagrams(render),
+  }, { document });
   const content = `<p>Failover</p><pre><code>sequenceDiagram\n  Primary-&gt;&gt;Standby: ping</code></pre>${ORDINARY}`;
   const editor = extensions => new Editor({ element: document.body.appendChild(document.createElement('div')), extensions, content });
   const plain = editor([StarterKit]);
   const withDiagrams = editor([StarterKit, MermaidPreviewExtension]);
+  const preview = () => withDiagrams.view.dom.querySelector('.mermaid-preview');
+  return {
+    plain, withDiagrams, preview,
+    source: () => preview().nextElementSibling,
+    control: () => preview().querySelector('button'),
+    close() { plain.destroy(); withDiagrams.destroy(); },
+  };
+}
+const drawing = async () => ({ svg: '<svg><text>Primary</text></svg>' });
+
+test('the note editor shows a diagram in place of its source and keeps the saved content the same', async () => {
+  const { plain, withDiagrams, preview, source, close } = noteEditors(drawing);
   await drawn();
-  const boxes = withDiagrams.view.dom.querySelectorAll('.mermaid-diagram');
-  assert.equal(boxes.length, 1);
-  assert.equal(boxes[0].querySelector('text').textContent, 'Primary');
-  assert.match(boxes[0].nextElementSibling.textContent, /^sequenceDiagram/);
-  assert.equal(boxes[0].nextElementSibling.hidden, false);
+  assert.equal(withDiagrams.view.dom.querySelectorAll('.mermaid-preview').length, 1);
+  assert.equal(preview().querySelector('.mermaid-diagram text').textContent, 'Primary');
+  assert.match(source().textContent, /^sequenceDiagram/);
+  assert.equal(displayed(source()), false);
+  const ordinary = withDiagrams.view.dom.querySelectorAll('pre')[1];
+  assert.equal(displayed(ordinary), true);
   assert.equal(withDiagrams.getHTML(), plain.getHTML());
-  plain.destroy();
-  withDiagrams.destroy();
+  close();
+});
+
+test('the source of a diagram opens and closes with the control under it', async () => {
+  const { plain, withDiagrams, source, control, close } = noteEditors(drawing);
+  await drawn();
+  assert.deepEqual([control().textContent, control().getAttribute('aria-expanded')], ['Show source', 'false']);
+  control().click();
+  assert.equal(displayed(source()), true);
+  assert.deepEqual([control().textContent, control().getAttribute('aria-expanded')], ['Hide source', 'true']);
+  control().click();
+  assert.equal(displayed(source()), false);
+  assert.equal(withDiagrams.getHTML(), plain.getHTML());
+  close();
+});
+
+test('the source of a diagram is shown while the cursor is in it', async () => {
+  const { withDiagrams, source, close } = noteEditors(drawing);
+  await drawn();
+  let block;
+  withDiagrams.state.doc.descendants((node, position) => { if (block === undefined && node.type.name === 'codeBlock') block = position; });
+  withDiagrams.commands.setTextSelection(block + 2);
+  assert.equal(displayed(source()), true);
+  withDiagrams.commands.setTextSelection(1);
+  assert.equal(displayed(source()), false);
+  close();
+});
+
+test('a diagram that cannot be drawn in the note editor keeps its source in view under a short reason', async () => {
+  const { preview, source, close } = noteEditors(async () => { throw new Error('Parse error on line 2:\nsequenceDiagram'); });
+  await drawn();
+  assert.equal(preview().querySelector('.mermaid-diagram').textContent, 'Diagram could not be drawn: Parse error on line 2:');
+  assert.equal(displayed(source()), true);
+  close();
 });
