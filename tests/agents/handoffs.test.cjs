@@ -196,9 +196,11 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
       const inbox = await monitor.workspaceAgentInbox(alice, { state: 'unseen', limit: 50 });
       assert.deepEqual(Array.from(inbox.items, h => h.id), [handoff.id], 'the same work is listed as before');
       assert.equal(inbox.agents.length, 43);
-      const query = sent.filter(sql => sql.includes('FROM "public"."AgentHandoff"') && sql.includes('"public"."Issue"')).at(-1);
+      const at = sent.findLastIndex(sql => sql.includes('FROM "public"."AgentHandoff"') && sql.includes('"public"."Issue"'));
       // Once for the viewer and once for each of the two users who have agents here: not once per agent.
-      assert.equal(query.split('LEFT JOIN "public"."Issue"').length - 1, 3);
+      assert.equal(sent[at].split('LEFT JOIN "public"."Issue"').length - 1, 3);
+      // Compiling this statement with PostgreSQL's JIT took minutes in production; it runs with JIT off.
+      assert.equal(sent[at - 1], 'SET LOCAL jit = off');
     } finally {
       await prisma.agentRegistration.deleteMany({ where: { id: { startsWith: 'crowd-' } } });
       await logged.$disconnect();
