@@ -9,22 +9,25 @@ export const definition = {
 
 // A distinct app avoids rotating the existing MCP integration's per-user token.
 // Existing conflicting registrations are refused, never silently reconfigured.
-export async function provision(prisma) {
-  return prisma.$transaction(async tx => {
-    const existing = await tx.app.findUnique({ where: { slug: definition.slug }, include: { oauthClient: true, scopes: true } });
-    if (existing) {
-      const matches = ['name', 'publisherId', 'status', 'visibility', 'isSystemApp'].every(key => existing[key] === definition[key]) &&
-        Object.entries(definition.oauthClient).every(([key, value]) => JSON.stringify(existing.oauthClient?.[key]) === JSON.stringify(value)) &&
-        existing.oauthClient?.clientSecret == null && existing.oauthClient?.apiKey == null &&
-        JSON.stringify(existing.scopes.map(row => row.scope).sort()) === JSON.stringify([...scopes].sort());
-      if (!matches) throw new Error('Existing CLI registration differs; review it before changing anything.');
-      return { created: false, appId: existing.id, clientId: definition.oauthClient.clientId };
-    }
-    const { oauthClient, scopes: requested, ...app } = definition;
-    const created = await tx.app.create({ data: { ...app, oauthClient: { create: oauthClient }, scopes: { create: requested.map(scope => ({ scope })) } }, select: { id: true } });
-    return { created: true, appId: created.id, clientId: oauthClient.clientId };
-  });
+export async function provisionIn(tx, def) {
+  const existing = await tx.app.findUnique({ where: { slug: def.slug }, include: { oauthClient: true, scopes: true } });
+  if (existing) {
+    // An app defined without an OAuth client must not have gained one.
+    const client = def.oauthClient
+      ? Object.entries(def.oauthClient).every(([key, value]) => JSON.stringify(existing.oauthClient?.[key]) === JSON.stringify(value)) &&
+        existing.oauthClient?.clientSecret == null && existing.oauthClient?.apiKey == null
+      : existing.oauthClient == null;
+    const matches = client && ['name', 'publisherId', 'status', 'visibility', 'isSystemApp'].every(key => existing[key] === def[key]) &&
+      JSON.stringify(existing.scopes.map(row => row.scope).sort()) === JSON.stringify([...def.scopes].sort());
+    if (!matches) throw new Error(`Existing ${def.slug} registration differs; review it before changing anything.`);
+    return { created: false, appId: existing.id, clientId: def.oauthClient?.clientId };
+  }
+  const { oauthClient, scopes: requested, ...app } = def;
+  const created = await tx.app.create({ data: { ...app, ...(oauthClient && { oauthClient: { create: oauthClient } }), scopes: { create: requested.map(scope => ({ scope })) } }, select: { id: true } });
+  return { created: true, appId: created.id, clientId: oauthClient?.clientId };
 }
+
+export const provision = prisma => prisma.$transaction(tx => provisionIn(tx, definition));
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.length === 2) console.log(JSON.stringify({ dryRun: true, app: definition.slug, scopes }));
