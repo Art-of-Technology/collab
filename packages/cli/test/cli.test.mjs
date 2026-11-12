@@ -1051,7 +1051,7 @@ test('retrieval errors retain safe machine codes without echoing provider or rec
 test('a template refusal names the missing sections and fields, and passes on nothing else from the server', async t => {
   const refusal = {
     error: 'template_required', error_description: 'PRIVATE_SENTINEL', issue_type: 'BUG', template_version: 3,
-    missing_sections: ['Summary', 'x'.repeat(200), 42, 'Steps\nto\u001b reproduce', ...Array.from({ length: 40 }, (_, index) => `Section ${index}`)],
+    missing_sections: ['Summary', 'x'.repeat(200), 42, 'Steps\nto\u001b reproduce\u0085again\u2028here', ...Array.from({ length: 40 }, (_, index) => `Section ${index}`)],
     missing_fields: ['priority', 'PRIVATE_SENTINEL', 7, 'dueDate'],
     template: { sections: [{ title: 'Summary', required: true, guidance: 'PRIVATE_SENTINEL' }], requiredFields: ['priority'] },
   };
@@ -1062,7 +1062,7 @@ test('a template refusal names the missing sections and fields, and passes on no
     assert.deepEqual(result.error, {
       error: 'template_required', status: 422, issueType: 'BUG',
       message: 'Collab refused the issue: required template sections or fields are missing. Run collab templates get BUG.',
-      missingSections: ['Summary', 'x'.repeat(80), 'Steps to  reproduce', ...Array.from({ length: 27 }, (_, index) => `Section ${index}`)],
+      missingSections: ['Summary', 'x'.repeat(80), 'Steps to  reproduce again here', ...Array.from({ length: 27 }, (_, index) => `Section ${index}`)],
       missingFields: ['priority', 'dueDate'],
     });
     assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));

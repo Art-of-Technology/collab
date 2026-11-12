@@ -162,6 +162,11 @@ export async function POST(req: Request) {
         if (params.assigneeId && !await userHasWorkspaceAccess(params.assigneeId, workspace.id)) {
           return NextResponse.json({ error: 'Invalid issue participant' }, { status: 400 });
         }
+        if (params.labels?.length && await prisma.taskLabel.count({
+          where: { id: { in: [...new Set(params.labels)] }, workspaceId: workspace.id },
+        }) !== new Set(params.labels).size) {
+          return NextResponse.json({ error: 'Invalid issue labels' }, { status: 400 });
+        }
 
         // Get or validate project
         let projectId = params.projectId;
@@ -253,14 +258,15 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: 'Unsupported issue update field' }, { status: 400 });
         }
         const { enforced, templates } = await getWorkspaceTemplates(workspace.id);
+        let checkedAt: Date | undefined;
         if (enforced) {
-          // shortcut: read ahead of updateIssue's own read, so an edit that lands in between is not seen;
-          // move the check into updateIssue's transaction if this route ever gets a caller.
-          const before = await findIssueByIdOrKey(issueId, { workspaceId: workspace.id, userId: currentUser.id, select: ISSUE_SHAPE_SELECT });
+          const before = await findIssueByIdOrKey(issueId, { workspaceId: workspace.id, userId: currentUser.id, select: { ...ISSUE_SHAPE_SELECT, updatedAt: true } });
           const refusal = before && updateRefusal(templates, issueShape(before), issueShape({ ...before, ...fields }));
           if (refusal) return NextResponse.json(refusal, { status: 422 });
+          checkedAt = before?.updatedAt;
         }
-        const result = await updateIssue(currentUser.id, issueId, fields, workspace.id);
+        // The update is written only if the issue is still as it was when checked.
+        const result = await updateIssue(currentUser.id, issueId, fields, workspace.id, checkedAt);
         if ('error' in result) {
           return NextResponse.json({ error: result.error }, { status: result.status });
         }

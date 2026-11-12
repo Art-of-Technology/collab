@@ -41,6 +41,14 @@ test('labels written as bold text are not sections, and the refusal says to writ
   assert.match(refusal.error_description, /Write each section as a heading\./);
 });
 
+test('the description stays on one line whatever a section title contains', () => {
+  const title = 'First\nsection\u0085here';
+  const templates = { ...STANDARD_TEMPLATES, TASK: { ...STANDARD_TEMPLATES.TASK, sections: [{ title, required: true, guidance: '' }] } };
+  const refusal = createRefusal(templates, shape('TASK', null));
+  assert.equal(refusal.error_description, 'Missing required sections: First section here. Write each section as a heading. Get the template with "collab templates get TASK".');
+  assert.deepEqual(plain(refusal.missing_sections), [title]);
+});
+
 test('subtasks and types without a template are never refused', () => {
   for (const type of ['SUBTASK', 'subtask', 'NOPE']) assert.equal(createRefusal(STANDARD_TEMPLATES, shape(type, null)), null);
 });
@@ -75,8 +83,8 @@ const issueRow = (type, description, fields = {}) => ({
 });
 
 // One workspace with one stored issue, the real routes, and counters for what they write.
-function workspace({ enforced = true, issue = null, templates = STANDARD_TEMPLATES } = {}) {
-  const state = { issue, created: [], updated: [], beforeTransaction: null, transactionOptions: null };
+function workspace({ enforced = true, issue = null, templates = STANDARD_TEMPLATES, realUpdate = false } = {}) {
+  const state = { issue, created: [], updated: [], beforeTransaction: null, transactionOptions: null, afterRead: null };
   const db = {
     workspace: { findFirst: async () => ({ id: 'workspace', slug: 'workspace' }) },
     project: { findFirst: async () => ({ id: PROJECT, workspaceId: 'workspace' }) },
@@ -90,6 +98,7 @@ function workspace({ enforced = true, issue = null, templates = STANDARD_TEMPLAT
     issueRelation: { create: async () => ({}) },
     issueActivity: { create: async () => ({}) },
     issueAssignee: { deleteMany: async () => ({}) },
+    taskLabel: { count: async ({ where }) => where.id.in.filter(id => id !== 'missing').length },
     issueFollower: { findMany: async () => [] },
     projectFollower: { findMany: async () => [] },
     $transaction: async (operation, options) => {
@@ -113,8 +122,14 @@ function workspace({ enforced = true, issue = null, templates = STANDARD_TEMPLAT
     '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'person', name: 'Person' } }) },
     '@/lib/auth-options': { authOptions: {} },
     '@/lib/permissions': { Permission: { CREATE_TASK: 'CREATE_TASK' }, checkUserPermission: async () => ({ hasPermission: true }) },
-    '@/lib/issue-finder': { userHasWorkspaceAccess: async () => true, findIssueByIdOrKey: async () => state.issue && { ...state.issue } },
-    '@/lib/issue-mutation': { updateIssue: async (_user, _id, fields) => { state.updated.push(fields); return { issue: { ...state.issue, ...fields } }; } },
+    '@/lib/issue-finder': { userHasWorkspaceAccess: async () => true, findIssueByIdOrKey: async () => {
+      const row = state.issue && { ...state.issue };
+      if (state.afterRead) state.afterRead();
+      return row;
+    } },
+    // The shared update itself, unless a test asks for the real one.
+    ...(!realUpdate && { '@/lib/issue-mutation': { updateIssue: async (_user, _id, fields) => { state.updated.push(fields); return { issue: { ...state.issue, ...fields } }; } } }),
+    '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
     '@/lib/board-item-activity-service': { trackCreation: async () => {} },
     '@/lib/redis': { publishEvent: async () => {} },
     '@/utils/mentions': { extractMentionUserIds: () => [] },
@@ -259,6 +274,25 @@ test('the in-app assistant route follows the same create and update rules', asyn
   assert.equal((await older.assistant('update_issue', { issueId: 'issue', description: 'Edited' })).status, 200);
   const off = workspace({ enforced: false });
   assert.equal((await off.assistant('create_issue', { title: 'New', type: 'BUG' })).status, 200);
+});
+
+test('the assistant update is not written when the issue changed after its template check', async () => {
+  const on = workspace({ realUpdate: true, issue: issueRow('TASK', 'Old free text', { updatedAt: new Date('2026-11-12T10:00:00Z') }) });
+  // The check finds an incomplete issue, which may be edited freely; then someone completes it before the write.
+  on.state.afterRead = () => {
+    on.state.afterRead = null;
+    Object.assign(on.state.issue, { description: complete('TASK'), updatedAt: new Date('2026-11-12T10:00:01Z') });
+  };
+  const response = await on.assistant('update_issue', { issueId: 'issue', description: 'Free text' });
+  assert.equal(response.status, 409);
+  assert.deepEqual(on.state.updated, []);
+});
+
+test('assistant creation refuses a label that is not in the workspace', async () => {
+  const on = workspace();
+  const response = await on.assistant('create_issue', { title: 'New', description: complete('TASK'), labels: ['label', 'missing'] });
+  assert.equal(response.status, 400);
+  assert.deepEqual(on.state.created, []);
 });
 
 test('a person creating an issue in the web app is never refused', async () => {

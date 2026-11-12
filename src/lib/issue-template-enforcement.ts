@@ -43,6 +43,9 @@ export function issueShape(row: { type?: unknown; description?: unknown } & Part
   };
 }
 
+// Section titles are a workspace's own text; the description stays on one line whatever they contain.
+const oneLine = (text: string) => text.replace(/[\s\p{Cc}]+/gu, ' ').trim();
+
 /** Why a new issue is refused, or null when it has all its template requires or its type has no template. */
 export function createRefusal(templates: Record<TemplatedIssueType, IssueTemplate>, issue: IssueShape): TemplateRefusal | null {
   const template = templateFor(templates, issue.type);
@@ -53,7 +56,7 @@ export function createRefusal(templates: Record<TemplatedIssueType, IssueTemplat
   return {
     error: 'template_required',
     error_description: [
-      sections.length && `Missing required sections: ${sections.join(', ')}.`,
+      sections.length && `Missing required sections: ${sections.map(oneLine).join(', ')}.`,
       fields.length && `Missing required fields: ${fields.join(', ')}.`,
       sections.length && 'Write each section as a heading.',
       `Get the template with "collab templates get ${template.type}".`,

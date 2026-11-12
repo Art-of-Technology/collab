@@ -165,7 +165,7 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
         // The one refusal whose details are passed on: the agent needs the names to complete its issue.
         // Only short plain strings are copied, never the server's own message.
         const names = (value, known) => (Array.isArray(value) ? value : []).filter(item => typeof item === 'string' && (!known || known.includes(item)))
-          .slice(0, 30).map(item => item.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 80));
+          .slice(0, 30).map(item => item.replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ').slice(0, 80));
         const issueType = ['BUG', 'STORY', 'EPIC', 'MILESTONE', 'TASK'].find(type => type === remote.issue_type);
         code = remoteCode;
         retrievalMessage = `Collab refused the issue: required template sections or fields are missing. Run collab templates get ${issueType || 'TYPE'}.`;
