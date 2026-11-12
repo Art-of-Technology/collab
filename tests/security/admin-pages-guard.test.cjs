@@ -10,7 +10,8 @@ function fixture() {
   const prisma = {
     user: {
       findUnique: async ({ where }) => users.find(row => row.id === where.id) ?? null,
-      findMany: async ({ where = {} }) => { state.reads.push('users'); return users.filter(row => matches(row, where)); },
+      findMany: async ({ where = {}, take }) => { state.reads.push('users'); return users.filter(row => matches(row, where)).slice(0, take); },
+      count: async ({ where = {} } = {}) => { state.reads.push('user count'); return users.filter(row => matches(row, where)).length; },
     },
     app: { findMany: async () => { state.reads.push('apps'); return []; } },
   };
@@ -64,7 +65,7 @@ for (const page of ['users', 'apps']) {
     const f = fixture();
     f.as('root', 'SYSTEM_ADMIN');
     assert.ok(await f.render(page));
-    assert.deepEqual(f.state.reads, [page]);
+    assert.deepEqual(f.state.reads, page === 'users' ? ['users', 'user count', 'user count'] : [page]);
   });
 }
 
@@ -85,4 +86,18 @@ test('the admin users list finds people by name or email and links each to their
   }
   assert.doesNotMatch(text(await f.render('users', { q: 'nobody' })), /example\.test/);
   assert.match(text(await f.render('users', { q: ['bob', 'root'] })), /root@example\.test/, 'a repeated parameter is not a search');
+});
+
+test('user summary counts cover the platform regardless of search and list limit', async () => {
+  const f = fixture();
+  f.as('root', 'SYSTEM_ADMIN');
+  for (let i = 0; i < 51; i++) {
+    f.users.push({ id: `extra-${i}`, name: 'Extra', email: `extra-${i}@example.test`, role: 'DEVELOPER', createdAt: new Date(), _count: { workspaceMemberships: 0 } });
+  }
+  for (const q of ['', 'nobody', 'root']) {
+    const rendered = text(await f.render('users', { q }));
+    assert.match(rendered, /Total Users\s+53/);
+    assert.match(rendered, /System Admins\s+1/);
+    assert.match(rendered, /Regular Users\s+52/);
+  }
 });

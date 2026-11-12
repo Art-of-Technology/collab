@@ -42,8 +42,11 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   if (!await systemAdminId()) notFound();
   const { q } = await searchParams;
   const search = typeof q === 'string' ? q.trim() : '';
-  const users = await getUsers(search);
-  const adminCount = users.filter(u => u.role === 'SYSTEM_ADMIN').length;
+  const [users, totalCount, adminCount] = await Promise.all([
+    getUsers(search),
+    prisma.user.count(),
+    prisma.user.count({ where: { role: 'SYSTEM_ADMIN' } }),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -62,7 +65,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
             <Users className="h-4 w-4 text-gray-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{users.length}</div>
+            <div className="text-2xl font-bold text-white">{totalCount}</div>
           </CardContent>
         </Card>
 
@@ -82,7 +85,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
             <UserCheck className="h-4 w-4 text-gray-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{users.length - adminCount}</div>
+            <div className="text-2xl font-bold text-white">{totalCount - adminCount}</div>
           </CardContent>
         </Card>
       </div>
