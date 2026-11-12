@@ -34,7 +34,7 @@ function fixture({ handshake = [true], tool = { content: [{ type: 'text', text: 
     '@/lib/ai/agents/registry': { getAgent: async () => agent, getDefaultAgent: async () => agent },
     '@/lib/ai/mcp-token': {
       getMcpToken: async (_prisma, userId, workspaceId) => { issued.push([userId, workspaceId]); return `token-${issued.length}`; },
-      invalidateMcpToken: async (_prisma, userId, workspaceId) => { invalidated.push([userId, workspaceId]); },
+      refreshMcpToken: async (_prisma, userId, workspaceId) => { invalidated.push([userId, workspaceId]); issued.push([userId, workspaceId]); return `token-${issued.length}`; },
     },
     '@/lib/mcp-oauth': { MCP_SCOPES: SCOPES },
     '@/lib/mcp-tools': {

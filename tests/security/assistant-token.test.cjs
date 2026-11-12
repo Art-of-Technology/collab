@@ -99,6 +99,21 @@ test('invalidating replaces only that member\'s assistant token and leaves every
   assert.equal((await f.auth(next)).success, true);
 });
 
+test('concurrent and delayed failures of one token share its replacement', async () => {
+  const f = fixture();
+  const lib = f.fresh();
+  const old = await lib.getMcpToken(f.prisma, 'alice', 'w1');
+  const [first, second] = await Promise.all([
+    lib.refreshMcpToken(f.prisma, 'alice', 'w1', old),
+    lib.refreshMcpToken(f.prisma, 'alice', 'w1', old),
+  ]);
+  assert.notEqual(first, old);
+  assert.equal(second, first);
+  assert.equal(await lib.refreshMcpToken(f.prisma, 'alice', 'w1', old), first);
+  assert.equal((await f.auth(first)).success, true);
+  assert.equal(f.tokens.length, 2);
+});
+
 test('an expired stored token is replaced, never handed out', async () => {
   const f = fixture();
   f.stored('assistant-app', 'alice', 'collab_at_expired');

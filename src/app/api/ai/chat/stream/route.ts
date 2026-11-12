@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { getDefaultAgent, getAgent } from '@/lib/ai/agents/registry';
-import { getMcpToken, invalidateMcpToken } from '@/lib/ai/mcp-token';
+import { getMcpToken, refreshMcpToken } from '@/lib/ai/mcp-token';
 import { MCP_SCOPES } from '@/lib/mcp-oauth';
 import { runTool, toolsFor } from '@/lib/mcp-tools';
 import { coclawRetired } from '@/lib/coclaw-retired';
@@ -94,10 +94,7 @@ export async function POST(req: Request) {
     }
 
     // Token refresh callback — invalidates cached/DB tokens and provisions fresh one
-    const refreshMcpToken = async (): Promise<string> => {
-      await invalidateMcpToken(prisma, currentUser.id, workspace.id);
-      return getMcpToken(prisma, currentUser.id, workspace.id);
-    };
+    const refreshToken = () => refreshMcpToken(prisma, currentUser.id, workspace.id, mcpToken);
 
     // Save user message to conversation
     let convoId = conversationId;
@@ -149,7 +146,7 @@ export async function POST(req: Request) {
       webSearchEnabled || false,
       convoId,
       agent,
-      refreshMcpToken,
+      refreshToken,
       req.url
     );
 

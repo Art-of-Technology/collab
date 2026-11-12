@@ -20,6 +20,7 @@ const ASSISTANT_APP_SLUG = 'collab-assistant';
 
 // In-memory cache to avoid DB lookups on every message
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
+const refreshes = new Map<string, Promise<string>>();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 /**
@@ -123,6 +124,27 @@ export async function invalidateMcpToken(
 
   if (result.count > 0) {
     console.log(`[mcp-token] Invalidated ${result.count} token(s) for user=${userId} workspace=${workspaceId}`);
+  }
+}
+
+export async function refreshMcpToken(prisma: any, userId: string, workspaceId: string, failedToken: string): Promise<string> {
+  const key = JSON.stringify([userId, workspaceId]);
+  const pending = refreshes.get(key);
+  if (pending) {
+    await pending;
+    return refreshMcpToken(prisma, userId, workspaceId, failedToken);
+  }
+  const refresh = (async () => {
+    const current = await getMcpToken(prisma, userId, workspaceId);
+    if (current !== failedToken) return current;
+    await invalidateMcpToken(prisma, userId, workspaceId);
+    return getMcpToken(prisma, userId, workspaceId);
+  })();
+  refreshes.set(key, refresh);
+  try {
+    return await refresh;
+  } finally {
+    refreshes.delete(key);
   }
 }
 
