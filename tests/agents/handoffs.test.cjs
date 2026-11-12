@@ -405,7 +405,9 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     assert.equal((await reparent(null)).status, 200);
     assert.equal(await parentOf(), null);
     // The web app's own create route holds a parent to the same rule.
+    const guardedParents = [];
     const { POST: createInBrowser } = load('src/app/api/issues/route.ts', { ...deps,
+      '@/lib/forge/legacy-write-guard': { ...deps['@/lib/forge/legacy-write-guard'], assertLegacyIssueWriteAllowed: async id => guardedParents.push(id) },
       '@/lib/request-session': { getServerSession: async () => ({ user: { id: 'alice' } }) }, '@/lib/auth-options': {},
       '@/lib/board-item-activity-service': { trackCreation: async () => {} }, '@/lib/redis': { publishEvent: async () => {} },
       '@/utils/mentions': { extractMentionUserIds: () => [] }, '@/lib/notification-service': { NotificationService: {}, NotificationType: {} },
@@ -413,10 +415,25 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     const createChild = (title, parentId) => createInBrowser(new Request('https://example.test', { method: 'POST', body: JSON.stringify({ title, workspaceId: 'w', projectId: 'p-w', parentId }) }));
     const foreignChild = await createChild('Foreign child', 'cparentforeign01');
     assert.equal(foreignChild.status, 400, await foreignChild.clone().text());
+    assert.deepEqual(await foreignChild.json(), { error: 'Invalid parent issue' });
     assert.equal(await prisma.issue.count({ where: { title: 'Foreign child' } }), 0);
+    for (const [title, parentId] of [['Missing child', 'missing-parent'], ['Operator child', { not: 'cparentforeign01' }]]) {
+      const response = await createChild(title, parentId);
+      assert.equal(response.status, 400, await response.clone().text());
+      assert.deepEqual(await response.json(), { error: 'Invalid parent issue' });
+      assert.equal(await prisma.issue.count({ where: { title } }), 0);
+    }
+    assert.deepEqual(guardedParents, []);
     const localChild = await createChild('Local child', 'cparentlocal0001');
     assert.equal(localChild.status, 201, await localChild.clone().text());
     assert.equal((await prisma.issue.findFirst({ where: { title: 'Local child' } })).parentId, 'cparentlocal0001');
+    await prisma.project.create({ data: { id: 'p-other', workspaceId: 'w', name: 'Other', slug: 'other', issuePrefix: 'other' } });
+    await prisma.issue.create({ data: { id: 'other-parent', workspaceId: 'w', projectId: 'p-other', title: 'Other project parent', issueKey: 'other-1' } });
+    const otherChild = await createChild('Other project child', 'other-parent');
+    assert.equal(otherChild.status, 201, await otherChild.clone().text());
+    const stored = await prisma.issue.findFirstOrThrow({ where: { title: 'Other project child' } });
+    assert.equal(stored.parentId, 'other-parent');
+    assert.equal(await prisma.issueRelation.count({ where: { sourceIssueId: stored.id, targetIssueId: 'other-parent', relationType: 'PARENT' } }), 1);
   });
 
   await t.test('project coordinator migration, single owner lease and tenant-filtered snapshots', async () => {
