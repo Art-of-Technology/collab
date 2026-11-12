@@ -51,7 +51,7 @@ export default function FloorScene(props: SceneProps) {
     }
   }, [failed]);
   return (
-    <div className="relative h-[440px] md:h-[550px]" ref={host}>
+    <div className="relative h-[460px] md:h-[640px]" ref={host}>
       {failed && (
         <p
           role="status"

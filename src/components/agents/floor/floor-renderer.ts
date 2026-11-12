@@ -16,7 +16,51 @@ type Actor = {
   card: THREE.Object3D;
   cardLabel: string;
 };
-const palette = [0x8eb9dc, 0xb2bb8d, 0xc49aba, 0xd1a67c, 0x8bbeb8, 0xb2a2d3];
+/** A text label drawn as HTML over the canvas, so it stays sharp at any zoom. */
+type Tag = { element: HTMLElement; anchor: THREE.Object3D; lift: number };
+const palette = [0x6ea8dc, 0xa9b86a, 0xc487b8, 0xe0a063, 0x62b8ae, 0xa890e0];
+const roomAccents = ["#4f9de8", "#f08c3a", "#8ac24a", "#b07cf2", "#ef6b6b", "#2fbfae"];
+const stateColors: Record<string, string> = {
+  open: "#c2740a",
+  claimed: "#15803d",
+  completed: "#64748b",
+  superseded: "#94a3b8",
+};
+const FONT = 'Inter, system-ui, -apple-system, "Segoe UI", sans-serif';
+/** Texture pixels per world unit: text is drawn at the size of the surface it sits on. */
+const PX_PER_UNIT = 256;
+const overlayCss = `
+.floor-overlay{position:absolute;inset:0;overflow:hidden;pointer-events:none;font:500 12px/1.2 ${FONT}}
+.floor-overlay>*{position:absolute;left:0;top:0;white-space:nowrap;will-change:transform}
+.floor-room{pointer-events:auto;cursor:pointer;display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.16);background:rgba(9,14,23,.86);color:#f8fafc;font-size:13px;font-weight:600}
+.floor-room i{width:9px;height:9px;border-radius:3px;background:var(--accent)}
+.floor-room span{font-weight:500;font-size:12px;color:#cbd5e1}
+.floor-room em{font-style:normal;font-weight:600}
+.floor-agent{pointer-events:auto;cursor:pointer;display:grid;grid-template-columns:auto auto;align-items:center;column-gap:5px;padding:3px 8px 3px 6px;border-radius:9px;background:rgba(248,250,252,.96);color:#0f172a;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.floor-agent i{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.floor-agent b{grid-column:2;font-weight:700;font-size:10.5px;color:#166534}
+.floor-agent[data-selected]{outline:2px solid #38bdf8}
+.floor-agent:hover{z-index:2}
+.floor-overlay[data-zoom="far"] .floor-agent:not([data-selected]):not(:hover){display:block;padding:3px;border-radius:50%;line-height:0}
+.floor-overlay[data-zoom="far"] .floor-agent:not([data-selected]):not(:hover) i{display:block}
+.floor-overlay[data-zoom="far"] .floor-agent:not([data-selected]):not(:hover)>:not(i){display:none}
+`;
+/** The part of a name that tells the agents of one room apart: what follows the prefix they all share. */
+export function shortAgentNames(names: string[]) {
+  let shared = 0;
+  if (names.length > 1) {
+    const parts = names.map((name) => name.split("-"));
+    while (
+      shared < Math.min(...parts.map((p) => p.length)) - 1 &&
+      parts.every((p) => p[shared] === parts[0][shared])
+    )
+      shared++;
+  }
+  return names.map((name) => {
+    const rest = name.split("-").slice(shared).join("-");
+    return rest.length > 16 ? `${rest.slice(0, 15)}…` : rest;
+  });
+}
 function identityColor(id: string) {
   return palette[
     Array.from(id).reduce((sum, c) => sum + c.charCodeAt(0), 0) % palette.length
@@ -56,24 +100,37 @@ export function createFloorRenderer(
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.4;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const anisotropy = renderer.capabilities.getMaxAnisotropy();
   host.prepend(renderer.domElement);
+  const overlay = document.createElement("div");
+  overlay.className = "floor-overlay";
+  overlay.setAttribute("aria-hidden", "true");
+  const overlayStyle = document.createElement("style");
+  overlayStyle.textContent = overlayCss;
+  renderer.domElement.after(overlayStyle, overlay);
   renderer.domElement.setAttribute(
     "aria-label",
     "Organisation floor illustration. Use the project and agent buttons for keyboard navigation.",
   );
   renderer.domElement.setAttribute("role", "img");
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x17212e);
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 220);
+  scene.background = new THREE.Color(0x0f1622);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 260);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.minDistance = 7;
-  controls.maxDistance = 95;
+  controls.minDistance = 6;
+  controls.maxDistance = 120;
   controls.maxPolarAngle = Math.PI * 0.47;
-  scene.add(new THREE.HemisphereLight(0xdceaff, 0x5c6e68, 2.8));
-  const sun = new THREE.DirectionalLight(0xffefdc, 4);
-  sun.position.set(-12, 32, 18);
+  scene.add(new THREE.HemisphereLight(0xe6efff, 0x2a3340, 1.7));
+  const sun = new THREE.DirectionalLight(0xfff1dd, 2.6);
+  sun.position.set(-16, 34, 22);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0004;
+  Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 120 });
   scene.add(sun);
   const content = new THREE.Group();
   scene.add(content);
@@ -82,11 +139,13 @@ export function createFloorRenderer(
     layout = "",
     disposed = false,
     frameId = 0,
-    last = 0;
-  camera.position.set(29, 34, 39);
+    last = 0,
+    tags: Tag[] = [],
+    framed = false;
+  camera.position.set(4, 30, 34);
   const boardCards = new Map<string, THREE.Object3D>();
   const material = (color: number) =>
-    new THREE.MeshStandardMaterial({ color, roughness: 0.8 });
+    new THREE.MeshStandardMaterial({ color, roughness: 0.85 });
   const box = (
     parent: THREE.Object3D,
     size: number[],
@@ -98,6 +157,8 @@ export function createFloorRenderer(
       material(color),
     );
     mesh.position.set(...(position as [number, number, number]));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     parent.add(mesh);
     return mesh;
   };
@@ -108,46 +169,71 @@ export function createFloorRenderer(
     color: number,
   ) => {
     const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(r, 12, 8),
+      new THREE.SphereGeometry(r, 16, 10),
       material(color),
     );
     mesh.position.set(...(position as [number, number, number]));
+    mesh.castShadow = true;
     parent.add(mesh);
     return mesh;
   };
-  function textTexture(
-    lines: string[],
-    background = "#e5e9e5",
-    width = 1024,
-    height = 256,
-  ) {
+  type Draw = (ctx: CanvasRenderingContext2D, width: number, height: number) => void;
+  /** A texture drawn at the size of the surface that carries it, so text is neither stretched nor blurred. */
+  function drawnTexture(widthUnits: number, heightUnits: number, draw: Draw) {
+    const scale = Math.min(PX_PER_UNIT, 2048 / Math.max(widthUnits, heightUnits));
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = Math.max(2, Math.round(widthUnits * scale));
+    canvas.height = Math.max(2, Math.round(heightUnits * scale));
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = background;
-    ctx.fillRect(0, 0, width, height);
-    ctx.fillStyle = "#293c50";
-    ctx.font = "500 32px system-ui";
-    lines.forEach((line, index) =>
-      ctx.fillText(line.slice(0, 70), 24, 48 + index * 42, width - 48),
-    );
+    ctx.textBaseline = "middle";
+    draw(ctx, canvas.width, canvas.height);
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = anisotropy;
     return texture;
+  }
+  const rounded = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+    else ctx.rect(x, y, w, h);
+  };
+  /** The text cut to a width, ending in an ellipsis when it does not fit. */
+  function fitted(ctx: CanvasRenderingContext2D, text: string, width: number) {
+    if (ctx.measureText(text).width <= width) return text;
+    let cut = text;
+    while (cut.length > 1 && ctx.measureText(`${cut}…`).width > width) cut = cut.slice(0, -1);
+    return `${cut.trimEnd()}…`;
+  }
+  /** Up to `lines` lines of whole words; the last line is cut when the text is longer. */
+  function wrapped(ctx: CanvasRenderingContext2D, text: string, width: number, lines: number) {
+    const out: string[] = [];
+    let line = "";
+    const words = text.split(/\s+/).filter(Boolean);
+    for (let i = 0; i < words.length; i++) {
+      const next = line ? `${line} ${words[i]}` : words[i];
+      if (ctx.measureText(next).width <= width || !line) line = next;
+      else if (out.length === lines - 1) {
+        line = `${line} ${words.slice(i).join(" ")}`;
+        break;
+      } else {
+        out.push(line);
+        line = words[i];
+      }
+    }
+    out.push(fitted(ctx, line, width));
+    return out;
   }
   function panel(
     parent: THREE.Object3D,
     width: number,
     height: number,
     position: number[],
-    lines: string[],
-    background?: string,
+    draw: Draw,
   ) {
     const mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(width, height),
       new THREE.MeshBasicMaterial({
-        map: textTexture(lines, background),
+        map: drawnTexture(width, height, draw),
         side: THREE.DoubleSide,
       }),
     );
@@ -155,40 +241,112 @@ export function createFloorRenderer(
     parent.add(mesh);
     return mesh;
   }
-  function desk(room: THREE.Group, x: number, z: number) {
-    box(room, [1.8, 0.12, 1], [x, 1.04, z], 0xbca98d);
+  const BOARD = "#f4f5f1";
+  /** A task as it hangs on the board: key, handoff state, and as much of the title as fits. */
+  const taskCard = (task: FloorTask): Draw => (ctx, w, h) => {
+    const state = stateColors[task.handoffState] || stateColors.completed;
+    ctx.fillStyle = BOARD;
+    ctx.fillRect(0, 0, w, h);
+    rounded(ctx, 3, 3, w - 6, h - 6, h * 0.1);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#c9d1d9";
+    ctx.stroke();
+    ctx.fillStyle = state;
+    ctx.fillRect(3, h * 0.12, h * 0.07, h * 0.76);
+    const left = h * 0.16, right = w - h * 0.1;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#0f172a";
+    ctx.font = `700 ${Math.round(h * 0.26)}px ${FONT}`;
+    const key = fitted(ctx, task.issueKey, right - left);
+    ctx.fillText(key, left, h * 0.24);
+    const keyWidth = ctx.measureText(key).width;
+    ctx.font = `600 ${Math.round(h * 0.16)}px ${FONT}`;
+    // The state word is dropped when the column is too narrow for it; the coloured bar still shows it.
+    if (keyWidth + ctx.measureText(task.handoffState).width + h * 0.12 <= right - left) {
+      ctx.fillStyle = state;
+      ctx.textAlign = "right";
+      ctx.fillText(task.handoffState, right, h * 0.25);
+      ctx.textAlign = "left";
+    }
+    ctx.fillStyle = "#1e293b";
+    ctx.font = `500 ${Math.round(h * 0.225)}px ${FONT}`;
+    wrapped(ctx, task.title, right - left, 2).forEach((line, index) =>
+      ctx.fillText(line, left, h * (0.55 + index * 0.25)),
+    );
+  };
+  /** A column heading: the status and how many handoffs it holds. */
+  const columnHead = (status: string, count: number): Draw => (ctx, w, h) => {
+    ctx.fillStyle = BOARD;
+    ctx.fillRect(0, 0, w, h);
+    rounded(ctx, 3, h * 0.1, w - 6, h * 0.8, h * 0.18);
+    ctx.fillStyle = count ? "#1e293b" : "#dfe3e8";
+    ctx.fill();
+    ctx.fillStyle = count ? "#f8fafc" : "#64748b";
+    ctx.font = `700 ${Math.round(h * 0.46)}px ${FONT}`;
+    ctx.textAlign = "right";
+    ctx.fillText(String(count), w - h * 0.3, h * 0.52);
+    const countWidth = ctx.measureText(String(count)).width;
+    ctx.textAlign = "left";
+    ctx.font = `600 ${Math.round(h * 0.38)}px ${FONT}`;
+    ctx.fillText(fitted(ctx, status, w - h * 0.75 - countWidth), h * 0.3, h * 0.52);
+  };
+  const note = (text: string): Draw => (ctx, w, h) => {
+    ctx.fillStyle = BOARD;
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#64748b";
+    ctx.font = `500 ${Math.round(Math.min(h * 0.5, w * 0.06))}px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.fillText(fitted(ctx, text, w * 0.94), w / 2, h / 2);
+  };
+  /** The card an agent carries to the board: the issue key and the status it moves to. */
+  const carriedCard = (issueKey: string, status: string): Draw => (ctx, w, h) => {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#0f172a";
+    ctx.font = `700 ${Math.round(h * 0.34)}px ${FONT}`;
+    ctx.fillText(fitted(ctx, issueKey, w * 0.92), w / 2, h * 0.33);
+    ctx.fillStyle = "#475569";
+    ctx.font = `500 ${Math.round(h * 0.24)}px ${FONT}`;
+    ctx.fillText(fitted(ctx, status, w * 0.92), w / 2, h * 0.7);
+  };
+  /** Adds an HTML label that follows a point of the scene. */
+  function tag(element: HTMLElement, anchor: THREE.Object3D, lift: number) {
+    overlay.append(element);
+    tags.push({ element, anchor, lift });
+    return element;
+  }
+  function desk(room: THREE.Group, x: number, z: number, working: boolean) {
+    box(room, [1.8, 0.12, 1], [x, 1.04, z], 0xc9a273);
     for (const dx of [-0.75, 0.75])
       for (const dz of [-0.38, 0.38])
-        box(room, [0.07, 1, 0.07], [x + dx, 0.5, z + dz], 0x344656);
-    box(room, [0.8, 0.04, 0.52], [x, 1.12, z], 0x8796a5);
-    for (let row = 0; row < 3; row++)
-      for (let key = 0; key < 8; key++)
-        box(
-          room,
-          [0.065, 0.007, 0.065],
-          [x - 0.3 + key * 0.085, 1.147, z + row * 0.09],
-          0x344656,
-        );
-    box(room, [0.8, 0.52, 0.04], [x, 1.39, z - 0.23], 0x344656);
-    panel(
-      room,
-      0.72,
-      0.43,
-      [x, 1.4, z - 0.205],
-      ["> collab", "  work / reports", "  _"],
-      "#9cc9c1",
+        box(room, [0.07, 1, 0.07], [x + dx, 0.5, z + dz], 0x2b3644);
+    box(room, [0.8, 0.04, 0.52], [x, 1.12, z], 0x9aa7b4);
+    box(room, [0.68, 0.012, 0.3], [x, 1.146, z + 0.06], 0x2b3644);
+    box(room, [0.8, 0.52, 0.04], [x, 1.39, z - 0.23], 0x2b3644);
+    // The screen is lit while this agent holds claimed work, so activity shows from across the floor.
+    const screen = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.72, 0.43),
+      new THREE.MeshBasicMaterial({ color: working ? 0x7df0d2 : 0x3d4d5f }),
     );
-    box(room, [0.65, 0.12, 0.6], [x, 0.66, z + 0.83], 0x495c70);
-    box(room, [0.65, 0.52, 0.1], [x, 0.97, z + 1.12], 0x495c70);
-    box(room, [0.1, 0.6, 0.1], [x, 0.3, z + 0.84], 0x344656);
+    screen.position.set(x, 1.4, z - 0.205);
+    room.add(screen);
+    box(room, [0.65, 0.12, 0.6], [x, 0.66, z + 0.83], 0x3f5068);
+    box(room, [0.65, 0.52, 0.1], [x, 0.97, z + 1.12], 0x3f5068);
+    box(room, [0.1, 0.6, 0.1], [x, 0.3, z + 0.84], 0x2b3644);
   }
   function person(
     room: THREE.Group,
     id: string,
     name: string,
+    label: string,
+    held: string,
     projectId: string,
     x: number,
     z: number,
+    lift: number,
   ): Actor {
     const color = identityColor(id),
       root = new THREE.Group();
@@ -226,15 +384,21 @@ export function createFloorRenderer(
       sphere(elbow, 0.08, [0, -0.31, 0], 0xcfa783);
       arms.push({ top: shoulder, bottom: elbow });
     }
-    const label = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: textTexture([name], "#d7e5ee", 768, 90),
-        depthTest: false,
-      }),
-    );
-    label.scale.set(2.1, 0.25, 1);
-    label.position.y = 2;
-    root.add(label);
+    const nameTag = document.createElement("div");
+    nameTag.className = "floor-agent";
+    nameTag.title = name;
+    nameTag.dataset.agent = id;
+    nameTag.style.setProperty("--accent", held ? stateColors.claimed : "#94a3b8");
+    const shown = document.createElement("span");
+    shown.textContent = label;
+    nameTag.append(document.createElement("i"), shown);
+    if (held) {
+      const key = document.createElement("b");
+      key.textContent = held;
+      nameTag.append(key);
+    }
+    nameTag.addEventListener("click", () => callbacks.onAgent(id));
+    tag(nameTag, root, lift);
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.42, 0.48, 24),
       new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }),
@@ -242,7 +406,7 @@ export function createFloorRenderer(
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.025;
     root.add(ring);
-    const card = panel(root, 0.6, 0.4, [0, 1.25, 0.42], ["Task"], "#c6dcee");
+    const card = panel(root, 0.7, 0.42, [0, 1.25, 0.42], note("Task"));
     card.visible = false;
     root.position.set(x, 0, z + 0.83);
     root.rotation.y = Math.PI;
@@ -279,99 +443,144 @@ export function createFloorRenderer(
   }
   function rebuild() {
     disposeTree(content);
+    tags.forEach((item) => item.element.remove());
+    tags = [];
     actors = [];
     boardCards.clear();
     if (!state) return;
     const { projects, snapshot } = state;
     projects.forEach((project, index) => {
+      const accent = /^#[0-9a-f]{6}$/i.test(project.color || "")
+        ? project.color!
+        : roomAccents[index % roomAccents.length];
       const room = new THREE.Group();
       room.position.set(
         ((index % 3) - Math.min(2, projects.length - 1) / 2) * 14,
         0,
-        Math.floor(index / 3) * 14 - (projects.length > 3 ? 7 : 0),
+        Math.floor(index / 3) * 17 - (projects.length > 3 ? 8.5 : 0),
       );
       content.add(room);
-      const floor = box(room, [12, 0.17, 11], [0, -0.08, 0.5], 0x586974);
+      const floor = box(room, [12, 0.17, 11], [0, -0.08, 0.5], 0x2c3746);
       floor.userData.project = project.id;
-      box(room, [12, 3.6, 0.16], [0, 1.72, -4.9], 0x657783);
-      const title = panel(
-        room,
-        5,
-        0.6,
-        [0, 3.8, -4.65],
-        [project.name],
-        "#bed0d8",
+      floor.castShadow = false;
+      box(room, [12, 0.05, 0.22], [0, 0.02, 5.89], Number(`0x${accent.slice(1)}`)).castShadow = false;
+      const wall = box(room, [12, 5.1, 0.16], [0, 2.47, -4.9], 0x4a5a6e);
+      wall.userData.project = project.id;
+      box(room, [12, 0.22, 0.2], [0, 5.13, -4.9], Number(`0x${accent.slice(1)}`));
+      const backing = new THREE.Mesh(
+        new THREE.BoxGeometry(10.5, 4.1, 0.1),
+        new THREE.MeshBasicMaterial({ color: 0xf4f5f1 }),
       );
-      title.userData.project = project.id;
-      box(room, [10.5, 2.8, 0.12], [0, 2, -4.73], 0xe7e8df);
+      backing.position.set(0, 2.65, -4.76);
+      room.add(backing);
+      const tasks = snapshot.tasks.filter((t) => t.projectId === project.id);
       const statuses = boardStatuses(project.id);
       statuses.forEach((status, i) => {
         const width = 9.6 / statuses.length,
           x = -4.8 + (i + 0.5) * width;
-        panel(room, width - 0.06, 0.36, [x, 3, -4.64], [status], "#c8d9e4");
-        const tasks = snapshot.tasks.filter(
-          (t) => t.projectId === project.id && t.status === status,
-        );
-        tasks.slice(0, 3).forEach((task, row) => {
+        const column = tasks.filter((t) => t.status === status);
+        panel(room, width - 0.1, 0.5, [x, 4.32, -4.7], columnHead(status, column.length));
+        column.slice(0, 3).forEach((task, row) => {
           const card = panel(
             room,
-            width - 0.12,
-            0.49,
-            [x, 2.46 - row * 0.57, -4.63],
-            [task.issueKey, task.title, task.handoffState],
-            "#d9e5ec",
+            width - 0.14,
+            0.9,
+            [x, 3.5 - row * 0.98, -4.69],
+            taskCard(task),
           );
           card.userData.task = task.id;
           boardCards.set(task.id, card);
         });
-        if (tasks.length > 3)
+        if (column.length > 3)
           panel(
             room,
-            width - 0.06,
-            0.28,
-            [x, 0.65, -4.62],
-            [`+${tasks.length - 3} in task list`],
+            width - 0.14,
+            0.3,
+            [x, 0.84, -4.69],
+            note(`+${column.length - 3} more in the task list`),
           );
       });
       if (!statuses.length)
-        panel(
-          room,
-          8,
-          1,
-          [0, 2.2, -4.62],
-          ["No agent handoffs in this snapshot"],
-        );
-      const tasks = snapshot.tasks.filter((t) => t.projectId === project.id);
+        panel(room, 8, 1, [0, 2.7, -4.69], note("No agent handoffs in this snapshot"));
       const ids = new Set(
         tasks
           .flatMap((t) => [t.claimedById, t.senderId, ...t.recipientIds])
           .filter(Boolean),
       );
+      const held = (agentId: string) =>
+        tasks.find((t) => t.claimedById === agentId && t.handoffState === "claimed");
       const roster = snapshot.agents
         .filter((a) => ids.has(a.id))
-        .sort(
-          (a, b) =>
-            Number(
-              tasks.some(
-                (t) => t.claimedById === b.id && t.handoffState === "claimed",
-              ),
-            ) -
-            Number(
-              tasks.some(
-                (t) => t.claimedById === a.id && t.handoffState === "claimed",
-              ),
-            ),
-        );
-      roster.slice(0, 8).forEach((agent, seat) => {
+        .sort((a, b) => Number(Boolean(held(b.id))) - Number(Boolean(held(a.id))));
+      const seated = roster.slice(0, 8);
+      const labels = shortAgentNames(seated.map((agent) => agent.name));
+      seated.forEach((agent, seat) => {
         const x = -4.05 + (seat % 4) * 2.7,
           z = 1 + Math.floor(seat / 4) * 2.7;
-        desk(room, x, z);
-        actors.push(person(room, agent.id, agent.name, project.id, x, z));
+        const work = held(agent.id);
+        desk(room, x, z, Boolean(work));
+        actors.push(
+          person(room, agent.id, agent.name, labels[seat], work?.issueKey || "", project.id, x, z, 2.2 + (seat % 2) * 0.5),
+        );
       });
-      const leaf = sphere(room, 0.55, [5, 0.85, -3.5], 0x85a783);
+      const leaf = sphere(room, 0.55, [5, 0.85, -3.5], 0x6fa873);
       leaf.scale.y = 1.5;
-      box(room, [0.55, 0.5, 0.55], [5, 0.25, -3.5], 0xb5b7a8);
+      box(room, [0.55, 0.5, 0.55], [5, 0.25, -3.5], 0xb9b4a4);
+      // The room's name and what is on its board, as HTML so it reads from the overview.
+      const sign = document.createElement("div");
+      sign.className = "floor-room";
+      sign.dataset.project = project.id;
+      sign.style.setProperty("--accent", accent);
+      const claimed = tasks.filter((t) => t.handoffState === "claimed").length,
+        open = tasks.filter((t) => t.handoffState === "open").length;
+      const summary = document.createElement("span");
+      if (!tasks.length) summary.textContent = "no handoffs";
+      else if (!claimed && !open) summary.textContent = "nothing open";
+      else
+        for (const [count, word, color] of (
+          [
+            [claimed, "claimed", "#4ade80"],
+            [open, "open", "#fbbf24"],
+          ] as const
+        ).filter(([count]) => count)) {
+          const number = document.createElement("em");
+          number.textContent = `${count} `;
+          number.style.color = color;
+          summary.append(number, `${word} `);
+        }
+      sign.append(document.createElement("i"), project.name, summary);
+      sign.addEventListener("click", () => callbacks.onProject(project.id));
+      const signAnchor = new THREE.Object3D();
+      signAnchor.position.set(0, 5.3, -4.9);
+      room.add(signAnchor);
+      tag(sign, signAnchor, 0);
     });
+  }
+  /** Places the camera so the rooms fill the view, looking at their boards from the front. */
+  function frameRooms() {
+    const bounds = new THREE.Box3().setFromObject(content);
+    if (bounds.isEmpty()) return;
+    const center = bounds.getCenter(new THREE.Vector3());
+    const oneRow = (state?.projects.length || 0) <= 3;
+    const direction = new THREE.Vector3(0.14, oneRow ? 0.62 : 1.2, 1).normalize();
+    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), direction).normalize();
+    const up = new THREE.Vector3().crossVectors(direction, right);
+    const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    let distance = 0;
+    for (const x of [bounds.min.x, bounds.max.x])
+      for (const y of [bounds.min.y, bounds.max.y])
+        for (const z of [bounds.min.z, bounds.max.z]) {
+          const corner = new THREE.Vector3(x, y, z).sub(center);
+          const depth = corner.dot(direction);
+          distance = Math.max(
+            distance,
+            depth + Math.abs(corner.dot(up)) / tan,
+            depth + Math.abs(corner.dot(right)) / (tan * camera.aspect),
+          );
+        }
+    camera.position.copy(center).addScaledVector(direction, distance * (oneRow ? 1.02 : 1.06));
+    controls.target.copy(center);
+    controls.update();
   }
   function update(next: SceneProps) {
     if (disposed) return;
@@ -391,14 +600,11 @@ export function createFloorRenderer(
     if (prior?.snapshot !== next.snapshot || layout !== nextLayout) rebuild();
     if (layout !== nextLayout) {
       layout = nextLayout;
-      camera.position.set(
-        next.projects.length > 1 ? 29 : 11,
-        next.projects.length > 1 ? 34 : 13,
-        next.projects.length > 1 ? 39 : 16,
-      );
-      controls.target.set(0, 0, 0);
-      controls.update();
+      frameRooms();
     }
+    for (const item of tags)
+      if (item.element.dataset.agent)
+        item.element.toggleAttribute("data-selected", item.element.dataset.agent === next.selected);
     if (!next.animate) {
       next.playback.queues.clear();
       boardCards.forEach((card) => {
@@ -469,7 +675,7 @@ export function createFloorRenderer(
           THREE.PlaneGeometry, THREE.MeshBasicMaterial
         >;
         card.material.map?.dispose();
-        card.material.map = textTexture([task.issueKey, task.status], "#c6dcee");
+        card.material.map = drawnTexture(0.7, 0.42, carriedCard(task.issueKey, task.status));
         card.material.needsUpdate = true;
         actor.cardLabel = label;
       }
@@ -524,7 +730,28 @@ export function createFloorRenderer(
     actors.forEach((actor) => animateActor(actor, dt, time / 1000));
     controls.update();
     renderer.render(scene, camera);
+    placeTags();
     frameId = requestAnimationFrame(frame);
+  }
+  const point = new THREE.Vector3();
+  /** Moves each HTML label to where its anchor appears on screen. Names collapse to a dot when the floor is small. */
+  function placeTags() {
+    const width = host.clientWidth,
+      height = host.clientHeight;
+    if (!width || !height) return;
+    const pixelsPerUnit =
+      height /
+      (2 * camera.position.distanceTo(controls.target) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+    overlay.dataset.zoom = pixelsPerUnit < 32 ? "far" : "near";
+    for (const item of tags) {
+      item.anchor.getWorldPosition(point);
+      point.y += item.lift;
+      point.project(camera);
+      const visible = point.z < 1 && Math.abs(point.x) < 1.1 && Math.abs(point.y) < 1.1;
+      item.element.style.display = visible ? "" : "none";
+      if (visible)
+        item.element.style.transform = `translate(-50%,-100%) translate(${((point.x + 1) / 2) * width}px,${((1 - point.y) / 2) * height}px)`;
+    }
   }
   const visibility = () => {
     cancelAnimationFrame(frameId);
@@ -540,6 +767,11 @@ export function createFloorRenderer(
     renderer.setSize(width, height);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    // The first size, and any later one before the person has moved the camera, re-frames the rooms.
+    if (!framed) frameRooms();
+  });
+  controls.addEventListener("start", () => {
+    framed = true;
   });
   resize.observe(host);
   let start: [number, number] | undefined;
@@ -600,6 +832,8 @@ export function createFloorRenderer(
       renderer.domElement.removeEventListener("webglcontextlost", lost);
       controls.dispose();
       disposeTree(content);
+      overlay.remove();
+      overlayStyle.remove();
       renderer.dispose();
       renderer.forceContextLoss();
       renderer.domElement.remove();
