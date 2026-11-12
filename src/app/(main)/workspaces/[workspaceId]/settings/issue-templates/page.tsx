@@ -20,7 +20,7 @@ export default async function IssueTemplatesPage({ params }: { params: Promise<{
   const { templates } = await getWorkspaceTemplates(workspaceId);
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+    <div className="p-4 pb-28 md:p-6 md:pb-28 max-w-4xl mx-auto">
       <div className="mb-4">
         <Link href={`/workspaces/${workspaceId}`}>
           <Button variant="ghost" size="sm" className="pl-0 text-muted-foreground">
