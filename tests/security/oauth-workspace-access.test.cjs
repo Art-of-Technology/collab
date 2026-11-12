@@ -15,7 +15,7 @@ function fixture(kind, access = 'member', options = {}) {
     user: { findUnique: async () => options.deleted ? null : actor },
     workspace: { findUnique: lookup, findFirst: lookup },
     workspaceMember: { findFirst: async () => workspace.members.length ? { workspaceId: workspace.id, workspace } : null },
-    appOAuthClient: { findUnique: async () => ({ clientId: 'client', clientType: 'public', redirectUris: ['https://client.example.test/callback'], app: { id: 'app', slug: 'app', status: 'PUBLISHED', isSystemApp: kind === 'mcp', scopes: [{ scope: 'issues:read' }] } }) },
+    appOAuthClient: { findUnique: async () => ({ clientId: 'client', clientType: 'public', redirectUris: options.redirectUris ?? ['https://client.example.test/callback'], app: { id: 'app', slug: 'app', status: 'PUBLISHED', isSystemApp: kind === 'mcp', scopes: [{ scope: 'issues:read' }] } }) },
     appInstallation: { findFirst: async ({ where }) => options.noInstallation ? null : { id: 'install', appId: 'app', workspaceId: where.workspaceId, scopes: ['issues:read'], status: 'ACTIVE' } },
     appOAuthAuthorizationCode: { create: async ({ data }) => { pending.push(data); return data; } },
     $transaction: async fn => {
@@ -162,4 +162,38 @@ test('regular read-only app may omit scope and approve only the server prepared 
   assert.equal(prepared.status, 200); assert.equal(prepared.body.scope, 'issues:read');
   assert.equal((await f.approve(prepared.body.consent_token, { scope: prepared.body.scope })).status, 200);
   assert.equal(f.writes[0].scope, 'issues:read');
+});
+
+// The contract a Claude connector relies on: an exact hosted callback, an extra RFC 8707 resource parameter, and loopback for Claude Code.
+const claudeCallback = 'https://claude.ai/api/mcp/auth_callback';
+const resource = 'https://collab.example.test/api/mcp';
+
+test('a connector sign-in carrying a resource parameter reaches consent and returns to its exact registered callback', async () => {
+  const f = fixture('mcp', 'member', { redirectUris: [claudeCallback] });
+  const navigation = await f.navigate({ redirect_uri: claudeCallback, resource });
+  assert.equal(navigation.status, 307);
+  assert.equal(new URL(navigation.url).pathname, '/auth/mcp');
+  assert.equal(new URL(navigation.url).searchParams.get('redirect_uri'), claudeCallback);
+  assert.equal(f.writes.length, 0, 'navigation alone grants nothing');
+
+  const result = await f.invoke({ redirect_uri: claudeCallback, resource });
+  assert.equal(result.status, 200);
+  const callback = new URL(result.url);
+  assert.equal(callback.origin + callback.pathname, claudeCallback);
+  assert.equal(callback.searchParams.get('state'), 'state');
+  assert.ok(callback.searchParams.get('code'));
+  assert.equal(f.writes.length, 1);
+});
+
+test('only the exact registered connector callback is accepted, plus loopback for a native client', async () => {
+  for (const redirect_uri of [`${claudeCallback}/`, `${claudeCallback}?next=evil`, 'http://claude.ai/api/mcp/auth_callback',
+    'https://claude.ai.evil.example/api/mcp/auth_callback', 'https://claude.ai/api/mcp/other']) {
+    const f = fixture('mcp', 'member', { redirectUris: [claudeCallback] });
+    assert.equal((await f.invoke({ redirect_uri })).status, 400, redirect_uri);
+    assert.equal(f.writes.length, 0);
+  }
+  for (const redirect_uri of ['http://localhost:3118/callback', 'http://127.0.0.1:3118/callback']) {
+    const f = fixture('mcp', 'member', { redirectUris: [claudeCallback] });
+    assert.equal((await f.invoke({ redirect_uri })).status, 200, redirect_uri);
+  }
 });
