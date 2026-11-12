@@ -184,7 +184,7 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     await prisma.agentReceipt.deleteMany();
     await assert.rejects(act(alice, handoff, 'worker-b', 'claim'), e => e.code === 'agent_not_found');
   });
-  await t.test('workspace monitor states a recipient user\'s issue access once, however many agents that user has', async () => {
+  await t.test('workspace monitor and agent floor state a recipient user\'s issue access once, however many agents that user has', async () => {
     // In production 76 agents under three users made this one query exceed the database's memory.
     const sent = [];
     const logged = new PrismaClient({ datasources: { db: { url } }, log: [{ emit: 'event', level: 'query' }] });
@@ -201,6 +201,16 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
       assert.equal(sent[at].split('LEFT JOIN "public"."Issue"').length - 1, 3);
       // Compiling this statement with PostgreSQL's JIT took minutes in production; it runs with JIT off.
       assert.equal(sent[at - 1], 'SET LOCAL jit = off');
+      // The agent floor asks the same question for its board and had the same shape.
+      const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') });
+      const floor = load('src/lib/agent-floor.ts', { 'server-only': {}, '@/lib/prisma': { prisma: logged }, '@/lib/issue-finder': finder,
+        '@/lib/post-access': load('src/lib/post-access.ts', { '@/lib/prisma': { prisma: logged } }),
+        '@/lib/agent-floor-model': load('src/lib/agent-floor-model.ts'), '@/lib/comment-html': { commentHtml } }, { Date, console });
+      sent.length = 0;
+      const snapshot = await floor.readAgentFloor('alice', 'w');
+      assert.deepEqual([snapshot.agents.length, Array.from(snapshot.tasks, task => task.id)], [43, [handoff.id]]);
+      const board = sent.find(sql => sql.includes('FROM "public"."AgentHandoff"') && sql.includes('"public"."Issue"'));
+      assert.equal(board.split('LEFT JOIN "public"."Issue"').length - 1, 3);
     } finally {
       await prisma.agentRegistration.deleteMany({ where: { id: { startsWith: 'crowd-' } } });
       await logged.$disconnect();

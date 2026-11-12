@@ -68,16 +68,22 @@ export async function readAgentFloor(
     ],
   });
   // Preserve the inbox's recipient + viewer access intersection. User IDs and label subscriptions stay on the server.
-  const eligible = agents.map((agent) => ({
-    issue: scope(agent.userId),
-    OR: [
+  // The recipient's access is stated once per user, not once per agent: a workspace has many agents
+  // under few users, and repeating it for every agent made PostgreSQL run out of memory.
+  const agentsByUser = new Map<string, typeof agents>();
+  for (const agent of agents) {
+    agentsByUser.set(agent.userId, [...(agentsByUser.get(agent.userId) ?? []), agent]);
+  }
+  const eligible = [...agentsByUser].map(([agentUserId, owned]) => ({
+    issue: scope(agentUserId),
+    OR: owned.flatMap((agent) => [
       { claimedById: agent.id },
       { senderId: agent.id },
       { recipientNames: { has: agent.name } },
       ...(agent.labelIds.length
         ? [{ labelIds: { hasSome: agent.labelIds } }]
         : []),
-    ],
+    ]),
   }));
   const rows = eligible.length
     ? await prisma.agentHandoff.findMany({
