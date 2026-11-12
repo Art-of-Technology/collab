@@ -183,11 +183,11 @@ For headless use, inject a Collab bearer token through your credential manager a
 
 An agent that is not a person, such as a shared assistant on another platform, should use an **agent token** instead of someone's login:
 
-1. A workspace owner, or a member whose role holds *Manage Workspace Permissions*, opens the workspace's **Settings**, then **Agent tokens** (`/workspaces/WORKSPACE_ID/settings/agent-tokens`), and creates a token with a name, an access level (read only, or read and write) and a lifetime of 30, 90 or 365 days.
+1. A workspace owner or a member whose role holds *Manage Workspace Permissions* opens `/workspaces/WORKSPACE_ID/settings/agent-tokens` and creates a token with a name, an access level (read only, or read and write) and a lifetime of 30, 90 or 365 days. Workspace owners can also reach the page through **Settings**, then **Agent tokens**.
 2. The token is shown once. Store it in the agent's secret manager and inject it as `COLLAB_TOKEN` with `COLLAB_URL`, or as a Bearer credential for the API.
 3. To stop it, revoke it on the same page. Revocation takes effect at once.
 
-Each token belongs to a service account named after it: a workspace member with no email that cannot sign in. Issues, comments and Notes the agent writes show that name. The account can use only the workspace the token was created in, and switching the member off in the Members list pauses its tokens. `worker`, `coordinator` and `config set` still need a saved login and refuse `COLLAB_TOKEN`.
+Each token belongs to a service account named after it: a workspace member with no email that cannot sign in. Issues, comments and Notes the agent writes show that name. The account can use only the workspace the token was created in. Switching the member off in the Members list pauses its tokens; creating another token with the same name reactivates the member and its unrevoked, unexpired tokens. `worker`, `coordinator` and `config set` still need a saved login and refuse `COLLAB_TOKEN`.
 
 `COLLAB_CONFIG_DIR` overrides the private state directory. `--timeout SECONDS` sets a per-request timeout from 1 to 120 (default 30) for ordinary API commands; worker commands use their own request deadlines. HTTP bodies are capped at 8 MiB. Ordinary API commands never retry automatically. Dedicated workers have the bounded read and lease retries described under [recovery](#limits-monitoring-and-recovery); they do not retry uncertain task mutations.
 
@@ -221,7 +221,7 @@ node scripts/setup-agent-apps.mjs
 node scripts/setup-agent-apps.mjs --apply
 ```
 
-The apply operation creates `collab-agent` (agent tokens, no OAuth client), `collab-connector` (the public OAuth client for personal sign-in from Claude) and `collab-assistant` (tokens the in-app assistant mints for the signed-in user) in one transaction. Matching registrations are reused; a differing one refuses the whole run. Until it has run, the Agent tokens page says so and creating a token returns 503.
+The apply operation creates `collab-agent` (agent tokens, no OAuth client), `collab-connector` (a public OAuth client for a future Claude connector) and `collab-assistant` (for future in-app assistant tokens) in one transaction. Matching registrations are reused; a differing one refuses the whole run. Until it has run, the Agent tokens page says so and creating a token returns 503.
 
 ## Validation and release
 
