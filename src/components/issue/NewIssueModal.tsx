@@ -418,7 +418,7 @@ export default function NewIssueModal({
               projectId={selectedProjectId} 
             />
             <IssuePrioritySelector 
-              value={priority ?? "MEDIUM"} 
+              value={priority ?? "MEDIUM"}
               onChange={setPriority} 
             />
             <IssueAssigneeSelector 
