@@ -382,24 +382,40 @@ function sceneFixture() {
   const { document } = dom.window;
   dom.window.HTMLCanvasElement.prototype.getContext = function () {
     this.lines = [];
-    return { fillRect() {}, fillText: (text) => this.lines.push(text) };
+    const noop = () => {};
+    const ctx = {
+      fillRect: noop, beginPath: noop, rect: noop, fill: noop, stroke: noop,
+      // Half the font size a character: enough for fitting, shrinking and wrapping to be exercised.
+      measureText: (text) => ({ width: (text.length * parseInt(/(\d+)px/.exec(ctx.font)[1], 10)) / 2 }),
+      fillText: (text) => this.lines.push(text),
+    };
+    return ctx;
   };
-  let renderScene, pending, time = 0;
+  let renderScene, pending, time = 0, camera, target, moved, resized;
   const stats = { cancelled: 0, disposed: 0, disconnected: 0, geometriesDisposed: 0 };
   class Renderer {
     domElement = document.createElement("canvas");
     setPixelRatio() {}
     setSize() {}
-    render(scene) { renderScene = scene; }
+    shadowMap = {};
+    capabilities = { getMaxAnisotropy: () => 1 };
+    render(scene, view) { renderScene = scene; scene.updateMatrixWorld(); view.updateMatrixWorld(); }
     dispose() { stats.disposed++; }
     forceContextLoss() {}
   }
   class Controls {
     target = new THREE.Vector3();
-    update() {}
+    constructor(object) { camera = object; target = this.target; }
+    addEventListener(type, fn) { if (type === "start") moved = fn; }
+    update() {
+      const offset = camera.position.clone().sub(this.target);
+      if (offset.length() > this.maxDistance)
+        camera.position.copy(this.target).add(offset.setLength(this.maxDistance));
+      camera.lookAt(this.target);
+    }
     dispose() { stats.disposed++; }
   }
-  const { createFloorRenderer } = load("src/components/agents/floor/floor-renderer.ts", {
+  const { createFloorRenderer, shortAgentNames } = load("src/components/agents/floor/floor-renderer.ts", {
     three: { ...THREE, WebGLRenderer: Renderer },
     "three/examples/jsm/controls/OrbitControls.js": { OrbitControls: Controls },
     "@/lib/agent-floor-model": model,
@@ -409,13 +425,19 @@ function sceneFixture() {
     requestAnimationFrame: (fn) => { pending = fn; return 1; },
     cancelAnimationFrame: () => { stats.cancelled++; },
     ResizeObserver: class {
+      constructor(fn) { resized = fn; }
       observe() {}
       disconnect() { stats.disconnected++; }
     },
   });
   Object.defineProperty(document, "hidden", { value: false, configurable: true });
   const host = document.getElementById("floor");
-  const create = () => createFloorRenderer(host, { onAgent() {}, onProject() {}, onFailure() {} });
+  const picked = [];
+  const create = () => createFloorRenderer(host, {
+    onAgent: (id) => picked.push(`agent:${id}`),
+    onProject: (id) => picked.push(`project:${id}`),
+    onFailure() {},
+  });
   let controller = create();
   const data = snapshot();
   let props = {
@@ -433,7 +455,22 @@ function sceneFixture() {
     return result;
   };
   return {
-    get props() { return props; }, stats, host,
+    get props() { return props; }, stats, host, picked,
+    shortAgentNames,
+    get camera() { return camera; },
+    get target() { return target; },
+    /** What is written on every drawn surface of the scene. */
+    drawn: () => objects((object) => object.material?.map?.image?.lines)
+      .map((object) => object.material.map.image.lines.join(" | ")),
+    /** Gives the host a size, as the browser does once the scene is laid out. */
+    size(width, height) {
+      Object.defineProperty(host, "clientWidth", { value: width, configurable: true });
+      Object.defineProperty(host, "clientHeight", { value: height, configurable: true });
+      resized();
+      pending(time);
+    },
+    drag() { moved(); },
+    texts: (id) => Array.from(objects((object) => object.userData.task === id)[0].material.map.image.lines),
     update(next = {}) {
       props = { ...props, ...next };
       controller.update(props);
@@ -581,6 +618,175 @@ test("cancelling during carrying restores every board card and never replays can
     f.step(2500);
     assert.ok(f.actors().find((a) => a.userData.agent === "a").position.distanceTo(desk) > 1);
   } finally { f.close(); }
+});
+test("rooms and agents carry labels that name them, select them and leave with the scene", () => {
+  const f = sceneFixture();
+  try {
+    const sign = f.host.querySelector(".floor-room");
+    assert.equal(sign.textContent.trim(), "Project2 claimed");
+    const tags = [...f.host.querySelectorAll(".floor-agent")];
+    // Each agent shows its name and the issue it holds; the full name stays available on hover.
+    assert.deepEqual(tags.map((tag) => [tag.textContent, tag.title]), [["writerT-a", "writer"], ["reviewerT-b", "reviewer"]]);
+    tags[1].click();
+    sign.click();
+    assert.deepEqual(f.picked, ["agent:b", "project:p"]);
+    f.update({ selected: "b" });
+    assert.deepEqual(tags.map((tag) => tag.hasAttribute("data-selected")), [false, true]);
+
+    // An agent that holds nothing shows no issue, and a room with only finished work says so.
+    const idle = snapshot();
+    idle.tasks.forEach((task) => { task.handoffState = "completed"; });
+    f.update({ snapshot: idle, playback: model.createFloorPlayback(idle) });
+    assert.equal(f.host.querySelector(".floor-room").textContent.trim(), "Projectnothing open");
+    // The rebuild replaced the labels instead of adding to them, and the selection survived it.
+    assert.deepEqual([...f.host.querySelectorAll(".floor-agent")].map((tag) => tag.textContent), ["writer", "reviewer"]);
+    assert.ok(f.host.querySelector('.floor-agent[data-agent="b"]').hasAttribute("data-selected"));
+
+    f.unmount();
+    assert.equal(f.host.querySelector(".floor-overlay, style"), null);
+  } finally {
+    f.close();
+  }
+});
+test("the board draws the statuses in use and states each task without cutting its key", () => {
+  const f = sceneFixture();
+  try {
+    assert.deepEqual(f.texts("task-a"), ["T-a", "claimed", "Review UI"]);
+    assert.ok(f.drawn().includes("2 | In review"));
+
+    const data = snapshot();
+    data.projects[0].statuses = ["To do", "In progress", "In review", "Waiting for deploy", "Done", "Blocked", "Deprecated", "Backlog"]
+      .map((name, index) => ({ id: `s${index}`, name, isFinal: false }));
+    const title = "Coordinator run stops with outcome unknown when the pool is exhausted and nobody notices";
+    const elsewhere = ["Done", "Waiting for deploy", "In progress", "To do"];
+    data.tasks = [0, 1, 2, 3, 4, 5, 6, 7].map((index) => ({
+      ...data.tasks[0], id: `task-${index}`, title, issueKey: `T-${index}`,
+      status: index < 4 ? "In review" : elsewhere[index - 4],
+    }));
+    data.tasks[0].issueKey = "LONGPROJECT-1234";
+    data.tasks[2].issueKey = "K".repeat(40);
+    f.update({ snapshot: data, projects: data.projects, playback: model.createFloorPlayback(data) });
+    const lines = ["Coordinator run", "stops with outco…"];
+    assert.deepEqual(f.texts("task-1"), ["T-1", "claimed", ...lines]);
+    // A key too wide for its column is written smaller, and cut only when it would become unreadable.
+    assert.deepEqual(f.texts("task-0"), ["LONGPROJECT-1234", "claimed", ...lines]);
+    assert.equal(f.texts("task-2")[0], `${"K".repeat(33)}…`);
+    assert.equal(f.board("task-3"), undefined);
+    // Five of the project's eight statuses hold a handoff: only those are columns, in the project's order.
+    for (const text of ["4 | In review", "1 | To do", "1 | Waiting for deploy", "+1 more in the task list"])
+      assert.ok(f.drawn().includes(text), text);
+    assert.equal(f.drawn().filter((text) => /^\d+ \| /.test(text)).length, 5);
+    const across = [7, 6, 0, 5, 4].map((index) => f.board(`task-${index}`).position.x);
+    assert.deepEqual(across, [...across].sort((a, b) => a - b));
+    assert.equal(new Set(across).size, 5);
+
+    // Every line of a title is fitted, also a first word wider than the card.
+    data.tasks[1].title = `${"X".repeat(100)} next`;
+    data.tasks[2].title = `short ${"Y".repeat(100)} next`;
+    f.update({ snapshot: { ...data } });
+    assert.deepEqual(f.texts("task-1").slice(2), [`${"X".repeat(16)}…`, "next"]);
+    assert.deepEqual(f.texts("task-2").slice(2), ["short", `${"Y".repeat(16)}…`]);
+  } finally {
+    f.close();
+  }
+});
+test("with few statuses the fullest one uses the spare width of the board", () => {
+  const f = sceneFixture();
+  try {
+    const board = (counts) => {
+      const data = snapshot();
+      data.projects[0].statuses = Object.keys(counts).map((name, index) => ({ id: `s${index}`, name, isFinal: false }));
+      data.tasks = Object.entries(counts).flatMap(([status, count]) =>
+        Array.from({ length: count }, (_, index) => ({ ...data.tasks[0], id: `${status}-${index}`, status })));
+      f.update({ snapshot: data, projects: data.projects, playback: model.createFloorPlayback(data) });
+      const columns = (status) => new Set(data.tasks.filter((task) => task.status === status && f.board(task.id))
+        .map((task) => f.board(task.id).position.x.toFixed(2)));
+      return { shown: data.tasks.filter((task) => f.board(task.id)).length, columns };
+    };
+    // One status: three card columns of three, then the rest is counted.
+    let now = board({ Doing: 10 });
+    assert.deepEqual([now.shown, now.columns("Doing").size], [9, 3]);
+    assert.ok(f.drawn().includes("+1 more in the task list"));
+    // Two statuses: the fuller one takes two card columns; nothing overlaps.
+    now = board({ Doing: 5, Done: 2 });
+    assert.deepEqual([now.shown, now.columns("Doing").size, now.columns("Done").size], [7, 2, 1]);
+    assert.ok(Math.max(...now.columns("Doing")) < Math.min(...now.columns("Done")));
+    assert.ok(!f.drawn().some((text) => text.includes("more in the task list")));
+    // Three or more: one card column each.
+    now = board({ Todo: 4, Doing: 1, Done: 1 });
+    assert.deepEqual([now.shown, now.columns("Todo").size], [5, 1]);
+  } finally {
+    f.close();
+  }
+});
+test("automatic framing fits six rooms in a narrow host", () => {
+  const f = sceneFixture();
+  try {
+    const projects = Array.from({ length: 6 }, (_, i) => ({ ...f.props.projects[0], id: `p${i}` }));
+    f.size(200, 460);
+    f.update({ projects });
+    assert.ok(f.camera.position.distanceTo(f.target) > 120);
+    for (const x of [-1, 1]) {
+      const rooms = [...f.host.querySelectorAll(".floor-room")];
+      const label = rooms[x < 0 ? 0 : 2];
+      assert.notEqual(label.style.display, "none");
+      const [, px] = label.style.transform.match(/translate\(([-\d.]+)px,/) || [];
+      assert.ok(Number(px) > 0 && Number(px) < 200);
+    }
+    f.size(160, 460);
+    assert.ok(f.camera.position.distanceTo(f.target) > 150);
+  } finally {
+    f.close();
+  }
+});
+test("labels follow the camera, collapse to dots from afar, and the view re-frames until someone moves it", () => {
+  const f = sceneFixture();
+  try {
+    const overlay = f.host.querySelector(".floor-overlay");
+    const tag = f.host.querySelector('.floor-agent[data-agent="a"]');
+    const sign = f.host.querySelector(".floor-room");
+    assert.equal(tag.style.transform, "");
+    f.size(1200, 640);
+    assert.equal(overlay.dataset.zoom, "near");
+    const placed = /^translate\(-50%,-100%\) translate\(([\d.]+)px,([\d.]+)px\)$/;
+    for (const label of [tag, sign]) {
+      const [, x, y] = label.style.transform.match(placed);
+      assert.ok(x > 0 && x < 1200 && y > 0 && y < 640, label.style.transform);
+    }
+
+    // A narrower host shows less of the room, so the camera backs away; once dragged, it stays put.
+    const wide = f.camera.position.clone();
+    f.size(500, 640);
+    assert.ok(f.camera.position.distanceTo(wide) > 1);
+    f.drag();
+    const kept = f.camera.position.clone();
+    f.size(1200, 640);
+    assert.ok(f.camera.position.equals(kept));
+
+    f.camera.position.sub(f.target).multiplyScalar(4).add(f.target);
+    f.step(100);
+    assert.equal(overlay.dataset.zoom, "far");
+    // From near the board looking at the desks, the sign on the back wall is behind the camera.
+    f.camera.position.set(f.target.x, f.target.y, f.target.z - 3);
+    f.step(100);
+    assert.equal(sign.style.display, "none");
+    assert.equal(f.host.querySelector('.floor-agent[data-agent="b"]').style.display, "");
+  } finally {
+    f.close();
+  }
+});
+test("agent labels drop the prefix a room shares and keep what tells its agents apart", () => {
+  const f = sceneFixture();
+  try {
+    assert.deepEqual(f.shortAgentNames(["codex-bw57-sidebar", "codex-bw51-pagination"]), ["bw57-sidebar", "bw51-pagination"]);
+    assert.deepEqual(f.shortAgentNames(["codex-bw57", "claude-fable"]), ["codex-bw57", "claude-fable"]);
+    // Something of every name remains, a lone agent keeps its name, and a long remainder is cut.
+    assert.deepEqual(f.shortAgentNames(["worker-opus", "worker-opus-2"]), ["opus", "opus-2"]);
+    assert.deepEqual(f.shortAgentNames(["codex-bw57-sidebar"]), ["codex-bw57-side…"]);
+    assert.deepEqual(f.shortAgentNames([]), []);
+  } finally {
+    f.close();
+  }
 });
 test("late commits arrive once across overlapping snapshots and reconnects establish a baseline", () => {
   const initial = snapshot();
