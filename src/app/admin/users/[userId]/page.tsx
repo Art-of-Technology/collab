@@ -35,7 +35,7 @@ export default async function AdminUserPage({ params }: { params: Promise<{ user
           <CardTitle className="text-white">Workspaces</CardTitle>
           <CardDescription className="text-gray-500">
             {rows
-              ? 'Switch a workspace on to make this person a member there without an invitation, or off to stop their access. Their role is kept.'
+              ? 'Switch a workspace on to make this person a member without an invitation, or off to deactivate their membership. Their role is kept.'
               : 'An agent is let into workspaces on the Agent tokens page of the workspace its tokens belong to.'}
           </CardDescription>
         </CardHeader>

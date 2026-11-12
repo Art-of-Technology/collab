@@ -40,7 +40,7 @@ test('each workspace is a switch that adds the person or switches them off, and 
     assert.equal(notices.at(-1).description, 'Bob is now a member of Space b.');
     await React.act(async () => box('a').click());
     assert.deepEqual(calls.at(-1), ['/api/workspaces/a/members/by-user/bob', 'PUT', { active: false }]);
-    assert.equal(notices.at(-1).description, 'Bob can no longer use Space a.');
+    assert.equal(notices.at(-1).description, "Bob's membership in Space a is switched off.");
     assert.equal(refreshed, 2);
 
     answer = { ok: false, json: async () => ({ error: 'User or workspace not found' }) };

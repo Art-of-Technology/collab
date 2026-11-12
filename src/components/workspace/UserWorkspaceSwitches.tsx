@@ -22,7 +22,6 @@ interface UserWorkspaceSwitchesProps {
   workspaces: WorkspaceSwitchRow[];
 }
 
-/** One person's workspaces as switches: on makes them a member there, off stops their access. */
 export default function UserWorkspaceSwitches({ userId, userName, workspaces }: UserWorkspaceSwitchesProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -45,7 +44,7 @@ export default function UserWorkspaceSwitches({ userId, userName, workspaces }: 
       if (!response.ok) return failed(data.error || 'Failed to change the workspace');
       toast({
         title: active ? 'Added to workspace' : 'Switched off',
-        description: `${userName} ${active ? 'is now a member of' : 'can no longer use'} ${row.name}.`,
+        description: active ? `${userName} is now a member of ${row.name}.` : `${userName}'s membership in ${row.name} is switched off.`,
       });
       router.refresh();
     } catch {
