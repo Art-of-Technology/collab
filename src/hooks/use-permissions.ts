@@ -189,6 +189,11 @@ export function useCanInviteMembers(workspaceId?: string) {
   return checkPermission(Permission.INVITE_MEMBERS);
 }
 
+export function useCanManageMembers(workspaceId?: string) {
+  const { checkPermission } = usePermissions(workspaceId);
+  return checkPermission(Permission.MANAGE_WORKSPACE_MEMBERS);
+}
+
 export function useCanEditFeatureRequests(workspaceId?: string) {
   const { hasAnyPermission } = usePermissions(workspaceId);
   return hasAnyPermission([

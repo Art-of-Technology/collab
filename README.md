@@ -268,7 +268,7 @@ Collab is designed to streamline internal communication and work tracking by off
   [workspace permissions contract](docs/security/2026-09-23-hardening.md#scoped-permission-reads-and-resets).
   For custom-role names, grants and member assignments, see the
   [custom-role contract](docs/security/2026-09-23-hardening.md#custom-role-and-member-role-boundaries).
-  Workspace owners and system admins can choose **Workspaces** beside an active
+  Anyone who may manage members in a workspace can choose **Workspaces** beside an active
   member with an email address on the workspace page to manage that person's
   membership in their other accessible workspaces where they can manage members. System admins can also
   search **Users** at `/admin/users` and open a person to manage membership across

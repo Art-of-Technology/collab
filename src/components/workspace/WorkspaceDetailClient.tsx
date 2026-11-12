@@ -19,7 +19,7 @@ import { InvitationsTab } from "@/components/workspace/components/invitation";
 import { WorkspaceFeatureSettings } from "./WorkspaceFeatureSettings";
 import { useDetailedWorkspaceById } from "@/hooks/queries/useWorkspace";
 import { useWorkspacePermissions } from "@/hooks/use-workspace-permissions";
-import { useCanInviteMembers } from "@/hooks/use-permissions";
+import { useCanInviteMembers, useCanManageMembers } from "@/hooks/use-permissions";
 import PageHeader from "@/components/layout/PageHeader";
 import MemberStatusToggle from "./MemberStatusToggle";
 import { useQueryClient } from "@tanstack/react-query";
@@ -47,6 +47,8 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
 
   // Check if user can invite members
   const { hasPermission: canInviteMembers } = useCanInviteMembers(workspaceId);
+  // The member workspaces screen checks this same permission on the server.
+  const { hasPermission: canManageMembers } = useCanManageMembers(workspaceId);
 
   // Use the fetched data or fallback to initial data
   const workspaceData = workspace || initialWorkspace;
@@ -305,7 +307,7 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {canManage && member.user.email && (
+                      {canManageMembers && member.user.email && (
                         <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
                           <Link href={`/workspaces/${workspaceId}/settings/members/${member.user.id}`}>Workspaces</Link>
                         </Button>
