@@ -68,23 +68,25 @@ export async function readAgentFloor(
     ],
   });
   // Preserve the inbox's recipient + viewer access intersection. User IDs and label subscriptions stay on the server.
-  // The recipient's access is stated once per user, not once per agent: a workspace has many agents
-  // under few users, and repeating it for every agent made PostgreSQL run out of memory.
+  // One condition per agent made PostgreSQL run out of memory. Ask about each user's agents
+  // together: up to four conditions per user, with agent IDs and names passed as lists.
   const agentsByUser = new Map<string, typeof agents>();
   for (const agent of agents) {
     agentsByUser.set(agent.userId, [...(agentsByUser.get(agent.userId) ?? []), agent]);
   }
-  const eligible = [...agentsByUser].map(([agentUserId, owned]) => ({
-    issue: scope(agentUserId),
-    OR: owned.flatMap((agent) => [
-      { claimedById: agent.id },
-      { senderId: agent.id },
-      { recipientNames: { has: agent.name } },
-      ...(agent.labelIds.length
-        ? [{ labelIds: { hasSome: agent.labelIds } }]
-        : []),
-    ]),
-  }));
+  const eligible = [...agentsByUser].map(([agentUserId, owned]) => {
+    const ids = owned.map((agent) => agent.id);
+    const labels = [...new Set(owned.flatMap((agent) => agent.labelIds))];
+    return {
+      issue: scope(agentUserId),
+      OR: [
+        { claimedById: { in: ids } },
+        { senderId: { in: ids } },
+        { recipientNames: { hasSome: owned.map((agent) => agent.name) } },
+        ...(labels.length ? [{ labelIds: { hasSome: labels } }] : []),
+      ],
+    };
+  });
   const rows = eligible.length
     ? await prisma.agentHandoff.findMany({
         where: {

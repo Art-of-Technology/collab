@@ -7,6 +7,7 @@ const { execFileSync } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 const { Prisma, PrismaClient } = require('@prisma/client');
 const { load } = require('../security/helpers.cjs');
+const { monitorAgreesWithInboxes } = require('./monitor-agreement.cjs');
 
 // Same socket-only disposable PostgreSQL pattern as tests/search; no application DB.
 const directory = mkdtempSync(join(tmpdir(), 'collab-handoffs-pg-'));
@@ -80,6 +81,8 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   const act = (ctx, handoff, agent, action, content) => service.actOnHandoff(ctx, handoff.id, service.actionSchema.parse({ agent, action, ...(content && { content }) }));
   await register(alice, 'lead'); await register(alice, 'worker-a', ['label-w']); await register(bob, 'worker-b', ['label-w']);
   await register(outsider, 'outsider', ['label-foreign']);
+
+  t.afterEach(() => monitorAgreesWithInboxes({ prisma, service, context, viewer: alice }));
 
   await t.test('owned inbox cursor pages tied timestamps without leaking inaccessible work', async () => {
     const worker = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'worker-b' } } });
@@ -184,6 +187,59 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     await prisma.agentReceipt.deleteMany();
     await assert.rejects(act(alice, handoff, 'worker-b', 'claim'), e => e.code === 'agent_not_found');
   });
+  await t.test('workspace monitor does not list a claim that was completed while it was reading', async () => {
+    const worker = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'worker-a' } } });
+    const row = await prisma.agentHandoff.create({ data: { id: 'changing-handoff', sourceKey: 'changing-handoff', workspaceId: 'w', issueId: 'i-w',
+      content: 'changing', recipientNames: ['worker-a'], claimedById: worker.id, status: 'claimed' } });
+    // The monitor first asks which handoffs are candidates, then reads them. This client completes the claim in between.
+    let changed = false;
+    const between = new Proxy(publicPrisma, { get(target, key) {
+      if (key !== '$queryRaw') return typeof target[key] === 'function' ? target[key].bind(target) : target[key];
+      return async (...args) => {
+        const candidates = await target.$queryRaw(...args);
+        if (!changed) await prisma.agentHandoff.update({ where: { id: row.id }, data: { status: 'completed' } });
+        changed = true;
+        return candidates;
+      };
+    } });
+    const monitor = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'),
+      '@/lib/prisma': { prisma: between }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
+    try {
+      const claimed = { state: 'claimed', agent: 'worker-a', limit: 50 };
+      assert.ok((await service.workspaceAgentInbox(alice, claimed)).items.some(item => item.id === row.id), 'listed while it is claimed');
+      const result = await monitor.workspaceAgentInbox(alice, claimed);
+      assert.equal(changed, true);
+      assert.equal(result.items.some(item => item.id === row.id), false);
+    } finally {
+      await prisma.agentHandoff.delete({ where: { id: row.id } });
+    }
+  });
+  await t.test('workspace monitor reads on past a window of candidates that may not be shown', async () => {
+    // 505 old handoffs for bob's agent, then three for alice's. The monitor takes candidates 500 at a time.
+    const at = seconds => new Date(Date.UTC(2020, 0, 1, 0, 0, seconds));
+    const row = (id, recipient, seconds) => ({ id, sourceKey: id, workspaceId: 'w', issueId: 'i-w', content: id,
+      recipientNames: [recipient], createdAt: at(seconds), updatedAt: at(seconds) });
+    const bobs = Array.from({ length: 505 }, (_, i) => row(`window-${String(i).padStart(3, '0')}`, 'worker-b', i));
+    await prisma.agentHandoff.createMany({ data: [...bobs, ...['x', 'y', 'z'].map((id, i) => row(`window-${id}`, 'worker-a', 600 + i))] });
+    const monitor = limit => service.workspaceAgentInbox(alice, { state: 'unseen', limit });
+    const ids = page => Array.from(page.items, item => item.id);
+    try {
+      const first = await monitor(50);
+      assert.deepEqual([ids(first), first.hasMore], [bobs.slice(0, 50).map(item => item.id), true]);
+      await monitorAgreesWithInboxes({ prisma, service, context, viewer: alice });
+      // Bob loses access: the whole first window is his, and the page is filled from the next one.
+      await prisma.workspaceMember.updateMany({ where: { userId: 'bob' }, data: { status: false } });
+      const two = await monitor(2);
+      assert.deepEqual([ids(two), two.hasMore], [['window-x', 'window-y'], true]);
+      const three = await monitor(3);
+      assert.deepEqual(ids(three), ['window-x', 'window-y', 'window-z']);
+      assert.equal(three.hasMore, (await monitor(50)).items.length > 3);
+      await monitorAgreesWithInboxes({ prisma, service, context, viewer: alice });
+    } finally {
+      await prisma.workspaceMember.updateMany({ where: { userId: 'bob' }, data: { status: true } });
+      await prisma.agentHandoff.deleteMany({ where: { id: { startsWith: 'window-' } } });
+    }
+  });
   await t.test('workspace monitor and agent floor state a recipient user\'s issue access once, however many agents that user has', async () => {
     // In production 76 agents under three users made this one query exceed the database's memory.
     const sent = [];
@@ -191,8 +247,21 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     logged.$on('query', event => sent.push(event.query));
     const monitor = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'),
       '@/lib/prisma': { prisma: logged }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
+    // What the monitor and the floor send to read handoffs, without the agent list itself.
+    const handoffSql = () => sent.filter(sql => sql.includes('"AgentHandoff"'));
+    const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') });
+    const floor = load('src/lib/agent-floor.ts', { 'server-only': {}, '@/lib/prisma': { prisma: logged }, '@/lib/issue-finder': finder,
+      '@/lib/post-access': load('src/lib/post-access.ts', { '@/lib/prisma': { prisma: logged } }),
+      '@/lib/agent-floor-model': load('src/lib/agent-floor-model.ts'), '@/lib/comment-html': { commentHtml } }, { Date, console });
+    await monitor.workspaceAgentInbox(alice, { state: 'unseen', limit: 50 });
+    await monitor.workspaceAgentInbox(alice, { state: 'claimed', limit: 50 });
+    const fewAgents = handoffSql();
+    sent.length = 0;
+    await floor.readAgentFloor('alice', 'w');
+    const fewOnBoard = handoffSql().find(sql => sql.includes('"public"."Issue"'));
     await prisma.agentRegistration.createMany({ data: Array.from({ length: 40 }, (_, index) => ({ id: `crowd-${index}`, workspaceId: 'w', userId: 'alice', name: `crowd-${index}` })) });
     try {
+      sent.length = 0;
       const inbox = await monitor.workspaceAgentInbox(alice, { state: 'unseen', limit: 50 });
       assert.deepEqual(Array.from(inbox.items, h => h.id), [handoff.id], 'the same work is listed as before');
       assert.equal(inbox.agents.length, 43);
@@ -201,16 +270,18 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
       assert.equal(sent[at].split('LEFT JOIN "public"."Issue"').length - 1, 3);
       // Compiling this statement with PostgreSQL's JIT took minutes in production; it runs with JIT off.
       assert.equal(sent[at - 1], 'SET LOCAL jit = off');
+      // Forty more agents change nothing in what the monitor sends: the statements are the same text.
+      await monitor.workspaceAgentInbox(alice, { state: 'claimed', limit: 50 });
+      assert.deepEqual(handoffSql(), fewAgents);
       // The agent floor asks the same question for its board and had the same shape.
-      const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') });
-      const floor = load('src/lib/agent-floor.ts', { 'server-only': {}, '@/lib/prisma': { prisma: logged }, '@/lib/issue-finder': finder,
-        '@/lib/post-access': load('src/lib/post-access.ts', { '@/lib/prisma': { prisma: logged } }),
-        '@/lib/agent-floor-model': load('src/lib/agent-floor-model.ts'), '@/lib/comment-html': { commentHtml } }, { Date, console });
       sent.length = 0;
       const snapshot = await floor.readAgentFloor('alice', 'w');
       assert.deepEqual([snapshot.agents.length, Array.from(snapshot.tasks, task => task.id)], [43, [handoff.id]]);
       const board = sent.find(sql => sql.includes('FROM "public"."AgentHandoff"') && sql.includes('"public"."Issue"'));
       assert.equal(board.split('LEFT JOIN "public"."Issue"').length - 1, 3);
+      // Its agents are in lists, so the board statement has as many conditions with 43 agents as with 3.
+      const conditions = sql => sql.split(/ (?:AND|OR) /).length;
+      assert.equal(conditions(board), conditions(fewOnBoard));
     } finally {
       await prisma.agentRegistration.deleteMany({ where: { id: { startsWith: 'crowd-' } } });
       await logged.$disconnect();

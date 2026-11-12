@@ -7,6 +7,7 @@ const { execFileSync } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 const { Prisma, PrismaClient } = require('@prisma/client');
 const { load } = require('../security/helpers.cjs');
+const { monitorAgreesWithInboxes } = require('./monitor-agreement.cjs');
 
 const directory = mkdtempSync(join(tmpdir(), 'collab-offer-pg-'));
 const bindir = execFileSync('pg_config', ['--bindir'], { encoding: 'utf8' }).trim();
@@ -41,6 +42,7 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     '@/lib/prisma': { prisma: servicePrisma }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date, Buffer });
   const context = (user, workspace = 'w', scopes = ['issues:read', 'issues:write', 'workspace:write']) => ({ user: { id: user }, workspace: { id: workspace }, token: { scopes } });
   const alice = context('alice'), bob = context('bob'), carol = context('carol'), dave = context('dave'), foreign = context('outsider', 'foreign');
+  t.afterEach(() => monitorAgreesWithInboxes({ prisma, service, context, viewer: alice }));
   await prisma.user.createMany({ data: ['alice', 'bob', 'carol', 'dave', 'outsider'].map(id => ({ id, name: id })) });
   await prisma.workspace.createMany({ data: [{ id: 'w', name: 'Work', slug: 'work', ownerId: 'alice' }, { id: 'foreign', name: 'Foreign', slug: 'foreign', ownerId: 'outsider' }] });
   await prisma.workspaceMember.createMany({ data: ['bob', 'carol', 'dave'].map(userId => ({ workspaceId: 'w', userId })) });

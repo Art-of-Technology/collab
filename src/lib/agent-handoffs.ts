@@ -474,9 +474,9 @@ const inboxCursorSchema = z.tuple([id, id, z.enum(['unseen', 'claimed']), z.stri
 
 async function readInbox(context: InboxContext, matches: Prisma.AgentHandoffWhereInput[], limit: number,
   position?: { createdAt: Date; id: string }) {
-  // PostgreSQL's JIT compiles every expression of a statement before running it. This one has a
-  // branch per agent: at 76 agents compiling it took minutes in production, while running it takes
-  // a fraction of a second. JIT is therefore off for this statement only.
+  // PostgreSQL's JIT compiles every expression of a statement before running it. When this one had
+  // a branch per agent, compiling it took minutes in production at 76 agents, while running it took
+  // a fraction of a second. It no longer grows that way; JIT stays off for it as a second guard.
   const [, items] = await prisma.$transaction([
     prisma.$executeRaw`SET LOCAL jit = off`,
     prisma.agentHandoff.findMany({ where: { workspaceId: context.workspace.id,
@@ -512,24 +512,67 @@ export async function agentInbox(context: InboxContext, query: z.infer<typeof in
   return { ...inbox, nextCursor, agent: agent.name };
 }
 
+const CANDIDATE_WINDOW = 500;
+/**
+ * The handoffs that are in the inbox of some agent of the workspace (or of the named one), oldest
+ * first, each with the users who own those agents. This is inboxMatch stated as a join on the agents
+ * table instead of one condition per agent, so the statement is the same size for three agents or
+ * three thousand. Keep the two in step. Issue access is not checked here: the caller does that.
+ */
+function monitorCandidates(workspaceId: string, state: 'unseen' | 'claimed', agent: string | undefined, offset: number) {
+  return prisma.$queryRaw<Array<{ id: string; userIds: string[] }>>`
+    SELECT h.id, array_agg(DISTINCT a."userId") AS "userIds"
+    FROM "AgentHandoff" h
+    JOIN "AgentRegistration" a ON a."workspaceId" = h."workspaceId"
+      AND (a.name = ANY(h."recipientNames") OR h."labelIds" && a."labelIds" OR h."claimedById" = a.id)
+    WHERE h."workspaceId" = ${workspaceId}
+      AND (${agent ?? null}::text IS NULL OR a.name = ${agent ?? null})
+      AND (h."sourceKey" NOT LIKE 'transfer-offer:%' OR (
+        (a."managedWorker" IS NULL OR a."managedWorker" = 'null'::jsonb) AND EXISTS (
+          SELECT 1 FROM "AgentTransferOffer" o
+          WHERE o."acceptedHandoffId" = h.id AND o."recipientId" = a.id AND o.status = 'accepted')))
+      AND CASE WHEN ${state} = 'claimed' THEN h."claimedById" = a.id AND h.status = 'claimed'
+        ELSE h.status <> 'superseded' AND NOT EXISTS (
+          SELECT 1 FROM "AgentReceipt" r
+          WHERE r."handoffId" = h.id AND r."agentId" = a.id AND r."seenAt" IS NOT NULL) END
+    GROUP BY h.id, h."createdAt"
+    ORDER BY h."createdAt", h.id
+    LIMIT ${CANDIDATE_WINDOW} OFFSET ${offset}`;
+}
+
 /** Read-only workspace monitoring; CLI ownership and mutation rules stay unchanged. */
 export async function workspaceAgentInbox(context: InboxContext, query: { agent?: string; state: 'unseen' | 'claimed'; limit: number }) {
   const agents = await prisma.agentRegistration.findMany({ where: { workspaceId: context.workspace.id },
     orderBy: { name: 'asc' } });
-  const selected = query.agent ? agents.filter(agent => agent.name === query.agent) : agents;
-  if (query.agent && selected.length === 0) throw new HandoffError('agent_not_found', 'Agent not found in this workspace', 404);
+  if (query.agent && !agents.some(agent => agent.name === query.agent)) throw new HandoffError('agent_not_found', 'Agent not found in this workspace', 404);
+  const limit = Math.min(50, Math.max(1, query.limit));
   // Both the viewer and the recipient must still be allowed to read the issue.
-  // One OR query returns each handoff once, even when multiple agents receive it.
-  // The recipient's access is stated once per user, not once per agent: a workspace has many agents
-  // under few users, and repeating it for every agent made PostgreSQL run out of memory.
-  const matchesByUser = new Map<string, Prisma.AgentHandoffWhereInput[]>();
-  for (const agent of selected) {
-    matchesByUser.set(agent.userId, [...(matchesByUser.get(agent.userId) ?? []), inboxMatch(agent, query.state)]);
+  // Each handoff is returned once, even when several agents receive it. The database is asked which
+  // handoffs are in an agent's inbox once for all agents, a window at a time; each window is then
+  // read with the viewer's access and the access of the users who own the receiving agents.
+  // The two reads are separate statements, so the second one checks the handoff's state again: a
+  // claim completed in between is not listed as claimed. Who has seen a handoff is not checked
+  // again; a monitor that shows it one refresh longer harms nobody.
+  const current = query.state === 'claimed' ? { status: 'claimed' } : { status: { not: 'superseded' } };
+  const items: Awaited<ReturnType<typeof readInbox>>['items'] = [];
+  let hasMore = false;
+  for (let offset = 0; !hasMore; offset += CANDIDATE_WINDOW) {
+    const candidates = await monitorCandidates(context.workspace.id, query.state, query.agent, offset);
+    const idsByUser = new Map<string, string[]>();
+    for (const { id, userIds } of candidates) {
+      for (const userId of userIds) idsByUser.set(userId, [...(idsByUser.get(userId) ?? []), id]);
+    }
+    if (candidates.length) {
+      // With the page already full this reads one more row, only to learn whether anything follows.
+      const page = await readInbox(context, [...idsByUser].map(([userId, ids]) => ({
+        id: { in: ids }, ...current, issue: issueScope({ ...context, user: { id: userId } }),
+      })), limit - items.length);
+      items.push(...page.items);
+      hasMore = page.hasMore;
+    }
+    if (candidates.length < CANDIDATE_WINDOW) break;
   }
-  const inbox = await readInbox(context, [...matchesByUser].map(([userId, matches]) => ({
-    OR: matches, issue: issueScope({ ...context, user: { id: userId } }),
-  })), Math.min(50, Math.max(1, query.limit)));
-  return { ...inbox, agents: agents.map(agent => ({ name: agent.name, ...(agent.host && agentStatus(agent)) })) };
+  return { items, hasMore, agents: agents.map(agent => ({ name: agent.name, ...(agent.host && agentStatus(agent)) })) };
 }
 
 export async function getHandoff(context: AppAuthContext, agentName: string, id: string) {
