@@ -184,6 +184,26 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     await prisma.agentReceipt.deleteMany();
     await assert.rejects(act(alice, handoff, 'worker-b', 'claim'), e => e.code === 'agent_not_found');
   });
+  await t.test('workspace monitor states a recipient user\'s issue access once, however many agents that user has', async () => {
+    // In production 76 agents under three users made this one query exceed the database's memory.
+    const sent = [];
+    const logged = new PrismaClient({ datasources: { db: { url } }, log: [{ emit: 'event', level: 'query' }] });
+    logged.$on('query', event => sent.push(event.query));
+    const monitor = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'),
+      '@/lib/prisma': { prisma: logged }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
+    await prisma.agentRegistration.createMany({ data: Array.from({ length: 40 }, (_, index) => ({ id: `crowd-${index}`, workspaceId: 'w', userId: 'alice', name: `crowd-${index}` })) });
+    try {
+      const inbox = await monitor.workspaceAgentInbox(alice, { state: 'unseen', limit: 50 });
+      assert.deepEqual(Array.from(inbox.items, h => h.id), [handoff.id], 'the same work is listed as before');
+      assert.equal(inbox.agents.length, 43);
+      const query = sent.filter(sql => sql.includes('FROM "public"."AgentHandoff"') && sql.includes('"public"."Issue"')).at(-1);
+      // Once for the viewer and once for each of the two users who have agents here: not once per agent.
+      assert.equal(query.split('LEFT JOIN "public"."Issue"').length - 1, 3);
+    } finally {
+      await prisma.agentRegistration.deleteMany({ where: { id: { startsWith: 'crowd-' } } });
+      await logged.$disconnect();
+    }
+  });
   let winner, loser, winnerName, loserName;
   await t.test('two actual concurrent PostgreSQL claims have exactly one winner', async () => {
     await assert.rejects(act(alice, handoff, 'lead', 'claim'), e => e.code === 'not_a_recipient');
