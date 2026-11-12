@@ -82,7 +82,7 @@ export function templateFor(templates: Record<TemplatedIssueType, IssueTemplate>
 }
 
 // Heading text as it is compared: no markup, lower case, single spaces, no punctuation at the ends.
-const comparable = (text: string) => text.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').toLowerCase()
+const comparable = (text: string) => text.replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, '').replace(/&nbsp;/gi, ' ').toLowerCase()
   .replace(/\s+/g, ' ').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 
 /**
@@ -93,10 +93,10 @@ const comparable = (text: string) => text.replace(/<[^>]*>/g, '').replace(/&nbsp
 export function missingSections(template: IssueTemplate, description: string | null | undefined): string[] {
   const filled = new Set<string>();
   // Splitting on a pattern with one group gives: text before, heading, content, heading, content, ...
-  const parts = (description ? commentHtml(description) : '').split(/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/i);
+  const parts = (description ? commentHtml(description, null, true) : '').split(/<h[1-4]\b(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)<\/h[1-4]>/i);
   for (let index = 1; index < parts.length; index += 2) {
     const content = parts[index + 1].replace(/<!--[\s\S]*?-->/g, '');
-    if (/<img\b/i.test(content) || content.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim()) filled.add(comparable(parts[index]));
+    if (/<img\b/i.test(content) || content.replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, '').replace(/&nbsp;/gi, ' ').replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '').trim()) filled.add(comparable(parts[index]));
   }
   return template.sections.filter(section => section.required && !filled.has(comparable(section.title))).map(section => section.title);
 }

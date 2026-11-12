@@ -49,6 +49,17 @@ test('a label in bold is not a section heading', () => {
   assert.deepEqual([...missingSections(BUG, body)], ['Summary']);
 });
 
+test('heading attributes and hidden content follow the rendered description', () => {
+  const rest = markdown(BUG, ['Summary']);
+  for (const level of [1, 2, 3, 4]) {
+    assert.deepEqual([...missingSections(BUG, `<h${level} title="A > B">Summary</h${level}><p>Broken</p>\n\n${rest}`)], []);
+  }
+  for (const content of ['<span style="display:none">placeholder</span>', '<span hidden>placeholder</span>', '<span style="visibility:hidden"><img src="https://example.test/a.png"></span>', '<span title="A > B"></span>', '&#8203;']) {
+    assert.deepEqual([...missingSections(BUG, `<h2>Summary</h2><p>${content}</p>\n\n${rest}`)], ['Summary'], content);
+  }
+  assert.deepEqual([...missingSections(BUG, `<h2>Summary</h2><span style="display:none"><h2>Other</h2></span><p>Broken</p>\n\n${rest}`)], []);
+});
+
 test('a section holding only a comment, blank space or an empty paragraph is empty; an image or a short answer fills it', () => {
   const rest = markdown(BUG, ['Summary']);
   for (const empty of ['## Summary\n\n<!-- what is wrong -->\n', '## Summary\n\n   \n', '<h2>Summary</h2><p></p>', '<h2>Summary</h2><p>&nbsp;</p>']) {
