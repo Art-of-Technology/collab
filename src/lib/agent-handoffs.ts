@@ -472,21 +472,20 @@ function inboxMatch(agent: Agent, state: 'unseen' | 'claimed'): Prisma.AgentHand
 
 const inboxCursorSchema = z.tuple([id, id, z.enum(['unseen', 'claimed']), z.string().datetime(), id]);
 
-async function readInbox(context: InboxContext, matches: Prisma.AgentHandoffWhereInput[], limit: number,
+async function readInbox(db: Prisma.TransactionClient, context: InboxContext, matches: Prisma.AgentHandoffWhereInput[], limit: number,
   position?: { createdAt: Date; id: string }) {
   // PostgreSQL's JIT compiles every expression of a statement before running it. When this one had
   // a branch per agent, compiling it took minutes in production at 76 agents, while running it took
   // a fraction of a second. It no longer grows that way; JIT stays off for it as a second guard.
-  const [, items] = await prisma.$transaction([
-    prisma.$executeRaw`SET LOCAL jit = off`,
-    prisma.agentHandoff.findMany({ where: { workspaceId: context.workspace.id,
+  await db.$executeRaw`SET LOCAL jit = off`;
+  const items = await db.agentHandoff.findMany({ where: { workspaceId: context.workspace.id,
       issue: issueScope(context), OR: matches, ...(position && { AND: [{ OR: [
         { createdAt: { gt: position.createdAt } }, { createdAt: position.createdAt, id: { gt: position.id } },
       ] }] }),
     }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: limit + 1,
     include: { issue: { select: { id: true, issueKey: true, title: true, projectId: true } },
-      claimedBy: { select: { name: true } }, sender: { select: { name: true } } } }),
-  ]);
+      claimedBy: { select: { name: true } }, sender: { select: { name: true } } } },
+  });
   return { items: items.slice(0, limit), hasMore: items.length > limit };
 }
 
@@ -504,7 +503,7 @@ export async function agentInbox(context: InboxContext, query: z.infer<typeof in
       position = { createdAt, id: handoffId };
     } catch { throw new HandoffError('invalid_cursor', 'Invalid inbox cursor'); }
   }
-  const inbox = await readInbox(context, [inboxMatch(agent, query.state)], query.limit, position);
+  const inbox = await prisma.$transaction(db => readInbox(db, context, [inboxMatch(agent, query.state)], query.limit, position));
   const last = inbox.items.at(-1);
   const nextCursor = inbox.hasMore && last ? Buffer.from(JSON.stringify([
     context.workspace.id, agent.id, query.state, last.createdAt.toISOString(), last.id,
@@ -519,8 +518,8 @@ const CANDIDATE_WINDOW = 500;
  * table instead of one condition per agent, so the statement is the same size for three agents or
  * three thousand. Keep the two in step. Issue access is not checked here: the caller does that.
  */
-function monitorCandidates(workspaceId: string, state: 'unseen' | 'claimed', agent: string | undefined, offset: number) {
-  return prisma.$queryRaw<Array<{ id: string; userIds: string[] }>>`
+function monitorCandidates(db: Prisma.TransactionClient, workspaceId: string, state: 'unseen' | 'claimed', agent: string | undefined, offset: number) {
+  return db.$queryRaw<Array<{ id: string; userIds: string[] }>>`
     SELECT h.id, array_agg(DISTINCT a."userId") AS "userIds"
     FROM "AgentHandoff" h
     JOIN "AgentRegistration" a ON a."workspaceId" = h."workspaceId"
@@ -542,33 +541,35 @@ function monitorCandidates(workspaceId: string, state: 'unseen' | 'claimed', age
 
 /** Read-only workspace monitoring; CLI ownership and mutation rules stay unchanged. */
 export async function workspaceAgentInbox(context: InboxContext, query: { agent?: string; state: 'unseen' | 'claimed'; limit: number }) {
-  const agents = await prisma.agentRegistration.findMany({ where: { workspaceId: context.workspace.id },
-    orderBy: { name: 'asc' } });
-  if (query.agent && !agents.some(agent => agent.name === query.agent)) throw new HandoffError('agent_not_found', 'Agent not found in this workspace', 404);
-  const limit = Math.min(50, Math.max(1, query.limit));
-  // Both the viewer and the recipient must still be allowed to read the issue.
-  // Each handoff is returned once, even when several agents receive it. The database is asked which
-  // handoffs are in an agent's inbox once for all agents, a window at a time; each window is then
-  // read with the viewer's access and the access of the users who own the receiving agents.
-  const items: Awaited<ReturnType<typeof readInbox>>['items'] = [];
-  let hasMore = false;
-  for (let offset = 0; !hasMore; offset += CANDIDATE_WINDOW) {
-    const candidates = await monitorCandidates(context.workspace.id, query.state, query.agent, offset);
-    const idsByUser = new Map<string, string[]>();
-    for (const { id, userIds } of candidates) {
-      for (const userId of userIds) idsByUser.set(userId, [...(idsByUser.get(userId) ?? []), id]);
+  return prisma.$transaction(async db => {
+    const agents = await db.agentRegistration.findMany({ where: { workspaceId: context.workspace.id },
+      orderBy: { name: 'asc' } });
+    if (query.agent && !agents.some(agent => agent.name === query.agent)) throw new HandoffError('agent_not_found', 'Agent not found in this workspace', 404);
+    const limit = Math.min(50, Math.max(1, query.limit));
+    // Both the viewer and the recipient must still be allowed to read the issue.
+    // Each handoff is returned once, even when several agents receive it. The database is asked which
+    // handoffs are in an agent's inbox once for all agents, a window at a time; each window is then
+    // read with the viewer's access and the access of the users who own the receiving agents.
+    const items: Awaited<ReturnType<typeof readInbox>>['items'] = [];
+    let hasMore = false;
+    for (let offset = 0; !hasMore; offset += CANDIDATE_WINDOW) {
+      const candidates = await monitorCandidates(db, context.workspace.id, query.state, query.agent, offset);
+      const idsByUser = new Map<string, string[]>();
+      for (const { id, userIds } of candidates) {
+        for (const userId of userIds) idsByUser.set(userId, [...(idsByUser.get(userId) ?? []), id]);
+      }
+      if (candidates.length) {
+        // With the page already full this reads one more row, only to learn whether anything follows.
+        const page = await readInbox(db, context, [...idsByUser].map(([userId, ids]) => ({
+          id: { in: ids }, issue: issueScope({ ...context, user: { id: userId } }),
+        })), limit - items.length);
+        items.push(...page.items);
+        hasMore = page.hasMore;
+      }
+      if (candidates.length < CANDIDATE_WINDOW) break;
     }
-    if (candidates.length) {
-      // With the page already full this reads one more row, only to learn whether anything follows.
-      const page = await readInbox(context, [...idsByUser].map(([userId, ids]) => ({
-        id: { in: ids }, issue: issueScope({ ...context, user: { id: userId } }),
-      })), limit - items.length);
-      items.push(...page.items);
-      hasMore = page.hasMore;
-    }
-    if (candidates.length < CANDIDATE_WINDOW) break;
-  }
-  return { items, hasMore, agents: agents.map(agent => ({ name: agent.name, ...(agent.host && agentStatus(agent)) })) };
+    return { items, hasMore, agents: agents.map(agent => ({ name: agent.name, ...(agent.host && agentStatus(agent)) })) };
+  }, { isolationLevel: 'RepeatableRead' });
 }
 
 export async function getHandoff(context: AppAuthContext, agentName: string, id: string) {
