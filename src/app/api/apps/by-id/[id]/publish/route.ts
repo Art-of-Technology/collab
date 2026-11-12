@@ -26,8 +26,9 @@ export async function PATCH(
     // Check if app exists and get latest version, before the body is looked at: someone who may not
     // change this app learns nothing from how a request is validated.
     // The status belongs to the app's owner and to system admins; for anyone else the app does not exist.
+    const isAdmin = actor.role === 'SYSTEM_ADMIN';
     const existingApp = await prisma.app.findFirst({
-      where: { id, ...(actor.role === 'SYSTEM_ADMIN' ? {} : appOwnerWhere(actor.id)) },
+      where: { id, ...(isAdmin ? {} : appOwnerWhere(actor.id)) },
       include: {
         versions: {
           orderBy: { createdAt: 'desc' },
@@ -69,17 +70,6 @@ export async function PATCH(
       );
     }
 
-    // Validate manifest credentials for publishing
-    if (status === 'PUBLISHED' && manifest.oauth) {
-      const validationResult = await validateManifestCredentials(existingApp, manifest);
-      if (!validationResult.valid) {
-        return NextResponse.json(
-          { error: validationResult.error },
-          { status: 400 }
-        );
-      }
-    }
-
     // Only allow certain status transitions
     const validTransitions: Record<AppStatus, AppStatus[]> = {
       [AppStatus.DRAFT]: [AppStatus.IN_REVIEW, AppStatus.PUBLISHED], // Allow direct publish for approved apps
@@ -97,6 +87,41 @@ export async function PATCH(
       );
     }
 
+    // Without an administrator an owner may withdraw, unpublish and resubmit, and publish the version that
+    // was approved. Suspending, rejecting and lifting a suspension are an administrator's decisions.
+    if (!isAdmin) {
+      const ownerTransitions: Record<AppStatus, AppStatus[]> = {
+        [AppStatus.DRAFT]: [AppStatus.IN_REVIEW, AppStatus.PUBLISHED],
+        [AppStatus.IN_REVIEW]: [AppStatus.DRAFT],
+        [AppStatus.PUBLISHED]: [AppStatus.DRAFT],
+        [AppStatus.SUSPENDED]: [],
+        [AppStatus.REJECTED]: [AppStatus.DRAFT, AppStatus.IN_REVIEW]
+      };
+      if (!ownerTransitions[currentStatus].includes(targetStatus)) {
+        return NextResponse.json(
+          { error: 'Only an administrator can make this change' },
+          { status: 403 }
+        );
+      }
+      if (targetStatus === AppStatus.PUBLISHED && existingApp.approvedVersionId !== latestVersion.id) {
+        return NextResponse.json(
+          { error: 'This version has not been approved. Submit it for review first.' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Validate manifest credentials for publishing
+    if (status === 'PUBLISHED' && manifest.oauth) {
+      const validationResult = await validateManifestCredentials(existingApp, manifest);
+      if (!validationResult.valid) {
+        return NextResponse.json(
+          { error: validationResult.error },
+          { status: 400 }
+        );
+      }
+    }
+
     // Use transaction to update app status
     const result = await prisma.$transaction(async (tx) => {
 
@@ -105,6 +130,8 @@ export async function PATCH(
         where: { id },
         data: { 
           status,
+          // Publishing by an administrator is an approval of this version too
+          ...(targetStatus === AppStatus.PUBLISHED ? { approvedVersionId: latestVersion.id } : {}),
           updatedAt: new Date()
         }
       });

@@ -7,7 +7,8 @@ function fixture() {
   ].map(user => ({ ...user, createdAt: new Date(), updatedAt: new Date(), emailVerified: null }));
   const version = { id: 'v1', manifest: {} };
   const apps = [
-    { id: 'mine', slug: 'mine', name: 'Mine', userId: 'alice', status: 'DRAFT', versions: [version], oauthClient: null },
+    // Approved already: this file is about who may call the route; tests/security/app-publish-approval.test.cjs covers approval.
+    { id: 'mine', slug: 'mine', name: 'Mine', userId: 'alice', status: 'DRAFT', approvedVersionId: 'v1', versions: [version], oauthClient: null },
     { id: 'system', slug: 'collab-agent', name: 'Agent tokens', userId: null, publisherId: 'system', isSystemApp: true, status: 'PUBLISHED', versions: [version], oauthClient: null },
   ];
   const state = { session: null, uploads: [], appReads: 0 };

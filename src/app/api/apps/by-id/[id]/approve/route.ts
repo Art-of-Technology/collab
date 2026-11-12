@@ -56,7 +56,8 @@ export async function POST(
       // Update app status
       await tx.app.update({
         where: { id },
-        data: { status: 'DRAFT' }
+        // Approval is of this version: a version submitted later needs its own.
+        data: { status: 'DRAFT', approvedVersionId: latestVersion.id }
       });
 
       // Generate OAuth credentials if needed and not already present

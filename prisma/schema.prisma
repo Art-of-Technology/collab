@@ -2117,6 +2117,7 @@ model App {
   systemAppTokens AppToken[]        @relation("SystemAppTokens") // Direct tokens for system apps
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+  approvedVersionId String? // The version an administrator approved; an owner can publish only this one
 
   user User? @relation("UserApps", fields: [userId], references: [id], onDelete: Cascade)
 
