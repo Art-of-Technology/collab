@@ -212,6 +212,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
+    // A parent must be an issue of this workspace: checked before anything else looks at it.
+    if (parentId && (typeof parentId !== 'string' || !await prisma.issue.findFirst({
+      where: { id: parentId, workspaceId: workspace.id }, select: { id: true },
+    }))) {
+      return NextResponse.json({ error: "Invalid parent issue" }, { status: 400 });
+    }
+
     // Use a transaction to ensure atomic counter increment and issue creation
     await assertLegacyProjectWriteAllowed(project.id);
     if (parentId) await assertLegacyIssueWriteAllowed(parentId);
