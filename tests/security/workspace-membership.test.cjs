@@ -53,6 +53,8 @@ function fixture() {
     },
     rolePermission: { findUnique: async ({ where }) => rolePermissions.find(row => matches(row, where.workspaceId_role_permission)) ?? null },
     appAuditLog: { create: async ({ data }) => { audit.push(data); return data; } },
+    // The row lock does nothing here.
+    $queryRaw: async () => [],
     $transaction: async run => run(prisma),
   };
   const globals = { console: { log() {}, warn() {}, error() {} }, Date };

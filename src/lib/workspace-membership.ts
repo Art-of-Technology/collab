@@ -23,6 +23,8 @@ export async function setWorkspaceMembership(input: {
 
   return prisma.$transaction(async tx => {
     const key = { userId: input.userId, workspaceId: input.workspaceId };
+    // The member list can switch the same row at the same moment; holding it keeps what is recorded equal to what changed.
+    await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${input.userId} AND "workspaceId" = ${input.workspaceId} FOR UPDATE`;
     const member = await tx.workspaceMember.findUnique({ where: { userId_workspaceId: key }, select: { status: true } });
     if (!!member?.status === input.active) return 'unchanged';
     if (input.active) {
