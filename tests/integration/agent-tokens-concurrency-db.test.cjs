@@ -128,7 +128,7 @@ test('agent token lifecycle stays consistent under concurrent requests', async t
     assert.equal((await member(home, account)).status, true);
     assert.equal((await member(other, account)).status, false, 'a new token does not bring the other workspace back');
     assert.deepEqual((await lib.listAgentTokens(home))[0].workspaces, []);
-    assert.equal(await prisma.appAuditLog.count({ where: { workspaceId: other, action: { in: ['agent_token.workspace_added', 'agent_token.workspace_removed'] } } }), 3, 'one record per change');
+    assert.equal(await prisma.appAuditLog.count({ where: { workspaceId: other, action: { in: ['agent_token.workspace_added', 'agent_token.workspace_removed'] } } }), 4, 'one record per change');
   });
 
   await t.test('letting an agent into a workspace while its last token is being revoked does not switch it on', async () => {

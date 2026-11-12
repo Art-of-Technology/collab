@@ -58,8 +58,8 @@ function fixture() {
         .flatMap(row => row.members.map(member => ({ ...member, workspaceId: row.id, workspace: row })))
         .filter(row => matches(row, where)),
       updateMany: async ({ where, data }) => {
-        const rows = workspaces.filter(row => !where.workspaceId || row.id === where.workspaceId)
-          .flatMap(row => row.members).filter(row => row.userId === where.userId);
+        const rows = workspaces.flatMap(row => row.members.map(member => ({ member, workspaceId: row.id })))
+          .filter(row => matches({ ...row.member, workspaceId: row.workspaceId }, where)).map(row => row.member);
         rows.forEach(row => Object.assign(row, data));
         return { count: rows.length };
       },
@@ -569,6 +569,40 @@ test('a workspace an agent was let into can switch it off without touching its o
   f.workspace('w3').members.find(row => row.userId === f.tokens[0].userId).status = false; // switched off in that workspace's Members list
   assert.equal((await f.switched(token, '?workspaceId=w3')).status, 403);
   assert.equal((await f.switched(token)).workspace, 'w1');
+});
+
+test('expired tokens cannot grant access and a fresh token clears stale grants', async () => {
+  const f = fixture();
+  f.as('alice');
+  const first = (await f.mint()).body;
+  await f.access(first.id, 'w3');
+  f.tokens[0].tokenExpiresAt = new Date(Date.now() - 1000);
+  assert.equal((await f.access(first.id, 'w2')).status, 403);
+  assert.equal((await f.access(first.id, 'w3')).status, 404);
+  const before = f.audit.length;
+  const fresh = (await f.mint()).body;
+  assert.equal((await f.switched(fresh.token, '?workspaceId=w3')).status, 403);
+  assert.equal(f.audit.slice(before).filter(row => row.workspaceId === 'w3' && row.action === 'agent_token.workspace_removed').length, 1);
+});
+
+test('reactivated memberships have member role and revocation audits every changed workspace', async () => {
+  const f = fixture();
+  f.as('alice');
+  const first = (await f.mint()).body;
+  await f.access(first.id, 'w3');
+  const member = f.workspace('w3').members.find(row => row.userId === f.tokens[0].userId);
+  member.role = 'ADMIN';
+  await f.access(first.id, 'w3', false);
+  await f.access(first.id, 'w3');
+  assert.equal(member.role, 'MEMBER');
+  const before = f.audit.length;
+  await f.revoke(first.id);
+  assert.equal(member.status, false);
+  assert.equal(f.audit.slice(before).filter(row => row.workspaceId === 'w3' && row.action === 'agent_token.workspace_removed').length, 1);
+  const home = f.workspace('w1').members.find(row => row.userId === f.tokens[0].userId);
+  home.role = 'ADMIN';
+  await f.mint();
+  assert.equal(home.role, 'MEMBER');
 });
 
 test('the agent tokens page offers only the other workspaces the viewer manages', async () => {

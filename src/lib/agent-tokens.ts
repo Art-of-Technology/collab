@@ -79,14 +79,22 @@ export async function createAgentToken(input: {
     const membership = await tx.workspaceMember.findUnique({
       where: { userId_workspaceId: { userId: account.id, workspaceId: input.workspaceId } }, select: { status: true },
     });
+    const live = await tx.appToken.count({ where: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, isRevoked: false, tokenExpiresAt: { gte: new Date() } } });
     if (!membership?.status) {
       // Switched off or removed while tokens were still usable: minting must not make those work again.
-      const live = await tx.appToken.count({ where: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, isRevoked: false, tokenExpiresAt: { gte: new Date() } } });
       if (live) return { error: 'paused' as const };
+    }
+    if (!live) {
+      const others = await tx.workspaceMember.findMany({ where: { userId: account.id, status: true, workspaceId: { not: input.workspaceId } }, select: { workspaceId: true } });
+      await tx.workspaceMember.updateMany({ where: { userId: account.id, status: true, workspaceId: { not: input.workspaceId } }, data: { status: false } });
+      for (const { workspaceId } of others) await tx.appAuditLog.create({ data: {
+        workspaceId, actorId: input.actorId, action: 'agent_token.workspace_removed',
+        details: { serviceUserId: account.id, name: account.name, homeWorkspaceId: input.workspaceId },
+      } });
     }
     await tx.workspaceMember.upsert({
       where: { userId_workspaceId: { userId: account.id, workspaceId: input.workspaceId } },
-      update: { status: true },
+      update: membership?.status ? {} : { status: true, role: 'MEMBER' },
       create: { userId: account.id, workspaceId: input.workspaceId, role: 'MEMBER' },
     });
     const row = await tx.appToken.create({
@@ -120,8 +128,15 @@ export async function revokeAgentToken(input: { workspaceId: string; actorId: st
       const live = await tx.appToken.count({ where: { ...scope, userId: token.userId, isRevoked: false, tokenExpiresAt: { gte: new Date() } } });
       // An account with no usable token left stops being an active member, in every workspace it was let into:
       // a later token with its name starts again in this workspace only.
-      if (!live) await tx.workspaceMember.updateMany({ where: { userId: token.userId }, data: { status: false } });
       name = (await tx.user.findUnique({ where: { id: token.userId }, select: { name: true } }))?.name ?? null;
+      if (!live) {
+        const others = await tx.workspaceMember.findMany({ where: { userId: token.userId, status: true, workspaceId: { not: input.workspaceId } }, select: { workspaceId: true } });
+        await tx.workspaceMember.updateMany({ where: { userId: token.userId, status: true }, data: { status: false } });
+        for (const { workspaceId } of others) await tx.appAuditLog.create({ data: {
+          workspaceId, actorId: input.actorId, action: 'agent_token.workspace_removed',
+          details: { tokenId: token.id, serviceUserId: token.userId, name, homeWorkspaceId: input.workspaceId },
+        } });
+      }
     }
     await tx.appAuditLog.create({ data: {
       workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_token.revoked',
@@ -149,13 +164,13 @@ export async function setAgentWorkspaceAccess(input: {
     // Revoking locks the same row, so the token is read again: a revocation that switched the account off
     // everywhere must not be followed by this switching it back on.
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
-    if (!await tx.appToken.count({ where })) return false;
+    if (!await tx.appToken.count({ where: { ...where, ...(input.allowed ? { tokenExpiresAt: { gte: new Date() } } : {}) } })) return false;
     const key = { userId, workspaceId: input.targetWorkspaceId };
     const active = !!(await tx.workspaceMember.findUnique({ where: { userId_workspaceId: key }, select: { status: true } }))?.status;
     // Already let in: nothing to do. Not in: nothing to take away, so a workspace the agent never used is not found.
     if (active === input.allowed) return active;
     if (input.allowed) {
-      await tx.workspaceMember.upsert({ where: { userId_workspaceId: key }, update: { status: true }, create: { ...key, role: 'MEMBER' } });
+      await tx.workspaceMember.upsert({ where: { userId_workspaceId: key }, update: { status: true, role: 'MEMBER' }, create: { ...key, role: 'MEMBER' } });
     } else {
       await tx.workspaceMember.updateMany({ where: key, data: { status: false } });
     }
