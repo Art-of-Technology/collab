@@ -1,6 +1,6 @@
 ---
 name: collab-agents
-description: Coordinate agent sessions and dedicated workers through Collab handoffs, role subscriptions, atomic work claims, progress and shared project context.
+description: Coordinate agent sessions and dedicated workers through Collab handoffs, role subscriptions, atomic work claims, progress and shared project context, and write Collab issues from the workspace's issue templates. Use it before creating or editing a Collab issue.
 ---
 
 # Collab agent coordination

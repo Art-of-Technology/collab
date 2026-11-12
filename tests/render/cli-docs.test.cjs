@@ -52,7 +52,7 @@ test('command reference renders the executable CLI inventory and filters through
     }
   }
   for (const [flag, names] of [
-    ['yes', ['issues delete', 'relations delete', 'worklogs delete']],
+    ['yes', ['issues delete', 'relations delete', 'worklogs delete', 'notes delete']],
     ['all', ['issues list', 'worklogs list', 'notes list']],
   ]) {
     for (const value of [flag, `--${flag}`]) {
