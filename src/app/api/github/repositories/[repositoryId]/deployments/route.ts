@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { repositoryAccessDenied } from "@/lib/repository-access";
 
 // GET /api/github/repositories/[repositoryId]/deployments - Get deployment data
 export async function GET(
@@ -8,6 +9,8 @@ export async function GET(
 ) {
   try {
     const { repositoryId } = await params;
+    const denied = await repositoryAccessDenied(repositoryId);
+    if (denied) return denied;
 
     // Get all deployments grouped by environment
     const deployments = await prisma.deployment.findMany({

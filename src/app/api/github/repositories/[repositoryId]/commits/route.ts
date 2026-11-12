@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { repositoryAccessDenied } from "@/lib/repository-access";
 
 // GET /api/github/repositories/[repositoryId]/commits - Get commits for a repository
 export async function GET(
@@ -8,6 +9,8 @@ export async function GET(
 ) {
   try {
     const { repositoryId } = await params;
+    const denied = await repositoryAccessDenied(repositoryId);
+    if (denied) return denied;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);

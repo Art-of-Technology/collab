@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/session';
+import { issueAccessWhere } from '@/lib/issue-finder';
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const issueKey = searchParams.get('issueKey');
 
@@ -12,8 +19,10 @@ export async function GET(request: NextRequest) {
 
     // Find the issue and its workspace
     const issue = await prisma.issue.findFirst({
+      // Only in a workspace the caller can use; the same key can exist in another one.
       where: {
-        issueKey: issueKey
+        issueKey: issueKey,
+        ...issueAccessWhere(user.id)
       },
       include: {
         project: {
