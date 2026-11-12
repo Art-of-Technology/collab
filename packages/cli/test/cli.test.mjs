@@ -1208,6 +1208,51 @@ test('issue deletion stops on denied preview and does not retry uncertain mutati
   assert.deepEqual(failed.calls.map(call => call.method), ['GET', 'DELETE']);
 });
 
+const notePreview = { id: 'note-one', title: 'Runbook', type: 'RUNBOOK', scope: 'WORKSPACE', projectName: null, updatedAt: '2026-11-01T00:00:00.000Z' };
+const storedNote = { ...notePreview, content: 'private body', author: { id: 'user-one', name: 'Author' }, tags: [] };
+const noteUrl = '/api/apps/auth/context/note-one?workspaceId=workspace-one';
+
+test('note deletion needs confirmation and one plain ID before any request', async t => {
+  const f = await fixture(t);
+  for (const args of [
+    ['notes', 'delete', 'note-one', '--workspace', 'workspace-one'],
+    ['notes', 'delete', '--workspace', 'workspace-one', '--yes'],
+    ['notes', 'delete', 'note-one', 'note-two', '--workspace', 'workspace-one', '--yes'],
+    ['notes', 'delete', 'note-one', '--workspace', 'workspace-one', '--yes', '--all'],
+    ['notes', 'delete', 'note-one', '--workspace', 'workspace-one', '--yes', '--search', 'old'],
+  ]) assert.notEqual((await f.run(args)).code, 0, args.join(' '));
+  assert.equal(f.calls.length, 0);
+});
+
+test('note deletion dry-run reads the note without yes and deletes nothing', async t => {
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify(storedNote)));
+  const result = await f.run(['notes', 'delete', 'note-one', '--workspace', 'workspace-one', '--dry-run']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.data, { dryRun: true, method: 'DELETE', url: f.url + noteUrl, preview: notePreview });
+  assert.deepEqual(f.calls.map(({ method, url }) => ({ method, url })), [{ method: 'GET', url: noteUrl }]);
+  assert.equal(result.stderr, '');
+});
+
+test('note deletion shows which note goes, without its content, then deletes that ID', async t => {
+  const f = await fixture(t, (req, res) => res.end(JSON.stringify(req.method === 'GET' ? storedNote : { deleted: true, id: 'note-one', title: 'Runbook' })));
+  const result = await f.run(['notes', 'delete', 'note-one', '--workspace', 'workspace-one', '--yes']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.diagnostics, [{ deletePreview: notePreview }]);
+  assert.deepEqual(result.data, { deleted: true, id: 'note-one', title: 'Runbook' });
+  assert.deepEqual(f.calls.map(({ method, url }) => ({ method, url })), [{ method: 'GET', url: noteUrl }, { method: 'DELETE', url: noteUrl }]);
+});
+
+test('note deletion stops when the note cannot be read or is not the one asked for', async t => {
+  const denied = await fixture(t, (_req, res) => { res.statusCode = 404; res.end(JSON.stringify({ error: 'context_not_found' })); });
+  const refused = await denied.run(['notes', 'delete', 'note-one', '--workspace', 'workspace-one', '--yes']);
+  assert.equal(refused.error.error, 'not_found');
+  assert.deepEqual(denied.calls.map(call => call.method), ['GET']);
+  const other = await fixture(t, (_req, res) => res.end(JSON.stringify({ ...storedNote, id: 'note-two' })));
+  const mismatched = await other.run(['notes', 'delete', 'note-one', '--workspace', 'workspace-one', '--yes']);
+  assert.equal(mismatched.error.error, 'invalid_preview');
+  assert.deepEqual(other.calls.map(call => call.method), ['GET']);
+});
+
 test('issue trash and restore commands use required project scope and expose no purge', async t => {
   const f = await fixture(t);
   const schema = (await f.run(['schema'])).data;

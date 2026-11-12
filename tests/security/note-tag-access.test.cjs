@@ -20,7 +20,7 @@ function fixture() {
     expiresAt: null, sharedWith: [{ userId: 'alice', permission: 'EDIT' }], tags, comments: [], author: { name: 'Alice' },
     isPinned: true, isAiContext: true, createdAt: new Date(), updatedAt: new Date(), versioningEnabled: true, version: 1 };
   const notes = [note, { ...note, id: 'hidden', authorId: 'bob', scope: 'PERSONAL', sharedWith: [] }];
-  const state = { writes: 0, effects: 0, tagReads: 0, lastWrite: null };
+  const state = { writes: 0, effects: 0, tagReads: 0, lastWrite: null, deleted: [] };
   function projectNote(row, args) {
     const t = (args.include || args.select)?.tags;
     return { ...row, tags: row.tags.filter(tag => !t?.where || matches(tag, t.where)) };
@@ -44,6 +44,7 @@ function fixture() {
       findUnique: async () => note,
       create: async args => { state.writes++; state.lastWrite = args; return projectNote({ ...note, workspace: null }, args); },
       update: async args => { state.writes++; state.lastWrite = args; return projectNote({ ...note, workspace: null }, args); },
+      delete: async ({ where }) => { state.deleted.push(where.id); return note; },
     },
     issue: { findMany: async () => [], count: async () => 0, groupBy: async () => [],
       findFirst: async ({ where }) => state.issue && matches(state.issue, where) ? state.issue : null },
@@ -201,6 +202,7 @@ function appFixture() {
     '@/lib/event-bus': {
       emitContextCreated: async () => { f.state.effects++; },
       emitContextUpdated: async () => { f.state.effects++; },
+      emitContextDeleted: async () => { f.state.effects++; },
     },
   });
   return { ...f, context, route };
@@ -263,4 +265,30 @@ for (const [path, extract] of [
   }
   f.ws[1].members[0].status = false;
   assert.equal((await get()).status, 403);
+});
+
+const deleteNote = f => f.route('src/app/api/apps/auth/context/[id]/route.ts')
+  .DELETE(new Request('https://example.test/api', { method: 'DELETE' }), { params: Promise.resolve({ id: 'note' }) });
+
+test('app DELETE permanently removes a note for its author and announces it once', async () => {
+  const f = appFixture(); f.context.token.scopes = ['context:write'];
+  const response = await deleteNote(f);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { deleted: true, id: 'note', title: 'needle' });
+  assert.deepEqual(f.state.deleted, ['note']); assert.equal(f.state.effects, 1);
+});
+
+for (const [label, arrange, status] of [
+  ['a token without the write scope', f => { f.context.token.scopes = ['context:read']; }, 403],
+  ['a caller whose workspace access was revoked', f => { f.context.workspace = f.ws[2]; f.note.workspaceId = 'revoked'; f.note.workspace = f.ws[2]; }, 403],
+  ["someone else's note, even with edit rights on it", f => { f.note.authorId = 'bob'; }, 404],
+  ['a note outside the workspace the token is for', f => { f.context.workspace = f.ws[0]; }, 404],
+  ['a personal note', f => { f.note.scope = 'PERSONAL'; }, 404],
+  ['an encrypted note', f => { f.note.isEncrypted = true; }, 400],
+  ['a secret document', f => { f.note.type = 'API_KEYS'; }, 400],
+]) test(`app DELETE refuses ${label} before any write or event`, async () => {
+  const f = appFixture(); f.context.token.scopes = ['context:write']; arrange(f);
+  const response = await deleteNote(f);
+  assert.equal(response.status, status);
+  assert.deepEqual(f.state.deleted, []); assert.equal(f.state.effects, 0);
 });

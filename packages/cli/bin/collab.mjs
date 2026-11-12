@@ -69,7 +69,7 @@ async function boundedInput(file) {
   } finally { clearTimeout(timer); if (file !== '-') stream.destroy(); }
 }
 function help() {
-  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors and issue deletion previews on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema', 'update'], workerCommands, coordinatorCommands, globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
+  return { name: 'collab', version: cliPackage.version, output: 'JSON on stdout; errors and deletion previews on stderr', commands: Object.fromEntries(Object.entries(commands).map(([name, spec]) => [name, { ...spec, options: [...Object.keys(spec.fields), ...Object.keys(spec.query), ...(spec.wait ? ['waitSeconds'] : []), ...Object.keys(spec.localOptions || {})].map(flagName) }])), localCommands: ['auth login', 'auth status', 'auth refresh', 'auth logout', 'config show', 'config set --workspace ID [--project ID]', 'schema', 'update'], workerCommands, coordinatorCommands, globals, input: '--input FILE|- for a JSON body, or named field flags; --content-file/--description-file FILE|- for text', pagination: '--all on issues list, notes list, worklogs list; at most 100 pages', scopes };
 }
 async function update() {
   const windows = process.platform === 'win32';
@@ -315,10 +315,18 @@ async function main() {
     } finally { process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop); }
   }
   if (spec.deletePreview) {
-    const previewPath = `/api/apps/auth/${endpoint}/delete-preview?${query}`;
-    const preview = checkedDeletePreview(await request(selected.base, previewPath, { token: selected.token, timeout }), args[0], query.get('projectId'));
-    // Bind the mutation to the resolved immutable ID rather than looking up the key again.
-    endpoint = `issues/${encodeURIComponent(preview.id)}`;
+    let preview;
+    if (name === 'notes delete') {
+      // Notes have no trash, so name the one that is about to go. Its content stays out of the preview.
+      const note = await request(selected.base, apiPath(), { token: selected.token, timeout });
+      if (note?.id !== args[0] || typeof note.title !== 'string') throw new CliError('invalid_preview', 'Deletion preview did not match the requested Note. No deletion was sent.', 5);
+      preview = { id: note.id, title: note.title, type: note.type, scope: note.scope, projectName: note.projectName ?? null, updatedAt: note.updatedAt };
+    } else {
+      const previewPath = `/api/apps/auth/${endpoint}/delete-preview?${query}`;
+      preview = checkedDeletePreview(await request(selected.base, previewPath, { token: selected.token, timeout }), args[0], query.get('projectId'));
+      // Bind the mutation to the resolved immutable ID rather than looking up the key again.
+      endpoint = `issues/${encodeURIComponent(preview.id)}`;
+    }
     if (options['dry-run']) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), preview };
     await new Promise((resolve, reject) => process.stderr.write(JSON.stringify({ deletePreview: preview }) + '\n', error => error ? reject(error) : resolve()));
   }
