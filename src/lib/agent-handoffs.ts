@@ -484,7 +484,7 @@ async function readInbox(db: Prisma.TransactionClient, context: InboxContext, ma
       ] }] }),
     }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: limit + 1,
     include: { issue: { select: { id: true, issueKey: true, title: true, projectId: true } },
-      claimedBy: { select: { name: true } }, sender: { select: { name: true } } } },
+      claimedBy: { select: { name: true } }, sender: { select: { name: true } } },
   });
   return { items: items.slice(0, limit), hasMore: items.length > limit };
 }
