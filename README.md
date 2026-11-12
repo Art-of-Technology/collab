@@ -311,8 +311,9 @@ Blocks tagged with another language remain code.
 In Notes, the source is hidden under the diagram until you choose **Show source**
 or move the cursor into it; in issue read mode, it is hidden after a successful
 render. Invalid diagrams leave the source visible with a short error. A diagram
-is fitted to the width of its block, and scrolls within it only when fitting
-would make it too small to read. Comments do
+is fitted to the width of its block, and scrolls sideways within it only when
+fitting would make it too small to read. **Full screen** above a diagram opens
+it over the whole window with zoom controls. Comments do
 not render diagrams, and stored content and API, CLI and MCP output are unchanged.
 
 Choose **Edit description** to make changes. Changes autosave as rich-editor HTML;
