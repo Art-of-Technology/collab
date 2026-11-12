@@ -187,33 +187,57 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     await prisma.agentReceipt.deleteMany();
     await assert.rejects(act(alice, handoff, 'worker-b', 'claim'), e => e.code === 'agent_not_found');
   });
-  await t.test('workspace monitor reads candidates and handoffs from one snapshot', async () => {
+  await t.test('workspace monitor does not list a claim that was completed while it was reading', async () => {
     const worker = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'worker-a' } } });
-    const row = await prisma.agentHandoff.create({ data: { id: 'snapshot-handoff', sourceKey: 'snapshot-handoff', workspaceId: 'w', issueId: 'i-w',
-      content: 'snapshot', recipientNames: ['worker-a'], claimedById: worker.id, status: 'claimed' } });
+    const row = await prisma.agentHandoff.create({ data: { id: 'changing-handoff', sourceKey: 'changing-handoff', workspaceId: 'w', issueId: 'i-w',
+      content: 'changing', recipientNames: ['worker-a'], claimedById: worker.id, status: 'claimed' } });
+    // The monitor first asks which handoffs are candidates, then reads them. This client completes the claim in between.
     let changed = false;
-    const wrap = db => new Proxy(db, { get(target, key) {
-      if (key === '$transaction') return (fn, options) => target.$transaction(tx => fn(wrap(tx)), options);
-      if (key === '$queryRaw') return async (...args) => {
-        const result = await target.$queryRaw(...args);
-        if (!changed) {
-          changed = true;
-          await prisma.agentHandoff.update({ where: { id: row.id }, data: { status: 'completed' } });
-        }
-        return result;
+    const between = new Proxy(publicPrisma, { get(target, key) {
+      if (key !== '$queryRaw') return typeof target[key] === 'function' ? target[key].bind(target) : target[key];
+      return async (...args) => {
+        const candidates = await target.$queryRaw(...args);
+        if (!changed) await prisma.agentHandoff.update({ where: { id: row.id }, data: { status: 'completed' } });
+        changed = true;
+        return candidates;
       };
-      const value = target[key];
-      return typeof value === 'function' ? value.bind(target) : value;
     } });
     const monitor = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'),
-      '@/lib/prisma': { prisma: wrap(publicPrisma) }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
+      '@/lib/prisma': { prisma: between }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
     try {
-      const result = await monitor.workspaceAgentInbox(alice, { state: 'claimed', agent: 'worker-a', limit: 50 });
+      const claimed = { state: 'claimed', agent: 'worker-a', limit: 50 };
+      assert.ok((await service.workspaceAgentInbox(alice, claimed)).items.some(item => item.id === row.id), 'listed while it is claimed');
+      const result = await monitor.workspaceAgentInbox(alice, claimed);
       assert.equal(changed, true);
-      assert.equal(result.items.find(item => item.id === row.id)?.status, 'claimed');
-      assert.equal((await service.workspaceAgentInbox(alice, { state: 'claimed', agent: 'worker-a', limit: 50 })).items.some(item => item.id === row.id), false);
+      assert.equal(result.items.some(item => item.id === row.id), false);
     } finally {
       await prisma.agentHandoff.delete({ where: { id: row.id } });
+    }
+  });
+  await t.test('workspace monitor reads on past a window of candidates that may not be shown', async () => {
+    // 505 old handoffs for bob's agent, then three for alice's. The monitor takes candidates 500 at a time.
+    const at = seconds => new Date(Date.UTC(2020, 0, 1, 0, 0, seconds));
+    const row = (id, recipient, seconds) => ({ id, sourceKey: id, workspaceId: 'w', issueId: 'i-w', content: id,
+      recipientNames: [recipient], createdAt: at(seconds), updatedAt: at(seconds) });
+    const bobs = Array.from({ length: 505 }, (_, i) => row(`window-${String(i).padStart(3, '0')}`, 'worker-b', i));
+    await prisma.agentHandoff.createMany({ data: [...bobs, ...['x', 'y', 'z'].map((id, i) => row(`window-${id}`, 'worker-a', 600 + i))] });
+    const monitor = limit => service.workspaceAgentInbox(alice, { state: 'unseen', limit });
+    const ids = page => Array.from(page.items, item => item.id);
+    try {
+      const first = await monitor(50);
+      assert.deepEqual([ids(first), first.hasMore], [bobs.slice(0, 50).map(item => item.id), true]);
+      await monitorAgreesWithInboxes({ prisma, service, context, viewer: alice });
+      // Bob loses access: the whole first window is his, and the page is filled from the next one.
+      await prisma.workspaceMember.updateMany({ where: { userId: 'bob' }, data: { status: false } });
+      const two = await monitor(2);
+      assert.deepEqual([ids(two), two.hasMore], [['window-x', 'window-y'], true]);
+      const three = await monitor(3);
+      assert.deepEqual(ids(three), ['window-x', 'window-y', 'window-z']);
+      assert.equal(three.hasMore, (await monitor(50)).items.length > 3);
+      await monitorAgreesWithInboxes({ prisma, service, context, viewer: alice });
+    } finally {
+      await prisma.workspaceMember.updateMany({ where: { userId: 'bob' }, data: { status: true } });
+      await prisma.agentHandoff.deleteMany({ where: { id: { startsWith: 'window-' } } });
     }
   });
   await t.test('workspace monitor and agent floor state a recipient user\'s issue access once, however many agents that user has', async () => {
