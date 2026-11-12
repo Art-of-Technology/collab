@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cloudinary } from '@/utils/cloudinary-server';
+import { getCurrentUser } from '@/lib/session';
 
 // Whitelist of allowed video MIME types
 const ALLOWED_VIDEO_TYPES = [
@@ -21,6 +22,10 @@ const MAX_VIDEO_SIZE = 50 * 1024 * 1024;
  */
 export async function POST(req: NextRequest) {
   try {
+    const actor = await getCurrentUser();
+    if (!actor) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const formData = await req.formData();
     const file = formData.get('video') as File | null;
     

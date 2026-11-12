@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cloudinary } from '@/utils/cloudinary-server';
+import { getCurrentUser } from '@/lib/session';
 
 /**
  * API route handler for uploading profile images from URLs to Cloudinary
@@ -8,11 +9,21 @@ import { cloudinary } from '@/utils/cloudinary-server';
  */
 export async function POST(req: NextRequest) {
   try {
+    const actor = await getCurrentUser();
+    if (!actor) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { imageUrl, filename, userId } = await req.json();
     
-    if (!imageUrl || !filename || !userId) {
+    const prefix = typeof filename === 'string' ? filename.match(/^profile_[^_]+_/)?.[0] : undefined;
+    const ownedPrefix = `${prefix ?? ''}${actor.id}_`;
+    if (userId !== actor.id || !prefix || !filename.startsWith(ownedPrefix) || !/^\d+_[a-z0-9]{0,6}$/.test(filename.slice(ownedPrefix.length))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (!imageUrl) {
       return NextResponse.json(
-        { error: 'Image URL, filename, and userId are required' },
+        { error: 'Image URL is required' },
         { status: 400 }
       );
     }
@@ -60,4 +71,4 @@ export const config = {
       sizeLimit: '10mb',
     },
   },
-}; 
+};

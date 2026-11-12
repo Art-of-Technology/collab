@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { systemAdminId } from "@/lib/system-admin";
 
 /**
  * Debug endpoint to check GitHub OAuth configuration
  * GET /api/github/oauth/debug
  */
 export async function GET(request: NextRequest) {
+  if (!await systemAdminId()) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json({
     environment: {
       GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID ? 'Set' : 'Missing',
