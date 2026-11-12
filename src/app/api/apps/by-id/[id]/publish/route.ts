@@ -23,11 +23,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Parse and validate request body
-    const body = await request.json();
-    const { status } = PublishRequestSchema.parse(body);
-
-    // Check if app exists and get latest version
+    // Check if app exists and get latest version, before the body is looked at: someone who may not
+    // change this app learns nothing from how a request is validated.
     // The status belongs to the app's owner and to system admins; for anyone else the app does not exist.
     const existingApp = await prisma.app.findFirst({
       where: { id, ...(actor.role === 'SYSTEM_ADMIN' ? {} : appOwnerWhere(actor.id)) },
@@ -46,6 +43,10 @@ export async function PATCH(
         { status: 404 }
       );
     }
+
+    // Parse and validate request body
+    const body = await request.json();
+    const { status } = PublishRequestSchema.parse(body);
 
     const latestVersion = existingApp.versions[0];
     if (!latestVersion) {

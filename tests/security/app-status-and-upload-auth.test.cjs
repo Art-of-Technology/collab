@@ -53,6 +53,7 @@ test('an app status is changed only by its owner or a system admin', async () =>
   }
   assert.equal(f.status('system'), 'PUBLISHED');
   assert.equal(f.status('mine'), 'DRAFT');
+  assert.equal((await f.setStatus('mine', 'NONSENSE')).status, 404, 'an invalid request for someone else\'s app is still not found');
 
   f.as(null);
   const reads = f.state.appReads;
