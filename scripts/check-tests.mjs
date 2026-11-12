@@ -12,12 +12,19 @@ const files = ['tests/security', 'tests/render'].flatMap(folder =>
   readdirSync(folder).filter(name => name.endsWith('.test.cjs')).sort().map(name => join(folder, name)));
 
 const failing = [];
+const errors = new Map();
 let passed = 0;
 // One file at a time, as `npm run test:security` does: several files start their own PostgreSQL.
 for await (const event of run({ files, concurrency: 1 })) {
   if (event.type === 'test:pass') passed++;
   // A test is named by its file and its own name, so a new failing subtest shows even when its parent already fails.
-  if (event.type === 'test:fail') failing.push(`${relative(process.cwd(), event.data.file ?? '')} > ${event.data.name}`);
+  if (event.type === 'test:fail') {
+    const line = `${relative(process.cwd(), event.data.file ?? '')} > ${event.data.name}`;
+    failing.push(line);
+    const error = event.data.details?.error;
+    if (!errors.has(line)) errors.set(line, []);
+    errors.get(line).push(String(error?.cause?.message ?? error?.message ?? '').split('\n').slice(0, 8));
+  }
 }
 failing.sort();
 
@@ -37,8 +44,11 @@ const fixed = extra(known, now);
 
 console.log(`${passed} passing, ${failing.length} failing, ${failing.length - regressions.length} of them listed in ${LIST}.`);
 if (regressions.length) {
-  console.log(`\nFailing and not listed (${regressions.length}). Run the file with \`node --test <file>\` for the error:`);
-  for (const line of regressions) console.log(`  ${line}`);
+  console.log(`\nFailing and not listed (${regressions.length}). \`node --test <file>\` shows the whole error:`);
+  for (const line of regressions) {
+    console.log(`  ${line}`);
+    for (const text of errors.get(line).shift()) console.log(`      ${text}`);
+  }
 }
 if (fixed.length) {
   console.log(`\nListed but passing now (${fixed.length}). Delete these lines from ${LIST}:`);
