@@ -65,7 +65,6 @@ function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement
       event.stopPropagation();
       event.preventDefault();
       setFull(false);
-      toggle.focus();
     }
   };
   const level = document.createElement('output');
@@ -107,6 +106,12 @@ function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement
         placeholder.replaceWith(box);
         delete box.dataset.windowFallback;
       }
+      box.classList.remove(FULL);
+      toggle.textContent = 'Full screen';
+      fitBlock();
+      // Moving the controls back to the block drops keyboard focus; return it to the control that opened the view.
+      toggle.focus();
+      return;
     }
     box.classList.toggle(FULL, full);
     toggle.textContent = full ? 'Exit full screen' : 'Full screen';

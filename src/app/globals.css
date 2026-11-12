@@ -666,7 +666,6 @@ textarea::selection {
 .mermaid-diagram-canvas {
   overflow: auto;
   overscroll-behavior: contain;
-  max-height: min(60vh, 32rem);
 }
 
 .mermaid-diagram-canvas::-webkit-scrollbar {
@@ -709,6 +708,7 @@ textarea::selection {
   position: fixed;
   inset: 0;
   z-index: 1000;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -726,7 +726,6 @@ textarea::selection {
 .mermaid-diagram-full .mermaid-diagram-canvas {
   flex: 1;
   min-height: 0;
-  max-height: none;
 }
 
 .mermaid-diagram-full .mermaid-diagram-bar {
