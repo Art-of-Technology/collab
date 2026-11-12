@@ -268,6 +268,16 @@ Collab is designed to streamline internal communication and work tracking by off
   [workspace permissions contract](docs/security/2026-09-23-hardening.md#scoped-permission-reads-and-resets).
   For custom-role names, grants and member assignments, see the
   [custom-role contract](docs/security/2026-09-23-hardening.md#custom-role-and-member-role-boundaries).
+  Workspace owners and system admins can choose **Workspaces** beside an active
+  member with an email address on the workspace page to manage that person's
+  membership in their other accessible workspaces where they can manage members. System admins can also
+  search **Users** at `/admin/users` and open a person to manage membership across
+  all workspaces. Switching a person on adds them without an invitation or email;
+  switching them off retains their membership row and role for later. New members
+  receive the MEMBER role. Workspace owners cannot be switched off, and agent
+  service accounts are managed on the workspace's **Agent tokens** page. A
+  non-system-admin can add a person to a new workspace only if they already share
+  a workspace; an existing inactive membership can be reactivated.
 - Open **Settings** in the bottom-left profile menu to reach your profile and notification settings, in either the expanded or collapsed sidebar. This action is disabled until a workspace is selected. The workspace settings index (`/workspaces/<workspaceId>/settings`) redirects to workspace management (`/workspaces/<workspaceId>`); the retired AI-key settings route remains unavailable.
 - Use the timeline to post status updates, tasks, and feature requests.
 - Use [Workspace Home](docs/workspace-dashboard.md) to review work across projects.
