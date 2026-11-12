@@ -22,6 +22,7 @@
 
 <!-- TABLE OF CONTENTS -->
 For project, issue and Notes automation, select **Collab CLI** in the sidebar or open `/docs/cli` on your Collab server for the CLI guide and searchable command reference, or read the [CLI package guide](packages/cli/README.md). Existing `/docs` links serve the same documentation and installation links. The legacy `/{workspace}/apps/collab-cli` URL redirects to the guide after the existing session, workspace membership and published-app checks; the CLI's OAuth registration and credentials remain in use. Other apps retain their workspace entrypoints. The developer console's API reference remains at `/dev/docs`.
+For Claude connectors and other remote MCP clients, see the [remote MCP guide](docs/mcp-remote.md).
 
 The public `/home` page leads with CLI installation and a terminal/shared-project showcase. Select any of the four read-only workflow examples to explore projects, issues, keyword search and bounded project context; the demo makes no CLI or API calls and does not start an agent. Motion can be paused and respects reduced-motion preferences. The secondary product preview uses labelled example data, and a FAQ explains how existing agents use the CLI and agent inboxes. Installation and command-reference links remain available; see [search availability requirements](docs/agent-search.md#semantic-readiness).
 For the app-auth API's bounded project overview, see [Project context for agents](docs/agent-project-context.md).
