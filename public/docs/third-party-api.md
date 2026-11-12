@@ -241,6 +241,8 @@ Both endpoints require `issues:read` and active access to the selected workspace
 
 The built-in standards cover BUG, STORY, EPIC, MILESTONE and TASK. Type matching is case-insensitive; SUBTASK and unknown types return 404 with `template_not_found`. A workspace can replace the standard for each supported type; an invalid stored template falls back to the standard. The `enforced` field reports the workspace setting.
 
+Before writing an issue, run `collab templates get TYPE` to read the workspace's current template and follow its sections and required fields.
+
 When `enforced` is `true`, `POST /api/apps/auth/issues` and `PATCH /api/apps/auth/issues/{issueId}` can answer 422 and write nothing when template requirements are missing, subject to the update rule below. For example, a workspace with a custom BUG template containing only these two sections might receive:
 
 ```json
