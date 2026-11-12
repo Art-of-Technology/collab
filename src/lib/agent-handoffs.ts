@@ -474,13 +474,19 @@ const inboxCursorSchema = z.tuple([id, id, z.enum(['unseen', 'claimed']), z.stri
 
 async function readInbox(context: InboxContext, matches: Prisma.AgentHandoffWhereInput[], limit: number,
   position?: { createdAt: Date; id: string }) {
-  const items = await prisma.agentHandoff.findMany({ where: { workspaceId: context.workspace.id,
-    issue: issueScope(context), OR: matches, ...(position && { AND: [{ OR: [
-      { createdAt: { gt: position.createdAt } }, { createdAt: position.createdAt, id: { gt: position.id } },
-    ] }] }),
-  }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: limit + 1,
-  include: { issue: { select: { id: true, issueKey: true, title: true, projectId: true } },
-    claimedBy: { select: { name: true } }, sender: { select: { name: true } } } });
+  // PostgreSQL's JIT compiles every expression of a statement before running it. This one has a
+  // branch per agent: at 76 agents compiling it took minutes in production, while running it takes
+  // a fraction of a second. JIT is therefore off for this statement only.
+  const [, items] = await prisma.$transaction([
+    prisma.$executeRaw`SET LOCAL jit = off`,
+    prisma.agentHandoff.findMany({ where: { workspaceId: context.workspace.id,
+      issue: issueScope(context), OR: matches, ...(position && { AND: [{ OR: [
+        { createdAt: { gt: position.createdAt } }, { createdAt: position.createdAt, id: { gt: position.id } },
+      ] }] }),
+    }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: limit + 1,
+    include: { issue: { select: { id: true, issueKey: true, title: true, projectId: true } },
+      claimedBy: { select: { name: true } }, sender: { select: { name: true } } } }),
+  ]);
   return { items: items.slice(0, limit), hasMore: items.length > limit };
 }
 
