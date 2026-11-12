@@ -120,6 +120,10 @@ export const commands = {
   'notes get': command('GET', 'context/:id'),
   'notes create': command('POST', 'context', noteFields, {}, { required: ['title', 'content'], defaultProject: true }),
   'notes update': command('PUT', 'context/:id', noteFields),
+  'notes delete': command('DELETE', 'context/:id', {}, {}, {
+    deletePreview: true,
+    description: 'Permanently delete one Note you authored, after reading its identity. Notes have no trash. Requires --yes; --dry-run reads only the preview without --yes.',
+  }),
   'context get': command('GET', 'ai-context', {}, { ...projectQuery, includeKnowledge: boolean, includePipeline: boolean,
     ...offset, maxTokens: integer, since: string }, {
     defaults: { maxTokens: 8000 },

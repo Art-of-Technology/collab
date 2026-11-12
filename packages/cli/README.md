@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.8.4 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.8.4) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.8.5 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.8.5) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+
+Version 0.8.5 adds `notes delete`, which permanently deletes one Note you authored after showing which one. It requires the matching server; an older server answers the deletion with an error and deletes nothing.
 
 Version 0.6.1 adds `collab update`, which reruns the one-command installer for the current platform from the installed native executable. Installations before 0.6.1 run the installer once more to pick it up.
 
@@ -120,7 +122,7 @@ See [search API behavior](../../docs/agent-search.md) and [project context seman
 | Issues | `issues list/get/create/update/delete/trash/restore/assign/activity` |
 | Collaboration | `comments list/add`, `relations list/add/delete`, `worklogs list/get/add/update/delete` |
 | Organization | `labels list/create`, `views list/get`, `members search` |
-| Notes/context | `notes list/get/create/update`, `context get`, `knowledge list/get` |
+| Notes/context | `notes list/get/create/update/delete`, `context get`, `knowledge list/get` |
 | Reports | `reports issues/workload/timeline/time` |
 
 IDs follow the command (`issues get APP-123`; `worklogs update APP-123 LOG_ID`). Camel-case API fields become kebab-case flags (`--due-date`, `--is-ai-context`, `--issue-prefix`). Boolean fields require `true` or `false`. Arrays are JSON (`--labels '["LABEL_ID"]'`). JSON null is available through `--input` where the server allows clearing a field.
@@ -131,6 +133,8 @@ printf '%s' '{"assigneeId":null}' | collab issues update APP-123 --input -
 collab notes create --title 'Runbook' --content-file runbook.md --type RUNBOOK
 collab issues delete APP-123 --project PROJECT_ID --dry-run
 collab issues delete APP-123 --project PROJECT_ID --yes
+collab notes delete NOTE_ID --dry-run
+collab notes delete NOTE_ID --yes
 collab issues trash --project PROJECT_ID
 collab issues restore APP-123 --project PROJECT_ID
 collab projects create --name 'Platform' --slug platform --issue-prefix PLAT --dry-run
@@ -138,9 +142,11 @@ collab projects create --name 'Platform' --slug platform --issue-prefix PLAT --d
 
 `--input FILE|-` accepts a JSON body; `--content-file`/`--description-file` accept text. Inputs are limited to 1 MiB and 30 seconds. Unknown flags/fields and duplicate assignments refuse before sending. `--dry-run` normally prints the planned method, URL and body (or the local callback configuration for `inbox watch`) without sending or invoking an adapter; body content may be private.
 
-Issue deletion moves one issue to trash, preserving its ID, key and comments for restoration. It requires a project selected with `--project`, `--project-id` or saved context. `issues delete ID --dry-run` makes one read-only preview request and prints the exact ID, key, title, project and affected issue/comment/relation/worklog counts; it does not require `--yes`. A real deletion still requires `--yes`, checks a fresh preview, prints it as a `deletePreview` JSON record on stderr, then deletes by the resolved immutable ID within that project. The final API result remains one JSON object on stdout. Failed or mismatched previews prevent deletion. Other deletion commands still require `--yes` even in dry-run.
+Issue deletion moves one issue to trash, preserving its ID, key and comments for restoration. It requires a project selected with `--project`, `--project-id` or saved context. `issues delete ID --dry-run` makes one read-only preview request and prints the exact ID, key, title, project and affected issue/comment/relation/worklog counts; it does not require `--yes`. A real deletion still requires `--yes`, checks a fresh preview, prints it as a `deletePreview` JSON record on stderr, then deletes by the resolved immutable ID within that project. The final API result remains one JSON object on stdout. Failed or mismatched previews prevent deletion. Deletion commands other than issues and Notes still require `--yes` even in dry-run.
 
-`issues trash` lists trashed issues in the selected project; `issues restore ID` restores the original issue. These commands require the matching server release. The CLI has no bulk deletion, delete-by-search, or permanent purge command. Use `issues update` to revise existing work instead of deleting and recreating it: recreation assigns a new issue ID/key and does not restore the original discussion.
+Note deletion is permanent: Notes have no trash and no restore. Only the Note's author can delete it, and only a Note the CLI can read in the selected workspace; secret documents are refused. `notes delete ID --dry-run` reads the Note and prints its ID, title, type, scope, project and last update without its content; it does not require `--yes`. A real deletion requires `--yes`, reads the Note again, prints that identity as a `deletePreview` JSON record on stderr, then deletes that ID. A Note that cannot be read, or a preview for a different ID, prevents deletion.
+
+`issues trash` lists trashed issues in the selected project; `issues restore ID` restores the original issue. These commands require the matching server release. The CLI has no bulk deletion or delete-by-search, and no permanent purge of issues. Use `issues update` to revise existing work instead of deleting and recreating it: recreation assigns a new issue ID/key and does not restore the original discussion.
 
 `--workspace ID` and `--project ID` override saved context per command. `--project-id` is a specific API body/query field. Default project context applies to issue creation, Note creation, supported filters and issue trash operations, not to project moves on update. Conflicting explicit `--project` and `--project-id` values are refused for issue trash operations. A workspace change clears the saved project unless a new project is explicitly verified. The server rechecks current membership on every request; a CLI context is not authorization.
 
@@ -181,7 +187,7 @@ For headless use, inject an existing Collab OAuth bearer token through your cred
 | 4 | Server authorization refused |
 | 5 | API, transport, pagination or uncertain-write failure |
 
-Errors are JSON records on stderr, with no raw remote error response body. An issue deletion error after preview follows the `deletePreview` record on a separate line. After an issue or Note mutation reports `outcome_unknown`, read the affected item or check `issues trash` before deciding whether to retry. Issue/Note edits do **not** provide idempotency keys or compare-and-swap updates; never interpret a timeout as proof a write did not happen. For handoff retry and ownership guarantees, see the [agent handoff API contract](../../docs/agent-handoffs.md#api-foundation). Concurrent agents should own separate issues/Notes or coordinate their edits. Forge-backed projects retain their existing write refusal; the CLI does not bypass it.
+Errors are JSON records on stderr, with no raw remote error response body. An issue or Note deletion error after preview follows the `deletePreview` record on a separate line. After an issue or Note mutation reports `outcome_unknown`, read the affected item or check `issues trash` before deciding whether to retry. Issue/Note edits do **not** provide idempotency keys or compare-and-swap updates; never interpret a timeout as proof a write did not happen. For handoff retry and ownership guarantees, see the [agent handoff API contract](../../docs/agent-handoffs.md#api-foundation). Concurrent agents should own separate issues/Notes or coordinate their edits. Forge-backed projects retain their existing write refusal; the CLI does not bypass it.
 
 ## Administrator setup
 

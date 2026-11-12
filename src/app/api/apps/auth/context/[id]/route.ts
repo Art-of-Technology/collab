@@ -1,8 +1,10 @@
 /**
  * Third-Party App API: Single Context Endpoint
  * GET /api/apps/auth/context/[id] - Get a single context document by ID
+ * PUT /api/apps/auth/context/[id] - Update a context document
+ * DELETE /api/apps/auth/context/[id] - Permanently delete a context document
  *
- * Required scopes: context:read
+ * Required scopes: context:read (GET), context:write (PUT, DELETE)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -13,7 +15,9 @@ import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { NoteType, NoteScope } from '@prisma/client';
 import { z } from 'zod';
-import { emitContextUpdated } from '@/lib/event-bus';
+import { emitContextDeleted, emitContextUpdated } from '@/lib/event-bus';
+
+const SECRET_TYPES: NoteType[] = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
 
 /**
  * GET /api/apps/auth/context/[id]
@@ -210,8 +214,7 @@ export const PUT = withAppAuth(
         );
       }
 
-      const secretTypes: NoteType[] = [NoteType.ENV_VARS, NoteType.API_KEYS, NoteType.CREDENTIALS];
-      if (existingNote.isEncrypted || secretTypes.includes(existingNote.type) || (updateData.type && secretTypes.includes(updateData.type))) {
+      if (existingNote.isEncrypted || SECRET_TYPES.includes(existingNote.type) || (updateData.type && SECRET_TYPES.includes(updateData.type))) {
         return NextResponse.json(
           { error: 'invalid_request', error_description: 'Cannot update secret documents via this endpoint' },
           { status: 400 }
@@ -355,3 +358,86 @@ export const PUT = withAppAuth(
   { requiredScopes: ['context:write'] }
 );
 
+/**
+ * DELETE /api/apps/auth/context/[id]
+ * Permanently delete a context document. Notes have no trash.
+ */
+export const DELETE = withAppAuth(
+  async (_request: NextRequest, context: AppAuthContext, routeParams: { params: Promise<{ id: string }> }) => {
+    try {
+      if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
+        return NextResponse.json(
+          { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
+          { status: 403 }
+        );
+      }
+      const { id } = await routeParams.params;
+      const access = await canAccessNote(context.user.id, id);
+      // As in the web app, only the author deletes. The note must also be one this API can read:
+      // in the token's workspace and not personal.
+      const note = access.canDelete ? await prisma.note.findFirst({
+        where: {
+          id,
+          authorId: context.user.id,
+          workspaceId: context.workspace.id,
+          scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },
+        },
+        select: { id: true, title: true, type: true, isEncrypted: true },
+      }) : null;
+      if (!note) {
+        return NextResponse.json(
+          { error: 'context_not_found', error_description: 'Context document not found or delete denied' },
+          { status: 404 }
+        );
+      }
+      if (note.isEncrypted || SECRET_TYPES.includes(note.type)) {
+        return NextResponse.json(
+          { error: 'invalid_request', error_description: 'Cannot delete secret documents via this endpoint' },
+          { status: 400 }
+        );
+      }
+
+      const deleted = await prisma.note.deleteMany({
+        where: {
+          id: note.id,
+          authorId: context.user.id,
+          workspaceId: context.workspace.id,
+          workspace: { OR: [
+            { ownerId: context.user.id },
+            { members: { some: { userId: context.user.id, status: true } } },
+          ] },
+          scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },
+          type: { notIn: SECRET_TYPES },
+          isEncrypted: false,
+        },
+      });
+      if (deleted.count === 0) {
+        return NextResponse.json(
+          { error: 'context_not_found', error_description: 'Context document not found or delete denied' },
+          { status: 404 }
+        );
+      }
+
+      // Fire-and-forget: emit context event for Qdrant sync
+      emitContextDeleted(
+        { id: note.id },
+        {
+          workspaceId: context.workspace.id,
+          workspaceName: context.workspace.name,
+          workspaceSlug: context.workspace.slug,
+          source: 'mcp',
+        },
+        { async: true }
+      ).catch((err) => console.error('Failed to emit context.deleted from MCP:', err));
+
+      return NextResponse.json({ deleted: true, id: note.id, title: note.title });
+    } catch (error) {
+      console.error('Error deleting context document:', error);
+      return NextResponse.json(
+        { error: 'server_error', error_description: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  },
+  { requiredScopes: ['context:write'] }
+);
