@@ -1,4 +1,6 @@
+import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
+import { systemAdminId } from '@/lib/system-admin';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, Shield, UserCheck } from 'lucide-react';
@@ -27,6 +29,8 @@ async function getUsers() {
 }
 
 export default async function AdminUsersPage() {
+  // The admin layout only redirects in the browser; without this the list is sent to anyone who asks.
+  if (!await systemAdminId()) notFound();
   const users = await getUsers();
   const adminCount = users.filter(u => u.role === 'SYSTEM_ADMIN').length;
 

@@ -1,0 +1,69 @@
+const { assert, test, load } = require('./helpers.cjs');
+
+// The admin layout only redirects in the browser, so each page must refuse on the server before it reads anything.
+function fixture() {
+  const users = [
+    { id: 'root', name: 'Root', email: 'root@example.test', role: 'SYSTEM_ADMIN', createdAt: new Date(), _count: { workspaceMemberships: 1 } },
+    { id: 'bob', name: 'Bob', email: 'bob@example.test', role: 'DEVELOPER', createdAt: new Date(), _count: { workspaceMemberships: 2 } },
+  ];
+  const state = { session: null, reads: [] };
+  const prisma = {
+    user: {
+      findUnique: async ({ where }) => users.find(row => row.id === where.id) ?? null,
+      findMany: async () => { state.reads.push('users'); return users; },
+    },
+    app: { findMany: async () => { state.reads.push('apps'); return []; } },
+  };
+  const tag = name => name;
+  const ui = names => Object.fromEntries(names.map(name => [name, tag(name)]));
+  const deps = {
+    'react/jsx-runtime': require('react/jsx-runtime'), react: require('react'),
+    'next/navigation': { notFound() { throw new Error('NOT_FOUND'); } },
+    'next/link': { default: 'a' }, 'next/image': { default: 'img' },
+    'lucide-react': new Proxy({}, { get: (_, name) => name }),
+    '@/lib/prisma': { prisma },
+    '@/lib/request-session': { getServerSession: async () => state.session },
+    '@/lib/auth-options': { authOptions: {} },
+    '@/components/ui/card': ui(['Card', 'CardContent', 'CardDescription', 'CardHeader', 'CardTitle']),
+    '@/components/ui/badge': ui(['Badge']), '@/components/ui/user-avatar': ui(['UserAvatar']),
+    '@/components/ui/skeleton': ui(['Skeleton']), '@/components/ui/alert': ui(['Alert', 'AlertDescription', 'AlertTitle']),
+    '@/components/ui/button': ui(['Button']),
+    './SystemAppToggle': ui(['SystemAppToggle']), './AppConfigEditor': ui(['AppConfigEditor']),
+  };
+  deps['@/lib/system-admin'] = load('src/lib/system-admin.ts', deps);
+  const pages = {
+    users: load('src/app/admin/users/page.tsx', deps, { Date }).default,
+    apps: load('src/app/admin/system-apps/page.tsx', deps, { Date }).default,
+  };
+  // Runs a page as the server does: an async component under a Suspense boundary is awaited too.
+  const render = async page => {
+    let node = await pages[page]();
+    while (typeof node?.props?.children?.type === 'function') node = await node.props.children.type(node.props.children.props);
+    return node;
+  };
+  const as = (id, role) => { state.session = id ? { user: { id, role } } : null; };
+  return { state, users, render, as };
+}
+
+for (const page of ['users', 'apps']) {
+  test(`the admin ${page} page reads nothing for a visitor who is not a system admin`, async () => {
+    const f = fixture();
+    for (const [id, role, why] of [
+      [null, null, 'no session'],
+      ['bob', 'DEVELOPER', 'an ordinary user'],
+      ['bob', 'SYSTEM_ADMIN', 'a session that claims the role the account does not have'],
+      ['gone', 'SYSTEM_ADMIN', 'a session for an account that no longer exists'],
+    ]) {
+      f.as(id, role);
+      await assert.rejects(f.render(page), /NOT_FOUND/, why);
+    }
+    assert.deepEqual(f.state.reads, []);
+  });
+
+  test(`the admin ${page} page loads for a system admin`, async () => {
+    const f = fixture();
+    f.as('root', 'SYSTEM_ADMIN');
+    assert.ok(await f.render(page));
+    assert.deepEqual(f.state.reads, [page]);
+  });
+}

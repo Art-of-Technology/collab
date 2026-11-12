@@ -1,5 +1,7 @@
 import { Suspense } from 'react';
+import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
+import { systemAdminId } from '@/lib/system-admin';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Puzzle, Info, ExternalLink } from 'lucide-react';
@@ -246,7 +248,9 @@ function SystemAppsSkeleton() {
   );
 }
 
-export default function SystemAppsPage() {
+export default async function SystemAppsPage() {
+  // The admin layout only redirects in the browser; without this the apps are sent to anyone who asks.
+  if (!await systemAdminId()) notFound();
   return (
     <Suspense fallback={<SystemAppsSkeleton />}>
       <SystemAppsContent />
