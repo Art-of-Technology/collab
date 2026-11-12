@@ -22,7 +22,7 @@ async function serviceAccounts(db: Pick<typeof prisma, 'appToken' | 'user'>, app
   return ids.length ? db.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [];
 }
 
-/** Live agent tokens of a workspace, or null while the agent app is not provisioned and published. */
+/** Unrevoked agent tokens of a workspace, or null while the agent app is not provisioned and published. */
 export async function listAgentTokens(workspaceId: string) {
   const app = await agentApp();
   if (app?.status !== 'PUBLISHED') return null;
@@ -97,7 +97,7 @@ export async function createAgentToken(input: {
   return { id: created.id, name: created.name, scopes, expiresAt, token };
 }
 
-/** Revoke one agent token of this workspace. False when it is not a live agent token here. */
+/** Revoke one agent token of this workspace. False when it is absent or already revoked. */
 export async function revokeAgentToken(input: { workspaceId: string; actorId: string; tokenId: string }) {
   const app = await agentApp();
   if (!app) return false;
