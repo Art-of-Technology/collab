@@ -48,7 +48,7 @@ export default function WorkspaceDetailClient({ workspaceId, initialWorkspace }:
   // Check if user can invite members
   const { hasPermission: canInviteMembers } = useCanInviteMembers(workspaceId);
   // The member workspaces screen checks this same permission on the server.
-  const { hasPermission: canManageMembers } = useCanManageMembers(workspaceId);
+  const { hasPermission: canManageMembers } = useCanManageMembers(workspace?.id || initialWorkspace?.id);
 
   // Use the fetched data or fallback to initial data
   const workspaceData = workspace || initialWorkspace;
