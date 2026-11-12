@@ -1,0 +1,51 @@
+name: Tests and build
+# The other workflows run a few test files for the paths they watch. This one runs for every change:
+# the whole security and render suites, the type check, and the production build.
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: tests-and-build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  full-tests:
+    name: full tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npx prisma generate
+      - name: Install local PostgreSQL test binaries
+        run: sudo apt-get update && sudo apt-get install -y postgresql
+      - name: Type check
+        run: npx tsc --noEmit -p .
+      - name: Security and render tests, compared with tests/known-failures.txt
+        run: npm test
+  production-build:
+    name: production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npx prisma generate
+      # The release builder gives the build a 3072 MB heap. A change that needs more fails here
+      # instead of at release time. Do not raise this number to make a change fit.
+      - name: Build with the release builder's heap limit
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          NEXT_PUBLIC_APP_URL: https://collab.weez.boo
+          NODE_OPTIONS: --max-old-space-size=3072
+        run: node node_modules/next/dist/bin/next build --webpack
