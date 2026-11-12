@@ -312,6 +312,17 @@ curl -X POST /api/oauth/revoke \
 - The endpoint always returns HTTP 200 to prevent information disclosure
 - Client authentication is required for security
 
+## Discovery for the MCP endpoint
+
+Two discovery documents advertise sign-in endpoints for the planned MCP endpoint (`/api/mcp`); the endpoint itself is not included in this change. They use the HTTP(S) origin of `NEXTAUTH_URL`, ignoring any path or trailing slash, and answer `503` when it is missing or invalid.
+
+| Document | Content |
+| --- | --- |
+| `GET /.well-known/oauth-protected-resource` and `GET /.well-known/oauth-protected-resource/api/mcp` ([RFC 9728](https://www.rfc-editor.org/rfc/rfc9728)) | `resource` (`<origin>/api/mcp`), one `authorization_servers` entry (the origin), `scopes_supported`, `bearer_methods_supported: ["header"]` |
+| `GET /.well-known/oauth-authorization-server` ([RFC 8414](https://www.rfc-editor.org/rfc/rfc8414)) | `issuer` (the origin), the system-app endpoints `/api/oauth/mcp/authorize` and `/api/oauth/mcp/token`, `code_challenge_methods_supported: ["S256"]`, `token_endpoint_auth_methods_supported: ["none"]`, `scopes_supported` |
+
+The authorization server document describes the system-app endpoints only: public clients with PKCE. It lists no registration or revocation endpoint and no `offline_access` scope. A client must be registered beforehand; the connector client is `collab-connector`, created by `scripts/setup-agent-apps.mjs` with the exact callback `https://claude.ai/api/mcp/auth_callback`. Loopback callbacks for native clients follow the system-app rule above. Installed third-party apps keep using the endpoints documented on this page and do not use discovery.
+
 ## Supported Scopes
 
 The authoritative scope registry is `SUPPORTED_SCOPES` in [oauth-scopes.ts](../src/lib/oauth-scopes.ts). For example, `issues:read` permits reading issues and `issues:write` permits modifying them. Generic `read`/`write` and unlisted resource scopes are not supported. Requested scopes must also satisfy the [current permission ceiling](#current-permission-ceiling); omission follows the [authorization parameters](#1-authorization-endpoint).

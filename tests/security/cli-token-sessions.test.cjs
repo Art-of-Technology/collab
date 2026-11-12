@@ -44,7 +44,7 @@ function fixture(clientId = 'collab-cli') {
   };
   const login = async (code, scope) => { const response = await exchange(grant(code, scope)); assert.equal(response.status, 200); return response.body; };
   const auth = (token, scope = 'issues:read') => authenticateAppRequest({ headers: new Headers({ Authorization: `Bearer ${token}` }) }, { requiredScopes: [scope] });
-  return { rows, exchange, grant, login, auth, prisma, logs, crypto: deps['@/lib/apps/crypto'] };
+  return { rows, exchange, grant, login, auth, prisma, logs, post: POST, crypto: deps['@/lib/apps/crypto'] };
 }
 
 test('CLI logins on two machines retain independent access, refresh, scopes and revocation', async () => {
@@ -152,4 +152,21 @@ test('refresh reports encryption configuration errors even when no tokens exist'
   const result = await f.exchange({ grant_type: 'refresh_token', refresh_token: 'unknown' });
   assert.equal(result.status, 500);
   assert.equal(result.body.error, 'server_error');
+});
+
+test('a connector exchanges and refreshes with form bodies and an extra resource parameter, and a dead refresh token is invalid_grant', async () => {
+  const f = fixture('collab-connector');
+  const form = fields => f.post({ headers: new Headers({ 'content-type': 'application/x-www-form-urlencoded' }), formData: async () => new Map(Object.entries({ client_id: 'collab-connector', resource: 'https://collab.example.test/api/mcp', ...fields })) });
+  const issued = await form(f.grant('connector'));
+  assert.equal(issued.status, 200);
+  assert.equal(issued.body.token_type, 'Bearer');
+  assert.equal((await f.auth(issued.body.access_token)).success, true);
+
+  const refreshed = await form({ grant_type: 'refresh_token', refresh_token: issued.body.refresh_token });
+  assert.equal(refreshed.status, 200);
+  assert.equal((await f.auth(refreshed.body.access_token)).success, true);
+
+  const dead = await form({ grant_type: 'refresh_token', refresh_token: 'collab_rt_unknown' });
+  assert.equal(dead.status, 400);
+  assert.equal(dead.body.error, 'invalid_grant');
 });
