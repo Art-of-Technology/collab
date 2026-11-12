@@ -15,6 +15,7 @@ function fixture() {
       { userId: 'dave', role: 'ADMIN', status: false },
     ] },
     { id: 'w2', slug: 'two', name: 'Two', ownerId: 'erin', members: [] },
+    { id: 'w3', slug: 'three', name: 'Three', ownerId: 'alice', members: [] },
   ];
   const users = ['alice', 'bob', 'carol', 'dave', 'erin'].map(id => ({ id, name: id, email: `${id}@example.test`, role: 'DEVELOPER' }));
   users.push({ id: 'root', name: 'root', email: 'root@example.test', role: 'SYSTEM_ADMIN' });
@@ -27,6 +28,7 @@ function fixture() {
     workspace: {
       findUnique: async ({ where }) => workspaces.find(row => matches(row, where)) ?? null,
       findFirst: async ({ where }) => workspaces.find(row => matches(row, where)) ?? null,
+      findMany: async ({ where }) => workspaces.filter(row => matches(row, where)),
     },
     user: {
       findUnique: async ({ where, include }) => {
@@ -52,8 +54,12 @@ function fixture() {
         members.push(row);
         return row;
       },
+      findMany: async ({ where }) => workspaces
+        .flatMap(row => row.members.map(member => ({ ...member, workspaceId: row.id, workspace: row })))
+        .filter(row => matches(row, where)),
       updateMany: async ({ where, data }) => {
-        const rows = (workspace(where.workspaceId)?.members ?? []).filter(row => row.userId === where.userId);
+        const rows = workspaces.filter(row => !where.workspaceId || row.id === where.workspaceId)
+          .flatMap(row => row.members).filter(row => row.userId === where.userId);
         rows.forEach(row => Object.assign(row, data));
         return { count: rows.length };
       },
@@ -101,9 +107,15 @@ function fixture() {
   const mint = (body = {}, workspaceId = 'w1') => collection.POST(
     { json: async () => ({ name: 'Claude', ...body }) }, { params: Promise.resolve({ workspaceId }) });
   const revoke = (tokenId, workspaceId = 'w1') => item.DELETE({}, { params: Promise.resolve({ workspaceId, tokenId }) });
+  const access = (tokenId, target, allowed = true, workspaceId = 'w1') => item.PATCH(
+    { json: async () => ({ workspaceId: target, allowed }) }, { params: Promise.resolve({ workspaceId, tokenId }) });
+  // What a token's own request sees, with or without naming another workspace.
+  const switched = (token, query = '') => withAppAuth(async (request, context) => ({ status: 200, workspace: context.workspace.id, user: context.user.id }), { requiredScopes: ['issues:read'] })(
+    { url: `https://collab.test/api/apps/auth/issues${query}`, headers: new Headers({ Authorization: `Bearer ${token}` }) });
   const auth = (token, scope = 'issues:read') => authenticateAppRequest({ headers: new Headers({ Authorization: `Bearer ${token}` }) }, { requiredScopes: [scope] });
   const writes = () => JSON.stringify([users.length, tokens.length, audit.length, workspaces.map(row => row.members)]);
-  return { apps, agentApp, cliApp, workspaces, users, tokens, audit, logs, prisma, deps, collection, as, mint, revoke, auth, writes, withAppAuth, workspace };
+  deps.item = item;
+  return { apps, agentApp, cliApp, workspaces, users, tokens, audit, logs, prisma, deps, collection, as, mint, revoke, access, switched, auth, writes, withAppAuth, workspace };
 }
 
 test('an admin mints a token that authenticates as a named service account', async () => {
@@ -312,7 +324,7 @@ test('a person who shares the name is never reused as the service account', asyn
   assert.notEqual(f.tokens.find(row => row.id === id).userId, 'bob');
 });
 
-test('a service token cannot switch to another workspace and stops when its member is switched off', async () => {
+test('a service token cannot switch to a workspace it was not given and stops when its member is switched off', async () => {
   const f = fixture();
   f.as('alice');
   const { token } = (await f.mint()).body;
@@ -454,4 +466,122 @@ test('an account removed from the workspace is not brought back while it still h
   assert.equal(f.tokens.find(row => row.id === fresh.body.id).userId, account, 'the same account is used again');
   assert.equal((await f.auth(fresh.body.token)).success, true);
   assert.equal((await f.auth(old.token)).error.statusCode, 401);
+});
+
+const three = [{ id: 'w3', name: 'Three', slug: 'three' }];
+
+test('someone who manages both workspaces lets an agent into a second one, and its token can then switch there', async () => {
+  const f = fixture();
+  f.as('alice');
+  const { token, id } = (await f.mint({ access: 'write' })).body;
+  const account = f.tokens[0].userId;
+  assert.equal((await f.switched(token, '?workspaceId=w3')).status, 403);
+
+  const granted = await f.access(id, 'w3');
+  assert.equal(granted.status, 200);
+  assert.equal(JSON.stringify(granted.headers), JSON.stringify(noStore));
+  const member = f.workspace('w3').members.find(row => row.userId === account);
+  assert.equal(member.role, 'MEMBER');
+  assert.equal(member.status, true);
+  assert.equal(JSON.stringify(await f.switched(token, '?workspaceId=w3')), JSON.stringify({ status: 200, workspace: 'w3', user: account }));
+  assert.equal((await f.switched(token, '?workspace=three')).workspace, 'w3');
+  assert.equal((await f.switched(token)).workspace, 'w1', 'without the argument it stays in its own workspace');
+  assert.equal((await f.switched(token, '?workspaceId=w2')).status, 403, 'only the workspace it was given');
+
+  const listed = await f.deps['@/lib/agent-tokens'].listAgentTokens('w1');
+  assert.equal(JSON.stringify(listed[0].workspaces), JSON.stringify(three));
+  const row = f.audit.at(-1);
+  assert.equal(JSON.stringify([row.workspaceId, row.actorId, row.action, row.details.serviceUserId, row.details.name, row.details.homeWorkspaceId]),
+    JSON.stringify(['w3', 'alice', 'agent_token.workspace_added', account, 'Claude', 'w1']));
+  const before = f.writes();
+  assert.equal((await f.access(id, 'w3')).status, 200);
+  assert.equal(f.writes(), before, 'giving it again changes and records nothing');
+});
+
+test('letting an agent into another workspace needs the permission in both, and a refusal writes nothing', async () => {
+  const f = fixture();
+  f.as('alice');
+  const { id } = (await f.mint()).body, gone = (await f.mint({ name: 'Gone' })).body;
+  await f.revoke(gone.id);
+  f.tokens.push({ id: 'cli-token', appId: 'cli-app', workspaceId: 'w1', userId: 'alice', installationId: null, isRevoked: false });
+  const before = f.writes();
+  for (const [user, tokenId, target, through, status, why, allowed = true] of [
+    [null, id, 'w3', 'w1', 401, 'no session'],
+    ['bob', id, 'w3', 'w1', 403, 'a member without the permission'],
+    ['alice', id, 'w2', 'w1', 403, 'manages the agent\'s workspace but not the other one'],
+    ['erin', id, 'w2', 'w1', 403, 'manages the other workspace but not the agent\'s'],
+    ['root', id, 'w3', 'w2', 404, 'the token is not of the workspace in the path'],
+    ['root', id, 'missing', 'w1', 404, 'the other workspace does not exist'],
+    ['alice', id, 'w1', 'w1', 404, 'its own workspace is not another one'],
+    ['alice', gone.id, 'w3', 'w1', 404, 'a revoked token'],
+    ['alice', 'cli-token', 'w3', 'w1', 404, 'a CLI login is not an agent token'],
+    ['alice', id, 'w2', 'w1', 404, 'nothing to take away in a workspace the agent was never in', false],
+    ['alice', id, 'missing', 'w1', 404, 'nor in one that does not exist', false],
+  ]) {
+    f.as(user);
+    const refused = await f.access(tokenId, target, allowed, through);
+    assert.equal(refused.status, status, why);
+    assert.equal(JSON.stringify(refused.headers), JSON.stringify(noStore));
+  }
+  f.as('alice');
+  for (const body of [null, {}, { workspaceId: 'w3' }, { allowed: true }, { workspaceId: '', allowed: true }, { workspaceId: 'w3', allowed: 'yes' },
+    { workspaceId: 'w3', allowed: true, role: 'ADMIN' }]) {
+    const invalid = await f.deps.item.PATCH({ json: async () => body }, { params: Promise.resolve({ workspaceId: 'w1', tokenId: id }) });
+    assert.equal(invalid.status, 400, JSON.stringify(body));
+  }
+  assert.equal(f.writes(), before);
+});
+
+test('taking the workspace away stops the switch, and the last revoked token switches the agent off everywhere', async () => {
+  const f = fixture();
+  f.as('alice');
+  const first = (await f.mint()).body;
+  const account = f.tokens[0].userId;
+  const member = () => f.workspace('w3').members.find(row => row.userId === account);
+  await f.access(first.id, 'w3');
+  assert.equal((await f.switched(first.token, '?workspaceId=w3')).status, 200);
+
+  f.as('carol'); // manages agent tokens in w1 only: enough to pull the agent back, not to send it anywhere
+  assert.equal((await f.access(first.id, 'w3')).status, 403);
+  assert.equal((await f.access(first.id, 'w3', false)).status, 200);
+  assert.equal(member().status, false);
+  assert.equal((await f.switched(first.token, '?workspaceId=w3')).status, 403);
+  assert.equal((await f.switched(first.token)).workspace, 'w1', 'its own workspace is untouched');
+  assert.equal(JSON.stringify((await f.deps['@/lib/agent-tokens'].listAgentTokens('w1'))[0].workspaces), '[]');
+  assert.equal(JSON.stringify([f.audit.at(-1).workspaceId, f.audit.at(-1).actorId, f.audit.at(-1).action]), JSON.stringify(['w3', 'carol', 'agent_token.workspace_removed']));
+
+  f.as('alice');
+  await f.access(first.id, 'w3');
+  assert.equal(member().status, true);
+  await f.revoke(first.id);
+  assert.equal(member().status, false, 'no usable token left: off in every workspace');
+  const fresh = (await f.mint()).body;
+  assert.equal(f.tokens.find(row => row.id === fresh.id).userId, account, 'the same account is used again');
+  assert.equal((await f.switched(fresh.token)).workspace, 'w1');
+  assert.equal((await f.switched(fresh.token, '?workspaceId=w3')).status, 403, 'a new token does not bring the other workspace back');
+});
+
+test('a workspace an agent was let into can switch it off without touching its own workspace', async () => {
+  const f = fixture();
+  f.as('alice');
+  const { token, id } = (await f.mint()).body;
+  await f.access(id, 'w3');
+  f.workspace('w3').members.find(row => row.userId === f.tokens[0].userId).status = false; // switched off in that workspace's Members list
+  assert.equal((await f.switched(token, '?workspaceId=w3')).status, 403);
+  assert.equal((await f.switched(token)).workspace, 'w1');
+});
+
+test('the agent tokens page offers only the other workspaces the viewer manages', async () => {
+  const f = fixture(), p = page(f);
+  f.as('alice');
+  const { id } = (await f.mint()).body;
+  await f.access(id, 'w3');
+  f.workspace('w2').members.push({ userId: 'alice', role: 'MEMBER', status: true }); // a member there, without the permission
+  const manager = await p.render('w1');
+  assert.equal(JSON.stringify(manager.props.workspaces), JSON.stringify(three));
+  assert.equal(JSON.stringify(manager.props.tokens[0].workspaces), JSON.stringify(three));
+  f.as('carol');
+  const limited = await p.render('w1');
+  assert.equal(JSON.stringify(limited.props.workspaces), '[]', 'carol manages no other workspace');
+  assert.equal(JSON.stringify(limited.props.tokens[0].workspaces), JSON.stringify(three), 'but she sees where the agent can go');
 });

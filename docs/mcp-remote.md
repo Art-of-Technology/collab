@@ -26,7 +26,7 @@ Every request needs `Authorization: Bearer <token>`. Any token the API accepts w
 | `413` | The request body is larger than 1 MiB. |
 | `503` | Authentication is temporarily unavailable. Retry; do not sign in again. |
 
-A token works in the workspace it was issued for. A member's token may name another of their workspaces with the `workspaceId` argument, so text an agent reads in one workspace could steer it into another. An agent token's service account belongs to one workspace only: use one to confine an agent.
+A token works in the workspace it was issued for. A member's token may name another of their workspaces with the `workspaceId` argument, so text an agent reads in one workspace could steer it into another. An agent token's service account starts in one workspace only: use one to confine an agent. Someone who may manage agent tokens in two workspaces can let an agent into the second one (**Workspaces** on the Agent tokens page); its tokens can then name that workspace too, and the same caution applies.
 
 ## Connect Claude
 

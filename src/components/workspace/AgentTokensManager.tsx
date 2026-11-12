@@ -11,12 +11,21 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+
+export interface WorkspaceRef {
+  id: string;
+  name: string;
+  slug: string;
+}
 
 export interface AgentTokenRow {
   id: string;
   name: string;
+  /** Other workspaces the token's agent was let into. */
+  workspaces: WorkspaceRef[];
   access: 'read' | 'write';
   createdAt: string;
   expiresAt: string | null;
@@ -25,13 +34,15 @@ export interface AgentTokenRow {
 
 interface AgentTokensManagerProps {
   workspaceId: string;
+  /** Other workspaces where the viewer may manage agent tokens, so an agent can be let into them. */
+  workspaces: WorkspaceRef[];
   /** null while agent tokens are not set up on this deployment. */
   tokens: AgentTokenRow[] | null;
 }
 
 const accessLabel = { read: 'Read only', write: 'Read and write' } as const;
 
-export default function AgentTokensManager({ workspaceId, tokens }: AgentTokensManagerProps) {
+export default function AgentTokensManager({ workspaceId, workspaces, tokens }: AgentTokensManagerProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [creating, setCreating] = useState(false);
@@ -42,6 +53,11 @@ export default function AgentTokensManager({ workspaceId, tokens }: AgentTokensM
   const [minted, setMinted] = useState<{ name: string; token: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [revoking, setRevoking] = useState<AgentTokenRow | null>(null);
+  const [managingId, setManagingId] = useState<string | null>(null);
+  // Read from the current rows, so the switches follow each refresh.
+  const managing = tokens?.find(token => token.id === managingId) ?? null;
+  // The workspaces the viewer may add, and any the agent already has: those can always be taken away.
+  const choices = (token: AgentTokenRow) => [...workspaces, ...token.workspaces.filter(row => !workspaces.some(mine => mine.id === row.id))];
 
   const failed = (description: string) => toast({ title: 'Error', description, variant: 'destructive' });
 
@@ -81,6 +97,29 @@ export default function AgentTokensManager({ workspaceId, tokens }: AgentTokensM
       router.refresh();
     } catch {
       failed('Failed to revoke the token');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setWorkspace = async (target: WorkspaceRef, allowed: boolean) => {
+    if (!managing) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/agent-tokens/${managing.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: target.id, allowed }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return failed(data.error || 'Failed to change the workspace');
+      toast({
+        title: allowed ? 'Workspace added' : 'Workspace removed',
+        description: `${managing.name} can ${allowed ? 'now' : 'no longer'} work in ${target.name}.`,
+      });
+      router.refresh();
+    } catch {
+      failed('Failed to change the workspace');
     } finally {
       setBusy(false);
     }
@@ -141,7 +180,14 @@ export default function AgentTokensManager({ workspaceId, tokens }: AgentTokensM
               <TableBody>
                 {tokens.map(token => (
                   <TableRow key={token.id}>
-                    <TableCell className="font-medium">{token.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {token.name}
+                      {token.workspaces.length > 0 && (
+                        <div className="text-xs font-normal text-muted-foreground">
+                          Also works in {token.workspaces.map(row => row.name).join(', ')}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>{accessLabel[token.access]}</TableCell>
                     <TableCell>{token.createdAt}</TableCell>
                     <TableCell>
@@ -149,6 +195,11 @@ export default function AgentTokensManager({ workspaceId, tokens }: AgentTokensM
                       {token.expired && <Badge variant="destructive" className="ml-2">Expired</Badge>}
                     </TableCell>
                     <TableCell className="text-right">
+                      {choices(token).length > 0 && (
+                        <Button variant="outline" size="sm" className="mr-2 text-xs h-7" onClick={() => setManagingId(token.id)}>
+                          Workspaces
+                        </Button>
+                      )}
                       <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setRevoking(token)}>
                         Revoke
                       </Button>
@@ -226,6 +277,36 @@ export default function AgentTokensManager({ workspaceId, tokens }: AgentTokensM
           </p>
           <DialogFooter>
             <Button onClick={() => setMinted(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!managing} onOpenChange={open => { if (!open) setManagingId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Workspaces for {managing?.name}</DialogTitle>
+            <DialogDescription>
+              Tokens named {managing?.name} work in this workspace and in every workspace switched on below. An agent chooses one
+              with the <code>workspaceId</code> argument, so text it reads in one workspace could steer it into another.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {managing && choices(managing).map(row => (
+              <div key={row.id} className="flex items-center justify-between gap-3">
+                <Label htmlFor={`agent-workspace-${row.id}`} className="font-normal">
+                  {row.name} <span className="text-xs text-muted-foreground">{row.slug}</span>
+                </Label>
+                <Switch
+                  id={`agent-workspace-${row.id}`}
+                  checked={managing.workspaces.some(entry => entry.id === row.id)}
+                  disabled={busy}
+                  onCheckedChange={allowed => setWorkspace(row, allowed)}
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setManagingId(null)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

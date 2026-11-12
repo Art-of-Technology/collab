@@ -32,9 +32,16 @@ export async function listAgentTokens(workspaceId: string) {
     orderBy: { createdAt: 'desc' },
   });
   const names = new Map((await serviceAccounts(prisma, app.id, workspaceId)).map(user => [user.id, user.name]));
+  // Other workspaces an account was let into (setAgentWorkspaceAccess): its tokens work there too.
+  const elsewhere = names.size ? await prisma.workspaceMember.findMany({
+    where: { userId: { in: [...names.keys()] }, status: true, workspaceId: { not: workspaceId } },
+    select: { userId: true, workspace: { select: { id: true, name: true, slug: true } } },
+  }) : [];
   return tokens.map(token => ({
     id: token.id,
     name: names.get(token.userId ?? '') ?? 'Unknown',
+    workspaces: elsewhere.filter(row => row.userId === token.userId)
+      .map(({ workspace }) => ({ id: workspace.id, name: workspace.name, slug: workspace.slug })),
     access: (token.scopes.every(scope => scope.endsWith(':read')) ? 'read' : 'write') as AgentTokenAccess,
     createdAt: token.createdAt,
     expiresAt: token.tokenExpiresAt,
@@ -111,13 +118,53 @@ export async function revokeAgentToken(input: { workspaceId: string; actorId: st
     let name: string | null = null;
     if (token.userId) {
       const live = await tx.appToken.count({ where: { ...scope, userId: token.userId, isRevoked: false, tokenExpiresAt: { gte: new Date() } } });
-      // An account with no usable token left stops being an active member.
-      if (!live) await tx.workspaceMember.updateMany({ where: { userId: token.userId, workspaceId: input.workspaceId }, data: { status: false } });
+      // An account with no usable token left stops being an active member, in every workspace it was let into:
+      // a later token with its name starts again in this workspace only.
+      if (!live) await tx.workspaceMember.updateMany({ where: { userId: token.userId }, data: { status: false } });
       name = (await tx.user.findUnique({ where: { id: token.userId }, select: { name: true } }))?.name ?? null;
     }
     await tx.appAuditLog.create({ data: {
       workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_token.revoked',
       details: { tokenId: token.id, serviceUserId: token.userId, name },
+    } });
+    return true;
+  });
+}
+
+/**
+ * Let the service account behind a token work in another workspace as a member, or stop it there.
+ * It applies to every token of that account. False when the token or the other workspace is not found,
+ * or when there is nothing to stop there.
+ * The caller checks that the actor may do this in both workspaces.
+ */
+export async function setAgentWorkspaceAccess(input: {
+  workspaceId: string; actorId: string; tokenId: string; targetWorkspaceId: string; allowed: boolean;
+}) {
+  const app = await agentApp();
+  if (!app || input.targetWorkspaceId === input.workspaceId) return false;
+  const where = { id: input.tokenId, appId: app.id, workspaceId: input.workspaceId, isRevoked: false };
+  return prisma.$transaction(async tx => {
+    const userId = (await tx.appToken.findFirst({ where, select: { userId: true } }))?.userId;
+    if (!userId || !await tx.workspace.findUnique({ where: { id: input.targetWorkspaceId }, select: { id: true } })) return false;
+    // Revoking locks the same row, so the token is read again: a revocation that switched the account off
+    // everywhere must not be followed by this switching it back on.
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
+    if (!await tx.appToken.count({ where })) return false;
+    const key = { userId, workspaceId: input.targetWorkspaceId };
+    const active = !!(await tx.workspaceMember.findUnique({ where: { userId_workspaceId: key }, select: { status: true } }))?.status;
+    // Already let in: nothing to do. Not in: nothing to take away, so a workspace the agent never used is not found.
+    if (active === input.allowed) return active;
+    if (input.allowed) {
+      await tx.workspaceMember.upsert({ where: { userId_workspaceId: key }, update: { status: true }, create: { ...key, role: 'MEMBER' } });
+    } else {
+      await tx.workspaceMember.updateMany({ where: key, data: { status: false } });
+    }
+    const name = (await tx.user.findUnique({ where: { id: userId }, select: { name: true } }))?.name ?? null;
+    // Recorded in the workspace whose members changed.
+    await tx.appAuditLog.create({ data: {
+      workspaceId: input.targetWorkspaceId, actorId: input.actorId,
+      action: input.allowed ? 'agent_token.workspace_added' : 'agent_token.workspace_removed',
+      details: { tokenId: input.tokenId, serviceUserId: userId, name, homeWorkspaceId: input.workspaceId },
     } });
     return true;
   });
