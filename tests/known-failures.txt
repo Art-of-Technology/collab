@@ -1,0 +1,101 @@
+tests/render/cli-app-navigation.test.cjs > installed CLI opens public documentation while web apps retain their workspace routes
+tests/render/git-connections.test.cjs > tests/render/git-connections.test.cjs
+tests/render/homepage-showcase.test.cjs > homepage showcases the product and gives visitors working docs and sign-in destinations
+tests/render/project-notes.test.cjs > the board Project notes link renders its destination for a member
+tests/security/gateway-client-session.test.cjs > MCP gateway/invalid signin reports error and never invokes legacy signin
+tests/security/gateway-client-session.test.cjs > MCP legacy signin retains provider selection and exact callback
+tests/security/gateway-client-session.test.cjs > Navbar failed mode fetch or failed signout result stays signed in
+tests/security/gateway-client-session.test.cjs > Navbar gateway logout navigates locally without legacy POST or success navigation
+tests/security/gateway-client-session.test.cjs > Navbar invalid mode or surviving/malformed session never announces success
+tests/security/gateway-client-session.test.cjs > Navbar legacy logout confirms empty session before existing navigation
+tests/security/gateway-client-session.test.cjs > SimplifiedSidebar failed mode fetch or failed signout result stays signed in
+tests/security/gateway-client-session.test.cjs > SimplifiedSidebar gateway logout navigates locally without legacy POST or success navigation
+tests/security/gateway-client-session.test.cjs > SimplifiedSidebar invalid mode or surviving/malformed session never announces success
+tests/security/gateway-client-session.test.cjs > SimplifiedSidebar legacy logout confirms empty session before existing navigation
+tests/security/gateway-client-session.test.cjs > gateway and invalid registration deny before body, hash or database
+tests/security/gateway-client-session.test.cjs > gateway only serves exact session/mode paths and blocks all auth POSTs
+tests/security/gateway-client-session.test.cjs > gateway session uses actual current mapping and revocation returns uncached 401 without fallback
+tests/security/gateway-client-session.test.cjs > invalid mode blocks session and POST without protected work
+tests/security/gateway-client-session.test.cjs > legacy and unset modes forward original GET/POST arguments
+tests/security/gateway-client-session.test.cjs > legacy login form and authenticated welcome/workspace routing remain
+tests/security/gateway-client-session.test.cjs > legacy registration keeps successful creation
+tests/security/gateway-client-session.test.cjs > login gateway/invalid without mapped user cannot render legacy login form
+tests/security/gateway-client-session.test.cjs > missing gateway identity never falls back to legacy session
+tests/security/gateway-client-session.test.cjs > mode endpoint reports gateway, legacy, unset and invalid without session lookup
+tests/security/gateway-client-session.test.cjs > provider disables background session polling and focus refetch, keeps offline policy and explicit overrides
+tests/security/gateway-client-session.test.cjs > register page preserves login redirect
+tests/security/gateway-issues.test.cjs > issues POST uses mapped actor and preserves legacy contract
+tests/security/gateway-issues.test.cjs > issues/[issueId]/github GET uses mapped actor and preserves legacy contract
+tests/security/gateway-notes-collections.test.cjs > create-tag executes the real selector, fails closed and preserves legacy options
+tests/security/gateway-request-boundary.test.cjs > actual Next matcher protects API health/mode and both realtime routes while excluding static assets
+tests/security/gateway-request-boundary.test.cjs > current mapping denial and lookup errors fail closed without legacy fallback
+tests/security/gateway-request-boundary.test.cjs > gateway rejects missing/malformed claims before database or handler
+tests/security/gateway-request-boundary.test.cjs > invalid mode rejects even public mode path without lookup or logout navigation
+tests/security/gateway-request-boundary.test.cjs > legacy passthrough and existing HTML security headers are preserved
+tests/security/gateway-request-boundary.test.cjs > only exact GET health/mode bypass identity and lookup, including revoked mapping
+tests/security/gateway-request-boundary.test.cjs > revocation blocks session refresh while mode still permits local logout
+tests/security/gateway-request-boundary.test.cjs > unsafe requests require exact pinned HTTPS Origin before account reads
+tests/security/github-settings-boundary.test.cjs > settings client forwards only configured boolean to webhook status
+tests/security/github-settings-boundary.test.cjs > webhook display preserves configured, unconfigured and disconnected states
+tests/security/identity-runtime.test.cjs > auth image migration uploads only HTTPS Google hosts across all callbacks
+tests/security/identity-runtime.test.cjs > login redirects stay on the exact application origin
+tests/security/identity-runtime.test.cjs > profile edits cannot create membership in an inaccessible workspace
+tests/security/invitation-token.test.cjs > action: acceptance uses current subject email, grants MEMBER once and rejects replay
+tests/security/invitation-token.test.cjs > action: active member behavior preserved and inactive role never restored
+tests/security/invitation-token.test.cjs > action: lost pending/expiry claim and create failure leave no partial grant
+tests/security/invitation-token.test.cjs > action: missing/deleted/wrong recipient and expired/processed invitation cannot write
+tests/security/invitation-token.test.cjs > action: token preview requires live current recipient, not workspace membership
+tests/security/invitation-token.test.cjs > action: transaction entry rechecks recipient existence/email
+tests/security/invitation-token.test.cjs > rest: acceptance uses current subject email, grants MEMBER once and rejects replay
+tests/security/invitation-token.test.cjs > rest: active member behavior preserved and inactive role never restored
+tests/security/invitation-token.test.cjs > rest: lost pending/expiry claim and create failure leave no partial grant
+tests/security/invitation-token.test.cjs > rest: missing/deleted/wrong recipient and expired/processed invitation cannot write
+tests/security/invitation-token.test.cjs > rest: token preview requires live current recipient, not workspace membership
+tests/security/invitation-token.test.cjs > rest: transaction entry rechecks recipient existence/email
+tests/security/issue-navigation-projects.test.cjs > Back and post-delete navigation both retain the project when its default is inaccessible
+tests/security/issue-navigation-projects.test.cjs > issue description links remain navigable until explicit editing and switching issues returns to read mode
+tests/security/issue-navigation-projects.test.cjs > serialized preview cards and plain links survive Done, reopening and sanitization
+tests/security/issues-mutations.test.cjs > AI issue suggestions and relations resolve their source issue inside the authorized workspace
+tests/security/issues-mutations.test.cjs > review: issue field grants and atomic same-workspace project moves preserve rights and relations
+tests/security/issues-permissions.test.cjs > AI preserves its original update field set with zero writes for unsupported fields
+tests/security/issues-permissions.test.cjs > AI: assignment mixed with status name
+tests/security/issues-permissions.test.cjs > AI: assignment only
+tests/security/issues-permissions.test.cjs > AI: conflict
+tests/security/issues-permissions.test.cjs > AI: editor
+tests/security/issues-permissions.test.cjs > AI: foreign assignee
+tests/security/issues-permissions.test.cjs > AI: other reporter
+tests/security/issues-permissions.test.cjs > AI: owner without membership
+tests/security/issues-permissions.test.cjs > AI: read only reporter
+tests/security/issues-permissions.test.cjs > AI: reporter
+tests/security/issues-permissions.test.cjs > AI: revoked assignee
+tests/security/issues-permissions.test.cjs > AI: status name mixed with title
+tests/security/issues-permissions.test.cjs > AI: status only
+tests/security/issues-permissions.test.cjs > PUT: assignment mixed with status
+tests/security/issues-permissions.test.cjs > PUT: assignment mixed with status name
+tests/security/issues-permissions.test.cjs > PUT: assignment only
+tests/security/issues-permissions.test.cjs > PUT: conflict
+tests/security/issues-permissions.test.cjs > PUT: editor
+tests/security/issues-permissions.test.cjs > PUT: foreign assignee
+tests/security/issues-permissions.test.cjs > PUT: foreign labels
+tests/security/issues-permissions.test.cjs > PUT: foreign parent
+tests/security/issues-permissions.test.cjs > PUT: foreign project
+tests/security/issues-permissions.test.cjs > PUT: foreign reporter
+tests/security/issues-permissions.test.cjs > PUT: foreign status
+tests/security/issues-permissions.test.cjs > PUT: other reporter
+tests/security/issues-permissions.test.cjs > PUT: owner without membership
+tests/security/issues-permissions.test.cjs > PUT: read only reporter
+tests/security/issues-permissions.test.cjs > PUT: reporter
+tests/security/issues-permissions.test.cjs > PUT: revoked assignee
+tests/security/issues-permissions.test.cjs > PUT: status mixed with title
+tests/security/issues-permissions.test.cjs > PUT: status name mixed with title
+tests/security/issues-permissions.test.cjs > PUT: status only
+tests/security/issues-permissions.test.cjs > shared issue mutation blocks AI and PUT bypasses with real access and field permissions
+tests/security/leave-policy.test.cjs > leave policy permissions enforce active membership across reads and mutations
+tests/security/local-svg-images.test.cjs > src/app/home/page.tsx logo 1 stays on the direct authenticated asset path
+tests/security/managed-worker.test.cjs > concurrent starts admit only one generation; managed pass uses the fence
+tests/security/managed-worker.test.cjs > managed generations fence missing/stale mutation paths and refuse expired takeover
+tests/security/managed-worker.test.cjs > managed own-user/workspace/scopes checks and explicit conversion preserve legacy agents
+tests/security/navigation-editor.test.cjs > issue modal state follows URL and navigation clears stale parent context
+tests/security/note-tag-access.test.cjs > historical unauthorized tag links are filtered in src/app/api/projects/[projectId]/summary/route.ts
+tests/security/notes-collections.test.cjs > review: alternate Notes handlers filter content and metadata with the real access policy
+tests/security/related-issues.test.cjs > related issues override heuristics in both directions and retain access controls

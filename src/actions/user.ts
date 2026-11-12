@@ -50,39 +50,6 @@ export async function getCurrentUser() {
 }
 
 /**
- * Get a user by ID
- */
-export async function getUserById(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: {
-      id: userId
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      image: true,
-      role: true,
-      team: true,
-      currentFocus: true,
-      expertise: true,
-      createdAt: true,
-      useCustomAvatar: true,
-      avatarSkinTone: true,
-      avatarEyes: true,
-      avatarBrows: true,
-      avatarMouth: true,
-      avatarNose: true,
-      avatarHair: true,
-      avatarEyewear: true,
-      avatarAccessory: true,
-    }
-  });
-  
-  return user;
-}
-
-/**
  * Update user profile
  */
 export async function updateUserProfile(
