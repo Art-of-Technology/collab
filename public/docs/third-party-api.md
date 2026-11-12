@@ -230,6 +230,17 @@ GET /api/apps/auth/workspace/members
 
 ### Issues
 
+#### Issue Templates
+
+```http
+GET /api/apps/auth/issue-templates
+GET /api/apps/auth/issue-templates/{type}
+```
+
+Both endpoints require `issues:read` and active access to the selected workspace. The list returns `{ enforced, templates }`; the individual endpoint returns a template with `enforced`. Templates include their type, version, standard status, ordered sections (title, required flag and guidance), required fields and a Markdown `body` with headings and guidance in HTML comments.
+
+The built-in standards cover BUG, STORY, EPIC, MILESTONE and TASK. Type matching is case-insensitive; SUBTASK and unknown types return 404 with `template_not_found`. The standards currently apply to every workspace and are advisory: `enforced` is `false`, and issue creation does not enforce them.
+
 #### List Issues
 ```http
 GET /api/apps/auth/issues
