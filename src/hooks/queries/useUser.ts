@@ -3,7 +3,6 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { 
   getCurrentUser, 
-  getUserById,
   updateUserAvatar,
   getUserProfile,
   updateUserProfile
@@ -14,7 +13,6 @@ import { getPosts } from '@/actions/post';
 export const userKeys = {
   all: ['users'] as const,
   current: () => [...userKeys.all, 'current'] as const,
-  detail: (id: string) => [...userKeys.all, 'detail', id] as const,
 };
 
 // Get current user hook
@@ -22,15 +20,6 @@ export const useCurrentUser = () => {
   return useQuery({
     queryKey: userKeys.current(),
     queryFn: getCurrentUser,
-  });
-};
-
-// Get user by ID hook
-export const useUserById = (userId: string) => {
-  return useQuery({
-    queryKey: userKeys.detail(userId),
-    queryFn: () => getUserById(userId),
-    enabled: !!userId,
   });
 };
 

@@ -8,7 +8,6 @@ import {
   createWorkspace, 
   updateWorkspace, 
   deleteWorkspace,
-  addWorkspaceMember,
   removeWorkspaceMember,
   checkWorkspaceLimit,
   getPendingInvitations,
@@ -110,20 +109,6 @@ export const useDeleteWorkspace = () => {
       // Invalidate the workspaces list
       queryClient.invalidateQueries({ queryKey: workspaceKeys.list() });
       
-      // Invalidate the specific workspace
-      queryClient.invalidateQueries({ queryKey: workspaceKeys.detail(workspaceId) });
-    },
-  });
-};
-
-// Add workspace member mutation
-export const useAddWorkspaceMember = (workspaceId: string) => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (data: { email: string }) => 
-      addWorkspaceMember({ workspaceId, ...data }),
-    onSuccess: () => {
       // Invalidate the specific workspace
       queryClient.invalidateQueries({ queryKey: workspaceKeys.detail(workspaceId) });
     },

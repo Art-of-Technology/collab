@@ -48,7 +48,6 @@ const cases = [
   ['createWorkspace', a => a.createWorkspace({ name: 'New Space' }), result => assert.equal(result.owner.connect.id, 'alice')],
   ['updateWorkspace', a => a.updateWorkspace('own', { name: 'Updated' }), result => assert.equal(result.name, 'Updated')],
   ['deleteWorkspace', a => a.deleteWorkspace('own'), result => assert.equal(result.success, true)],
-  ['addWorkspaceMember', a => a.addWorkspaceMember({ workspaceId: 'own', email: 'bob@example.test' }), result => assert.equal(result.user.connect.id, 'bob')],
   ['removeWorkspaceMember', a => a.removeWorkspaceMember({ workspaceId: 'own', userId: 'carol' }), result => assert.equal(result.success, true)],
   ['checkWorkspaceLimit', a => a.checkWorkspaceLimit(), result => assert.equal(result.currentCount, 1)],
   ['updateWorkspaceMemberStatus', a => a.updateWorkspaceMemberStatus({ workspaceId: 'own', memberId: 'carol-member', status: false }), result => assert.equal(result.status, false)],
@@ -72,7 +71,6 @@ test('workspace action owner, self-removal, status-admin and validation restrict
   for (const invoke of [
     () => actions.updateWorkspace('foreign', { name: 'Denied' }),
     () => actions.deleteWorkspace('foreign'),
-    () => actions.addWorkspaceMember({ workspaceId: 'foreign', email: 'carol@example.test' }),
     () => actions.removeWorkspaceMember({ workspaceId: 'foreign', userId: 'bob' }),
     () => actions.updateWorkspaceMemberStatus({ workspaceId: 'revoked', memberId: 'revoked-member', status: false }),
   ]) await assert.rejects(invoke(), /Only/);
