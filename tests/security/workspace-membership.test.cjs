@@ -40,13 +40,11 @@ function fixture() {
       findMany: async ({ where }) => workspaces
         .flatMap(row => row.members.map(entry => ({ ...entry, workspaceId: row.id })))
         .filter(row => matches(row, where)),
-      upsert: async ({ where, update, create }) => {
-        const { userId, workspaceId } = where.userId_workspaceId;
-        const existing = member(workspaceId, userId);
-        if (existing) return Object.assign(existing, update);
-        const row = { status: true, ...create };
+      create: async ({ data }) => {
+        if (member(data.workspaceId, data.userId)) throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+        const row = { status: true, ...data };
         delete row.workspaceId;
-        workspace(workspaceId).members.push(row);
+        workspace(data.workspaceId).members.push(row);
         return row;
       },
       update: async ({ where, data }) => Object.assign(member(where.userId_workspaceId.workspaceId, where.userId_workspaceId.userId), data),
@@ -94,7 +92,7 @@ function fixture() {
   const admin = async userId => find(await adminPage({ params: Promise.resolve({ userId }) }));
   const members = async (workspaceId, userId) => find(await memberPage({ params: Promise.resolve({ workspaceId, userId }) }));
   const states = node => node.props.workspaces.map(row => `${row.id}:${row.state}`).join(' ');
-  return { workspaces, users, audit, reads, rolePermissions, as, put, writes, member, workspace, admin, members, states };
+  return { prisma, workspaces, users, audit, reads, rolePermissions, as, put, writes, member, workspace, admin, members, states };
 }
 
 test('the owner of two workspaces brings a colleague from one into the other without an invitation', async () => {
@@ -220,4 +218,21 @@ test('the member screen of a workspace offers only the other workspaces the view
 
   f.as('carol'); // manages members in w1 only
   assert.equal(f.states(await f.members('w1', 'bob')), '');
+});
+
+test('a request that loses the race to add the same person changes and records nothing', async () => {
+  const f = fixture();
+  f.as('alice');
+  // This request reads no membership; another one adds bob before it writes.
+  const read = f.prisma.workspaceMember.findUnique;
+  f.prisma.workspaceMember.findUnique = async args => {
+    f.prisma.workspaceMember.findUnique = read;
+    f.workspace('w2').members.push({ userId: 'bob', role: 'MEMBER', status: true });
+    return null;
+  };
+  const before = f.audit.length;
+  const late = await f.put('w2', 'bob');
+  assert.equal(JSON.stringify([late.status, late.body]), JSON.stringify([200, { active: true, changed: false }]));
+  assert.equal(f.audit.length, before);
+  assert.equal(f.workspace('w2').members.filter(row => row.userId === 'bob').length, 1);
 });

@@ -21,29 +21,38 @@ export async function setWorkspaceMembership(input: {
   // The owner is in the workspace through ownership, not through a membership that could be switched.
   if (workspace.ownerId === input.userId) return 'owner';
 
-  return prisma.$transaction(async tx => {
-    const key = { userId: input.userId, workspaceId: input.workspaceId };
-    // The member list can switch the same row at the same moment; holding it keeps what is recorded equal to what changed.
-    await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${input.userId} AND "workspaceId" = ${input.workspaceId} FOR UPDATE`;
-    const member = await tx.workspaceMember.findUnique({ where: { userId_workspaceId: key }, select: { status: true } });
-    if (!!member?.status === input.active) return 'unchanged';
-    if (input.active) {
-      // Someone new to the workspace must be a person the actor already works with; a stranger needs an
-      // invitation they accept, and reads the same as an account that does not exist.
-      if (!member && actor?.role !== 'SYSTEM_ADMIN' && !await tx.workspace.findFirst({
-        where: { AND: [postWorkspaceAccessWhere(input.actorId), postWorkspaceAccessWhere(input.userId)] }, select: { id: true },
-      })) return 'not_found';
-      await tx.workspaceMember.upsert({ where: { userId_workspaceId: key }, update: { status: true }, create: { ...key, role: 'MEMBER' } });
-    } else {
-      await tx.workspaceMember.update({ where: { userId_workspaceId: key }, data: { status: false } });
-    }
-    await tx.appAuditLog.create({ data: {
-      workspaceId: input.workspaceId, actorId: input.actorId,
-      action: input.active ? 'workspace_member.added' : 'workspace_member.switched_off',
-      details: { userId: input.userId },
-    } });
-    return 'changed';
-  });
+  try {
+    return await prisma.$transaction(async tx => {
+      const key = { userId: input.userId, workspaceId: input.workspaceId };
+      // The member list can switch the same row at the same moment; holding it keeps what is recorded equal to what changed.
+      await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${input.userId} AND "workspaceId" = ${input.workspaceId} FOR UPDATE`;
+      const member = await tx.workspaceMember.findUnique({ where: { userId_workspaceId: key }, select: { status: true } });
+      if (!!member?.status === input.active) return 'unchanged';
+      if (input.active) {
+        // Someone new to the workspace must be a person the actor already works with; a stranger needs an
+        // invitation they accept, and reads the same as an account that does not exist.
+        if (!member && actor?.role !== 'SYSTEM_ADMIN' && !await tx.workspace.findFirst({
+          where: { AND: [postWorkspaceAccessWhere(input.actorId), postWorkspaceAccessWhere(input.userId)] }, select: { id: true },
+        })) return 'not_found';
+        // A new row is created, never upserted: if another request adds the same person first, this one fails on
+        // the unique key instead of recording a change it did not make.
+        if (member) await tx.workspaceMember.update({ where: { userId_workspaceId: key }, data: { status: true } });
+        else await tx.workspaceMember.create({ data: { ...key, role: 'MEMBER' } });
+      } else {
+        await tx.workspaceMember.update({ where: { userId_workspaceId: key }, data: { status: false } });
+      }
+      await tx.appAuditLog.create({ data: {
+        workspaceId: input.workspaceId, actorId: input.actorId,
+        action: input.active ? 'workspace_member.added' : 'workspace_member.switched_off',
+        details: { userId: input.userId },
+      } });
+      return 'changed';
+    });
+  } catch (error) {
+    // Lost the race to add the same person: they are in, and this request changed nothing.
+    if ((error as { code?: string } | null)?.code === 'P2002') return 'unchanged';
+    throw error;
+  }
 }
 
 export type WorkspaceSwitchState = 'owner' | 'on' | 'off';
