@@ -68,6 +68,7 @@ export async function createAgentToken(input: {
     const account = (await serviceAccounts(tx, app.id, input.workspaceId)).find(user => user.name?.trim().toLowerCase() === wanted.toLowerCase())
       ?? await tx.user.create({ data: { name: wanted }, select: { id: true, name: true } });
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${account.id} FOR UPDATE`;
+    await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${account.id} AND "workspaceId" = ${input.workspaceId} FOR UPDATE`;
     const membership = await tx.workspaceMember.findUnique({
       where: { userId_workspaceId: { userId: account.id, workspaceId: input.workspaceId } }, select: { status: true },
     });
