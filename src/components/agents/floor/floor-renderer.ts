@@ -204,6 +204,15 @@ export function createFloorRenderer(
     while (cut.length > 1 && ctx.measureText(`${cut}…`).width > width) cut = cut.slice(0, -1);
     return `${cut.trimEnd()}…`;
   }
+  /** Sets the largest font up to `size` at which the text fits, and returns the text; it is cut only below 40% of that size. */
+  function shrunk(ctx: CanvasRenderingContext2D, text: string, weight: number, size: number, width: number) {
+    const px = Math.floor(size);
+    ctx.font = `${weight} ${px}px ${FONT}`;
+    const measured = ctx.measureText(text).width;
+    if (measured > width)
+      ctx.font = `${weight} ${Math.floor(Math.max(px * 0.4, (px * width) / measured))}px ${FONT}`;
+    return fitted(ctx, text, width);
+  }
   /** Up to `lines` lines of whole words; the last line is cut when the text is longer. */
   function wrapped(ctx: CanvasRenderingContext2D, text: string, width: number, lines: number) {
     const out: string[] = [];
@@ -242,7 +251,7 @@ export function createFloorRenderer(
     return mesh;
   }
   const BOARD = "#f4f5f1";
-  /** A task as it hangs on the board: key, handoff state, and as much of the title as fits. */
+  /** A task as it hangs on the board: its key, its handoff state, and two lines of the title. */
   const taskCard = (task: FloorTask): Draw => (ctx, w, h) => {
     const state = stateColors[task.handoffState] || stateColors.completed;
     ctx.fillStyle = BOARD;
@@ -255,25 +264,18 @@ export function createFloorRenderer(
     ctx.stroke();
     ctx.fillStyle = state;
     ctx.fillRect(3, h * 0.12, h * 0.07, h * 0.76);
-    const left = h * 0.16, right = w - h * 0.1;
+    const left = h * 0.16, room = w - h * 0.1 - left;
     ctx.textAlign = "left";
     ctx.fillStyle = "#0f172a";
-    ctx.font = `700 ${Math.round(h * 0.26)}px ${FONT}`;
-    const key = fitted(ctx, task.issueKey, right - left);
-    ctx.fillText(key, left, h * 0.24);
-    const keyWidth = ctx.measureText(key).width;
-    ctx.font = `600 ${Math.round(h * 0.16)}px ${FONT}`;
-    // The state word is dropped when the column is too narrow for it; the coloured bar still shows it.
-    if (keyWidth + ctx.measureText(task.handoffState).width + h * 0.12 <= right - left) {
-      ctx.fillStyle = state;
-      ctx.textAlign = "right";
-      ctx.fillText(task.handoffState, right, h * 0.25);
-      ctx.textAlign = "left";
-    }
+    // A key is what people look for, so in a narrow column its font shrinks before it is cut.
+    ctx.fillText(shrunk(ctx, task.issueKey, 700, h * 0.26, room), left, h * 0.2);
+    ctx.fillStyle = state;
+    ctx.font = `700 ${Math.round(h * 0.16)}px ${FONT}`;
+    ctx.fillText(fitted(ctx, task.handoffState, room), left, h * 0.43);
     ctx.fillStyle = "#1e293b";
-    ctx.font = `500 ${Math.round(h * 0.225)}px ${FONT}`;
-    wrapped(ctx, task.title, right - left, 2).forEach((line, index) =>
-      ctx.fillText(line, left, h * (0.55 + index * 0.25)),
+    ctx.font = `500 ${Math.round(h * 0.2)}px ${FONT}`;
+    wrapped(ctx, task.title, room, 2).forEach((line, index) =>
+      ctx.fillText(line, left, h * (0.64 + index * 0.22)),
     );
   };
   /** A column heading: the status and how many handoffs it holds. */
@@ -281,24 +283,22 @@ export function createFloorRenderer(
     ctx.fillStyle = BOARD;
     ctx.fillRect(0, 0, w, h);
     rounded(ctx, 3, h * 0.1, w - 6, h * 0.8, h * 0.18);
-    ctx.fillStyle = count ? "#1e293b" : "#dfe3e8";
+    ctx.fillStyle = "#1e293b";
     ctx.fill();
-    ctx.fillStyle = count ? "#f8fafc" : "#64748b";
+    ctx.fillStyle = "#f8fafc";
     ctx.font = `700 ${Math.round(h * 0.46)}px ${FONT}`;
     ctx.textAlign = "right";
     ctx.fillText(String(count), w - h * 0.3, h * 0.52);
     const countWidth = ctx.measureText(String(count)).width;
     ctx.textAlign = "left";
-    ctx.font = `600 ${Math.round(h * 0.38)}px ${FONT}`;
-    ctx.fillText(fitted(ctx, status, w - h * 0.75 - countWidth), h * 0.3, h * 0.52);
+    ctx.fillText(shrunk(ctx, status, 600, h * 0.38, w - h * 0.75 - countWidth), h * 0.3, h * 0.52);
   };
   const note = (text: string): Draw => (ctx, w, h) => {
     ctx.fillStyle = BOARD;
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "#64748b";
-    ctx.font = `500 ${Math.round(Math.min(h * 0.5, w * 0.06))}px ${FONT}`;
+    ctx.fillStyle = "#475569";
     ctx.textAlign = "center";
-    ctx.fillText(fitted(ctx, text, w * 0.94), w / 2, h / 2);
+    ctx.fillText(shrunk(ctx, text, 500, h * 0.5, w * 0.94), w / 2, h / 2);
   };
   /** The card an agent carries to the board: the issue key and the status it moves to. */
   const carriedCard = (issueKey: string, status: string): Draw => (ctx, w, h) => {
@@ -306,8 +306,7 @@ export function createFloorRenderer(
     ctx.fillRect(0, 0, w, h);
     ctx.textAlign = "center";
     ctx.fillStyle = "#0f172a";
-    ctx.font = `700 ${Math.round(h * 0.34)}px ${FONT}`;
-    ctx.fillText(fitted(ctx, issueKey, w * 0.92), w / 2, h * 0.33);
+    ctx.fillText(shrunk(ctx, issueKey, 700, h * 0.34, w * 0.92), w / 2, h * 0.33);
     ctx.fillStyle = "#475569";
     ctx.font = `500 ${Math.round(h * 0.24)}px ${FONT}`;
     ctx.fillText(fitted(ctx, status, w * 0.92), w / 2, h * 0.7);
@@ -422,24 +421,30 @@ export function createFloorRenderer(
       cardLabel: "",
     };
   }
+  /** The middle of a task's column on the board, where an agent walks to. */
   function column(task: FloorTask, projectId: string) {
-    const statuses = boardStatuses(projectId);
-    return (
-      -4.8 +
-      (Math.max(0, statuses.indexOf(task.status)) + 0.5) *
-        (9.6 / Math.max(1, statuses.length))
-    );
+    const found = boardColumns(projectId).find((c) => c.status === task.status);
+    return found ? found.x + (found.span * found.width) / 2 : 0;
   }
-  function boardStatuses(projectId: string) {
-    const project = state?.projects.find((p) => p.id === projectId);
-    return Array.from(
-      new Set([
-        ...(project?.statuses.map((s) => s.name) || []),
-        ...(state?.snapshot.tasks
-          .filter((t) => t.projectId === projectId)
-          .map((t) => t.status) || []),
-      ]),
-    );
+  /**
+   * The board's columns, left to right: the statuses that hold a handoff, in the project's order.
+   * An empty status would only narrow the others. Cards are at most a third of the board wide,
+   * so with fewer than three statuses the fullest one spans the spare width with more cards.
+   */
+  function boardColumns(projectId: string) {
+    const tasks = state?.snapshot.tasks.filter((t) => t.projectId === projectId) || [];
+    const order = state?.projects.find((p) => p.id === projectId)?.statuses.map((s) => s.name) || [];
+    const used = new Set(tasks.map((t) => t.status));
+    const statuses = Array.from(new Set([...order.filter((name) => used.has(name)), ...used]));
+    const count = (status: string) => tasks.filter((t) => t.status === status).length;
+    const fullest = statuses.reduce((a, b) => (count(b) > count(a) ? b : a), statuses[0]);
+    const width = 9.6 / Math.max(3, statuses.length);
+    let x = -4.8;
+    return statuses.map((status) => {
+      const span = status === fullest ? 1 + Math.max(0, 3 - statuses.length) : 1;
+      x += span * width;
+      return { status, x: x - span * width, span, width };
+    });
   }
   function rebuild() {
     disposeTree(content);
@@ -474,33 +479,33 @@ export function createFloorRenderer(
       backing.position.set(0, 2.65, -4.76);
       room.add(backing);
       const tasks = snapshot.tasks.filter((t) => t.projectId === project.id);
-      const statuses = boardStatuses(project.id);
-      statuses.forEach((status, i) => {
-        const width = 9.6 / statuses.length,
-          x = -4.8 + (i + 0.5) * width;
+      const columns = boardColumns(project.id);
+      for (const { status, x, span, width } of columns) {
         const column = tasks.filter((t) => t.status === status);
-        panel(room, width - 0.1, 0.5, [x, 4.32, -4.7], columnHead(status, column.length));
-        column.slice(0, 3).forEach((task, row) => {
+        const middle = x + (span * width) / 2;
+        panel(room, span * width - 0.1, 0.5, [middle, 4.32, -4.7], columnHead(status, column.length));
+        // Three cards down, then the next card column of the span.
+        column.slice(0, 3 * span).forEach((task, i) => {
           const card = panel(
             room,
             width - 0.14,
             0.9,
-            [x, 3.5 - row * 0.98, -4.69],
+            [x + (Math.floor(i / 3) + 0.5) * width, 3.5 - (i % 3) * 0.98, -4.69],
             taskCard(task),
           );
           card.userData.task = task.id;
           boardCards.set(task.id, card);
         });
-        if (column.length > 3)
+        if (column.length > 3 * span)
           panel(
             room,
-            width - 0.14,
-            0.3,
-            [x, 0.84, -4.69],
-            note(`+${column.length - 3} more in the task list`),
+            span * width - 0.14,
+            0.38,
+            [middle, 0.84, -4.69],
+            note(`+${column.length - 3 * span} more in the task list`),
           );
-      });
-      if (!statuses.length)
+      }
+      if (!columns.length)
         panel(room, 8, 1, [0, 2.7, -4.69], note("No agent handoffs in this snapshot"));
       const ids = new Set(
         tasks

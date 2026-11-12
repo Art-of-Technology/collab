@@ -383,12 +383,13 @@ function sceneFixture() {
   dom.window.HTMLCanvasElement.prototype.getContext = function () {
     this.lines = [];
     const noop = () => {};
-    return {
+    const ctx = {
       fillRect: noop, beginPath: noop, rect: noop, fill: noop, stroke: noop,
-      // Ten pixels a character, whatever the font: enough for fitting and wrapping to be exercised.
-      measureText: (text) => ({ width: text.length * 10 }),
+      // Half the font size a character: enough for fitting, shrinking and wrapping to be exercised.
+      measureText: (text) => ({ width: (text.length * parseInt(/(\d+)px/.exec(ctx.font)[1], 10)) / 2 }),
       fillText: (text) => this.lines.push(text),
     };
+    return ctx;
   };
   let renderScene, pending, time = 0, camera, target, moved, resized;
   const stats = { cancelled: 0, disposed: 0, disconnected: 0, geometriesDisposed: 0 };
@@ -647,33 +648,73 @@ test("rooms and agents carry labels that name them, select them and leave with t
     f.close();
   }
 });
-test("the board states each task and counts what a crowded column cannot show", () => {
+test("the board draws the statuses in use and states each task without cutting its key", () => {
   const f = sceneFixture();
   try {
     assert.deepEqual(f.texts("task-a"), ["T-a", "claimed", "Review UI"]);
     assert.ok(f.drawn().includes("2 | In review"));
 
     const data = snapshot();
-    data.projects[0].statuses = ["To do", "In progress", "In review", "Waiting for deploy", "Done"]
+    data.projects[0].statuses = ["To do", "In progress", "In review", "Waiting for deploy", "Done", "Blocked", "Deprecated", "Backlog"]
       .map((name, index) => ({ id: `s${index}`, name, isFinal: false }));
     const title = "Coordinator run stops with outcome unknown when the pool is exhausted and nobody notices";
-    data.tasks = [0, 1, 2, 3].map((index) => ({
-      ...data.tasks[0], id: `task-${index}`, title,
-      issueKey: index ? `T-${index}` : "LONGPROJECT-12345678901234567890",
+    const elsewhere = ["Done", "Waiting for deploy", "In progress", "To do"];
+    data.tasks = [0, 1, 2, 3, 4, 5, 6, 7].map((index) => ({
+      ...data.tasks[0], id: `task-${index}`, title, issueKey: `T-${index}`,
+      status: index < 4 ? "In review" : elsewhere[index - 4],
     }));
+    data.tasks[0].issueKey = "LONGPROJECT-1234";
+    data.tasks[2].issueKey = "K".repeat(40);
     f.update({ snapshot: data, projects: data.projects, playback: model.createFloorPlayback(data) });
-    const lines = ["Coordinator run stops with outcome", "unknown when the pool is exhausted and…"];
+    const lines = ["Coordinator run", "stops with outco…"];
     assert.deepEqual(f.texts("task-1"), ["T-1", "claimed", ...lines]);
-    // A key that leaves no room for the state word is still written out whole.
-    assert.deepEqual(f.texts("task-0"), ["LONGPROJECT-12345678901234567890", ...lines]);
+    // A key too wide for its column is written smaller, and cut only when it would become unreadable.
+    assert.deepEqual(f.texts("task-0"), ["LONGPROJECT-1234", "claimed", ...lines]);
+    assert.equal(f.texts("task-2")[0], `${"K".repeat(33)}…`);
     assert.equal(f.board("task-3"), undefined);
-    for (const text of ["4 | In review", "0 | To do", "0 | Done", "+1 more in the task list"])
+    // Five of the project's eight statuses hold a handoff: only those are columns, in the project's order.
+    for (const text of ["4 | In review", "1 | To do", "1 | Waiting for deploy", "+1 more in the task list"])
       assert.ok(f.drawn().includes(text), text);
+    assert.equal(f.drawn().filter((text) => /^\d+ \| /.test(text)).length, 5);
+    const across = [7, 6, 0, 5, 4].map((index) => f.board(`task-${index}`).position.x);
+    assert.deepEqual(across, [...across].sort((a, b) => a - b));
+    assert.equal(new Set(across).size, 5);
+
+    // Every line of a title is fitted, also a first word wider than the card.
     data.tasks[1].title = `${"X".repeat(100)} next`;
     data.tasks[2].title = `short ${"Y".repeat(100)} next`;
     f.update({ snapshot: { ...data } });
-    assert.deepEqual(f.texts("task-1").slice(2), [`${"X".repeat(37)}…`, "next"]);
-    assert.deepEqual(f.texts("task-2").slice(2), ["short", `${"Y".repeat(37)}…`]);
+    assert.deepEqual(f.texts("task-1").slice(2), [`${"X".repeat(16)}…`, "next"]);
+    assert.deepEqual(f.texts("task-2").slice(2), ["short", `${"Y".repeat(16)}…`]);
+  } finally {
+    f.close();
+  }
+});
+test("with few statuses the fullest one uses the spare width of the board", () => {
+  const f = sceneFixture();
+  try {
+    const board = (counts) => {
+      const data = snapshot();
+      data.projects[0].statuses = Object.keys(counts).map((name, index) => ({ id: `s${index}`, name, isFinal: false }));
+      data.tasks = Object.entries(counts).flatMap(([status, count]) =>
+        Array.from({ length: count }, (_, index) => ({ ...data.tasks[0], id: `${status}-${index}`, status })));
+      f.update({ snapshot: data, projects: data.projects, playback: model.createFloorPlayback(data) });
+      const columns = (status) => new Set(data.tasks.filter((task) => task.status === status && f.board(task.id))
+        .map((task) => f.board(task.id).position.x.toFixed(2)));
+      return { shown: data.tasks.filter((task) => f.board(task.id)).length, columns };
+    };
+    // One status: three card columns of three, then the rest is counted.
+    let now = board({ Doing: 10 });
+    assert.deepEqual([now.shown, now.columns("Doing").size], [9, 3]);
+    assert.ok(f.drawn().includes("+1 more in the task list"));
+    // Two statuses: the fuller one takes two card columns; nothing overlaps.
+    now = board({ Doing: 5, Done: 2 });
+    assert.deepEqual([now.shown, now.columns("Doing").size, now.columns("Done").size], [7, 2, 1]);
+    assert.ok(Math.max(...now.columns("Doing")) < Math.min(...now.columns("Done")));
+    assert.ok(!f.drawn().some((text) => text.includes("more in the task list")));
+    // Three or more: one card column each.
+    now = board({ Todo: 4, Doing: 1, Done: 1 });
+    assert.deepEqual([now.shown, now.columns("Todo").size], [5, 1]);
   } finally {
     f.close();
   }
