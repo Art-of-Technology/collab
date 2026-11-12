@@ -37,6 +37,7 @@ function fixture({ timers = { setTimeout, clearTimeout } } = {}) {
     installationId: null, installation: null, appId: app.id, app, workspaceId: 'w1', workspace: workspaces[0], tokenExpiresAt: new Date(Date.now() + 60_000), ...extra,
   });
   token('full', ALL); token('readonly', READ); token('expired', ALL, { tokenExpiresAt: new Date(Date.now() - 1000) });
+  token('useronly', ['user:read']); token('noscopes', []);
   const state = { scanError: null }, calls = [], respond = {}, logs = [];
   const prisma = {
     appToken: { findMany: async ({ where }) => { if (state.scanError) throw state.scanError; return tokens.filter(row => matches(row, where)); } },
@@ -361,4 +362,32 @@ test('a path argument cannot add query parameters or path segments, even without
     ['GET issues/[issueIdOrKey]', {}, 'x#fragment', 'w1'],
     ['GET issues/[issueIdOrKey]', {}, 'x&workspace=two', 'w1'],
   ]);
+});
+
+test('a tool that needs two scopes is not offered with one, and a token with no scopes is offered nothing', async () => {
+  const f = fixture();
+  const names = async bearer => (await f.modern(bearer, 'tools/list')).body.result.tools.map(tool => tool.name).sort();
+  // whoami needs user:read or profile:read; workspaces_list needs user:read and workspace:read.
+  assert.deepEqual(await names('useronly'), ['whoami']);
+  assert.deepEqual(await names('noscopes'), []);
+  assert.equal((await f.call('useronly', 'workspaces_list')).rpcError.code, -32602);
+});
+
+test('a rejected request is logged without the text the client sent', async () => {
+  const f = fixture();
+  const response = await f.read(await f.post('full', { 'mcp-protocol-version': '2026-07-28', 'mcp-method': 'tools/list' },
+    { jsonrpc: '2.0', id: 1, method: 'tools/list', params: { _meta: { 'io.modelcontextprotocol/protocolVersion': 'EVIL\nINJECTED-LOG-LINE token=fake', 'io.modelcontextprotocol/clientCapabilities': {} } } }));
+  assert.ok(response.status >= 400 || response.body.error, 'the request is refused');
+  assert.ok(f.logs.length > 0, 'the refusal is logged');
+  assert.doesNotMatch(JSON.stringify(f.logs), /INJECTED-LOG-LINE|token=fake/);
+});
+
+test('the 30 second timer is cleared as soon as a call finishes', async () => {
+  const started = [], cleared = [];
+  const timers = { setTimeout: (run, ms, ...args) => { if (ms !== 30_000) return setTimeout(run, ms, ...args); const id = { ms }; started.push(id); return id; },
+    clearTimeout: id => { if (started.includes(id)) cleared.push(id); else clearTimeout(id); } };
+  const f = fixture({ timers });
+  assert.equal((await f.call('full', 'issues_list', {})).isError, false);
+  assert.equal(started.length, 1);
+  assert.deepEqual(cleared, started, 'no timer is left running after the answer');
 });

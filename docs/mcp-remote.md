@@ -92,6 +92,7 @@ A token is offered only the tools its scopes allow, so a read-only token never s
 - A request body may be at most 1 MiB.
 - A tool call is answered within 30 seconds. A slower call returns a `timeout` error; a write may still complete, so read the current state before retrying.
 - There is no rate limit beyond the API's own, which has none today.
+- A 2025-era client may batch up to 100 calls in one request; they run at the same time.
 - A failed tool call is a result with `isError: true` whose text is the API's JSON error, for example `{"error":"not_found",…}`. Invalid arguments are refused before any route runs. A tool the token may not use is reported as unknown.
 
 ## Content is data

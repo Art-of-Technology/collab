@@ -23,7 +23,11 @@ const handler = createMcpHandler(({ authInfo, requestInfo }) => {
     );
   }
   return server;
-}, { maxRequestBodySize: 1024 * 1024, onerror: error => console.error('MCP request failed:', error.message) });
+}, {
+  maxRequestBodySize: 1024 * 1024,
+  // Only the error's class is logged: its message can repeat text the client sent.
+  onerror: error => console.error('MCP request failed:', error.name),
+});
 
 export async function POST(request: NextRequest) {
   // Authenticate before the MCP layer reads anything: a 401 here is what starts a client's sign-in.
