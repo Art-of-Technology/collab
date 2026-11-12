@@ -5,6 +5,7 @@ import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/prisma';
 import { checkUserPermission, Permission } from '@/lib/permissions';
+import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { listAgentTokens } from '@/lib/agent-tokens';
 import { Button } from '@/components/ui/button';
 import AgentTokensManager from '@/components/workspace/AgentTokensManager';
@@ -21,6 +22,16 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
   if (!hasPermission) notFound();
 
   const tokens = await listAgentTokens(workspace.id);
+  // An agent can be let into the viewer's other workspaces only where the viewer may manage agent tokens too.
+  const others = tokens?.length ? await prisma.workspace.findMany({
+    where: { ...postWorkspaceAccessWhere(session.user.id), id: { not: workspace.id } },
+    select: { id: true, name: true, slug: true },
+    orderBy: { name: 'asc' },
+  }) : [];
+  const manageable = [];
+  for (const { id, name, slug } of others) {
+    if ((await checkUserPermission(session.user.id, id, Permission.MANAGE_WORKSPACE_PERMISSIONS)).hasPermission) manageable.push({ id, name, slug });
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
@@ -42,9 +53,11 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
 
       <AgentTokensManager
         workspaceId={workspace.id}
+        workspaces={manageable}
         tokens={tokens && tokens.map(token => ({
           id: token.id,
           name: token.name,
+          workspaces: token.workspaces,
           access: token.access,
           // Plain date text, so the server and the browser render the same thing.
           createdAt: token.createdAt.toISOString().slice(0, 10),

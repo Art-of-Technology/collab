@@ -38,6 +38,7 @@ test('agent token lifecycle stays consistent under concurrent requests', async t
   const workspace = async () => (await prisma.workspace.create({ data: { name: `Work ${++workspaces}`, slug: `work-${workspaces}`, ownerId: 'alice' }, select: { id: true } })).id;
   const mint = (workspaceId, name = 'Claude') => lib.createAgentToken({ workspaceId, actorId: 'alice', name, access: 'write', expiresInDays: 90 });
   const revoke = (workspaceId, tokenId) => lib.revokeAgentToken({ workspaceId, actorId: 'alice', tokenId });
+  const allow = (workspaceId, tokenId, targetWorkspaceId, allowed = true) => lib.setAgentWorkspaceAccess({ workspaceId, actorId: 'alice', tokenId, targetWorkspaceId, allowed });
   const accounts = async workspaceId => [...new Set((await prisma.appToken.findMany({ where: { workspaceId, appId: 'agent-app' }, select: { userId: true } })).map(row => row.userId))];
   const member = (workspaceId, userId) => prisma.workspaceMember.findUnique({ where: { userId_workspaceId: { userId, workspaceId } } });
 
@@ -102,6 +103,78 @@ test('agent token lifecycle stays consistent under concurrent requests', async t
       assert.ok(fresh.token, stop);
       assert.deepEqual(await accounts(w), [account], 'the same account is reused');
       assert.equal((await member(w, account)).status, true);
+    }
+  });
+
+  await t.test('an agent let into a second workspace is switched off everywhere with its last token', async () => {
+    const home = await workspace(), other = await workspace();
+    const first = await mint(home, 'Roamer');
+    const [account] = await accounts(home);
+    assert.equal(await allow(home, first.id, other), true);
+    assert.equal(await allow(home, first.id, other), true, 'giving it twice changes nothing');
+    assert.equal(await allow(home, first.id, other, false), true);
+    assert.equal((await member(other, account)).status, false);
+    assert.equal(await allow(home, first.id, other, false), false, 'nothing left to take away');
+    assert.equal(await allow(home, first.id, other), true);
+    assert.equal((await member(other, account)).status, true);
+    assert.deepEqual((await lib.listAgentTokens(home))[0].workspaces.map(row => row.id), [other]);
+    assert.equal(await allow(other, first.id, home), false, 'the token is not of that workspace');
+
+    assert.equal(await revoke(home, first.id), true);
+    assert.equal((await member(home, account)).status, false);
+    assert.equal((await member(other, account)).status, false);
+    const fresh = await mint(home, 'Roamer');
+    assert.deepEqual(await accounts(home), [account], 'the same account is reused');
+    assert.equal((await member(home, account)).status, true);
+    assert.equal((await member(other, account)).status, false, 'a new token does not bring the other workspace back');
+    assert.deepEqual((await lib.listAgentTokens(home))[0].workspaces, []);
+    assert.equal(await prisma.appAuditLog.count({ where: { workspaceId: other, action: { in: ['agent_token.workspace_added', 'agent_token.workspace_removed'] } } }), 4, 'one record per change');
+  });
+
+  await t.test('letting an agent into a workspace while its last token is being revoked does not switch it on', async () => {
+    const home = await workspace(), other = await workspace();
+    const { id } = await mint(home, 'Racer');
+    const [account] = await accounts(home);
+    // What a revocation does, held open: the grant starts while the token still reads as usable.
+    const revoking = prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${account} FOR UPDATE`;
+      await tx.appToken.updateMany({ where: { id }, data: { isRevoked: true, revokedAt: new Date() } });
+      await tx.workspaceMember.updateMany({ where: { userId: account }, data: { status: false } });
+      await sleep(400);
+    }, { timeout: 10_000 });
+    await sleep(100);
+    const overlapping = await allow(home, id, other);
+    await revoking;
+    assert.equal(overlapping, false);
+    assert.equal(await member(other, account), null, 'no membership was created');
+  });
+
+  await t.test('concurrent member status changes do not create false transition audits', async () => {
+    for (const operation of ['remove', 'revoke', 'mint', 'grant']) {
+      const home = await workspace(), other = await workspace();
+      const first = await mint(home, `Transition ${operation}`);
+      const [account] = await accounts(home);
+      await allow(home, first.id, other);
+      if (operation === 'mint') await prisma.appToken.update({ where: { id: first.id }, data: { tokenExpiresAt: new Date(0) } });
+      const key = { userId_workspaceId: { userId: account, workspaceId: other } };
+      if (operation === 'grant') await prisma.workspaceMember.update({ where: key, data: { status: false, role: 'ADMIN' } });
+      const before = await prisma.appAuditLog.count({ where: { workspaceId: other } });
+      const changing = prisma.$transaction(async tx => {
+        await tx.workspaceMember.update({ where: key, data: { status: operation === 'grant' } });
+        await sleep(400);
+      }, { timeout: 10_000 });
+      await sleep(100);
+      const result = operation === 'remove' ? await allow(home, first.id, other, false)
+        : operation === 'revoke' ? await revoke(home, first.id)
+        : operation === 'mint' ? await mint(home, `Transition ${operation}`)
+        : await allow(home, first.id, other);
+      await changing;
+      if (operation === 'remove') assert.equal(result, false);
+      if (operation === 'grant') {
+        assert.equal(result, true);
+        assert.equal((await member(other, account)).role, 'ADMIN');
+      }
+      assert.equal(await prisma.appAuditLog.count({ where: { workspaceId: other } }), before, operation);
     }
   });
 });
