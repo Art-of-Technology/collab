@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
-import { postWorkspaceAccessWhere } from '@/lib/post-access';
+import { repositoryAccessWhere } from '@/lib/github/access';
 
 /**
  * The response to send when the caller may not read a repository's data, or null when they may:
@@ -11,7 +11,7 @@ export async function repositoryAccessDenied(repositoryId: string) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const repository = await prisma.repository.findFirst({
-    where: { id: repositoryId, project: { workspace: postWorkspaceAccessWhere(user.id) } },
+    where: { id: repositoryId, ...repositoryAccessWhere(user.id) },
     select: { id: true },
   });
   return repository ? null : NextResponse.json({ error: 'Repository not found' }, { status: 404 });

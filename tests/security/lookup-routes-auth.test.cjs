@@ -38,6 +38,7 @@ function fixture() {
   const globals = { URL, console: { error() {}, log() {} }, Date, parseInt, Promise };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, globals);
   deps['@/lib/issue-finder'] = load('src/lib/issue-finder.ts', deps, globals);
+  deps['@/lib/github/access'] = load('src/lib/github/access.ts', deps, globals);
   deps['@/lib/repository-access'] = load('src/lib/repository-access.ts', deps, globals);
   const route = file => load(`src/app/api/${file}/route.ts`, deps, globals);
   const as = id => { state.session = id ? { user: { id } } : null; };
