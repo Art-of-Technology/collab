@@ -656,17 +656,31 @@ textarea::selection {
   border-width: 0;
 }
 
-/* Mermaid diagrams drawn from code blocks; a wide diagram scrolls inside its own block */
+/* Mermaid diagrams drawn from code blocks. A drawing is fitted to its block; one that would get too
+   small to read keeps a minimum width and scrolls inside its own block. */
 .mermaid-diagram {
   overflow-x: auto;
   margin: 0.75rem 0;
 }
 
-.mermaid-diagram svg {
-  max-width: none;
-}
-
 .mermaid-diagram[data-state="error"] {
   font-size: 0.75rem;
   color: hsl(var(--destructive));
+}
+
+/* Note editor: the control under a diagram, and its source, which stays hidden unless it is opened,
+   the cursor is in it, or the diagram could not be drawn. */
+.mermaid-preview > button {
+  display: block;
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.mermaid-preview > button:hover {
+  color: hsl(var(--foreground));
+}
+
+.mermaid-preview:not([data-state="error"]) + pre.mermaid-source-collapsed {
+  display: none;
 }
