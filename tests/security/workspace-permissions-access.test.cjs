@@ -56,6 +56,17 @@ test('self lookup keeps active role/owner controls and revoked404', async () => 
   f.state.owner = true; assert.equal((await f.invoke('GET', undefined, 'actor')).status, 200);
 });
 
+test('a system admin without membership receives workspace permissions', async () => {
+  const f = fixture();
+  f.state.member = false;
+  f.state.admin = true;
+  const response = await f.invoke('GET', undefined, 'actor');
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.role, 'OWNER');
+  assert.ok(body.permissions.includes('MANAGE_WORKSPACE_MEMBERS'));
+});
+
 test('reset replaces only selected workspace role with existing application defaults', async () => {
   const f = fixture(); const unaffected = clone(f.state.rows.filter(row => row.workspaceId !== 'workspace' || row.role !== 'DEVELOPER'));
   assert.equal((await f.invoke('POST', { role: 'DEVELOPER' })).status, 200); assert.equal(f.state.seeds, 0); assert.equal(f.state.transactions, 1);

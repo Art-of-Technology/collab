@@ -1,13 +1,22 @@
 import { notFound } from 'next/navigation';
+import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { systemAdminId } from '@/lib/system-admin';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, Shield, UserCheck } from 'lucide-react';
 import { UserAvatar } from '@/components/ui/user-avatar';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
-async function getUsers() {
+async function getUsers(search: string) {
   const users = await prisma.user.findMany({
+    where: search ? {
+      OR: [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+      ],
+    } : undefined,
     select: {
       id: true,
       name: true,
@@ -28,11 +37,16 @@ async function getUsers() {
   return users;
 }
 
-export default async function AdminUsersPage() {
+export default async function AdminUsersPage({ searchParams }: { searchParams: Promise<{ q?: string | string[] }> }) {
   // The admin layout only redirects in the browser; without this the list is sent to anyone who asks.
   if (!await systemAdminId()) notFound();
-  const users = await getUsers();
-  const adminCount = users.filter(u => u.role === 'SYSTEM_ADMIN').length;
+  const { q } = await searchParams;
+  const search = typeof q === 'string' ? q.trim() : '';
+  const [users, totalCount, adminCount] = await Promise.all([
+    getUsers(search),
+    prisma.user.count(),
+    prisma.user.count({ where: { role: 'SYSTEM_ADMIN' } }),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -51,7 +65,7 @@ export default async function AdminUsersPage() {
             <Users className="h-4 w-4 text-gray-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{users.length}</div>
+            <div className="text-2xl font-bold text-white">{totalCount}</div>
           </CardContent>
         </Card>
 
@@ -71,7 +85,7 @@ export default async function AdminUsersPage() {
             <UserCheck className="h-4 w-4 text-gray-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{users.length - adminCount}</div>
+            <div className="text-2xl font-bold text-white">{totalCount - adminCount}</div>
           </CardContent>
         </Card>
       </div>
@@ -81,14 +95,19 @@ export default async function AdminUsersPage() {
         <CardHeader>
           <CardTitle className="text-white">All Users</CardTitle>
           <CardDescription className="text-gray-500">
-            Recently registered users on the platform
+            {search ? `Up to 50 users whose name or email contains "${search}"` : 'Recently registered users on the platform'}. Open a user to manage their workspaces.
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <form action="/admin/users" className="mb-4 flex gap-2">
+            <Input name="q" defaultValue={search} placeholder="Search by name or email" aria-label="Search users" className="max-w-sm border-collab-700 bg-collab-950 text-white" />
+            <Button type="submit" variant="outline" size="sm">Search</Button>
+          </form>
           <div className="space-y-2">
             {users.map((user) => (
-              <div
+              <Link
                 key={user.id}
+                href={`/admin/users/${user.id}`}
                 className="flex items-center justify-between p-3 rounded-lg border border-collab-700 hover:bg-collab-700/50 transition-colors"
               >
                 <div className="flex items-center gap-3">
@@ -111,7 +130,7 @@ export default async function AdminUsersPage() {
                     Joined {new Date(user.createdAt).toLocaleDateString()}
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </CardContent>

@@ -43,7 +43,8 @@ export async function GET(
       const { getUserPermissions, getUserWorkspaceRole } = await import('@/lib/permissions');
 
       const userPermissions = await getUserPermissions(userId, workspaceId);
-      const userRole = await getUserWorkspaceRole(userId, workspaceId);
+      const userRole = await getUserWorkspaceRole(userId, workspaceId)
+        ?? (await checkUserPermission(userId, workspaceId, Permission.MANAGE_WORKSPACE_MEMBERS)).userRole;
 
       if (!userRole) {
         return NextResponse.json(

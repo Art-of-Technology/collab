@@ -1,4 +1,4 @@
-const { assert, test, load } = require('./helpers.cjs');
+const { assert, test, load, matches } = require('./helpers.cjs');
 
 // The admin layout only redirects in the browser, so each page must refuse on the server before it reads anything.
 function fixture() {
@@ -10,7 +10,8 @@ function fixture() {
   const prisma = {
     user: {
       findUnique: async ({ where }) => users.find(row => row.id === where.id) ?? null,
-      findMany: async () => { state.reads.push('users'); return users; },
+      findMany: async ({ where = {}, take }) => { state.reads.push('users'); return users.filter(row => matches(row, where)).slice(0, take); },
+      count: async ({ where = {} } = {}) => { state.reads.push('user count'); return users.filter(row => matches(row, where)).length; },
     },
     app: { findMany: async () => { state.reads.push('apps'); return []; } },
   };
@@ -27,7 +28,7 @@ function fixture() {
     '@/components/ui/card': ui(['Card', 'CardContent', 'CardDescription', 'CardHeader', 'CardTitle']),
     '@/components/ui/badge': ui(['Badge']), '@/components/ui/user-avatar': ui(['UserAvatar']),
     '@/components/ui/skeleton': ui(['Skeleton']), '@/components/ui/alert': ui(['Alert', 'AlertDescription', 'AlertTitle']),
-    '@/components/ui/button': ui(['Button']),
+    '@/components/ui/button': ui(['Button']), '@/components/ui/input': ui(['Input']),
     './SystemAppToggle': ui(['SystemAppToggle']), './AppConfigEditor': ui(['AppConfigEditor']),
   };
   deps['@/lib/system-admin'] = load('src/lib/system-admin.ts', deps);
@@ -36,8 +37,8 @@ function fixture() {
     apps: load('src/app/admin/system-apps/page.tsx', deps, { Date }).default,
   };
   // Runs a page as the server does: an async component under a Suspense boundary is awaited too.
-  const render = async page => {
-    let node = await pages[page]();
+  const render = async (page, query = {}) => {
+    let node = await pages[page]({ searchParams: Promise.resolve(query) });
     while (typeof node?.props?.children?.type === 'function') node = await node.props.children.type(node.props.children.props);
     return node;
   };
@@ -64,6 +65,39 @@ for (const page of ['users', 'apps']) {
     const f = fixture();
     f.as('root', 'SYSTEM_ADMIN');
     assert.ok(await f.render(page));
-    assert.deepEqual(f.state.reads, [page]);
+    assert.deepEqual(f.state.reads, page === 'users' ? ['users', 'user count', 'user count'] : [page]);
   });
 }
+
+// Everything a rendered page says, and where its links go.
+const text = node => node == null || typeof node === 'boolean' ? '' : typeof node !== 'object' ? String(node)
+  : [node.props?.href ?? '', ...[].concat(node.props?.children ?? []).map(text)].join(' ');
+
+test('the admin users list finds people by name or email and links each to their workspaces screen', async () => {
+  const f = fixture();
+  f.as('root', 'SYSTEM_ADMIN');
+  const all = text(await f.render('users'));
+  assert.match(all, /root@example\.test/);
+  assert.match(all, /\/admin\/users\/bob /);
+  for (const query of ['BOB@exam', ' bob ', 'Bo']) {
+    const found = text(await f.render('users', { q: query }));
+    assert.match(found, /bob@example\.test/, query);
+    assert.doesNotMatch(found, /root@example\.test/, query);
+  }
+  assert.doesNotMatch(text(await f.render('users', { q: 'nobody' })), /example\.test/);
+  assert.match(text(await f.render('users', { q: ['bob', 'root'] })), /root@example\.test/, 'a repeated parameter is not a search');
+});
+
+test('user summary counts cover the platform regardless of search and list limit', async () => {
+  const f = fixture();
+  f.as('root', 'SYSTEM_ADMIN');
+  for (let i = 0; i < 51; i++) {
+    f.users.push({ id: `extra-${i}`, name: 'Extra', email: `extra-${i}@example.test`, role: 'DEVELOPER', createdAt: new Date(), _count: { workspaceMemberships: 0 } });
+  }
+  for (const q of ['', 'nobody', 'root']) {
+    const rendered = text(await f.render('users', { q }));
+    assert.match(rendered, /Total Users\s+53/);
+    assert.match(rendered, /System Admins\s+1/);
+    assert.match(rendered, /Regular Users\s+52/);
+  }
+});
