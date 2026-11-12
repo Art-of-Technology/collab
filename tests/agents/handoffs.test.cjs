@@ -388,6 +388,22 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     assert.equal((await patch(['label-w'])).status, 200);
     assert.equal(await prisma.agentHandoff.count({ where: { issueId: 'route-labels' } }), 2);
     assert.equal((await updateIssue('outsider', 'route-labels', { labels: [] }, 'w')).status, 404);
+    // A parent must be an issue of this workspace, as it must be on create: an ID from another
+    // workspace would otherwise show that issue's key and title on this one.
+    await prisma.issue.createMany({ data: [
+      { id: 'cparentlocal0001', workspaceId: 'w', projectId: 'p-w', title: 'Local parent', issueKey: 'w-parent' },
+      { id: 'cparentforeign01', workspaceId: 'foreign', projectId: 'p-foreign', title: 'Foreign parent', issueKey: 'foreign-parent' },
+    ] });
+    const reparent = parentId => PATCH(new Request('https://example.test', { method: 'PATCH', body: JSON.stringify({ parentId }) }), alice, { params: Promise.resolve({ issueIdOrKey: 'route-labels' }) });
+    const parentOf = async () => (await prisma.issue.findUnique({ where: { id: 'route-labels' } })).parentId;
+    const refused = await reparent('cparentforeign01');
+    assert.equal(refused.status, 404);
+    assert.equal((await refused.json()).error, 'parent_issue_not_found');
+    assert.equal(await parentOf(), null);
+    assert.equal((await reparent('cparentlocal0001')).status, 200);
+    assert.equal(await parentOf(), 'cparentlocal0001');
+    assert.equal((await reparent(null)).status, 200);
+    assert.equal(await parentOf(), null);
   });
 
   await t.test('project coordinator migration, single owner lease and tenant-filtered snapshots', async () => {

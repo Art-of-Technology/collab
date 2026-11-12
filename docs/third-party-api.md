@@ -233,6 +233,8 @@ PATCH /api/apps/auth/issues/{issueId}
 ```
 **Required scopes:** `issues:write`
 
+See the [app API update reference](../public/docs/third-party-api.md#update-issue) for parent issue validation.
+
 #### Issue Trash and Restore
 
 See the authoritative [app API Trash and Restore reference](../public/docs/third-party-api.md#issue-trash-and-restore) for deletion, preview, listing and restoration contracts.

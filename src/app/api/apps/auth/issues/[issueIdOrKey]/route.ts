@@ -224,6 +224,16 @@ export const PATCH = withAppAuth(
         );
       }
 
+      // A parent must be an issue of this workspace, as on create: checked before anything else looks at it.
+      if (updateData.parentId && !await prisma.issue.findFirst({
+        where: { id: updateData.parentId, workspaceId: context.workspace.id }, select: { id: true },
+      })) {
+        return NextResponse.json(
+          { error: 'parent_issue_not_found', error_description: 'Parent issue not found' },
+          { status: 404 }
+        );
+      }
+
       await assertLegacyIssueWriteAllowed(
         existingIssue.id,
         ...(updateData.parentId !== undefined && existingIssue.parentId ? [existingIssue.parentId] : []),

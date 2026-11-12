@@ -334,6 +334,8 @@ PATCH /api/apps/auth/issues/{issueId}
 ```
 **Required scopes:** `issues:write`
 
+When setting `parentId`, the parent issue must belong to the authenticated workspace; it may belong to another project in that workspace. A missing parent or one in another workspace returns HTTP 404 (`parent_issue_not_found`). Set `parentId` to `null` to clear the parent.
+
 #### Issue Trash and Restore
 
 All endpoints below require the selected project's `projectId` query parameter and current workspace access. `{issueIdOrKey}` accepts an ID or issue key within that project.
