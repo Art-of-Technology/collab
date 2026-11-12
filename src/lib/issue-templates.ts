@@ -81,8 +81,10 @@ export function templateFor(templates: Record<TemplatedIssueType, IssueTemplate>
   return TEMPLATED_TYPES.includes(key) ? templates[key] : null;
 }
 
+// Extract comparison text, not HTML for rendering.
+const plainText = (text: string) => text.split(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g).join('');
 // Heading text as it is compared: no markup, lower case, single spaces, no punctuation at the ends.
-const comparable = (text: string) => text.replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, '').replace(/&nbsp;/gi, ' ').toLowerCase()
+const comparable = (text: string) => plainText(text).replace(/&nbsp;/gi, ' ').toLowerCase()
   .replace(/\s+/g, ' ').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 
 /**
@@ -95,8 +97,8 @@ export function missingSections(template: IssueTemplate, description: string | n
   // Splitting on a pattern with one group gives: text before, heading, content, heading, content, ...
   const parts = (description ? commentHtml(description, null, true) : '').split(/<h[1-4]\b(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)<\/h[1-4]>/i);
   for (let index = 1; index < parts.length; index += 2) {
-    const content = parts[index + 1].replace(/<!--[\s\S]*?-->/g, '');
-    if (/<img\b/i.test(content) || content.replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, '').replace(/&nbsp;/gi, ' ').replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '').trim()) filled.add(comparable(parts[index]));
+    const content = parts[index + 1];
+    if (/<img\b/i.test(content) || plainText(content).replace(/&nbsp;/gi, ' ').replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '').trim()) filled.add(comparable(parts[index]));
   }
   return template.sections.filter(section => section.required && !filled.has(comparable(section.title))).map(section => section.title);
 }
@@ -119,7 +121,7 @@ export function templateBody(template: IssueTemplate, format: 'html' | 'markdown
     return template.sections.map(section => `<h2>${section.title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h2>`).join('');
   }
   return template.sections.map(section =>
-    `## ${section.title}\n\n<!-- ${section.guidance.replace(/-->/g, '->')}${section.required ? '' : ' (optional)'} -->\n`).join('\n');
+    `## ${section.title}\n\n<!-- ${section.guidance.replace(/-(?=-)/g, '- ')}${section.required ? '' : ' (optional)'} -->\n`).join('\n');
 }
 
 /** A template as the read routes return it: with a Markdown body ready to fill in. */

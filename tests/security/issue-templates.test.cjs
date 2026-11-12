@@ -99,6 +99,15 @@ test('guidance cannot close its own comment or break out of a heading', () => {
   assert.equal(templateBody(odd, 'html'), '<h2>A &lt;b&gt;title&lt;/b&gt; &amp; more</h2>');
 });
 
+test('comment terminators in guidance do not make guidance visible', () => {
+  for (const guidance of ['stop --!> leaked', 'stop ---> leaked', 'stop --> leaked']) {
+    const template = { ...BUG, sections: [{ title: 'Summary', required: true, guidance }] };
+    const body = templateBody(template, 'markdown');
+    assert.equal(commentHtml(body).includes('leaked'), false, guidance);
+    assert.deepEqual([...missingSections(template, body)], ['Summary'], guidance);
+  }
+});
+
 // The read routes for agents. The store has no database yet: every workspace gets the standards.
 function routes({ scopes = ['issues:read'], access = true } = {}) {
   const dependencies = {
