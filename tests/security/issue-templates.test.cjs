@@ -3,7 +3,7 @@ const { assert, test, load } = require('./helpers.cjs');
 // Sections are looked for in the description as people see it, so the real renderer is used.
 const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') });
 const library = load('src/lib/issue-templates.ts', { '@/lib/comment-html': { commentHtml } });
-const { STANDARD_TEMPLATES, TEMPLATED_TYPES, TEMPLATE_FIELDS, missingSections, missingFields, templateBody, templateFor } = library;
+const { STANDARD_TEMPLATES, TEMPLATED_TYPES, TEMPLATE_FIELDS, missingSections, missingFields, templateBody, templateFor, validateTemplateInput } = library;
 const BUG = STANDARD_TEMPLATES.BUG;
 // The library runs in its own context, so its arrays are copied before they are compared.
 const required = template => Array.from(template.sections).filter(section => section.required).map(section => section.title);
@@ -108,11 +108,60 @@ test('comment terminators in guidance do not make guidance visible', () => {
   }
 });
 
-// The read routes for agents. The store has no database yet: every workspace gets the standards.
+const section = (title, extra = {}) => ({ title, required: true, guidance: 'What goes here.', ...extra });
+const plain = value => JSON.parse(JSON.stringify(value));
+
+test('a template an admin saves is tidied: trimmed text, known fields once and in a fixed order', () => {
+  const saved = validateTemplateInput({
+    sections: [section('  Summary '), section('Steps', { required: false, guidance: '  Numbered.  ' })],
+    requiredFields: ['labels', 'priority', 'priority'],
+  });
+  assert.deepEqual(plain(saved), {
+    sections: [{ title: 'Summary', required: true, guidance: 'What goes here.' }, { title: 'Steps', required: false, guidance: 'Numbered.' }],
+    requiredFields: ['priority', 'labels'],
+  });
+  assert.deepEqual(plain(validateTemplateInput({ sections: [], requiredFields: [] })), { sections: [], requiredFields: [] });
+});
+
+for (const [label, input] of [
+  ['the same title twice in different case', { sections: [section('Summary'), section('summary:')], requiredFields: [] }],
+  ['a blank title', { sections: [section('   ')], requiredFields: [] }],
+  ['a title with no letters or digits', { sections: [section('???')], requiredFields: [] }],
+  ['a title of 81 characters', { sections: [section('x'.repeat(81))], requiredFields: [] }],
+  ['guidance of 501 characters', { sections: [section('Summary', { guidance: 'x'.repeat(501) })], requiredFields: [] }],
+  ['a non-boolean required flag', { sections: [section('Summary', { required: 'true' })], requiredFields: [] }],
+  ['non-string guidance', { sections: [section('Summary', { guidance: 42 })], requiredFields: [] }],
+  ['missing section properties', { sections: [{ title: 'Summary' }], requiredFields: [] }],
+  ['21 sections', { sections: Array.from({ length: 21 }, (_, index) => section(`Section ${index}`)), requiredFields: [] }],
+  ['a field that is not on the list', { sections: [section('Summary')], requiredFields: ['color'] }],
+  ['sections that are not a list', { sections: 'Summary', requiredFields: [] }],
+  ['fields that are not a list', { sections: [section('Summary')], requiredFields: 'priority' }],
+  ['nothing at all', null],
+]) test(`a template with ${label} is refused with a reason`, () => {
+  const result = validateTemplateInput(input);
+  assert.equal(typeof result.error, 'string');
+  assert.ok(result.error.length > 10 && !('sections' in result));
+});
+
+test('literal section titles survive generated headings and match filled descriptions', () => {
+  for (const title of ['Steps *to reproduce*', 'A <b>title</b> & more', 'See [link](url)', 'Line\nbreak', 'Code `x` #']) {
+    const template = { ...BUG, sections: [section(title)] };
+    for (const format of ['html', 'markdown']) {
+      const body = templateBody(template, format);
+      const rendered = commentHtml(body);
+      const dom = new (require('jsdom').JSDOM)(rendered).window.document;
+      assert.equal(dom.querySelector('h2').textContent, title, `${format}: ${title}`);
+      assert.deepEqual([...missingSections(template, `${body}\n\nDetails.`)], [], `${format}: ${title}`);
+    }
+  }
+});
+
+// The read routes for agents, for a workspace that has edited nothing.
 function routes({ scopes = ['issues:read'], access = true } = {}) {
   const dependencies = {
     'next/server': { NextResponse: Response },
     '@/lib/issue-templates': library,
+    '@/lib/prisma': { prisma: { workspace: { findUnique: async () => ({ issueTemplatesEnforced: false }) }, issueTemplate: { findMany: async () => [] } } },
     '@/lib/issue-finder': { userHasWorkspaceAccess: async () => access },
     '@/lib/apps/auth-middleware': { withAppAuth: (handler, options) => (request, params) =>
       options.requiredScopes.every(scope => scopes.includes(scope))
