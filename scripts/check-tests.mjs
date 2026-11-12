@@ -22,7 +22,8 @@ for await (const event of run({ files, concurrency: 1 })) {
     const line = `${relative(process.cwd(), event.data.file ?? '')} > ${event.data.name}`;
     failing.push(line);
     const error = event.data.details?.error;
-    errors.set(line, String(error?.cause?.message ?? error?.message ?? '').trim().split('\n').slice(0, 8));
+    if (!errors.has(line)) errors.set(line, []);
+    errors.get(line).push(String(error?.cause?.message ?? error?.message ?? '').split('\n').slice(0, 8));
   }
 }
 failing.sort();
@@ -46,7 +47,7 @@ if (regressions.length) {
   console.log(`\nFailing and not listed (${regressions.length}). \`node --test <file>\` shows the whole error:`);
   for (const line of regressions) {
     console.log(`  ${line}`);
-    for (const text of errors.get(line) ?? []) console.log(`      ${text}`);
+    for (const text of errors.get(line).shift()) console.log(`      ${text}`);
   }
 }
 if (fixed.length) {
