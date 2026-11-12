@@ -15,16 +15,17 @@ export async function POST(req: NextRequest) {
     }
     const { imageUrl, filename, userId } = await req.json();
     
-    if (!imageUrl || !filename || !userId) {
-      return NextResponse.json(
-        { error: 'Image URL, filename, and userId are required' },
-        { status: 400 }
-      );
+    const prefix = typeof filename === 'string' ? filename.match(/^profile_[^_]+_/)?.[0] : undefined;
+    const ownedPrefix = `${prefix ?? ''}${actor.id}_`;
+    if (userId !== actor.id || !prefix || !filename.startsWith(ownedPrefix) || !/^\d+_[a-z0-9]{0,6}$/.test(filename.slice(ownedPrefix.length))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // The file name carries the user's id (see generateProfileImageFilename), so a user can only write their own.
-    if (userId !== actor.id || !String(filename).startsWith('profile_') || !String(filename).includes(`_${actor.id}_`)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!imageUrl) {
+      return NextResponse.json(
+        { error: 'Image URL is required' },
+        { status: 400 }
+      );
     }
 
     // Validate that it's a valid image URL

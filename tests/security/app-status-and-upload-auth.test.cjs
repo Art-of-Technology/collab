@@ -90,11 +90,17 @@ test('a profile image is written only under the signed-in user\'s own name', asy
   for (const [body, why] of [
     [{ ...mine, userId: 'alice' }, 'another user id'],
     [{ ...mine, filename: 'profile_google_alice_1_abc' }, 'another user\'s file name'],
+    [{ ...mine, filename: 'profile_google_alice_bob_1_abc' }, 'user id embedded in another user\'s file name'],
+    [{ ...mine, filename: 'profile_google_bob_1_abc_extra' }, 'extra filename segments'],
+    [{ ...mine, filename: undefined }, 'missing file name'],
+    [{ ...mine, userId: undefined }, 'missing user id'],
+    [{ ...mine, filename: 123 }, 'non-string file name'],
     [{ ...mine, filename: 'bob' }, 'a file name that is not a profile image of this user'],
   ]) {
     assert.equal((await f.profile.POST(f.request(body))).status, 403, why);
   }
   assert.deepEqual(f.state.uploads, []);
+  assert.equal((await f.profile.POST(f.request({ ...mine, imageUrl: undefined }))).status, 400);
   assert.equal((await f.profile.POST(f.request(mine))).status, 200);
   assert.deepEqual(f.state.uploads, ['profile_google_bob_1_abc']);
 });
