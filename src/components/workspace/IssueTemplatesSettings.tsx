@@ -22,39 +22,63 @@ const FIELD_LABELS: Record<TemplateField, string> = {
 interface IssueTemplatesSettingsProps {
   workspaceId: string;
   initialTemplates: IssueTemplate[];
+  initialEnforced: boolean;
 }
 
-export default function IssueTemplatesSettings({ workspaceId, initialTemplates }: IssueTemplatesSettingsProps) {
+export default function IssueTemplatesSettings({ workspaceId, initialTemplates, initialEnforced }: IssueTemplatesSettingsProps) {
   // What is stored, and the unsaved edits of each type.
   const [saved, setSaved] = useState(initialTemplates);
   const [drafts, setDrafts] = useState(initialTemplates);
-  const [busy, setBusy] = useState<IssueTemplate['type'] | null>(null);
+  const [enforced, setEnforced] = useState(initialEnforced);
+  const [busy, setBusy] = useState<IssueTemplate['type'] | 'enforced' | null>(null);
 
   const edit = (type: IssueTemplate['type'], change: (draft: IssueTemplate) => IssueTemplate) =>
     setDrafts(current => current.map(draft => (draft.type === type ? change(draft) : draft)));
   const editSections = (type: IssueTemplate['type'], change: (sections: TemplateSection[]) => TemplateSection[]) =>
     edit(type, draft => ({ ...draft, sections: change(draft.sections) }));
 
-  async function send(type: IssueTemplate['type'], body: object, done: string) {
-    setBusy(type);
+  // One change at a time: sends it, shows the outcome, and hands the server's answer to `apply`.
+  async function put(working: NonNullable<typeof busy>, body: object, done: string, apply: (result: { template: IssueTemplate & { body?: string } }) => void) {
+    setBusy(working);
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/issue-templates`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, ...body }),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || 'The template could not be saved.');
-      const { body: _markdown, ...template } = result.template;
-      setSaved(current => current.map(item => (item.type === type ? template : item)));
-      setDrafts(current => current.map(item => (item.type === type ? template : item)));
+      if (!response.ok) throw new Error(result.error || 'The change could not be saved.');
+      apply(result);
       toast({ title: done });
     } catch (error) {
-      toast({ title: 'Not saved', description: error instanceof Error ? error.message : 'The template could not be saved.', variant: 'destructive' });
+      toast({ title: 'Not saved', description: error instanceof Error ? error.message : 'The change could not be saved.', variant: 'destructive' });
     } finally {
       setBusy(null);
     }
   }
 
+  const send = (type: IssueTemplate['type'], body: object, done: string) => put(type, { type, ...body }, done, result => {
+    const { body: _markdown, ...template } = result.template;
+    setSaved(current => current.map(item => (item.type === type ? template : item)));
+    setDrafts(current => current.map(item => (item.type === type ? template : item)));
+  });
+
   return (
+    <div className="space-y-4">
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+        <div className="space-y-1.5">
+          <CardTitle className="text-base"><Label htmlFor="enforce-issue-templates" className="text-base">Require templates for agents</Label></CardTitle>
+          <CardDescription>
+            When this is on, an agent that creates or edits an issue without a required section or field is refused and told what is missing.
+            People in the web app are never refused. Agents on a Collab CLI older than 0.9.0 get a refusal with no explanation, so update them first.
+          </CardDescription>
+        </div>
+        <Switch
+          id="enforce-issue-templates" checked={enforced} disabled={busy !== null}
+          onCheckedChange={next => put('enforced', { enforced: next }, next ? 'Agents must now follow the templates' : 'Agents are no longer held to the templates', () => setEnforced(next))}
+        />
+      </CardHeader>
+    </Card>
+
     <Tabs defaultValue={drafts[0]?.type}>
       <TabsList>
         {drafts.map(draft => <TabsTrigger key={draft.type} value={draft.type}>{TYPE_LABELS[draft.type]}</TabsTrigger>)}
@@ -176,5 +200,6 @@ export default function IssueTemplatesSettings({ workspaceId, initialTemplates }
         );
       })}
     </Tabs>
+    </div>
   );
 }

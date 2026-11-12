@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
+import { getWorkspaceTemplates } from '@/lib/issue-template-store';
+import { issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 
 const AssignIssueSchema = z.object({
   assigneeId: z.string().cuid().optional(),
@@ -43,6 +45,7 @@ export const POST = withAppAuth(
               email: true,
             },
           },
+          labels: { select: { id: true } },
         },
       });
 
@@ -59,6 +62,11 @@ export const POST = withAppAuth(
 
       // Handle unassign
       if (data.unassign) {
+        // An agent may not take away an assignee that the issue's template requires.
+        const { enforced, templates } = await getWorkspaceTemplates(context.workspace.id);
+        const refusal = enforced && updateRefusal(templates, issueShape(issue), issueShape({ ...issue, assigneeId: null }));
+        if (refusal) return NextResponse.json(refusal, { status: 422 });
+
         await prisma.issue.update({
           where: { id: issue.id },
           data: { assigneeId: null },

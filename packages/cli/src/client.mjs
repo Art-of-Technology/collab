@@ -157,9 +157,21 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
   if (!response.ok) {
     const codes = { 400: 'invalid_request', 401: 'unauthorized', 403: 'forbidden', 404: 'not_found', 409: 'conflict', 429: 'rate_limited' };
     let code = codes[response.status] || 'server_error';
-    let retrievalMessage, configureRejected = false;
+    let retrievalMessage, configureRejected = false, template;
     try {
-      const remoteCode = JSON.parse(text).error;
+      const remote = JSON.parse(text), remoteCode = remote.error;
+      if (mutation && response.status === 422 && remoteCode === 'template_required' && /^\/api\/apps\/auth\/issues(?:\/[^/?]+(?:\/assign)?)?(?:\?|$)/.test(endpoint) &&
+          /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
+        // The one refusal whose details are passed on: the agent needs the names to complete its issue.
+        // Only short plain strings are copied, never the server's own message.
+        const names = (value, known) => (Array.isArray(value) ? value : []).filter(item => typeof item === 'string' && (!known || known.includes(item)))
+          .slice(0, 30).map(item => item.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 80));
+        const issueType = ['BUG', 'STORY', 'EPIC', 'MILESTONE', 'TASK'].find(type => type === remote.issue_type);
+        code = remoteCode;
+        retrievalMessage = `Collab refused the issue: required template sections or fields are missing. Run collab templates get ${issueType || 'TYPE'}.`;
+        template = { ...(issueType && { issueType }), missingSections: names(remote.missing_sections),
+          missingFields: names(remote.missing_fields, ['priority', 'dueDate', 'startDate', 'assigneeId', 'storyPoints', 'labels']) };
+      }
       if (response.status === 409 && /^\/api\/apps\/auth\/agents\/reviews(?:\/[^/?]+)?(?:\?|$)/.test(endpoint) &&
           /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
         const reviewConflicts = {
@@ -211,7 +223,7 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
     if (method === 'POST' && response.status === 400 && /^\/api\/apps\/auth\/agents\/handoffs(?:\?|$)/.test(endpoint)) {
       retrievalMessage = 'Check --agent (sender), --to-agents or --to-labels (recipient), an accessible --issue and nonempty --content. Optional --request-id must be a UUID; --after-id must be a claimed handoff on the same issue.';
     }
-    throw new CliError(code, retrievalMessage || (code === 'outcome_unknown' ? 'Server failed after dispatch. Inspect Collab before retrying.' : `Collab refused the request (HTTP ${response.status}).`), response.status === 401 ? 3 : response.status === 403 ? 4 : 5, { status: response.status, ...(configureRejected && { configureRejected: true }) });
+    throw new CliError(code, retrievalMessage || (code === 'outcome_unknown' ? 'Server failed after dispatch. Inspect Collab before retrying.' : `Collab refused the request (HTTP ${response.status}).`), response.status === 401 ? 3 : response.status === 403 ? 4 : 5, { status: response.status, ...(configureRejected && { configureRejected: true }), ...template });
   }
   if (!text && (response.status === 204 || endpoint === '/api/oauth/revoke')) return { ok: true };
   try {

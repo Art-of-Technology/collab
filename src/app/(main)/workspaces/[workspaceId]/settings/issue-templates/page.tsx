@@ -17,7 +17,7 @@ export default async function IssueTemplatesPage({ params }: { params: Promise<{
   const { hasPermission } = await checkUserPermission(session.user.id, workspaceId, Permission.MANAGE_WORKSPACE_SETTINGS);
   if (!hasPermission) notFound();
 
-  const { templates } = await getWorkspaceTemplates(workspaceId);
+  const { enforced, templates } = await getWorkspaceTemplates(workspaceId);
 
   return (
     <div className="p-4 pb-28 md:p-6 md:pb-28 max-w-4xl mx-auto">
@@ -38,7 +38,7 @@ export default async function IssueTemplatesPage({ params }: { params: Promise<{
         </p>
       </div>
 
-      <IssueTemplatesSettings workspaceId={workspaceId} initialTemplates={TEMPLATED_TYPES.map(type => templates[type])} />
+      <IssueTemplatesSettings workspaceId={workspaceId} initialTemplates={TEMPLATED_TYPES.map(type => templates[type])} initialEnforced={enforced} />
     </div>
   );
 }

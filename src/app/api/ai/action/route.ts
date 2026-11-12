@@ -6,8 +6,10 @@ import { prisma } from "@/lib/prisma";
 import { z } from 'zod';
 import { IssueType } from '@prisma/client';
 import { checkUserPermission, Permission } from '@/lib/permissions';
-import { userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { findIssueByIdOrKey, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { updateIssue } from '@/lib/issue-mutation';
+import { getWorkspaceTemplates } from '@/lib/issue-template-store';
+import { ISSUE_SHAPE_SELECT, createRefusal, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 
 export async function POST(req: Request) {
   try {
@@ -188,6 +190,11 @@ export async function POST(req: Request) {
 
         await assertLegacyProjectWriteAllowed(project.id);
 
+        // The assistant is an agent: it is held to the workspace's issue templates.
+        const { enforced, templates } = await getWorkspaceTemplates(workspace.id);
+        const refusal = enforced && createRefusal(templates, issueShape({ ...params, type: params.type || 'TASK' }));
+        if (refusal) return NextResponse.json(refusal, { status: 422 });
+
         const issue = await prisma.$transaction(async (tx) => {
           const issueKey = await allocateIssueKey(tx, project.id);
           return tx.issue.create({
@@ -230,6 +237,14 @@ export async function POST(req: Request) {
           'title', 'description', 'status', 'priority', 'type', 'assigneeId', 'dueDate',
         ].includes(field))) {
           return NextResponse.json({ error: 'Unsupported issue update field' }, { status: 400 });
+        }
+        const { enforced, templates } = await getWorkspaceTemplates(workspace.id);
+        if (enforced) {
+          // shortcut: read ahead of updateIssue's own read, so an edit that lands in between is not seen;
+          // move the check into updateIssue's transaction if this route ever gets a caller.
+          const before = await findIssueByIdOrKey(issueId, { workspaceId: workspace.id, userId: currentUser.id, select: ISSUE_SHAPE_SELECT });
+          const refusal = before && updateRefusal(templates, issueShape(before), issueShape({ ...before, ...fields }));
+          if (refusal) return NextResponse.json(refusal, { status: 422 });
         }
         const result = await updateIssue(currentUser.id, issueId, fields, workspace.id);
         if ('error' in result) {

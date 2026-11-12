@@ -16,6 +16,8 @@ import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 import { emitIssueCreated } from '@/lib/event-bus';
+import { getWorkspaceTemplates } from '@/lib/issue-template-store';
+import { createRefusal, issueShape } from '@/lib/issue-template-enforcement';
 
 // Schema for creating new issues
 const CreateIssueSchema = z.object({
@@ -248,6 +250,12 @@ export const POST = withAppAuth(
       // to avoid race conditions with concurrent requests
       await assertLegacyProjectWriteAllowed(project.id);
       if (issueData.parentId) await assertLegacyIssueWriteAllowed(issueData.parentId);
+
+      // Agents are held to the workspace's issue templates. A field counts only when the request
+      // states it, so the default priority does not satisfy a template that requires one.
+      const { enforced, templates } = await getWorkspaceTemplates(context.workspace.id);
+      const refusal = enforced && createRefusal(templates, issueShape({ ...issueData, priority: body.priority === undefined ? undefined : issueData.priority }));
+      if (refusal) return NextResponse.json(refusal, { status: 422 });
 
       const newIssue = await prisma.$transaction(async (tx) => {
         const issueKey = await allocateIssueKey(tx, issueData.projectId);

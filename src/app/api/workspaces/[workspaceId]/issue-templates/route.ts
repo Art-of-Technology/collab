@@ -3,7 +3,7 @@ import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { Permission, checkUserPermission } from '@/lib/permissions';
-import { getWorkspaceTemplates, resetWorkspaceTemplate, saveWorkspaceTemplate } from '@/lib/issue-template-store';
+import { getWorkspaceTemplates, resetWorkspaceTemplate, saveWorkspaceTemplate, setTemplatesEnforced } from '@/lib/issue-template-store';
 import { TEMPLATED_TYPES, templateFor, validateTemplateInput, withBody, type TemplatedIssueType } from '@/lib/issue-templates';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +32,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 }
 
-// PUT /api/workspaces/[workspaceId]/issue-templates - save one type's template, or reset it to the standard
+// PUT /api/workspaces/[workspaceId]/issue-templates - save one type's template, reset it to the standard,
+// or switch enforcement for agents with { enforced }
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ workspaceId: string }> }) {
   try {
     const session = await getServerSession(authOptions);
@@ -41,7 +42,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!await canManageTemplates(session.user.id, workspaceId)) {
       return NextResponse.json({ error: 'You do not have permission to change issue templates' }, { status: 403 });
     }
-    const body = await request.json().catch(() => null) as { type?: unknown; reset?: unknown } | null;
+    const body = await request.json().catch(() => null) as { type?: unknown; reset?: unknown; enforced?: unknown } | null;
+    if (typeof body?.enforced === 'boolean') {
+      await setTemplatesEnforced(workspaceId, body.enforced);
+      return NextResponse.json({ enforced: body.enforced });
+    }
     const type = typeof body?.type === 'string' ? body.type.toUpperCase() as TemplatedIssueType : null;
     if (!type || !templateFor((await getWorkspaceTemplates(workspaceId)).templates, type)) {
       return NextResponse.json({ error: `Choose an issue type that has a template: ${TEMPLATED_TYPES.join(', ')}.` }, { status: 400 });
