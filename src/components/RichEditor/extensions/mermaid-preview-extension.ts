@@ -32,7 +32,7 @@ function preview(source: string, open: boolean, selected: boolean, view: EditorV
     if (position !== undefined) {
       const focused = document.activeElement === control;
       view.dispatch(view.state.tr.setMeta(key, position));
-      if (focused) (view.nodeDOM(position) as HTMLElement | null)?.previousElementSibling?.querySelector('button')?.focus();
+      if (focused) (view.nodeDOM(position) as HTMLElement | null)?.previousElementSibling?.querySelector<HTMLElement>(':scope > button')?.focus();
     }
   });
   // The stylesheet keeps the source in view when the diagram could not be drawn.

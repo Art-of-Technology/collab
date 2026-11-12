@@ -41,6 +41,79 @@ function loadRenderer(): Promise<Mermaid> {
   }));
 }
 
+const FULL = 'mermaid-diagram-full';
+
+/**
+ * The controls above a drawing. Inside its block the drawing is fitted; "Full screen" opens it over
+ * the whole window, where it can be zoomed, and the same control brings it back.
+ */
+function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement, width: number, height: number): HTMLElement {
+  const bar = document.createElement('div');
+  bar.className = 'mermaid-diagram-bar';
+  const level = document.createElement('output');
+  level.dataset.zoom = '';
+  let zoom = 1;
+  const setZoom = (next: number) => {
+    zoom = Math.min(8, Math.max(0.1, next));
+    Object.assign(drawing.style, { width: `${Math.round(width * zoom)}px`, maxWidth: 'none', minWidth: '0px' });
+    level.textContent = `${Math.round(zoom * 100)}%`;
+  };
+  // The whole drawing in view. Before the page has a layout there is no size to fit to.
+  const fitWindow = () => {
+    const fit = Math.min(canvas.clientWidth / width, canvas.clientHeight / height);
+    setZoom(fit > 0 ? fit : 1);
+  };
+  // Fitted to its block: at its natural size at most, and no smaller than two fifths of it, where
+  // labels stop being readable. Past that the drawing's area scrolls sideways.
+  const fitBlock = () => {
+    Object.assign(drawing.style, { width: '100%', maxWidth: `${width}px`, minWidth: `${width * 0.4}px` });
+    level.textContent = '100%';
+  };
+  const control = (text: string, label: string, action: () => void, zoomOnly = true) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = text;
+    if (label !== text) button.setAttribute('aria-label', label);
+    if (zoomOnly) button.dataset.zoom = '';
+    button.addEventListener('click', action);
+    return button;
+  };
+  const setFull = (full: boolean) => {
+    box.classList.toggle(FULL, full);
+    toggle.textContent = full ? 'Exit full screen' : 'Full screen';
+    if (full) fitWindow();
+    else fitBlock();
+  };
+  const toggle = control('Full screen', 'Full screen', () => {
+    if (document.fullscreenElement === box) void document.exitFullscreen();
+    else if (box.classList.contains(FULL)) setFull(false);
+    // A browser without element full screen, or one that refuses it, gets a block that covers the window.
+    else Promise.resolve().then(() => box.requestFullscreen()).catch(() => setFull(true));
+  }, false);
+  box.addEventListener('fullscreenchange', () => setFull(document.fullscreenElement === box));
+  box.addEventListener('keydown', event => {
+    if (!box.classList.contains(FULL)) return;
+    if (event.key === '+' || event.key === '=') setZoom(zoom * 1.25);
+    else if (event.key === '-') setZoom(zoom / 1.25);
+    else if (event.key === '0') setZoom(1);
+    // True full screen closes on Escape by itself; the covering block has to do it here.
+    else if (event.key === 'Escape' && document.fullscreenElement !== box) {
+      event.stopPropagation();
+      setFull(false);
+    }
+  });
+  bar.append(
+    control('−', 'Zoom out', () => setZoom(zoom / 1.25)),
+    level,
+    control('+', 'Zoom in', () => setZoom(zoom * 1.25)),
+    control('Fit', 'Fit to window', fitWindow),
+    control('100%', 'Actual size', () => setZoom(1)),
+    toggle,
+  );
+  fitBlock();
+  return bar;
+}
+
 const rendered = new Map<string, string>();
 let renderCount = 0;
 
@@ -55,12 +128,13 @@ export function diagramElement(source: string, onResult?: (drawn: boolean) => vo
   const dark = document.documentElement.classList.contains('dark');
   const key = `${dark ? 'dark' : 'light'}:${source}`;
   const show = (svg: string) => {
-    box.innerHTML = svg;
-    // Fit the drawing to its block, at its natural size at most. Below two fifths of that size the
-    // labels are too small to read, so from there the block scrolls sideways instead.
-    const drawing = box.querySelector('svg');
-    const natural = Number(drawing?.getAttribute('viewBox')?.split(/[\s,]+/)[2]);
-    if (drawing && natural) Object.assign(drawing.style, { width: '100%', maxWidth: `${natural}px`, minWidth: `${natural * 0.4}px` });
+    const canvas = document.createElement('div');
+    canvas.className = 'mermaid-diagram-canvas';
+    canvas.innerHTML = svg;
+    const drawing = canvas.querySelector('svg');
+    const [, , width, height] = (drawing?.getAttribute('viewBox') ?? '').split(/[\s,]+/).map(Number);
+    if (drawing && width && height) box.replaceChildren(viewControls(box, canvas, drawing, width, height), canvas);
+    else box.replaceChildren(canvas);
     box.dataset.state = 'drawn';
     onResult?.(true);
   };

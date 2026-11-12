@@ -130,6 +130,56 @@ test('a drawing is fitted to its block: at most its natural size, and no smaller
   assert.deepEqual({ width, maxWidth, minWidth }, { width: '100%', maxWidth: '1800px', minWidth: '720px' });
 });
 
+// A control of a drawing, found by what it says or by its accessible name.
+const press = (box, name) => [...box.querySelectorAll('button')]
+  .find(button => button.textContent === name || button.getAttribute('aria-label') === name).click();
+const sizing = box => {
+  const { width, maxWidth, minWidth } = box.querySelector('svg').style;
+  return { width, maxWidth, minWidth, level: box.querySelector('output').textContent };
+};
+async function wideDrawing() {
+  const { renderDiagrams } = diagrams(async () => ({ svg: '<svg viewBox="0 0 1800 600"><text>Users</text></svg>' }));
+  const container = rendered(FLOWCHART);
+  renderDiagrams(container);
+  await drawn();
+  return container.querySelector('.mermaid-diagram');
+}
+
+test('a drawing sits in its own scrolling area under a full screen control', async () => {
+  const box = await wideDrawing();
+  assert.equal(box.querySelector('.mermaid-diagram-canvas > svg text').textContent, 'Users');
+  assert.deepEqual([...box.querySelectorAll('button')].filter(button => !('zoom' in button.dataset)).map(button => button.textContent), ['Full screen']);
+  assert.equal(box.classList.contains('mermaid-diagram-full'), false);
+});
+
+test('a drawing opens over the whole window, zooms in steps, and returns to its fitted size', async () => {
+  const box = await wideDrawing();
+  press(box, 'Full screen');
+  await drawn();
+  assert.equal(box.classList.contains('mermaid-diagram-full'), true);
+  assert.deepEqual(sizing(box), { width: '1800px', maxWidth: 'none', minWidth: '0px', level: '100%' });
+  press(box, 'Zoom in');
+  assert.deepEqual(sizing(box), { width: '2250px', maxWidth: 'none', minWidth: '0px', level: '125%' });
+  press(box, 'Zoom out');
+  press(box, 'Zoom out');
+  assert.deepEqual(sizing(box), { width: '1440px', maxWidth: 'none', minWidth: '0px', level: '80%' });
+  press(box, 'Actual size');
+  assert.equal(sizing(box).width, '1800px');
+  press(box, 'Exit full screen');
+  await drawn();
+  assert.equal(box.classList.contains('mermaid-diagram-full'), false);
+  assert.deepEqual(sizing(box), { width: '100%', maxWidth: '1800px', minWidth: '720px', level: '100%' });
+});
+
+test('Escape closes a drawing that covers the window', async () => {
+  const box = await wideDrawing();
+  press(box, 'Full screen');
+  await drawn();
+  box.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(box.classList.contains('mermaid-diagram-full'), false);
+  assert.equal(sizing(box).width, '100%');
+});
+
 // The stylesheet's diagram rules decide whether a diagram's source is displayed in the note editor.
 const styles = require('node:fs').readFileSync(require('node:path').resolve(process.env.SECURITY_TEST_ROOT || `${__dirname}/../..`, 'src/app/globals.css'), 'utf8');
 document.head.appendChild(document.createElement('style')).textContent = styles.slice(styles.indexOf('/* Mermaid diagrams'));
@@ -151,7 +201,7 @@ function noteEditors(render) {
   return {
     plain, withDiagrams, preview,
     source: () => preview().nextElementSibling,
-    control: () => preview().querySelector('button'),
+    control: () => preview().querySelector(':scope > button'),
     close() { plain.destroy(); withDiagrams.destroy(); },
   };
 }
