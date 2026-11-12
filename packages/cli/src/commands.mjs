@@ -113,6 +113,12 @@ export const commands = {
   'worklogs delete': command('DELETE', 'issues/:id/work-logs/:childId'),
   'labels list': command('GET', 'labels', {}, { search: string }),
   'labels create': command('POST', 'labels', { name: string, color: string }, {}, { required: ['name'] }),
+  'templates list': command('GET', 'issue-templates', {}, {}, {
+    description: 'The issue template for each type in the workspace: required sections, required fields and a Markdown body to fill in.',
+  }),
+  'templates get': command('GET', 'issue-templates/:id', {}, {}, {
+    description: 'One issue template by type: BUG, STORY, EPIC, MILESTONE or TASK. Subtasks have none.',
+  }),
   'views list': command('GET', 'views'),
   'views get': command('GET', 'views/:id'),
   'members search': command('GET', 'search/users', {}, { q: string, role: string, team: string, hasActiveIssues: boolean, limit: integer }),

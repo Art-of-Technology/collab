@@ -1,0 +1,126 @@
+// Issue templates: one standard description per issue type, as headed sections plus the issue fields
+// that must be set. This file is pure: the server and the web forms both use it, so they agree on
+// what is missing.
+import { commentHtml } from '@/lib/comment-html';
+
+export type TemplatedIssueType = 'BUG' | 'STORY' | 'EPIC' | 'MILESTONE' | 'TASK';
+export type TemplateField = 'priority' | 'dueDate' | 'startDate' | 'assigneeId' | 'storyPoints' | 'labels';
+
+export interface TemplateSection {
+  title: string;
+  required: boolean;
+  /** One or two sentences telling the writer what goes in the section. */
+  guidance: string;
+}
+
+export interface IssueTemplate {
+  type: TemplatedIssueType;
+  version: number;
+  /** True for the built-in standard, false once a workspace has edited the type. */
+  standard: boolean;
+  sections: TemplateSection[];
+  requiredFields: TemplateField[];
+}
+
+/** Subtasks are deliberately absent: they stay free-form. */
+export const TEMPLATED_TYPES: TemplatedIssueType[] = ['BUG', 'STORY', 'EPIC', 'MILESTONE', 'TASK'];
+export const TEMPLATE_FIELDS: TemplateField[] = ['priority', 'dueDate', 'startDate', 'assigneeId', 'storyPoints', 'labels'];
+
+const must = (title: string, guidance: string): TemplateSection => ({ title, required: true, guidance });
+const may = (title: string, guidance: string): TemplateSection => ({ title, required: false, guidance });
+const standard = (type: TemplatedIssueType, sections: TemplateSection[], requiredFields: TemplateField[] = []): IssueTemplate =>
+  ({ type, version: 1, standard: true, sections, requiredFields });
+
+export const STANDARD_TEMPLATES: Record<TemplatedIssueType, IssueTemplate> = {
+  BUG: standard('BUG', [
+    must('Summary', 'What is wrong, in one or two sentences.'),
+    must('Steps to reproduce', 'Numbered steps from a known starting point.'),
+    must('Expected result', 'What should have happened.'),
+    must('Actual result', 'What happened instead, with the exact error text if there is one.'),
+    must('Environment', 'Where it happens: app version or commit, browser or operating system, account or workspace, data involved.'),
+    must('Severity and impact', 'Who is affected and how badly. Say if data is lost or security is involved.'),
+    may('Evidence', 'Logs, screenshots, links.'),
+    may('Workaround', 'What people can do until it is fixed.'),
+  ], ['priority']),
+  STORY: standard('STORY', [
+    must('User story', 'As a ..., I want ..., so that ...'),
+    must('Actors', 'Who or what takes part.'),
+    must('Preconditions', 'What must be true before it starts.'),
+    must('Main flow', 'Numbered steps of the normal path.'),
+    may('Alternate flows', 'Variations and failures, by step.'),
+    must('Acceptance criteria', 'Statements that can be checked, for example Given / When / Then.'),
+    may('Out of scope', 'What this story deliberately leaves out.'),
+  ]),
+  EPIC: standard('EPIC', [
+    must('Goal', 'The outcome, not the work.'),
+    must('Background', 'The problem and who has it.'),
+    must('Scope', 'What is included.'),
+    must('Non-goals', 'What is deliberately left out.'),
+    must('Success measures', 'How we will know it worked.'),
+    must('Deliverables', 'The stories or tasks expected.'),
+    may('Dependencies and risks', 'What this waits on and what could go wrong.'),
+  ]),
+  MILESTONE: standard('MILESTONE', [
+    must('Goal', 'What reaching this milestone means.'),
+    must('Deliverables', 'What must be finished.'),
+    must('Exit criteria', 'What must be true to call it reached.'),
+    must('Target date', 'The date, and what it depends on.'),
+    may('Dependencies and risks', 'What this waits on and what could go wrong.'),
+  ], ['dueDate']),
+  TASK: standard('TASK', [
+    must('What', 'The change or action.'),
+    must('Why', 'The reason, or the issue it serves.'),
+    must('Done when', 'How to tell it is finished.'),
+    may('Notes', 'Anything else worth knowing.'),
+  ]),
+};
+
+/** The template for an issue type, or null for Subtask and for types that have none. */
+export function templateFor(templates: Record<TemplatedIssueType, IssueTemplate>, type: string): IssueTemplate | null {
+  const key = type.toUpperCase() as TemplatedIssueType;
+  return TEMPLATED_TYPES.includes(key) ? templates[key] : null;
+}
+
+// Heading text as it is compared: no markup, lower case, single spaces, no punctuation at the ends.
+const comparable = (text: string) => text.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').toLowerCase()
+  .replace(/\s+/g, ' ').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+
+/**
+ * The required sections that a description lacks or leaves empty, in template order. A section is
+ * a heading; it is filled when something visible follows it before the next heading. Descriptions
+ * are stored as Markdown or as editor HTML, so the check reads them the way they are displayed.
+ */
+export function missingSections(template: IssueTemplate, description: string | null | undefined): string[] {
+  const filled = new Set<string>();
+  // Splitting on a pattern with one group gives: text before, heading, content, heading, content, ...
+  const parts = (description ? commentHtml(description) : '').split(/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/i);
+  for (let index = 1; index < parts.length; index += 2) {
+    const content = parts[index + 1].replace(/<!--[\s\S]*?-->/g, '');
+    if (/<img\b/i.test(content) || content.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim()) filled.add(comparable(parts[index]));
+  }
+  return template.sections.filter(section => section.required && !filled.has(comparable(section.title))).map(section => section.title);
+}
+
+/** The required fields that have no value. An empty text or an empty list is no value. */
+export function missingFields(template: IssueTemplate, values: Partial<Record<TemplateField, unknown>>): TemplateField[] {
+  return template.requiredFields.filter(field => {
+    const value = values[field];
+    return value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
+  });
+}
+
+/**
+ * A description to start from. As HTML, for the web editor, it is the headings alone, so nothing
+ * but the writer's own words is ever stored. As Markdown, for agents, each heading carries its
+ * guidance in a comment, which is not displayed and does not count as content.
+ */
+export function templateBody(template: IssueTemplate, format: 'html' | 'markdown'): string {
+  if (format === 'html') {
+    return template.sections.map(section => `<h2>${section.title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h2>`).join('');
+  }
+  return template.sections.map(section =>
+    `## ${section.title}\n\n<!-- ${section.guidance.replace(/-->/g, '->')}${section.required ? '' : ' (optional)'} -->\n`).join('\n');
+}
+
+/** A template as the read routes return it: with a Markdown body ready to fill in. */
+export const withBody = (template: IssueTemplate) => ({ ...template, body: templateBody(template, 'markdown') });
