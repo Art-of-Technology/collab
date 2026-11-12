@@ -251,6 +251,30 @@ test('a drawing comes back to its block when the browser closes the covering vie
   assert.equal(box.querySelector('dialog').open, true);
 });
 
+for (const native of [false, true]) {
+  test(`a queued dialog close does not dismiss a reopened ${native ? 'native' : 'fallback'} view`, async () => {
+    const box = await wideDrawing();
+    press(box, 'Full screen');
+    await drawn();
+    press(box, 'Exit full screen');
+    if (native) {
+      box.requestFullscreen = () => {
+        Object.defineProperty(document, 'fullscreenElement', { value: box, configurable: true });
+        box.dispatchEvent(new dom.window.Event('fullscreenchange'));
+        return Promise.resolve();
+      };
+    }
+    try {
+      press(box, 'Full screen');
+      await drawn();
+      assert.equal(box.classList.contains('mermaid-diagram-full'), true);
+      if (!native) assert.equal(box.querySelector('dialog').open, true);
+    } finally {
+      delete document.fullscreenElement;
+    }
+  });
+}
+
 test('fitting to the window may shrink a very wide drawing below one tenth', async () => {
   const { renderDiagrams } = diagrams(async () => ({ svg: '<svg viewBox="0 0 20000 400"><text>Users</text></svg>' }));
   const container = rendered(FLOWCHART);

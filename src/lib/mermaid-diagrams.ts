@@ -53,7 +53,9 @@ function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement
   const dialog = document.createElement('dialog');
   const placeholder = document.createComment('diagram');
   // The browser can close a modal dialog by itself (a back gesture, for example); bring the drawing back then too.
-  dialog.addEventListener('close', () => setFull(false));
+  dialog.addEventListener('close', () => {
+    if (dialog.parentNode && !dialog.open) setFull(false);
+  });
   const observer = new MutationObserver(() => {
     if (dialog.parentNode ? !box.isConnected : !placeholder.isConnected) {
       observer.disconnect();
