@@ -208,6 +208,27 @@ test('without modal dialogs the fallback restores the same drawing to its place'
   }
 });
 
+for (const modal of [true, false]) {
+  test(`removing the owner cleans up the ${modal ? 'dialog' : 'body'} fallback`, async () => {
+    const box = await wideDrawing();
+    const owner = box.parentNode;
+    const showModal = dom.window.HTMLDialogElement.prototype.showModal;
+    if (!modal) dom.window.HTMLDialogElement.prototype.showModal = undefined;
+    try {
+      press(box, 'Full screen');
+      await drawn();
+      owner.replaceChildren();
+      await drawn();
+      assert.equal(box.isConnected, false);
+      const escape = new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      document.body.dispatchEvent(escape);
+      assert.equal(escape.defaultPrevented, false);
+    } finally {
+      dom.window.HTMLDialogElement.prototype.showModal = showModal;
+    }
+  });
+}
+
 // The stylesheet's diagram rules decide whether a diagram's source is displayed in the note editor.
 const styles = require('node:fs').readFileSync(require('node:path').resolve(process.env.SECURITY_TEST_ROOT || `${__dirname}/../..`, 'src/app/globals.css'), 'utf8');
 document.head.appendChild(document.createElement('style')).textContent = styles.slice(styles.indexOf('/* Mermaid diagrams'));

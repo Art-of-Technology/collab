@@ -52,6 +52,14 @@ function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement
   bar.className = 'mermaid-diagram-bar';
   const dialog = document.createElement('dialog');
   const placeholder = document.createComment('diagram');
+  const observer = new MutationObserver(() => {
+    if (dialog.open ? !box.isConnected : !placeholder.isConnected) {
+      observer.disconnect();
+      window.removeEventListener('keydown', escapeFallback, true);
+      if (dialog.open) dialog.close();
+      else box.remove();
+    }
+  });
   const escapeFallback = (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.stopPropagation();
@@ -90,6 +98,7 @@ function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement
   };
   const setFull = (full: boolean) => {
     if (!full && (dialog.open || placeholder.parentNode)) {
+      observer.disconnect();
       window.removeEventListener('keydown', escapeFallback, true);
       if (dialog.open) {
         dialog.close();
@@ -120,6 +129,7 @@ function viewControls(box: HTMLElement, canvas: HTMLElement, drawing: SVGElement
         box.dataset.windowFallback = '';
       }
       window.addEventListener('keydown', escapeFallback, true);
+      observer.observe(document, { childList: true, subtree: true });
       setFull(true);
     });
   }, false);
