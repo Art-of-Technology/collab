@@ -62,10 +62,20 @@ export async function createAgentToken(input: {
   const wanted = input.name.trim();
 
   const created = await prisma.$transaction(async tx => {
+    // One mint at a time per name and workspace, so two cannot both find no account and create it twice.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-token:${input.workspaceId}:${wanted.toLowerCase()}`}))`;
     // Only accounts this app already owns here are reused: a person who shares the name never is.
     const account = (await serviceAccounts(tx, app.id, input.workspaceId)).find(user => user.name?.trim().toLowerCase() === wanted.toLowerCase())
       ?? await tx.user.create({ data: { name: wanted }, select: { id: true, name: true } });
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${account.id} FOR UPDATE`;
+    const membership = await tx.workspaceMember.findUnique({
+      where: { userId_workspaceId: { userId: account.id, workspaceId: input.workspaceId } }, select: { status: true },
+    });
+    if (membership && !membership.status) {
+      // Switched off by an admin while tokens were still usable: minting must not switch those back on.
+      const live = await tx.appToken.count({ where: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, isRevoked: false, tokenExpiresAt: { gte: new Date() } } });
+      if (live) return { error: 'paused' as const };
+    }
     await tx.workspaceMember.upsert({
       where: { userId_workspaceId: { userId: account.id, workspaceId: input.workspaceId } },
       update: { status: true },
@@ -82,7 +92,8 @@ export async function createAgentToken(input: {
     } });
     return { id: row.id, name: account.name ?? wanted };
   });
-  return { ...created, scopes, expiresAt, token };
+  if (created.error) return { error: created.error };
+  return { id: created.id, name: created.name, scopes, expiresAt, token };
 }
 
 /** Revoke one agent token of this workspace. False when it is not a live agent token here. */

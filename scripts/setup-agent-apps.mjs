@@ -25,6 +25,11 @@ export async function provisionAll(prisma) {
   });
 }
 
+// A refusal names the registration that differs and carries no secret; any other failure stays private.
+export const failureMessage = error => /registration differs/.test(error?.message ?? '')
+  ? error.message
+  : 'Agent app registration failed. Nothing was changed; no token or database error details emitted.';
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.length === 2) {
     console.log(JSON.stringify({ dryRun: true, apps: definitions.map(def => ({ app: def.slug, scopes: def.scopes, clientId: def.oauthClient?.clientId, redirectUris: def.oauthClient?.redirectUris })) }));
@@ -36,7 +41,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       const { PrismaClient } = await import('@prisma/client');
       prisma = new PrismaClient();
       for (const result of await provisionAll(prisma)) console.log(JSON.stringify(result));
-    } catch { console.error('Agent app registration failed. Nothing was changed; no token or database error details emitted.'); process.exitCode = 1; }
+    } catch (error) { console.error(failureMessage(error)); process.exitCode = 1; }
     finally { await prisma?.$disconnect(); }
   } else { console.error('Usage: node scripts/setup-agent-apps.mjs [--apply]'); process.exitCode = 2; }
 }

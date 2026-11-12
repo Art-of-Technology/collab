@@ -26,10 +26,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!body.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400, headers: noStore });
 
   const result = await createAgentToken({ workspaceId, actorId: session.user.id, ...body.data });
-  if ('error' in result) {
-    return result.error === 'not_found'
-      ? NextResponse.json({ error: 'Workspace not found' }, { status: 404, headers: noStore })
-      : NextResponse.json({ error: 'Agent tokens are not set up on this deployment' }, { status: 503, headers: noStore });
+  if (result.error) {
+    const [status, error] = ({
+      not_found: [404, 'Workspace not found'],
+      paused: [409, 'This agent is switched off. Switch its member back on, or revoke its tokens, before creating another token.'],
+      unavailable: [503, 'Agent tokens are not set up on this deployment'],
+    } as const)[result.error];
+    return NextResponse.json({ error }, { status, headers: noStore });
   }
   return NextResponse.json(result, { status: 201, headers: noStore });
 }

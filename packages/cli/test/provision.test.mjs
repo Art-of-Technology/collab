@@ -96,3 +96,14 @@ test('agent app setup reuses matching registrations and refuses differing ones w
     assert.equal(f.transactions(), 1);
   }
 });
+
+test('a refused agent app setup says which registration differs and hides every other failure', async () => {
+  const { failureMessage } = await import('../../../scripts/setup-agent-apps.mjs');
+  const refusal = 'Existing collab-agent registration differs; review it before changing anything.';
+  assert.equal(failureMessage(new Error(refusal)), refusal);
+  for (const error of [Object.assign(new Error('connect ECONNREFUSED postgresql://app:secret@db:5432/collab'), { code: 'P1001' }), new Error('Database configuration required.'), undefined, 'text']) {
+    const message = failureMessage(error);
+    assert.match(message, /Nothing was changed/);
+    assert.doesNotMatch(message, /secret|postgresql|ECONNREFUSED/);
+  }
+});
