@@ -163,12 +163,13 @@ export async function setAgentWorkspaceAccess(input: {
     // everywhere must not be followed by this switching it back on.
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
     if (!await tx.appToken.count({ where })) return false;
-    if (input.allowed && !await tx.appToken.count({ where: { appId: app.id, workspaceId: input.workspaceId, userId, isRevoked: false, tokenExpiresAt: { gte: new Date() } } })) return false;
     const key = { userId, workspaceId: input.targetWorkspaceId };
     await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${userId} AND "workspaceId" = ${input.targetWorkspaceId} FOR UPDATE`;
     const active = !!(await tx.workspaceMember.findUnique({ where: { userId_workspaceId: key }, select: { status: true } }))?.status;
     // Already let in: nothing to do. Not in: nothing to take away, so a workspace the agent never used is not found.
     if (active === input.allowed) return active;
+    // A new workspace needs an account that can still act: one with a usable token.
+    if (input.allowed && !await tx.appToken.count({ where: { appId: app.id, workspaceId: input.workspaceId, userId, isRevoked: false, tokenExpiresAt: { gte: new Date() } } })) return false;
     if (input.allowed) {
       await tx.workspaceMember.upsert({ where: { userId_workspaceId: key }, update: { status: true, role: 'MEMBER' }, create: { ...key, role: 'MEMBER' } });
     } else {

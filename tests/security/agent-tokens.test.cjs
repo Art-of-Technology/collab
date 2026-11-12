@@ -584,7 +584,12 @@ test('expired tokens cannot grant access and a fresh token clears stale grants',
   await f.access(first.id, 'w3');
   f.tokens[0].tokenExpiresAt = new Date(Date.now() - 1000);
   assert.equal((await f.access(first.id, 'w2')).status, 403);
-  assert.equal((await f.access(first.id, 'w3')).status, 404);
+  f.as('root');
+  const unchanged = f.writes();
+  assert.equal((await f.access(first.id, 'w2')).status, 404, 'an account with no usable token is not let into a new workspace');
+  assert.equal((await f.access(first.id, 'w3')).status, 200, 'the workspace it is already in stays a no-op');
+  assert.equal(f.writes(), unchanged);
+  f.as('alice');
   const before = f.audit.length;
   const fresh = (await f.mint()).body;
   assert.equal((await f.switched(fresh.token, '?workspaceId=w3')).status, 403);
