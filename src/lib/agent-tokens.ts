@@ -148,7 +148,7 @@ export async function revokeAgentToken(input: { workspaceId: string; actorId: st
  * Let the service account behind a token work in another workspace as a member, or stop it there.
  * It applies to every token of that account. False when the token or the other workspace is not found,
  * or when there is nothing to stop there.
- * The caller checks that the actor may do this in both workspaces.
+ * The caller checks permission in the home workspace and, for grants, in the target workspace.
  */
 export async function setAgentWorkspaceAccess(input: {
   workspaceId: string; actorId: string; tokenId: string; targetWorkspaceId: string; allowed: boolean;
