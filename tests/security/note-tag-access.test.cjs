@@ -308,3 +308,25 @@ for (const [field, value] of [
   assert.equal(response.status, 404);
   assert.deepEqual(f.state.deleted, []); assert.equal(f.state.effects, 0);
 });
+
+for (const access of ['member', 'owner']) test(`app DELETE refuses concurrent loss of workspace ${access} access`, async () => {
+  const f = appFixture(); f.context.token.scopes = ['context:write'];
+  if (access === 'owner') { f.ws[1].ownerId = 'alice'; f.ws[1].members[0].status = false; }
+  const remove = f.db.note.deleteMany;
+  f.db.note.deleteMany = async args => {
+    if (access === 'owner') f.ws[1].ownerId = 'bob';
+    else f.ws[1].members[0].status = false;
+    return remove(args);
+  };
+  const response = await deleteNote(f);
+  assert.equal(response.status, 404);
+  assert.deepEqual(f.state.deleted, []); assert.equal(f.state.effects, 0);
+});
+
+test('app DELETE allows a workspace owner without active membership', async () => {
+  const f = appFixture(); f.context.token.scopes = ['context:write'];
+  f.ws[1].ownerId = 'alice'; f.ws[1].members[0].status = false;
+  const response = await deleteNote(f);
+  assert.equal(response.status, 200);
+  assert.deepEqual(f.state.deleted, ['note']); assert.equal(f.state.effects, 1);
+});

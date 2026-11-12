@@ -402,6 +402,10 @@ export const DELETE = withAppAuth(
           id: note.id,
           authorId: context.user.id,
           workspaceId: context.workspace.id,
+          workspace: { OR: [
+            { ownerId: context.user.id },
+            { members: { some: { userId: context.user.id, status: true } } },
+          ] },
           scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },
           type: { notIn: SECRET_TYPES },
           isEncrypted: false,
