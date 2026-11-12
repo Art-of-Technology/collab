@@ -216,7 +216,7 @@ export function createFloorRenderer(
         line = `${line} ${words.slice(i).join(" ")}`;
         break;
       } else {
-        out.push(line);
+        out.push(fitted(ctx, line, width));
         line = words[i];
       }
     }
@@ -578,7 +578,11 @@ export function createFloorRenderer(
             depth + Math.abs(corner.dot(right)) / (tan * camera.aspect),
           );
         }
-    camera.position.copy(center).addScaledVector(direction, distance * (oneRow ? 1.02 : 1.06));
+    distance *= oneRow ? 1.02 : 1.06;
+    controls.maxDistance = Math.max(120, distance);
+    camera.far = Math.max(260, distance + bounds.getSize(new THREE.Vector3()).length());
+    camera.updateProjectionMatrix();
+    camera.position.copy(center).addScaledVector(direction, distance);
     controls.target.copy(center);
     controls.update();
   }

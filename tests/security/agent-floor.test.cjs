@@ -406,7 +406,12 @@ function sceneFixture() {
     target = new THREE.Vector3();
     constructor(object) { camera = object; target = this.target; }
     addEventListener(type, fn) { if (type === "start") moved = fn; }
-    update() { camera.lookAt(this.target); }
+    update() {
+      const offset = camera.position.clone().sub(this.target);
+      if (offset.length() > this.maxDistance)
+        camera.position.copy(this.target).add(offset.setLength(this.maxDistance));
+      camera.lookAt(this.target);
+    }
     dispose() { stats.disposed++; }
   }
   const { createFloorRenderer, shortAgentNames } = load("src/components/agents/floor/floor-renderer.ts", {
@@ -664,6 +669,31 @@ test("the board states each task and counts what a crowded column cannot show", 
     assert.equal(f.board("task-3"), undefined);
     for (const text of ["4 | In review", "0 | To do", "0 | Done", "+1 more in the task list"])
       assert.ok(f.drawn().includes(text), text);
+    data.tasks[1].title = `${"X".repeat(100)} next`;
+    data.tasks[2].title = `short ${"Y".repeat(100)} next`;
+    f.update({ snapshot: { ...data } });
+    assert.deepEqual(f.texts("task-1").slice(2), [`${"X".repeat(37)}…`, "next"]);
+    assert.deepEqual(f.texts("task-2").slice(2), ["short", `${"Y".repeat(37)}…`]);
+  } finally {
+    f.close();
+  }
+});
+test("automatic framing fits six rooms in a narrow host", () => {
+  const f = sceneFixture();
+  try {
+    const projects = Array.from({ length: 6 }, (_, i) => ({ ...f.props.projects[0], id: `p${i}` }));
+    f.size(200, 460);
+    f.update({ projects });
+    assert.ok(f.camera.position.distanceTo(f.target) > 120);
+    for (const x of [-1, 1]) {
+      const rooms = [...f.host.querySelectorAll(".floor-room")];
+      const label = rooms[x < 0 ? 0 : 2];
+      assert.notEqual(label.style.display, "none");
+      const [, px] = label.style.transform.match(/translate\(([-\d.]+)px,/) || [];
+      assert.ok(Number(px) > 0 && Number(px) < 200);
+    }
+    f.size(160, 460);
+    assert.ok(f.camera.position.distanceTo(f.target) > 150);
   } finally {
     f.close();
   }
