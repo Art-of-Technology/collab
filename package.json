@@ -34,6 +34,7 @@
     "@hocuspocus/provider": "^2.15.3",
     "@hocuspocus/transformer": "^2.15.3",
     "@hookform/resolvers": "^4.1.3",
+    "@modelcontextprotocol/server": "2.4.0",
     "@prisma/client": "^6.19.3",
     "@qdrant/js-client-rest": "^1.17.0",
     "@radix-ui/react-alert-dialog": "^1.1.6",
