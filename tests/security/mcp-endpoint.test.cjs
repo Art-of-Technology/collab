@@ -93,7 +93,7 @@ function fixture({ timers = { setTimeout, clearTimeout } } = {}) {
     let data; try { data = JSON.parse(text); } catch { data = text; }
     return { isError: !!body.result.isError, text, data };
   };
-  return { post, read, legacy, modern, call, calls, respond, logs, state, workspaces, route, tools: deps['@/lib/mcp-tools'].tools, callTool: deps['@/lib/mcp-tools'].callTool };
+  return { post, read, legacy, modern, call, calls, respond, logs, state, workspaces, route, tools: deps['@/lib/mcp-tools'].tools, callTool: deps['@/lib/mcp-tools'].callTool, lib: deps['@/lib/mcp-tools'] };
 }
 
 test('a missing, unknown or expired token gets 401 with the discovery challenge before anything runs', async () => {
@@ -391,4 +391,33 @@ test('the 30 second timer is cleared as soon as a call finishes', async () => {
   assert.equal((await f.call('full', 'issues_list', {})).isError, false);
   assert.equal(started.length, 1);
   assert.deepEqual(cleared, started, 'no timer is left running after the answer');
+});
+
+// The in-app assistant runs the same tools without an MCP client in front of them.
+test('a caller without an MCP client gets the same tool list for its scopes', () => {
+  const { lib } = fixture();
+  const names = scopes => Array.from(lib.toolsFor(scopes), tool => tool.name).sort();
+  assert.deepEqual(names(READ), [...READ_TOOLS].sort());
+  assert.deepEqual(names(ALL), [...READ_TOOLS, ...WRITE_TOOLS].sort());
+  assert.deepEqual(names([]), []);
+});
+
+test('a tool run by name is validated, limited to the caller\'s scopes and forwarded with its credentials', async () => {
+  const f = fixture();
+  const run = (name, args, scopes = ALL) => f.lib.runTool(name, args, 'Bearer full', `${ORIGIN}/api/ai/chat/stream`, scopes);
+  const ok = await run('issues_create', { title: 'From the assistant', projectId: 'p1' });
+  assert.equal(ok.isError, undefined);
+  assert.deepEqual(f.calls.map(call => [call.route, call.authorization, call.user, call.body]), [['POST issues', 'Bearer full', 'agent', { title: 'From the assistant', projectId: 'p1' }]]);
+
+  const before = f.calls.length;
+  for (const [name, args, scopes] of [
+    ['issues_get', { issueIdOrKey: 'x?workspaceId=w2' }, ALL], ['issues_create', { title: 'x' }, ALL], ['issues_list', { limit: 500 }, ALL],
+    ['issues_list', undefined, []], ['issues_create', { title: 'x', projectId: 'p1' }, READ], ['delete_everything', {}, ALL],
+  ]) {
+    const refused = await run(name, args, scopes);
+    assert.equal(refused.isError, true, `${name} ${JSON.stringify(args)}`);
+    assert.match(JSON.parse(refused.content[0].text).error, /^(invalid_arguments|unknown_tool)$/, name);
+  }
+  assert.equal(f.calls.length, before, 'a refused call never reaches a route');
+  assert.equal((await run('issues_list', undefined)).isError, undefined, 'arguments may be omitted');
 });

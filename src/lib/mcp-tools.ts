@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { fromJsonSchema } from '@modelcontextprotocol/server';
+import { hasAllScopes, hasAnyScope } from '@/lib/oauth-scopes';
 import * as me from '@/app/api/apps/auth/user/me/route';
 import * as userWorkspaces from '@/app/api/apps/auth/user/workspaces/route';
 import * as projects from '@/app/api/apps/auth/projects/route';
@@ -137,10 +138,16 @@ export const tools: McpTool[] = [
   }),
 ];
 
-const failure = (error: string, error_description: string) => ({ content: [{ type: 'text' as const, text: JSON.stringify({ error, error_description }) }], isError: true });
+/** The tools a set of granted scopes may use. */
+export const toolsFor = (granted: string[]) => tools.filter(tool => tool.anyScope ? hasAnyScope(tool.scopes, granted) : hasAllScopes(tool.scopes, granted));
+
+// A type alias, not an interface: the SDK's result type has an index signature that only an alias satisfies.
+export type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
+
+const failure = (error: string, error_description: string): ToolResult => ({ content: [{ type: 'text', text: JSON.stringify({ error, error_description }) }], isError: true });
 
 /** Run one tool by calling its API route in-process with the caller's own Authorization header. */
-export async function callTool(tool: McpTool, input: Args, authorization: string, base: string) {
+export async function callTool(tool: McpTool, input: Args, authorization: string, base: string): Promise<ToolResult> {
   const { workspaceId: workspace, ...args } = input;
   const params: Record<string, string> = {};
   const path = tool.path.replace(/:(\w+)/g, (_, key: string) => {
@@ -169,9 +176,9 @@ export async function callTool(tool: McpTool, input: Args, authorization: string
       return failure('timeout', read ? 'The request took longer than 30 seconds.' : 'The request took longer than 30 seconds and may still complete. Read the current state before retrying.');
     }
     const body = await response.text();
-    if (!response.ok) return { content: [{ type: 'text' as const, text: body }], isError: true };
+    if (!response.ok) return { content: [{ type: 'text', text: body }], isError: true };
     const withheld = tool.refuse?.(JSON.parse(body));
-    return withheld ? failure('unsupported_note_type', withheld) : { content: [{ type: 'text' as const, text: body }] };
+    return withheld ? failure('unsupported_note_type', withheld) : { content: [{ type: 'text', text: body }] };
   } catch (error) {
     // Only the error's class is logged: its message can carry database or user content.
     console.error('MCP tool failed:', tool.name, (error as { name?: string } | null)?.name ?? 'Error');
@@ -179,4 +186,13 @@ export async function callTool(tool: McpTool, input: Args, authorization: string
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Validate and run a tool by name, for a caller with no MCP client in front of it (the in-app assistant). */
+export async function runTool(name: string, args: Args | undefined, authorization: string, base: string, granted: string[]): Promise<ToolResult> {
+  const tool = toolsFor(granted).find(row => row.name === name);
+  if (!tool) return failure('unknown_tool', `Tool ${name} is not available.`);
+  const checked = await tool.input['~standard'].validate(args ?? {});
+  if (checked.issues) return failure('invalid_arguments', checked.issues.map(issue => issue.message).join('; '));
+  return callTool(tool, checked.value as Args, authorization, base);
 }

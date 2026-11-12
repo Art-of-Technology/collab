@@ -11,15 +11,12 @@ import { AppManifestV1 } from '@/lib/apps/types';
 import { prisma } from '@/lib/prisma';
 
 // CORS headers for OAuth token endpoint
-// Allow cross-origin requests from MCP server and other authorized origins
+// Allow cross-origin requests from authorized origins
 function getCorsHeaders(request: NextRequest) {
   const origin = request.headers.get('origin');
 
-  // List of allowed origins (MCP server domains)
+  // List of allowed origins (local development)
   const allowedOrigins = [
-    'https://mcp-collab.weez.boo',
-    'https://dev-mcp-collab.weez.boo',
-    'https://uat-mcp-collab.weez.boo',
     'http://localhost:3001',
     'http://localhost:3002',
   ];

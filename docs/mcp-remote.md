@@ -64,6 +64,8 @@ Then sign in from `/mcp`. Claude Code's loopback callback is accepted for this c
 
 A token is offered only the tools its scopes allow, so a read-only token never sees a write tool. Every tool also takes an optional `workspaceId`.
 
+The in-app assistant uses the same tools: it runs them in-process as the signed-in member, with a token of its own app (`collab-assistant`).
+
 | Tool | Does | Scope |
 | --- | --- | --- |
 | `whoami` | The account the token acts as | `user:read` or `profile:read` |

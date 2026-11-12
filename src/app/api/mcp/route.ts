@@ -1,9 +1,8 @@
 import { NextRequest } from 'next/server';
 import { McpServer, createMcpHandler } from '@modelcontextprotocol/server';
 import { authenticateAppRequest, createAuthErrorResponse } from '@/lib/apps/auth-middleware';
-import { hasAllScopes, hasAnyScope } from '@/lib/oauth-scopes';
 import { bearerChallenge } from '@/lib/mcp-oauth';
-import { INSTRUCTIONS, callTool, tools } from '@/lib/mcp-tools';
+import { INSTRUCTIONS, callTool, toolsFor } from '@/lib/mcp-tools';
 
 // POST /api/mcp - the MCP endpoint (Streamable HTTP, stateless). See docs/mcp-remote.md.
 export const runtime = 'nodejs';
@@ -13,9 +12,7 @@ export const dynamic = 'force-dynamic';
 const handler = createMcpHandler(({ authInfo, requestInfo }) => {
   // A token's tool list never changes, so no client needs to keep a change subscription open.
   const server = new McpServer({ name: 'collab', version: '1.0.0' }, { capabilities: { tools: { listChanged: false } }, instructions: INSTRUCTIONS });
-  const granted = authInfo?.scopes ?? [];
-  for (const tool of tools) {
-    if (!(tool.anyScope ? hasAnyScope(tool.scopes, granted) : hasAllScopes(tool.scopes, granted))) continue;
+  for (const tool of toolsFor(authInfo?.scopes ?? [])) {
     server.registerTool(
       tool.name,
       { description: tool.description, inputSchema: tool.input, annotations: { readOnlyHint: tool.method === 'GET' } },

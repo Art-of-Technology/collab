@@ -37,9 +37,8 @@ test('Cleo chat admission enforces conversation owner and workspace', async t =>
       } },
       '@/lib/ai/agents/registry': { getAgent: chooseAgent, getDefaultAgent: chooseAgent },
       '@/lib/ai/mcp-token': { getMcpToken: async () => { activity.push('token'); return 'test'; } },
-      '@/lib/ai/mcp-client': { createMcpSession: async () => {
-        activity.push('mcp'); return { convertToolsToClaudeFormat: () => [], close: async () => {} };
-      } },
+      '@/lib/mcp-oauth': { MCP_SCOPES: [] },
+      '@/lib/mcp-tools': { toolsFor: () => [], runTool: async () => { activity.push('mcp'); return { content: [{ type: 'text', text: '{}' }] }; } },
       '@/lib/coclaw/instance-manager': { coclawManager: { getOrCreateInstance: async () => {
         activity.push('gateway'); return { port: 1234 };
       } } },

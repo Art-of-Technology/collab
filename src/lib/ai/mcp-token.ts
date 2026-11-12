@@ -1,43 +1,22 @@
 /**
- * MCP Token Provisioning
+ * Assistant token provisioning
  *
- * Automatically generates/retrieves MCP access tokens for authenticated users.
- * These tokens are used to authenticate with the Collab MCP server via
- * Anthropic's MCP connector, giving the AI agent access to all workspace tools.
+ * The in-app assistant runs the MCP tools as the signed-in member. Each tool call goes
+ * through the app API with a bearer token, so the assistant keeps one token per member
+ * and workspace. They belong to their own system app (scripts/setup-agent-apps.mjs), which
+ * keeps them apart from a member's connector sign-in and CLI logins.
  *
  * Resilience: If decryption fails (e.g. APP_TOKENS_KEY rotation), ALL stale
  * tokens for the user+workspace are batch-revoked and a fresh one is issued.
  * The stream route can call invalidateMcpToken() to force re-provisioning
- * when Anthropic reports MCP errors.
+ * when a token stops working.
  */
 
 import { randomBytes } from 'crypto';
 import { encryptToken, decryptToken } from '@/lib/apps/crypto';
+import { MCP_SCOPES } from '@/lib/mcp-oauth';
 
-// MCP server app configuration — matches the deployed MCP server's OAuth client
-const MCP_APP_CLIENT_ID = process.env.MCP_APP_CLIENT_ID || '0f3fa5b9-81e8-42c2-b572-107e636ea3e8';
-const MCP_SERVER_URL = process.env.MCP_SERVER_URL || 'https://mcp-collab.weez.boo';
-
-// Full scope set for the AI agent — needs read+write access to everything
-const MCP_AGENT_SCOPES = [
-  'user:read',
-  'workspace:read',
-  'issues:read',
-  'issues:write',
-  'projects:read',
-  'projects:write',
-  'comments:read',
-  'comments:write',
-  'labels:read',
-  'labels:write',
-  'views:read',
-  'views:write',
-  'context:read',
-  'context:write',
-  'knowledge:read',
-  'secrets:read',
-  'profile:read',
-];
+const ASSISTANT_APP_SLUG = 'collab-assistant';
 
 // In-memory cache to avoid DB lookups on every message
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
@@ -60,13 +39,10 @@ export async function getMcpToken(
     return cached.token;
   }
 
-  // 2. Find the MCP app by client ID
+  // 2. Find the assistant app
   const mcpApp = await findMcpApp(prisma);
   if (!mcpApp) {
-    throw new Error(
-      'MCP app not found. Ensure the Collab MCP server app is registered with client_id: ' +
-        MCP_APP_CLIENT_ID
-    );
+    throw new Error('Assistant app not found. Run scripts/setup-agent-apps.mjs --apply.');
   }
 
   // 3. Find ALL existing non-revoked tokens for this user+workspace+app
@@ -119,7 +95,7 @@ export async function getMcpToken(
 
 /**
  * Invalidate the cached MCP token and revoke it in DB.
- * Call this when Anthropic reports an MCP-related error so the next
+ * Call this when the token stops working so the next
  * getMcpToken() call creates a fresh one.
  */
 export async function invalidateMcpToken(
@@ -150,13 +126,6 @@ export async function invalidateMcpToken(
   }
 }
 
-/**
- * Get the MCP server URL for the Anthropic MCP connector.
- */
-export function getMcpServerUrl(): string {
-  return MCP_SERVER_URL;
-}
-
 // ── Internal helpers ──
 
 async function createFreshToken(
@@ -178,7 +147,7 @@ async function createFreshToken(
       installationId: null,
       accessToken: Buffer.from(encrypted).toString('base64'),
       tokenExpiresAt: expiresAt,
-      scopes: MCP_AGENT_SCOPES,
+      scopes: [...MCP_SCOPES],
       isRevoked: false,
     },
   });
@@ -192,50 +161,13 @@ async function createFreshToken(
   return accessToken;
 }
 
-// Cache the MCP app lookup
-let mcpAppCache: { id: string; slug: string } | null = null;
-let mcpAppCacheTime = 0;
-
-async function findMcpApp(prisma: any): Promise<{ id: string; slug: string } | null> {
-  if (mcpAppCache && Date.now() - mcpAppCacheTime < 60 * 60 * 1000) {
-    return mcpAppCache;
-  }
-
-  // Find by OAuth client ID
-  const oauthClient = await prisma.appOAuthClient.findUnique({
-    where: { clientId: MCP_APP_CLIENT_ID },
-    select: {
-      app: {
-        select: { id: true, slug: true },
-      },
-    },
+// Only the provisioned, published system app: never another app that merely looks similar.
+async function findMcpApp(prisma: any): Promise<{ id: string } | null> {
+  const app = await prisma.app.findUnique({
+    where: { slug: ASSISTANT_APP_SLUG },
+    select: { id: true, status: true, isSystemApp: true },
   });
-
-  if (oauthClient?.app) {
-    mcpAppCache = oauthClient.app;
-    mcpAppCacheTime = Date.now();
-    return oauthClient.app;
-  }
-
-  // Fallback: find by slug
-  const app = await prisma.app.findFirst({
-    where: {
-      OR: [
-        { slug: 'collab-mcp-server' },
-        { slug: 'mcp-server' },
-        { isSystemApp: true, slug: { contains: 'mcp' } },
-      ],
-    },
-    select: { id: true, slug: true },
-  });
-
-  if (app) {
-    mcpAppCache = app;
-    mcpAppCacheTime = Date.now();
-    return app;
-  }
-
-  return null;
+  return app?.isSystemApp && app.status === 'PUBLISHED' ? app : null;
 }
 
 function generateAccessToken(): string {
