@@ -45,6 +45,10 @@ function fixture() {
       create: async args => { state.writes++; state.lastWrite = args; return projectNote({ ...note, workspace: null }, args); },
       update: async args => { state.writes++; state.lastWrite = args; return projectNote({ ...note, workspace: null }, args); },
       delete: async ({ where }) => { state.deleted.push(where.id); return note; },
+      deleteMany: async ({ where }) => {
+        if (!matches(note, where)) return { count: 0 };
+        state.deleted.push(note.id); return { count: 1 };
+      },
     },
     issue: { findMany: async () => [], count: async () => 0, groupBy: async () => [],
       findFirst: async ({ where }) => state.issue && matches(state.issue, where) ? state.issue : null },
@@ -290,5 +294,17 @@ for (const [label, arrange, status] of [
   const f = appFixture(); f.context.token.scopes = ['context:write']; arrange(f);
   const response = await deleteNote(f);
   assert.equal(response.status, status);
+  assert.deepEqual(f.state.deleted, []); assert.equal(f.state.effects, 0);
+});
+
+for (const [field, value] of [
+  ['authorId', 'bob'], ['workspaceId', 'own'], ['scope', 'PERSONAL'],
+  ['type', 'ENV_VARS'], ['type', 'API_KEYS'], ['type', 'CREDENTIALS'], ['isEncrypted', true],
+]) test(`app DELETE refuses a concurrent change to ${field}`, async () => {
+  const f = appFixture(); f.context.token.scopes = ['context:write'];
+  const remove = f.db.note.deleteMany;
+  f.db.note.deleteMany = async args => { f.note[field] = value; return remove(args); };
+  const response = await deleteNote(f);
+  assert.equal(response.status, 404);
   assert.deepEqual(f.state.deleted, []); assert.equal(f.state.effects, 0);
 });

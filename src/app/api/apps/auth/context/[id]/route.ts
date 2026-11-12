@@ -397,7 +397,22 @@ export const DELETE = withAppAuth(
         );
       }
 
-      await prisma.note.delete({ where: { id: note.id } });
+      const deleted = await prisma.note.deleteMany({
+        where: {
+          id: note.id,
+          authorId: context.user.id,
+          workspaceId: context.workspace.id,
+          scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },
+          type: { notIn: SECRET_TYPES },
+          isEncrypted: false,
+        },
+      });
+      if (deleted.count === 0) {
+        return NextResponse.json(
+          { error: 'context_not_found', error_description: 'Context document not found or delete denied' },
+          { status: 404 }
+        );
+      }
 
       // Fire-and-forget: emit context event for Qdrant sync
       emitContextDeleted(
