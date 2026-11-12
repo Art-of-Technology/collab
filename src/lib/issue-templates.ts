@@ -95,13 +95,44 @@ const comparable = (text: string) => plainText(text).replace(/&nbsp;/gi, ' ').to
  */
 export function missingSections(template: IssueTemplate, description: string | null | undefined): string[] {
   const filled = new Set<string>();
-  // Splitting on a pattern with one group gives: text before, heading, content, heading, content, ...
-  const parts = (description ? commentHtml(description, null, true) : '').split(/<h[1-4]\b(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)<\/h[1-4]>/i);
+  const parts = headingParts(description);
   for (let index = 1; index < parts.length; index += 2) {
-    const content = parts[index + 1];
-    if (/<img\b/i.test(content) || plainText(content).replace(/&nbsp;/gi, ' ').replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '').trim()) filled.add(comparable(parts[index]));
+    if (visible(parts[index + 1])) filled.add(comparable(parts[index]));
   }
   return template.sections.filter(section => section.required && !filled.has(comparable(escapeHeading(section.title)))).map(section => section.title);
+}
+
+// A description as it is displayed, split at its headings: text before the first, then heading, content, heading, content, ...
+const headingParts = (description: string | null | undefined) =>
+  (description ? commentHtml(description, null, true) : '').split(/<h[1-4]\b(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)<\/h[1-4]>/i);
+// Whether a piece of displayed HTML shows anything: an image or some text.
+const visible = (html: string) => /<img\b/i.test(html)
+  || plainText(html).replace(/&nbsp;/gi, ' ').replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '').trim() !== '';
+
+// Whether a description is exactly a template's headings, in order, with nothing written under them.
+function untouched(description: string, template: IssueTemplate | null): boolean {
+  if (!template) return false;
+  const parts = headingParts(description);
+  const headings = parts.filter((_, index) => index % 2 === 1).map(comparable);
+  return !parts.some((part, index) => index % 2 === 0 && visible(part))
+    && headings.length === template.sections.length
+    && template.sections.every((section, index) => headings[index] === comparable(escapeHeading(section.title)));
+}
+
+/**
+ * The description a web form shows after the issue type is chosen or changed: the new type's
+ * headings when nothing has been written yet, otherwise what the person wrote. `previous` is the
+ * template whose headings the form put there before.
+ */
+export function nextDescription(current: string, previous: IssueTemplate | null, next: IssueTemplate | null): string {
+  const parts = headingParts(current);
+  const empty = parts.length === 1 && !visible(parts[0]);
+  return empty || untouched(current, previous) ? (next ? templateBody(next, 'html') : '') : current;
+}
+
+/** What a web form stores: nothing when the description is still only the headings it was given. */
+export function storedDescription(current: string, template: IssueTemplate | null): string {
+  return untouched(current, template) ? '' : current;
 }
 
 /** The required fields that have no value. An empty text or an empty list is no value. */

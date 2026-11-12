@@ -211,3 +211,38 @@ test('templates need the issues read scope and current access to the workspace',
   assert.equal((await denied.json()).error, 'workspace_access_denied');
   assert.equal((await routes({ access: false }).one('bug')).status, 403);
 });
+
+const { nextDescription, storedDescription } = library;
+const STORY = STANDARD_TEMPLATES.STORY;
+const bugHeadings = templateBody(BUG, 'html');
+const typed = bugHeadings.replace('</h2>', '</h2><p>It crashes on save.</p>');
+
+test('an empty description takes the headings of the chosen type', () => {
+  for (const empty of ['', '   ', '<p></p>', '<p><br></p>']) assert.equal(nextDescription(empty, null, BUG), bugHeadings, JSON.stringify(empty));
+  assert.equal(nextDescription('', null, null), '');
+});
+
+test('untouched headings follow a change of type, and are cleared for a type without a template', () => {
+  assert.equal(nextDescription(bugHeadings, BUG, STORY), templateBody(STORY, 'html'));
+  // The editor may hand the headings back with its own attributes and an empty paragraph.
+  assert.equal(nextDescription(`${bugHeadings.replaceAll('<h2>', '<h2 class="heading">')}<p></p>`, BUG, STORY), templateBody(STORY, 'html'));
+  assert.equal(nextDescription(bugHeadings, BUG, null), '');
+});
+
+test('text a person has typed is never replaced', () => {
+  assert.equal(nextDescription(typed, BUG, STORY), typed);
+  assert.equal(nextDescription(typed, BUG, null), typed);
+  assert.equal(nextDescription('<p>Free text</p>', null, BUG), '<p>Free text</p>');
+  // Headings alone are kept too, unless they are exactly the previous type's.
+  assert.equal(nextDescription('<h2>My own heading</h2>', BUG, STORY), '<h2>My own heading</h2>');
+  assert.equal(nextDescription(bugHeadings.replace('<h2>Summary</h2>', ''), BUG, STORY), bugHeadings.replace('<h2>Summary</h2>', ''));
+});
+
+test('untouched headings are not stored, anything else is stored as written', () => {
+  assert.equal(storedDescription(bugHeadings, BUG), '');
+  assert.equal(storedDescription(`${bugHeadings}<p></p>`, BUG), '');
+  assert.equal(storedDescription(typed, BUG), typed);
+  assert.equal(storedDescription(bugHeadings, STORY), bugHeadings);
+  assert.equal(storedDescription('<p>Free text</p>', null), '<p>Free text</p>');
+  assert.equal(storedDescription('', BUG), '');
+});

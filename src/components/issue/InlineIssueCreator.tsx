@@ -15,6 +15,8 @@ import { IssueTypeSelector } from "./selectors/IssueTypeSelector";
 import { IssueDateSelector } from "./selectors/IssueDateSelector";
 import { IssueLabelSelector } from "./selectors/IssueLabelSelector";
 import { RichEditor } from "@/components/RichEditor";
+import { IssueTemplateChecklist } from "./IssueTemplateChecklist";
+import { useIssueTemplateForm } from "@/hooks/queries/useIssueTemplates";
 import type { IssueRelationType } from "./sections/relations/types/relation";
 import type { IssuePriority } from "@/types/issue";
 import type { IssueType } from "@/constants/issue-types";
@@ -57,7 +59,8 @@ export function InlineIssueCreator({
   const [description, setDescription] = useState("");
   const [projectId, setProjectId] = useState<string | undefined>(defaultProjectId);
   const [statusId, setStatusId] = useState<string | undefined>(undefined);
-  const [priority, setPriority] = useState<IssuePriority>("MEDIUM");
+  // Undefined until the person chooses one: the default is sent, but does not count as stated.
+  const [priority, setPriority] = useState<IssuePriority | undefined>(undefined);
   const [assigneeId, setAssigneeId] = useState<string | undefined>(defaultAssigneeId);
   const [relationType, setRelationType] = useState<IssueRelationType>(defaultRelationType);
   const [type, setType] = useState<IssueType>("TASK");
@@ -68,6 +71,8 @@ export function InlineIssueCreator({
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIssues, setSelectedIssues] = useState<any[]>([]);
   const [isLinking, setIsLinking] = useState(false);
+  // Templates are read only once the form is opened.
+  const templateForm = useIssueTemplateForm(isExpanded ? workspaceId : undefined, type, description, setDescription, { priority, assigneeId, labels: labelIds, dueDate });
 
   const titleInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -130,7 +135,7 @@ export function InlineIssueCreator({
   const handleCollapse = () => {
     setIsExpanded(false);
     setTitle("");
-    setDescription("");
+    setDescription(templateForm.starting("TASK"));
     setSearchQuery("");
     setSearchResults([]);
     setSelectedIssues([]);
@@ -154,10 +159,10 @@ export function InlineIssueCreator({
     try {
       const result = await createIssueMutation.mutateAsync({
         title: title.trim(),
-        description: description.trim() || undefined,
+        description: templateForm.stored(description).trim() || undefined,
         type,
         status: statusId,
-        priority,
+        priority: priority ?? "MEDIUM",
         projectId,
         workspaceId,
         assigneeId,
@@ -231,9 +236,9 @@ export function InlineIssueCreator({
 
       // Reset form
       setTitle("");
-      setDescription("");
+      setDescription(templateForm.starting("TASK"));
       setStatusId(undefined);
-      setPriority("MEDIUM");
+      setPriority(undefined);
       setAssigneeId(defaultAssigneeId);
       setType("TASK");
       setDueDate(undefined);
@@ -398,6 +403,11 @@ export function InlineIssueCreator({
                   className="text-xs"
                 />
               </div>
+              <IssueTemplateChecklist
+                template={templateForm.template}
+                missingSections={templateForm.missingSections}
+                missingFields={templateForm.missingFields}
+              />
             </div>
 
             {/* Divider */}
@@ -433,7 +443,7 @@ export function InlineIssueCreator({
 
               {/* Priority Selector */}
               <IssuePrioritySelector
-                value={priority}
+                value={priority ?? "MEDIUM"}
                 onChange={setPriority}
               />
 
@@ -477,6 +487,8 @@ export function InlineIssueCreator({
                     <Loader2 className="h-2.5 w-2.5 mr-1 animate-spin" />
                     Creating...
                   </>
+                ) : templateForm.incomplete ? (
+                  'Create anyway'
                 ) : (
                   'Create'
                 )}

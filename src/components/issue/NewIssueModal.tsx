@@ -15,6 +15,8 @@ import { IssueTypeSelector } from "./selectors/IssueTypeSelector";
 import { IssueRichEditor } from "@/components/RichEditor/IssueRichEditor";
 import { normalizeDescriptionHTML } from "@/utils/html-normalizer";
 import { IssueRelationsManager } from "./IssueRelationsManager";
+import { IssueTemplateChecklist } from "./IssueTemplateChecklist";
+import { useIssueTemplateForm } from "@/hooks/queries/useIssueTemplates";
 
 export interface IssueRelation {
   id: string;
@@ -83,7 +85,8 @@ export default function NewIssueModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<string | undefined>(defaultStatus);
-  const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("MEDIUM");
+  // Undefined until the person chooses one: the default is sent, but does not count as stated.
+  const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT" | undefined>(undefined);
   const [assigneeId, setAssigneeId] = useState<string | undefined>(undefined);
   const [labels, setLabels] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
@@ -106,6 +109,8 @@ export default function NewIssueModal({
   }, [fullscreen]);
 
   const canCreate = title.trim().length > 0 && !!selectedProjectId;
+  // Templates are read only while the form is open; it stays mounted on every page.
+  const templateForm = useIssueTemplateForm(open ? workspaceId : undefined, issueType, description, setDescription, { priority, assigneeId, labels, dueDate });
 
   // Toggle fullscreen mode
   const toggleFullscreen = useCallback(() => {
@@ -174,13 +179,14 @@ export default function NewIssueModal({
     
     try {
       // Create main issue first
-      const normalizedDescription = description.trim() ? normalizeDescriptionHTML(description.trim()) : undefined;
+      const text = templateForm.stored(description).trim();
+      const normalizedDescription = text ? normalizeDescriptionHTML(text) : undefined;
       const result = await createIssueMutation.mutateAsync({
         title: title.trim(),
         description: normalizedDescription,
         type: issueType,
         status: status,
-        priority,
+        priority: priority ?? "MEDIUM",
         projectId: selectedProjectId,
         workspaceId,
         assigneeId: assigneeId || undefined,
@@ -259,9 +265,9 @@ export default function NewIssueModal({
       if (createMore) {
         // Reset form but keep modal open
         setTitle("");
-        setDescription("");
+        setDescription(templateForm.starting(issueType));
         setStatus(defaultStatus);
-        setPriority("MEDIUM");
+        setPriority(undefined);
         setAssigneeId(undefined);
         setLabels([]);
         setDueDate(undefined);
@@ -276,9 +282,9 @@ export default function NewIssueModal({
         onOpenChange(false);
         // Reset form
         setTitle("");
-        setDescription("");
+        setDescription(templateForm.starting("TASK"));
         setStatus(defaultStatus);
-        setPriority("MEDIUM");
+        setPriority(undefined);
         setAssigneeId(undefined);
         setLabels([]);
         setDueDate(undefined);
@@ -310,7 +316,7 @@ export default function NewIssueModal({
     } finally {
       setCreating(false);
     }
-  }, [canCreate, selectedProjectId, createIssueMutation, title, description, issueType, status, priority, workspaceId, assigneeId, currentUserId, labels, dueDate, relations, createMore, defaultStatus, onOpenChange, onCreated, projectId, toast, queryClient]);
+  }, [canCreate, selectedProjectId, createIssueMutation, title, description, issueType, status, priority, workspaceId, assigneeId, currentUserId, labels, dueDate, relations, createMore, defaultStatus, onOpenChange, onCreated, projectId, toast, queryClient, templateForm]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -397,6 +403,13 @@ export default function NewIssueModal({
             maxHeight={isFullscreen ? "600px" : "300px"}
           />
 
+          <IssueTemplateChecklist
+            template={templateForm.template}
+            missingSections={templateForm.missingSections}
+            missingFields={templateForm.missingFields}
+            className="mb-4"
+          />
+
           {/* Properties */}
           <div className="flex flex-wrap gap-1 mt-2 mb-6">
             <IssueStatusSelector 
@@ -405,7 +418,7 @@ export default function NewIssueModal({
               projectId={selectedProjectId} 
             />
             <IssuePrioritySelector 
-              value={priority} 
+              value={priority ?? "MEDIUM"} 
               onChange={setPriority} 
             />
             <IssueAssigneeSelector 
@@ -470,7 +483,7 @@ export default function NewIssueModal({
               disabled={!canCreate || creating || createIssueMutation.isPending}
               className="bg-green-700 hover:bg-green-600 text-white border-0 h-8 px-3 text-sm font-medium"
             >
-              {creating || createIssueMutation.isPending ? "Creating..." : "Create issue"}
+              {creating || createIssueMutation.isPending ? "Creating..." : templateForm.incomplete ? "Create anyway" : "Create issue"}
             </Button>
           </div>
         </div>
