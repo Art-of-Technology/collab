@@ -314,7 +314,7 @@ curl -X POST /api/oauth/revoke \
 
 ## Discovery for the MCP endpoint
 
-Two discovery documents advertise sign-in endpoints for the planned MCP endpoint (`/api/mcp`); the endpoint itself is not included in this change. They use the HTTP(S) origin of `NEXTAUTH_URL`, ignoring any path or trailing slash, and answer `503` when it is missing or invalid.
+Two discovery documents advertise the sign-in endpoints for the MCP endpoint (`/api/mcp`, see [mcp-remote.md](mcp-remote.md)). They use the HTTP(S) origin of `NEXTAUTH_URL`, ignoring any path or trailing slash, and answer `503` when it is missing or invalid.
 
 | Document | Content |
 | --- | --- |

@@ -29,6 +29,8 @@ const nextConfig = {
   serverExternalPackages: [
     '@prisma/client',
     'bcrypt',
+    // Server-only and large: kept out of the bundle so it does not add to the build's memory use.
+    '@modelcontextprotocol/server',
   ],
   images: {
     // Keep SVG optimization available for callers that have not opted out.
