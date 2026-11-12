@@ -72,8 +72,8 @@ export async function createAgentToken(input: {
     const membership = await tx.workspaceMember.findUnique({
       where: { userId_workspaceId: { userId: account.id, workspaceId: input.workspaceId } }, select: { status: true },
     });
-    if (membership && !membership.status) {
-      // Switched off by an admin while tokens were still usable: minting must not switch those back on.
+    if (!membership?.status) {
+      // Switched off or removed while tokens were still usable: minting must not make those work again.
       const live = await tx.appToken.count({ where: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, isRevoked: false, tokenExpiresAt: { gte: new Date() } } });
       if (live) return { error: 'paused' as const };
     }

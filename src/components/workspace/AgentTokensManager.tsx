@@ -57,6 +57,9 @@ export default function AgentTokensManager({ workspaceId, tokens }: AgentTokensM
       if (!response.ok) return failed(data.error || 'Failed to create the token');
       setCreating(false);
       setName('');
+      // The next token starts from the safe defaults again.
+      setAccess('read');
+      setDays('90');
       setCopied(false);
       setMinted({ name: data.name, token: data.token });
       router.refresh();

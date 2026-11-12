@@ -19,16 +19,7 @@ function fixture() {
   const users = ['alice', 'bob', 'carol', 'dave', 'erin'].map(id => ({ id, name: id, email: `${id}@example.test`, role: 'DEVELOPER' }));
   users.push({ id: 'root', name: 'root', email: 'root@example.test', role: 'SYSTEM_ADMIN' });
   const rolePermissions = [{ workspaceId: 'w1', role: 'ADMIN', permission: 'MANAGE_WORKSPACE_PERMISSIONS' }];
-  const tokens = [], audit = [], logs = [], held = new Map();
-  const lock = async key => {
-    const previous = held.get(key);
-    let release;
-    const current = new Promise(resolve => { release = resolve; });
-    held.set(key, current);
-    if (previous) await previous;
-    return () => { if (held.get(key) === current) held.delete(key); release(); };
-  };
-  let onMemberRead;
+  const tokens = [], audit = [], logs = [];
   const state = { session: null };
   const workspace = id => workspaces.find(row => row.id === id);
   const prisma = {
@@ -51,12 +42,7 @@ function fixture() {
       create: async ({ data }) => { const row = { id: `service-${users.length}`, email: null, hashedPassword: null, role: 'DEVELOPER', ...data }; users.push(row); return row; },
     },
     workspaceMember: {
-      findUnique: async ({ where }) => {
-        const member = workspace(where.userId_workspaceId.workspaceId)?.members.find(row => row.userId === where.userId_workspaceId.userId);
-        const snapshot = member ? { ...member } : null;
-        if (onMemberRead) await onMemberRead();
-        return snapshot;
-      },
+      findUnique: async ({ where }) => workspace(where.userId_workspaceId.workspaceId)?.members.find(row => row.userId === where.userId_workspaceId.userId) ?? null,
       upsert: async ({ where, update, create }) => {
         const { userId, workspaceId } = where.userId_workspaceId;
         const members = workspace(workspaceId).members;
@@ -89,19 +75,10 @@ function fixture() {
       },
     },
     appAuditLog: { create: async ({ data }) => { audit.push(data); return data; } },
-    $transaction: async run => {
-      const releases = [];
-      const acquire = async key => { releases.push(await lock(key)); };
-      const tx = { ...prisma,
-        $executeRaw: async (_sql, key) => { await acquire(`advisory:${key}`); return 1; },
-        $queryRaw: async (sql, ...values) => {
-          if (sql.join('').includes('"WorkspaceMember"')) await acquire(`member:${values[0]}:${values[1]}`);
-          else await acquire(`user:${values[0]}`);
-          return [];
-        },
-      };
-      try { return await run(tx); } finally { releases.reverse().forEach(release => release()); }
-    },
+    // Lock statements do nothing here; tests/integration/agent-tokens-concurrency-db.test.cjs runs them against PostgreSQL.
+    $queryRaw: async () => [],
+    $executeRaw: async () => 1,
+    $transaction: async run => run(prisma),
   };
   const globals = { Buffer, URL, console: { log: (...args) => logs.push(args), warn: (...args) => logs.push(args), error: (...args) => logs.push(args) } };
   const deps = {
@@ -126,11 +103,7 @@ function fixture() {
   const revoke = (tokenId, workspaceId = 'w1') => item.DELETE({}, { params: Promise.resolve({ workspaceId, tokenId }) });
   const auth = (token, scope = 'issues:read') => authenticateAppRequest({ headers: new Headers({ Authorization: `Bearer ${token}` }) }, { requiredScopes: [scope] });
   const writes = () => JSON.stringify([users.length, tokens.length, audit.length, workspaces.map(row => row.members)]);
-  const pause = async (userId, workspaceId) => {
-    const release = await lock(`member:${userId}:${workspaceId}`);
-    try { workspace(workspaceId).members.find(row => row.userId === userId).status = false; } finally { release(); }
-  };
-  return { apps, agentApp, cliApp, workspaces, users, tokens, audit, logs, prisma, deps, collection, as, mint, revoke, auth, writes, withAppAuth, workspace, pause, onMemberRead: fn => { onMemberRead = fn; } };
+  return { apps, agentApp, cliApp, workspaces, users, tokens, audit, logs, prisma, deps, collection, as, mint, revoke, auth, writes, withAppAuth, workspace };
 }
 
 test('an admin mints a token that authenticates as a named service account', async () => {
@@ -183,7 +156,9 @@ test('minting is refused without a session or the workspace permission, and writ
   const before = f.writes();
   for (const [user, status] of [[null, 401], ['bob', 403], ['dave', 403], ['erin', 403]]) {
     f.as(user);
-    assert.equal((await f.mint()).status, status, `${user} must be refused`);
+    const refused = await f.mint();
+    assert.equal(refused.status, status, `${user} must be refused`);
+    assert.equal(JSON.stringify(refused.headers), JSON.stringify(noStore));
   }
   assert.equal(f.writes(), before);
 });
@@ -330,6 +305,8 @@ test('simultaneous revocations of one token record one successful revocation', a
 
 test('a person who shares the name is never reused as the service account', async () => {
   const f = fixture();
+  // bob has a CLI login here, as any member who uses the CLI or the assistant does.
+  f.tokens.push({ id: 'bob-cli', appId: 'cli-app', workspaceId: 'w1', userId: 'bob', installationId: null, isRevoked: false });
   f.as('alice');
   const { id } = (await f.mint({ name: 'bob' })).body;
   assert.notEqual(f.tokens.find(row => row.id === id).userId, 'bob');
@@ -458,37 +435,23 @@ test('a switched-off account whose only tokens have expired can be given a new t
   assert.equal(member.status, true);
 });
 
-test('concurrent same-name mints share one service account', async () => {
+test('an account removed from the workspace is not brought back while it still has usable tokens', async () => {
   const f = fixture();
   f.as('alice');
-  const [first, second] = await Promise.all([f.mint({ name: 'Claude' }), f.mint({ name: '  claude ' })]);
-  assert.equal(first.status, 201);
-  assert.equal(second.status, 201);
-  assert.equal(f.tokens.find(row => row.id === first.body.id).userId, f.tokens.find(row => row.id === second.body.id).userId);
-  assert.equal(f.users.filter(row => row.name === 'Claude').length, 1);
-  f.as('erin');
-  const elsewhere = await f.mint({ name: 'Claude' }, 'w2');
-  assert.notEqual(f.tokens.find(row => row.id === first.body.id).userId, f.tokens.find(row => row.id === elsewhere.body.id).userId);
-});
+  const old = (await f.mint()).body;
+  const account = f.tokens[0].userId;
+  const members = f.workspace('w1').members;
+  members.splice(members.findIndex(row => row.userId === account), 1); // the owner removes the member
+  const before = f.writes();
+  const refused = await f.mint();
+  assert.equal(refused.status, 409);
+  assert.equal(f.writes(), before);
+  assert.equal((await f.auth(old.token)).error.statusCode, 403, 'the removed account\'s token stays unusable');
 
-test('a concurrent member pause cannot be overwritten by minting', async () => {
-  const f = fixture();
-  f.as('alice');
-  const original = (await f.mint()).body;
-  const userId = f.tokens[0].userId;
-  let read, resume;
-  const reading = new Promise(resolve => { read = resolve; });
-  const waiting = new Promise(resolve => { resume = resolve; });
-  f.onMemberRead(async () => { read(); await waiting; });
-  const minting = f.mint();
-  await reading;
-  const pausing = f.pause(userId, 'w1');
-  await new Promise(resolve => setImmediate(resolve));
-  resume();
-  const minted = await minting;
-  await pausing;
-  assert.equal(minted.status, 201);
-  assert.equal(f.workspace('w1').members.find(row => row.userId === userId).status, false);
-  assert.equal((await f.auth(original.token)).error.statusCode, 403);
-  assert.equal((await f.auth(minted.body.token)).error.statusCode, 403);
+  await f.revoke(old.id);
+  const fresh = await f.mint();
+  assert.equal(fresh.status, 201);
+  assert.equal(f.tokens.find(row => row.id === fresh.body.id).userId, account, 'the same account is used again');
+  assert.equal((await f.auth(fresh.body.token)).success, true);
+  assert.equal((await f.auth(old.token)).error.statusCode, 401);
 });

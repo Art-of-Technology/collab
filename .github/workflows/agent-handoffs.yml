@@ -1,10 +1,10 @@
 name: Agent handoffs
 on:
   pull_request:
-    paths: ['src/lib/agent-handoff*', 'src/lib/agent-review*', 'src/lib/project-coordinator.ts', 'src/lib/agent-label-triggers.ts', 'src/lib/issue-mutation.ts', 'src/lib/prisma.ts', 'src/lib/database-diagnostics.ts', 'src/app/api/issues/**', 'src/app/api/apps/auth/issues/**', 'src/lib/issue-finder.ts', 'src/lib/apps/auth-middleware.ts', 'src/lib/oauth-scopes.ts', 'src/app/api/apps/auth/agents/**', 'packages/cli/**', 'prisma/**', 'tests/agents/**', 'tests/integration/agent-review-guard-db.test.cjs', 'tests/integration/issue-activity-scope.test.cjs', 'tests/security/helpers.cjs', 'tests/security/bootstrap-*.test.cjs', 'scripts/bootstrap-empty-database.mjs', 'package.json', 'package-lock.json', '.github/workflows/agent-handoffs.yml']
+    paths: ['src/lib/agent-tokens.ts', 'tests/integration/agent-tokens-concurrency-db.test.cjs', 'src/lib/agent-handoff*', 'src/lib/agent-review*', 'src/lib/project-coordinator.ts', 'src/lib/agent-label-triggers.ts', 'src/lib/issue-mutation.ts', 'src/lib/prisma.ts', 'src/lib/database-diagnostics.ts', 'src/app/api/issues/**', 'src/app/api/apps/auth/issues/**', 'src/lib/issue-finder.ts', 'src/lib/apps/auth-middleware.ts', 'src/lib/oauth-scopes.ts', 'src/app/api/apps/auth/agents/**', 'packages/cli/**', 'prisma/**', 'tests/agents/**', 'tests/integration/agent-review-guard-db.test.cjs', 'tests/integration/issue-activity-scope.test.cjs', 'tests/security/helpers.cjs', 'tests/security/bootstrap-*.test.cjs', 'scripts/bootstrap-empty-database.mjs', 'package.json', 'package-lock.json', '.github/workflows/agent-handoffs.yml']
   push:
     branches: [main]
-    paths: ['src/lib/agent-handoff*', 'src/lib/agent-review*', 'src/lib/project-coordinator.ts', 'src/lib/agent-label-triggers.ts', 'src/lib/issue-mutation.ts', 'src/lib/prisma.ts', 'src/lib/database-diagnostics.ts', 'src/app/api/issues/**', 'src/app/api/apps/auth/issues/**', 'src/lib/issue-finder.ts', 'src/lib/apps/auth-middleware.ts', 'src/lib/oauth-scopes.ts', 'src/app/api/apps/auth/agents/**', 'packages/cli/**', 'prisma/**', 'tests/agents/**', 'tests/integration/agent-review-guard-db.test.cjs', 'tests/integration/issue-activity-scope.test.cjs', 'tests/security/helpers.cjs', 'tests/security/bootstrap-*.test.cjs', 'scripts/bootstrap-empty-database.mjs', 'package.json', 'package-lock.json', '.github/workflows/agent-handoffs.yml']
+    paths: ['src/lib/agent-tokens.ts', 'tests/integration/agent-tokens-concurrency-db.test.cjs', 'src/lib/agent-handoff*', 'src/lib/agent-review*', 'src/lib/project-coordinator.ts', 'src/lib/agent-label-triggers.ts', 'src/lib/issue-mutation.ts', 'src/lib/prisma.ts', 'src/lib/database-diagnostics.ts', 'src/app/api/issues/**', 'src/app/api/apps/auth/issues/**', 'src/lib/issue-finder.ts', 'src/lib/apps/auth-middleware.ts', 'src/lib/oauth-scopes.ts', 'src/app/api/apps/auth/agents/**', 'packages/cli/**', 'prisma/**', 'tests/agents/**', 'tests/integration/agent-review-guard-db.test.cjs', 'tests/integration/issue-activity-scope.test.cjs', 'tests/security/helpers.cjs', 'tests/security/bootstrap-*.test.cjs', 'scripts/bootstrap-empty-database.mjs', 'package.json', 'package-lock.json', '.github/workflows/agent-handoffs.yml']
 permissions:
   contents: read
 jobs:
@@ -35,7 +35,7 @@ jobs:
       - run: npx prisma generate
       - name: Install local PostgreSQL test binaries
         run: sudo apt-get update && sudo apt-get install -y postgresql
-      - run: node --test --test-concurrency=1 tests/agents/*.test.cjs tests/integration/issue-activity-scope.test.cjs
+      - run: node --test --test-concurrency=1 tests/agents/*.test.cjs tests/integration/issue-activity-scope.test.cjs tests/integration/agent-tokens-concurrency-db.test.cjs
       - name: Apply review guard migration to an isolated database
         env:
           DATABASE_URL: postgresql://collab:collab@localhost:5432/collab_test

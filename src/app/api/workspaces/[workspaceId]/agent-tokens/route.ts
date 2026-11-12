@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (result.error) {
     const [status, error] = ({
       not_found: [404, 'Workspace not found'],
-      paused: [409, 'This agent is switched off. Switch its member back on, or revoke its tokens, before creating another token.'],
+      paused: [409, 'This agent was switched off or removed and still has usable tokens. Revoke them, or switch its member back on, before creating another token.'],
       unavailable: [503, 'Agent tokens are not set up on this deployment'],
     } as const)[result.error];
     return NextResponse.json({ error }, { status, headers: noStore });
