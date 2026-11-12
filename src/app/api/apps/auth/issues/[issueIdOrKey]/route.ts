@@ -15,6 +15,9 @@ import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-trigg
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 import { emitIssueUpdated } from '@/lib/event-bus';
+import { TEMPLATE_FIELDS } from '@/lib/issue-templates';
+import { getWorkspaceTemplates } from '@/lib/issue-template-store';
+import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 
 // Schema for updating issues
 const UpdateIssueSchema = z.object({
@@ -330,11 +333,20 @@ export const PATCH = withAppAuth(
         });
       }
 
+      // Agents are held to the workspace's issue templates when a change touches what they cover.
+      const guarded = (['description', 'type', ...TEMPLATE_FIELDS] as const).some(key => updateData[key] !== undefined)
+        ? await getWorkspaceTemplates(context.workspace.id) : null;
+
       // Update issue
       const updatedIssue = await prisma.$transaction(async tx => {
-        const before = updateData.labels === undefined ? null : await tx.issue.findUniqueOrThrow({
-          where: { id: existingIssue.id }, select: { labels: { select: { id: true } } },
+        const before = updateData.labels === undefined && !guarded?.enforced ? null : await tx.issue.findUniqueOrThrow({
+          where: { id: existingIssue.id }, select: ISSUE_SHAPE_SELECT,
         });
+        // Read inside the transaction, so two changes that each look complete cannot combine into an incomplete issue.
+        const refusal = before && guarded?.enforced
+          ? updateRefusal(guarded.templates, issueShape(before), issueShape({ ...before, ...update, ...(updateData.labels && { labels: updateData.labels }) }))
+          : null;
+        if (refusal) throw new TemplateRefused(refusal);
         const changed = await tx.issue.update({
           where: { id: existingIssue.id },
           data: {
@@ -420,6 +432,7 @@ export const PATCH = withAppAuth(
 
       return NextResponse.json(updatedIssue);
     } catch (error) {
+      if (error instanceof TemplateRefused) return NextResponse.json(error.refusal, { status: 422 });
       if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
         return NextResponse.json({ error: 'issue_conflict', error_description: 'Issue changed; reload and retry' }, { status: 409 });

@@ -11,7 +11,7 @@ test('app handlers deny bound issue writes before mutation while allowing unconn
   let writes = 0, bindingReads = 0;
   const mutate = async () => { writes++; return {}; };
   const db = {
-    issue: { findFirst: async ({ where }) => issues.find(row => matches(row, where)), findMany: async ({ where }) => issues.filter(row => matches(row, where)), update: mutate, delete: mutate },
+    issue: { findFirst: async ({ where }) => issues.find(row => matches(row, where)), findUniqueOrThrow: async ({ where }) => issues.find(row => matches(row, where)), findMany: async ({ where }) => issues.filter(row => matches(row, where)), update: mutate, delete: mutate },
     project: { findFirst: async ({ where }) => [{ id: 'c000000000000000000000003', workspaceId: 'workspace' }, { id: 'c000000000000000000000004', workspaceId: 'workspace' }].find(row => matches(row, where)) },
     issueActivity: { create: mutate }, issueAssignee: { deleteMany: mutate },
     $transaction: async operation => operation(db),

@@ -239,7 +239,33 @@ GET /api/apps/auth/issue-templates/{type}
 
 Both endpoints require `issues:read` and active access to the selected workspace. The list returns `{ enforced, templates }`; the individual endpoint returns a template with `enforced`. Templates include their type, version, standard status, ordered sections (title, required flag and guidance), required fields and a Markdown `body` with headings and guidance in HTML comments.
 
-The built-in standards cover BUG, STORY, EPIC, MILESTONE and TASK. Type matching is case-insensitive; SUBTASK and unknown types return 404 with `template_not_found`. A workspace can replace the standard for each supported type; an invalid stored template falls back to the standard. The `enforced` field reports the workspace setting, but issue creation does not enforce templates yet.
+The built-in standards cover BUG, STORY, EPIC, MILESTONE and TASK. Type matching is case-insensitive; SUBTASK and unknown types return 404 with `template_not_found`. A workspace can replace the standard for each supported type; an invalid stored template falls back to the standard. The `enforced` field reports the workspace setting.
+
+Before writing an issue, run `collab templates get TYPE` to read the workspace's current template and follow its sections and required fields.
+
+When `enforced` is `true`, `POST /api/apps/auth/issues` and `PATCH /api/apps/auth/issues/{issueId}` can answer 422 and write nothing when template requirements are missing, subject to the update rule below. For example, a workspace with a custom BUG template containing only these two sections might receive:
+
+```json
+{
+  "error": "template_required",
+  "error_description": "Missing required sections: Environment. Missing required fields: priority. Write each section as a heading. Get the template with \"collab templates get BUG\".",
+  "issue_type": "BUG",
+  "template_version": 2,
+  "missing_sections": ["Environment"],
+  "missing_fields": ["priority"],
+  "template": {
+    "sections": [
+      { "title": "Summary", "required": true, "guidance": "What is wrong?" },
+      { "title": "Environment", "required": true, "guidance": "Where does it happen?" }
+    ],
+    "requiredFields": ["priority"]
+  }
+}
+```
+
+`template` holds every section of the type's current template, not only the missing ones.
+
+A section is a heading (h1 to h4, in Markdown or HTML) whose text matches the section title, with something visible under it. On create, a required field counts only when the request states it: the default priority does not. On update, a field already set on the issue counts, and the request is refused only when the issue had everything before the change and would not after it, so issues written before templates were required can still be edited. Unassigning through `POST /api/apps/auth/issues/{issueId}/assign` follows the update rule when the template requires an assignee. SUBTASK issues are never refused; having a parent does not exempt another type. Requests from the web app are never refused.
 
 #### List Issues
 ```http

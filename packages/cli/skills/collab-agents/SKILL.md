@@ -138,6 +138,23 @@ coverage metadata: keyword fallback is not semantic search. If a code-search too
 available, use it for implementation evidence and record repository/commit/file links.
 Collab context and code results have different sources and freshness; do not conflate them.
 
+## Write issues from the template
+
+Each issue type except Subtask has a template: sections the description must have and
+fields that must be set. A workspace can require it for agents. Read it before you write:
+
+```sh
+collab templates get BUG --workspace WORKSPACE_ID
+```
+
+Write the description from the returned `body`. Keep each section as a heading
+(`## Steps to reproduce`) with your text under it; a bold label is not a heading. State
+every field in `requiredFields` on the command, for example `--priority high`. A refused
+issue fails with `template_required` and lists `missingSections` and `missingFields`;
+nothing was written, so add what is listed and run the command again. An update is
+refused the same way when it would remove a required section or field from an issue that
+had them all. Do not switch an issue to Subtask to avoid its template.
+
 ## Preserve issue history
 
 Revise existing work with `issues update`; deleting and recreating it assigns a new
@@ -294,12 +311,12 @@ Only the sender of open work or its current claimant may supersede it. The repla
 
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
-For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.8.5/packages/cli/README.md#agent-coordination).
+For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.0/packages/cli/README.md#agent-coordination).
 
 ## Host wake callback
 
 For automatic notifications, have the host supervisor follow the
-[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.8.5/packages/cli/README.md#wake-a-running-agent-through-its-host)
+[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.0/packages/cli/README.md#wake-a-running-agent-through-its-host)
 for command availability, setup, deadlines and adapter requirements.
 
 Require the host to provide and verify its adapter; never substitute a guessed
@@ -321,7 +338,7 @@ requirements above before claiming automatic wake-ups are active for that host.
 
 ### Dedicated managed workers
 
-Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.8.5/packages/cli/README.md#dedicated-managed-workers-cli-070)
+Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.0/packages/cli/README.md#dedicated-managed-workers-cli-070)
 for setup, supervision and recovery. Never use a custom terminal callback as a
 fallback. Preserve the saved login, stable identity, labels and private journals.
 
@@ -340,7 +357,7 @@ owner's qualification boundary described there.
 ## Project coordinator
 
 CLI 0.8.0 adds `coordinator setup/run/status/stop/install/uninstall` for one project.
-Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.8.5/packages/cli/README.md#project-coordinator-cli-080). A registered
+Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.0/packages/cli/README.md#project-coordinator-cli-080). A registered
 interactive agent without an approved execution route is not automatically wakeable.
 Only explicitly consented local dedicated workers can be dispatched. Check status
 and the issue timeline for actual claim/progress/result; do not call a queued wakeup
