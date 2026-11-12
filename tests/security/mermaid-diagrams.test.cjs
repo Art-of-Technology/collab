@@ -48,7 +48,7 @@ function diagrams(render) {
   const loaded = load('src/lib/mermaid-diagrams.ts', {
     ...RENDERER_URL,
     dompurify: { __esModule: true, default: require('dompurify')(dom.window) },
-  }, { document, window: dom.window });
+  }, { document, window: dom.window, MutationObserver: dom.window.MutationObserver });
   return { ...loaded, calls };
 }
 
