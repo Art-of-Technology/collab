@@ -101,5 +101,6 @@ export const GET = withAppAuth(
       );
     }
   },
-  { requiredScopes: ['projects:read'] }
+  // Issue history is issue content: old and new values and handoff text.
+  { requiredScopes: ['projects:read', 'issues:read'] }
 );
