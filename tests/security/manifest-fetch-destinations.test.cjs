@@ -48,16 +48,22 @@ test('in production a name is judged by the addresses it resolves to', async t =
   }
   assert.equal(seen.connections, 0, 'nothing was connected to');
 
-  // A public address passes. The connection is played by a stand-in that, like the real one, asks the
-  // lookup it was given before it connects, and then talks to the local server instead of the internet.
-  const standIn = { request: (url, options, onResponse) => {
+  // A public address passes. The connection is played by a stand-in that, like the real one, asks the lookup it
+  // was given before it connects (for every address or for one), and then talks to the local server instead of the internet.
+  const standIn = all => ({ request: (url, options, onResponse) => {
     const request = http.request({ host: '127.0.0.1', port, path: url.pathname, headers: options.headers, signal: options.signal, agent: false }, onResponse);
     const end = request.end.bind(request);
-    request.end = () => options.lookup(url.hostname, { all: true }, error => error ? request.destroy(error) : end());
+    request.end = () => options.lookup(url.hostname, { all }, error => error ? request.destroy(error) : end());
     return request;
-  } };
-  const { fetchManifest } = validation({ NODE_ENV: 'production' }, { 'node:dns': resolvesTo('93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946'), 'node:https': standIn });
-  assert.equal((await fetchManifest(`https://manifest.example:${port}/manifest.json`)).slug, 'app');
+  } });
+  for (const all of [true, false]) {
+    const publicOnly = validation({ NODE_ENV: 'production' }, { 'node:dns': resolvesTo('93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946'), 'node:https': standIn(all) });
+    assert.equal((await publicOnly.fetchManifest(`https://manifest.example:${port}/manifest.json`)).slug, 'app');
+    // Every answer is checked, also when the connection asks for one address and the first answer is public.
+    const mixed = validation({ NODE_ENV: 'production' }, { 'node:dns': resolvesTo('93.184.216.34', '192.168.1.1'), 'node:https': standIn(all) });
+    await assert.rejects(mixed.fetchManifest(`https://manifest.example:${port}/manifest.json`), /public address/);
+  }
+  assert.equal(seen.paths.length, 2, 'only the two public fetches reached the server');
 });
 
 test('a manifest fetch does not follow redirects and stops at one megabyte', async t => {

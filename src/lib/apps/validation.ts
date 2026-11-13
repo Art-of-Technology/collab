@@ -251,7 +251,7 @@ export function validateManifestUrl(url: string): boolean {
 const MAX_MANIFEST_BYTES = 1024 * 1024;
 
 // Where a manifest may not be fetched from: this server, private networks, link-local (cloud metadata)
-// and other ranges that are not public addresses.
+// and other ranges that are not public addresses. An IPv4 address written as IPv6 is refused whatever it is.
 const nonPublicAddresses = new BlockList();
 for (const [network, prefix] of [
   ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12],
@@ -268,12 +268,13 @@ const isPublicAddress = (address: string) => {
 };
 const notPublic = () => new Error('Manifest URL must resolve to a public address');
 
-// Given to the connection itself, so the address that is checked is the address that is connected to:
-// a name cannot answer one thing for a check and another for the request.
-const publicLookup: LookupFunction = (hostname, options, callback) => lookup(hostname, options, (error, address, family) => {
-  const addresses = Array.isArray(address) ? address.map(entry => entry.address) : [address];
-  if (!error && !addresses.every(isPublicAddress)) return callback(notPublic(), address, family);
-  callback(error, address, family);
+// Given to the connection itself, so the addresses that are checked are the ones it connects to: a name cannot
+// answer one thing for a check and another for the request. Every answer is checked, also when one address is asked for.
+const publicLookup: LookupFunction = (hostname, options, callback) => lookup(hostname, { ...options, all: true }, (error, addresses) => {
+  if (error) return callback(error, []);
+  if (!addresses.length || !addresses.every(entry => isPublicAddress(entry.address))) return callback(notPublic(), []);
+  if (options.all) callback(null, addresses);
+  else callback(null, addresses[0].address, addresses[0].family);
 });
 
 // Fetch manifest from URL

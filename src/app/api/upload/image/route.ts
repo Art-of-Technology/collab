@@ -3,8 +3,8 @@ import { cloudinary } from '@/utils/cloudinary-server';
 import { getCurrentUser } from '@/lib/session';
 import { withRateLimit, imageUploadRateLimit } from '@/lib/rate-limit';
 
-// 10 MB of image data, as the length of its base64 text
-const MAX_IMAGE_CHARS = Math.ceil(10 * 1024 * 1024 / 3) * 4;
+// The application buffers at most 10 MB of a request body and cuts off the rest, so a larger upload never arrives whole.
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 /**
  * API route handler for uploading images to Cloudinary
@@ -17,20 +17,20 @@ export const POST = withRateLimit(async function(req: NextRequest) {
     if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    // shortcut: the body is read before its size is known; a limit on the request itself belongs in the proxy.
-    const { image } = await req.json();
+    if (Number(req.headers.get('content-length')) > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(
+        { error: 'Image too large. Maximum upload size: 10MB' },
+        { status: 413 }
+      );
+    }
+
+    // A body that is not JSON, or was cut off on the way in, is the caller's error, not the server's.
+    const image = (await req.json().catch(() => null))?.image;
     
     if (!image || typeof image !== 'string') {
       return NextResponse.json(
         { error: 'Image data is required' },
         { status: 400 }
-      );
-    }
-
-    if (image.length > MAX_IMAGE_CHARS) {
-      return NextResponse.json(
-        { error: 'Image too large. Maximum size: 10MB' },
-        { status: 413 }
       );
     }
     

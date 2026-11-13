@@ -156,23 +156,19 @@ export function createRateLimiter(options: RateLimitOptions = {}) {
     }
 
     // Increment counter
-    if (!skipFailedRequests) {
-      info.count++;
-      cacheStore.cache.set(key, info);
-    }
+    info.count++;
+    cacheStore.cache.set(key, info);
 
     // Execute the actual handler
     const response = await next();
 
     // Optionally skip counting based on response
-    if (skipFailedRequests && !skipSuccessfulRequests && response.status < 400) {
-      const completedAt = Date.now();
-      info = cacheStore.cache.get(key) ?? { count: 0, resetTime: completedAt + windowMs };
-      if (completedAt > info.resetTime) info = { count: 0, resetTime: completedAt + windowMs };
-      info.count++;
-      cacheStore.cache.set(key, info);
-    } else if (!skipFailedRequests && skipSuccessfulRequests && response.status < 400 && cacheStore.cache.get(key) === info) {
+    if (
+      (skipSuccessfulRequests && response.status < 400) ||
+      (skipFailedRequests && response.status >= 400)
+    ) {
       info.count--;
+      cacheStore.cache.set(key, info);
     }
 
     // Add rate limit headers to response
@@ -218,20 +214,18 @@ export const pushSubscriptionRateLimit = createRateLimiter({
 
 /**
  * Rate limiters for media uploads. Images arrive in bursts when a document is pasted; videos and profile images do not.
- * Only uploads that succeed are counted.
+ * Every request to an upload route counts, refused ones too.
  */
 // shortcut: counted per client address in this process's memory; a hard storage quota per account needs a counter in the database.
 export const imageUploadRateLimit = createRateLimiter({
   windowMs: 60 * 1000, // 1 minute
   maxRequests: 120,
-  skipFailedRequests: true,
   message: 'Too many uploads, please try again later.',
 });
 
 export const mediaUploadRateLimit = createRateLimiter({
   windowMs: 60 * 1000, // 1 minute
   maxRequests: 10,
-  skipFailedRequests: true,
   message: 'Too many uploads, please try again later.',
 });
 

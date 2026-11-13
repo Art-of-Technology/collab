@@ -45,7 +45,7 @@ function fixture() {
     video = route('upload/video'), debug = route('github/oauth/debug');
   // A session can claim any role; the routes must go by the account in the database.
   const as = (id, role = 'DEVELOPER') => { state.session = id ? { user: { id, role } } : null; };
-  const request = body => ({ json: async () => body, formData: async () => { throw new Error('the body was read'); } });
+  const request = body => ({ headers: new Headers(), json: async () => body, formData: async () => { throw new Error('the body was read'); } });
   const setStatus = (id, status) => publish.PATCH(request({ status }), { params: Promise.resolve({ id }) });
   const status = id => apps.find(row => row.id === id).status;
   return { state, as, request, setStatus, status, image, profile, video, debug };

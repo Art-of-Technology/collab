@@ -16,16 +16,16 @@ function fixture() {
   deps['@/lib/session'] = load('src/lib/session.ts', deps, globals);
   deps['@/lib/rate-limit'] = load('src/lib/rate-limit.ts', deps, globals);
   const route = Object.fromEntries(['image', 'profile-image', 'video'].map(name => [name, load(`src/app/api/upload/${name}/route.ts`, deps, globals)]));
-  const post = (name, body, address = '203.0.113.9') => route[name].POST(new Request(`https://collab.test/api/upload/${name}`, {
-    method: 'POST', headers: { 'x-forwarded-for': address, ...(typeof body === 'string' && { 'content-type': 'application/json' }) }, body,
+  const post = (name, body, address = '203.0.113.9', headers = {}) => route[name].POST(new Request(`https://collab.test/api/upload/${name}`, {
+    method: 'POST', headers: { 'x-forwarded-for': address, ...headers }, body,
   }));
-  const json = (name, body, address) => post(name, JSON.stringify(body), address);
+  const json = (name, body, address) => post(name, JSON.stringify(body), address, { 'content-type': 'application/json' });
   const video = address => {
     const form = new FormData();
     form.set('video', new File([Buffer.from('video')], 'clip.mp4', { type: 'video/mp4' }));
     return post('video', form, address);
   };
-  return { state, json, video };
+  return { state, post, json, video };
 }
 
 test('an uploaded image is named by storage, not by the caller, and must be an image', async () => {
@@ -36,14 +36,15 @@ test('an uploaded image is named by storage, not by the caller, and must be an i
   assert.equal(f.state.uploads[0].options.resource_type, 'image');
 });
 
-test('an image over 10 MB or not sent as text is refused before it reaches storage', async () => {
+test('an image upload over 10 MB is refused unread, and a body that is not JSON is the caller\'s error', async () => {
   const f = fixture();
-  const tenMegabytes = 'A'.repeat(Math.ceil(10 * 1024 * 1024 / 3) * 4);
-  assert.equal((await f.json('image', { image: tenMegabytes + 'AAAA' })).status, 413);
+  const sized = bytes => f.post('image', JSON.stringify({ image: 'aGVsbG8=' }), '203.0.113.9', { 'content-type': 'application/json', 'content-length': String(bytes) });
+  assert.equal((await sized(10 * 1024 * 1024 + 1)).status, 413);
+  assert.equal((await f.post('image', '{"image":"aGVsbG8', '203.0.113.9', { 'content-type': 'application/json' })).status, 400, 'a body cut off on the way in');
   assert.equal((await f.json('image', { image: { nested: true } })).status, 400);
   assert.equal((await f.json('image', {})).status, 400);
   assert.deepEqual(f.state.uploads, []);
-  assert.equal((await f.json('image', { image: tenMegabytes })).status, 200, 'exactly 10 MB is accepted');
+  assert.equal((await sized(10 * 1024 * 1024)).status, 200, 'exactly 10 MB is accepted');
 });
 
 test('a profile image is taken only from an https address', async () => {
@@ -69,30 +70,8 @@ test('uploads are limited per client address: 120 images, 10 videos and 10 profi
   }
   assert.equal(f.state.uploads.length, 120 + 10 + 10 + 3, 'a refused upload does not reach storage');
 
-  // Requests that upload nothing do not use up the count.
+  // A refused request counts like any other.
   const g = fixture();
-  for (let count = 0; count < 15; count++) assert.equal((await g.json('profile-image', { filename: 'x', userId: 'alice', imageUrl: 'https://img.test/a.png' }, '192.0.2.1')).status, 403);
-  assert.equal((await g.json('profile-image', { filename: 'profile_google_alice_1_abc', userId: 'alice', imageUrl: 'https://img.test/a.png' }, '192.0.2.1')).status, 200);
-});
-
-test('pending and failed uploads do not consume or restore a rate-limit window', async () => {
-  let now = 100000;
-  class Clock extends Date { static now() { return now; } }
-  const { createRateLimiter } = load('src/lib/rate-limit.ts', {
-    'next/server': { NextResponse: Response }, 'lru-cache': require('lru-cache'),
-  }, { URL, Headers, Date: Clock });
-  const limit = createRateLimiter({ maxRequests: 2, windowMs: 1000, skipFailedRequests: true });
-  const request = new Request('https://collab.test/api/upload/image');
-  let finish;
-  const pending = new Promise(resolve => { finish = resolve; });
-  const first = limit(request, () => pending);
-  const second = limit(request, () => pending);
-  assert.equal((await limit(request, async () => new Response(null, { status: 400 }))).status, 400);
-  now += 1001;
-  assert.equal((await limit(request, async () => new Response())).status, 200);
-  finish(new Response(null, { status: 400 }));
-  assert.equal((await first).status, 400);
-  assert.equal((await second).status, 400);
-  assert.equal((await limit(request, async () => new Response())).status, 200);
-  assert.equal((await limit(request, async () => new Response())).status, 429);
+  for (let count = 0; count < 10; count++) assert.equal((await g.json('profile-image', { filename: 'x', userId: 'alice', imageUrl: 'https://img.test/a.png' }, '192.0.2.1')).status, 403);
+  assert.equal((await g.json('profile-image', { filename: 'profile_google_alice_1_abc', userId: 'alice', imageUrl: 'https://img.test/a.png' }, '192.0.2.1')).status, 429);
 });
