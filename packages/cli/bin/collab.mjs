@@ -101,7 +101,10 @@ async function update() {
       if (windows && !fs.existsSync(process.execPath)) { try { fs.renameSync(old, process.execPath); } catch { /* Reported below. */ } }
       throw new CliError('update_failed', 'Installer did not complete; the current executable was kept. Rerun collab update or the one-command installer.', 5);
     }
-    return { updated: true, previousVersion: cliPackage.version, installer: result.stdout.trim() };
+    // The installer succeeds whether or not it changed anything, so ask the executable now in place which version it is.
+    let version = null;
+    try { version = JSON.parse(spawnSync(process.execPath, ['schema'], { encoding: 'utf8', windowsHide: true, timeout: 30000 }).stdout).version ?? null; } catch { /* Not readable: reported as null. */ }
+    return { updated: version !== cliPackage.version, previousVersion: cliPackage.version, version, installer: result.stdout.trim() };
   } finally { fs.rmSync(work, { recursive: true, force: true }); }
 }
 async function main() {
