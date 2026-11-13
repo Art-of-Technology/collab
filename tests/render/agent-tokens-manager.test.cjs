@@ -104,6 +104,9 @@ test('Connect an agent shows the endpoint of this deployment and copies each com
     const command = `claude mcp add --transport http --client-id collab-connector collab ${url}`;
     assert.deepEqual(snippets().slice(0, 3), [url, command, `claude mcp add --transport http collab ${url} --header "Authorization: Bearer $COLLAB_TOKEN"`]);
     assert.deepEqual(JSON.parse(snippets()[3]), { mcpServers: { collab: { type: 'http', url, headers: { Authorization: 'Bearer ${COLLAB_TOKEN}' } } } });
+    const sections = [...document.querySelectorAll('section')];
+    assert.match(sections.find(section => section.querySelector('h2')?.textContent === 'Claude Code, as yourself').textContent, /runs this command in each project/);
+    assert.match(sections.find(section => section.querySelector('h2')?.textContent === 'An agent with its own name').textContent, /Run this command in each project/);
     assert.match(document.body.textContent, /client ID collab-connector with no secret/);
     assert.equal(document.querySelector('a').href, 'https://github.com/Art-of-Technology/collab/blob/main/docs/mcp-remote.md');
 

@@ -55,7 +55,7 @@ export default function AgentConnectGuide({ mcpUrl }: AgentConnectGuideProps) {
 
           <section className="space-y-2">
             <h2 className="font-medium">Claude Code, as yourself</h2>
-            <p className="text-muted-foreground">Each person adds the server once and signs in with their own Collab account.</p>
+            <p className="text-muted-foreground">Each person runs this command in each project where they want to use Collab, then signs in with their own account.</p>
             {snippet('the Claude Code command', `claude mcp add --transport http --client-id collab-connector collab ${mcpUrl}`)}
             <p className="text-muted-foreground">Then run <code>/mcp</code> in Claude Code and sign in.</p>
           </section>
@@ -63,7 +63,7 @@ export default function AgentConnectGuide({ mcpUrl }: AgentConnectGuideProps) {
           <section className="space-y-2">
             <h2 className="font-medium">An agent with its own name</h2>
             <p className="text-muted-foreground">
-              Create a token on this page and give it to the agent as the <code>COLLAB_TOKEN</code> environment variable. Everything the agent writes shows the token&apos;s name.
+              Create a token on this page and give it to the agent as the <code>COLLAB_TOKEN</code> environment variable. Run this command in each project where the agent needs Collab. Everything the agent writes shows the token&apos;s name.
             </p>
             {snippet('the Claude Code command with a token', `claude mcp add --transport http collab ${mcpUrl} --header "Authorization: Bearer $COLLAB_TOKEN"`)}
             <p className="text-muted-foreground">
