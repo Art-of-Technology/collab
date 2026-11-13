@@ -22,7 +22,7 @@ Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32
 
 The [release process](#validation-and-release) publishes [CLI 0.9.1 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.9.1) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
 
-Version 0.9.1 makes `inbox watch` ride through a server that is briefly away, such as an app restart during a deploy. Polls the server does not answer are skipped and counted in `skippedPolls`, and the watcher keeps its identity, so its health recovers by itself. Earlier versions exit on the first failed request, and the server then refuses a replacement watcher for five minutes while still showing the old one as running.
+Version 0.9.1 makes `inbox watch` ride through a server that is briefly away, such as an app restart during a deploy. Affected polls are skipped and counted in `skippedPolls`, and the watcher keeps its identity. Earlier versions exit on the first failed request; if a health-reporting watcher cannot report its exit, the server can show it as running and refuse a replacement until its health becomes stale.
 
 Version 0.9.0 adds `templates list` and `templates get TYPE`, and explains a refused issue: when a workspace requires issue templates, `issues create` and `issues update` print `template_required` with the missing sections and fields. Earlier versions print only that the request was refused.
 
@@ -396,10 +396,12 @@ unseen queues using the existing login, without OAuth, refresh or handoff mutati
 A read or health report that the server does not answer (a timeout, a connection
 failure, HTTP 5xx or 429) is one skipped poll: the watcher tries again at the next
 interval with the same watcher UUID, so its health turns to running again by itself
-after an app restart. The result reports `skippedPolls` when there were any. Once
-five minutes have passed since the last poll the server answered, the next failed
-attempt stops the watcher with that error. A window that ends while the server is
-away repeats its final stop report the same way, so the next watcher is not refused.
+after an app restart, unless a replacement has already started. The result reports
+`skippedPolls` when there were any. Once five minutes have passed since the last
+completed poll (or the watcher's start, if none completed), the next failed attempt
+stops the watcher with that error. A window that ends while the server is away
+retries its final stop report within the same limit. If that report cannot be
+delivered, the server may show the watcher as running until its health becomes stale.
 A refusal the server did answer (authentication, permission, a changed binding), an
 answer that is not Collab's JSON, and callback errors or timeouts stop the watcher
 with nonzero exit at once; investigate before restarting. Already received HTTP errors and observed
