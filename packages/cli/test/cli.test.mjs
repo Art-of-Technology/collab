@@ -1536,6 +1536,59 @@ test('note deletion stops when the note cannot be read or is not the one asked f
   assert.deepEqual(other.calls.map(call => call.method), ['GET']);
 });
 
+const retirePreview = { agent: 'old-agent', released: [{ id: 'handoff-one', issueKey: 'APP-1' }], releasedHidden: 2, unowned: { count: 1, handoffs: [{ id: 'handoff-two', issueKey: 'APP-2' }] } };
+const retirePreviewUrl = '/api/apps/auth/agents/delete-preview?workspaceId=workspace-one&agent=old-agent';
+// The removal names the registration that was previewed, so a name that changed hands in between is not retired.
+const retireUrl = '/api/apps/auth/agents?workspaceId=workspace-one&agent=old-agent&id=registration-one';
+
+test('agent retirement asks for the agent and for --yes, and its dry-run only reads the preview', async t => {
+  const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ ...retirePreview, id: 'registration-one' })));
+  assert.equal((await f.run(['agents', 'retire', '--workspace', 'workspace-one', '--yes'])).error.error, 'required_field');
+  assert.equal((await f.run(['agents', 'retire', '--agent', 'old-agent', '--workspace', 'workspace-one'])).error.error, 'confirmation_required');
+  assert.equal(f.calls.length, 0);
+  const result = await f.run(['agents', 'retire', '--agent', 'old-agent', '--workspace', 'workspace-one', '--dry-run']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.data, { dryRun: true, method: 'DELETE', url: f.url + retireUrl, preview: retirePreview });
+  assert.deepEqual(f.calls.map(({ method, url }) => ({ method, url })), [{ method: 'GET', url: retirePreviewUrl }]);
+});
+
+test('agent retirement shows what is released and what stays unowned, then retires that agent', async t => {
+  const f = await fixture(t, (req, res) => res.end(JSON.stringify({ ...retirePreview, id: 'registration-one', ...(req.method === 'DELETE' && { retired: true }) })));
+  const result = await f.run(['agents', 'retire', '--agent', 'old-agent', '--workspace', 'workspace-one', '--yes']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.diagnostics, [{ deletePreview: retirePreview }]);
+  assert.deepEqual(result.data, { ...retirePreview, id: 'registration-one', retired: true });
+  assert.deepEqual(f.calls.map(({ method, url }) => ({ method, url })), [{ method: 'GET', url: retirePreviewUrl }, { method: 'DELETE', url: retireUrl }]);
+});
+
+test('agent retirement stops when the server refuses the preview or answers for another agent', async t => {
+  const blocked = await fixture(t, (_req, res) => { res.statusCode = 409; res.end(JSON.stringify({ error: 'watcher_active' })); });
+  const refused = await blocked.run(['agents', 'retire', '--agent', 'old-agent', '--workspace', 'workspace-one', '--yes']);
+  assert.equal(refused.error.error, 'conflict');
+  assert.deepEqual(blocked.calls.map(call => call.method), ['GET']);
+  const answer = { ...retirePreview, id: 'registration-one' };
+  for (const wrong of [
+    { ...answer, agent: 'another' }, { ...answer, id: undefined }, { ...answer, released: 'all' },
+    { ...answer, releasedHidden: 'some' }, { ...answer, releasedHidden: -1 },
+    { ...answer, unowned: { count: 'many', handoffs: [] } }, { ...answer, unowned: { count: -1, handoffs: [] } },
+    { ...answer, unowned: { count: 0, handoffs: answer.unowned.handoffs } },
+    { ...answer, unowned: { count: 21, handoffs: Array(21).fill(answer.unowned.handoffs[0]) } },
+    ...['released', 'unowned'].flatMap(field => ['id', 'issueKey'].map(key => {
+      const row = { id: 'handoff-one', issueKey: 'APP-1', [key]: '' };
+      return field === 'released' ? { ...answer, released: [row] } : { ...answer, unowned: { count: 1, handoffs: [row] } };
+    })),
+  ]) {
+    const other = await fixture(t, (_req, res) => res.end(JSON.stringify(wrong)));
+    const mismatched = await other.run(['agents', 'retire', '--agent', 'old-agent', '--workspace', 'workspace-one', '--yes']);
+    assert.equal(mismatched.error.error, 'invalid_preview');
+    assert.deepEqual(other.calls.map(call => call.method), ['GET']);
+  }
+  // An agent with very many claims is still a valid preview.
+  const many = await fixture(t, (_req, res) => res.end(JSON.stringify({ ...answer, released: Array.from({ length: 250 }, (_, i) => ({ id: `handoff-${i}`, issueKey: `APP-${i}` })) })));
+  const large = await many.run(['agents', 'retire', '--agent', 'old-agent', '--workspace', 'workspace-one', '--dry-run']);
+  assert.equal(large.data.preview.released.length, 250);
+});
+
 test('issue trash and restore commands use required project scope and expose no purge', async t => {
   const f = await fixture(t);
   const schema = (await f.run(['schema'])).data;

@@ -30,6 +30,17 @@ clears it. A name already owned by another user is refused. Recover existing cla
 work before taking another task; a claim persists across process restarts.
 Use the actual session ID supplied by your host and a nonsecret host label. The server permits one name per owner's host/session pair. Stop the old watcher before rebinding the same name to a replacement session. A fresh watcher refuses takeover; stale health is not proof that the old process exited. Unbound historical names are not current runtime evidence. Do not change another agent's binding or assume its work.
 
+### Retire a name you no longer use
+
+A registration stays until somebody retires it, and work it has claimed stays claimed. When an agent name will not come back (a finished experiment, a session that ended for good), retire it, from CLI 0.9.2 on:
+
+```sh
+collab agents retire --agent old-name --workspace WORKSPACE_ID --dry-run
+collab agents retire --agent old-name --workspace WORKSPACE_ID --yes
+```
+
+The preview lists the claimed work that goes back to open (each issue gets an entry) and the open handoffs addressed only to that name, which stay open: address those again if they still matter. You can retire your own agents; the workspace owner can retire anyone's. Claims on issues you cannot read are released as well and only counted (`releasedHidden`). It is refused while the agent's watcher is running, while it has a pending transfer offer or an active review, while it holds transferred work, and for a managed worker. Stop the watcher or settle those first. The name is free afterwards, and whoever registers it again receives the handoffs still addressed to it. Do not retire an agent that is only resting between tasks.
+
 ## Send a handoff
 
 A handoff connects a message to an existing issue and routes it to registered
@@ -311,12 +322,12 @@ Only the sender of open work or its current claimant may supersede it. The repla
 
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
-For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.1/packages/cli/README.md#agent-coordination).
+For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.2/packages/cli/README.md#agent-coordination).
 
 ## Host wake callback
 
 For automatic notifications, have the host supervisor follow the
-[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.1/packages/cli/README.md#wake-a-running-agent-through-its-host)
+[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.2/packages/cli/README.md#wake-a-running-agent-through-its-host)
 for command availability, setup, deadlines and adapter requirements.
 
 Require the host to provide and verify its adapter; never substitute a guessed
@@ -338,7 +349,7 @@ requirements above before claiming automatic wake-ups are active for that host.
 
 ### Dedicated managed workers
 
-Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.1/packages/cli/README.md#dedicated-managed-workers-cli-070)
+Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.2/packages/cli/README.md#dedicated-managed-workers-cli-070)
 for setup, supervision and recovery. Never use a custom terminal callback as a
 fallback. Preserve the saved login, stable identity, labels and private journals.
 
@@ -357,7 +368,7 @@ owner's qualification boundary described there.
 ## Project coordinator
 
 CLI 0.8.0 adds `coordinator setup/run/status/stop/install/uninstall` for one project.
-Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.1/packages/cli/README.md#project-coordinator-cli-080). A registered
+Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.2/packages/cli/README.md#project-coordinator-cli-080). A registered
 interactive agent without an approved execution route is not automatically wakeable.
 Only explicitly consented local dedicated workers can be dispatched. Check status
 and the issue timeline for actual claim/progress/result; do not call a queued wakeup

@@ -321,6 +321,19 @@ async function main() {
       const note = await request(selected.base, apiPath(), { token: selected.token, timeout });
       if (note?.id !== args[0] || typeof note.title !== 'string') throw new CliError('invalid_preview', 'Deletion preview did not match the requested Note. No deletion was sent.', 5);
       preview = { id: note.id, title: note.title, type: note.type, scope: note.scope, projectName: note.projectName ?? null, updatedAt: note.updatedAt };
+    } else if (name === 'agents retire') {
+      // Name what goes back to open and what stays unowned before anything is removed.
+      const found = await request(selected.base, `/api/apps/auth/agents/delete-preview?${query}`, { token: selected.token, timeout });
+      const rows = list => Array.isArray(list) && list.every(row => typeof row?.id === 'string' && row.id.length > 0 && typeof row.issueKey === 'string' && row.issueKey.length > 0);
+      if (found?.agent !== options.agent || typeof found.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(found.id) || !rows(found.released) ||
+          !Number.isSafeInteger(found.releasedHidden) || found.releasedHidden < 0 || !Number.isSafeInteger(found.unowned?.count) || found.unowned.count < 0 ||
+          !rows(found.unowned.handoffs) || found.unowned.handoffs.length > 20 || found.unowned.handoffs.length > found.unowned.count) {
+        throw new CliError('invalid_preview', 'Retire preview did not match the requested agent. Nothing was changed.', 5);
+      }
+      const keys = list => list.map(({ id, issueKey }) => ({ id, issueKey }));
+      preview = { agent: found.agent, released: keys(found.released), releasedHidden: found.releasedHidden, unowned: { count: found.unowned.count, handoffs: keys(found.unowned.handoffs) } };
+      // Retire the registration that was previewed, not whatever holds the name a moment later.
+      query.set('id', found.id);
     } else {
       const previewPath = `/api/apps/auth/${endpoint}/delete-preview?${query}`;
       preview = checkedDeletePreview(await request(selected.base, previewPath, { token: selected.token, timeout }), args[0], query.get('projectId'));

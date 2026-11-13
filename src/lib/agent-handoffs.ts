@@ -237,6 +237,72 @@ export async function getOwnedAgent(context: AppAuthContext, agent: unknown) {
   return agentStatus(await ownedAgent(prisma, context, name.parse(agent)));
 }
 
+/**
+ * Removes an agent registration nobody uses any more. The work it holds goes back to open, with an
+ * entry on each issue. Handoffs addressed only to its name stay open, so that their
+ * senders can address them again. Whatever needs a decision first (a running watcher, a pending
+ * transfer offer, an active review, transferred work, a managed worker) is refused, not guessed.
+ * With `preview` it changes nothing. The summary names only handoffs on issues the caller can read
+ * and counts the claims it releases on issues the caller cannot read, so nothing happens unannounced.
+ * `expectedId` binds the removal to the registration that was previewed: the name can be retired and
+ * registered again by somebody else between the two requests.
+ */
+export async function retireAgent(context: AppAuthContext, agentName: unknown, preview: boolean, expectedId?: string | null) {
+  const named = name.parse(agentName), workspaceId = context.workspace.id;
+  return prisma.$transaction(async db => {
+    await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${workspaceId} AND name = ${named} FOR UPDATE`;
+    const agent = await db.agentRegistration.findUnique({ where: { workspaceId_name: { workspaceId, name: named } } });
+    // An agent is retired by the user it belongs to, or by the owner of the workspace.
+    if (!agent || (agent.userId !== context.user.id &&
+      !await db.workspace.findFirst({ where: { id: workspaceId, ownerId: context.user.id }, select: { id: true } }))) {
+      throw new HandoffError('agent_not_found', 'Agent not found in this workspace, or it belongs to another user', 404);
+    }
+    if (expectedId && expectedId !== agent.id) throw new HandoffError('agent_changed', 'This name belongs to another registration than the one that was previewed. Nothing was changed; preview again', 409);
+    if (agent.managedWorker) throw new HandoffError('managed_agent', 'A managed worker is removed through worker setup, not by retiring it', 409);
+    if (watcherState(agent.watcher)?.state === 'running') throw new HandoffError('watcher_active', 'Stop this agent\'s watcher before retiring it', 409);
+    const claimed = await db.agentHandoff.findMany({ where: { workspaceId, claimedById: agent.id, status: 'claimed' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, sourceKey: true, issue: { select: { id: true, issueKey: true, projectId: true } } } });
+    // Transferred work can be claimed only by the agent it was transferred to: released, it would be lost.
+    if (claimed.some(handoff => handoff.sourceKey.startsWith('transfer-offer:')) || await db.agentHandoff.findFirst({ where: {
+      workspaceId, status: 'open', acceptedTransferOffer: { is: { status: 'accepted', recipientId: agent.id } },
+    }, select: { id: true } })) {
+      throw new HandoffError('transfer_claim_held', 'This agent holds transferred work that no other agent can claim. Complete or supersede it before retiring the agent', 409);
+    }
+    if (await db.agentTransferOffer.findFirst({ where: { workspaceId, status: 'pending', OR: [{ senderId: agent.id }, { recipientId: agent.id }] }, select: { id: true } })) {
+      throw new HandoffError('transfer_offer_pending', 'Accept or cancel this agent\'s pending transfer offers before retiring it', 409);
+    }
+    // Old databases lack the review table.
+    const [reviewTable] = await db.$queryRaw<Array<{ installed: boolean }>>`SELECT to_regclass('public."AgentReviewRequest"') IS NOT NULL AS installed`;
+    if (reviewTable?.installed && await db.agentReviewRequest.findFirst({ where: { workspaceId, status: { in: ['pending', 'claimed', 'replied'] },
+      OR: [{ ownerAgentId: agent.id }, { reviewerAgentId: agent.id }] }, select: { id: true } })) {
+      throw new HandoffError('review_already_active', 'Resolve or cancel this agent\'s active reviews before retiring it', 409);
+    }
+    const onlyForIt = { workspaceId, status: 'open', recipientNames: { equals: [agent.name] }, labelIds: { isEmpty: true }, issue: issueScope(context) };
+    const unowned = await db.agentHandoff.count({ where: onlyForIt });
+    const examples = await db.agentHandoff.findMany({ where: onlyForIt, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 20,
+      select: { id: true, issue: { select: { id: true, issueKey: true } } } });
+    const listed = (rows: Array<{ id: string; issue: { id: string; issueKey: string | null } }>) =>
+      rows.map(row => ({ id: row.id, issueKey: row.issue.issueKey || row.issue.id }));
+    const visibleClaimed = await db.agentHandoff.findMany({ where: { id: { in: claimed.map(row => row.id) }, issue: issueScope(context) },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true, issue: { select: { id: true, issueKey: true } } } });
+    // The count and the examples are two statements, and a handoff can arrive between them: the count
+    // is never smaller than what is listed.
+    const summary = { agent: agent.name, id: agent.id, released: listed(visibleClaimed), releasedHidden: claimed.length - visibleClaimed.length,
+      unowned: { count: Math.max(unowned, examples.length), handoffs: listed(examples) } };
+    if (preview) return summary;
+    for (const handoff of claimed) {
+      const changed = await db.agentHandoff.updateMany({ where: { id: handoff.id, status: 'claimed', claimedById: agent.id }, data: { status: 'open', claimedById: null } });
+      if (!changed.count) throw new HandoffError('claim_changed', 'This agent\'s claims changed while it was being retired. Nothing was changed; try again', 409);
+      // As for any release: the work is news again for everyone who had seen it.
+      await db.agentReceipt.deleteMany({ where: { handoffId: handoff.id } });
+      await activity(db, context, agent, handoff.issue, handoff.id, 'release', 'Released: this agent was retired.', { retired: true });
+    }
+    await db.agentRegistration.delete({ where: { id: agent.id } });
+    return { ...summary, retired: true };
+  });
+}
+
 export async function reportWatcher(context: AppAuthContext, input: z.infer<typeof heartbeatSchema>) {
   return prisma.$transaction(async db => {
     await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${context.workspace.id} AND name = ${input.agent} FOR UPDATE`;
