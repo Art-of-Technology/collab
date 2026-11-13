@@ -570,7 +570,7 @@ test('watcher reports a bounded fallback for code-less failures and preserves th
 // A deploy takes the app away for a few seconds. The watcher used to exit on the first 502, and the
 // server then refused a replacement for five minutes while still showing the dead one as running.
 test('inbox watch rides through a server that is away and keeps the same watcher', async () => {
-  const away = code => new CliError(code, 'synthetic', 5);
+  const away = code => new CliError(code, 'synthetic', 5, code === 'server_error' ? { status: 502 } : undefined);
   const controller = new AbortController(), events = [];
   // One entry per poll: what the claimed read, the unseen read and the poll heartbeat do.
   const polls = [
@@ -679,7 +679,7 @@ test('inbox watch reconciles an uncertain start on shutdown', async () => {
 });
 
 test('inbox watch gives up when the server stays away longer than it tolerates', async () => {
-  const gone = new CliError('server_error', 'synthetic', 5), events = [];
+  const gone = new CliError('server_error', 'synthetic', 5, { status: 502 }), events = [];
   let reads = 0;
   const started = Date.now();
   await assert.rejects(watchInbox({
@@ -691,6 +691,29 @@ test('inbox watch gives up when the server stays away longer than it tolerates',
   assert.ok(reads > 1, 'it tried again before giving up');
   assert.ok(Date.now() - started >= 60, 'it waited out the tolerated outage');
   assert.deepEqual(events, [['started', undefined], ['error', 'server_error']]);
+});
+
+test('inbox watch does not retry an answered 4xx server error', async () => {
+  for (const stage of ['started', 'claimed', 'unseen', 'poll', 'wake', 'stopped']) {
+    const controller = new AbortController(), events = [];
+    const refused = new CliError('server_error', 'synthetic', 5, { status: 413 });
+    await assert.rejects(watchInbox({
+      read: async state => {
+        events.push(state);
+        if (state === stage) throw refused;
+        return { items: stage === 'wake' && state === 'unseen' ? [{ id: 'work', status: 'open' }] : [], hasMore: false };
+      },
+      report: async event => {
+        events.push(event);
+        if (event === stage) throw refused;
+        if (event === 'poll' && stage === 'stopped') controller.abort();
+      },
+      callback: process.execPath, callbackArgs: ['-e', 'process.stdin.resume()'],
+      agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+      durationMs: 20000, intervalMs: 1, callbackTimeoutMs: 5000, signal: controller.signal,
+    }), error => error === refused);
+    assert.equal(events.filter(event => event === stage).length, 1, stage);
+  }
 });
 
 test('inbox watch says goodbye when the server is back, so the next watcher is not refused', async () => {
