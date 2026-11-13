@@ -17,6 +17,12 @@ function publicOrigin(): string | null {
   }
 }
 
+/** The MCP endpoint's public URL, for setup instructions; null while the public origin is not configured. */
+export function mcpEndpointUrl(): string | null {
+  const origin = publicOrigin();
+  return origin && `${origin}${MCP_PATH}`;
+}
+
 export function protectedResourceMetadata(origin: string) {
   return {
     resource: `${origin}${MCP_PATH}`,

@@ -274,6 +274,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, tokens }: 
           </div>
           <p className="text-xs text-muted-foreground">
             Use it as a Bearer credential, or as <code>COLLAB_TOKEN</code> together with <code>COLLAB_URL</code> for the CLI.
+            To connect an agent over MCP, follow &ldquo;Connect an agent&rdquo; on this page.
           </p>
           <DialogFooter>
             <Button onClick={() => setMinted(null)}>Done</Button>

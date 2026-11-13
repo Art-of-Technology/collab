@@ -376,7 +376,7 @@ test('the list shows live tokens with their account name and is unavailable unti
 
 function page(f) {
   const calls = [];
-  const Manager = () => null;
+  const Manager = () => null, Guide = () => null;
   const lib = f.deps['@/lib/agent-tokens'];
   const { default: AgentTokensPage } = load('src/app/(main)/workspaces/[workspaceId]/settings/agent-tokens/page.tsx', {
     ...f.deps,
@@ -386,11 +386,14 @@ function page(f) {
     'lucide-react': new Proxy({}, { get: (_, name) => name }),
     '@/components/ui/button': { Button: 'button' },
     '@/components/workspace/AgentTokensManager': { default: Manager },
+    '@/components/workspace/AgentConnectGuide': { default: Guide },
+    '@/lib/mcp-oauth': load('src/lib/mcp-oauth.ts', { 'next/server': {} }, { URL, process: { env: { NEXTAUTH_URL: 'https://collab.example.test/login' } } }),
     '@/lib/agent-tokens': { ...lib, listAgentTokens: async id => { calls.push(id); return lib.listAgentTokens(id); } },
   }, { Date });
-  const find = node => !node || typeof node !== 'object' ? null : node.type === Manager ? node
-    : [].concat(node.props?.children ?? []).map(find).find(Boolean) ?? null;
-  return { calls, render: async workspaceId => find(await AgentTokensPage({ params: Promise.resolve({ workspaceId }) })) };
+  const find = (type, node) => !node || typeof node !== 'object' ? null : node.type === type ? node
+    : [].concat(node.props?.children ?? []).map(child => find(type, child)).find(Boolean) ?? null;
+  const open = async (type, workspaceId) => find(type, await AgentTokensPage({ params: Promise.resolve({ workspaceId }) }));
+  return { calls, render: workspaceId => open(Manager, workspaceId), guide: workspaceId => open(Guide, workspaceId) };
 }
 
 test('the agent tokens page is hidden from non-admins before any token is read', async () => {
@@ -416,8 +419,10 @@ test('the agent tokens page gives an admin the live tokens and never a token val
     JSON.stringify([[fresh.id, 'Claude', 'write', false], [stale.id, 'Old bot', 'read', true]].sort()));
   assert.equal(typeof manager.props.tokens[0].createdAt, 'string');
   assert.doesNotMatch(JSON.stringify(manager.props), /collab_at_/);
+  assert.equal((await p.guide('w1')).props.mcpUrl, 'https://collab.example.test/api/mcp', 'the setup steps name the endpoint of this deployment');
   f.agentApp.status = 'SUSPENDED';
   assert.equal((await p.render('w1')).props.tokens, null);
+  assert.equal((await p.guide('w1')).props.mcpUrl, 'https://collab.example.test/api/mcp', 'and stay on the page while agent tokens are not set up');
 });
 
 test('minting for an account that was switched off is refused while its tokens are live, so a pause is never undone by accident', async () => {
