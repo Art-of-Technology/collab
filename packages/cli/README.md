@@ -393,10 +393,10 @@ in the next window. `--poll-seconds` defaults to 5 seconds (1–60), and
 `--callback-timeout` defaults to 30 seconds (1–120). It reads both claimed and
 unseen queues using the existing login, without OAuth, refresh or handoff mutations. With host/session flags it additionally posts start, poll, successful callback, stop and error health reports using a fresh watcher UUID. Health requests have a five-second timeout, including the final report after cancellation; a failed final report does not hide an earlier API/callback failure.
 `--timeout` still bounds each API request independently of the watch window.
-A read or health report that the server does not answer (a timeout, a connection
-failure, HTTP 5xx or 429) is one skipped poll: the watcher tries again at the next
-interval with the same watcher UUID, so its health turns to running again by itself
-after an app restart, unless a replacement has already started. The result reports
+A read or health report that times out, cannot connect, or receives HTTP 5xx or
+429 is one skipped poll: the watcher tries again at the next interval with the
+same watcher UUID. A health-reporting watcher's health can return to running after
+an app restart, unless a replacement has already started. The result reports
 `skippedPolls` when there were any. Once five minutes have passed since the last
 completed poll (or the watcher's start, if none completed), the next failed attempt
 stops the watcher with that error. A window that ends while the server is away
