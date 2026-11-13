@@ -1,6 +1,6 @@
 name: Tests and build
 # The other workflows run a few test files for the paths they watch. This one runs for every change:
-# the whole security and render suites, the type check, and the production build.
+# the whole security and render suites, the type check, lint, and the production build.
 on:
   pull_request:
   push:
@@ -26,6 +26,19 @@ jobs:
         run: npx tsc --noEmit -p .
       - name: Security and render tests, compared with tests/known-failures.txt
         run: npm test
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      # Errors fail the check. Warnings do not: main had 56 of them when this was added.
+      - run: npm run lint
   production-build:
     name: production build
     runs-on: ubuntu-latest

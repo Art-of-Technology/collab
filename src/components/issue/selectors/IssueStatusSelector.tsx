@@ -196,6 +196,7 @@ export function IssueStatusSelector({
           "text-collab-400"
         )}
       >
+        {/* eslint-disable-next-line react-hooks/static-components -- getStatusIcon picks one of the module-level icons; nothing is created here */}
         <Icon className={cn("h-3 w-3", colorClass)} />
         <span className="text-collab-400 text-xs">{displayStatus.displayName}</span>
       </div>
