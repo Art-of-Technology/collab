@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cloudinary } from '@/utils/cloudinary-server';
 import { getCurrentUser } from '@/lib/session';
+import { withRateLimit, mediaUploadRateLimit } from '@/lib/rate-limit';
 
 // Whitelist of allowed video MIME types
 const ALLOWED_VIDEO_TYPES = [
@@ -20,7 +21,7 @@ const MAX_VIDEO_SIZE = 50 * 1024 * 1024;
  * @param req Request object containing the video file
  * @returns Response with the uploaded video URL or an error
  */
-export async function POST(req: NextRequest) {
+export const POST = withRateLimit(async function(req: NextRequest) {
   try {
     const actor = await getCurrentUser();
     if (!actor) {
@@ -89,5 +90,5 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, mediaUploadRateLimit);
 

@@ -1,24 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cloudinary } from '@/utils/cloudinary-server';
 import { getCurrentUser } from '@/lib/session';
+import { withRateLimit, imageUploadRateLimit } from '@/lib/rate-limit';
+
+// 10 MB of image data, as the length of its base64 text
+const MAX_IMAGE_CHARS = Math.ceil(10 * 1024 * 1024 / 3) * 4;
 
 /**
  * API route handler for uploading images to Cloudinary
  * @param req Request object containing the image data
  * @returns Response with the uploaded image URL or an error
  */
-export async function POST(req: NextRequest) {
+export const POST = withRateLimit(async function(req: NextRequest) {
   try {
     const actor = await getCurrentUser();
     if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const { image, filename } = await req.json();
+    // shortcut: the body is read before its size is known; a limit on the request itself belongs in the proxy.
+    const { image } = await req.json();
     
-    if (!image) {
+    if (!image || typeof image !== 'string') {
       return NextResponse.json(
         { error: 'Image data is required' },
         { status: 400 }
+      );
+    }
+
+    if (image.length > MAX_IMAGE_CHARS) {
+      return NextResponse.json(
+        { error: 'Image too large. Maximum size: 10MB' },
+        { status: 413 }
       );
     }
     
@@ -28,8 +40,8 @@ export async function POST(req: NextRequest) {
       `data:image/png;base64,${image}`,
       {
         folder: 'devitter',
-        public_id: filename ? filename.split('.')[0] : undefined,
-        resource_type: 'auto', // Auto-detect the file type
+        // No public_id: storage names the asset, so an upload never replaces an existing one.
+        resource_type: 'image',
       }
     );
     
@@ -47,7 +59,7 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, imageUploadRateLimit);
 
 export const config = {
   api: {

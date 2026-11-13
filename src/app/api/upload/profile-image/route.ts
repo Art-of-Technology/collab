@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cloudinary } from '@/utils/cloudinary-server';
 import { getCurrentUser } from '@/lib/session';
+import { withRateLimit, mediaUploadRateLimit } from '@/lib/rate-limit';
 
 /**
  * API route handler for uploading profile images from URLs to Cloudinary
  * @param req Request object containing the image URL and user info
  * @returns Response with the uploaded image URL or an error
  */
-export async function POST(req: NextRequest) {
+export const POST = withRateLimit(async function(req: NextRequest) {
   try {
     const actor = await getCurrentUser();
     if (!actor) {
@@ -24,6 +25,14 @@ export async function POST(req: NextRequest) {
     if (!imageUrl) {
       return NextResponse.json(
         { error: 'Image URL is required' },
+        { status: 400 }
+      );
+    }
+
+    // Storage fetches the image itself. It is handed an https address only, never a local path or another scheme.
+    if (typeof imageUrl !== 'string' || !URL.canParse(imageUrl) || new URL(imageUrl).protocol !== 'https:') {
+      return NextResponse.json(
+        { error: 'Invalid image URL format' },
         { status: 400 }
       );
     }
@@ -63,7 +72,7 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, mediaUploadRateLimit);
 
 export const config = {
   api: {

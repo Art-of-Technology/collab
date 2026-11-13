@@ -30,12 +30,14 @@ function fixture() {
     '@/lib/prisma': { prisma }, '@/lib/auth-options': { authOptions: {} },
     '@/lib/request-session': { getServerSession: async () => state.session },
     '@/lib/apps/ownership': load('src/lib/apps/ownership.ts'),
+    // Upload limits are covered in upload-limits.test.cjs.
+    '@/lib/rate-limit': { withRateLimit: handler => handler },
     '@/utils/cloudinary-server': { cloudinary: { uploader: {
       upload: async (source, options) => { state.uploads.push(options?.public_id ?? source); return { secure_url: 'https://cdn.test/file', public_id: 'file' }; },
       upload_stream: () => { state.uploads.push('stream'); throw new Error('unexpected stream'); },
     } } },
   };
-  const globals = { Buffer, console: { error() {}, log() {} }, process: { env: { NEXTAUTH_URL: 'https://collab.test', GITHUB_CLIENT_ID: 'configured' } }, Date };
+  const globals = { Buffer, console: { error() {}, log() {} }, process: { env: { NEXTAUTH_URL: 'https://collab.test', GITHUB_CLIENT_ID: 'configured' } }, Date, URL };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, globals);
   deps['@/lib/system-admin'] = load('src/lib/system-admin.ts', deps, globals);
   const route = file => load(`src/app/api/${file}/route.ts`, deps, globals);
@@ -88,7 +90,7 @@ test('uploads need a signed-in user and nothing is sent to storage without one',
 
   f.as('alice');
   assert.equal((await f.image.POST(f.request({ image: 'aGVsbG8=', filename: 'a.png' }))).status, 200);
-  assert.deepEqual(f.state.uploads, ['a']);
+  assert.equal(f.state.uploads.length, 1);
 });
 
 test('a profile image is written only under the signed-in user\'s own name', async () => {
