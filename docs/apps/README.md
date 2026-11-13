@@ -50,7 +50,7 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 
 ## Manifest URL requirements
 
-In production, the manifest URL must use HTTPS and resolve to a public address. Local and private addresses are allowed outside production. The URL path must end in `.json` or `/manifest`. The fetch does not follow redirects, accepts only successful responses, limits the body to 1 MiB, and times out after 10 seconds.
+In production, the manifest URL must use HTTPS and every resolved address must be public. IPv4-mapped IPv6 addresses are rejected, even when the embedded IPv4 address is public. Local and private addresses are allowed outside production. The URL path must end in `.json` or `/manifest`. The fetch does not follow redirects, accepts only successful responses, limits the body to 1 MiB, and times out after 10 seconds.
 
 ## App Manifest Reference
 ```json

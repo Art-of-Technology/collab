@@ -241,7 +241,6 @@ export function validateManifestUrl(url: string): boolean {
     if (process.env.NODE_ENV === 'production' && parsedUrl.protocol !== 'https:') {
       return false;
     }
-    // Must end with .json or have json content-type (we'll check content-type in the API)
     return parsedUrl.pathname.endsWith('.json') || parsedUrl.pathname.endsWith('/manifest');
   } catch {
     return false;
