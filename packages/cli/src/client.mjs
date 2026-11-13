@@ -229,7 +229,7 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
   try {
     if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('content type');
     return JSON.parse(text);
-  } catch { throw new CliError(mutation ? 'outcome_unknown' : 'invalid_response', 'Expected a JSON response. Response body omitted; no retry was made.', 5); }
+  } catch { throw new CliError(mutation ? 'outcome_unknown' : 'invalid_response', 'Expected a JSON response. Response body omitted; no retry was made.', 5, { status: response.status }); }
 }
 
 export function session(options, state) {

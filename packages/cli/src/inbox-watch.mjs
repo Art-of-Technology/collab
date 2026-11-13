@@ -37,29 +37,38 @@ function queue(result) {
   return { items: result.items.map(({ id, status }) => ({ id, status })), hasMore: result.hasMore };
 }
 
-// The server being away for a moment: unreachable, answering 5xx, or throttling. For the watcher's
-// own heartbeat a lost answer (outcome_unknown) counts too: repeating a heartbeat changes nothing.
-const serverAway = error => ['transport_failed', 'server_error', 'rate_limited', 'outcome_unknown'].includes(error?.code);
+// The server being away for a moment: unreachable, answering 5xx, or throttling. The watcher's only
+// write is its heartbeat, and repeating one changes nothing, so a heartbeat whose answer never came
+// or was a 5xx counts too. A heartbeat that was answered with something unreadable does not: that
+// error carries the status it was answered with.
+const serverAway = error => ['transport_failed', 'server_error', 'rate_limited'].includes(error?.code) ||
+  (error?.code === 'outcome_unknown' && !(error.details?.status < 500));
 
 export async function watchInbox({ read, callback, callbackArgs, agent, workspaceId, origin,
   durationMs, intervalMs, callbackTimeoutMs, signal, report, outageMs = 300000 }) {
   const window = new AbortController();
   const timer = setTimeout(() => window.abort(), durationMs);
   const watchSignal = signal ? AbortSignal.any([signal, window.signal]) : window.signal;
-  let lastDelivery, deliveredAt = 0, callbacks = 0, failure, reportingStarted = false, startUncertain = false, skippedPolls = 0, awaySince;
+  let lastDelivery, deliveredAt = 0, callbacks = 0, failure, skippedPolls = 0, answered = Date.now();
+  // Does the server know this watcher? 'perhaps' is a start whose answer never came.
+  let started = 'no';
+  // The app restarts on every deploy. While the server is away the watcher keeps trying, so it keeps
+  // its identity and its health recovers by itself. Five minutes after the last answered poll (when
+  // the server calls a watcher stale) it gives up.
+  const tolerated = error => serverAway(error) && Date.now() - answered < outageMs;
   try {
     while (!watchSignal.aborted) {
       try {
-        if (report && !reportingStarted) {
-          try { await report('started', watchSignal); reportingStarted = true; }
-          catch (error) { if (error?.code === 'outcome_unknown' || (watchSignal.aborted && (error === watchSignal.reason || error?.cause === watchSignal.reason))) startUncertain = true; throw error; }
+        if (report && started !== 'yes') {
+          try { await report('started', watchSignal); started = 'yes'; }
+          catch (error) { if (error?.code === 'outcome_unknown' || watchSignal.aborted) started = 'perhaps'; throw error; }
         }
         const claimed = queue(await read('claimed', watchSignal));
         watchSignal.throwIfAborted();
         const unseen = queue(await read('unseen', watchSignal));
         watchSignal.throwIfAborted();
         await report?.('poll', watchSignal);
-        awaySince = undefined;
+        answered = Date.now();
         const payload = { version: 1, event: 'collab.inbox.pending', origin, workspaceId, agent, claimed, unseen };
         const deliveryId = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
         if (claimed.items.length || unseen.items.length) {
@@ -72,12 +81,8 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
           }
         } else lastDelivery = undefined;
       } catch (error) {
-        // The app restarts on every deploy. A poll the server could not answer is skipped and the next
-        // one tries again, so the watcher keeps its identity and its health recovers by itself. After
-        // five minutes without an answer (when the server calls a watcher stale) it gives up.
-        awaySince ??= Date.now();
-        if (watchSignal.aborted || !serverAway(error) || Date.now() - awaySince >= outageMs) throw error;
-        skippedPolls++;
+        if (watchSignal.aborted || !tolerated(error)) throw error;
+        skippedPolls++; // This poll is skipped; the next one tries again.
       }
       await delay(intervalMs, undefined, { signal: watchSignal });
     }
@@ -85,10 +90,21 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
     if (!watchSignal.aborted || (error !== watchSignal.reason && error.cause !== watchSignal.reason)) { failure = error; throw error; }
   } finally {
     clearTimeout(timer);
-    if (reportingStarted || startUncertain) {
-      try { await report(failure ? 'error' : 'stopped', undefined, failure ? (typeof failure.code === 'string' && /^[a-z_]{1,64}$/.test(failure.code) ? failure.code : 'watcher_failed') : undefined); }
-      catch (error) { if (!failure) throw error; } // Preserve the original API/callback failure.
+    while (started !== 'no') {
+      try {
+        await report(failure ? 'error' : 'stopped', undefined, failure ? (typeof failure.code === 'string' && /^[a-z_]{1,64}$/.test(failure.code) ? failure.code : 'watcher_failed') : undefined);
+        break;
+      } catch (error) {
+        // The window can end while the server is away. Without this last report the server keeps
+        // showing the watcher as running and refuses the next one, so an orderly end repeats it like
+        // a poll. A watcher that is ending on a failure reports once and goes.
+        if (!failure && tolerated(error)) { await delay(intervalMs); continue; }
+        // A start the server never saw has nothing to stop; its refusal is expected. (A start still
+        // in flight can land after this report: that record then turns stale by itself.)
+        if (!failure && started === 'yes') throw error;
+        break; // Preserve the original API/callback failure.
+      }
     }
   }
-  return { agent, workspaceId, callbacks, ...(skippedPolls && { skippedPolls }), ...(report && { healthReported: reportingStarted }), stopped: watchSignal.reason === signal?.reason, timedOut: watchSignal.reason === window.signal.reason };
+  return { agent, workspaceId, callbacks, ...(skippedPolls && { skippedPolls }), ...(report && { healthReported: started === 'yes' }), stopped: watchSignal.reason === signal?.reason, timedOut: watchSignal.reason === window.signal.reason };
 }

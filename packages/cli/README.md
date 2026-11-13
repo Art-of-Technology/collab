@@ -396,10 +396,13 @@ unseen queues using the existing login, without OAuth, refresh or handoff mutati
 A read or health report that the server does not answer (a timeout, a connection
 failure, HTTP 5xx or 429) is one skipped poll: the watcher tries again at the next
 interval with the same watcher UUID, so its health turns to running again by itself
-after an app restart. The result reports `skippedPolls` when there were any. After
-five minutes from the first failed attempt, another failed attempt stops it with that error. A refusal the server did
-answer (authentication, permission, a changed binding) and callback errors or
-timeouts stop the watcher with nonzero exit at once; investigate before restarting. Already received HTTP errors and observed
+after an app restart. The result reports `skippedPolls` when there were any. Once
+five minutes have passed since the last poll the server answered, the next failed
+attempt stops the watcher with that error. A window that ends while the server is
+away repeats its final stop report the same way, so the next watcher is not refused.
+A refusal the server did answer (authentication, permission, a changed binding), an
+answer that is not Collab's JSON, and callback errors or timeouts stop the watcher
+with nonzero exit at once; investigate before restarting. Already received HTTP errors and observed
 nonzero adapter exits or unexpected termination signals remain failures even when
 cancellation coincides; the watcher's own cancellation kill is not a callback
 failure. Only one watcher should serve an agent/session.
