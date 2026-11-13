@@ -355,7 +355,7 @@ collab agents retire --agent old-name --workspace WORKSPACE_ID --dry-run
 collab agents retire --agent old-name --workspace WORKSPACE_ID --yes
 ```
 
-Its claimed handoffs return to open with a timeline entry on each issue. Open handoffs addressed only to that name are listed and stay open. The agent's own user or the workspace owner can retire it. The server refuses while its watcher is running, while it has a pending transfer offer or an active review, while it holds transferred work, and for a managed worker.
+Its claimed handoffs return to open with a timeline entry on each issue. Open handoffs addressed only to that name stay open. The preview lists only issues the caller can access; retirement also releases claims on inaccessible issues. The agent's own user or the workspace owner can retire it. The server refuses while its watcher is running, while it has a pending transfer offer or an active review, while it holds transferred work, and for a managed worker. See the [retirement reference](../../docs/agent-handoffs.md#retiring-an-agent) for details.
 
 Supply the full existing role-label list instead of `[]` when subscribed; registration replaces the list. The server refuses a second name for the same owner's host/session and refuses rebinding while the old watcher is fresh. Other active agents need their own names and sessions. Unbound historical names are not evidence of an active worker.
 
