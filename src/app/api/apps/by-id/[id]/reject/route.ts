@@ -45,15 +45,20 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Update app status to rejected
-    await prisma.app.update({
-      where: { id },
+    // Update app status to rejected, but only the review that was read: an approval that landed in
+    // between stands, and its version stays the approved one.
+    const rejected = await prisma.app.updateMany({
+      where: { id, status: 'IN_REVIEW', updatedAt: app.updatedAt },
       data: { 
         status: 'REJECTED',
+        approvedVersionId: null,
         // You might want to store the rejection reason in a separate field
         // For now, we'll just update the status
       }
     });
+    if (rejected.count !== 1) {
+      return NextResponse.json({ error: 'App changed during review' }, { status: 409 });
+    }
 
     // TODO: Send notification to app developer about rejection
     // This could be implemented later with an email service or in-app notifications

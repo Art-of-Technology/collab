@@ -52,12 +52,22 @@ export async function POST(
     const manifest = latestVersion.manifest as any;
 
     // Start transaction
-    await prisma.$transaction(async (tx) => {
-      // Update app status
-      await tx.app.update({
+    const approved = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "App" WHERE id = ${id} FOR UPDATE`;
+      const current = await tx.app.findUnique({
         where: { id },
-        data: { status: 'DRAFT' }
+        include: { versions: { orderBy: { createdAt: 'desc' }, take: 1 } }
       });
+      if (!current || current.status !== app.status || current.updatedAt.getTime() !== app.updatedAt.getTime() ||
+          current.versions[0]?.id !== latestVersion.id) return false;
+      // Update app status
+      const updated = await tx.app.updateMany({
+        where: { id, status: 'IN_REVIEW', updatedAt: app.updatedAt },
+        // Approval is of this version: a version submitted later needs its own.
+        data: { status: 'DRAFT', approvedVersionId: latestVersion.id }
+      });
+
+      if (updated.count !== 1) return false;
 
       // Generate OAuth credentials if needed and not already present
       if (manifest.oauth && !app.oauthClient) {
@@ -116,8 +126,12 @@ export async function POST(
           }))
         });
       }
+      return true;
     });
 
+    if (!approved) {
+      return NextResponse.json({ error: 'App changed during approval' }, { status: 409 });
+    }
 
     return NextResponse.json({ 
       success: true, 

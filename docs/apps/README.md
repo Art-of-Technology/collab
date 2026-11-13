@@ -10,7 +10,7 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 - **Webhook Pipeline** – optional per-installation webhooks with secret generation, retry logic and delivery analytics.
 
 ## Data Model Highlights
-- `App`: canonical registration record with slug, publisher, manifest URL (optional for DRAFT apps) and lifecycle status (`DRAFT | IN_REVIEW | PUBLISHED | SUSPENDED`). Apps start in `DRAFT` status with credentials generated immediately.
+- `App`: canonical registration record with slug, publisher, manifest URL (optional for DRAFT apps) and lifecycle status (`DRAFT | IN_REVIEW | PUBLISHED | SUSPENDED | REJECTED`). Apps start in `DRAFT` status with credentials generated immediately.
 - `AppVersion`: immutable snapshot of every imported manifest version.
 - `AppScope`: normalized list of granted scopes used during consent.
 - `AppOAuthClient`: stores OAuth credentials and redirect URIs. See [credential storage](#security-guarantees).
@@ -39,8 +39,9 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 
 4. **Review & Approval**
    - System admins review your app for security and compliance.
-   - OAuth configuration from your manifest is applied to your existing credentials.
-   - Approved apps move to `PUBLISHED` status and become available for installation.
+   - Approval records the newest version and returns the app to `DRAFT`. OAuth credentials are created if needed and not already present.
+   - Publish the approved version from the developer console to make it available for installation. A newer version requires its own approval before an owner can publish it.
+   - Owners can unpublish an app or withdraw it from review. Only an administrator can suspend an app or lift a suspension.
 
 5. **Manage & Update**
    - `/dev/apps/[slug]` displays credentials, manifest details, installation analytics, and webhook settings.
@@ -107,7 +108,7 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 - `type`: one of `embed`, `mfe_remote`, `server_only`.
 - `entrypoint_url`: must resolve to HTTPS (localhost allowed for development) and passes `validateAppManifestSecurity` checks.
 - `scopes`: deduplicated list of up to 10 values; allowed scopes come from `AppScopeSchema` (`workspace:read`, `issues:read`, `issues:write`, `comments:read`, `comments:write`, `user:read`, `leave:read`, `leave:write`).
-- `oauth`: all redirect URIs validated as URLs; authentication method determines credential requirements. **Note:** Credentials are pre-generated for draft apps, manifest OAuth config is applied during review.
+- `oauth`: all redirect URIs validated as URLs; authentication method determines credential requirements. See [Developer Workflow](#developer-workflow) for credential handling.
 - `webhooks.url`: must be HTTPS in production; private-network hosts are rejected.
 - Legacy fields `homepage_url` and `permissions_legacy` are mapped for backward compatibility but new manifests should use the fields above.
 
@@ -228,7 +229,7 @@ For `mfe_remote` app types, the `mfe` configuration object is required:
 | POST | `/api/apps/import-manifest` | Legacy: Fetch and register a manifest (create or update app & latest version). Sets status to `IN_REVIEW`. |
 | GET | `/api/apps` | Paginated app list; see [App read access](#app-read-access) for visibility and filters. |
 | GET | `/api/apps/[slug]` | App detail, versions, scopes and OAuth metadata under [App read access](#app-read-access). |
-| PATCH | `/api/apps/by-id/[id]/publish` | Toggle `status` between `DRAFT` and `PUBLISHED` (admin only). |
+| PATCH | `/api/apps/by-id/[id]/publish` | Change app status; see [Developer Workflow](#developer-workflow) for review and publishing. |
 | **Installation & OAuth** | | |
 | POST | `/api/apps/[slug]/installations` | Create `PENDING` installation for a workspace admin. |
 | POST | `/api/apps/installations/[id]/ack` | Partner acknowledgement after OAuth token exchange. |

@@ -7,14 +7,21 @@ function fixture() {
   ].map(user => ({ ...user, createdAt: new Date(), updatedAt: new Date(), emailVerified: null }));
   const version = { id: 'v1', manifest: {} };
   const apps = [
-    { id: 'mine', slug: 'mine', name: 'Mine', userId: 'alice', status: 'DRAFT', versions: [version], oauthClient: null },
-    { id: 'system', slug: 'collab-agent', name: 'Agent tokens', userId: null, publisherId: 'system', isSystemApp: true, status: 'PUBLISHED', versions: [version], oauthClient: null },
+    // Approved already: this file is about who may call the route; tests/security/app-publish-approval.test.cjs covers approval.
+    { id: 'mine', slug: 'mine', name: 'Mine', userId: 'alice', status: 'DRAFT', approvedVersionId: 'v1', versions: [version], oauthClient: null, updatedAt: new Date(0) },
+    { id: 'system', slug: 'collab-agent', name: 'Agent tokens', userId: null, publisherId: 'system', isSystemApp: true, status: 'PUBLISHED', versions: [version], oauthClient: null, updatedAt: new Date(0) },
   ];
   const state = { session: null, uploads: [], appReads: 0 };
   const find = async ({ where }) => { state.appReads += 1; return apps.find(row => matches(row, where)) ?? null; };
   const prisma = {
     user: { findUnique: async ({ where }) => users.find(row => row.id === where.id) ?? null },
-    app: { findUnique: find, findFirst: find, update: async ({ where, data }) => Object.assign(apps.find(row => row.id === where.id), data) },
+    $queryRaw: async () => [],
+    app: { findUnique: find, findFirst: find, updateMany: async ({ where, data }) => {
+      const app = apps.find(row => matches(row, where));
+      if (!app) return { count: 0 };
+      Object.assign(app, data);
+      return { count: 1 };
+    } },
     $transaction: async run => run(prisma),
   };
   const json = (body, init = {}) => ({ body, status: init.status ?? 200 });
