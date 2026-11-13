@@ -1,3 +1,7 @@
+import { lookup } from 'node:dns';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { BlockList, isIP, type LookupFunction } from 'node:net';
 import { z } from 'zod';
 import { AppScope, AppManifestV1 } from './types';
 
@@ -244,32 +248,72 @@ export function validateManifestUrl(url: string): boolean {
   }
 }
 
+const MAX_MANIFEST_BYTES = 1024 * 1024;
+
+// Where a manifest may not be fetched from: this server, private networks, link-local (cloud metadata)
+// and other ranges that are not public addresses. IPv4 written as IPv6 is matched by the IPv4 rules.
+const nonPublicAddresses = new BlockList();
+for (const [network, prefix] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12],
+  ['192.0.0.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['224.0.0.0', 3],
+] as const) nonPublicAddresses.addSubnet(network, prefix, 'ipv4');
+for (const [network, prefix] of [['::', 127], ['64:ff9b::', 96], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8]] as const) {
+  nonPublicAddresses.addSubnet(network, prefix, 'ipv6');
+}
+const isPublicAddress = (address: string) => !nonPublicAddresses.check(address, isIP(address) === 6 ? 'ipv6' : 'ipv4');
+const notPublic = () => new Error('Manifest URL must resolve to a public address');
+
+// Given to the connection itself, so the address that is checked is the address that is connected to:
+// a name cannot answer one thing for a check and another for the request.
+const publicLookup: LookupFunction = (hostname, options, callback) => lookup(hostname, options, (error, address, family) => {
+  const addresses = Array.isArray(address) ? address.map(entry => entry.address) : [address];
+  if (!error && !addresses.every(isPublicAddress)) return callback(notPublic(), address, family);
+  callback(error, address, family);
+});
+
 // Fetch manifest from URL
 export async function fetchManifest(url: string): Promise<unknown> {
   if (!validateManifestUrl(url)) {
     throw new Error('Invalid manifest URL format');
   }
 
-  try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Collab-App-Platform/1.0'
-      },
-      signal: AbortSignal.timeout(10000) // 10 seconds
+  const target = new URL(url);
+  // Like the HTTPS rule above, the address rule holds in production; a developer's local server stays usable elsewhere.
+  const production = process.env.NODE_ENV === 'production';
+  const literal = target.hostname.replace(/^\[|\]$/g, '');
+  // A literal address is never looked up, so it is checked here.
+  if (production && isIP(literal) && !isPublicAddress(literal)) throw notPublic();
+
+  const body = await new Promise<string>((resolve, reject) => {
+    const request = (target.protocol === 'https:' ? httpsRequest : httpRequest)(target, {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'Collab-App-Platform/1.0' },
+      signal: AbortSignal.timeout(10000), // 10 seconds for the whole exchange
+      agent: false, // a connection of its own, never one another request opened without the address rule
+      ...(production && { lookup: publicLookup }),
+    }, response => {
+      const status = response.statusCode ?? 0;
+      // A redirect is an error like any other status: its target would be a second, unchecked destination.
+      if (status < 200 || status > 299) {
+        request.destroy();
+        return reject(new Error(`Failed to fetch manifest: ${status} ${response.statusMessage}`));
+      }
+      const chunks: Buffer[] = [];
+      let size = 0;
+      response.on('data', (chunk: Buffer) => {
+        size += chunk.length;
+        if (size > MAX_MANIFEST_BYTES) request.destroy(new Error('Manifest is larger than 1 MB'));
+        else chunks.push(chunk);
+      });
+      response.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      response.on('error', reject);
     });
+    request.on('error', reject);
+    request.end();
+  });
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch manifest: ${response.status} ${response.statusText}`);
-    }
-
-    const manifestData = await response.json();
-    return manifestData;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error('Failed to fetch manifest: Network error');
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new Error('Manifest is not valid JSON');
   }
 }
