@@ -63,11 +63,10 @@ export default function AgentConnectGuide({ mcpUrl }: AgentConnectGuideProps) {
           <section className="space-y-2">
             <h2 className="font-medium">An agent with its own name</h2>
             <p className="text-muted-foreground">
-              Create a token on this page and give it to the agent as the <code>COLLAB_TOKEN</code> environment variable. Run this command in each project where the agent needs Collab. Everything the agent writes shows the token&apos;s name.
+              Create a token on this page and give it to the agent as the <code>COLLAB_TOKEN</code> environment variable. Everything the agent writes shows the token&apos;s name.
             </p>
-            {snippet('the Claude Code command with a token', `claude mcp add --transport http collab ${mcpUrl} --header "Authorization: Bearer $COLLAB_TOKEN"`)}
             <p className="text-muted-foreground">
-              Or in a project&apos;s <code>.mcp.json</code>, where Claude Code reads the token from the environment, so the file holds no secret:
+              For Claude Code, add this to the project&apos;s <code>.mcp.json</code>. It reads the token from the environment, so no file holds the secret:
             </p>
             {snippet('the .mcp.json entry', JSON.stringify({ mcpServers: { collab: { type: 'http', url: mcpUrl, headers: { Authorization: 'Bearer ${COLLAB_TOKEN}' } } } }, null, 2))}
             <p className="text-muted-foreground">
