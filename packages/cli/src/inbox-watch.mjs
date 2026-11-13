@@ -100,9 +100,10 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
         // showing the watcher as running and refuses the next one, so an orderly end repeats it like
         // a poll. A watcher that is ending on a failure reports once and goes.
         if (!failure && tolerated(error)) { await delay(intervalMs); continue; }
-        // A start the server never saw has nothing to stop; its refusal is expected. (A start still
-        // in flight can land after this report: that record then turns stale by itself.)
-        if (!failure && started === 'yes') throw error;
+        // A start the server never saw has nothing to stop, so its refusal of this report is expected;
+        // a server that stayed away is not. (A start still in flight can land after this report:
+        // that record then turns stale by itself.)
+        if (!failure && (started === 'yes' || serverAway(error))) throw error;
         break; // Preserve the original API/callback failure.
       }
     }

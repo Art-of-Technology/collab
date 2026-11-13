@@ -676,6 +676,17 @@ test('inbox watch reconciles an uncertain start on shutdown', async () => {
     durationMs: 20000, intervalMs: 100, callbackTimeoutMs: 100, signal: controller.signal,
   });
   assert.deepEqual([events, result.healthReported, result.stopped], [['started', 'stopped'], false, true]);
+
+  // But a server that stays away past the tolerated outage is an error here too: it may have recorded
+  // the start, and nobody could tell it that the watcher is gone.
+  const away = new CliError('outcome_unknown', 'synthetic', 5, { status: 502 }), stop = new AbortController(), reports = [];
+  await assert.rejects(watchInbox({
+    read: async () => { throw new Error('unexpected read'); },
+    report: async event => { reports.push(event); if (event === 'started') setImmediate(() => stop.abort()); throw away; },
+    callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+    durationMs: 20000, intervalMs: 5, callbackTimeoutMs: 100, signal: stop.signal, outageMs: 40,
+  }), error => error === away);
+  assert.ok(reports.filter(event => event === 'stopped').length > 1, 'the last report was repeated before giving up');
 });
 
 test('inbox watch gives up when the server stays away longer than it tolerates', async () => {
