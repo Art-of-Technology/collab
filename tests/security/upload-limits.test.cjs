@@ -74,3 +74,25 @@ test('uploads are limited per client address: 120 images, 10 videos and 10 profi
   for (let count = 0; count < 15; count++) assert.equal((await g.json('profile-image', { filename: 'x', userId: 'alice', imageUrl: 'https://img.test/a.png' }, '192.0.2.1')).status, 403);
   assert.equal((await g.json('profile-image', { filename: 'profile_google_alice_1_abc', userId: 'alice', imageUrl: 'https://img.test/a.png' }, '192.0.2.1')).status, 200);
 });
+
+test('pending and failed uploads do not consume or restore a rate-limit window', async () => {
+  let now = 100000;
+  class Clock extends Date { static now() { return now; } }
+  const { createRateLimiter } = load('src/lib/rate-limit.ts', {
+    'next/server': { NextResponse: Response }, 'lru-cache': require('lru-cache'),
+  }, { URL, Headers, Date: Clock });
+  const limit = createRateLimiter({ maxRequests: 2, windowMs: 1000, skipFailedRequests: true });
+  const request = new Request('https://collab.test/api/upload/image');
+  let finish;
+  const pending = new Promise(resolve => { finish = resolve; });
+  const first = limit(request, () => pending);
+  const second = limit(request, () => pending);
+  assert.equal((await limit(request, async () => new Response(null, { status: 400 }))).status, 400);
+  now += 1001;
+  assert.equal((await limit(request, async () => new Response())).status, 200);
+  finish(new Response(null, { status: 400 }));
+  assert.equal((await first).status, 400);
+  assert.equal((await second).status, 400);
+  assert.equal((await limit(request, async () => new Response())).status, 200);
+  assert.equal((await limit(request, async () => new Response())).status, 429);
+});

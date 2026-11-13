@@ -156,19 +156,23 @@ export function createRateLimiter(options: RateLimitOptions = {}) {
     }
 
     // Increment counter
-    info.count++;
-    cacheStore.cache.set(key, info);
+    if (!skipFailedRequests) {
+      info.count++;
+      cacheStore.cache.set(key, info);
+    }
 
     // Execute the actual handler
     const response = await next();
 
     // Optionally skip counting based on response
-    if (
-      (skipSuccessfulRequests && response.status < 400) ||
-      (skipFailedRequests && response.status >= 400)
-    ) {
-      info.count--;
+    if (skipFailedRequests && !skipSuccessfulRequests && response.status < 400) {
+      const completedAt = Date.now();
+      info = cacheStore.cache.get(key) ?? { count: 0, resetTime: completedAt + windowMs };
+      if (completedAt > info.resetTime) info = { count: 0, resetTime: completedAt + windowMs };
+      info.count++;
       cacheStore.cache.set(key, info);
+    } else if (!skipFailedRequests && skipSuccessfulRequests && response.status < 400 && cacheStore.cache.get(key) === info) {
+      info.count--;
     }
 
     // Add rate limit headers to response

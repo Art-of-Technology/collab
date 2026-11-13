@@ -32,7 +32,7 @@ test('in production a manifest is not fetched from a private, loopback or link-l
   const { seen, port } = await localServer(t);
   const { fetchManifest } = validation({ NODE_ENV: 'production' });
   for (const host of [
-    `127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`, `[::ffff:127.0.0.1]:${port}`, `2130706433:${port}`, `0x7f.1:${port}`,
+    `127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`, `[::ffff:127.0.0.1]:${port}`, '[::ffff:8.8.8.8]', '[::8.8.8.8]', `2130706433:${port}`, `0x7f.1:${port}`,
     `0.0.0.0:${port}`, '10.0.0.5', '172.16.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '[fd00::1]', '[fe80::1]', '[::]',
   ]) {
     await assert.rejects(fetchManifest(`https://${host}/manifest.json`), /public address/, host);
@@ -42,7 +42,7 @@ test('in production a manifest is not fetched from a private, loopback or link-l
 
 test('in production a name is judged by the addresses it resolves to', async t => {
   const { seen, port } = await localServer(t, (request, response) => response.end('{"slug":"app"}'));
-  for (const addresses of [['127.0.0.1'], ['10.0.0.5'], ['93.184.216.34', '192.168.1.1'], ['fd00::1']]) {
+  for (const addresses of [['127.0.0.1'], ['10.0.0.5'], ['93.184.216.34', '192.168.1.1'], ['fd00::1'], ['::ffff:8.8.8.8'], ['93.184.216.34', '::808:808']]) {
     const { fetchManifest } = validation({ NODE_ENV: 'production' }, { 'node:dns': resolvesTo(...addresses) });
     await assert.rejects(fetchManifest(`https://manifest.example:${port}/manifest.json`), /public address/, addresses.join(', '));
   }
