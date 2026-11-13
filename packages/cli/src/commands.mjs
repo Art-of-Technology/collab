@@ -13,6 +13,10 @@ const retrievalIdentifier = { trim: true, minLength: 1, maxLength: 128 };
 export const commands = {
   'agents list': command('GET', 'agents'),
   'agents register': command('POST', 'agents', { name: string, labelIds: array, host: string, sessionId: string }, {}, { required: ['name'], description: 'Bind a stable agent name to a host and session with --host and --session-id together. Reuse this name after restart.' }),
+  'agents retire': command('DELETE', 'agents', {}, { agent: string }, {
+    requiredQuery: ['agent'], deletePreview: true,
+    description: 'Remove an agent registration that is no longer used, after reading what it holds. Its claimed work goes back to open with an entry on each issue; handoffs addressed only to it stay open and are listed. Requires --yes; --dry-run reads only the preview without --yes.',
+  }),
   'inbox list': command('GET', 'agents/inbox', {}, { agent: string, state: string, limit: integer, cursor: string }, { requiredQuery: ['agent'], constraints: { state: { enum: ['unseen', 'claimed'] }, limit: { minimum: 1, maximum: 50 }, cursor: { minLength: 1, maxLength: 4096 } } }),
   'inbox watch': command('GET', 'agents/inbox', {}, { agent: string }, {
     requiredQuery: ['agent'], watch: true,

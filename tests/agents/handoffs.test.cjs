@@ -240,6 +240,80 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
       await prisma.agentHandoff.deleteMany({ where: { id: { startsWith: 'window-' } } });
     }
   });
+  await t.test('retiring an agent releases its work, leaves what was addressed to it, and frees its name', async () => {
+    await register(bob, 'leaver');
+    const leaver = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'leaver' } } });
+    const workerA = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'worker-a' } } });
+    const row = (id, data) => ({ id, sourceKey: id, workspaceId: 'w', issueId: 'i-w', content: id, ...data });
+    await prisma.agentHandoff.createMany({ data: [
+      row('retire-claimed', { recipientNames: ['leaver'], status: 'claimed', claimedById: leaver.id }),
+      row('retire-own', { recipientNames: ['leaver'] }),
+      row('retire-shared', { recipientNames: ['leaver', 'worker-a'] }),
+      row('retire-labelled', { recipientNames: ['leaver'], labelIds: ['label-w'] }),
+      row('retire-sent', { recipientNames: ['worker-a'], senderId: leaver.id }),
+    ] });
+    await prisma.agentReceipt.create({ data: { agentId: workerA.id, handoffId: 'retire-claimed', seenAt: new Date() } });
+    const state = id => prisma.agentHandoff.findUniqueOrThrow({ where: { id } });
+    const activities = () => prisma.issueActivity.count({ where: { itemId: 'i-w' } });
+    const before = await activities();
+    try {
+      // The routes: the preview only reads, retiring needs both write scopes, and errors are answers, not crashes.
+      const http = load('src/lib/agent-handoff-http.ts', { './agent-handoffs': service, zod: require('zod'), 'next/server': { NextResponse: Response } }, { Buffer });
+      const route = (file, verb) => load(file, {
+        '@/lib/apps/auth-middleware': { withAppAuth: (fn, options) => Object.assign(fn, { scopes: Array.from(options.requiredScopes) }) },
+        '@/lib/agent-handoffs': service, '@/lib/agent-handoff-http': http,
+      }, { URL })[verb];
+      const previewRoute = route('src/app/api/apps/auth/agents/delete-preview/route.ts', 'GET');
+      const retire = route('src/app/api/apps/auth/agents/route.ts', 'DELETE');
+      assert.deepEqual([previewRoute.scopes, retire.scopes], [['issues:read'], ['workspace:write', 'issues:write']]);
+      const call = async (handler, query, ctx) => { const response = await handler(new Request(`https://example.test/api/apps/auth/agents${query}`), ctx); return [response.status, (await response.json()).error ?? null]; };
+      assert.deepEqual(await call(retire, '?agent=lead', bob), [404, 'agent_not_found']);
+      assert.deepEqual(await call(retire, '', alice), [400, 'invalid_request']);
+      assert.deepEqual(await call(previewRoute, '?agent=leaver', bob), [200, null]);
+      assert.equal(await prisma.agentRegistration.count({ where: { id: leaver.id } }), 1);
+
+      // Only the agent's own user or the workspace owner may retire it; bob is neither for alice's agent.
+      await assert.rejects(service.retireAgent(bob, 'lead', false), e => e.code === 'agent_not_found' && e.status === 404);
+      await assert.rejects(service.retireAgent(alice, 'nobody', false), e => e.code === 'agent_not_found');
+      await assert.rejects(service.retireAgent(alice, 'Not A Name', false), e => e.name === 'ZodError');
+
+      // The preview says what would happen and changes nothing.
+      const preview = await service.retireAgent(bob, 'leaver', true);
+      assert.deepEqual(JSON.parse(JSON.stringify(preview)), { agent: 'leaver', id: leaver.id,
+        released: [{ id: 'retire-claimed', issueKey: 'w-1' }], unowned: { count: 1, handoffs: [{ id: 'retire-own', issueKey: 'w-1' }] } });
+      assert.deepEqual([(await state('retire-claimed')).status, await prisma.agentRegistration.count({ where: { id: leaver.id } }), await activities()], ['claimed', 1, before]);
+
+      // Not while its watcher runs, and not a managed worker.
+      const now = new Date().toISOString();
+      await prisma.agentRegistration.update({ where: { id: leaver.id }, data: { host: 'laptop', sessionId: 'session', watcher: { id: 'watcher', state: 'running', startedAt: now, heartbeatAt: now, lastPollAt: null, lastWakeAt: null, errorCode: null } } });
+      await assert.rejects(service.retireAgent(bob, 'leaver', false), e => e.code === 'watcher_active' && e.status === 409);
+      await prisma.agentRegistration.update({ where: { id: leaver.id }, data: { watcher: Prisma.DbNull, managedWorker: { state: 'stopped' } } });
+      await assert.rejects(service.retireAgent(bob, 'leaver', false), e => e.code === 'managed_agent');
+      await prisma.agentRegistration.update({ where: { id: leaver.id }, data: { managedWorker: Prisma.DbNull } });
+      assert.deepEqual([(await state('retire-claimed')).status, await activities()], ['claimed', before], 'a refusal changes nothing');
+
+      // The workspace owner retires another user's agent.
+      const done = await service.retireAgent(alice, 'leaver', false);
+      assert.deepEqual(JSON.parse(JSON.stringify(done)), { ...JSON.parse(JSON.stringify(preview)), retired: true });
+      assert.equal(await prisma.agentRegistration.count({ where: { id: leaver.id } }), 0);
+      const released = await state('retire-claimed');
+      assert.deepEqual([released.status, released.claimedById, await prisma.agentReceipt.count({ where: { handoffId: 'retire-claimed' } })], ['open', null, 0]);
+      const entry = await prisma.issueActivity.findFirstOrThrow({ where: { itemId: 'i-w', action: 'AGENT_RELEASE' }, orderBy: { createdAt: 'desc' } });
+      assert.deepEqual([entry.userId, JSON.parse(entry.details)], ['alice', { agent: { id: leaver.id, name: 'leaver' }, handoffId: 'retire-claimed', content: 'Released: this agent was retired.', retired: true }]);
+      assert.equal(await activities(), before + 1, 'one entry, for the one released claim');
+      // What was addressed to it stays open as it was; what it had sent keeps its content and loses the sender link.
+      for (const id of ['retire-own', 'retire-shared', 'retire-labelled']) assert.deepEqual([(await state(id)).status, (await state(id)).recipientNames.includes('leaver')], ['open', true], id);
+      assert.equal((await state('retire-sent')).senderId, null);
+      assert.ok((await service.listAgents(alice)).every(agent => agent.name !== 'leaver'));
+      // The name is free again, and whoever takes it gets the handoffs still addressed to it.
+      await register(alice, 'leaver');
+      assert.deepEqual(Array.from((await inbox(alice, 'leaver')).items, item => item.id).sort(), ['retire-claimed', 'retire-labelled', 'retire-own', 'retire-shared']);
+    } finally {
+      await prisma.agentHandoff.deleteMany({ where: { id: { startsWith: 'retire-' } } });
+      await prisma.issueActivity.deleteMany({ where: { itemId: 'i-w', details: { contains: 'retire-claimed' } } });
+      await prisma.agentRegistration.deleteMany({ where: { workspaceId: 'w', name: 'leaver' } });
+    }
+  });
   await t.test('workspace monitor and agent floor state a recipient user\'s issue access once, however many agents that user has', async () => {
     // In production 76 agents under three users made this one query exceed the database's memory.
     const sent = [];

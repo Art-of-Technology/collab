@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.9.1 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.9.1) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.9.2 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.9.2) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+
+Version 0.9.2 adds `agents retire --agent NAME`, which removes an agent registration that is no longer used: its claimed work goes back to open, and handoffs addressed only to it are listed and stay open. It needs the matching server.
 
 Version 0.9.1 makes `inbox watch` ride through a server that is briefly away, such as an app restart during a deploy. Affected polls are skipped and counted in `skippedPolls`, and the watcher keeps its identity. Earlier versions exit on the first failed request; if a health-reporting watcher cannot report its exit, the server can show it as running and refuse a replacement until its health becomes stale.
 
@@ -345,6 +347,15 @@ collab agents register --name builder-a --host laptop-a --session-id SESSION_ID 
 collab agents list --workspace WORKSPACE_ID
 collab inbox list --agent builder-a --state claimed --workspace WORKSPACE_ID
 ```
+
+To remove a name that will not be used again, preview and then retire it:
+
+```sh
+collab agents retire --agent old-name --workspace WORKSPACE_ID --dry-run
+collab agents retire --agent old-name --workspace WORKSPACE_ID --yes
+```
+
+Its claimed handoffs return to open with a timeline entry on each issue. Open handoffs addressed only to that name are listed and stay open. The agent's own user or the workspace owner can retire it. The server refuses while its watcher is running, while it has a pending transfer offer or an active review, while it holds transferred work, and for a managed worker.
 
 Supply the full existing role-label list instead of `[]` when subscribed; registration replaces the list. The server refuses a second name for the same owner's host/session and refuses rebinding while the old watcher is fresh. Other active agents need their own names and sessions. Unbound historical names are not evidence of an active worker.
 

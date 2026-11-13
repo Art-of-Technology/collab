@@ -99,6 +99,12 @@ Legacy `afterId` behavior remains available and does not retain custody until
 acceptance, so adopting offers alone does not enforce the rule for older clients.
 Managed workers do not participate in this manual protocol.
 
+## Retiring an agent
+
+`DELETE /api/apps/auth/agents?agent=NAME` (CLI 0.9.2 `agents retire --agent NAME --yes`) removes a registration that is no longer used. It requires `workspace:write` and `issues:write`, and is allowed for the agent's own user and for the workspace owner. In one transaction it returns every handoff the agent has claimed to `open`, clears those handoffs' receipts as a release does, records `AGENT_RELEASE` on each issue with `retired: true`, and deletes the registration. Handoffs the agent sent keep their content and lose the sender link. Open handoffs addressed only to its name are not changed; the response lists up to 20 of them with their count. `GET /api/apps/auth/agents/delete-preview?agent=NAME` (`issues:read`) returns the same summary without changing anything.
+
+It answers 409 instead of deciding for somebody else: `watcher_active` while the agent's watcher is running, `transfer_offer_pending` and `review_already_active` while the agent is on either side of one, `transfer_claim_held` while it holds transferred work (only that agent could claim it again), and `managed_agent` for a managed worker. The name can be registered again afterwards, by any workspace member, and that registration receives the handoffs still addressed to the name, subject to its user's issue access.
+
 ## Current identities and watcher health
 
 For manual agents, use one stable agent name across restarts. Register a human-readable host identifier and the actual agent session identifier together; do not use credentials, user data or task text in either field. One workspace user cannot bind multiple names to the same host/session pair. Existing names without a binding remain compatible and are displayed as unbound. Registration without these fields preserves an existing binding. Registration still replaces the complete label subscription list. Managed identities use the lifecycle below instead of registration or watcher heartbeats.

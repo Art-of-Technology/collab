@@ -727,6 +727,25 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     await act(alice, pending, 'alice', 'cancel');
   });
 
+  await t.test('an agent with a pending offer or with transferred work is not retired', async () => {
+    await service.registerAgent(carol, service.registrationSchema.parse({ name: 'newcomer', labelIds: [] }));
+    const row = await original();
+    const pending = await offer(row, { toAgent: 'newcomer' });
+    // Either side of a pending offer: retiring would decide the offer for somebody else.
+    await assert.rejects(service.retireAgent(alice, 'alice', false), e => e.code === 'transfer_offer_pending' && e.status === 409);
+    await assert.rejects(service.retireAgent(carol, 'newcomer', false), e => e.code === 'transfer_offer_pending');
+    const accepted = await act(carol, pending, 'newcomer', 'accept');
+    // Transferred work can be claimed only by the agent it went to: released, nobody could pick it up.
+    await assert.rejects(service.retireAgent(carol, 'newcomer', true), e => e.code === 'transfer_claim_held' && e.status === 409);
+    await assert.rejects(service.retireAgent(alice, 'newcomer', false), e => e.code === 'transfer_claim_held');
+    const successor = await prisma.agentHandoff.findUniqueOrThrow({ where: { id: accepted.handoff.id } });
+    assert.deepEqual([successor.status, await prisma.agentRegistration.count({ where: { workspaceId: 'w', name: 'newcomer' } })], ['claimed', 1]);
+    // With that work completed nothing holds the agent back.
+    await service.actOnHandoff(carol, successor.id, service.actionSchema.parse({ agent: 'newcomer', action: 'complete', content: 'Done' }));
+    const done = await service.retireAgent(carol, 'newcomer', false);
+    assert.deepEqual([done.retired, done.released.length, await prisma.agentRegistration.count({ where: { workspaceId: 'w', name: 'newcomer' } })], [true, 0, 0]);
+  });
+
   await t.test('deleting a non-owner claimant is refused until the offer is cancelled', async () => {
     const row = await service.sendHandoff(bob, service.sendSchema.parse({ agent: 'bob', issue: 'w-1', content: 'Bob owns this', toAgents: ['bob'], requestId: randomUUID() }));
     await service.actOnHandoff(bob, row.id, service.actionSchema.parse({ agent: 'bob', action: 'claim' }));

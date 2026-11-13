@@ -321,6 +321,15 @@ async function main() {
       const note = await request(selected.base, apiPath(), { token: selected.token, timeout });
       if (note?.id !== args[0] || typeof note.title !== 'string') throw new CliError('invalid_preview', 'Deletion preview did not match the requested Note. No deletion was sent.', 5);
       preview = { id: note.id, title: note.title, type: note.type, scope: note.scope, projectName: note.projectName ?? null, updatedAt: note.updatedAt };
+    } else if (name === 'agents retire') {
+      // Name what goes back to open and what stays unowned before anything is removed.
+      const found = await request(selected.base, `/api/apps/auth/agents/delete-preview?${query}`, { token: selected.token, timeout });
+      const rows = list => Array.isArray(list) && list.length <= 200 && list.every(row => typeof row?.id === 'string' && typeof row.issueKey === 'string');
+      if (found?.agent !== options.agent || !rows(found.released) || !Number.isSafeInteger(found.unowned?.count) || !rows(found.unowned.handoffs)) {
+        throw new CliError('invalid_preview', 'Retire preview did not match the requested agent. Nothing was changed.', 5);
+      }
+      const keys = list => list.map(({ id, issueKey }) => ({ id, issueKey }));
+      preview = { agent: found.agent, released: keys(found.released), unowned: { count: found.unowned.count, handoffs: keys(found.unowned.handoffs) } };
     } else {
       const previewPath = `/api/apps/auth/${endpoint}/delete-preview?${query}`;
       preview = checkedDeletePreview(await request(selected.base, previewPath, { token: selected.token, timeout }), args[0], query.get('projectId'));
