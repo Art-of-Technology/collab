@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSy
 import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
@@ -12,7 +12,7 @@ const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.u
 const command = `ZDOTDIR="\${ZDOTDIR:-$HOME}" bash -o pipefail -c 'curl -fsSL https://collab.weez.boo/install.sh | sh' && . "$HOME/.local/share/collab/env"`;
 const supported = process.platform === 'darwin' || process.platform === 'linux';
 
-function fixture(t) {
+function fixture(t, reports = version) {
   const dir = mkdtempSync(path.join(tmpdir(), 'collab installer '));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const home = path.join(dir, 'home'), tools = path.join(dir, 'tools');
@@ -24,7 +24,7 @@ function fixture(t) {
     for (const file of [name, `${name}.sha256`]) copyFileSync(path.join(process.env.COLLAB_NATIVE_DOWNLOADS, file), path.join(downloads, file));
   } else {
     const stage = path.join(dir, `collab-${platform}`); mkdirSync(stage);
-    writeFileSync(path.join(stage, 'collab'), `#!/bin/sh\nprintf '%s\\n' '{"version":"${version}"}'\n`, { mode: 0o755 });
+    writeFileSync(path.join(stage, 'collab'), `#!/bin/sh\nprintf '%s\\n' '{"version":"${reports}"}'\n`, { mode: 0o755 });
     execFileSync('tar', ['-czf', path.join(downloads, name), '-C', dir, `collab-${platform}`], { env: { ...process.env, COPYFILE_DISABLE: '1' } });
     const digest = createHash('sha256').update(readFileSync(path.join(downloads, name))).digest('hex');
     writeFileSync(path.join(downloads, `${name}.sha256`), `${digest}  ${name}\n`);
@@ -121,4 +121,26 @@ test('non-exported ZDOTDIR configures a new custom directory and future Zsh term
   const future = spawnSync('zsh', ['-d', '-i', '-c', 'collab schema'], { env: f.env, encoding: 'utf8', timeout: 30000 });
   assert.equal(future.status, 0, future.stderr);
   assert.equal(JSON.parse(future.stdout).version, version);
+});
+
+// With real native downloads the release reports its own version, so only the unchanged case can be staged.
+test('update reports whether the installed version changed', { skip: !supported }, t => {
+  for (const [released, updated] of process.env.COLLAB_NATIVE_DOWNLOADS ? [[version, false]] : [[version, false], ['99.0.0', true]]) {
+    const f = fixture(t, released);
+    // update only runs as the executable in ~/.local/bin, so this source runs under a copy of node placed there as collab.
+    const installed = path.join(f.home, '.local/bin/collab');
+    mkdirSync(path.dirname(installed), { recursive: true });
+    copyFileSync(process.execPath, installed);
+    // It downloads the installer with fetch; answer with this repository's installer and nothing else.
+    const installer = 'https://collab.weez.boo/install.sh';
+    const preload = path.join(f.home, 'fetch.mjs');
+    writeFileSync(preload, `import fs from 'node:fs';
+globalThis.fetch = async url => url === ${JSON.stringify(installer)} ? new Response(fs.readFileSync(${JSON.stringify(path.join(root, 'public/install.sh'))})) : new Response(null, { status: 404 });
+`);
+    const result = spawnSync(installed, ['--import', pathToFileURL(preload).href, path.join(root, 'packages/cli/bin/collab.mjs'), 'update'], { env: f.env, encoding: 'utf8', timeout: 60000 });
+    assert.equal(result.status, 0, result.stderr);
+    const { installer: output, ...summary } = JSON.parse(result.stdout);
+    assert.deepEqual(summary, { updated, previousVersion: version, version: released });
+    assert.equal(output, `Collab ${version} installed. Run collab --help to get started.`);
+  }
 });

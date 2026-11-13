@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.9.2 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.9.2) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.9.3 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.9.3) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+
+Version 0.9.3 makes `collab update` say what happened: `updated` is `false` when the installed version is the one you already had, and `version` is the version now installed (`null` if the installed executable did not report it). Earlier versions print `"updated": true` after every run.
 
 Version 0.9.2 adds `agents retire --agent NAME`, which removes an agent registration that is no longer used: its claimed work goes back to open, and handoffs addressed only to it are listed and stay open. It needs the matching server.
 
