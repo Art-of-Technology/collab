@@ -56,7 +56,8 @@ export default function AgentConnectGuide({ mcpUrl }: AgentConnectGuideProps) {
           <section className="space-y-2">
             <h2 className="font-medium">Claude Code, as yourself</h2>
             <p className="text-muted-foreground">Each person runs this command in each project where they want to use Collab, then signs in with their own account.</p>
-            {snippet('the Claude Code command', `claude mcp add --transport http --client-id collab-connector collab '${mcpUrl.replace(/'/g, "'\\''")}'`)}
+            {/* Double quotes: an IPv6 origin's brackets are a pattern in zsh, and Command Prompt passes single quotes through. */}
+            {snippet('the Claude Code command', `claude mcp add --transport http --client-id collab-connector collab "${mcpUrl}"`)}
             <p className="text-muted-foreground">Then run <code>/mcp</code> in Claude Code and sign in.</p>
           </section>
 
