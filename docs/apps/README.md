@@ -29,7 +29,7 @@ The Collab App Store enables third-party developers to ship apps that workspace 
    - Use the credentials provided in step 1 to develop and test your app.
    - Configure OAuth using the `client_id` and `client_secret` from Collab.
    - Build your app's functionality and prepare your `manifest.json` following the schema below.
-   - Host your manifest on HTTPS (HTTP allowed for localhost development).
+   - Host your manifest as described in [Manifest URL requirements](#manifest-url-requirements).
 
 3. **Submit Manifest for Review**
    - As the app owner, navigate to `/dev/apps/[slug]` and submit your manifest URL (POST `/api/apps/[slug]/submit-manifest`).
@@ -47,6 +47,10 @@ The Collab App Store enables third-party developers to ship apps that workspace 
    - `/dev/apps/[slug]` displays credentials, manifest details, installation analytics, and webhook settings.
    - Delete your app anytime from the "Danger Zone" in the app details card (only if no active installations exist).
    - Manifest submission is available only while the app is `DRAFT`; see step 3.
+
+## Manifest URL requirements
+
+In production, the manifest URL must use HTTPS and every resolved address must be public. IPv4-mapped IPv6 addresses are rejected, even when the embedded IPv4 address is public. Local and private addresses are allowed outside production. The URL path must end in `.json` or `/manifest`. The fetch does not follow redirects, accepts only successful responses, limits the body to 1 MiB, and times out after 10 seconds.
 
 ## App Manifest Reference
 ```json
@@ -297,7 +301,7 @@ allowlist and does not authorize deployment.
 ## Environment & Local Setup
 - Define `APP_TOKENS_KEY` as a 32-character string in `.env` to enable token encryption/decryption.
 - Follow the [installation guide](../../README.md#installation), then visit `/dev/apps`.
-- Sandbox manifest hosts can be HTTP (localhost) in development; production requires HTTPS.
+- See [Manifest URL requirements](#manifest-url-requirements) for hosting and local development.
 
 ## Useful UI Routes
 - `/dev/apps` – app catalog, status badges, quick stats.

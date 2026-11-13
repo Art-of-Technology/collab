@@ -213,6 +213,23 @@ export const pushSubscriptionRateLimit = createRateLimiter({
 });
 
 /**
+ * Rate limiters for media uploads. Images arrive in bursts when a document is pasted; videos and profile images do not.
+ * Every request to an upload route counts, refused ones too.
+ */
+// shortcut: counted per client address in this process's memory; a hard storage quota per account needs a counter in the database.
+export const imageUploadRateLimit = createRateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  maxRequests: 120,
+  message: 'Too many uploads, please try again later.',
+});
+
+export const mediaUploadRateLimit = createRateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  maxRequests: 10,
+  message: 'Too many uploads, please try again later.',
+});
+
+/**
  * Stricter rate limiter for sensitive operations
  */
 export const strictRateLimit = createRateLimiter({
