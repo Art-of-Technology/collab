@@ -239,10 +239,10 @@ export async function getOwnedAgent(context: AppAuthContext, agent: unknown) {
 
 /**
  * Removes an agent registration nobody uses any more. The work it holds goes back to open, with an
- * entry on each issue. Handoffs addressed only to its name stay open and are listed, so that their
+ * entry on each issue. Handoffs addressed only to its name stay open, so that their
  * senders can address them again. Whatever needs a decision first (a running watcher, a pending
  * transfer offer, an active review, transferred work, a managed worker) is refused, not guessed.
- * With `preview` it changes nothing and says what it would do.
+ * With `preview` it changes nothing; the summary includes only issues the caller can access.
  */
 export async function retireAgent(context: AppAuthContext, agentName: unknown, preview: boolean) {
   const named = name.parse(agentName), workspaceId = context.workspace.id;
