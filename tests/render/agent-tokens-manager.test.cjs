@@ -101,7 +101,7 @@ test('Connect an agent shows the endpoint of this deployment and copies each com
 
   let root = await show(url);
   try {
-    const command = `claude mcp add --transport http --client-id collab-connector collab ${url}`;
+    const command = `claude mcp add --transport http --client-id collab-connector collab '${url}'`;
     assert.deepEqual(snippets().slice(0, 2), [url, command]);
     assert.equal(snippets().length, 3);
     assert.deepEqual(JSON.parse(snippets()[2]), { mcpServers: { collab: { type: 'http', url, headers: { Authorization: 'Bearer ${COLLAB_TOKEN}' } } } });
@@ -119,6 +119,15 @@ test('Connect an agent shows the endpoint of this deployment and copies each com
     await React.act(async () => buttons('Copy the endpoint URL')[0].click());
     assert.equal(notices.at(-1).variant, 'destructive');
     assert.equal(buttons('Copy the endpoint URL').length, 1);
+  } finally { await React.act(async () => root.unmount()); }
+
+  const ipv6Url = endpoint({ NEXTAUTH_URL: 'http://[::1]:3000' });
+  assert.equal(ipv6Url, 'http://[::1]:3000/api/mcp');
+  clipboard.refuse = false;
+  root = await show(ipv6Url);
+  try {
+    await React.act(async () => buttons('Copy the Claude Code command')[0].click());
+    assert.equal(clipboard.at(-1), "claude mcp add --transport http --client-id collab-connector collab 'http://[::1]:3000/api/mcp'");
   } finally { await React.act(async () => root.unmount()); }
 
   root = await show(null);

@@ -56,7 +56,7 @@ export default function AgentConnectGuide({ mcpUrl }: AgentConnectGuideProps) {
           <section className="space-y-2">
             <h2 className="font-medium">Claude Code, as yourself</h2>
             <p className="text-muted-foreground">Each person runs this command in each project where they want to use Collab, then signs in with their own account.</p>
-            {snippet('the Claude Code command', `claude mcp add --transport http --client-id collab-connector collab ${mcpUrl}`)}
+            {snippet('the Claude Code command', `claude mcp add --transport http --client-id collab-connector collab '${mcpUrl.replace(/'/g, "'\\''")}'`)}
             <p className="text-muted-foreground">Then run <code>/mcp</code> in Claude Code and sign in.</p>
           </section>
 
