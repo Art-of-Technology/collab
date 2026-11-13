@@ -280,7 +280,7 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
       // The preview says what would happen and changes nothing.
       const preview = await service.retireAgent(bob, 'leaver', true);
       assert.deepEqual(JSON.parse(JSON.stringify(preview)), { agent: 'leaver', id: leaver.id,
-        released: [{ id: 'retire-claimed', issueKey: 'w-1' }], unowned: { count: 1, handoffs: [{ id: 'retire-own', issueKey: 'w-1' }] } });
+        released: [{ id: 'retire-claimed', issueKey: 'w-1' }], releasedHidden: 0, unowned: { count: 1, handoffs: [{ id: 'retire-own', issueKey: 'w-1' }] } });
       assert.deepEqual([(await state('retire-claimed')).status, await prisma.agentRegistration.count({ where: { id: leaver.id } }), await activities()], ['claimed', 1, before]);
 
       // Not while its watcher runs, and not a managed worker.
@@ -292,8 +292,13 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
       await prisma.agentRegistration.update({ where: { id: leaver.id }, data: { managedWorker: Prisma.DbNull } });
       assert.deepEqual([(await state('retire-claimed')).status, await activities()], ['claimed', before], 'a refusal changes nothing');
 
+      // The removal can name the registration that was previewed; another one under the same name is not touched.
+      await assert.rejects(service.retireAgent(alice, 'leaver', false, 'some-other-registration'), e => e.code === 'agent_changed' && e.status === 409);
+      assert.deepEqual(await call(retire, '?agent=leaver&id=some-other-registration', alice), [409, 'agent_changed']);
+      assert.deepEqual([(await state('retire-claimed')).status, await prisma.agentRegistration.count({ where: { id: leaver.id } }), await activities()], ['claimed', 1, before]);
+
       // The workspace owner retires another user's agent.
-      const done = await service.retireAgent(alice, 'leaver', false);
+      const done = await service.retireAgent(alice, 'leaver', false, leaver.id);
       assert.deepEqual(JSON.parse(JSON.stringify(done)), { ...JSON.parse(JSON.stringify(preview)), retired: true });
       assert.equal(await prisma.agentRegistration.count({ where: { id: leaver.id } }), 0);
       const released = await state('retire-claimed');
@@ -326,11 +331,14 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     try {
       for (const preview of [true, false]) {
         const result = await service.retireAgent(bob, 'restricted-leaver', preview);
-        assert.deepEqual(JSON.parse(JSON.stringify(result.released)), []);
-        assert.deepEqual(JSON.parse(JSON.stringify(result.unowned)), { count: 0, handoffs: [] });
+        // Bob cannot read that issue: its key is not shown to him, but he is told that one more claim is released.
+        assert.deepEqual(JSON.parse(JSON.stringify([result.released, result.releasedHidden, result.unowned])), [[], 1, { count: 0, handoffs: [] }]);
+        assert.doesNotMatch(JSON.stringify(result), /w-restricted|restricted-issue|restricted-claimed|restricted-open/);
       }
       const claim = await prisma.agentHandoff.findUniqueOrThrow({ where: { id: 'restricted-claimed' } });
       assert.deepEqual([claim.status, claim.claimedById], ['open', null]);
+      // The issue still gets its entry, for those who can read it.
+      assert.equal(await prisma.issueActivity.count({ where: { itemId: 'restricted-issue', action: 'AGENT_RELEASE' } }), 1);
     } finally {
       await prisma.issue.delete({ where: { id: 'restricted-issue' } });
       await prisma.projectStatus.delete({ where: { id: 'foreign-status' } });

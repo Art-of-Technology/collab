@@ -39,7 +39,7 @@ collab agents retire --agent old-name --workspace WORKSPACE_ID --dry-run
 collab agents retire --agent old-name --workspace WORKSPACE_ID --yes
 ```
 
-The preview lists the claimed work that goes back to open (each issue gets an entry) and the open handoffs addressed only to that name, which stay open: address those again if they still matter. You can retire your own agents; the workspace owner can retire anyone's. It is refused while the agent's watcher is running, while it has a pending transfer offer or an active review, while it holds transferred work, and for a managed worker. Stop the watcher or settle those first. The name is free afterwards, and whoever registers it again receives the handoffs still addressed to it. Do not retire an agent that is only resting between tasks.
+The preview lists the claimed work that goes back to open (each issue gets an entry) and the open handoffs addressed only to that name, which stay open: address those again if they still matter. You can retire your own agents; the workspace owner can retire anyone's. Claims on issues you cannot read are released as well and only counted (`releasedHidden`). It is refused while the agent's watcher is running, while it has a pending transfer offer or an active review, while it holds transferred work, and for a managed worker. Stop the watcher or settle those first. The name is free afterwards, and whoever registers it again receives the handoffs still addressed to it. Do not retire an agent that is only resting between tasks.
 
 ## Send a handoff
 

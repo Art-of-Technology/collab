@@ -242,9 +242,12 @@ export async function getOwnedAgent(context: AppAuthContext, agent: unknown) {
  * entry on each issue. Handoffs addressed only to its name stay open, so that their
  * senders can address them again. Whatever needs a decision first (a running watcher, a pending
  * transfer offer, an active review, transferred work, a managed worker) is refused, not guessed.
- * With `preview` it changes nothing; the summary includes only issues the caller can access.
+ * With `preview` it changes nothing. The summary names only handoffs on issues the caller can read
+ * and counts the claims it releases on issues the caller cannot read, so nothing happens unannounced.
+ * `expectedId` binds the removal to the registration that was previewed: the name can be retired and
+ * registered again by somebody else between the two requests.
  */
-export async function retireAgent(context: AppAuthContext, agentName: unknown, preview: boolean) {
+export async function retireAgent(context: AppAuthContext, agentName: unknown, preview: boolean, expectedId?: string | null) {
   const named = name.parse(agentName), workspaceId = context.workspace.id;
   return prisma.$transaction(async db => {
     await db.$queryRaw`SELECT id FROM "AgentRegistration" WHERE "workspaceId" = ${workspaceId} AND name = ${named} FOR UPDATE`;
@@ -254,6 +257,7 @@ export async function retireAgent(context: AppAuthContext, agentName: unknown, p
       !await db.workspace.findFirst({ where: { id: workspaceId, ownerId: context.user.id }, select: { id: true } }))) {
       throw new HandoffError('agent_not_found', 'Agent not found in this workspace, or it belongs to another user', 404);
     }
+    if (expectedId && expectedId !== agent.id) throw new HandoffError('agent_changed', 'This name belongs to another registration than the one that was previewed. Nothing was changed; preview again', 409);
     if (agent.managedWorker) throw new HandoffError('managed_agent', 'A managed worker is removed through worker setup, not by retiring it', 409);
     if (watcherState(agent.watcher)?.state === 'running') throw new HandoffError('watcher_active', 'Stop this agent\'s watcher before retiring it', 409);
     const claimed = await db.agentHandoff.findMany({ where: { workspaceId, claimedById: agent.id, status: 'claimed' },
@@ -282,7 +286,8 @@ export async function retireAgent(context: AppAuthContext, agentName: unknown, p
       rows.map(row => ({ id: row.id, issueKey: row.issue.issueKey || row.issue.id }));
     const visibleClaimed = await db.agentHandoff.findMany({ where: { id: { in: claimed.map(row => row.id) }, issue: issueScope(context) },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true, issue: { select: { id: true, issueKey: true } } } });
-    const summary = { agent: agent.name, id: agent.id, released: listed(visibleClaimed), unowned: { count: unowned, handoffs: listed(examples) } };
+    const summary = { agent: agent.name, id: agent.id, released: listed(visibleClaimed), releasedHidden: claimed.length - visibleClaimed.length,
+      unowned: { count: unowned, handoffs: listed(examples) } };
     if (preview) return summary;
     for (const handoff of claimed) {
       const changed = await db.agentHandoff.updateMany({ where: { id: handoff.id, status: 'claimed', claimedById: agent.id }, data: { status: 'open', claimedById: null } });

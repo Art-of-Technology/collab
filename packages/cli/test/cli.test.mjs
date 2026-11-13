@@ -1536,9 +1536,10 @@ test('note deletion stops when the note cannot be read or is not the one asked f
   assert.deepEqual(other.calls.map(call => call.method), ['GET']);
 });
 
-const retirePreview = { agent: 'old-agent', released: [{ id: 'handoff-one', issueKey: 'APP-1' }], unowned: { count: 1, handoffs: [{ id: 'handoff-two', issueKey: 'APP-2' }] } };
+const retirePreview = { agent: 'old-agent', released: [{ id: 'handoff-one', issueKey: 'APP-1' }], releasedHidden: 2, unowned: { count: 1, handoffs: [{ id: 'handoff-two', issueKey: 'APP-2' }] } };
 const retirePreviewUrl = '/api/apps/auth/agents/delete-preview?workspaceId=workspace-one&agent=old-agent';
-const retireUrl = '/api/apps/auth/agents?workspaceId=workspace-one&agent=old-agent';
+// The removal names the registration that was previewed, so a name that changed hands in between is not retired.
+const retireUrl = '/api/apps/auth/agents?workspaceId=workspace-one&agent=old-agent&id=registration-one';
 
 test('agent retirement asks for the agent and for --yes, and its dry-run only reads the preview', async t => {
   const f = await fixture(t, (_req, res) => res.end(JSON.stringify({ ...retirePreview, id: 'registration-one' })));
@@ -1565,12 +1566,17 @@ test('agent retirement stops when the server refuses the preview or answers for 
   const refused = await blocked.run(['agents', 'retire', '--agent', 'old-agent', '--workspace', 'workspace-one', '--yes']);
   assert.equal(refused.error.error, 'conflict');
   assert.deepEqual(blocked.calls.map(call => call.method), ['GET']);
-  for (const wrong of [{ ...retirePreview, agent: 'another' }, { ...retirePreview, released: 'all' }, { ...retirePreview, unowned: { count: 'many', handoffs: [] } }]) {
+  const answer = { ...retirePreview, id: 'registration-one' };
+  for (const wrong of [{ ...answer, agent: 'another' }, { ...answer, id: undefined }, { ...answer, released: 'all' }, { ...answer, releasedHidden: 'some' }, { ...answer, unowned: { count: 'many', handoffs: [] } }]) {
     const other = await fixture(t, (_req, res) => res.end(JSON.stringify(wrong)));
     const mismatched = await other.run(['agents', 'retire', '--agent', 'old-agent', '--workspace', 'workspace-one', '--yes']);
     assert.equal(mismatched.error.error, 'invalid_preview');
     assert.deepEqual(other.calls.map(call => call.method), ['GET']);
   }
+  // An agent with very many claims is still a valid preview.
+  const many = await fixture(t, (_req, res) => res.end(JSON.stringify({ ...answer, released: Array.from({ length: 250 }, (_, i) => ({ id: `handoff-${i}`, issueKey: `APP-${i}` })) })));
+  const large = await many.run(['agents', 'retire', '--agent', 'old-agent', '--workspace', 'workspace-one', '--dry-run']);
+  assert.equal(large.data.preview.released.length, 250);
 });
 
 test('issue trash and restore commands use required project scope and expose no purge', async t => {
