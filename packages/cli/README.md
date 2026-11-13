@@ -391,13 +391,13 @@ The watcher waits for its direct adapter child to close before returning.
 An interrupted delivery is not counted as a successful callback and may repeat
 in the next window. `--poll-seconds` defaults to 5 seconds (1–60), and
 `--callback-timeout` defaults to 30 seconds (1–120). It reads both claimed and
-unseen queues using the existing login, without OAuth, refresh or handoff mutations. With host/session flags it additionally posts start, poll, successful callback, stop and error health reports using a fresh watcher UUID. Health requests have a five-second timeout, including the final report after cancellation; reporting failure stops the watcher without hiding an earlier API/callback failure.
+unseen queues using the existing login, without OAuth, refresh or handoff mutations. With host/session flags it additionally posts start, poll, successful callback, stop and error health reports using a fresh watcher UUID. Health requests have a five-second timeout, including the final report after cancellation; a failed final report does not hide an earlier API/callback failure.
 `--timeout` still bounds each API request independently of the watch window.
 A read or health report that the server does not answer (a timeout, a connection
 failure, HTTP 5xx or 429) is one skipped poll: the watcher tries again at the next
 interval with the same watcher UUID, so its health turns to running again by itself
 after an app restart. The result reports `skippedPolls` when there were any. After
-five minutes without an answer it stops with that error. A refusal the server did
+five minutes from the first failed attempt, another failed attempt stops it with that error. A refusal the server did
 answer (authentication, permission, a changed binding) and callback errors or
 timeouts stop the watcher with nonzero exit at once; investigate before restarting. Already received HTTP errors and observed
 nonzero adapter exits or unexpected termination signals remain failures even when
