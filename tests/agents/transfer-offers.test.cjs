@@ -740,6 +740,9 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     await assert.rejects(service.retireAgent(alice, 'newcomer', false), e => e.code === 'transfer_claim_held');
     const successor = await prisma.agentHandoff.findUniqueOrThrow({ where: { id: accepted.handoff.id } });
     assert.deepEqual([successor.status, await prisma.agentRegistration.count({ where: { workspaceId: 'w', name: 'newcomer' } })], ['claimed', 1]);
+    await service.actOnHandoff(carol, successor.id, service.actionSchema.parse({ agent: 'newcomer', action: 'release' }));
+    for (const preview of [true, false]) await assert.rejects(service.retireAgent(carol, 'newcomer', preview), e => e.code === 'transfer_claim_held');
+    await service.actOnHandoff(carol, successor.id, service.actionSchema.parse({ agent: 'newcomer', action: 'claim' }));
     // With that work completed nothing holds the agent back.
     await service.actOnHandoff(carol, successor.id, service.actionSchema.parse({ agent: 'newcomer', action: 'complete', content: 'Done' }));
     const done = await service.retireAgent(carol, 'newcomer', false);

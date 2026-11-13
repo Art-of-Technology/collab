@@ -314,6 +314,29 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
       await prisma.agentRegistration.deleteMany({ where: { workspaceId: 'w', name: 'leaver' } });
     }
   });
+  await t.test('retirement hides inaccessible issues while releasing every claim', async () => {
+    await register(bob, 'restricted-leaver');
+    const agent = await prisma.agentRegistration.findFirstOrThrow({ where: { workspaceId: 'w', name: 'restricted-leaver' } });
+    await prisma.projectStatus.create({ data: { id: 'foreign-status', name: 'foreign', displayName: 'Foreign', projectId: 'p-foreign' } });
+    await prisma.issue.create({ data: { id: 'restricted-issue', issueKey: 'w-restricted', title: 'Restricted', workspaceId: 'w', projectId: 'p-w', statusId: 'foreign-status' } });
+    await prisma.agentHandoff.createMany({ data: [
+      { id: 'restricted-claimed', sourceKey: 'restricted-claimed', workspaceId: 'w', issueId: 'restricted-issue', content: 'Claim', status: 'claimed', claimedById: agent.id },
+      { id: 'restricted-open', sourceKey: 'restricted-open', workspaceId: 'w', issueId: 'restricted-issue', content: 'Open', recipientNames: ['restricted-leaver'] },
+    ] });
+    try {
+      for (const preview of [true, false]) {
+        const result = await service.retireAgent(bob, 'restricted-leaver', preview);
+        assert.deepEqual(JSON.parse(JSON.stringify(result.released)), []);
+        assert.deepEqual(JSON.parse(JSON.stringify(result.unowned)), { count: 0, handoffs: [] });
+      }
+      const claim = await prisma.agentHandoff.findUniqueOrThrow({ where: { id: 'restricted-claimed' } });
+      assert.deepEqual([claim.status, claim.claimedById], ['open', null]);
+    } finally {
+      await prisma.issue.delete({ where: { id: 'restricted-issue' } });
+      await prisma.projectStatus.delete({ where: { id: 'foreign-status' } });
+      await prisma.agentRegistration.deleteMany({ where: { id: agent.id } });
+    }
+  });
   await t.test('workspace monitor and agent floor state a recipient user\'s issue access once, however many agents that user has', async () => {
     // In production 76 agents under three users made this one query exceed the database's memory.
     const sent = [];

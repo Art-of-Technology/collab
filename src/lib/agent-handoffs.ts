@@ -260,7 +260,9 @@ export async function retireAgent(context: AppAuthContext, agentName: unknown, p
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: { id: true, sourceKey: true, issue: { select: { id: true, issueKey: true, projectId: true } } } });
     // Transferred work can be claimed only by the agent it was transferred to: released, it would be lost.
-    if (claimed.some(handoff => handoff.sourceKey.startsWith('transfer-offer:'))) {
+    if (claimed.some(handoff => handoff.sourceKey.startsWith('transfer-offer:')) || await db.agentHandoff.findFirst({ where: {
+      workspaceId, status: 'open', acceptedTransferOffer: { is: { status: 'accepted', recipientId: agent.id } },
+    }, select: { id: true } })) {
       throw new HandoffError('transfer_claim_held', 'This agent holds transferred work that no other agent can claim. Complete or supersede it before retiring the agent', 409);
     }
     if (await db.agentTransferOffer.findFirst({ where: { workspaceId, status: 'pending', OR: [{ senderId: agent.id }, { recipientId: agent.id }] }, select: { id: true } })) {
@@ -272,13 +274,15 @@ export async function retireAgent(context: AppAuthContext, agentName: unknown, p
       OR: [{ ownerAgentId: agent.id }, { reviewerAgentId: agent.id }] }, select: { id: true } })) {
       throw new HandoffError('review_already_active', 'Resolve or cancel this agent\'s active reviews before retiring it', 409);
     }
-    const onlyForIt = { workspaceId, status: 'open', recipientNames: { equals: [agent.name] }, labelIds: { isEmpty: true } };
+    const onlyForIt = { workspaceId, status: 'open', recipientNames: { equals: [agent.name] }, labelIds: { isEmpty: true }, issue: issueScope(context) };
     const unowned = await db.agentHandoff.count({ where: onlyForIt });
     const examples = await db.agentHandoff.findMany({ where: onlyForIt, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 20,
       select: { id: true, issue: { select: { id: true, issueKey: true } } } });
     const listed = (rows: Array<{ id: string; issue: { id: string; issueKey: string | null } }>) =>
       rows.map(row => ({ id: row.id, issueKey: row.issue.issueKey || row.issue.id }));
-    const summary = { agent: agent.name, id: agent.id, released: listed(claimed), unowned: { count: unowned, handoffs: listed(examples) } };
+    const visibleClaimed = await db.agentHandoff.findMany({ where: { id: { in: claimed.map(row => row.id) }, issue: issueScope(context) },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true, issue: { select: { id: true, issueKey: true } } } });
+    const summary = { agent: agent.name, id: agent.id, released: listed(visibleClaimed), unowned: { count: unowned, handoffs: listed(examples) } };
     if (preview) return summary;
     for (const handoff of claimed) {
       const changed = await db.agentHandoff.updateMany({ where: { id: handoff.id, status: 'claimed', claimedById: agent.id }, data: { status: 'open', claimedById: null } });
