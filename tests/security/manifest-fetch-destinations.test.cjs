@@ -66,6 +66,27 @@ test('in production a name is judged by the addresses it resolves to', async t =
   assert.equal(seen.paths.length, 2, 'only the two public fetches reached the server');
 });
 
+test('connection lookup options cannot hide non-public DNS answers', async t => {
+  const { seen, port } = await localServer(t);
+  const dns = {
+    lookup: (hostname, options, callback) => {
+      const answers = [{ address: '93.184.216.34', family: 4 }, { address: 'fd00::1', family: 6 }];
+      callback(null, options.family || options.hints ? answers.slice(0, 1) : answers);
+    },
+  };
+  for (const all of [false, true]) {
+    const https = { request: (url, options, onResponse) => {
+      const request = http.request({ host: '127.0.0.1', port }, onResponse);
+      const end = request.end.bind(request);
+      request.end = () => options.lookup(url.hostname, { all, family: 4, hints: require('node:dns').ADDRCONFIG }, error => error ? request.destroy(error) : end());
+      return request;
+    } };
+    const { fetchManifest } = validation({ NODE_ENV: 'production' }, { 'node:dns': dns, 'node:https': https });
+    await assert.rejects(fetchManifest(`https://manifest.example:${port}/manifest.json`), /public address/);
+  }
+  assert.equal(seen.connections, 0);
+});
+
 test('a manifest fetch does not follow redirects and stops at one megabyte', async t => {
   const { seen, port } = await localServer(t, (request, response) => {
     if (request.url === '/moved/manifest.json') return response.writeHead(302, { Location: '/internal/manifest.json' }).end();

@@ -270,7 +270,7 @@ const notPublic = () => new Error('Manifest URL must resolve to a public address
 
 // Given to the connection itself, so the addresses that are checked are the ones it connects to: a name cannot
 // answer one thing for a check and another for the request. Every answer is checked, also when one address is asked for.
-const publicLookup: LookupFunction = (hostname, options, callback) => lookup(hostname, { ...options, all: true }, (error, addresses) => {
+const publicLookup: LookupFunction = (hostname, options, callback) => lookup(hostname, { all: true }, (error, addresses) => {
   if (error) return callback(error, []);
   if (!addresses.length || !addresses.every(entry => isPublicAddress(entry.address))) return callback(notPublic(), []);
   if (options.all) callback(null, addresses);
