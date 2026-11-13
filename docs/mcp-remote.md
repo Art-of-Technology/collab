@@ -30,6 +30,8 @@ A token works in the workspace it was issued for. A member's token may name anot
 
 ## Connect Claude
 
+The **Agent tokens** page in workspace settings shows the Claude Code and claude.ai steps with the deployment's own address filled in, ready to copy.
+
 ### Claude in Slack (one shared identity)
 
 Claude in Slack acts as itself, not as the person who mentions it, so give it an agent token.

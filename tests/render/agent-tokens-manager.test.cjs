@@ -77,3 +77,62 @@ test('the Workspaces control lets an agent into a workspace, takes it away, and 
     assert.equal(refreshed, 2, 'a refusal changes nothing on the page');
   } finally { await React.act(async () => root.unmount()); }
 });
+
+test('Connect an agent shows the endpoint of this deployment and copies each command', async () => {
+  const endpoint = env => load('src/lib/mcp-oauth.ts', { 'next/server': {} }, { URL, process: { env } }).mcpEndpointUrl();
+  const url = endpoint({ NEXTAUTH_URL: 'https://collab.example.test/login' });
+  assert.equal(url, 'https://collab.example.test/api/mcp');
+  assert.equal(endpoint({}), null);
+
+  const clipboard = [];
+  const Guide = load('src/components/workspace/AgentConnectGuide.tsx', {
+    react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
+    'lucide-react': new Proxy({}, { get: () => () => null }),
+    '@/components/ui/button': { Button: el('button') },
+    '@/components/ui/card': parts(['Card', 'CardContent', 'CardDescription', 'CardHeader', 'CardTitle']),
+    '@/hooks/use-toast': { useToast: () => ({ toast: notice => notices.push(notice) }) },
+  }, { navigator: { clipboard: { writeText: async text => { if (clipboard.refuse) throw new Error('denied'); clipboard.push(text); } } } }).default;
+  const show = async mcpUrl => {
+    const root = createRoot(document.getElementById('root'));
+    await React.act(async () => root.render(React.createElement(Guide, { mcpUrl })));
+    return root;
+  };
+  const snippets = () => [...document.querySelectorAll('pre')].map(pre => pre.textContent);
+
+  let root = await show(url);
+  try {
+    const command = `claude mcp add --transport http --client-id collab-connector collab "${url}"`;
+    assert.deepEqual(snippets().slice(0, 2), [url, command]);
+    assert.equal(snippets().length, 3);
+    assert.deepEqual(JSON.parse(snippets()[2]), { mcpServers: { collab: { type: 'http', url, headers: { Authorization: 'Bearer ${COLLAB_TOKEN}' } } } });
+    assert.doesNotMatch(snippets().join('\n'), /\$COLLAB_TOKEN/, 'no command makes the shell write the token into a settings file');
+    assert.match(document.body.textContent, /runs this command in each project/);
+    assert.match(document.body.textContent, /client ID collab-connector with no secret/);
+    assert.equal(document.querySelector('a').href, 'https://github.com/Art-of-Technology/collab/blob/main/docs/mcp-remote.md');
+
+    await React.act(async () => buttons('Copy the Claude Code command')[0].click());
+    assert.deepEqual(clipboard, [command]);
+    assert.equal(buttons('Copied the Claude Code command').length, 1, 'only the copied snippet says so');
+    assert.equal(buttons('Copy the endpoint URL').length, 1);
+
+    clipboard.refuse = true;
+    await React.act(async () => buttons('Copy the endpoint URL')[0].click());
+    assert.equal(notices.at(-1).variant, 'destructive');
+    assert.equal(buttons('Copy the endpoint URL').length, 1);
+  } finally { await React.act(async () => root.unmount()); }
+
+  const ipv6Url = endpoint({ NEXTAUTH_URL: 'http://[::1]:3000' });
+  assert.equal(ipv6Url, 'http://[::1]:3000/api/mcp');
+  clipboard.refuse = false;
+  root = await show(ipv6Url);
+  try {
+    await React.act(async () => buttons('Copy the Claude Code command')[0].click());
+    assert.equal(clipboard.at(-1), 'claude mcp add --transport http --client-id collab-connector collab "http://[::1]:3000/api/mcp"');
+  } finally { await React.act(async () => root.unmount()); }
+
+  root = await show(null);
+  try {
+    assert.deepEqual(snippets(), [], 'no command is shown for an address that is not known');
+    assert.match(document.body.textContent, /no public address configured/);
+  } finally { await React.act(async () => root.unmount()); }
+});

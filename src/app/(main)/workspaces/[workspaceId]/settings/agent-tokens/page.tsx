@@ -7,7 +7,9 @@ import { prisma } from '@/lib/prisma';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { listAgentTokens } from '@/lib/agent-tokens';
+import { mcpEndpointUrl } from '@/lib/mcp-oauth';
 import { Button } from '@/components/ui/button';
+import AgentConnectGuide from '@/components/workspace/AgentConnectGuide';
 import AgentTokensManager from '@/components/workspace/AgentTokensManager';
 
 export default async function AgentTokensPage({ params }: { params: Promise<{ workspaceId: string }> }) {
@@ -65,6 +67,10 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
           expired: token.expired,
         }))}
       />
+
+      <div className="mt-4">
+        <AgentConnectGuide mcpUrl={mcpEndpointUrl()} />
+      </div>
     </div>
   );
 }
