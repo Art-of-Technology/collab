@@ -37,31 +37,45 @@ function queue(result) {
   return { items: result.items.map(({ id, status }) => ({ id, status })), hasMore: result.hasMore };
 }
 
+// The server being away for a moment: unreachable, answering 5xx, or throttling. For the watcher's
+// own heartbeat a lost answer (outcome_unknown) counts too: repeating a heartbeat changes nothing.
+const serverAway = error => ['transport_failed', 'server_error', 'rate_limited', 'outcome_unknown'].includes(error?.code);
+
 export async function watchInbox({ read, callback, callbackArgs, agent, workspaceId, origin,
-  durationMs, intervalMs, callbackTimeoutMs, signal, report }) {
+  durationMs, intervalMs, callbackTimeoutMs, signal, report, outageMs = 300000 }) {
   const window = new AbortController();
   const timer = setTimeout(() => window.abort(), durationMs);
   const watchSignal = signal ? AbortSignal.any([signal, window.signal]) : window.signal;
-  let lastDelivery, deliveredAt = 0, callbacks = 0, failure, reportingStarted = false;
+  let lastDelivery, deliveredAt = 0, callbacks = 0, failure, reportingStarted = false, skippedPolls = 0, awaySince;
   try {
-    if (report) { await report('started', watchSignal); reportingStarted = true; }
     while (!watchSignal.aborted) {
-      const claimed = queue(await read('claimed', watchSignal));
-      watchSignal.throwIfAborted();
-      const unseen = queue(await read('unseen', watchSignal));
-      watchSignal.throwIfAborted();
-      await report?.('poll', watchSignal);
-      const payload = { version: 1, event: 'collab.inbox.pending', origin, workspaceId, agent, claimed, unseen };
-      const deliveryId = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
-      if (claimed.items.length || unseen.items.length) {
-        // Coalesce unchanged queues; remind once per minute until the agent drains them.
-        // No persisted ACK: restarting may repeat a notification, never lose queued work.
-        if (deliveryId !== lastDelivery || Date.now() - deliveredAt >= 60000) {
-          await deliverWake(callback, callbackArgs, { ...payload, deliveryId }, callbackTimeoutMs, watchSignal);
-          lastDelivery = deliveryId; deliveredAt = Date.now();
-          callbacks++; await report?.('wake', watchSignal);
-        }
-      } else lastDelivery = undefined;
+      try {
+        if (report && !reportingStarted) { await report('started', watchSignal); reportingStarted = true; }
+        const claimed = queue(await read('claimed', watchSignal));
+        watchSignal.throwIfAborted();
+        const unseen = queue(await read('unseen', watchSignal));
+        watchSignal.throwIfAborted();
+        await report?.('poll', watchSignal);
+        awaySince = undefined;
+        const payload = { version: 1, event: 'collab.inbox.pending', origin, workspaceId, agent, claimed, unseen };
+        const deliveryId = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+        if (claimed.items.length || unseen.items.length) {
+          // Coalesce unchanged queues; remind once per minute until the agent drains them.
+          // No persisted ACK: restarting may repeat a notification, never lose queued work.
+          if (deliveryId !== lastDelivery || Date.now() - deliveredAt >= 60000) {
+            await deliverWake(callback, callbackArgs, { ...payload, deliveryId }, callbackTimeoutMs, watchSignal);
+            lastDelivery = deliveryId; deliveredAt = Date.now();
+            callbacks++; await report?.('wake', watchSignal);
+          }
+        } else lastDelivery = undefined;
+      } catch (error) {
+        // The app restarts on every deploy. A poll the server could not answer is skipped and the next
+        // one tries again, so the watcher keeps its identity and its health recovers by itself. After
+        // five minutes without an answer (when the server calls a watcher stale) it gives up.
+        awaySince ??= Date.now();
+        if (watchSignal.aborted || !serverAway(error) || Date.now() - awaySince >= outageMs) throw error;
+        skippedPolls++;
+      }
       await delay(intervalMs, undefined, { signal: watchSignal });
     }
   } catch (error) {
@@ -73,5 +87,5 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
       catch (error) { if (!failure) throw error; } // Preserve the original API/callback failure.
     }
   }
-  return { agent, workspaceId, callbacks, ...(report && { healthReported: reportingStarted }), stopped: watchSignal.reason === signal?.reason, timedOut: watchSignal.reason === window.signal.reason };
+  return { agent, workspaceId, callbacks, ...(skippedPolls && { skippedPolls }), ...(report && { healthReported: reportingStarted }), stopped: watchSignal.reason === signal?.reason, timedOut: watchSignal.reason === window.signal.reason };
 }

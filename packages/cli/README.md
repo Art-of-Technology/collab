@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.9.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.9.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.9.1 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.9.1) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+
+Version 0.9.1 makes `inbox watch` ride through a server that is briefly away, such as an app restart during a deploy. Polls the server does not answer are skipped and counted in `skippedPolls`, and the watcher keeps its identity, so its health recovers by itself. Earlier versions exit on the first failed request, and the server then refuses a replacement watcher for five minutes while still showing the old one as running.
 
 Version 0.9.0 adds `templates list` and `templates get TYPE`, and explains a refused issue: when a workspace requires issue templates, `issues create` and `issues update` print `template_required` with the missing sections and fields. Earlier versions print only that the request was refused.
 
@@ -391,9 +393,13 @@ in the next window. `--poll-seconds` defaults to 5 seconds (1–60), and
 `--callback-timeout` defaults to 30 seconds (1–120). It reads both claimed and
 unseen queues using the existing login, without OAuth, refresh or handoff mutations. With host/session flags it additionally posts start, poll, successful callback, stop and error health reports using a fresh watcher UUID. Health requests have a five-second timeout, including the final report after cancellation; reporting failure stops the watcher without hiding an earlier API/callback failure.
 `--timeout` still bounds each API request independently of the watch window.
-API or callback timeouts that occur before window expiry are operational failures.
-Authentication/API failures and callback errors stop the watcher with nonzero
-exit; investigate before restarting. Already received HTTP errors and observed
+A read or health report that the server does not answer (a timeout, a connection
+failure, HTTP 5xx or 429) is one skipped poll: the watcher tries again at the next
+interval with the same watcher UUID, so its health turns to running again by itself
+after an app restart. The result reports `skippedPolls` when there were any. After
+five minutes without an answer it stops with that error. A refusal the server did
+answer (authentication, permission, a changed binding) and callback errors or
+timeouts stop the watcher with nonzero exit at once; investigate before restarting. Already received HTTP errors and observed
 nonzero adapter exits or unexpected termination signals remain failures even when
 cancellation coincides; the watcher's own cancellation kill is not a callback
 failure. Only one watcher should serve an agent/session.

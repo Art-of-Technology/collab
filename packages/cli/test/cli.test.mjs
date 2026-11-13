@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import { aclFailureKind, windowsAcl } from '../src/windows-acl.mjs';
 import { commands } from '../src/commands.mjs';
 import { watchInbox } from '../src/inbox-watch.mjs';
+import { CliError } from '../src/client.mjs';
 
 const bin = fileURLToPath(new URL('../bin/collab.mjs', import.meta.url));
 const executable = process.env.COLLAB_CLI_EXECUTABLE;
@@ -566,6 +567,84 @@ test('watcher reports a bounded fallback for code-less failures and preserves th
   ]);
 });
 
+// A deploy takes the app away for a few seconds. The watcher used to exit on the first 502, and the
+// server then refused a replacement for five minutes while still showing the dead one as running.
+test('inbox watch rides through a server that is away and keeps the same watcher', async () => {
+  const away = code => new CliError(code, 'synthetic', 5);
+  const controller = new AbortController(), events = [];
+  // One entry per poll: what the claimed read, the unseen read and the poll heartbeat do.
+  const polls = [
+    {},
+    { claimed: away('server_error') },
+    { unseen: away('transport_failed') },
+    { heartbeat: away('outcome_unknown') },
+    { claimed: away('rate_limited') },
+    { work: true },
+  ];
+  let poll = 0;
+  const result = await watchInbox({
+    read: async state => {
+      const now = polls[state === 'claimed' ? poll : poll - 1];
+      if (state === 'claimed') poll++;
+      if (now[state]) throw now[state];
+      return { items: state === 'unseen' && now.work ? [{ id: 'work', status: 'open' }] : [], hasMore: false };
+    },
+    report: async event => {
+      events.push(event);
+      if (event === 'poll' && polls[poll - 1].heartbeat) throw polls[poll - 1].heartbeat;
+      if (event === 'wake') controller.abort();
+    },
+    callback: process.execPath, callbackArgs: ['-e', 'process.stdin.resume()'],
+    agent: 'worker', workspaceId: 'w', origin: 'http://localhost', durationMs: 20000, intervalMs: 1, callbackTimeoutMs: 5000, signal: controller.signal,
+  });
+  assert.deepEqual([result.callbacks, result.skippedPolls, result.stopped, result.healthReported], [1, 4, true, true]);
+  // Started once: the watcher that was running before the outage is the one running after it.
+  assert.deepEqual(events, ['started', 'poll', 'poll', 'poll', 'wake', 'stopped']);
+});
+
+test('inbox watch repeats a start the server did not answer, and still stops on a refusal', async () => {
+  const controller = new AbortController(), events = [];
+  const started = await watchInbox({
+    read: async () => ({ items: [], hasMore: false }),
+    report: async event => {
+      events.push(event);
+      if (events.length === 1) throw new CliError('outcome_unknown', 'synthetic', 5);
+      if (event === 'poll') controller.abort();
+    },
+    callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+    durationMs: 20000, intervalMs: 1, callbackTimeoutMs: 100, signal: controller.signal,
+  });
+  assert.deepEqual([events, started.skippedPolls, started.healthReported], [['started', 'started', 'poll', 'stopped'], 1, true]);
+
+  // A refusal is an answer: a changed binding, a missing permission or a bad response end the watcher at once.
+  for (const code of ['conflict', 'unauthorized', 'forbidden', 'invalid_response']) {
+    const refused = new CliError(code, 'synthetic', 5), seen = [];
+    let reads = 0;
+    await assert.rejects(watchInbox({
+      read: async () => { reads++; throw refused; },
+      report: async (event, _signal, errorCode) => { seen.push([event, errorCode]); },
+      callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+      durationMs: 20000, intervalMs: 1, callbackTimeoutMs: 100,
+    }), error => error === refused);
+    assert.deepEqual([reads, seen], [1, [['started', undefined], ['error', code]]], code);
+  }
+});
+
+test('inbox watch gives up when the server stays away longer than it tolerates', async () => {
+  const gone = new CliError('server_error', 'synthetic', 5), events = [];
+  let reads = 0;
+  const started = Date.now();
+  await assert.rejects(watchInbox({
+    read: async () => { reads++; throw gone; },
+    report: async (event, _signal, errorCode) => { events.push([event, errorCode]); },
+    callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+    durationMs: 20000, intervalMs: 5, callbackTimeoutMs: 100, outageMs: 60,
+  }), error => error === gone);
+  assert.ok(reads > 1, 'it tried again before giving up');
+  assert.ok(Date.now() - started >= 60, 'it waited out the tolerated outage');
+  assert.deepEqual(events, [['started', undefined], ['error', 'server_error']]);
+});
+
 test('agent commands stop on permission or claim conflict errors without retry', async t => {
   const f = await fixture(t, (_req, res) => { res.statusCode = 409; res.end('{"error":"conflict"}'); });
   assert.notEqual((await f.run(['handoffs', 'claim', 'handoff-one', '--agent', 'reviewer'])).code, 0);
@@ -650,16 +729,11 @@ test('inbox watch distinguishes window expiry from API timeouts in both queues a
       });
       const start = Date.now();
       const result = await f.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath,
-        '--watch-seconds', expires ? '1' : '5', '--timeout', expires ? '120' : '1']);
-      if (expires) {
-        assert.equal(result.code, 0, result.stderr);
-        assert.deepEqual(result.data, { agent: 'worker', workspaceId: 'w', callbacks: 0, stopped: false, timedOut: true });
-      } else {
-        assert.equal(result.code, 5, result.stderr);
-        assert.equal(result.error.error, 'transport_failed');
-        assert.equal(result.stdout, '');
-      }
-      assert.ok(Date.now() - start < 3000, 'the first deadline must stop the read');
+        '--watch-seconds', expires ? '1' : '2', '--timeout', expires ? '120' : '1']);
+      // A read the server does not answer in time is one skipped poll, not the end of the watcher.
+      assert.equal(result.code, 0, result.stderr);
+      assert.deepEqual(result.data, { agent: 'worker', workspaceId: 'w', callbacks: 0, ...(!expires && { skippedPolls: 1 }), stopped: false, timedOut: true });
+      assert.ok(Date.now() - start < 4000, 'the first deadline must stop the read');
       assert.equal(f.calls.length, state === 'claimed' ? 1 : 2);
       assert.ok(f.calls.every(call => call.method === 'GET' && call.headers.authorization === 'Bearer synthetic-token'));
       assert.equal(existsSync(path.join(f.dir, 'default.json')), false);
