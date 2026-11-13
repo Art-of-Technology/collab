@@ -630,6 +630,40 @@ test('inbox watch repeats a start the server did not answer, and still stops on 
   }
 });
 
+test('inbox watch reconciles an uncertain start on shutdown', async () => {
+  for (const mode of ['lost-response', 'interrupted-start', 'window', 'refused']) {
+    const controller = new AbortController(), events = [];
+    const options = {
+      read: async () => { throw new Error('unexpected read'); },
+      report: async (event, signal) => {
+        events.push(event);
+        if (event !== 'started') return;
+        if (mode === 'window') {
+          await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }));
+          throw signal.reason;
+        }
+        if (mode === 'refused') throw new CliError('conflict', 'synthetic', 5);
+        if (mode === 'lost-response') {
+          setImmediate(() => controller.abort());
+          throw new CliError('outcome_unknown', 'synthetic', 5);
+        }
+        controller.abort();
+        throw signal.reason;
+      },
+      callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+      durationMs: mode === 'window' ? 20 : 20000, intervalMs: 100, callbackTimeoutMs: 100, signal: controller.signal,
+    };
+    if (mode === 'refused') {
+      await assert.rejects(watchInbox(options), { code: 'conflict' });
+      assert.deepEqual(events, ['started']);
+    } else {
+      const result = await watchInbox(options);
+      assert.equal(result.healthReported, false);
+      assert.deepEqual(events, ['started', 'stopped'], mode);
+    }
+  }
+});
+
 test('inbox watch gives up when the server stays away longer than it tolerates', async () => {
   const gone = new CliError('server_error', 'synthetic', 5), events = [];
   let reads = 0;

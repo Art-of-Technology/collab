@@ -46,11 +46,14 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
   const window = new AbortController();
   const timer = setTimeout(() => window.abort(), durationMs);
   const watchSignal = signal ? AbortSignal.any([signal, window.signal]) : window.signal;
-  let lastDelivery, deliveredAt = 0, callbacks = 0, failure, reportingStarted = false, skippedPolls = 0, awaySince;
+  let lastDelivery, deliveredAt = 0, callbacks = 0, failure, reportingStarted = false, startUncertain = false, skippedPolls = 0, awaySince;
   try {
     while (!watchSignal.aborted) {
       try {
-        if (report && !reportingStarted) { await report('started', watchSignal); reportingStarted = true; }
+        if (report && !reportingStarted) {
+          try { await report('started', watchSignal); reportingStarted = true; }
+          catch (error) { if (error?.code === 'outcome_unknown' || (watchSignal.aborted && (error === watchSignal.reason || error?.cause === watchSignal.reason))) startUncertain = true; throw error; }
+        }
         const claimed = queue(await read('claimed', watchSignal));
         watchSignal.throwIfAborted();
         const unseen = queue(await read('unseen', watchSignal));
@@ -82,7 +85,7 @@ export async function watchInbox({ read, callback, callbackArgs, agent, workspac
     if (!watchSignal.aborted || (error !== watchSignal.reason && error.cause !== watchSignal.reason)) { failure = error; throw error; }
   } finally {
     clearTimeout(timer);
-    if (reportingStarted) {
+    if (reportingStarted || startUncertain) {
       try { await report(failure ? 'error' : 'stopped', undefined, failure ? (typeof failure.code === 'string' && /^[a-z_]{1,64}$/.test(failure.code) ? failure.code : 'watcher_failed') : undefined); }
       catch (error) { if (!failure) throw error; } // Preserve the original API/callback failure.
     }
