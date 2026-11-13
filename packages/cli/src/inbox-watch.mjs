@@ -37,41 +37,76 @@ function queue(result) {
   return { items: result.items.map(({ id, status }) => ({ id, status })), hasMore: result.hasMore };
 }
 
+// The server being away for a moment: unreachable, answering 5xx, or throttling. The watcher's only
+// write is its heartbeat, and repeating one changes nothing, so a heartbeat whose answer never came
+// or was a 5xx counts too. A heartbeat that was answered with something unreadable does not: that
+// error carries the status it was answered with.
+const serverAway = error => ['transport_failed', 'rate_limited'].includes(error?.code) ||
+  (error?.code === 'server_error' && error.details?.status >= 500) ||
+  (error?.code === 'outcome_unknown' && !(error.details?.status < 500));
+
 export async function watchInbox({ read, callback, callbackArgs, agent, workspaceId, origin,
-  durationMs, intervalMs, callbackTimeoutMs, signal, report }) {
+  durationMs, intervalMs, callbackTimeoutMs, signal, report, outageMs = 300000 }) {
   const window = new AbortController();
   const timer = setTimeout(() => window.abort(), durationMs);
   const watchSignal = signal ? AbortSignal.any([signal, window.signal]) : window.signal;
-  let lastDelivery, deliveredAt = 0, callbacks = 0, failure, reportingStarted = false;
+  let lastDelivery, deliveredAt = 0, callbacks = 0, failure, skippedPolls = 0, answered = Date.now();
+  // Does the server know this watcher? 'perhaps' is a start whose answer never came.
+  let started = 'no';
+  // The app restarts on every deploy. While the server is away the watcher keeps trying, so it keeps
+  // its identity and its health recovers by itself. Five minutes after the last answered poll (when
+  // the server calls a watcher stale) it gives up.
+  const tolerated = error => serverAway(error) && Date.now() - answered < outageMs;
   try {
-    if (report) { await report('started', watchSignal); reportingStarted = true; }
     while (!watchSignal.aborted) {
-      const claimed = queue(await read('claimed', watchSignal));
-      watchSignal.throwIfAborted();
-      const unseen = queue(await read('unseen', watchSignal));
-      watchSignal.throwIfAborted();
-      await report?.('poll', watchSignal);
-      const payload = { version: 1, event: 'collab.inbox.pending', origin, workspaceId, agent, claimed, unseen };
-      const deliveryId = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
-      if (claimed.items.length || unseen.items.length) {
-        // Coalesce unchanged queues; remind once per minute until the agent drains them.
-        // No persisted ACK: restarting may repeat a notification, never lose queued work.
-        if (deliveryId !== lastDelivery || Date.now() - deliveredAt >= 60000) {
-          await deliverWake(callback, callbackArgs, { ...payload, deliveryId }, callbackTimeoutMs, watchSignal);
-          lastDelivery = deliveryId; deliveredAt = Date.now();
-          callbacks++; await report?.('wake', watchSignal);
+      try {
+        if (report && started !== 'yes') {
+          try { await report('started', watchSignal); started = 'yes'; }
+          catch (error) { if (error?.code === 'outcome_unknown' || watchSignal.aborted) started = 'perhaps'; throw error; }
         }
-      } else lastDelivery = undefined;
+        const claimed = queue(await read('claimed', watchSignal));
+        watchSignal.throwIfAborted();
+        const unseen = queue(await read('unseen', watchSignal));
+        watchSignal.throwIfAborted();
+        await report?.('poll', watchSignal);
+        answered = Date.now();
+        const payload = { version: 1, event: 'collab.inbox.pending', origin, workspaceId, agent, claimed, unseen };
+        const deliveryId = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+        if (claimed.items.length || unseen.items.length) {
+          // Coalesce unchanged queues; remind once per minute until the agent drains them.
+          // No persisted ACK: restarting may repeat a notification, never lose queued work.
+          if (deliveryId !== lastDelivery || Date.now() - deliveredAt >= 60000) {
+            await deliverWake(callback, callbackArgs, { ...payload, deliveryId }, callbackTimeoutMs, watchSignal);
+            lastDelivery = deliveryId; deliveredAt = Date.now();
+            callbacks++; await report?.('wake', watchSignal);
+          }
+        } else lastDelivery = undefined;
+      } catch (error) {
+        if (watchSignal.aborted || !tolerated(error)) throw error;
+        skippedPolls++; // This poll is skipped; the next one tries again.
+      }
       await delay(intervalMs, undefined, { signal: watchSignal });
     }
   } catch (error) {
     if (!watchSignal.aborted || (error !== watchSignal.reason && error.cause !== watchSignal.reason)) { failure = error; throw error; }
   } finally {
     clearTimeout(timer);
-    if (reportingStarted) {
-      try { await report(failure ? 'error' : 'stopped', undefined, failure ? (typeof failure.code === 'string' && /^[a-z_]{1,64}$/.test(failure.code) ? failure.code : 'watcher_failed') : undefined); }
-      catch (error) { if (!failure) throw error; } // Preserve the original API/callback failure.
+    while (started !== 'no') {
+      try {
+        await report(failure ? 'error' : 'stopped', undefined, failure ? (typeof failure.code === 'string' && /^[a-z_]{1,64}$/.test(failure.code) ? failure.code : 'watcher_failed') : undefined);
+        break;
+      } catch (error) {
+        // The window can end while the server is away. Without this last report the server keeps
+        // showing the watcher as running and refuses the next one, so an orderly end repeats it like
+        // a poll. A watcher that is ending on a failure reports once and goes.
+        if (!failure && tolerated(error)) { await delay(intervalMs); continue; }
+        // A start the server never saw has nothing to stop, so its refusal of this report is expected;
+        // a server that stayed away is not. (A start still in flight can land after this report:
+        // that record then turns stale by itself.)
+        if (!failure && (started === 'yes' || serverAway(error))) throw error;
+        break; // Preserve the original API/callback failure.
+      }
     }
   }
-  return { agent, workspaceId, callbacks, ...(report && { healthReported: reportingStarted }), stopped: watchSignal.reason === signal?.reason, timedOut: watchSignal.reason === window.signal.reason };
+  return { agent, workspaceId, callbacks, ...(skippedPolls && { skippedPolls }), ...(report && { healthReported: started === 'yes' }), stopped: watchSignal.reason === signal?.reason, timedOut: watchSignal.reason === window.signal.reason };
 }

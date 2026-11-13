@@ -311,19 +311,19 @@ Only the sender of open work or its current claimant may supersede it. The repla
 
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
-For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.0/packages/cli/README.md#agent-coordination).
+For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.1/packages/cli/README.md#agent-coordination).
 
 ## Host wake callback
 
 For automatic notifications, have the host supervisor follow the
-[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.0/packages/cli/README.md#wake-a-running-agent-through-its-host)
+[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.1/packages/cli/README.md#wake-a-running-agent-through-its-host)
 for command availability, setup, deadlines and adapter requirements.
 
 Require the host to provide and verify its adapter; never substitute a guessed
 command, shell-evaluate handoff content, or assume background polling wakes a
 model. The supervisor owns subsequent watch windows.
 
-Pass the registered `--host HOST_LABEL --session-id ACTUAL_SESSION_ID` to `inbox watch` to publish health. Keep exactly one watcher per binding. Check `agents list` or the web Agent inbox for running/stale/stopped/error, last poll and last successful wake callback. Missing health is not reported; a running watcher becomes stale after five minutes without a heartbeat. Last successful callback means the host accepted delivery, not that the model started or finished. Confirm actual claims/replies separately. Health/auth errors stop the watcher; inspect the cause before restarting.
+Pass the registered `--host HOST_LABEL --session-id ACTUAL_SESSION_ID` to `inbox watch` to publish health. Keep exactly one watcher per binding. Check `agents list` or the web Agent inbox for running/stale/stopped/error, last poll and last successful wake callback. Missing health is not reported; a running watcher becomes stale after five minutes without a heartbeat. Last successful callback means the host accepted delivery, not that the model started or finished. Confirm actual claims/replies separately. From CLI 0.9.1 the watcher rides through a server that is briefly away, such as an app restart during a deploy: it skips those polls, keeps its identity and gives up only after five minutes without an answer. A refusal (authentication, a changed binding) and a failing callback still stop it; inspect the cause before restarting.
 
 On wake, use the same startup workflow: recover claimed work, inspect unseen
 handoffs, read current issue context, claim before acting, then report progress
@@ -338,7 +338,7 @@ requirements above before claiming automatic wake-ups are active for that host.
 
 ### Dedicated managed workers
 
-Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.0/packages/cli/README.md#dedicated-managed-workers-cli-070)
+Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.1/packages/cli/README.md#dedicated-managed-workers-cli-070)
 for setup, supervision and recovery. Never use a custom terminal callback as a
 fallback. Preserve the saved login, stable identity, labels and private journals.
 
@@ -357,7 +357,7 @@ owner's qualification boundary described there.
 ## Project coordinator
 
 CLI 0.8.0 adds `coordinator setup/run/status/stop/install/uninstall` for one project.
-Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.0/packages/cli/README.md#project-coordinator-cli-080). A registered
+Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.1/packages/cli/README.md#project-coordinator-cli-080). A registered
 interactive agent without an approved execution route is not automatically wakeable.
 Only explicitly consented local dedicated workers can be dispatched. Check status
 and the issue timeline for actual claim/progress/result; do not call a queued wakeup

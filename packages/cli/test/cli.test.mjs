@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import { aclFailureKind, windowsAcl } from '../src/windows-acl.mjs';
 import { commands } from '../src/commands.mjs';
 import { watchInbox } from '../src/inbox-watch.mjs';
+import { CliError } from '../src/client.mjs';
 
 const bin = fileURLToPath(new URL('../bin/collab.mjs', import.meta.url));
 const executable = process.env.COLLAB_CLI_EXECUTABLE;
@@ -566,6 +567,235 @@ test('watcher reports a bounded fallback for code-less failures and preserves th
   ]);
 });
 
+// A deploy takes the app away for a few seconds. The watcher used to exit on the first 502, and the
+// server then refused a replacement for five minutes while still showing the dead one as running.
+test('inbox watch rides through a server that is away and keeps the same watcher', async () => {
+  const away = code => new CliError(code, 'synthetic', 5, code === 'server_error' ? { status: 502 } : undefined);
+  const controller = new AbortController(), events = [];
+  // One entry per poll: what the claimed read, the unseen read and the poll heartbeat do.
+  const polls = [
+    {},
+    { claimed: away('server_error') },
+    { unseen: away('transport_failed') },
+    { heartbeat: away('outcome_unknown') },
+    { claimed: away('rate_limited') },
+    { work: true },
+  ];
+  let poll = 0;
+  const result = await watchInbox({
+    read: async state => {
+      const now = polls[state === 'claimed' ? poll : poll - 1];
+      if (state === 'claimed') poll++;
+      if (now[state]) throw now[state];
+      return { items: state === 'unseen' && now.work ? [{ id: 'work', status: 'open' }] : [], hasMore: false };
+    },
+    report: async event => {
+      events.push(event);
+      if (event === 'poll' && polls[poll - 1].heartbeat) throw polls[poll - 1].heartbeat;
+      if (event === 'wake') controller.abort();
+    },
+    callback: process.execPath, callbackArgs: ['-e', 'process.stdin.resume()'],
+    agent: 'worker', workspaceId: 'w', origin: 'http://localhost', durationMs: 20000, intervalMs: 1, callbackTimeoutMs: 5000, signal: controller.signal,
+  });
+  assert.deepEqual([result.callbacks, result.skippedPolls, result.stopped, result.healthReported], [1, 4, true, true]);
+  // Started once: the watcher that was running before the outage is the one running after it.
+  assert.deepEqual(events, ['started', 'poll', 'poll', 'poll', 'wake', 'stopped']);
+});
+
+test('inbox watch repeats a start the server did not answer, and still stops on a refusal', async () => {
+  const controller = new AbortController(), events = [];
+  const started = await watchInbox({
+    read: async () => ({ items: [], hasMore: false }),
+    report: async event => {
+      events.push(event);
+      if (events.length === 1) throw new CliError('outcome_unknown', 'synthetic', 5);
+      if (event === 'poll') controller.abort();
+    },
+    callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+    durationMs: 20000, intervalMs: 1, callbackTimeoutMs: 100, signal: controller.signal,
+  });
+  assert.deepEqual([events, started.skippedPolls, started.healthReported], [['started', 'started', 'poll', 'stopped'], 1, true]);
+
+  // A refusal is an answer: a changed binding, a missing permission or a bad response end the watcher at once.
+  for (const code of ['conflict', 'unauthorized', 'forbidden', 'invalid_response']) {
+    const refused = new CliError(code, 'synthetic', 5), seen = [];
+    let reads = 0;
+    await assert.rejects(watchInbox({
+      read: async () => { reads++; throw refused; },
+      report: async (event, _signal, errorCode) => { seen.push([event, errorCode]); },
+      callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+      durationMs: 20000, intervalMs: 1, callbackTimeoutMs: 100,
+    }), error => error === refused);
+    assert.deepEqual([reads, seen], [1, [['started', undefined], ['error', code]]], code);
+  }
+});
+
+test('inbox watch reconciles an uncertain start on shutdown', async () => {
+  for (const mode of ['lost-response', 'interrupted-start', 'window', 'refused']) {
+    const controller = new AbortController(), events = [];
+    const options = {
+      read: async () => { throw new Error('unexpected read'); },
+      report: async (event, signal) => {
+        events.push(event);
+        if (event !== 'started') return;
+        if (mode === 'window') {
+          await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }));
+          throw signal.reason;
+        }
+        if (mode === 'refused') throw new CliError('conflict', 'synthetic', 5);
+        if (mode === 'lost-response') {
+          setImmediate(() => controller.abort());
+          throw new CliError('outcome_unknown', 'synthetic', 5);
+        }
+        controller.abort();
+        throw signal.reason;
+      },
+      callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+      durationMs: mode === 'window' ? 20 : 20000, intervalMs: 100, callbackTimeoutMs: 100, signal: controller.signal,
+    };
+    if (mode === 'refused') {
+      await assert.rejects(watchInbox(options), { code: 'conflict' });
+      assert.deepEqual(events, ['started']);
+    } else {
+      const result = await watchInbox(options);
+      assert.equal(result.healthReported, false);
+      assert.deepEqual(events, ['started', 'stopped'], mode);
+    }
+  }
+  // A start the server never saw has nothing to stop: the refusal of that last report is not a failure.
+  const controller = new AbortController(), events = [];
+  const result = await watchInbox({
+    read: async () => { throw new Error('unexpected read'); },
+    report: async event => {
+      events.push(event);
+      if (event === 'stopped') throw new CliError('conflict', 'synthetic', 5, { status: 409 });
+      setImmediate(() => controller.abort());
+      throw new CliError('outcome_unknown', 'synthetic', 5);
+    },
+    callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+    durationMs: 20000, intervalMs: 100, callbackTimeoutMs: 100, signal: controller.signal,
+  });
+  assert.deepEqual([events, result.healthReported, result.stopped], [['started', 'stopped'], false, true]);
+
+  // But a server that stays away past the tolerated outage is an error here too: it may have recorded
+  // the start, and nobody could tell it that the watcher is gone.
+  const away = new CliError('outcome_unknown', 'synthetic', 5, { status: 502 }), stop = new AbortController(), reports = [];
+  await assert.rejects(watchInbox({
+    read: async () => { throw new Error('unexpected read'); },
+    report: async event => { reports.push(event); if (event === 'started') setImmediate(() => stop.abort()); throw away; },
+    callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+    durationMs: 20000, intervalMs: 5, callbackTimeoutMs: 100, signal: stop.signal, outageMs: 40,
+  }), error => error === away);
+  assert.ok(reports.filter(event => event === 'stopped').length > 1, 'the last report was repeated before giving up');
+});
+
+test('inbox watch gives up when the server stays away longer than it tolerates', async () => {
+  const gone = new CliError('server_error', 'synthetic', 5, { status: 502 }), events = [];
+  let reads = 0;
+  const started = Date.now();
+  await assert.rejects(watchInbox({
+    read: async () => { reads++; throw gone; },
+    report: async (event, _signal, errorCode) => { events.push([event, errorCode]); },
+    callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+    durationMs: 20000, intervalMs: 5, callbackTimeoutMs: 100, outageMs: 60,
+  }), error => error === gone);
+  assert.ok(reads > 1, 'it tried again before giving up');
+  assert.ok(Date.now() - started >= 60, 'it waited out the tolerated outage');
+  assert.deepEqual(events, [['started', undefined], ['error', 'server_error']]);
+});
+
+test('inbox watch does not retry an answered 4xx server error', async () => {
+  for (const stage of ['started', 'claimed', 'unseen', 'poll', 'wake', 'stopped']) {
+    const controller = new AbortController(), events = [];
+    const refused = new CliError('server_error', 'synthetic', 5, { status: 413 });
+    await assert.rejects(watchInbox({
+      read: async state => {
+        events.push(state);
+        if (state === stage) throw refused;
+        return { items: stage === 'wake' && state === 'unseen' ? [{ id: 'work', status: 'open' }] : [], hasMore: false };
+      },
+      report: async event => {
+        events.push(event);
+        if (event === stage) throw refused;
+        if (event === 'poll' && stage === 'stopped') controller.abort();
+      },
+      callback: process.execPath, callbackArgs: ['-e', 'process.stdin.resume()'],
+      agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+      durationMs: 20000, intervalMs: 1, callbackTimeoutMs: 5000, signal: controller.signal,
+    }), error => error === refused);
+    assert.equal(events.filter(event => event === stage).length, 1, stage);
+  }
+});
+
+test('inbox watch says goodbye when the server is back, so the next watcher is not refused', async () => {
+  const away = new CliError('outcome_unknown', 'synthetic', 5, { status: 502 });
+  const run = (goodbye, extra = {}) => {
+    const controller = new AbortController(), events = [];
+    return watchInbox({
+      read: async () => ({ items: [], hasMore: false }),
+      report: async event => {
+        events.push(event);
+        if (event === 'poll') controller.abort();
+        if (event === 'stopped') return goodbye(events.filter(e => e === 'stopped').length);
+      },
+      callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+      durationMs: 20000, intervalMs: 1, callbackTimeoutMs: 100, signal: controller.signal, ...extra,
+    }).then(result => ({ result, events }), error => ({ error, events }));
+  };
+  // The window ends during a restart: the last report is repeated until it is answered.
+  const back = await run(attempt => { if (attempt < 3) throw away; });
+  assert.deepEqual([back.events, back.result.stopped], [['started', 'poll', 'stopped', 'stopped', 'stopped'], true]);
+  // Not for ever: past the tolerated outage the watcher ends with that error.
+  const gone = await run(() => { throw away; }, { outageMs: 40, intervalMs: 5 });
+  assert.equal(gone.error, away);
+  assert.ok(gone.events.filter(e => e === 'stopped').length > 1);
+  // A refusal of the goodbye is an answer and is not repeated.
+  const refused = new CliError('conflict', 'synthetic', 5, { status: 409 });
+  const changed = await run(() => { throw refused; });
+  assert.deepEqual([changed.error, changed.events], [refused, ['started', 'poll', 'stopped']]);
+});
+
+test('inbox watch counts an outage from the last poll the server answered', async () => {
+  const controller = new AbortController();
+  let reads = 0;
+  const result = await watchInbox({
+    read: async state => {
+      if (state === 'unseen') return { items: [], hasMore: false };
+      reads++;
+      // The first poll is answered only after the tolerated outage has passed since the watcher started.
+      if (reads === 1) await new Promise(resolve => setTimeout(resolve, 300));
+      if (reads === 2) throw new CliError('server_error', 'synthetic', 5, { status: 502 });
+      if (reads === 3) controller.abort();
+      return { items: [], hasMore: false };
+    },
+    callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+    durationMs: 20000, intervalMs: 1, callbackTimeoutMs: 100, signal: controller.signal, outageMs: 200,
+  });
+  assert.deepEqual([reads, result.skippedPolls, result.stopped], [3, 1, true]);
+});
+
+test('a bound watcher stops at once when what answers is not Collab', async t => {
+  // A proxy page or a wrong origin answers 200 with HTML. That is an answer, not an outage.
+  const page = await fixture(t, (_req, res) => { res.setHeader('content-type', 'text/html'); res.end('<html>maintenance</html>'); });
+  const result = await page.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--host', 'my-pc', '--session-id', 'session-1',
+    '--callback', process.execPath, '--watch-seconds', '5']);
+  assert.notEqual(result.code, 0);
+  assert.deepEqual([result.error.error, result.error.status], ['outcome_unknown', 200]);
+  assert.deepEqual(page.calls.map(call => [call.method, call.method === 'POST' && JSON.parse(call.body).event]), [['POST', 'started'], ['POST', 'error']]);
+});
+
+test('inbox watch treats an unreadable answer to its heartbeat as a refusal', async () => {
+  // The client reports a heartbeat answered with something that is not JSON as outcome_unknown with the status it came with.
+  const unreadable = new CliError('outcome_unknown', 'synthetic', 5, { status: 200 }), events = [];
+  await assert.rejects(watchInbox({
+    read: async () => ({ items: [], hasMore: false }),
+    report: async (event, _signal, errorCode) => { events.push([event, errorCode]); if (event === 'poll') throw unreadable; },
+    callback: process.execPath, callbackArgs: [], agent: 'worker', workspaceId: 'w', origin: 'http://localhost',
+    durationMs: 20000, intervalMs: 1, callbackTimeoutMs: 100,
+  }), error => error === unreadable);
+  assert.deepEqual(events, [['started', undefined], ['poll', undefined], ['error', 'outcome_unknown']]);
+});
+
 test('agent commands stop on permission or claim conflict errors without retry', async t => {
   const f = await fixture(t, (_req, res) => { res.statusCode = 409; res.end('{"error":"conflict"}'); });
   assert.notEqual((await f.run(['handoffs', 'claim', 'handoff-one', '--agent', 'reviewer'])).code, 0);
@@ -650,16 +880,11 @@ test('inbox watch distinguishes window expiry from API timeouts in both queues a
       });
       const start = Date.now();
       const result = await f.run(['inbox', 'watch', '--agent', 'worker', '--workspace', 'w', '--callback', process.execPath,
-        '--watch-seconds', expires ? '1' : '5', '--timeout', expires ? '120' : '1']);
-      if (expires) {
-        assert.equal(result.code, 0, result.stderr);
-        assert.deepEqual(result.data, { agent: 'worker', workspaceId: 'w', callbacks: 0, stopped: false, timedOut: true });
-      } else {
-        assert.equal(result.code, 5, result.stderr);
-        assert.equal(result.error.error, 'transport_failed');
-        assert.equal(result.stdout, '');
-      }
-      assert.ok(Date.now() - start < 3000, 'the first deadline must stop the read');
+        '--watch-seconds', expires ? '1' : '2', '--timeout', expires ? '120' : '1']);
+      // A read the server does not answer in time is one skipped poll, not the end of the watcher.
+      assert.equal(result.code, 0, result.stderr);
+      assert.deepEqual(result.data, { agent: 'worker', workspaceId: 'w', callbacks: 0, ...(!expires && { skippedPolls: 1 }), stopped: false, timedOut: true });
+      assert.ok(Date.now() - start < 4000, 'the first deadline must stop the read');
       assert.equal(f.calls.length, state === 'claimed' ? 1 : 2);
       assert.ok(f.calls.every(call => call.method === 'GET' && call.headers.authorization === 'Bearer synthetic-token'));
       assert.equal(existsSync(path.join(f.dir, 'default.json')), false);
