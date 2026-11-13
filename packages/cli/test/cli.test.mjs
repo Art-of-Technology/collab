@@ -1567,7 +1567,17 @@ test('agent retirement stops when the server refuses the preview or answers for 
   assert.equal(refused.error.error, 'conflict');
   assert.deepEqual(blocked.calls.map(call => call.method), ['GET']);
   const answer = { ...retirePreview, id: 'registration-one' };
-  for (const wrong of [{ ...answer, agent: 'another' }, { ...answer, id: undefined }, { ...answer, released: 'all' }, { ...answer, releasedHidden: 'some' }, { ...answer, unowned: { count: 'many', handoffs: [] } }]) {
+  for (const wrong of [
+    { ...answer, agent: 'another' }, { ...answer, id: undefined }, { ...answer, released: 'all' },
+    { ...answer, releasedHidden: 'some' }, { ...answer, releasedHidden: -1 },
+    { ...answer, unowned: { count: 'many', handoffs: [] } }, { ...answer, unowned: { count: -1, handoffs: [] } },
+    { ...answer, unowned: { count: 0, handoffs: answer.unowned.handoffs } },
+    { ...answer, unowned: { count: 21, handoffs: Array(21).fill(answer.unowned.handoffs[0]) } },
+    ...['released', 'unowned'].flatMap(field => ['id', 'issueKey'].map(key => {
+      const row = { id: 'handoff-one', issueKey: 'APP-1', [key]: '' };
+      return field === 'released' ? { ...answer, released: [row] } : { ...answer, unowned: { count: 1, handoffs: [row] } };
+    })),
+  ]) {
     const other = await fixture(t, (_req, res) => res.end(JSON.stringify(wrong)));
     const mismatched = await other.run(['agents', 'retire', '--agent', 'old-agent', '--workspace', 'workspace-one', '--yes']);
     assert.equal(mismatched.error.error, 'invalid_preview');

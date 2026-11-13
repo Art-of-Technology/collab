@@ -324,9 +324,10 @@ async function main() {
     } else if (name === 'agents retire') {
       // Name what goes back to open and what stays unowned before anything is removed.
       const found = await request(selected.base, `/api/apps/auth/agents/delete-preview?${query}`, { token: selected.token, timeout });
-      const rows = list => Array.isArray(list) && list.every(row => typeof row?.id === 'string' && typeof row.issueKey === 'string');
+      const rows = list => Array.isArray(list) && list.every(row => typeof row?.id === 'string' && row.id.length > 0 && typeof row.issueKey === 'string' && row.issueKey.length > 0);
       if (found?.agent !== options.agent || typeof found.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(found.id) || !rows(found.released) ||
-          !Number.isSafeInteger(found.releasedHidden) || !Number.isSafeInteger(found.unowned?.count) || !rows(found.unowned.handoffs)) {
+          !Number.isSafeInteger(found.releasedHidden) || found.releasedHidden < 0 || !Number.isSafeInteger(found.unowned?.count) || found.unowned.count < 0 ||
+          !rows(found.unowned.handoffs) || found.unowned.handoffs.length > 20 || found.unowned.handoffs.length > found.unowned.count) {
         throw new CliError('invalid_preview', 'Retire preview did not match the requested agent. Nothing was changed.', 5);
       }
       const keys = list => list.map(({ id, issueKey }) => ({ id, issueKey }));
