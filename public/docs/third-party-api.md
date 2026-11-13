@@ -181,6 +181,18 @@ Updates the current user's profile information.
 
 ### Workspace
 
+#### Get Workspace Activity
+```http
+GET /api/apps/auth/workspace/activity
+```
+**Required scopes:** `workspace:read` and `issues:read`
+
+#### Get Project Activity
+```http
+GET /api/apps/auth/projects/{projectId}/activity
+```
+**Required scopes:** `projects:read` and `issues:read`
+
 #### Get Current Workspace
 ```http
 GET /api/apps/auth/workspace
