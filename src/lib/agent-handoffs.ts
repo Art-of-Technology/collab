@@ -286,8 +286,10 @@ export async function retireAgent(context: AppAuthContext, agentName: unknown, p
       rows.map(row => ({ id: row.id, issueKey: row.issue.issueKey || row.issue.id }));
     const visibleClaimed = await db.agentHandoff.findMany({ where: { id: { in: claimed.map(row => row.id) }, issue: issueScope(context) },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true, issue: { select: { id: true, issueKey: true } } } });
+    // The count and the examples are two statements, and a handoff can arrive between them: the count
+    // is never smaller than what is listed.
     const summary = { agent: agent.name, id: agent.id, released: listed(visibleClaimed), releasedHidden: claimed.length - visibleClaimed.length,
-      unowned: { count: unowned, handoffs: listed(examples) } };
+      unowned: { count: Math.max(unowned, examples.length), handoffs: listed(examples) } };
     if (preview) return summary;
     for (const handoff of claimed) {
       const changed = await db.agentHandoff.updateMany({ where: { id: handoff.id, status: 'claimed', claimedById: agent.id }, data: { status: 'open', claimedById: null } });
