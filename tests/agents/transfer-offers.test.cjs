@@ -396,6 +396,7 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     assert.equal((await parent(row)).status, 'claimed');
     const results = await Promise.all([act(bob, pending, 'bob', 'accept'), act(bob, pending, 'bob', 'accept')]);
     assert.equal(results[0].handoff.id, results[1].handoff.id);
+    for (const result of results) assert.equal(Object.hasOwn(result.handoff, 'claimedOnce'), false);
     assert.equal((await parent(row)).status, 'completed');
     assert.equal(results[0].handoff.status, 'claimed');
     assert.equal(results[0].handoff.claimedById, (await prisma.agentRegistration.findUnique({ where: { workspaceId_name: { workspaceId: 'w', name: 'bob' } } })).id);
@@ -592,6 +593,7 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
       const bobRegistration = await prisma.agentRegistration.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId: 'w', name: 'bob' } } });
       assert.equal(successor.afterId, handoff.id);
       assert.equal(successor.status, 'claimed'); assert.equal(successor.claimedById, bobRegistration.id);
+      assert.equal(successor.claimedOnce, true, 'a successor is created claimed, and says so durably');
       assert.equal(await prisma.agentHandoff.count({ where: { afterId: handoff.id, status: 'claimed' } }), 1);
     } finally {
       if (server.listening) await new Promise(resolveClose => server.close(resolveClose));

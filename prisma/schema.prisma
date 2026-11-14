@@ -2857,6 +2857,7 @@ model AgentHandoff {
   supersededById String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  claimedOnce    Boolean? // Whether it was ever claimed; null is unknown (older than this column) and counts as claimed
   workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   issue          Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
   sender         AgentRegistration? @relation("AgentSender", fields: [senderId], references: [id], onDelete: SetNull)
