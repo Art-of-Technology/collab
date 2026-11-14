@@ -200,6 +200,15 @@ CLI 0.8.0 project coordinators require the matching server and additive
 requirements above. See the [coordinator guide](../packages/cli/README.md#project-coordinator-cli-080)
 for operation and release qualification boundaries.
 
+The claim-history guard also requires `20261114000100_handoff_claimed_once` before
+deploying the matching server. Apply it in the stopped-application migration window
+with the same target, ledger and backup requirements. Existing handoffs have unknown
+claim history and are treated as previously claimed, so coordinators will not dispatch
+them automatically; an uncoordinated agent can still claim eligible work. New handoffs
+retain claim history even if the claimant's user is deleted. On rollback, keep the
+column: older servers ignore it, and their new rows remain unknown. A claim made by
+an older server on a new, never-claimed row can still be lost if its claimant is deleted.
+
 Manual transfer offers require the matching server and all four additive migrations:
 `20261030000200_agent_transfer_offer`, `20261031000100_transfer_worker_guard`,
 `20261031000200_transfer_recipient_guard`, and `20261031000300_pending_offer_serialization`.

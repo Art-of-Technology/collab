@@ -618,7 +618,8 @@ using their existing
 claim, generation fence, journal, tool restrictions and budget. It does not inject
 messages into an interactive terminal or turn a registration into a running agent.
 The matching server and [coordinator migration](../../docs/agent-handoffs.md#validation-and-rollout)
-must be installed first. Installation of the CLI alone starts nothing.
+must be installed first. See that reference for how unknown claim history affects
+automatic dispatch. Installation of the CLI alone starts nothing.
 
 Set up a new coordinator identity with a stable host/session pair. Use your actual
 workspace/project IDs, a fresh UUID and a distinct worker name. Keep your existing
