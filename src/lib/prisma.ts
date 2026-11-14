@@ -4,7 +4,7 @@ import { issueVisibilityExtension } from './issue-visibility';
 
 // Credentials require an explicit select at the authentication/integration boundary.
 const options = {
-  omit: { user: { hashedPassword: true, githubAccessToken: true }, project: { coordinator: true } }
+  omit: { user: { hashedPassword: true, githubAccessToken: true }, project: { coordinator: true }, agentHandoff: { claimedOnce: true } }
 } as const;
 const globalForPrisma = global as unknown as { prisma: PrismaClient<typeof options> };
 

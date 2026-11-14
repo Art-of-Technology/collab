@@ -396,6 +396,7 @@ test('manual transfer offers preserve the original claim until acceptance', asyn
     assert.equal((await parent(row)).status, 'claimed');
     const results = await Promise.all([act(bob, pending, 'bob', 'accept'), act(bob, pending, 'bob', 'accept')]);
     assert.equal(results[0].handoff.id, results[1].handoff.id);
+    for (const result of results) assert.equal(Object.hasOwn(result.handoff, 'claimedOnce'), false);
     assert.equal((await parent(row)).status, 'completed');
     assert.equal(results[0].handoff.status, 'claimed');
     assert.equal(results[0].handoff.claimedById, (await prisma.agentRegistration.findUnique({ where: { workspaceId_name: { workspaceId: 'w', name: 'bob' } } })).id);

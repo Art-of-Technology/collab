@@ -168,7 +168,13 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   });
   const requestId = randomUUID(), handoff = await send({ requestId, requestAck: true });
   await t.test('one durable request fans out and a retry does not duplicate work or history', async () => {
-    assert.equal((await send({ requestId, requestAck: true })).id, handoff.id);
+    const retry = await send({ requestId, requestAck: true });
+    assert.equal(retry.id, handoff.id);
+    for (const row of [handoff, retry, (await service.getHandoff(alice, 'worker-a', handoff.id)).handoff,
+      (await inbox(alice, 'worker-a')).items[0], (await service.workspaceAgentInbox(alice, { state: 'unseen', limit: 50 })).items[0]]) {
+      assert.equal(Object.hasOwn(row, 'claimedOnce'), false);
+    }
+    assert.equal((await publicPrisma.agentHandoff.findUniqueOrThrow({ where: { id: handoff.id }, select: { claimedOnce: true } })).claimedOnce, false);
     await assert.rejects(send({ requestId, content: 'Different' }), e => e.code === 'request_conflict');
     assert.equal((await inbox(alice, 'worker-a')).items[0].id, handoff.id);
     assert.equal((await inbox(bob, 'worker-b')).items[0].id, handoff.id);
@@ -786,7 +792,9 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
 
     const fresh = await send({ toAgents: ['coordinated'], toLabels: [] });
     assert.equal(await marker(fresh), false, 'a new handoff is known to be unclaimed');
-    await claim(fresh);
+    const claimedFresh = await claim(fresh);
+    assert.equal(Object.hasOwn(claimedFresh, 'claimedOnce'), false);
+    assert.equal(Object.hasOwn(await claim(fresh), 'claimedOnce'), false);
     assert.equal(await marker(fresh), true);
     const current = await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } });
     await prisma.project.update({ where: { id: 'p-w' }, data: { coordinator: { ...current.coordinator, leaseUntil: new Date(0).toISOString() } } });
