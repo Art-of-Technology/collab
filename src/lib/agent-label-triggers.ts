@@ -26,7 +26,7 @@ export async function enqueueLabelHandoff(db: Prisma.TransactionClient, userId: 
   const content = `Subscribed labels were added to ${issue.issueKey || issue.id}. Read the current issue, comments and timeline; claim this handoff before working. Labels: ${routed.join(', ')}.`;
   const handoff = await db.agentHandoff.create({ data: {
     workspaceId: issue.workspaceId, issueId: issue.id, sourceKey: `labels:${randomUUID()}`,
-    kind: 'label_added', content, labelIds: routed, recipientNames: [],
+    kind: 'label_added', content, labelIds: routed, recipientNames: [], claimedOnce: false,
   } });
   await db.issueActivity.create({ data: {
     itemType: 'ISSUE', itemId: issue.id, workspaceId: issue.workspaceId, projectId: issue.projectId,

@@ -58,6 +58,12 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
   execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', userInfo().username, '-d', 'postgres'], { input: recipientGuard, stdio: ['pipe', 'pipe', 'pipe'] });
   const pendingGuard = readFileSync(resolve('prisma/migrations/20261031000300_pending_offer_serialization/migration.sql'), 'utf8');
   execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', userInfo().username, '-d', 'postgres'], { input: pendingGuard, stdio: ['pipe', 'pipe', 'pipe'] });
+  // A handoff from before the claim marker comes out of its migration as unknown, not as never claimed.
+  await prisma.$executeRawUnsafe(`INSERT INTO "AgentHandoff" (id, "workspaceId", "issueId", "sourceKey", content, "updatedAt") VALUES ('legacy-handoff', 'w', 'i-w', 'legacy-handoff', 'old', NOW())`);
+  const claimedOnceMigration = readFileSync(resolve('prisma/migrations/20261114000100_handoff_claimed_once/migration.sql'), 'utf8');
+  execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-U', userInfo().username, '-d', 'postgres'], { input: claimedOnceMigration, stdio: ['pipe', 'pipe', 'pipe'] });
+  assert.equal((await prisma.agentHandoff.findUniqueOrThrow({ where: { id: 'legacy-handoff' } })).claimedOnce, null);
+  await prisma.agentHandoff.delete({ where: { id: 'legacy-handoff' } });
   const legacy = await prisma.agentRegistration.findUniqueOrThrow({ where: { id: 'legacy-agent' } });
   assert.equal(legacy.host, null); assert.equal(legacy.sessionId, null); assert.equal(legacy.watcher, null);
   assert.equal(legacy.managedWorker, null, 'migration preserves existing agents as unmanaged');
@@ -547,7 +553,7 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     const events = await prisma.agentHandoff.findMany({ where: { issueId: 'label-issue' } });
     assert.equal(events.length, 1);
     const event = events[0];
-    assert.equal(event.kind, 'label_added');
+    assert.equal(event.kind, 'label_added'); assert.equal(event.claimedOnce, false);
     assert.equal((await inbox(alice, 'worker-a')).items.some(h => h.id === event.id), true);
     assert.equal((await inbox(bob, 'worker-b')).items.some(h => h.id === event.id), true);
     assert.equal((await inbox(outsider, 'outsider')).items.some(h => h.id === event.id), false);
@@ -752,14 +758,43 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     const afterRelease = await coordinator.coordinatorSnapshot(alice, 'p-w');
     assert.equal(afterRelease.items.find(item => item.id === released.id).previouslyClaimed, true);
     await assert.rejects(claim(released), e => e.code === 'coordinator_fenced');
+
+    // The proof that work was claimed outlives the user who claimed it: the timeline entry goes with its author.
+    await prisma.user.create({ data: { id: 'leaver', name: 'leaver' } });
+    await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: 'leaver' } });
+    const leaver = context('leaver');
+    await register(leaver, 'leaving-worker');
+    const orphaned = await send({ toAgents: ['leaving-worker', 'coordinated'], toLabels: [] });
+    await act(leaver, orphaned, 'leaving-worker', 'claim');
+    await act(leaver, orphaned, 'leaving-worker', 'release', 'Hand back');
+    await prisma.user.delete({ where: { id: 'leaver' } });
+    assert.equal(await prisma.issueActivity.count({ where: { userId: 'leaver' } }), 0, 'the claim entry is gone with its author');
+    assert.equal((await prisma.agentHandoff.findUniqueOrThrow({ where: { id: orphaned.id } })).status, 'open');
+    assert.equal((await coordinator.coordinatorSnapshot(alice, 'p-w')).items.find(item => item.id === orphaned.id).previouslyClaimed, true);
+    await assert.rejects(claim(orphaned), e => e.code === 'coordinator_fenced');
+    const marker = async handoff => (await prisma.agentHandoff.findUniqueOrThrow({ where: { id: handoff.id } })).claimedOnce;
+    assert.equal(await marker(released), true, 'a release does not take the marker back');
+
+    // A handoff written without the marker (older than it, or by a version that does not know it) is unknown, not unclaimed.
+    const unknown = await prisma.agentHandoff.create({ data: { workspaceId: 'w', issueId: 'i-w', sourceKey: 'unknown-history', content: 'old', recipientNames: ['coordinated', 'worker-a'] } });
+    assert.equal(unknown.claimedOnce, null);
+    assert.equal((await coordinator.coordinatorSnapshot(alice, 'p-w')).items.find(item => item.id === unknown.id).previouslyClaimed, true);
+    await assert.rejects(claim(unknown), e => e.code === 'coordinator_fenced');
+    await act(alice, unknown, 'worker-a', 'claim');
+    assert.equal(await marker(unknown), true, 'an agent that is not coordinated can still take it, and that is recorded');
+    await act(alice, unknown, 'worker-a', 'complete', 'Done by hand');
+
     const fresh = await send({ toAgents: ['coordinated'], toLabels: [] });
+    assert.equal(await marker(fresh), false, 'a new handoff is known to be unclaimed');
     await claim(fresh);
+    assert.equal(await marker(fresh), true);
     const current = await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } });
     await prisma.project.update({ where: { id: 'p-w' }, data: { coordinator: { ...current.coordinator, leaseUntil: new Date(0).toISOString() } } });
     await assert.rejects(lease({ generation: generation(attemptExpires) }), e => e.code === 'coordinator_conflict');
     await assert.rejects(claim(fresh), e => e.code === 'coordinator_fenced');
     await manage({ event: 'close', generation: workerGeneration, coordinator: admission });
     await lease({ generation: generation(attemptExpires) });
+    assert.equal((await coordinator.coordinatorSnapshot(alice, 'p-w')).items.find(item => item.id === released.id).previouslyClaimed, true, 'a new coordinator generation reads the same history');
 
     const direct = await publicPrisma.project.findUniqueOrThrow({ where: { id: 'p-w' } });
     const nested = await publicPrisma.issue.findUniqueOrThrow({ where: { id: 'i-w' }, include: { project: true } });

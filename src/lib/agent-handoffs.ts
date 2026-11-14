@@ -70,7 +70,12 @@ async function coordinatorAdmission(db: Prisma.TransactionClient, context: AppAu
   if (!lease || lease.userId !== context.user.id || lease.generation !== binding.generation || lease.closed || !(Date.parse(lease.leaseUntil) > Date.now())) throw new HandoffError('coordinator_fenced', 'A live matching coordinator generation is required', 409);
   return lease;
 }
+// claimedOnce is kept on the handoff, so it outlives the user who claimed it; the timeline entry is deleted with its author.
+// Only an explicit false is proof that nobody claimed it: null is a row older than the column or written without it.
+// The timeline is still read for a row that says false, for a claim made by a version that does not write the column.
 export async function wasClaimed(db: DB, workspaceId: string, issueId: string, handoffId: string) {
+  const handoff = await db.agentHandoff.findFirst({ where: { id: handoffId, workspaceId }, select: { claimedOnce: true } });
+  if (handoff?.claimedOnce !== false) return true;
   return Boolean(await db.issueActivity.findFirst({ where: { workspaceId, itemId: issueId, itemType: 'ISSUE', action: 'AGENT_CLAIM', details: { contains: `"handoffId":${JSON.stringify(handoffId)}` } }, select: { id: true } }));
 }
 export function assertManagedGeneration(value: Prisma.JsonValue | null, generation?: string) {
@@ -372,7 +377,7 @@ export async function sendHandoff(context: AppAuthContext, input: z.infer<typeof
       await activity(db, context, agent, issue, prior.id, 'passed', input.content, { toAgents: recipientNames, toLabels: labelIds });
     }
     const handoff = await db.agentHandoff.create({ data: { workspaceId: context.workspace.id, issueId: issue.id, sourceKey,
-      senderId: agent.id, content: input.content, recipientNames, labelIds, requestAck: input.requestAck, afterId: input.afterId } });
+      senderId: agent.id, content: input.content, recipientNames, labelIds, requestAck: input.requestAck, afterId: input.afterId, claimedOnce: false } });
     await activity(db, context, agent, issue, handoff.id, 'sent', input.content, { toAgents: recipientNames, toLabels: labelIds, afterId: input.afterId });
     return handoff;
   });
@@ -517,7 +522,7 @@ export async function actOnTransferOffer(context: AppAuthContext, offerId: strin
       issueId: offer.issueId, status: 'claimed', claimedById: sender.id }, data: { status: 'completed' } });
     if (!changed.count) throw new HandoffError('claim_changed', 'Original ownership changed; create a new offer', 409);
     const handoff = await db.agentHandoff.create({ data: { workspaceId: context.workspace.id, issueId: offer.issueId,
-      sourceKey: `transfer-offer:${offer.id}`, senderId: sender.id, claimedById: agent.id, status: 'claimed',
+      sourceKey: `transfer-offer:${offer.id}`, senderId: sender.id, claimedById: agent.id, status: 'claimed', claimedOnce: true,
       recipientNames: [agent.name], content: `Transfer offer: ${offer.id}`, afterId: offer.parentId } });
     const accepted = await db.agentTransferOffer.update({ where: { id: offer.id }, data: { acceptedHandoffId: handoff.id } });
     await activity(db, context, agent, offer.issue, offer.parentId, 'transfer_accepted', undefined, { offerId: offer.id, successorId: handoff.id });
@@ -713,7 +718,7 @@ export async function actOnHandoff(context: AppAuthContext, id: string, input: z
       }
       if (lease && handoff.status !== 'open') throw new HandoffError('already_claimed', 'Another agent claimed or completed this work', 409);
       if (lease && (handoff.issue.projectId !== input.coordinator!.project || await wasClaimed(db, context.workspace.id, handoff.issueId, id))) throw new HandoffError('coordinator_fenced', 'Previously claimed work cannot be automatically reassigned', 409);
-      const claimed = await db.agentHandoff.updateMany({ where: { id, status: 'open', claimedById: null }, data: { status: 'claimed', claimedById: agent.id } });
+      const claimed = await db.agentHandoff.updateMany({ where: { id, status: 'open', claimedById: null }, data: { status: 'claimed', claimedById: agent.id, claimedOnce: true } });
       if (!claimed.count) throw new HandoffError('already_claimed', 'Another agent claimed or completed this work', 409);
     } else {
       const changed = await db.agentHandoff.updateMany({ where: { id, status: 'claimed', claimedById: agent.id },
