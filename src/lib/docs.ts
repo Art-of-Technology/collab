@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { lexer, type Token } from 'marked';
+import DOMPurify from 'isomorphic-dompurify';
 
 // Published documentation: Markdown files in content/docs, listed in content/docs/nav.json.
 // The page, the plain Markdown, the index files, the search and the MCP tools all read it through here,
@@ -18,6 +19,7 @@ const root = () => join(process.cwd(), 'content', 'docs');
 const words = (tokens: Token[] = []): string => tokens.map(token => {
   if (token.type === 'html') return '';
   if ('tokens' in token && token.tokens) return words(token.tokens);
+  if (token.type === 'text') return DOMPurify.sanitize(token.text.replace(/</g, '&lt;'), { RETURN_DOM: true }).textContent ?? '';
   return 'text' in token ? token.text : ' ';
 }).join('');
 const plain = (tokens?: Token[]) => words(tokens).replace(/\s+/g, ' ').trim();
