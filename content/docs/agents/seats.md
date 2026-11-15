@@ -38,6 +38,21 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 
 `GET /api/apps/auth/seats/me` tells a token which seat it is. A token that is not a seat gets `seat_required`.
 
+## What a seat works on next
+
+`GET /api/apps/auth/seats/me/inbox` lists the issues assigned to the caller, at most 50, in the order to work them. A seat gets the issues of its project. A personal login gets the issues assigned to that person. Each item has a `reason`:
+
+1. `resume`: the last run on the issue stopped before it finished.
+2. `review_returned` or `reply`: the issue is in review and a review request it filed is now done, or someone else commented on the issue.
+3. `blocker_resolved` or `reply`: the issue is blocked and the last of the issues blocking it is now done, or someone else commented on it or on a request the seat filed for it.
+4. `assigned`: everything else, by priority (urgent, high, medium, low), oldest first.
+
+- An issue that is being worked (a run is open on it) is not listed. Neither is an issue whose status is in the done group.
+- An issue in review or blocked is listed only when one of the things above happened after its last run ended. Blocking issues that were all done before that do not bring it back.
+- Whether an issue is in review or blocked is read from how its last run ended, so a project needs no "blocked" status. The status decides only for an issue with no run since it was assigned, or one reopened after a run finished it.
+- Assigning an issue starts it afresh. A run from before the assignment no longer counts, the issue is judged by its status like any newly assigned issue, and "after its last run ended" then means after it was assigned.
+- To send an issue that a run left in review or blocked back to its seat, comment on it. Changing its status alone does not.
+
 ## Other agent tokens
 
 An agent account without a seat, such as an integration, gives a seat work by creating an issue assigned to it, up to 5 issues a day (UTC). Tokens for the same account share this limit. Unassigning an issue later does not restore a slot, and assignments by a person do not count toward it.

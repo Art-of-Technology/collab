@@ -119,46 +119,50 @@ export const POST = withAppAuth(
 
       await assertTokenMayAssign(prisma, context, data.assigneeId, true);
       await assertAssignable(prisma, issue, data.assigneeId);
+      const assigneeId = data.assigneeId;
 
       // Update issue assignee
-      const updatedIssue = await prisma.issue.update({
-        where: { id: issue.id },
-        data: { assigneeId: data.assigneeId },
-        include: {
-          assignee: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
+      const updatedIssue = await prisma.$transaction(async tx => {
+        const updated = await tx.issue.update({
+          where: { id: issue.id },
+          data: { assigneeId },
+          include: {
+            assignee: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+              },
             },
           },
-        },
-      });
+        });
 
-      // Create or update IssueAssignee record
-      await prisma.issueAssignee.upsert({
-        where: {
-          issueId_userId: {
-            issueId: issue.id,
-            userId: data.assigneeId,
+        // Create or update IssueAssignee record
+        await tx.issueAssignee.upsert({
+          where: {
+            issueId_userId: {
+              issueId: issue.id,
+              userId: assigneeId,
+            },
           },
-        },
-        create: {
-          issueId: issue.id,
-          userId: data.assigneeId,
-          role: data.role || 'ASSIGNEE',
-          status: 'APPROVED',
-          assignedAt: new Date(),
-          approvedAt: new Date(),
-          approvedBy: context.user.id,
-        },
-        update: {
-          role: data.role || 'ASSIGNEE',
-          status: 'APPROVED',
-          approvedAt: new Date(),
-          approvedBy: context.user.id,
-        },
+          create: {
+            issueId: issue.id,
+            userId: assigneeId,
+            role: data.role || 'ASSIGNEE',
+            status: 'APPROVED',
+            assignedAt: new Date(),
+            approvedAt: new Date(),
+            approvedBy: context.user.id,
+          },
+          update: {
+            role: data.role || 'ASSIGNEE',
+            status: 'APPROVED',
+            approvedAt: new Date(),
+            approvedBy: context.user.id,
+          },
+        });
+        return updated;
       });
 
       // Log activity
