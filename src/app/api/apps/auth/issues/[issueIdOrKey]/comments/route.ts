@@ -162,7 +162,8 @@ export const POST = withAppAuth(
         );
       }
 
-      await seatWriteGuard(prisma, context, issue.projectId);
+      // A seat comments on its own project's issues, and on a request it filed in another project.
+      await seatWriteGuard(prisma, context, issue.projectId, issue);
 
       // Validate parent comment if provided
       if (data.parentId) {

@@ -194,6 +194,29 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
       const done = await write();
       assert.ok(done.status >= 200 && done.status < 300, `${name} on the seat's project answered ${done.status} ${JSON.stringify(done.body)}`);
     }
+
+    // Rule 8: on a request the seat filed in project B, creating a comment is the one write of the table that passes.
+    // The token API has no route that edits or deletes a comment.
+    const filed = await fixture(B);
+    await prisma.issue.update({ where: { id: filed.target.id }, data: { agentRequestRole: 'review', reporterId: devA.userId } });
+    const request = () => prisma.issue.findUniqueOrThrow({ where: { id: filed.target.id } }).then(JSON.stringify);
+    const [said, ...others] = await rows(), unchanged = await request();
+    for (const [name, write] of Object.entries(writes(filed))) {
+      const reply = await write();
+      assert.equal(reply.status, name === 'comments POST' ? 201 : 403, `${name} on the seat's own request answered ${reply.status} ${JSON.stringify(reply.body)}`);
+      if (name !== 'comments POST') assert.equal(reply.body.error, 'wrong_project', name);
+    }
+    assert.deepEqual(await rows(), [said + 1, ...others]);
+    assert.equal(await request(), unchanged, 'the request itself is unchanged');
+    // Not on another seat's request, not on a request nobody or a person reported, and not on an issue it reported that is no request.
+    for (const data of [{ agentRequestRole: 'review', reporterId: devB.userId }, { agentRequestRole: 'review' }, { agentRequestRole: 'release', reporterId: person }, { reporterId: devA.userId }]) {
+      const other = await issue(B, data);
+      const refused = await send(comments.POST, devA.token, 'POST', { body: { content: 'A note' }, params: { issueIdOrKey: other.id } });
+      assert.equal(refused.body.error, 'wrong_project', JSON.stringify(data));
+    }
+    assert.equal(await prisma.issueComment.count(), said + 1);
+    // A person comments on it as before.
+    assert.equal((await send(comments.POST, personToken, 'POST', { body: { content: 'A reply' }, params: { issueIdOrKey: filed.target.id } })).status, 201);
   });
 
   await t.test('a seat cannot link its issue to another project\'s issue, or make one its parent', async () => {
@@ -435,6 +458,8 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     assert.equal(write.status, 403);
     assert.equal(write.body.error, 'seat_scope');
     assert.equal((await send(route('labels').POST, worker.token, 'POST', { body: { name: 'late', color: '#000000' } })).body.error, 'seat_scope');
+    const filed = await issue(B, { agentRequestRole: 'review', reporterId: worker.userId });
+    assert.equal((await send(comments.POST, worker.token, 'POST', { body: { content: 'After retiring' }, params: { issueIdOrKey: filed.id } })).body.error, 'seat_scope', 'nor on a request it filed');
     await refuses(assignee.assertAssignable(prisma, { workspaceId: 'w', projectId: A, agentRequestRole: null }, worker.userId), 'assignee_not_found', 400);
 
     // The name can take a seat again, also in another project.

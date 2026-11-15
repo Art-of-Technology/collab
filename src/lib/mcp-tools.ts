@@ -16,9 +16,10 @@ import * as note from '@/app/api/apps/auth/context/[id]/route';
 import * as search from '@/app/api/apps/auth/search/route';
 import * as aiContext from '@/app/api/apps/auth/ai-context/route';
 import * as docs from '@/app/api/apps/auth/docs/route';
+import * as seatInbox from '@/app/api/apps/auth/seats/me/inbox/route';
+import * as runContext from '@/app/api/apps/auth/issues/[issueIdOrKey]/run-context/route';
 
-// The MCP tools mirror the CLI: each one forwards to the API route the matching CLI command calls,
-// so access checks, validation and side effects stay in those routes.
+// MCP tools forward to API routes so access checks, validation and side effects stay in those routes.
 
 type Args = Record<string, unknown>;
 type RouteHandler = (request: NextRequest, routeParams?: { params: Promise<Record<string, string>> }) => Promise<Response>;
@@ -143,6 +144,8 @@ export const tools: McpTool[] = [
       } else if (['limit', 'offset', 'since'].some(key => args[key] !== undefined)) return 'limit, offset and since require project pipeline context.';
     },
   }),
+  tool('seat_inbox', 'The issues assigned to this token\'s account, at most 50, in the order to work them, each with the reason it is offered. A seat gets the issues of its project.', ['issues:read'], 'GET', 'seats/me/inbox', seatInbox.GET),
+  tool('run_context', 'What a fresh session needs to work an issue, in one read: the issue, the last exit note, the comments made since, what blocks it and the requests filed for it.', ['issues:read'], 'GET', 'issues/:issueIdOrKey/run-context', runContext.GET, { issueIdOrKey }, ['issueIdOrKey']),
   docsTool('docs_search', 'Search Collab\'s documentation: how Collab, its CLI and its agent features work. Returns the matching sections, best first, each with the slug of its page for docs_get. The same search as on the docs site.', {
     query: { type: 'string', minLength: 1, maxLength: 500 }, limit: integer(1, 20),
   }, ['query']),

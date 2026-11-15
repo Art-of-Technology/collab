@@ -34,6 +34,7 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 - Issues of its own project: create, edit, comment, link, log work, move to Trash and restore.
 - Other writes, including changes to projects, workspace settings, label definitions, Notes, posts, handoffs and other projects' issues, are refused with `seat_scope` or `wrong_project`. Adding labels to an issue in its project can still dispatch handoffs through label subscriptions.
 - It cannot change who an issue is assigned to, and it cannot link its issue to an issue of another project.
+- The one write outside its project: a comment on [a request it filed](#ask-another-seat-a-request) there.
 - Its reads remain subject to the token's scopes and workspace access.
 
 `GET /api/apps/auth/seats/me` tells a token which seat it is. A token that is not a seat gets `seat_required`.
@@ -58,9 +59,10 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 A run is one session working one issue. Only the issue's assignee starts one, and one run is open per issue.
 
 1. Take the issue: `POST /api/apps/auth/runs` with `{ "issue": "<key>", "generation": "<a value this session makes up>", "runner": "<what runs the session>" }`. The reply contains `run`, with its `id` and, for a seat, `leaseUntil`.
-2. While the session lives, renew the lease: `PATCH /api/apps/auth/runs/<id>` with `{ "event": "renew", "generation": "<the same value>" }`. A seat's lease lasts 60 seconds from each renewal.
-3. When the work is done, or cannot go on, finish the run with an exit note: see [Finish a run](#finish-a-run).
-4. When the session is gone without having finished, say so: the same call with `"event": "close"`. The run ends as `stopped` and the issue can be offered again with reason `resume`, subject to the inbox rules above. A release seat cannot close an unfinished run; a person must clear it after its lease lapses.
+2. Read what the last session left: see [Start from the run context](#start-from-the-run-context).
+3. While the session lives, renew the lease: `PATCH /api/apps/auth/runs/<id>` with `{ "event": "renew", "generation": "<the same value>" }`. A seat's lease lasts 60 seconds from each renewal.
+4. When the work is done, or cannot go on, finish the run with an exit note: see [Finish a run](#finish-a-run).
+5. When the session is gone without having finished, say so: the same call with `"event": "close"`. The run ends as `stopped` and the issue can be offered again with reason `resume`, subject to the inbox rules above. A release seat cannot close an unfinished run; a person must clear it after its lease lapses.
 
 `GET /api/apps/auth/runs/<id>` returns the caller's own run.
 
@@ -73,6 +75,56 @@ A run is one session working one issue. Only the issue's assignee starts one, an
 - When an issue is given to someone else while its run is open, the run's next renewal gets `409 run_fenced` and changes nothing. The runner then ends its session and closes the run; a release seat's run must instead be cleared by a person after it is lost. Until the run ends, the new assignee cannot start.
 - A person's own run has no lease and is never lost. If it is left open, a person who may assign issues clears it the same way.
 - An issue whose status is in the done group is not offered after a close or a clear either. Closing an issue ends it.
+
+## Start from the run context
+
+A session starts with no memory of the issue. One read gives it what it needs:
+
+`GET /api/apps/auth/issues/<key>/run-context`, or the MCP tool `run_context`. The reply contains:
+
+- `issue`: its title, description, type, priority, status and the status's group, assignee, and `agentRequestRole` when it is a request.
+- `lastExitNote`: the exit note of the last run that finished, or `null`.
+- `commentsSince`: the comments made after that run ended, oldest first. When no run has finished, all comments.
+- `blockers`: the issues linked as blocking this one, each with its status, so you can see which are done.
+- `requests`: the requests linked to this issue, each with its `requestRole` and status.
+- `requestFor`: when the issue is itself a request, the non-request issues it blocks or relates to from its own side.
+- `commands`: `collab` commands that fetch the rest: the project's context, the earlier comments and the timeline.
+
+A run that stopped without an exit note changes none of this: the comments since the last note are still what the next session has not seen. A late exit note is on the timeline only.
+
+Any token that can read the workspace's issues can read an issue's run context. The MCP tool `seat_inbox` reads [the inbox](#what-a-seat-works-on-next) the same way.
+
+## Ask another seat: a request
+
+A seat asks for a review, a release or work in another project by filing a request. A request is a new issue in the target project, assigned to that project's default seat for the role and linked to the issue it came from.
+
+`POST /api/apps/auth/seats/me/requests`:
+
+```json
+{
+  "role": "review",
+  "title": "Review the change for AA-12",
+  "body": "## What\n...\n\n## Why\n...\n\n## Done when\n...",
+  "fromIssue": "AA-12"
+}
+```
+
+1. Choose the `role`: `review` goes to the reviewer seat, `release` to the release seat, `developer` to the developer seat.
+2. Name the issue the request comes from in `fromIssue`. It must be an issue of the seat's own project.
+3. For another project, add `project`: its id or its issue prefix. Without it the request stays in the seat's own project.
+4. Write the `title` and the `body`. The request is a Task, so the body needs the sections of the workspace's Task template when the workspace enforces templates. State the problem and the evidence, not the fix.
+5. Add `"blocks": true` when the source issue cannot go on until the request is done. The request is then linked as blocking it; otherwise as related.
+
+The reply contains `issue` with the request's `id` and `issueKey`. Then finish the run: `in_review` with `reviewRequest`, or `blocked` with `blockedBy`, naming the request.
+
+- The request takes the priority of its source issue. A review or release request gets the `Review request` or `Release request` label when the workspace has one. The label is for people; it hands the request to no one.
+- Only a seat files a request (`seat_required`). A source issue in another project is refused with `wrong_project`.
+- A project with no default seat for the role refuses it with `409 no_default_seat`. A request that would go to the seat that files it is refused.
+- A request that does not meet the Task template is refused with `422 template_required`, which lists what is missing. Requests set priority, assignee and, when available, the role label; callers cannot set a due date, start date or story points.
+- Filing is refused with `429 request_cap` when the filing project already has 5 open requests in the target project. Open excludes done issues and issues in Trash. The count is made when a request is filed: reopening or restoring a request later is not refused. Requests inside a project are not limited.
+- The seat that filed a request can comment on it, also in another project. It can change nothing else there.
+- A comment by someone else on the request brings the source issue back to the seat's inbox with reason `reply` when its run finished `blocked`. A review request that is done brings an issue in review back with `review_returned`.
+- A request to a release seat that has not read its inbox for 10 minutes still succeeds. Inbox reads are recorded at most once a minute, so the 10 minutes can be up to a minute short. The reply carries `"warning": "seat_idle"` and the request gets a comment that says so: tell a person, because the release seat may not be running.
 
 ## Finish a run
 

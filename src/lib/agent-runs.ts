@@ -27,6 +27,8 @@ type Status = { category: string | null; isFinal: boolean } | null;
 const categoryOf = (status: Status) => status?.category ?? (status?.isFinal ? 'done' : 'todo');
 const isDone = (issue: { projectStatus: Status }) => categoryOf(issue.projectStatus) === 'done';
 const statusSelect = { select: { category: true, isFinal: true } } as const;
+/** The issues that are not in a status of the done group, as a query reads `categoryOf`. */
+export const NOT_DONE = { OR: [{ statusId: null }, { projectStatus: { OR: [{ category: { not: 'done' } }, { category: null, isFinal: false }] } }] };
 
 /**
  * What the caller should work on next: the issues assigned to it, and for a seat only those of its project.
@@ -48,8 +50,7 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
   }
   const issues = await prisma.issue.findMany({
     where: {
-      workspaceId: context.workspace.id, assigneeId: me, ...(seat && { projectId: seat.projectId }),
-      OR: [{ statusId: null }, { projectStatus: { OR: [{ category: { not: 'done' } }, { category: null, isFinal: false }] } }],
+      workspaceId: context.workspace.id, assigneeId: me, ...(seat && { projectId: seat.projectId }), ...NOT_DONE,
     },
     select: {
       id: true, issueKey: true, projectId: true, title: true, priority: true, createdAt: true, projectStatus: statusSelect,
@@ -373,6 +374,50 @@ async function settle(tx: Prisma.TransactionClient, me: string, workspaceId: str
       fieldName: 'statusId', oldValue: issue.projectStatus?.name, newValue: status.name, oldStatusId: issue.statusId, newStatusId: status.id } });
   }
   return !status;
+}
+
+const REF = { id: true, issueKey: true, title: true, projectId: true, agentRequestRole: true, projectStatus: { select: { name: true, ...statusSelect.select } } } as const;
+type Ref = { id: string; issueKey: string | null; title: string; projectId: string; agentRequestRole: string | null; projectStatus: { name: string; category: string | null; isFinal: boolean } | null };
+/** An issue as another issue's context names it: enough to tell what it is and whether it is done. */
+const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: issue.title, projectId: issue.projectId, status: issue.projectStatus?.name ?? null,
+  category: categoryOf(issue.projectStatus), ...(issue.agentRequestRole && { requestRole: issue.agentRequestRole }) });
+
+/**
+ * What a fresh session needs to work an issue, in one read: the issue, the exit note of the last run that finished, the
+ * comments made after that run ended (all of them when no run has finished), the issues linked as blocking it, the
+ * requests linked to it, and for a request the issues it was filed for (the ones it blocks or relates to from its own
+ * side, which is how filing links it). A run that ended without a note moves nothing:
+ * what was said since the last note is still what the next session lacks. A read like any other: every token that
+ * reads the workspace's issues gets it.
+ */
+export async function runContext(context: Caller, issueIdOrKey: string) {
+  const issue = await prisma.issue.findFirst({ where: { workspaceId: context.workspace.id, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] }, select: {
+    ...REF, description: true, type: true, priority: true, assigneeId: true,
+    agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { note: true, endedAt: true } },
+    sourceRelations: { where: { targetIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, targetIssue: { select: REF } } },
+    targetRelations: { where: { sourceIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, sourceIssue: { select: REF } } },
+  } });
+  if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
+  const last = issue.agentRuns[0];
+  const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: { gt: last.endedAt } }) },
+    orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
+  const others = [
+    ...issue.sourceRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKED_BY', filedFor: relation.relationType === 'BLOCKS' || relation.relationType === 'RELATES_TO', issue: relation.targetIssue })),
+    ...issue.targetRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKS', filedFor: false, issue: relation.sourceIssue })),
+  ];
+  const key = issue.issueKey ?? issue.id;
+  return {
+    issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, description: issue.description, type: issue.type, priority: issue.priority, projectId: issue.projectId,
+      status: issue.projectStatus?.name ?? null, category: categoryOf(issue.projectStatus), assigneeId: issue.assigneeId, agentRequestRole: issue.agentRequestRole },
+    lastExitNote: last?.note ?? null,
+    commentsSince,
+    blockers: others.filter(other => other.blocksMe).map(other => toRef(other.issue)),
+    requests: others.filter(other => other.issue.agentRequestRole).map(other => toRef(other.issue)),
+    // Filing a request links it to its source from the request's side: it blocks the source or relates to it.
+    requestFor: issue.agentRequestRole ? others.filter(other => other.filedFor && !other.issue.agentRequestRole).map(other => toRef(other.issue)) : [],
+    // Where the rest is: the project's context, what was said before the last note, and the timeline, which holds a late exit note.
+    commands: [`collab context get --project-id ${issue.projectId}`, `collab comments list ${key}`, `collab issues activity ${key}`],
+  };
 }
 
 /** The run that is open on an issue, for its page: who holds it, since when, and whether this person may clear it now. */
