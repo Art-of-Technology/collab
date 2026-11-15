@@ -5,7 +5,7 @@ const path = require('node:path');
 
 // The loader reads content/docs under the working directory, so a test points it at a folder of its own.
 function docsIn(root) {
-  return load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked') }, { process: { cwd: () => root } });
+  return load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), 'isomorphic-dompurify': { default: require('isomorphic-dompurify') } }, { process: { cwd: () => root } });
 }
 
 // The loader runs in its own context, so its arrays are compared by value.
@@ -102,6 +102,18 @@ test('inline Markdown is removed consistently without removing literal underscor
   assert.deepEqual(plain(page.headings.map(h => [h.text, h.id])), [
     ['Getting started with the CLI', 'getting-started-with-the-cli'],
     ['Keep code_name', 'keep-code_name'],
+  ]);
+});
+
+test('character references are decoded in plain text but remain literal in code', () => {
+  const page = docsIn(fixture({ 'content/docs/entities.md': [
+    '# Research &amp; Development', '', 'Use &#x41; &copy; and `&amp;`.', '',
+    '## [Fish &amp; Chips](/food) &#50;', '### `&amp;` &amp;amp;',
+  ].join('\n') })).docPage('entities');
+  assert.equal(page.title, 'Research & Development');
+  assert.equal(page.summary, 'Use A © and &amp;.');
+  assert.deepEqual(plain(page.headings.map(h => [h.text, h.id])), [
+    ['Fish & Chips 2', 'fish-chips-2'], ['&amp; &amp;', 'amp-amp'],
   ]);
 });
 
