@@ -493,8 +493,8 @@ model Project {
   issuePrefix      String
   nextIssueNumbers Json     @default("{\"EPIC\": 1, \"STORY\": 1, \"TASK\": 1, \"BUG\": 1, \"MILESTONE\": 1, \"SUBTASK\": 1}")
   coordinator      Json?
-  agentMode        String   @default("handoffs") // handoffs | seats
-  agentSwitchedAt  DateTime?
+  agentMode        String   @default("handoffs") @ignore // handoffs | seats
+  agentSwitchedAt  DateTime? @ignore
   agentSeats       AgentSeat[]
 
   // Relationships
@@ -648,7 +648,7 @@ model Issue {
   workLogs             WorkLog[]
 
   // Set only by filing a request for a role (developer | review | release); a label never sets it.
-  agentRequestRole String?
+  agentRequestRole String? @ignore
 
   @@unique([issueKey, projectId])
   @@index([projectId, deletedAt])
@@ -824,7 +824,7 @@ model ProjectStatus {
 
   // Group the status belongs to: todo | in_progress | in_review | blocked | done. Null (a status made
   // after the backfill) reads as done when isFinal, otherwise todo.
-  category String?
+  category String? @ignore
 
   // Relationships - issues that use this status
   issues Issue[] @relation("IssueStatus")

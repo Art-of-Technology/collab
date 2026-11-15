@@ -1,5 +1,6 @@
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
+const { PrismaClient } = require('@prisma/client');
 const { seatsDatabase } = require('./seats-db.cjs');
 
 // Status names as projects have them, and the group each must get. `shipped` is final by its flag, not its name.
@@ -26,14 +27,32 @@ test('the seats migration over a database that already has rows', async t => {
   const run = (issueId, extra = {}) => prisma.agentRun.create({ data: { workspaceId: 'w', issueId, userId: 'owner', runner: 'test', generation: 'g', ...extra } });
 
   await t.test('every existing status gets its group from its name', async () => {
-    const statuses = await prisma.projectStatus.findMany({ where: { projectId: 'p' } });
+    const statuses = await prisma.$queryRaw`SELECT name, category FROM "ProjectStatus" WHERE "projectId" = 'p'`;
     assert.deepEqual(Object.fromEntries(statuses.map(status => [status.name, status.category])), groups);
   });
 
   await t.test('existing projects stay on handoffs and existing issues are not requests', async () => {
-    const project = await prisma.project.findUniqueOrThrow({ where: { id: 'p' } });
+    const [project] = await prisma.$queryRaw`SELECT "agentMode", "agentSwitchedAt" FROM "Project" WHERE id = 'p'`;
     assert.equal(project.agentMode, 'handoffs'); assert.equal(project.agentSwitchedAt, null);
-    assert.equal((await prisma.issue.findUniqueOrThrow({ where: { id: 'i1' } })).agentRequestRole, null);
+    const [issue] = await prisma.$queryRaw`SELECT "agentRequestRole" FROM "Issue" WHERE id = 'i1'`;
+    assert.equal(issue.agentRequestRole, null);
+  });
+
+  await t.test('ordinary Prisma reads omit the new columns', async () => {
+    const client = new PrismaClient({ datasources: { db: { url: db.url } }, log: [{ emit: 'event', level: 'query' }] });
+    const queries = [];
+    client.$on('query', event => queries.push(event.query));
+    try {
+      const project = await client.project.findUniqueOrThrow({ where: { id: 'p' }, include: { statuses: true, issues: true } });
+      assert.equal(Object.hasOwn(project, 'agentMode'), false);
+      assert.equal(Object.hasOwn(project, 'agentSwitchedAt'), false);
+      assert.equal(Object.hasOwn(project.statuses[0], 'category'), false);
+      assert.equal(Object.hasOwn(project.issues[0], 'agentRequestRole'), false);
+      assert.ok(queries.length >= 3);
+      for (const query of queries) assert.doesNotMatch(query, /"(?:agentMode|agentSwitchedAt|agentRequestRole|category)"/);
+    } finally {
+      await client.$disconnect();
+    }
   });
 
   await t.test('an issue has one open run; a run that ended makes room for the next', async () => {
