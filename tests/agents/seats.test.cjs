@@ -308,6 +308,49 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     assert.equal((await deps['@/lib/issue-mutation'].updateIssue(owner, kept.id, { projectId: B }, 'w')).issue.assigneeId, person);
   });
 
+  await t.test('retirement preserves concurrent reassignment and completion', async () => {
+    const worker = await seat('dev-concurrent-retire', A, 'developer');
+    const statuses = Object.fromEntries((await prisma.projectStatus.findMany({ where: { projectId: A } })).map(row => [row.name, row.id]));
+    const reassigned = await issue(A, { assigneeId: worker.userId, statusId: statuses.to_do });
+    const completed = await issue(A, { assigneeId: worker.userId, statusId: statuses.to_do });
+    const open = await issue(A, { assigneeId: worker.userId, statusId: statuses.to_do });
+    await prisma.issueAssignee.createMany({ data: [reassigned, completed, open].map(row => ({ issueId: row.id, userId: worker.userId, role: 'ASSIGNEE', status: 'APPROVED' })) });
+    let release;
+    const held = new Promise(resolve => { release = resolve; });
+    let ready;
+    const locked = new Promise(resolve => { ready = resolve; });
+    const competing = prisma.$transaction(async tx => {
+      await tx.issue.update({ where: { id: reassigned.id }, data: { assigneeId: person } });
+      await tx.issue.update({ where: { id: completed.id }, data: { statusId: statuses.done } });
+      ready();
+      await held;
+    }, { timeout: 15000 });
+    await locked;
+    const retiring = seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: worker.id });
+    try {
+      const deadline = Date.now() + 5000;
+      let blocked = false;
+      while (!blocked && Date.now() < deadline) {
+        const rows = await prisma.$queryRaw`SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%UPDATE%' AND query LIKE '%Issue%' AND pid <> pg_backend_pid()`;
+        blocked = rows.length > 0;
+        if (!blocked) await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      assert.ok(blocked, 'retirement waits for the competing issue updates');
+    } finally {
+      release();
+      await competing;
+    }
+    const result = await retiring;
+    assert.deepEqual(result.unassigned, [open.issueKey]);
+    assert.equal((await prisma.issue.findUniqueOrThrow({ where: { id: reassigned.id } })).assigneeId, person);
+    assert.equal((await prisma.issue.findUniqueOrThrow({ where: { id: completed.id } })).assigneeId, worker.userId);
+    assert.equal((await prisma.issue.findUniqueOrThrow({ where: { id: open.id } })).assigneeId, null);
+    const activities = await prisma.issueActivity.findMany({ where: { itemId: { in: [reassigned.id, completed.id, open.id] }, action: 'UNASSIGNED' } });
+    assert.deepEqual(activities.map(row => row.itemId), [open.id]);
+    const assignments = await prisma.issueAssignee.findMany({ where: { issueId: { in: [reassigned.id, completed.id, open.id] }, userId: worker.userId } });
+    assert.deepEqual(assignments.map(row => row.issueId).sort(), [reassigned.id, completed.id].sort());
+  });
+
   await t.test('review focus 5: a seat is not retired while it has a run open; otherwise its open issues are unassigned', async () => {
     const worker = await seat('dev-retire', A, 'developer');
     const statuses = Object.fromEntries((await prisma.projectStatus.findMany({ where: { projectId: A } })).map(row => [row.name, row.id]));

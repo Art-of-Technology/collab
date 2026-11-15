@@ -135,12 +135,12 @@ export async function retireSeat(input: { workspaceId: string; actorId: string; 
     if (await tx.agentRun.count({ where: { seatId: seat.id, endedAt: null } })) {
       throw new HandoffError('already_running', 'This seat has a run open; let it finish, or clear it, before retiring the seat', 409);
     }
-    const issues = await tx.issue.findMany({
+    const issues = await tx.issue.updateManyAndReturn({
       where: { assigneeId: seat.userId, NOT: { projectStatus: { OR: [{ category: 'done' }, { category: null, isFinal: true }] } } },
+      data: { assigneeId: null },
       select: { id: true, issueKey: true, workspaceId: true, projectId: true },
     });
     const ids = issues.map(issue => issue.id);
-    await tx.issue.updateMany({ where: { id: { in: ids } }, data: { assigneeId: null } });
     await tx.issueAssignee.deleteMany({ where: { issueId: { in: ids }, userId: seat.userId } });
     await tx.issueActivity.createMany({ data: issues.map(issue => ({
       action: 'UNASSIGNED', itemType: 'ISSUE', itemId: issue.id, userId: input.actorId, workspaceId: issue.workspaceId, projectId: issue.projectId,
