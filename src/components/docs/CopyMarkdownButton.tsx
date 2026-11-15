@@ -8,6 +8,7 @@ export function CopyMarkdownButton({ markdown }: { markdown: string }) {
   return (
     <button
       type="button"
+      aria-label="Copy page as Markdown"
       onClick={async () => {
         await navigator.clipboard.writeText(markdown);
         setCopied(true);

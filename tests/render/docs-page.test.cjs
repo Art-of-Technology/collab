@@ -190,6 +190,7 @@ test('"copy page as Markdown" copies the loader\'s Markdown', async () => {
   }, { navigator: { clipboard: { writeText: async text => { copied.push(text); } } }, setTimeout: () => {} });
   const [control] = find(CopyMarkdownButton({ markdown: guide }), element => element.type === 'button');
   assert.match(renderToStaticMarkup(control), /Copy page as Markdown/);
+  assert.equal(control.props['aria-label'], 'Copy page as Markdown');
   await control.props.onClick();
   assert.deepEqual(copied, [guide]);
 });
