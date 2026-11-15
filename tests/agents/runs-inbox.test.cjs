@@ -16,8 +16,9 @@ test('waiting issues missing from the visibility-filtered details are omitted', 
     id: category, issueKey: category, title: category, priority: 'medium', createdAt,
     projectStatus: { category, isFinal: false }, helpers: [], agentRuns: [],
   }));
-  const prisma = { issue: { findMany: async query => query.where.workspaceId ? candidates : [] } };
-  const { seatInbox } = load('src/lib/agent-runs.ts', { '@/lib/prisma': { prisma }, '@/lib/agent-seats': { seatFor: async () => null } }, { Date });
+  const prisma = { issue: { findMany: async query => query.where.workspaceId ? candidates : [] }, agentRun: { findMany: async () => [] } };
+  const { seatInbox } = load('src/lib/agent-runs.ts', { zod: require('zod'), '@/lib/prisma': { prisma }, '@/lib/issue-finder': {}, '@/lib/permissions': {}, '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent' },
+    '@/lib/agent-seats': { seatFor: async () => null } }, { Date });
   const result = await seatInbox({ user: { id: person }, workspace: { id: 'w' } });
   assert.deepEqual(result.items.map(item => [item.issueId, item.reason]), [['todo', 'assigned']]);
 });
@@ -65,7 +66,7 @@ test('seat inbox: only what was assigned, in a fixed order, each with its reason
     '@/lib/auth-error-diagnostics': load('src/lib/auth-error-diagnostics.ts'), '@/lib/prisma': { prisma } }, globals);
   const route = load('src/app/api/apps/auth/seats/me/inbox/route.ts', { '@/lib/apps/auth-middleware': middleware,
     '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': response, './agent-handoffs': handoffs }, globals),
-    '@/lib/agent-runs': load('src/lib/agent-runs.ts', { '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats }, { Date }) }, globals);
+    '@/lib/agent-runs': load('src/lib/agent-runs.ts', { zod, '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats, '@/lib/issue-finder': {}, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens }, { Date }) }, globals);
 
   const seat = async (name, projectId) => {
     const made = await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId, role: 'developer', ownerId: person, name, expiresInDays: 30 });
