@@ -41,7 +41,7 @@ function queue(result) {
 // write is its heartbeat, and repeating one changes nothing, so a heartbeat whose answer never came
 // or was a 5xx counts too. A heartbeat that was answered with something unreadable does not: that
 // error carries the status it was answered with.
-const serverAway = error => ['transport_failed', 'rate_limited'].includes(error?.code) ||
+export const serverAway = error => ['transport_failed', 'rate_limited'].includes(error?.code) ||
   (error?.code === 'server_error' && error.details?.status >= 500) ||
   (error?.code === 'outcome_unknown' && !(error.details?.status < 500));
 

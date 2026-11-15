@@ -82,7 +82,9 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     assert.equal(fresh.lastExitNote, null);
     assert.deepEqual(said(fresh), ['first', 'second', 'third']);
     assert.deepEqual(fresh.commentsSince[2], { id: fresh.commentsSince[2].id, content: 'third', createdAt: fresh.commentsSince[2].createdAt, parentId: null, author: { id: person, name: person } });
-    assert.deepEqual(fresh.commands, [`collab context get --project-id ${A}`, `collab comments list ${target.issueKey}`, `collab issues activity ${target.issueKey}`]);
+    assert.deepEqual(fresh.commands, [`collab context get --project-id ${A}`, `collab comments list ${target.issueKey}`, `collab issues activity ${target.issueKey}`,
+      `collab seat request --from-issue ${target.issueKey} --role review|release|developer --title TITLE --body-file FILE`,
+      'collab run finish RUN_ID --generation GENERATION --outcome done|in_review|blocked --note-file FILE']);
     assert.deepEqual([fresh.blockers, fresh.requests, fresh.requestFor], [[], [], []]);
 
     await run(target, 60, { note: 'The first note' });

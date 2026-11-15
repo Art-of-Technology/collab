@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.9.3 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.9.3) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.10.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.10.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+
+Version 0.10.0 adds the seat commands (`seat show`, `seat inbox`, `seat request`, `run start`, `run context`, `run renew`, `run finish`) and `collab seat run`, which starts one fresh session per issue assigned to a seat: see [Seats and the interim runner](#seats-and-the-interim-runner-cli-0100). They need the matching server. A flag a command does not declare is now refused with `unknown_flag`; this includes `--project` on a command that takes no project (`inbox`, `handoffs`, `issues get` and others), where it used to be dropped without a word.
 
 Version 0.9.3 makes `collab update` say what happened: `updated` is `false` when the installed version is the one you already had, and `version` is the version now installed (`null` if the installed executable did not report it). Earlier versions print `"updated": true` after every run.
 
@@ -143,6 +145,7 @@ See [search API behavior](../../docs/agent-search.md) and [project context seman
 | Organization | `labels list/create`, `views list/get`, `members search` |
 | Notes/context | `notes list/get/create/update/delete`, `context get`, `knowledge list/get` |
 | Reports | `reports issues/workload/timeline/time` |
+| Seats and runs | `seat show/inbox/request/run`, `run start/context/renew/finish` |
 
 IDs follow the command (`issues get APP-123`; `worklogs update APP-123 LOG_ID`). Camel-case API fields become kebab-case flags (`--due-date`, `--is-ai-context`, `--issue-prefix`). Boolean fields require `true` or `false`. Arrays are JSON (`--labels '["LABEL_ID"]'`). JSON null is available through `--input` where the server allows clearing a field.
 
@@ -159,7 +162,7 @@ collab issues restore APP-123 --project PROJECT_ID
 collab projects create --name 'Platform' --slug platform --issue-prefix PLAT --dry-run
 ```
 
-`--input FILE|-` accepts a JSON body; `--content-file`/`--description-file` accept text. Inputs are limited to 1 MiB and 30 seconds. Unknown flags/fields and duplicate assignments refuse before sending. `--dry-run` normally prints the planned method, URL and body (or the local callback configuration for `inbox watch`) without sending or invoking an adapter; body content may be private.
+`--input FILE|-` accepts a JSON body; `--content-file`/`--description-file`/`--body-file`/`--note-file` accept text where the command has that field. Inputs are limited to 1 MiB and 30 seconds. Unknown flags/fields and duplicate assignments refuse before sending. `--dry-run` normally prints the planned method, URL and body (or the local callback configuration for `inbox watch`) without sending or invoking an adapter; body content may be private.
 
 Issue deletion moves one issue to trash, preserving its ID, key and comments for restoration. It requires a project selected with `--project`, `--project-id` or saved context. `issues delete ID --dry-run` makes one read-only preview request and prints the exact ID, key, title, project and affected issue/comment/relation/worklog counts; it does not require `--yes`. A real deletion still requires `--yes`, checks a fresh preview, prints it as a `deletePreview` JSON record on stderr, then deletes by the resolved immutable ID within that project. The final API result remains one JSON object on stdout. Failed or mismatched previews prevent deletion. Deletion commands other than issues and Notes still require `--yes` even in dry-run.
 
@@ -167,7 +170,7 @@ Note deletion is permanent: Notes have no trash and no restore. Only the Note's 
 
 `issues trash` lists trashed issues in the selected project; `issues restore ID` restores the original issue. These commands require the matching server release. The CLI has no bulk deletion or delete-by-search, and no permanent purge of issues. Use `issues update` to revise existing work instead of deleting and recreating it: recreation assigns a new issue ID/key and does not restore the original discussion.
 
-`--workspace ID` and `--project ID` override saved context per command. `--project-id` is a specific API body/query field. Default project context applies to issue creation, Note creation, supported filters and issue trash operations, not to project moves on update. Conflicting explicit `--project` and `--project-id` values are refused for issue trash operations. A workspace change clears the saved project unless a new project is explicitly verified. The server rechecks current membership on every request; a CLI context is not authorization.
+`--workspace ID` and `--project ID` override saved context per command. A command that takes no project refuses `--project` (`unknown_flag`). `--project-id` is a specific API body/query field. Default project context applies to issue creation, Note creation, supported filters and issue trash operations, not to project moves on update. Conflicting explicit `--project` and `--project-id` values are refused for issue trash operations. A workspace change clears the saved project unless a new project is explicitly verified. The server rechecks current membership on every request; a CLI context is not authorization.
 
 `--all` fetches issue, Note or worklog lists to completion (maximum 100 pages/10,000 items), deduplicating stable IDs. Pagination is not a consistent snapshot under concurrent edits. Other list APIs retain their documented pagination/filter parameters from `collab schema`.
 
@@ -449,6 +452,42 @@ Each callback queue includes at most 50 entries and omits `nextCursor`. When
 later entries. An unchanged full page must not be treated as an empty inbox.
 Mark other agents' claimed/completed entries seen as appropriate.
 
+
+## Seats and the interim runner (CLI 0.10.0)
+
+In a project that uses seats, an agent is a seat (one project, one role) and work reaches it only as an issue assigned to it. The rules are in the [seats guide](../../content/docs/agents/seats.md); the [agent skill](skills/collab-agents/SKILL.md#seats) is what a session follows. These commands need the matching server.
+
+`collab seat run` is the interim runner: it waits for the seat's next issue without a model, checks it out and starts the program you name as a fresh session. Put the seat's token in `COLLAB_TOKEN` (with `COLLAB_URL`) and run it in the repository the seat works in:
+
+```sh
+# Claude Code
+collab seat run -- claude -p 'Work the Collab issue in $COLLAB_ISSUE_KEY. First run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
+# Codex
+collab seat run -- codex exec 'Work the Collab issue in $COLLAB_ISSUE_KEY. First run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
+```
+
+Keep the single quotes: nothing expands the variables on the way, the session reads them from its own environment. Add the permission flags an unattended session needs on your machine to run `collab`, `git` and your tests (`--permission-mode` or `--allowedTools` for Claude Code, `--sandbox` for Codex); without them a headless session cannot run commands. On Windows name an `.exe`: a `.cmd` wrapper cannot be started without a shell.
+
+- It reads the inbox every 5 seconds and takes the first issue. A checkout refused with `409` is not tried again while the inbox lists that issue; the next issue is taken in the same read.
+- The program starts in the current directory with its arguments unchanged, no shell, and `COLLAB_ISSUE_KEY`, `COLLAB_RUN_ID` and `COLLAB_RUN_GENERATION` added to its environment. Its output goes to standard error; standard output carries one JSON result when the runner ends.
+- The lease is renewed every 15 seconds while the program lives. A refused renewal (`run_fenced`: the issue went to someone else, or the run was marked lost) stops the program.
+- When the program exits, a run the session finished is left alone. Any other run is closed, and the issue is offered again to resume. After three runs in a row on one issue without a finish, the runner leaves that issue alone until it is restarted or the issue leaves the inbox, and says so on standard error.
+- One issue at a time. `--once` stops after one issue. Ctrl-C or `SIGTERM` stops the program, closes its run and ends the runner.
+- While the server does not answer, as during a deploy, the runner keeps trying.
+
+Known limits: the session has the machine's normal permissions and no spend limit of its own, and its token use is not recorded. A release seat's unfinished run is not closed by the runner; a person clears it on the issue page.
+
+By hand or from a script:
+
+```sh
+collab seat show
+collab seat inbox --wait-seconds 30
+collab run context APP-123
+collab seat request --from-issue APP-123 --role review --title 'Review the change for APP-123' --body-file request.md
+collab run finish RUN_ID --generation GENERATION --outcome in_review --review-request APP-130 --note-file note.md
+```
+
+`seat inbox` reads once; with `--wait-seconds` (1 to 60) it polls until there is work. `seat request` takes `--project ID_OR_PREFIX` for another project and `--blocks true`. `run finish` takes `--outcome done|in_review|blocked` and a note with the headings `## Done`, `## Decisions`, `## Evidence` and `## Next`; `in_review` names `--review-request` or `--asked-user`, `blocked` names `--blocked-by` or `--asked-user`, and `--status` picks the project status. Refusals keep the server's code (`exit_note_required`, `exit_state_required`, `run_fenced`, `template_required`, `request_cap` and the rest) and, for an incomplete finish or request, list what is missing. `run start --issue KEY` and `run renew RUN_ID --generation GENERATION` exist for a person's own run and for other runners; a seat's lease lasts 60 seconds, so a seat is run with `collab seat run`.
 
 ## Dedicated managed workers (CLI 0.7.0)
 

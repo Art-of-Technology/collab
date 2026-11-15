@@ -70,6 +70,28 @@ export const commands = {
   'handoffs supersede': command('PATCH', 'agents/handoffs/:id', { agent: string, content: string, replacementId: string }, {}, {
     action: 'supersede', required: ['agent', 'content', 'replacementId'], description: 'Close obsolete work and link its existing replacement on the same issue. Only the sender of open work or the current claimant may do this.',
   }),
+  'seat show': command('GET', 'seats/me', {}, {}, { description: 'The seat behind this token: its project and role. Refused with seat_required for a token that is not a seat.' }),
+  'seat inbox': command('GET', 'seats/me/inbox', {}, {}, {
+    wait: 'optional',
+    description: 'What to work on next, in order, each with its reason. With --wait-seconds 1..60 it polls until there is work, so a plain script can wait without a model. Reads only.',
+  }),
+  'seat request': command('POST', 'seats/me/requests', { project: string, role: string, title: string, body: string, fromIssue: string, blocks: boolean }, {}, {
+    required: ['role', 'title', 'body', 'fromIssue'],
+    description: 'Ask a seat for work on one of your issues: --role developer, review or release, --from-issue the issue it is for, --body or --body-file filled in from the Task template. --project names another project by ID or issue prefix; without it the request stays in your project. --blocks true makes your issue wait for it.',
+  }),
+  'seat run': command('GET', 'seats/me/inbox', {}, {}, {
+    seatRun: true, localOptions: { once: boolean },
+    description: 'collab seat run [--once] -- PROGRAM [ARGS...]. Waits for the next issue in the inbox, checks it out and starts PROGRAM with ARGS as given, no shell, with COLLAB_RUN_ID, COLLAB_RUN_GENERATION and COLLAB_ISSUE_KEY in its environment. Renews the lease while PROGRAM lives; when it exits without having finished the run, closes it. One issue at a time; --once stops after one.',
+  }),
+  'run start': command('POST', 'runs', { issue: string, generation: string, runner: string }, {}, {
+    required: ['issue'], description: 'Take an issue assigned to you. One run is open per issue. The reply carries the generation that renew and finish need.',
+  }),
+  'run context': command('GET', 'issues/:id/run-context', {}, {}, { description: 'What a fresh session needs to work an issue, in one read: the issue, the last exit note, comments since, blockers and requests.' }),
+  'run renew': command('PATCH', 'runs/:id', { generation: string }, {}, { event: 'renew', required: ['generation'], description: "Extend a seat's 60 second lease. collab seat run does this for the program it starts." }),
+  'run finish': command('PATCH', 'runs/:id', { generation: string, outcome: string, note: string, status: string, reviewRequest: string, askedUser: string, blockedBy: string, alsoFinish: array }, {}, {
+    event: 'finish', required: ['generation', 'outcome', 'note'],
+    description: 'End a run with --outcome done, in_review or blocked and an exit note (--note or --note-file) with the headings ## Done, ## Decisions, ## Evidence and ## Next. in_review names --review-request or --asked-user; blocked names --blocked-by or --asked-user. --status picks the project status when the outcome has several.',
+  }),
   'search': command('GET', 'search', {}, { query: string, mode: string, ...projectQuery, type: string, status: string,
     assigneeId: string, after: string, before: string, ...offset, maxTokens: integer }, {
     requiredQuery: ['query'], defaults: { mode: 'hybrid', limit: 20, offset: 0, maxTokens: 8000 },

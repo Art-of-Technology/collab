@@ -7,18 +7,22 @@ import { randomUUID } from 'node:crypto';
 import { workerCommands, runWorker } from '../src/worker.mjs';
 import { coordinatorCommands, runCoordinator } from '../src/coordinator.mjs';
 import { watchInbox } from '../src/inbox-watch.mjs';
+import { seatRun } from '../src/seat-run.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { commands, flagName, scopes } from '../src/commands.mjs';
 import { CliError, request, session, store } from '../src/client.mjs';
 import { login, refresh } from '../src/auth.mjs';
 import cliPackage from '../package.json' with { type: 'json' };
 
-const booleans = new Set(['help', 'json', 'all', 'yes', 'dry-run', 'read-only', 'manage-existing']);
+const booleans = new Set(['help', 'json', 'all', 'yes', 'dry-run', 'read-only', 'manage-existing', 'once']);
 const globals = ['url', 'profile', 'workspace', 'project', 'timeout', 'json'];
 function parse(argv) {
   const words = [], options = Object.create(null);
+  let rest;
   for (let i = 0; i < argv.length; i++) {
     const item = argv[i];
+    // Everything after -- belongs to the program that seat run starts, untouched.
+    if (item === '--') { rest = argv.slice(i + 1); break; }
     if (!item.startsWith('--')) { words.push(item); continue; }
     const [key, ...parts] = item.slice(2).split('=');
     if (Object.hasOwn(options, key)) throw new CliError('duplicate_option', 'Each option can be supplied only once.');
@@ -31,10 +35,10 @@ function parse(argv) {
       options[key] = value;
     }
   }
-  return { words, options };
+  return { words, options, rest };
 }
 function allowed(options, names) {
-  if (Object.keys(options).some(key => !names.includes(key))) throw new CliError('unknown_option', `Supported options: ${names.map(n => `--${n}`).join(', ')}`);
+  if (Object.keys(options).some(key => !names.includes(key))) throw new CliError('unknown_flag', `Supported options: ${names.map(n => `--${n}`).join(', ')}`);
 }
 function checkedDeletePreview(value, identifier, projectId) {
   if (!value || typeof value.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(value.id) ||
@@ -108,9 +112,10 @@ async function update() {
   } finally { fs.rmSync(work, { recursive: true, force: true }); }
 }
 async function main() {
-  const { words, options } = parse(process.argv.slice(2));
+  const { words, options, rest } = parse(process.argv.slice(2));
   if (options.help || !words.length || words[0] === 'help' || words[0] === 'schema') return help();
   const name = commands[words[0]] ? words[0] : words.slice(0, 2).join(' ');
+  if (rest && name !== 'seat run') throw new CliError('unexpected_arguments', 'Only collab seat run takes arguments after --.');
   if (words[0] === 'orca') throw new CliError('orca_retired', 'Terminal dispatch was retired. Use worker setup/run with a dedicated owned Claude process.');
   if (['worker', 'coordinator'].includes(words[0]) && options['config-dir']) {
     if (!path.isAbsolute(options['config-dir'])) throw new CliError('invalid_config_dir', 'Use an absolute private --config-dir.');
@@ -190,7 +195,9 @@ async function main() {
   const args = words.slice(name.split(' ').length);
   const parameters = [...spec.path.matchAll(/:(\w+)/g)].map(m => m[1]);
   if (args.length !== parameters.length || args.some(a => !/^[a-zA-Z0-9_-]+$/.test(a))) throw new CliError('invalid_identifier', `Expected ${parameters.length} ID/key argument(s); only letters, digits, underscores and hyphens allowed.`);
-  allowed(options, [...globals, ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...Object.keys(spec.localOptions || {}).map(flagName), 'input', 'content-file', 'description-file', 'yes', 'dry-run', 'all']);
+  const textFiles = ['content', 'description', 'body', 'note'].filter(key => Object.hasOwn(spec.fields, key));
+  // --project is declared only by a command that reads a project; elsewhere it used to be dropped without a word.
+  allowed(options, [...globals.filter(key => key !== 'project' || spec.query.projectId || spec.defaultProject), ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...Object.keys(spec.localOptions || {}).map(flagName), 'input', ...textFiles.map(key => `${key}-file`), 'yes', 'dry-run', 'all']);
   if (options.all && !spec.pagination) throw new CliError('unsupported_pagination', '--all is supported only for issues, notes and worklogs lists.');
   if (spec.method === 'DELETE' && !options.yes && !(spec.deletePreview && options['dry-run'])) throw new CliError('confirmation_required', 'Deletion requires --yes.');
   if (spec.requiredQuery?.includes('projectId') && options.project && options['project-id'] && options.project !== options['project-id']) {
@@ -210,8 +217,8 @@ async function main() {
     if (Object.hasOwn(body, key)) throw new CliError('duplicate_field', 'Do not repeat a field in JSON and command flags.');
     body[key] = converted(options[flagName(key)], type);
   }
-  for (const key of ['content', 'description']) if (options[`${key}-file`]) {
-    if (!Object.hasOwn(spec.fields, key) || Object.hasOwn(body, key)) throw new CliError('invalid_input', 'Text file field is unsupported or duplicated.');
+  for (const key of textFiles) if (options[`${key}-file`]) {
+    if (Object.hasOwn(body, key)) throw new CliError('invalid_input', 'Text file field is duplicated.');
     body[key] = await boundedInput(options[`${key}-file`]);
   }
   if (['handoffs send', 'transfers offer', 'reviews request'].includes(name) && body.requestId !== undefined &&
@@ -227,6 +234,8 @@ async function main() {
     if (body.scope && !['WORKSPACE', 'PROJECT', 'PUBLIC'].includes(body.scope)) throw new CliError('unsupported_note_scope', 'Use WORKSPACE, PROJECT or PUBLIC for shared Notes.');
   }
   const state = stateStore.load(), selected = session(options, state);
+  // A run started by hand gets a generation of its own; the reply carries it for renew and finish.
+  if (name === 'run start') { body.generation ??= randomUUID(); body.runner ??= 'collab-cli'; }
   if (spec.defaultProject && !Object.hasOwn(body, 'projectId') && selected.project) body.projectId = selected.project;
   if (name === 'notes create' && body.projectId && !body.scope) body.scope = 'PROJECT';
   for (const key of spec.required || []) if (body[key] === undefined || body[key] === null || body[key] === '') throw new CliError('required_field', `Missing required --${flagName(key)}.`);
@@ -274,12 +283,14 @@ async function main() {
   let endpoint = spec.path; parameters.forEach((key, i) => { endpoint = endpoint.replace(`:${key}`, encodeURIComponent(args[i])); });
   const timeout = options.timeout === undefined ? 30000 : converted(options.timeout, 'integer') * 1000;
   if (timeout < 1000 || timeout > 120000) throw new CliError('invalid_timeout', 'Timeout must be 1..120 seconds.');
-  const waitSeconds = spec.wait ? converted(options['wait-seconds'] ?? '30', 'integer') : 0;
-  if (spec.wait && (waitSeconds < 1 || waitSeconds > 60)) throw new CliError('invalid_timeout', 'Wait must be 1..60 seconds.');
+  const waits = spec.wait && (spec.wait !== 'optional' || options['wait-seconds'] !== undefined);
+  const waitSeconds = waits ? converted(options['wait-seconds'] ?? '30', 'integer') : 0;
+  if (waits && (waitSeconds < 1 || waitSeconds > 60)) throw new CliError('invalid_timeout', 'Wait must be 1..60 seconds.');
   if (name === 'reviews wait' && !/^[a-zA-Z0-9_-]{1,128}$/.test(options['reviewer-id'] || '')) {
     throw new CliError('invalid_value', '--reviewer-id must be the immutable registration ID from agents list.');
   }
   if (spec.action) body.action = spec.action;
+  if (spec.event) body.event = spec.event;
   const payload = Object.keys(spec.fields).length ? body : undefined;
   const apiPath = () => `/api/apps/auth/${endpoint}${query.size ? `?${query}` : ''}`;
   if (spec.watch) {
@@ -347,9 +358,21 @@ async function main() {
     await new Promise((resolve, reject) => process.stderr.write(JSON.stringify({ deletePreview: preview }) + '\n', error => error ? reject(error) : resolve()));
   }
   if (options['dry-run']) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), body: payload };
+  if (spec.seatRun) {
+    if (!rest?.length) throw new CliError('required_field', 'Name the program to start after --, for example: collab seat run -- claude -p PROMPT');
+    const controller = new AbortController();
+    const stop = () => controller.abort();
+    process.once('SIGINT', stop); process.once('SIGTERM', stop);
+    try {
+      return await seatRun({ program: rest[0], args: rest.slice(1), once: Boolean(options.once), signal: controller.signal,
+        runner: `collab seat run: ${path.basename(rest[0])}`.slice(0, 64),
+        api: (method, route, data) => request(selected.base, `/api/apps/auth/${route}${query.size ? `?${query}` : ''}`, { token: selected.token, method, body: data, timeout }) });
+    } finally { process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop); }
+  }
   const send = async (requestTimeout = timeout) => {
     const result = await request(selected.base, apiPath(), { token: selected.token, method: spec.method, body: payload, timeout: requestTimeout });
     if (name === 'notes get' && ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'].includes(result?.type)) throw new CliError('unsupported_note_type', 'Secret document output is not available through this CLI.', 4);
+    if (name === 'seat request' && result?.warning === 'seat_idle') process.stderr.write(JSON.stringify({ warning: 'seat_idle', message: 'The request was filed, but the seat it went to has not read its inbox for 10 minutes and may not be running. Tell a person.' }) + '\n');
     return result;
   };
   if (name === 'reviews wait') {
@@ -393,7 +416,7 @@ async function main() {
       if (Date.now() >= deadline) return { items: [], nextCursor: null, timedOut: true };
     }
   }
-  if (spec.wait) {
+  if (waits) {
     const deadline = Date.now() + waitSeconds * 1000;
     let last;
     for (;;) {
