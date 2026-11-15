@@ -85,11 +85,20 @@ test('who may be assigned an issue is one rule on every path that sets an assign
   });
 
   await t.test('web create rejects non-string assignees without creating an issue', async () => {
-    for (const value of [false, 0, null, true, 1, {}, []]) {
+    for (const value of [false, 0, true, 1, {}, []]) {
       const title = `invalid ${++count}`;
       const response = await web.POST(request('POST', { title, workspaceId: 'w', projectId: project, assigneeId: value }));
       assert.equal(response.status, 400);
       assert.equal(await prisma.issue.count({ where: { title } }), 0);
+    }
+  });
+
+  await t.test('web create with no assignee, or null as the assignee selector sends for Unassigned, creates an unassigned issue', async () => {
+    for (const body of [{}, { assigneeId: null }]) {
+      const title = `unassigned ${++count}`;
+      const response = await web.POST(request('POST', { title, workspaceId: 'w', projectId: project, ...body }));
+      assert.equal(response.status, 201, await response.clone().text());
+      assert.equal((await prisma.issue.findFirstOrThrow({ where: { title } })).assigneeId, null);
     }
   });
 
