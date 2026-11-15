@@ -4,9 +4,8 @@ const dom = new JSDOM('<div id="root"></div>', { url: 'https://collab.test/works
 global.window = dom.window; global.document = dom.window.document; global.IS_REACT_ACT_ENVIRONMENT = true;
 const React = require('react');
 const { createRoot } = require('react-dom/client');
-const { QueryClient } = require('@tanstack/react-query');
+const { QueryClient, QueryClientProvider, useQuery } = require('@tanstack/react-query');
 const queryClient = new QueryClient();
-const memberKey = ['workspace-member-users', 'w1'];
 
 const calls = [], notices = [];
 let refreshed = 0, answer = { ok: true, json: async () => ({}) };
@@ -15,7 +14,6 @@ const parts = (names, tag = 'div') => Object.fromEntries(names.map(name => [name
 const Manager = load('src/components/workspace/AgentTokensManager.tsx', {
   react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
   '@tanstack/react-query': { useQueryClient: () => queryClient },
-  '@/hooks/queries/useWorkspaceSelectorData': { workspaceMemberUsersKey: id => ['workspace-member-users', id] },
   'next/navigation': { useRouter: () => ({ refresh: () => { refreshed += 1; } }) },
   'lucide-react': new Proxy({}, { get: () => () => null }),
   '@/components/ui/badge': { Badge: el('span') },
@@ -95,6 +93,72 @@ const type = (id, value) => React.act(async () => {
   input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 });
 
+test('seat changes refresh visible picker choices across workspace keys', async () => {
+  const agent = { id: 'agent', name: 'Agent', email: null };
+  let members = [agent];
+  const selectorData = load('src/hooks/queries/useWorkspaceSelectorData.ts', {
+    '@tanstack/react-query': { useQuery },
+  }, { fetch: async () => ({ ok: true, json: async () => ({ members }) }) });
+  const shown = ({ children }) => React.createElement('div', null, children);
+  const { IssueAssigneeSelector } = load('src/components/issue/selectors/IssueAssigneeSelector.tsx', {
+    react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
+    '@/hooks/queries/useWorkspaceSelectorData': selectorData,
+    'next-auth/react': { useSession: () => ({ data: null }) },
+    '@/components/ui/popover': { Popover: shown, PopoverContent: shown, PopoverTrigger: shown },
+    '@/components/ui/button': { Button: el('button') },
+    '@/components/ui/user-avatar': { UserAvatar: () => null }, '@/components/ui/custom-avatar': { CustomAvatar: () => null },
+    '@/components/ui/input': { Input: () => null },
+    'lucide-react': new Proxy({}, { get: () => () => null }),
+    '@/lib/utils': { cn: (...names) => names.filter(Boolean).join(' ') },
+  });
+  queryClient.clear();
+  const seat = { id: 's1', role: 'developer', project: 'Collab', isDefault: true, retired: false };
+  const root = createRoot(document.getElementById('root'));
+  await React.act(async () => root.render(React.createElement(QueryClientProvider, { client: queryClient },
+    React.createElement(Manager, { workspaceId: 'w1', workspaces: [], projects: [{ id: 'p1', name: 'Collab' }], people: [], tokens: [{ ...token('t1', 'Agent', []), seat }] }),
+    ...[['id-picker', 'w1', 'p1'], ['slug-picker', 'workspace-slug', 'p1'], ['other-picker', 'w2', 'p1'], ['wrong-project', 'workspace-slug', 'p2']].map(([id, workspaceId, projectId]) =>
+      React.createElement('div', { id, key: id }, React.createElement(IssueAssigneeSelector, { workspaceId, projectId, onChange() {} }))))));
+  const waitFor = async predicate => {
+    for (let i = 0; i < 100 && !predicate(); i++) await React.act(async () => new Promise(resolve => setTimeout(resolve, 10)));
+    assert.ok(predicate(), 'picker choices did not update');
+  };
+  const offered = id => [...document.querySelectorAll(`#${id} button`)].some(button => button.textContent.includes('Agent'));
+  try {
+    await waitFor(() => offered('id-picker') && offered('slug-picker') && offered('other-picker') && offered('wrong-project'));
+    await React.act(async () => buttons('New token')[0].click());
+    await type('agent-token-name', 'Agent');
+    await choose(0, 'p1');
+    members = [{ ...agent, agentSeat: { projectId: 'p1', role: 'developer', retiredAt: null } }];
+    answer = { ok: true, json: async () => ({ token: { name: 'Agent', token: 'token' } }) };
+    await React.act(async () => buttons('Create seat')[0].click());
+    await waitFor(() => offered('id-picker') && offered('slug-picker') && offered('other-picker') && !offered('wrong-project'));
+    await React.act(async () => buttons('Done')[0].click());
+
+    members = [{ ...agent, agentSeat: { projectId: 'p1', role: 'developer', retiredAt: '2026-11-15' } }];
+    answer = { ok: true, json: async () => ({ unassigned: [] }) };
+    await React.act(async () => buttons('Retire seat')[0].click());
+    await React.act(async () => buttons('Confirm: Retire seat')[0].click());
+    await waitFor(() => !offered('id-picker') && !offered('slug-picker') && !offered('other-picker'));
+
+    await React.act(async () => buttons('New token')[0].click());
+    await type('agent-token-name', 'Agent');
+    await choose(0, 'p1');
+    members = [{ ...agent, agentSeat: { projectId: 'p1', role: 'developer', retiredAt: null } }];
+    answer = { ok: true, json: async () => ({ token: { name: 'Agent', token: 'token' } }) };
+    await React.act(async () => buttons('Create seat')[0].click());
+    await waitFor(() => offered('id-picker') && offered('slug-picker') && offered('other-picker'));
+    await React.act(async () => buttons('Done')[0].click());
+    members = [];
+    await React.act(async () => buttons('Revoke')[0].click());
+    answer = { ok: true, json: async () => ({}) };
+    await React.act(async () => buttons('Confirm: Revoke')[0].click());
+    await waitFor(() => !offered('id-picker') && !offered('slug-picker') && !offered('other-picker'));
+  } finally {
+    await React.act(async () => root.unmount());
+    queryClient.clear();
+  }
+});
+
 test('a token created with a project is a seat: project, role and owner go to the seats endpoint', async () => {
   const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }], people: [{ id: 'u1', name: 'Cem' }] });
   try {
@@ -108,9 +172,7 @@ test('a token created with a project is a seat: project, role and owner go to th
     await choose(1, 'release');
     await choose(2, 'u1');
     answer = { ok: true, json: async () => ({ seat: { id: 's1' }, token: { name: 'rel', token: 'collab_at_seat' } }) };
-    queryClient.setQueryData(memberKey, [{ id: 'agent' }]);
     await React.act(async () => buttons('Create seat')[0].click());
-    assert.equal(queryClient.getQueryState(memberKey).isInvalidated, true);
     assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats', 'POST', { name: 'rel', projectId: 'p1', role: 'release', ownerId: 'u1', expiresInDays: 90 }]);
     assert.match(document.body.textContent, /Copy the token for rel/);
     assert.equal(document.querySelector('input[readonly]').value, 'collab_at_seat');
@@ -136,20 +198,16 @@ test('a seat is named on its token and can be retired; a retired seat and a plai
     assert.equal(buttons('Revoke').length, 3);
 
     const before = refreshed;
-    queryClient.setQueryData(memberKey, [{ id: 'agent' }]);
     await React.act(async () => buttons('Retire seat')[0].click());
     answer = { ok: true, json: async () => ({ unassigned: ['CLB-1'] }) };
     await React.act(async () => buttons('Confirm: Retire seat')[0].click());
-    assert.equal(queryClient.getQueryState(memberKey).isInvalidated, true);
     assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats/s1', 'DELETE', undefined]);
     assert.equal(notices.at(-1).description, 'rel takes no more work. 1 open issue was unassigned.');
     assert.equal(refreshed, before + 1);
 
-    queryClient.setQueryData(memberKey, [{ id: 'agent' }]);
     await React.act(async () => buttons('Revoke')[0].click());
     answer = { ok: true, json: async () => ({}) };
     await React.act(async () => buttons('Confirm: Revoke')[0].click());
-    assert.equal(queryClient.getQueryState(memberKey).isInvalidated, true);
 
     await React.act(async () => buttons('Retire seat')[0].click());
     answer = { ok: false, json: async () => ({ error: 'This seat has a run open; let it finish, or clear it, before retiring the seat' }) };
