@@ -259,7 +259,7 @@ Reads. Scope: `issues:read` or `context:read`.
 
 ## context_get
 
-Project context for an agent: with a projectId, the pipeline (status counts, owners, blockers, recent changes, relevant Notes), which also needs issues:read and context:read; otherwise the workspace prompts.
+Project context for an agent: with a projectId, defaults to the pipeline (status counts, owners, blockers, recent changes, relevant Notes), which also needs issues:read and context:read. Set includePipeline=false for the prompt format; includeKnowledge=true also selects it when includePipeline is omitted. Without a projectId, returns workspace prompts.
 
 Reads. Scope: `prompts:read`.
 

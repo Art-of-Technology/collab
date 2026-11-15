@@ -214,7 +214,7 @@ test('the MCP reference lists every tool with the scope it needs and its argumen
   }
   assert.match(section(page, '## whoami'), /`user:read` or `profile:read`/);
   // What a tool needs beyond its declared scope is in the tool's own description, so an MCP client reads it too.
-  assert.match(section(page, '## context_get'), /with a projectId, the pipeline .* which also needs issues:read and context:read/);
+  assert.match(section(page, '## context_get'), /with a projectId, defaults to the pipeline .* which also needs issues:read and context:read\. Set includePipeline=false for the prompt format; includeKnowledge=true also selects it when includePipeline is omitted\. Without a projectId, returns workspace prompts\./);
   assert.match(section(page, '## workspaces_list'), /`user:read` and `workspace:read`/);
   assert.match(section(page, '## docs_search'), /No scope: every valid token/);
   assert.match(section(page, '## issues_get'), /Reads\./);
