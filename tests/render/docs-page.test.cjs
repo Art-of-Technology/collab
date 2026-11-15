@@ -113,6 +113,20 @@ test('without the ids a heading is rendered as before', async () => {
   assert.match(html, /<h2 class="[^"]*">Example<\/h2>/);
 });
 
+test('repeated explicit markers are hidden on h2 and h3 while loader IDs remain unique', async () => {
+  const root = fixture();
+  fs.writeFileSync(path.join(root, 'content/docs/guides/last.md'), '# Last page\n\n## First {#agents}\n\n### Second {#agents}\n\n## Third {#agents}\n\n### Literal `{#agents}`\n');
+  const page = docsIn(root).docPage('guides/last');
+  const headingIds = Array.from(page.headings, heading => heading.id);
+  assert.deepEqual(headingIds, ['agents', 'agents-2', 'agents-3', 'literal-agents']);
+  const { MarkdownRenderer } = await renderer();
+  const html = renderToStaticMarkup(MarkdownRenderer({ content: page.markdown, headingIds }));
+  assert.match(html, /<h2 id="agents"[^>]*>First<\/h2>/);
+  assert.match(html, /<h3 id="agents-2"[^>]*>Second<\/h3>/);
+  assert.match(html, /<h2 id="agents-3"[^>]*>Third<\/h2>/);
+  assert.match(html, /<h3 id="literal-agents"[^>]*>Literal <code[^>]*>\{#agents\}<\/code><\/h3>/);
+});
+
 test('a link to a page of this site stays in the tab; a link to another site opens a new one', async () => {
   const { MarkdownRenderer } = await renderer();
   const html = renderToStaticMarkup(MarkdownRenderer({ content: guide }));

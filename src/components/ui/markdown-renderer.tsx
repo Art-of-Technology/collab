@@ -15,7 +15,7 @@ interface MarkdownRendererProps {
 
 // Runs after the sanitizer, which would prefix an id. Only headings at the top level of the page count,
 // as in the loader. A heading's trailing {#id} marker chose the id and is not shown.
-const withHeadingIds = (ids: string[]) => () => (tree: any) => {
+const withHeadingIds = (ids: string[], content: string) => () => (tree: any) => {
   let next = 0;
   for (const node of tree.children) {
     if (node.type !== "element" || (node.tagName !== "h2" && node.tagName !== "h3")) continue;
@@ -23,8 +23,9 @@ const withHeadingIds = (ids: string[]) => () => (tree: any) => {
     if (!id) continue;
     node.properties.id = id;
     const last = node.children.at(-1);
-    const text = last?.type === "text" ? last.value.trimEnd() : "";
-    if (text.endsWith(`{#${id}}`)) last.value = text.slice(0, -id.length - 3).trimEnd();
+    if (last?.type === "text" && /\s*\{#[a-z0-9_-]+\}\s*$/.test(content.slice(last.position?.start.offset, last.position?.end.offset))) {
+      last.value = last.value.replace(/\s*\{#[a-z0-9_-]+\}\s*$/, "");
+    }
   }
 };
 
@@ -33,7 +34,7 @@ export function MarkdownRenderer({ content, className = "", headingIds }: Markdo
     <div className={`prose prose-sm max-w-none dark:prose-invert ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight, rehypeSanitize, ...(headingIds ? [withHeadingIds(headingIds)] : [])]}
+        rehypePlugins={[rehypeHighlight, rehypeSanitize, ...(headingIds ? [withHeadingIds(headingIds, content)] : [])]}
         components={{
           // Custom styling for different markdown elements
           h1: ({ children }) => (
