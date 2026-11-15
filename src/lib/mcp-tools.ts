@@ -131,7 +131,7 @@ export const tools: McpTool[] = [
     projectId: id, status: { type: 'string', minLength: 1, maxLength: 128 }, assigneeId: id, after: dateTime, before: dateTime,
     limit: integer(1, 50), offset: integer(0, 50000), maxTokens: integer(1024, 64000),
   }, ['query'], { anyScope: true }),
-  tool('context_get', 'Project context for an agent: with a projectId, the pipeline (status counts, owners, blockers, recent changes, relevant Notes); otherwise the workspace prompts.', ['prompts:read'], 'GET', 'ai-context', aiContext.GET, {
+  tool('context_get', 'Project context for an agent: with a projectId, the pipeline (status counts, owners, blockers, recent changes, relevant Notes), which also needs issues:read and context:read; otherwise the workspace prompts.', ['prompts:read'], 'GET', 'ai-context', aiContext.GET, {
     projectId: id, includeKnowledge: flag, includePipeline: flag, limit: integer(1, 50), offset: integer(0, 50000), since: dateTime, maxTokens: integer(2048, 64000),
   }, [], {
     prepare: args => {

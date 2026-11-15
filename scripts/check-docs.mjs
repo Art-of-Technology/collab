@@ -51,18 +51,23 @@ export function checkDocs(root = repo) {
       if (token.type === 'link') {
         const href = token.href;
         if (!/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(href)) return problems.push(`${file} links to "${href}": write the whole address, starting with /docs/.`);
-        const url = new URL(href, `https://docs.invalid${docHref(slug)}`);
-        // /docs, /docs.md, /docs/<page> and /docs/<page>.md are documentation; other addresses are not checked.
-        const address = url.origin === 'https://docs.invalid' && url.pathname.match(/^\/docs(?:\/(.+?))?(\.md)?$/);
-        if (!address) return;
-        const targetSlug = decodeURIComponent(address[1] ?? 'index');
-        const target = !address[2] && url.pathname !== docHref(targetSlug) ? null : pages.get(targetSlug);
-        const id = decodeURIComponent(url.hash.slice(1));
-        // A file in public/ is served at its own address (the developer docs keep two under /docs).
-        if (!target) { if (!existsSync(join(root, 'public', url.pathname))) problems.push(`${file} links to ${href}, which is not a page.`); }
-        else if (id && !address[2] && !target.headings.some(heading => heading.id === id)) problems.push(`${file} links to ${href}, but that page has no heading with the id "${id}".`);
+        try {
+          const url = new URL(href, `https://docs.invalid${docHref(slug)}`);
+          // /docs, /docs.md, /docs/<page> and /docs/<page>.md are documentation; other addresses are not checked.
+          const address = url.origin === 'https://docs.invalid' && url.pathname.match(/^\/docs(?:\/(.+?))?(\.md)?$/);
+          if (!address) return;
+          const target = pages.get(decodeURIComponent(address[1] ?? 'index'));
+          const id = decodeURIComponent(url.hash.slice(1));
+          // A file in public/ is served at its own address (the developer docs keep two under /docs).
+          if (!target) { if (!existsSync(join(root, 'public', url.pathname))) problems.push(`${file} links to ${href}, which is not a page.`); }
+          else if (id && !address[2] && !target.headings.some(heading => heading.id === id)) problems.push(`${file} links to ${href}, but that page has no heading with the id "${id}".`);
+        } catch {
+          // new URL and decodeURIComponent throw on an address no browser can read, on this site or on another.
+          problems.push(`${file} links to "${href}", which is not an address a browser can read.`);
+        }
       } else if (token.type === 'code' || token.type === 'codespan') {
-        for (const [, after] of token.text.matchAll(COMMAND)) {
+        // A shell comment is words, not a command line.
+        for (const [, after] of token.text.replace(/(^|\s)#.*$/gm, '$1').matchAll(COMMAND)) {
           const words = after.trim().split(/[ \t]+/).filter(Boolean).slice(0, 2);
           const known = !words.length || commands.has(words.join(' ')) || commands.has(words[0]) || (words.length === 1 && groups.has(words[0]));
           if (!known) problems.push(`${file} names the command "collab ${words.join(' ')}", which the CLI does not have (packages/cli).`);

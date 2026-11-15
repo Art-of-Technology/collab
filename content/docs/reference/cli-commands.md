@@ -138,6 +138,114 @@ ID is the resource ID.
 | --- | --- | --- |
 | `--agent` | string | required |
 
+### `collab handoffs seen`
+
+Writes.
+
+```sh
+collab handoffs seen ID
+```
+
+ID is the resource ID.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--agent` | string | required |
+| `--content` | string |  |
+
+### `collab handoffs ack`
+
+Writes.
+
+```sh
+collab handoffs ack ID
+```
+
+ID is the resource ID.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--agent` | string | required |
+| `--content` | string |  |
+
+### `collab handoffs claim`
+
+Writes.
+
+```sh
+collab handoffs claim ID
+```
+
+ID is the resource ID.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--agent` | string | required |
+| `--content` | string |  |
+
+### `collab handoffs progress`
+
+Writes.
+
+```sh
+collab handoffs progress ID
+```
+
+ID is the resource ID.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--agent` | string | required |
+| `--content` | string | required |
+
+### `collab handoffs release`
+
+Writes.
+
+```sh
+collab handoffs release ID
+```
+
+ID is the resource ID.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--agent` | string | required |
+| `--content` | string | required |
+
+### `collab handoffs complete`
+
+Writes.
+
+```sh
+collab handoffs complete ID
+```
+
+ID is the resource ID.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--agent` | string | required |
+| `--content` | string | required |
+
+### `collab handoffs supersede`
+
+Writes.
+
+```sh
+collab handoffs supersede ID
+```
+
+Close obsolete work and link its existing replacement on the same issue. Only the sender of open work or the current claimant may do this.
+
+ID is the resource ID.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--agent` | string | required |
+| `--content` | string | required |
+| `--replacement-id` | string | required |
+
 ## transfers
 
 ### `collab transfers offer`
@@ -371,116 +479,6 @@ ID is the resource ID.
 | Flag | Type | Details |
 | --- | --- | --- |
 | `--agent` | string | required |
-
-## handoffs
-
-### `collab handoffs seen`
-
-Writes.
-
-```sh
-collab handoffs seen ID
-```
-
-ID is the resource ID.
-
-| Flag | Type | Details |
-| --- | --- | --- |
-| `--agent` | string | required |
-| `--content` | string |  |
-
-### `collab handoffs ack`
-
-Writes.
-
-```sh
-collab handoffs ack ID
-```
-
-ID is the resource ID.
-
-| Flag | Type | Details |
-| --- | --- | --- |
-| `--agent` | string | required |
-| `--content` | string |  |
-
-### `collab handoffs claim`
-
-Writes.
-
-```sh
-collab handoffs claim ID
-```
-
-ID is the resource ID.
-
-| Flag | Type | Details |
-| --- | --- | --- |
-| `--agent` | string | required |
-| `--content` | string |  |
-
-### `collab handoffs progress`
-
-Writes.
-
-```sh
-collab handoffs progress ID
-```
-
-ID is the resource ID.
-
-| Flag | Type | Details |
-| --- | --- | --- |
-| `--agent` | string | required |
-| `--content` | string | required |
-
-### `collab handoffs release`
-
-Writes.
-
-```sh
-collab handoffs release ID
-```
-
-ID is the resource ID.
-
-| Flag | Type | Details |
-| --- | --- | --- |
-| `--agent` | string | required |
-| `--content` | string | required |
-
-### `collab handoffs complete`
-
-Writes.
-
-```sh
-collab handoffs complete ID
-```
-
-ID is the resource ID.
-
-| Flag | Type | Details |
-| --- | --- | --- |
-| `--agent` | string | required |
-| `--content` | string | required |
-
-### `collab handoffs supersede`
-
-Writes.
-
-```sh
-collab handoffs supersede ID
-```
-
-Close obsolete work and link its existing replacement on the same issue. Only the sender of open work or the current claimant may do this.
-
-ID is the resource ID.
-
-| Flag | Type | Details |
-| --- | --- | --- |
-| `--agent` | string | required |
-| `--content` | string | required |
-| `--replacement-id` | string | required |
 
 ## search
 

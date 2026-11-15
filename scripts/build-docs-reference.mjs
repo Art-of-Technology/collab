@@ -34,29 +34,31 @@ export function cliCommandsPage(table_ = commands) {
     generated('packages/cli/src/commands.mjs'), '',
     'The commands that only run on your computer (`collab auth`, `collab config`, `collab schema`, `collab worker`) are on the [CLI page](/docs/cli#commands). The flags every command takes are under [Flags and inputs](/docs/cli#flags). `collab schema` prints this list as JSON.',
   ];
-  let group = null;
-  for (const [name, spec] of Object.entries(table_)) {
-    const [first] = name.split(' ');
-    if (first !== group) lines.push('', `## ${group = first}`);
-    const ids = [...spec.path.matchAll(/:(\w+)/g)].map(([, key]) => (key === 'childId' ? 'CHILD_ID' : 'ID'));
-    const remove = spec.method === 'DELETE';
-    const options = { ...spec.fields, ...spec.query, ...spec.localOptions };
-    const rows = Object.entries(options).map(([field, type]) => [`\`--${flagName(field)}\``, type, details([
-      (spec.required?.includes(field) || spec.requiredQuery?.includes(field) || spec.requiredOptions?.includes(field)) && 'required',
-      ...limits(spec.constraints?.[field]),
-      spec.defaults?.[field] !== undefined && `CLI default: ${spec.defaults[field]}`,
-      spec.defaultDescriptions?.[field] && `default: ${spec.defaultDescriptions[field]}`,
-    ])]);
-    if (spec.wait) rows.push(['`--wait-seconds`', 'integer', '1 to 60 seconds, default 30. A wait only reads; an empty wait returns `timedOut: true`']);
-    lines.push(
-      '', `### \`collab ${name}\``,
-      '', spec.method === 'GET' ? 'Reads.' : remove ? 'Deletes. Needs `--yes`.' : 'Writes.',
-      '', '```sh', ['collab', name, ...ids, ...(remove ? ['--yes'] : [])].join(' '), '```',
-      ...(spec.description ? ['', spec.description] : []),
-      ...(ids.length ? ['', `ID is the ${spec.path.startsWith('issues/') ? 'issue ID or key (such as APP-123)' : 'resource ID'}.${ids.length > 1 ? ' CHILD_ID is the relation or work log ID.' : ''}`] : []),
-      '', ...(rows.length ? table('Flag', rows) : ['No flags of its own.']),
-      ...(spec.pagination ? ['', '`--all` fetches every page.'] : []),
-    );
+  // One section per first word, in the order the words first appear: the table comes back to a word it has left.
+  const groups = Map.groupBy(Object.entries(table_), ([name]) => name.split(' ')[0]);
+  for (const [group, entries] of groups) {
+    lines.push('', `## ${group}`);
+    for (const [name, spec] of entries) {
+      const ids = [...spec.path.matchAll(/:(\w+)/g)].map(([, key]) => (key === 'childId' ? 'CHILD_ID' : 'ID'));
+      const remove = spec.method === 'DELETE';
+      const options = { ...spec.fields, ...spec.query, ...spec.localOptions };
+      const rows = Object.entries(options).map(([field, type]) => [`\`--${flagName(field)}\``, type, details([
+        (spec.required?.includes(field) || spec.requiredQuery?.includes(field) || spec.requiredOptions?.includes(field)) && 'required',
+        ...limits(spec.constraints?.[field]),
+        spec.defaults?.[field] !== undefined && `CLI default: ${spec.defaults[field]}`,
+        spec.defaultDescriptions?.[field] && `default: ${spec.defaultDescriptions[field]}`,
+      ])]);
+      if (spec.wait) rows.push(['`--wait-seconds`', 'integer', '1 to 60 seconds, default 30. A wait only reads; an empty wait returns `timedOut: true`']);
+      lines.push(
+        '', `### \`collab ${name}\``,
+        '', spec.method === 'GET' ? 'Reads.' : remove ? 'Deletes. Needs `--yes`.' : 'Writes.',
+        '', '```sh', ['collab', name, ...ids, ...(remove ? ['--yes'] : [])].join(' '), '```',
+        ...(spec.description ? ['', spec.description] : []),
+        ...(ids.length ? ['', `ID is the ${spec.path.startsWith('issues/') ? 'issue ID or key (such as APP-123)' : 'resource ID'}.${ids.length > 1 ? ' CHILD_ID is the relation or work log ID.' : ''}`] : []),
+        '', ...(rows.length ? table('Flag', rows) : ['No flags of its own.']),
+        ...(spec.pagination ? ['', '`--all` fetches every page.'] : []),
+      );
+    }
   }
   return `${lines.join('\n')}\n`;
 }
@@ -88,7 +90,6 @@ export function mcpToolsPage(tools, warning) {
       '', `## ${tool.name}`,
       '', tool.description.endsWith(warning) ? tool.description.slice(0, -warning.length) : tool.description,
       '', `${tool.method === 'GET' ? 'Reads.' : 'Writes.'} ${scopes ? `Scope: ${scopes}.` : 'No scope: every valid token.'}`,
-      ...(tool.name === 'context_get' ? ['', 'Pipeline context also requires `issues:read` and `context:read`. It is enabled by default when `projectId` is supplied unless `includeKnowledge` is true, or can be requested with `includePipeline=true`.'] : []),
       '', ...(rows.length ? table('Argument', rows) : ['No arguments of its own.']),
     );
   }

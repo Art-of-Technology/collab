@@ -57,11 +57,17 @@ test('a link to a docs page that does not exist fails', async () => {
   await one({ 'guides/seats.md': clean['guides/seats.md'] + '\n[The CLI](cli)\n' }, /guides\/seats\.md links to "cli".*\/docs\//);
 });
 
-test('the index has an HTML route only at /docs', async () => {
-  for (const href of ['/docs/index', '/docs/index#missing']) {
-    await one({ 'index.md': clean['index.md'] + `\n[Wrong](${href})\n` }, /which is not a page/);
-  }
-  assert.deepEqual(await check({ 'index.md': clean['index.md'] + '\n[Markdown](/docs/index.md) and [root Markdown](/docs.md).\n' }), []);
+test('every address of the landing page is accepted, and its headings are still checked', async () => {
+  // /docs/index answers with the landing page too: the page route finds the slug "index".
+  assert.deepEqual(await check({ 'index.md': clean['index.md'] + '\n[Page](/docs/index), [Markdown](/docs/index.md) and [root Markdown](/docs.md).\n' }), []);
+  await one({ 'index.md': clean['index.md'] + '\n[Wrong](/docs/index#missing)\n' }, /no heading with the id "missing"/);
+});
+
+test('an address that cannot be read is reported, and the rest of the docs is still checked', async () => {
+  const problems = await check({ 'index.md': clean['index.md'] + '\n[Bad escape](/docs/%ZZ), [bad site](https://[) and [bad fragment](/docs/cli#%ZZ).\n[Gone](/docs/gone)\n' });
+  assert.equal(problems.length, 4, problems.join('\n'));
+  for (const href of ['/docs/%ZZ', 'https://[', '/docs/cli#%ZZ']) assert.ok(problems.some(problem => problem.includes(`links to "${href}", which is not an address a browser can read`)), href);
+  assert.ok(problems.some(problem => /links to \/docs\/gone, which is not a page/.test(problem)));
 });
 
 test('a link to a heading that does not exist fails, on another page and on the same page', async () => {
@@ -96,6 +102,13 @@ test('shell assignments with quoted values and tabs do not hide commands', async
   assert.deepEqual(await check({ 'cli.md': clean['cli.md'] + '\n`LABEL="my agent"\tcollab\tissues\tlist`\n' }), []);
 });
 
+test('a shell comment is not read as a command; quoted text after a pipe is', async () => {
+  const block = lines => ({ 'cli.md': clean['cli.md'] + `\n\`\`\`sh\n${lines}\n\`\`\`\n` });
+  assert.deepEqual(await check(block('# example | collab frobnicate\ncollab whoami # then: collab frobnicate; collab nothing')), []);
+  // The check does not parse quotes. Text that names a command the CLI does not have is what it is for.
+  await one(block('echo "example | collab frobnicate"'), /names the command "collab frobnicate"/);
+});
+
 test('every problem is reported, not only the first', async () => {
   const problems = await check({
     'index.md': '# Docs\n\n[Gone](/docs/gone) and [missing](/docs/cli#uninstall).\n',
@@ -119,6 +132,12 @@ test('the CLI reference lists every command of the CLI with every flag it takes'
     for (const option of spec.options) assert.ok(part.includes(`| \`--${option}\` |`), `${name} --${option}`);
   }
   assert.equal((page.match(/^### /gm) || []).length, Object.keys(commands).length);
+  // One section per first word, although the table comes back to "handoffs" after other commands.
+  const groups = page.match(/^## .+$/gm);
+  assert.deepEqual(groups, [...new Set(Object.keys(commands).map(name => `## ${name.split(' ')[0]}`))]);
+  for (const name of Object.keys(commands).filter(name => name.startsWith('handoffs '))) {
+    assert.ok(page.split(/^(?=## )/m).find(part => part.startsWith('## handoffs\n')).includes(`### \`collab ${name}\``), name);
+  }
   for (const name of ['agents retire', 'issues delete', 'relations delete', 'worklogs delete', 'notes delete']) assert.match(section(page, `### \`collab ${name}\``), /--yes/, name);
   for (const name of ['issues list', 'worklogs list', 'notes list']) assert.match(section(page, `### \`collab ${name}\``), /--all/, name);
   assert.match(section(page, '### `collab relations delete`'), /collab relations delete ID CHILD_ID --yes/);
@@ -152,12 +171,17 @@ test('the CLI reference shows the watcher\'s required callback, and the limits a
       query: ['required', 'minimum length: 1', 'maximum length: 500', 'trimmed'],
       mode: ['values: exact, keyword, semantic, hybrid, fuzzy', 'CLI default: hybrid'],
       type: ['values: all, issue, note, activity', 'default: all (server default)'],
+      status: ['minimum length: 1', 'maximum length: 128', 'trimmed'],
+      'assignee-id': ['minimum length: 1', 'maximum length: 128', 'trimmed'],
       'project-id': ['minimum length: 1', 'maximum length: 128', 'trimmed'],
-      after: ['format: date-time'],
+      after: ['format: date-time'], before: ['format: date-time'],
       limit: ['minimum: 1', 'maximum: 50', 'CLI default: 20'],
+      offset: ['minimum: 0', 'maximum: 50000', 'CLI default: 0'],
       'max-tokens': ['minimum: 1024', 'maximum: 64000', 'CLI default: 8000'],
     }],
     ['context get', {
+      'project-id': ['minimum length: 1', 'maximum length: 128', 'trimmed'],
+      offset: ['minimum: 0', 'maximum: 50000', 'default: 0 (server default; includePipeline=true only)'],
       'include-pipeline': ['true with projectId unless includeKnowledge=true; false otherwise (CLI default)'],
       limit: ['minimum: 1', 'maximum: 50', 'default: 10 (server default; includePipeline=true only)'],
       since: ['format: date-time', '7 days before the server request time (server default; includePipeline=true only)'],
@@ -189,7 +213,8 @@ test('the MCP reference lists every tool with the scope it needs and its argumen
     }
   }
   assert.match(section(page, '## whoami'), /`user:read` or `profile:read`/);
-  assert.match(section(page, '## context_get'), /Pipeline context also requires `issues:read` and `context:read`.*default when `projectId` is supplied unless `includeKnowledge` is true.*`includePipeline=true`/);
+  // What a tool needs beyond its declared scope is in the tool's own description, so an MCP client reads it too.
+  assert.match(section(page, '## context_get'), /with a projectId, the pipeline .* which also needs issues:read and context:read/);
   assert.match(section(page, '## workspaces_list'), /`user:read` and `workspace:read`/);
   assert.match(section(page, '## docs_search'), /No scope: every valid token/);
   assert.match(section(page, '## issues_get'), /Reads\./);
