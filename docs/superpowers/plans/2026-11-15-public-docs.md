@@ -36,16 +36,16 @@
 - `docsNav() → { title: string; pages: { slug: string; title: string }[] }[]`
 - `docPage(slug: string) → { slug; title; summary; markdown; headings: { depth: 2 | 3; text: string; id: string }[] } | null`
 - `allDocs() → DocPage[]` in navigation order
-- `headingId(text: string, seen: Map<string, number>) → string`
+- `headingId(text: string, seen: Map<string, number>) → string`. A heading may end with `{#custom-id}`: the loader uses that id and strips the marker from the text, which is how `/docs/cli` keeps the ids existing links use.
 
-- [ ] Tests: title is the first `# ` line and summary the first paragraph after it; repeated headings get `-2`, `-3`; an unknown slug gives null; a slug with `..` gives null.
+- [ ] Tests: title is the first `# ` line and summary the first paragraph after it; repeated headings get `-2`, `-3`; `## Agent collaboration {#agents}` gives id `agents` and text `Agent collaboration`; an unknown slug gives null; a slug with `..` gives null.
 - [ ] The app builds with `output: 'standalone'` (`next.config.js:4`) and the image copies only `.next/standalone`, `.next/static` and `public` (`Dockerfile:62-76`). Verify the built standalone bundle contains the `content/docs/` files; B2 verifies they can be served.
 
 ### Task B2: what agents read
 
-**Files:** create `src/app/docs/raw/[...slug]/route.ts`, `src/app/llms.txt/route.ts`, `src/app/llms-full.txt/route.ts`; modify `next.config.js` (rewrite `/docs/:path*.md` to `/docs/raw/:path*`); test `tests/render/docs-routes.test.cjs`.
+**Files:** create `src/app/docs/raw/[...slug]/route.ts`, `src/app/llms.txt/route.ts`, `src/app/llms-full.txt/route.ts`; modify `next.config.js` (rewrite `{ source: '/docs/:path(.*)\\.md', destination: '/docs/raw/:path' }`); test `tests/render/docs-routes.test.cjs`.
 
-- [ ] If the rewrite cannot match the `.md` suffix, serve the Markdown at `/docs/raw/<slug>` and list those addresses in `llms.txt`; whichever address is used, the test below hits it on the built server.
+- [ ] `/docs/<slug>.md` is the public address and the only one listed in `llms.txt` or on a page. `/docs/raw/...` is the internal target of the rewrite and is linked from nowhere.
 - [ ] Tests: `/docs/<slug>.md` returns `text/markdown` and exactly `docPage(slug).markdown`; `/llms.txt` has one line per navigation page with title, summary and the `.md` address; `/llms-full.txt` is every page in navigation order.
 - [ ] Start the built standalone server, not `next dev`, and fetch a Markdown page; verify its content matches the source file.
 
@@ -55,6 +55,8 @@
 
 - [ ] Move the eleven sections of today's page (`src/app/docs/page.tsx:26-38`) into Markdown pages; `/docs/cli` becomes a page whose headings carry the old ids.
 - [ ] Render with `MarkdownRenderer`; `DocsDiagrams` calls `renderDiagrams(container)` from `src/lib/mermaid-diagrams.ts` after mount.
+- [ ] Headings get their ids. `MarkdownRenderer`'s heading components set none today, so give it an optional `headingIds` prop (or pass heading components) that sets `id` on `h2` and `h3` from B1's `headingId`, in document order with one `seen` map, so the right rail, search hits and old links land on the heading.
+- [ ] Test: a page with two "Example" headings renders elements with ids `example` and `example-2`; `/docs/cli` renders elements with ids `installation`, `authentication`, `agents` and `commands`.
 - [ ] Tests: the page for a slug shows its title, its headings in the right rail, previous and next from the navigation, and "copy page as Markdown" copies the loader's Markdown.
 
 ### Task B4: one search for people and agents

@@ -109,6 +109,7 @@
 **Produces:** `seatInbox(context) → { items: InboxItem[] }` with `InboxItem = { issueId; issueKey; title; priority; category; reason: 'resume'|'review_returned'|'reply'|'blocker_resolved'|'assigned'; lastRunAt: string | null }`. Callable by a seat, or by a person for the issues assigned to that person. Updates `AgentSeat.lastSeenAt` at most once a minute.
 
 - [ ] Test rule 1: an unassigned issue and an issue assigned to someone else never appear.
+- [ ] Test: an issue with an open run (`running`, `waiting` or `lost`) is never offered, so a runner does not see work that is already being done.
 - [ ] Test rule 3 with one fixture of six issues: the order is resume, then in review with a new comment from someone else, then blocked whose blocking issues are all in category `done`, then to do by priority (`urgent`, `high`, `medium`, `low`) and age; an in review issue with nothing new is absent; at most 50 items.
 - [ ] Test: a status with `category` null counts as `done` when `isFinal`, otherwise as `todo`.
 - [ ] Test: where an issue stands comes from its last run: an issue whose last run finished `blocked` in a project with no "blocked" status is held back, and appears with reason `blocker_resolved` once its blocking issue is done. The status group is used only for issues that never had a run.
@@ -143,7 +144,7 @@
 - [ ] Test rule 10: `usage` is stored on the run and returned by `GET runs/{id}`.
 - [ ] Test: `finish` with `outcome: 'done', status: 'waiting_for_deploy'` moves the issue there; with a status from another group it is refused; without `status` in a project that has both `done` (final) and `waiting_for_deploy` it moves to `done`.
 - [ ] Tests for review focus 3 and 4.
-- [ ] Test: `alsoFinish` is accepted only from a release seat, only for to do issues assigned to that seat; each gets a finished run with the same note.
+- [ ] Test: `alsoFinish` is accepted only from a release seat, only for to do issues assigned to that seat; each gets a finished run with the same note. Each additional issue is checked out and finished inside the same transaction as the main finish, so the one-open-run index refuses an issue that already has a run: then the whole finish is refused with `already_running` naming that issue, and nothing is written.
 - [ ] The issue page shows the open run (who, since when) above the timeline and the last exit note in the timeline, rendered like handoff notes are today (render test in `tests/render`).
 
 ### Task A7: run context, requests, and reading in MCP
@@ -168,10 +169,10 @@
 
 **Produces:**
 - Commands `seat show`, `seat inbox`, `seat request`, `run start`, `run context`, `run renew`, `run finish` (declared like `'inbox list'` in `commands.mjs`).
-- `collab seat run [--once] -- <program> [args...]`, with the seat token in the existing `COLLAB_TOKEN` variable (`packages/cli/src/client.mjs:238`). Loop: poll `seats/me/inbox` every 5 s; check out the first item; start the program without a shell (argv as given), in the current directory, with `COLLAB_RUN_ID`, `COLLAB_RUN_GENERATION` and `COLLAB_ISSUE_KEY` added to its environment; renew the lease every 15 s while it runs; when it exits, read the run: if it is not finished, send `close`. One issue at a time. `--once` stops after one issue.
+- `collab seat run [--once] -- <program> [args...]`, with the seat token in the existing `COLLAB_TOKEN` variable (`packages/cli/src/client.mjs:238`). Loop: poll `seats/me/inbox` every 5 s; check out the first item that is not in its skip set; on `409` put that issue in the skip set and try the next item of the same poll (an issue leaves the skip set when a later poll no longer lists it); start the program without a shell (argv as given), in the current directory, with `COLLAB_RUN_ID`, `COLLAB_RUN_GENERATION` and `COLLAB_ISSUE_KEY` added to its environment; renew the lease every 15 s while it runs; when it exits, read the run: if it is not finished, send `close`. One issue at a time. `--once` stops after one issue.
 
 - [ ] Test: a flag the command does not declare is an error (`unknown_flag`), so `collab inbox list --project X` no longer drops `--project` silently.
-- [ ] Tests with a fake program and the fake API the CLI tests already use: a program that finishes its run leaves it `finished` and no `close` is sent; a program that exits without finishing gets `close` and the run is `stopped`; a program that runs for 40 s sees at least two renews; a `409` on checkout is not retried and the loop moves on; the program receives its arguments unchanged with no shell in between.
+- [ ] Tests with a fake program and the fake API the CLI tests already use: a program that finishes its run leaves it `finished` and no `close` is sent; a program that exits without finishing gets `close` and the run is `stopped`; a program that runs for 40 s sees at least two renews; a `409` on checkout is not retried: with two items of which the first answers `409`, the second is checked out in the same poll, and the first is not tried again while it stays listed; the program receives its arguments unchanged with no shell in between.
 - [ ] `seat inbox --wait-seconds N` waits like `inbox wait` does today (client-side polling, 1 to 60 s), so a plain script can wait for work without a model.
 - [ ] The README shows the two lines people will copy: one starting Claude Code and one starting Codex on `$COLLAB_ISSUE_KEY`, each telling the session to read the run context first and to end with `collab run finish`.
 - [ ] The skill gets a "Seats" part (the loop, the exit note, requests) and marks handoffs as "for projects not switched yet".
