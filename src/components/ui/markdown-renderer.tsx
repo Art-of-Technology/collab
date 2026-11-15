@@ -136,4 +136,4 @@ export function MarkdownRenderer({ content, className = "", headingIds }: Markdo
       </ReactMarkdown>
     </div>
   );
-} 
+}
