@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { HandoffError } from '@/lib/agent-handoffs';
 import { AGENT_APP_SLUG, createAgentToken } from '@/lib/agent-tokens';
@@ -57,12 +57,7 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
     name: account.name ?? input.name.trim(), isDefault, retiredAt: null };
   const seat = await tx.agentSeat.upsert({ where: { userId: account.id }, create: { ...data, userId: account.id }, update: data });
   // An account that had work before it took this seat keeps only what the seat may hold.
-  const takes = SEAT_TAKES[seat.role];
-  const unassigned = same ? [] : await unassignOpen(tx, seat, input.actorId, 'seat_created', { OR: [
-    { projectId: { not: seat.projectId } },
-    { agentRequestRole: { notIn: takes.filter((role): role is string => role !== null) } },
-    ...(takes.includes(null) ? [] : [{ agentRequestRole: null }]),
-  ] });
+  const unassigned = same ? [] : await unassignOpen(tx, seat, input.actorId, 'seat_created', seat);
   await tx.appAuditLog.create({ data: {
     workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_seat.created',
     details: { seatId: seat.id, serviceUserId: account.id, projectId: seat.projectId, role: seat.role, ownerId: seat.ownerId, isDefault, unassigned },
@@ -70,16 +65,23 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
   return seat;
 }
 
-/** Unassign the seat account's issues that are not done (and match `only`), each with an activity entry that says why. Returns their keys. */
-async function unassignOpen(tx: Prisma.TransactionClient, seat: { id: string; userId: string }, actorId: string, reason: string, only: Prisma.IssueWhereInput = {}) {
+/**
+ * Unassign the seat account's issues that are not done, each with an activity entry that says why; with `keep`, only
+ * those that seat may not hold. Returns their keys. Written in SQL because the application's client hides issues in
+ * Trash, and a restored issue must not bring the assignment back.
+ */
+async function unassignOpen(tx: Prisma.TransactionClient, seat: { id: string; userId: string }, actorId: string, reason: string, keep?: { projectId: string; role: string }) {
   // Take the account's issues first, so a change to one of them that is already under way finishes before it is read here.
   await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "assigneeId" = ${seat.userId} FOR UPDATE`;
-  const issues = await tx.issue.updateManyAndReturn({
-    where: { assigneeId: seat.userId, NOT: { projectStatus: { OR: [{ category: 'done' }, { category: null, isFinal: true }] } }, ...only },
-    data: { assigneeId: null },
-    select: { id: true, issueKey: true, workspaceId: true, projectId: true },
-  });
-  await tx.issueAssignee.deleteMany({ where: { issueId: { in: issues.map(issue => issue.id) }, userId: seat.userId } });
+  // An ordinary issue has no request role; '' stands for that in the list of roles the seat takes.
+  const misfit = keep ? Prisma.sql`AND (i."projectId" <> ${keep.projectId} OR NOT (COALESCE(i."agentRequestRole", '') = ANY(${SEAT_TAKES[keep.role].map(role => role ?? '')})))` : Prisma.empty;
+  const issues = await tx.$queryRaw<{ id: string; issueKey: string | null; workspaceId: string; projectId: string }[]>`
+    UPDATE "Issue" i SET "assigneeId" = NULL, "updatedAt" = ${new Date()}
+    WHERE i."assigneeId" = ${seat.userId}
+      AND NOT EXISTS (SELECT 1 FROM "ProjectStatus" s WHERE s."id" = i."statusId" AND (s."category" = 'done' OR (s."category" IS NULL AND s."isFinal")))
+      ${misfit}
+    RETURNING i."id", i."issueKey", i."workspaceId", i."projectId"`;
+  await tx.$executeRaw`DELETE FROM "IssueAssignee" WHERE "userId" = ${seat.userId} AND "issueId" = ANY(${issues.map(issue => issue.id)})`;
   await tx.issueActivity.createMany({ data: issues.map(issue => ({
     action: 'UNASSIGNED', itemType: 'ISSUE', itemId: issue.id, userId: actorId, workspaceId: issue.workspaceId, projectId: issue.projectId,
     fieldName: 'assignee', oldValue: seat.userId, newValue: '', details: JSON.stringify({ reason, seatId: seat.id }),

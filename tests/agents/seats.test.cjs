@@ -427,6 +427,34 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     assert.equal((await send(seatsMe.GET, worker.token, 'GET')).body.seat.projectId, B);
   });
 
+  await t.test('an issue in Trash is unassigned too, so restoring it does not bring a retired or misplaced seat back', async () => {
+    // The application's client hides trashed issues from ordinary queries; seats must still reach them.
+    const { Prisma, PrismaClient } = require('@prisma/client');
+    class TestPrismaClient extends PrismaClient { constructor(options) { super({ ...options, datasources: { db: { url: db.url } } }); } }
+    const app = load('src/lib/prisma.ts', { '@prisma/client': { Prisma, PrismaClient: TestPrismaClient },
+      './database-diagnostics': load('src/lib/database-diagnostics.ts', {}, { performance, setTimeout, console }),
+      './issue-visibility': load('src/lib/issue-visibility.ts') }, { global: {}, process: { env: { NODE_ENV: 'production' } } }).prisma;
+    t.after(() => app.$disconnect());
+    const appTokens = load('src/lib/agent-tokens.ts', { crypto: require('node:crypto'), '@/lib/prisma': { prisma: app }, '@/lib/apps/crypto': crypto }, { Buffer, Date });
+    const appSeats = load('src/lib/agent-seats.ts', { '@/lib/prisma': { prisma: app }, '@/lib/agent-handoffs': handoffs, '@/lib/agent-tokens': appTokens, '@/lib/issue-assignee': assignee }, { Date });
+    const holder = async row => (await prisma.issue.findUniqueOrThrow({ where: { id: row.id } })).assigneeId;
+
+    const worker = await seat('dev-trash', A, 'developer');
+    const trashed = await issue(A, { assigneeId: worker.userId, deletedAt: new Date() });
+    await prisma.issueAssignee.create({ data: { issueId: trashed.id, userId: worker.userId, role: 'ASSIGNEE', status: 'APPROVED' } });
+    const retired = await appSeats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: worker.id });
+    assert.deepEqual(retired.unassigned, [trashed.issueKey]);
+    assert.equal(await holder(trashed), null);
+    assert.equal(await prisma.issueAssignee.count({ where: { issueId: trashed.id } }), 0);
+    assert.equal(await prisma.issueActivity.count({ where: { itemId: trashed.id, action: 'UNASSIGNED' } }), 1);
+
+    const old = await appTokens.createAgentToken({ workspaceId: 'w', actorId: owner, name: 'legacy-trash', access: 'write', expiresInDays: 30 });
+    const account = (await prisma.appToken.findUniqueOrThrow({ where: { id: old.id } })).userId;
+    const elsewhere = await issue(B, { assigneeId: account, deletedAt: new Date() }), fitting = await issue(A, { assigneeId: account, deletedAt: new Date() });
+    await appSeats.createSeat({ workspaceId: 'w', actorId: owner, projectId: A, role: 'developer', ownerId: null, name: 'legacy-trash', expiresInDays: 30 });
+    assert.deepEqual([await holder(elsewhere), await holder(fitting)], [null, account]);
+  });
+
   await t.test('retiring the default seat of a role hands the default to the oldest seat left', async () => {
     const first = await seat('rev-b1', B, 'reviewer'), second = await seat('rev-b2', B, 'reviewer');
     assert.deepEqual([first.isDefault, second.isDefault], [true, false]);
