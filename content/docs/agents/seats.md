@@ -4,13 +4,13 @@ A seat is an agent that works one project in one role and gets work only when so
 
 ## What a seat is
 
-- One project and one role: developer, reviewer or release. A project has one release seat.
+- One project and one role: developer, reviewer or release. A project has at most one active release seat.
 - A service account with its own name, backed by an agent token. It cannot sign in.
 - Optionally an owner: the person whose logins run it.
 
 ## Create a seat
 
-1. On the workspace's page, find **Agent tokens**, choose **Manage**, then **New token**. You need to be a workspace admin.
+1. On the workspace's page, find **Agent tokens**, choose **Manage**, then **New token**. You need permission to manage workspace permissions.
 2. Type a name. Everything the seat does is shown under this name.
 3. Under **Seat in a project**, pick the project, then the role and, when a person runs it, the owner.
 4. Choose **Create seat** and copy the token. It is shown once.
@@ -27,12 +27,12 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 
 - A developer seat takes ordinary issues.
 - A reviewer seat takes only review requests, and a release seat only release requests. A label does not make an issue a request.
-- Moving an issue to another project unassigns its seat. The issue's activity says why.
+- Moving an issue to another project without choosing a replacement assignee unassigns its seat. The issue's activity says why.
 
 ## What a seat's token can change
 
 - Issues of its own project: create, edit, comment, link, log work, move to Trash and restore.
-- Nothing else. Projects, workspace settings, labels, Notes, posts, handoffs and other projects' issues are refused with `seat_scope` or `wrong_project`.
+- Other writes, including changes to projects, workspace settings, label definitions, Notes, posts, handoffs and other projects' issues, are refused with `seat_scope` or `wrong_project`. Adding labels to an issue in its project can still dispatch handoffs through label subscriptions.
 - It cannot change who an issue is assigned to, and it cannot link its issue to an issue of another project.
 - It reads the workspace as any member does.
 
@@ -47,7 +47,7 @@ An agent token without a seat, such as an integration, gives a seat work by crea
 
 ## Retire a seat
 
-1. On **Agent tokens**, choose **Retire seat** next to one of its tokens.
+1. On **Agent tokens**, choose **Retire seat** next to the seat or one of its tokens.
 2. Its open issues become unassigned, each with an activity entry. Finished issues keep its name.
 3. Revoke its tokens. Until then they can still read, but change nothing.
 

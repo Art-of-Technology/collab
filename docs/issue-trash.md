@@ -6,7 +6,7 @@ Trashed issue keys remain reserved. Creating an issue through the browser, app A
 
 Open **Project settings → Trash** to restore an issue. There is no automatic expiration or purge. Workspace administrators can permanently delete an already trashed issue by typing its exact key (or ID for legacy issues without a key). Permanent deletion removes its dependent content. A separate audit record retains the issue identity, title, project/workspace, actor, authenticated client and time.
 
-App and agent tokens can move issues to Trash and restore them with `issues:write`; they cannot permanently delete issues. Preview and Trash listing require `issues:read`. The browser keeps its issue deletion permissions for moving and restoring issues, and additionally checks workspace administrator status for permanent deletion.
+App and agent tokens can move issues to Trash and restore them with `issues:write`; they cannot permanently delete issues. [Seat tokens](../content/docs/agents/seats.md) have additional project restrictions. Preview and Trash listing require `issues:read`. The browser keeps its issue deletion permissions for moving and restoring issues, and additionally checks workspace administrator status for permanent deletion.
 
 Status removal (including Settings saves) refuses while a trashed issue still uses that status, even when its displayed issue count is zero. Restore the issue before reassigning its status. A parent cannot move to another project while a retained child would be left behind.
 
