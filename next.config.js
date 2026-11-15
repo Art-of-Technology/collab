@@ -8,7 +8,7 @@ const nextConfig = {
   async rewrites() {
     return [
       { source: '/docs.md', destination: '/docs/raw/index' },
-      { source: '/docs/:path*.md', destination: '/docs/raw/:path*' },
+      { source: '/docs/:path(.*)\\.md', destination: '/docs/raw/:path' },
     ];
   },
 

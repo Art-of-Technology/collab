@@ -111,5 +111,7 @@ test('an address ending in .md is sent to the Markdown route, and no other docs 
   assert.equal(rewrite('/docs/index.md'), '/docs/raw/index');
   assert.equal(rewrite('/docs.md'), '/docs/raw/index');
   assert.equal(rewrite('/docs/guides/create-a-seat.md'), '/docs/raw/guides/create-a-seat');
-  for (const path of ['/docs', '/docs/cli', '/docs/guides/create-a-seat', '/docs/.md', '/llms.txt']) assert.equal(rewrite(path), null, path);
+  for (const path of ['/docs', '/docs/cli', '/docs/guides/create-a-seat', '/docs/a.mdx', '/llms.txt']) assert.equal(rewrite(path), null, path);
+  // The rewrite is the one the plan names, so the pattern itself is pinned as well as what it does.
+  assert.deepEqual(rewrites.at(-1), { source: '/docs/:path(.*)\\.md', destination: '/docs/raw/:path' });
 });
