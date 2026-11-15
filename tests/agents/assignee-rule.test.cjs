@@ -83,6 +83,43 @@ test('who may be assigned an issue is one rule on every path that sets an assign
     });
   }
 
+  await t.test('token update stamps a reassignment after its initial read', async () => {
+    const id = await existing();
+    const stalePrisma = new Proxy(prisma, { get(target, key) {
+      if (key === 'issue') return new Proxy(target.issue, { get(issue, property) {
+        if (property === 'findFirst') return async (...args) => {
+          const found = await issue.findFirst(...args);
+          await prisma.issue.update({ where: { id }, data: { assigneeId: active } });
+          return found;
+        };
+        return issue[property];
+      } });
+      return target[key];
+    } });
+    const staleItem = load('src/app/api/apps/auth/issues/[issueIdOrKey]/route.ts', { ...deps, '@/lib/prisma': { prisma: stalePrisma } }, globals);
+    const started = new Date();
+    const response = await staleItem.PATCH(request('PATCH', { assigneeId: owner }), token, at(id));
+    assert.equal(response.status, 200);
+    assert.equal((await stored({ id })).assigneeId, owner);
+    const row = await prisma.issueAssignee.findUnique({ where: { issueId_userId: { issueId: id, userId: owner } } });
+    assert.ok(row?.approvedAt >= started);
+  });
+
+  await t.test('token assign rolls back the issue when the assignment stamp fails', async () => {
+    const id = await existing();
+    const failingPrisma = new Proxy(prisma, { get(target, key) {
+      if (key === '$transaction') return callback => target.$transaction(tx => callback(new Proxy(tx, { get(inner, property) {
+        if (property === 'issueAssignee') return { upsert: async () => { throw new Error('stamp failed'); } };
+        return inner[property];
+      } })));
+      return target[key];
+    } });
+    const failingAssignment = load('src/app/api/apps/auth/issues/[issueIdOrKey]/assign/route.ts', { ...deps, '@/lib/prisma': { prisma: failingPrisma } }, globals);
+    const response = await failingAssignment.POST(request('POST', { assigneeId: active }), token, at(id));
+    assert.equal(response.status, 500);
+    assert.equal((await stored({ id })).assigneeId, owner);
+  });
+
   await t.test('token paths name the refusal', async () => {
     const response = await assignment.POST(request('POST', { assigneeId: switchedOff }), token, at(await existing()));
     assert.equal(response.status, 400);

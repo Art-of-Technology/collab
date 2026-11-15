@@ -348,6 +348,9 @@ export const PATCH = withAppAuth(
 
       // Update issue
       const updatedIssue = await prisma.$transaction(async tx => {
+        const currentAssignee = updateData.assigneeId ? await tx.issue.findUniqueOrThrow({
+          where: { id: existingIssue.id }, select: { assigneeId: true },
+        }) : null;
         const before = updateData.labels === undefined && !guarded?.enforced ? null : await tx.issue.findUniqueOrThrow({
           where: { id: existingIssue.id }, select: ISSUE_SHAPE_SELECT,
         });
@@ -406,8 +409,7 @@ export const PATCH = withAppAuth(
         });
 
         if (before) await enqueueLabelHandoff(tx, context.user.id, changed, before.labels.map(label => label.id));
-        if (updateData.assigneeId && updateData.assigneeId !== existingIssue.assigneeId) {
-          // As the other paths that change an assignee do: the seat inbox reads from this row when the issue was last assigned.
+        if (updateData.assigneeId && updateData.assigneeId !== currentAssignee?.assigneeId) {
           const assignee = { role: 'ASSIGNEE', status: 'APPROVED', approvedAt: new Date(), approvedBy: context.user.id } as const;
           await tx.issueAssignee.upsert({
             where: { issueId_userId: { issueId: existingIssue.id, userId: updateData.assigneeId } },
