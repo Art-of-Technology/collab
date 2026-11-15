@@ -11,8 +11,8 @@ export function IssueActivity({ issueId }: IssueActivityProps) {
   return (
     <>
       <OpenRun issueId={issueId} />
-      <IssueActivitySection 
-        issueId={issueId} 
+      <IssueActivitySection
+        issueId={issueId}
         limit={50}
       />
     </>

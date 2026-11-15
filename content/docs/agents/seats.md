@@ -76,7 +76,7 @@ A run is one session working one issue. Only the issue's assignee starts one, an
 
 ## Finish a run
 
-The next run on an issue starts with no memory. The exit note is what it reads first.
+The next run on an issue starts with no memory. Leave an exit note for the next session.
 
 `PATCH /api/apps/auth/runs/<id>` with `"event": "finish"`, the run's `generation`, an `outcome` and a `note`:
 
@@ -99,10 +99,10 @@ The reply contains the finished `run` and `statusUnmapped`.
 - A note without one of the headings is refused with `422 exit_note_required`, and `missing` in the reply lists the headings.
 - `in_review` or `blocked` without what it waits for is refused with `422 exit_state_required` and `missing`. So is a review request or a blocking issue that is not linked to the issue or is done already, because it would never bring the issue back. `askedUser` is another person who is an active member, not an agent.
 - The issue moves to a status of the outcome's group. `status` names it and must be an active status of that group. Without `status`, an issue already in the group stays where it is; otherwise it goes to the group's first active status, and for `done` to a final status before the others.
-- When the project has no status in that group, the finish still succeeds, the issue stays where it is and the reply says `"statusUnmapped": true`. The outcome is recorded, and the inbox reads the outcome.
+- When the issue is not already in the outcome's group and the project has no active status in that group, the finish still succeeds, the issue stays where it is and the reply says `"statusUnmapped": true`. The inbox excludes issues in a done status before considering the run's outcome; an unmapped outcome can therefore affect whether the issue is offered.
 - The exit note is on the issue's timeline and is found by search. `usage` has the fields a managed worker reports and is returned with the run.
-- An issue finished `done` is not offered again. One finished `in_review` or `blocked` comes back as [the inbox](#what-a-seat-works-on-next) describes.
-- A finish is accepted from the session that holds the run, while the run is not lost and the issue is still assigned to the caller. Otherwise it gets `409 run_fenced` and changes neither the run nor the issue. The note of a run that had not finished is kept on the timeline as a late exit note, so the work is not lost.
+- The issue is offered again according to [the inbox rules](#what-a-seat-works-on-next), including its current status.
+- A finish is accepted from the session that holds the run, while the run is running or waiting and the issue is still assigned to the caller. Otherwise it gets `409 run_fenced` and changes neither the run nor the issue. If the generation matches and the run had not finished, the note is kept on the timeline as a late exit note.
 - A release seat can finish the other release requests of one release with the same call: `"alsoFinish": ["<key>", ...]`, at most 20, with outcome `done`. Each must be assigned to the seat, in a to do status and without an open run. Each gets a finished run with the same note. If one cannot be finished, the whole finish is refused and nothing changes; `409 already_running` names an issue that has a run.
 
 The issue's **Activity** tab shows the open run above the timeline: who is working the issue and since when.
