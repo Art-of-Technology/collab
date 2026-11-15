@@ -9,30 +9,49 @@ import "highlight.js/styles/github.css";
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  /** Ids for the page's h2 and h3 headings, in document order (the docs loader's list). */
+  headingIds?: string[];
 }
 
-export function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
+// Runs after the sanitizer, which would prefix an id. Only headings at the top level of the page count,
+// as in the loader. A heading's trailing {#id} marker chose the id and is not shown.
+const withHeadingIds = (ids: string[], content: string) => () => (tree: any) => {
+  let next = 0;
+  for (const node of tree.children) {
+    if (node.type !== "element" || (node.tagName !== "h2" && node.tagName !== "h3")) continue;
+    const id = ids[next++];
+    if (!id) continue;
+    node.properties.id = id;
+    const last = node.children.at(-1);
+    if (last?.type === "text" && /\s*\{#[a-z0-9_-]+\}\s*$/.test(content.slice(last.position?.start.offset, last.position?.end.offset))) {
+      last.value = last.value.replace(/\s*\{#[a-z0-9_-]+\}\s*$/, "");
+    }
+  }
+};
+
+export function MarkdownRenderer({ content, className = "", headingIds }: MarkdownRendererProps) {
   return (
     <div className={`prose prose-sm max-w-none dark:prose-invert ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight, rehypeSanitize]}
+        rehypePlugins={[rehypeHighlight, rehypeSanitize, ...(headingIds ? [withHeadingIds(headingIds, content)] : [])]}
         components={{
           // Custom styling for different markdown elements
           h1: ({ children }) => (
             <h1 className="text-2xl font-bold mb-4 text-foreground">{children}</h1>
           ),
-          h2: ({ children }) => (
-            <h2 className="text-xl font-semibold mb-3 text-foreground">{children}</h2>
+          h2: ({ children, id }) => (
+            <h2 id={id} className="text-xl font-semibold mb-3 text-foreground">{children}</h2>
           ),
-          h3: ({ children }) => (
-            <h3 className="text-lg font-medium mb-2 text-foreground">{children}</h3>
+          h3: ({ children, id }) => (
+            <h3 id={id} className="text-lg font-medium mb-2 text-foreground">{children}</h3>
           ),
           p: ({ children }) => (
             <p className="mb-3 text-foreground leading-relaxed">{children}</p>
           ),
-          code: ({ node, inline, className, children, ...props }: any) => {
-            if (inline) {
+          code: ({ node, className, children, ...props }: any) => {
+            // A code block is one line or more ending in a line break, or carries its language; code in a sentence has neither.
+            if (!className && !String(children).endsWith("\n")) {
               return (
                 <code
                   className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground"
@@ -76,12 +95,14 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           ),
           a: ({ children, href }) => {
             const isInternalLink = href?.startsWith('#');
+            // A page of this site opens in the same tab; another site opens a new one.
+            const sameTab = isInternalLink || /^\/(?!\/)/.test(href ?? '');
             return (
               <a
                 href={href || '#'}
                 className="text-primary hover:underline"
-                target={isInternalLink ? undefined : "_blank"}
-                rel={isInternalLink ? undefined : "noopener noreferrer"}
+                target={sameTab ? undefined : "_blank"}
+                rel={sameTab ? undefined : "noopener noreferrer"}
                 onClick={(e) => {
                   if (isInternalLink && href) {
                     e.preventDefault();
@@ -115,4 +136,4 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       </ReactMarkdown>
     </div>
   );
-} 
+}

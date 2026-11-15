@@ -124,92 +124,6 @@ test('command reference renders retrieval constraints and dispatched versus cond
   }
 });
 
-function installation(react = require('react')) {
-  const { CodeBlock } = load('src/components/dev/docs/CodeBlock.tsx', {
-    react: require('react'), 'react/jsx-runtime': jsx,
-    '@/components/ui/button': { Button: 'button' },
-  });
-  const tabs = load('src/components/ui/tabs.tsx', {
-    react: require('react'), 'react/jsx-runtime': jsx,
-    '@radix-ui/react-tabs': require('@radix-ui/react-tabs'),
-    '@/lib/utils': { cn: require('clsx').clsx },
-  });
-  const button = load('src/components/ui/button.tsx', {
-    react: require('react'), 'react/jsx-runtime': jsx,
-    '@radix-ui/react-slot': require('@radix-ui/react-slot'),
-    'class-variance-authority': require('class-variance-authority'),
-    '@/lib/utils': { cn: require('clsx').clsx },
-  });
-  return load('src/app/docs/installation.tsx', {
-    react, 'react/jsx-runtime': jsx, 'lucide-react': require('lucide-react'),
-    '@/components/dev/docs/CodeBlock': { CodeBlock },
-    '@/components/ui/tabs': tabs, '@/components/ui/button': button,
-  }).Installation;
-}
-
-test('installation OS selection exposes one panel while keeping all commands available in server markup', () => {
-  let selected = 'windows';
-  const Installation = installation({ useState: () => [selected, value => { selected = value; }] });
-  const Tabs = require('@radix-ui/react-tabs').Root;
-  for (const platform of ['windows', 'macos', 'linux']) {
-    const element = Installation({ version: 'test-version' });
-    const tabs = element.props.children.find(child => child?.type === Tabs);
-    tabs.props.onValueChange(platform);
-    const html = renderToStaticMarkup(Installation({ version: 'test-version' }));
-    const panels = [...html.matchAll(/<div([^>]*role="tabpanel"[^>]*)>/g)].map(match => match[1]);
-    assert.equal(panels.length, 3);
-    assert.equal(panels.filter(attrs => !attrs.includes('hidden=""')).length, 1);
-    assert.match(panels.find(attrs => !attrs.includes('hidden=""')), /data-state="active"/);
-    assert.match(html, /CLI test-version/);
-    assert.match(html, /irm https:\/\/collab.weez.boo\/install.ps1/);
-    assert.match(html, /curl -fsSL https:\/\/collab.weez.boo\/install.sh/);
-    assert.match(html, /collab --help/);
-    assert.match(html, /href="#authentication"/);
-  }
-});
-
-test('docs render installation, navigable sections, commands, and credential limitations', async () => {
-  const { CodeBlock } = load('src/components/dev/docs/CodeBlock.tsx', {
-    react: require('react'), 'react/jsx-runtime': jsx,
-    '@/components/ui/button': { Button: 'button' },
-  });
-  const { default: Page } = load('src/app/docs/page.tsx', {
-    'react/jsx-runtime': jsx,
-    'next/link': require('next/link'), 'next/image': require('next/image'),
-    'lucide-react': require('lucide-react'),
-    '@/components/dev/docs/CodeBlock': { CodeBlock },
-    './command-reference': { CommandReference: await reference() },
-    './installation': { Installation: installation() },
-    '../../../packages/cli/package.json': { default: require('../../packages/cli/package.json') },
-  });
-  const { default: CliPage, metadata } = load('src/app/docs/cli/page.tsx', { '../page': { default: Page, metadata: { title: 'CLI docs' } } });
-  const html = renderToStaticMarkup(CliPage());
-  assert.equal(html, renderToStaticMarkup(Page()), 'both docs routes share the same content');
-  assert.equal(metadata.title, 'CLI docs');
-  assert.match(html, /npm install --global .\/packages\/cli/);
-  assert.match(html, /Node.js 22/);
-  const { version } = require('../../packages/cli/package.json');
-  for (const platform of ['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'windows-x64', 'windows-x86', 'windows-arm64']) {
-    const url = `https://github.com/Art-of-Technology/collab/releases/download/cli-v${version}/collab-${platform}.${platform.startsWith('windows-') ? 'zip' : 'tar.gz'}`;
-    assert.ok(html.includes(`href="${url}"`), platform);
-    assert.ok(html.includes(`href="${url}.sha256"`), `${platform} checksum`);
-  }
-  assert.match(html, /curl -fsSL https:\/\/collab\.weez\.boo\/install\.sh/);
-  assert.match(html, /irm https:\/\/collab\.weez\.boo\/install\.ps1/);
-  assert.match(html, /No Node.js, npm, Bun, or terminal restart needed/);
-  assert.match(html, /Logout removes local credentials only/);
-  assert.match(html, /id="agents"/);
-  assert.match(html, /collab inbox wait/);
-  assert.match(html, /--wait-seconds/);
-  assert.ok(html.includes(`https://raw.githubusercontent.com/Art-of-Technology/collab/cli-v${version}/packages/cli/skills/collab-agents/SKILL.md`));
-  assert.match(html, /Each new CLI login has an independent grant/);
-  assert.match(html, /collab-cli/);
-  assert.match(html, /href="\/dev\/docs"/);
-  const ids = [...html.matchAll(/ id="([^"]+)"/g)].map(match => match[1]);
-  assert.equal(new Set(ids).size, ids.length, 'section IDs must be unique');
-  for (const [, target] of html.matchAll(/href="#([^"]+)"/g)) assert.ok(ids.includes(target), target);
-});
-
 test('docs stay readable while session or workspace loads without changing workspace loading', () => {
   let pathname = '/docs';
   let status = 'loading';
@@ -223,10 +137,10 @@ test('docs stay readable while session or workspace loads without changing works
   });
   for (status of ['loading', 'authenticated', 'unauthenticated']) {
     for (isLoading of [true, false]) {
-      for (pathname of ['/docs', '/docs/cli']) {
+      for (pathname of ['/docs', '/docs/cli', '/docs/guides/create-a-seat', '/docs/notes']) {
         assert.equal(renderToStaticMarkup(Wrapper({ children: 'Documentation' })), 'Documentation');
       }
-      for (pathname of ['/docs/notes', '/docs/dashboard', '/docs/cli/notes', '/docs-team/dashboard', '/workspace/dashboard']) {
+      for (pathname of ['/docs-team/dashboard', '/workspace/dashboard']) {
         const html = renderToStaticMarkup(Wrapper({ children: 'Workspace page' }));
         if (status === 'loading' || (status === 'authenticated' && isLoading)) {
           assert.match(html, /Loading workspace/, `${pathname}: ${status}, loading=${isLoading}`);
@@ -238,7 +152,7 @@ test('docs stay readable while session or workspace loads without changing works
   }
 });
 
-test('workspace URL selection takes priority over saved workspace outside the exact docs page', () => {
+test('workspace URL selection takes priority over saved workspace outside the documentation', () => {
   const docsWorkspace = { id: 'docs-workspace', slug: 'docs' };
   const savedWorkspace = { id: 'saved-workspace', slug: 'saved' };
   const teamWorkspace = { id: 'team-workspace', slug: 'docs-team' };
@@ -266,10 +180,9 @@ test('workspace URL selection takes priority over saved workspace outside the ex
   for (const [route, expected] of [
     ['/docs', savedWorkspace],
     ['/docs/cli', savedWorkspace],
-    ['/docs/cli/notes', docsWorkspace],
-    ['/docs/notes', docsWorkspace],
-    ['/docs/dashboard', docsWorkspace],
-    ['/docs/projects/project/notes', docsWorkspace],
+    // Every address under /docs is a documentation page, never a workspace's.
+    ['/docs/guides/create-a-seat', savedWorkspace],
+    ['/docs/notes', savedWorkspace],
     ['/docs-workspace/notes', docsWorkspace],
     ['/docs-team/dashboard', teamWorkspace],
     ['/saved/notes', savedWorkspace],

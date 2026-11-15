@@ -138,3 +138,11 @@ for (const method of ['PATCH', 'DELETE']) test(`workspace REST ${method} uses cu
   assert.equal((await admin.rest[method](request(method, 'foreign'), params('foreign'))).status, 403);
   assert.equal(admin.calls.writes.length, 0);
 });
+
+test('a workspace cannot take the slug "docs": every address under /docs is the documentation', async () => {
+  const { actions, calls } = fixture();
+  await assert.rejects(actions.updateWorkspace('own', { slug: 'docs' }), /reserved for the documentation/);
+  assert.equal(calls.writes.length, 0);
+  // Addresses are case-sensitive, and generated slugs are upper case.
+  assert.equal((await actions.updateWorkspace('own', { slug: 'DOCS' })).slug, 'DOCS');
+});

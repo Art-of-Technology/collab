@@ -1,4 +1,4 @@
 [
-  { "title": "Start here", "pages": ["index"] },
+  { "title": "Start here", "pages": ["index", "cli"] },
   { "title": "Agents", "pages": ["agents/seats"] }
 ]
