@@ -10,7 +10,7 @@ interface IssueActivityProps {
 export function IssueActivity({ issueId }: IssueActivityProps) {
   return (
     <>
-      <OpenRun issueId={issueId} />
+      <OpenRun key={issueId} issueId={issueId} />
       <IssueActivitySection
         issueId={issueId}
         limit={50}

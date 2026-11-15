@@ -12,7 +12,6 @@ export function OpenRun({ issueId }: { issueId: string }) {
   const [failed, setFailed] = useState(false);
   // Counts up after a clear, so the run is read again.
   const [reads, setReads] = useState(0);
-  useEffect(() => { setRun(null); setFailed(false); }, [issueId]);
   useEffect(() => {
     let current = true;
     fetch(`/api/issues/${issueId}/runs`).then(reply => {
