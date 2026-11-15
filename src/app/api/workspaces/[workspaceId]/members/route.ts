@@ -66,7 +66,9 @@ export async function GET(
             avatarHair: true,
             avatarMouth: true,
             avatarNose: true,
-            avatarSkinTone: true
+            avatarSkinTone: true,
+            // Lets the assignee picker badge seats and leave out those of other projects.
+            agentSeat: { select: { projectId: true, role: true, retiredAt: true } }
           },
         },
       },

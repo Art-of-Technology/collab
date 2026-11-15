@@ -17,6 +17,11 @@ function load(file, dependencies = {}, globals = {}) {
     dependencies['server-only'] = {};
     dependencies['./permission-types'] = load('src/lib/permission-types.ts');
   }
+  const database = dependencies['@/lib/prisma'];
+  if (file === 'src/lib/apps/auth-middleware.ts' && database?.prisma && !database.prisma.agentSeat) {
+    // A fixture database that says nothing about seats has none, so no caller is a seat.
+    dependencies['@/lib/prisma'] = { ...database, prisma: Object.assign(Object.create(database.prisma), { agentSeat: { findUnique: async () => null } }) };
+  }
   const exports = {};
   const source = readFileSync(resolve(process.env.SECURITY_TEST_ROOT || resolve(__dirname, '../../'), file), 'utf8');
   const { outputText } = ts.transpileModule(source, {
@@ -63,7 +68,15 @@ function load(file, dependencies = {}, globals = {}) {
       // A fixture that says nothing about issue templates gets a workspace that does not enforce them.
       if (!(name in dependencies) && name === '@/lib/issue-template-store') return { getWorkspaceTemplates: async () => ({ enforced: false, templates: {} }) };
       // The real assignment rule, read through whatever database the fixture hands the code under test.
-      if (!(name in dependencies) && name === '@/lib/issue-assignee') return load('src/lib/issue-assignee.ts', { './agent-handoffs': { HandoffError } });
+      if (!(name in dependencies) && name === '@/lib/issue-assignee') {
+        const rule = load('src/lib/issue-assignee.ts', { './agent-handoffs': { HandoffError } });
+        // A fixture database that says nothing about seats has none.
+        return { ...rule, assertAssignable: (db, issue, userId) => rule.assertAssignable(db.agentSeat ? db : { ...db, agentSeat: { findUnique: async () => null } }, issue, userId) };
+      }
+      // A fixture that says nothing about seats is called by people and by tokens that are not seats.
+      if (!(name in dependencies) && name === '@/lib/agent-seats') {
+        return { HandoffError, seatWriteGuard: async () => {}, assertTokenMayAssign: async () => {}, assignCapReached: async () => false, recordSeatHandoff: async () => {} };
+      }
       if (!(name in dependencies) && name === '@/lib/issue-templates') {
         return load('src/lib/issue-templates.ts', { '@/lib/comment-html': load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') }) });
       }

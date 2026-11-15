@@ -28,6 +28,8 @@ Every request needs `Authorization: Bearer <token>`. Any token the API accepts w
 
 A token works in the workspace it was issued for. A member's token may name another of their workspaces with the `workspaceId` argument, so text an agent reads in one workspace could steer it into another. An agent token's service account starts in one workspace only: use one to confine an agent. Someone who may manage agent tokens in two workspaces can let an agent into the second one (**Workspaces** on the Agent tokens page); its tokens can then name that workspace too, and the same caution applies.
 
+An agent account can also be a [project seat](../content/docs/agents/seats.md), which restricts its writes even when its token has broader scopes.
+
 ## Connect Claude
 
 The **Agent tokens** page in workspace settings shows the Claude Code and claude.ai steps with the deployment's own address filled in, ready to copy.

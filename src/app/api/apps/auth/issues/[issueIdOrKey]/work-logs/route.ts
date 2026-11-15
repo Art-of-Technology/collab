@@ -8,6 +8,7 @@ import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/for
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { HandoffError, seatWriteGuard } from '@/lib/agent-seats';
 import { z } from 'zod';
 
 const CreateWorkLogSchema = z.object({
@@ -140,6 +141,7 @@ export const POST = withAppAuth(
       }
 
       // Create work log and update issue time spent in a transaction
+      await seatWriteGuard(prisma, context, issue.projectId);
       await assertLegacyIssueWriteAllowed(issue.id);
 
       const result = await prisma.$transaction(async (tx) => {
@@ -225,6 +227,7 @@ export const POST = withAppAuth(
         },
       }, { status: 201 });
     } catch (error) {
+      if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
       if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
         return NextResponse.json(
@@ -244,5 +247,5 @@ export const POST = withAppAuth(
       );
     }
   },
-  { requiredScopes: ['issues:write'] }
+  { requiredScopes: ['issues:write'], seatWrites: true }
 );

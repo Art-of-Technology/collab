@@ -18,6 +18,9 @@ import type { IssueSelectorProps, IssueUser } from "@/types/issue";
 
 interface IssueAssigneeSelectorProps extends IssueSelectorProps {
   workspaceId?: string;
+  /** The issue's project: a seat is offered only for issues of its own project. */
+  projectId?: string;
+  currentAssignee?: IssueUser | null;
 }
 
 export function IssueAssigneeSelector({
@@ -26,9 +29,13 @@ export function IssueAssigneeSelector({
   disabled = false,
   placeholder = "Assign to...",
   workspaceId,
+  projectId,
+  currentAssignee,
 }: IssueAssigneeSelectorProps) {
   const { data: session } = useSession();
-  const { data: users = [], isLoading } = useWorkspaceMemberUsers(workspaceId);
+  const { data: members = [], isLoading } = useWorkspaceMemberUsers(workspaceId);
+  // The server refuses a seat for another project's issue, so the picker does not offer it.
+  const users = members.filter(user => !user.agentSeat || (!user.agentSeat.retiredAt && user.agentSeat.projectId === projectId));
   const [searchQuery, setSearchQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
 
@@ -39,7 +46,8 @@ export function IssueAssigneeSelector({
     setSearchQuery("");
   };
 
-  const selectedUser = users.find(user => user.id === value);
+  // Read from every member, so an issue still shows a seat it was given before the seat changed.
+  const selectedUser = members.find(user => user.id === value) ?? (currentAssignee?.id === value ? currentAssignee : undefined);
   const currentUserId = session?.user?.id;
 
   // Filter users based on search query
@@ -185,6 +193,9 @@ export function IssueAssigneeSelector({
               <span className={`text-collab-400 flex-1 ${user.id === currentUserId ? 'font-medium' : ''}`}>
                 {user.name}{user.id === currentUserId ? " (You)" : ""}
               </span>
+              {user.agentSeat && (
+                <span className="rounded border border-collab-600 px-1 text-[10px] text-collab-500">{user.agentSeat.role} seat</span>
+              )}
               {value === user.id && (
                 <span className="text-xs text-collab-500">✓</span>
               )}

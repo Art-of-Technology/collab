@@ -9,6 +9,7 @@ import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/for
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { HandoffError, seatWriteGuard } from '@/lib/agent-seats';
 import { z } from 'zod';
 
 const UpdateWorkLogSchema = z.object({
@@ -148,6 +149,7 @@ export const PATCH = withAppAuth(
         : 0;
 
       // Update work log and issue time spent in a transaction
+      await seatWriteGuard(prisma, context, issue.projectId);
       await assertLegacyIssueWriteAllowed(issue.id);
 
       const result = await prisma.$transaction(async (tx) => {
@@ -228,6 +230,7 @@ export const PATCH = withAppAuth(
         },
       });
     } catch (error) {
+      if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
       if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
         return NextResponse.json(
@@ -247,7 +250,7 @@ export const PATCH = withAppAuth(
       );
     }
   },
-  { requiredScopes: ['issues:write'] }
+  { requiredScopes: ['issues:write'], seatWrites: true }
 );
 
 /**
@@ -280,6 +283,7 @@ export const DELETE = withAppAuth(
       }
 
       // Delete work log and update issue time spent in a transaction
+      await seatWriteGuard(prisma, context, issue.projectId);
       await assertLegacyIssueWriteAllowed(issue.id);
 
       await prisma.$transaction(async (tx) => {
@@ -331,6 +335,7 @@ export const DELETE = withAppAuth(
         deletedWorkLogId: workLogId,
       });
     } catch (error) {
+      if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
       if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       console.error('Error deleting work log:', error);
       return NextResponse.json(
@@ -339,5 +344,5 @@ export const DELETE = withAppAuth(
       );
     }
   },
-  { requiredScopes: ['issues:write'] }
+  { requiredScopes: ['issues:write'], seatWrites: true }
 );

@@ -455,6 +455,7 @@ export function InlineIssueCreator({
                 value={assigneeId}
                 onChange={setAssigneeId}
                 workspaceId={workspaceId}
+                projectId={projectId}
               />
 
               {/* Type Selector */}

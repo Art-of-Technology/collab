@@ -1113,8 +1113,10 @@ export function IssueDetailContent({
                 <h3 className="text-[13px] font-semibold text-collab-400">Assignee</h3>
                 <IssueAssigneeSelector
                   value={issue.assigneeId}
+                  currentAssignee={issue.assignee}
                   onChange={(value) => handleUpdate({ assigneeId: value })}
                   workspaceId={workspaceId}
+                  projectId={issue.projectId}
                   disabled={isUpdating}
                 />
               </div>

@@ -56,6 +56,11 @@ export interface AuthMiddlewareOptions {
    */
   scopeMode?: 'all' | 'any';
   allowExpired?: boolean;
+  /**
+   * A seat token is refused every request that is not a GET unless the route sets this. A route that sets it
+   * limits the seat to its own project with seatWriteGuard (src/lib/agent-seats.ts).
+   */
+  seatWrites?: boolean;
 }
 
 export interface AuthMiddlewareResult {
@@ -511,6 +516,17 @@ export function withAppAuth(
             name: targetWorkspace.name
           };
           authResult.context!.installation.workspaceId = targetWorkspace.id;
+        }
+      } catch (error) {
+        return createAuthErrorResponse(authenticationError(error));
+      }
+    }
+
+    // Deny is the default, so a new route that writes is closed to seats until it opts in. A retired seat still counts.
+    if (!options.seatWrites && request.method !== 'GET') {
+      try {
+        if (await prisma.agentSeat.findUnique({ where: { userId: authResult.context!.user.id }, select: { id: true } })) {
+          return createAuthErrorResponse({ code: 'seat_scope', message: 'A seat token may not make this change', statusCode: 403 });
         }
       } catch (error) {
         return createAuthErrorResponse(authenticationError(error));
