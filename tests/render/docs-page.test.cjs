@@ -268,6 +268,8 @@ test('the layout lists every section and page of the navigation and marks the pa
   const { default: Layout } = load('src/app/docs/layout.tsx', {
     'react/jsx-runtime': jsx, 'next/link': require('next/link'), 'next/image': require('next/image'),
     'lucide-react': require('lucide-react'), '@/lib/docs': docs, '@/components/docs/DocsSidebar': sidebar,
+    // The search box has its own tests in docs-search.test.cjs.
+    '@/components/docs/DocsSearch': { DocsSearch: () => null },
   });
   const html = renderToStaticMarkup(Layout({ children: 'The page' }));
   assert.match(html, /The page/);

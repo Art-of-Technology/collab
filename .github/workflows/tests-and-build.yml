@@ -69,13 +69,15 @@ jobs:
         run: |
           PORT=3999 HOSTNAME=127.0.0.1 node .next/standalone/server.js &
           for attempt in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:3999/docs && break; sleep 1; done
-          for address in /docs /docs/cli /llms.txt /llms-full.txt; do
+          for address in /docs /docs/cli /llms.txt /llms-full.txt /docs-index.json; do
             status=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3999$address")
             [ "$status" = 200 ] || { echo "$address answered $status, not 200"; exit 1; }
           done
           curl -sf http://127.0.0.1:3999/docs/index.md | cmp - content/docs/index.md
           curl -sf http://127.0.0.1:3999/docs.md | cmp - content/docs/index.md
           curl -sf http://127.0.0.1:3999/docs/cli.md | cmp - content/docs/cli.md
+          # The search box on every docs page reads this file; a hit's address must be a heading that is on the page.
+          curl -sf http://127.0.0.1:3999/docs-index.json | grep -q '"id":"/docs/cli#agents"' || { echo "/docs-index.json has no entry for /docs/cli#agents"; exit 1; }
           # Links elsewhere in the app and on other sites point at these headings of the CLI page.
           curl -sf http://127.0.0.1:3999/docs/cli > docs-cli.html
           for id in installation authentication workflow agents commands; do

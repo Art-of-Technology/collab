@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { ArrowRight } from 'lucide-react';
 import { docHref, docsNav } from '@/lib/docs';
 import { DocsSidebar } from '@/components/docs/DocsSidebar';
+import { DocsSearch } from '@/components/docs/DocsSearch';
 
 export default function DocsLayout({ children }: { children: ReactNode }) {
   const sections = docsNav().map(section => ({
@@ -24,9 +25,12 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
             <span className="text-border" aria-hidden="true">/</span>
             <Link href="/docs" className="text-sm font-medium">Docs</Link>
           </div>
-          <Link href="/" className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium transition-colors hover:bg-muted">
-            Open Collab <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </Link>
+          <div className="flex shrink-0 items-center gap-3">
+            <DocsSearch />
+            <Link href="/" className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium transition-colors hover:bg-muted">
+              Open Collab <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </div>
         </div>
       </header>
       <div className="mx-auto grid max-w-[1440px] grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)]">
