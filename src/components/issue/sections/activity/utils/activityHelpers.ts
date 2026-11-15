@@ -53,7 +53,7 @@ export const getActionText = (activity: IssueActivity, itemType: string = 'issue
   const userName = activity.user.name || 'Unknown User';
   if (activity.action === 'AGENT_LABEL_ADDED') return `${userName} added labels and notified role subscribers`;
   if (activity.action === 'AGENT_RUN_LOST') return `${userName} lost its run on this ${itemType}`;
-  if (activity.action === 'AGENT_RUN_CLEARED') return `${userName} cleared a lost run on this ${itemType}`;
+  if (activity.action === 'AGENT_RUN_CLEARED') return `${userName} cleared a run on this ${itemType}`;
   const actionName = getActionDisplayName(activity.action).toLowerCase();
   
   // Handle aggregated view activities
