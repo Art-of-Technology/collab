@@ -33,7 +33,7 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
         {/* Change details for field updates */}
         {activity.action.startsWith('AGENT_') && typeof activity.details?.content === 'string' && activity.details.content && (
           <details className="mt-1 text-xs text-collab-400">
-            <summary className="cursor-pointer">Handoff details</summary>
+            <summary className="cursor-pointer">{activity.action.startsWith('AGENT_RUN_') ? 'Exit note' : 'Handoff details'}</summary>
             <p className="mt-2 whitespace-pre-wrap break-words">{activity.details.content}</p>
             {activity.action === 'AGENT_SUPERSEDED' && typeof activity.details.replacementId === 'string' && <p className="mt-2 break-all">Replacement handoff: <code>{activity.details.replacementId}</code></p>}
           </details>

@@ -23,7 +23,7 @@ export async function handoffResponse(run: () => Promise<unknown>) {
   try { return NextResponse.json(await run()); }
   catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: 'invalid_request', error_description: error.issues.map(i => i.message).join('; ') }, { status: 400 });
-    if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
+    if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message, ...(error as { body?: object }).body }, { status: error.status });
     if ((error as { code?: string }).code === 'P2002') return NextResponse.json({ error: 'request_conflict', error_description: 'A concurrent request already created this record; retry using the same requestId' }, { status: 409 });
     console.error('Agent handoff failed', error);
     return NextResponse.json({ error: 'handoff_unavailable', error_description: 'Agent handoffs are temporarily unavailable' }, { status: 503 });

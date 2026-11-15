@@ -1,6 +1,7 @@
 "use client";
 
 import { IssueActivitySection } from "./activity";
+import { OpenRun } from "./activity/components/OpenRun";
 
 interface IssueActivityProps {
   issueId: string;
@@ -8,9 +9,12 @@ interface IssueActivityProps {
 
 export function IssueActivity({ issueId }: IssueActivityProps) {
   return (
-    <IssueActivitySection 
-      issueId={issueId} 
-      limit={50}
-    />
+    <>
+      <OpenRun issueId={issueId} />
+      <IssueActivitySection 
+        issueId={issueId} 
+        limit={50}
+      />
+    </>
   );
 }
