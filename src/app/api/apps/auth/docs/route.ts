@@ -25,7 +25,10 @@ export const GET = withAppAuth(
     if (!query?.trim()) {
       return NextResponse.json({ error: 'invalid_request', error_description: 'Supply query to search, or slug to read a page.' }, { status: 400 });
     }
-    const limit = Math.min(20, Math.max(1, Math.trunc(Number(searchParams.get('limit'))) || 8));
+    // 8 when no number is given; any number is cut to a whole one from 1 to 20, so 0 asks for one hit, not eight.
+    const given = searchParams.get('limit');
+    const asked = given?.trim() ? Number(given) : NaN;
+    const limit = Number.isNaN(asked) ? 8 : Math.min(20, Math.max(1, Math.trunc(asked)));
     return NextResponse.json({ results: searchDocs(docsIndex(), query, limit) });
   },
   // The documentation is public: any valid token may read it, whatever its scopes.

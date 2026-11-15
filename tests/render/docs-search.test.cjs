@@ -151,7 +151,7 @@ test('the same query through the browser\'s function and through the docs route 
   assert.deepEqual((await ask('query=collab&limit=2')).body.results, JSON.parse(JSON.stringify(search.searchDocs(index, 'collab', 2))));
 });
 
-test('the docs route caps search results at 20', async () => {
+test('the docs route keeps the number of results between 1 and 20, and gives 8 when no number is asked for', async () => {
   const index = Array.from({ length: 25 }, (_, i) => ({
     id: `/docs/page-${i}`, slug: `page-${i}`, title: 'Collab', heading: 'Collab', anchor: '', text: 'Collab',
   }));
@@ -163,6 +163,11 @@ test('the docs route caps search results at 20', async () => {
   const response = await route.GET(new Request('http://localhost/api/apps/auth/docs?query=collab&limit=500'));
   assert.equal(response.status, 200);
   assert.equal((await response.json()).results.length, 20);
+  // A number is cut to a whole one from 1 to 20; without a number the limit is 8.
+  for (const [limit, hits] of [['0', 1], ['0.9', 1], ['-5', 1], ['2.7', 2], ['20', 20], ['1e9', 20], ['abc', 8], ['3abc', 8], ['', 8], ['%20', 8], [null, 8]]) {
+    const answer = await route.GET(new Request(`http://localhost/api/apps/auth/docs?query=collab${limit === null ? '' : `&limit=${limit}`}`));
+    assert.equal((await answer.json()).results.length, hits, `limit=${limit}`);
+  }
 });
 
 test('the docs route gives one page as the loader has it, and says what is wrong otherwise', async () => {
