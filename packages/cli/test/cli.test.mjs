@@ -2133,6 +2133,13 @@ test('a flag a command does not declare is an error, and --project is one where 
   assert.equal(new URL(f.calls.at(-1).url, f.url).searchParams.get('projectId'), 'project-one');
   assert.equal((await f.run(['issues', 'create', '--project', 'project-one', '--title', 'New'])).code, 0);
   assert.deepEqual(JSON.parse(f.calls.at(-1).body), { title: 'New', projectId: 'project-one' });
+  // Every command but seat run still previews with --dry-run and sends nothing.
+  const sentBefore = f.calls.length;
+  for (const args of [['projects', 'create', '--name', 'Platform', '--slug', 'platform', '--issue-prefix', 'PLAT', '--dry-run'], ['seat', 'show', '--dry-run'], ['run', 'renew', 'run-one', '--generation', 'g', '--dry-run']]) {
+    const preview = await f.run(args);
+    assert.equal(preview.code, 0, args.join(' ')); assert.equal(preview.data.dryRun, true);
+  }
+  assert.equal(f.calls.length, sentBefore);
 });
 
 test('seat and run commands send the seat contract and nothing else', async t => {
@@ -2218,7 +2225,7 @@ test('seat and run refusals keep their code and what is missing, and pass on not
 });
 
 // A stand-in for the seat routes that keeps state: an inbox, and runs that are checked out, renewed, finished and closed.
-async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [], fenceRenew = false, awayPolls = 0 } = {}) {
+async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [], fenceRenew = false, awayPolls = 0, throttled = 0 } = {}) {
   const runs = new Map(), log = []; let polls = 0;
   const f = await fixture(t, (req, res, body) => {
     const route = `${req.method} ${req.url.split('?')[0].replace('/api/apps/auth/', '')}`;
@@ -2233,6 +2240,7 @@ async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [],
       log.push(`checkout ${input.issue}`);
       if (conflicts.includes(input.issue)) return refuse(409, 'already_running');
       if (forbidden.includes(input.issue)) return refuse(403, 'seat_required');
+      if (throttled-- > 0) return refuse(429, 'rate_limited');
       const run = { id: `run-${runs.size + 1}`, issueId: input.issue, generation: input.generation, runner: input.runner, state: 'running' };
       runs.set(run.id, run);
       return res.end(JSON.stringify({ run }));
@@ -2352,4 +2360,23 @@ test('seat run: a checkout refused for another reason than a conflict ends the r
   const s = await seatServer(t, { inbox: () => ['APP-1', 'APP-2'], forbidden: ['id-APP-1'] });
   await assert.rejects(seatRun({ ...fast, api: s.api, program: process.execPath, args: ['-e', ''] }), { code: 'seat_required' });
   assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1']);
+});
+
+test('seat run: a checkout the server throttles is not repeated at once; the inbox is read again after the wait', async t => {
+  const events = [];
+  const s = await seatServer(t, { inbox: () => ['APP-1', 'APP-2'], throttled: 1 });
+  const result = await seatRun({ ...fast, log: event => events.push(event), api: s.api, program: process.execPath, args: ['-e', finishes, s.url], once: true });
+  assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1', 'inbox 2', 'checkout id-APP-1', 'finish run-1']);
+  assert.deepEqual(events[0], { event: 'checkout_deferred', issueKey: 'APP-1', reason: 'rate_limited' });
+  assert.equal(result.runs[0].state, 'finished');
+});
+
+test('seat run: a program that ignores the request to stop is killed, so a fenced session does not go on', { skip: windows }, async t => {
+  const s = await seatServer(t, { inbox: () => ['APP-1'], fenceRenew: true });
+  const start = Date.now();
+  // The renew comes after a second, when the program has long installed its handler.
+  const result = await seatRun({ ...fast, renewMs: 1000, killMs: 200, api: s.api, program: process.execPath, args: ['-e', `process.on('SIGTERM', () => {}); ${sleeps(20000)}`], once: true });
+  assert.ok(Date.now() - start < 10000, `took ${Date.now() - start} ms`);
+  assert.equal(s.log.at(-1), 'close run-1');
+  assert.deepEqual(outcome(result), [{ issueKey: 'APP-1', runId: 'run-1', state: 'stopped', exitCode: null }]);
 });

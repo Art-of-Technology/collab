@@ -97,9 +97,9 @@ collab seat run -- codex exec 'Work the Collab issue in $COLLAB_ISSUE_KEY. First
 
 - One issue at a time. Start a second runner for a second seat, not for the same one.
 - An issue whose checkout is refused with `409` is not tried again while the inbox keeps listing it; the next issue is taken in the same read.
-- When a renewal is refused (`run_fenced`), the runner stops the program and closes the run.
+- When a renewal is refused (`run_fenced`), the runner stops the program and closes the run. A program that has not stopped after 10 seconds is killed.
 - After three runs in a row on one issue that ended without a finish, the runner leaves that issue alone until it is restarted or the issue leaves the inbox, and says so. A person should look at it.
-- While the server does not answer, as during a deploy, the runner keeps trying. A checkout that got no answer is not repeated blind: if the run exists, its lease lapses and a person clears it.
+- While the server does not answer, as during a deploy, the runner keeps trying. A checkout that got no answer, a server error or a `429` is not repeated at once: the inbox is read again after 5 seconds. If the run exists after all, its lease lapses and a person clears it.
 - A release seat's unfinished run is not closed by the runner; a person clears it.
 - The program's output goes to the runner's standard error. Standard output carries one JSON result when the runner ends.
 - The session has the machine's normal permissions and no spend limit of its own, and its token use is not recorded. Give the session only the permission flags it needs to run `collab`, `git` and your tests unattended.

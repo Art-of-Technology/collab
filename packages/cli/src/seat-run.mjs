@@ -6,7 +6,7 @@ import { serverAway } from './inbox-watch.mjs';
 
 // The interim runner: it waits for the seat's next issue in plain code, then starts one fresh program per issue.
 // Only the program named on the command line is run, with the arguments given and no shell. Remote content is never code.
-export async function seatRun({ api, program, args, once, runner, signal, pollMs = 5000, renewMs = 15000,
+export async function seatRun({ api, program, args, once, runner, signal, pollMs = 5000, renewMs = 15000, killMs = 10000,
   log = event => process.stderr.write(JSON.stringify(event) + '\n') }) {
   // Issues this runner leaves alone while the inbox keeps listing them, and how often each ended unfinished in a row.
   const skip = new Set(), unfinished = new Map(), runs = [];
@@ -26,14 +26,16 @@ export async function seatRun({ api, program, args, once, runner, signal, pollMs
     if (!signal?.aborted) {
       const child = spawn(program, args, { shell: false, windowsHide: true, stdio: ['inherit', 2, 2],
         env: { ...process.env, COLLAB_RUN_ID: run.id, COLLAB_RUN_GENERATION: generation, COLLAB_ISSUE_KEY: issueKey } });
-      const stop = () => child.kill();
+      // A program that does not stop when asked is killed: a fenced session must not go on working.
+      let killer;
+      const stop = () => { child.kill(); killer ??= setTimeout(() => child.kill('SIGKILL'), killMs); };
       signal?.addEventListener('abort', stop, { once: true });
       // A renew the server refuses means the run is fenced: the issue went to someone else or the run was marked lost.
       // The program has to stop before anyone else can start, so it is stopped here and the run closed below.
       const timer = setInterval(() => api('PATCH', `runs/${run.id}`, { event: 'renew', generation }).catch(error => { if (!serverAway(error)) stop(); }), renewMs);
       if (signal?.aborted) stop();
       exitCode = await new Promise(resolve => { child.on('error', () => { failed = true; resolve(null); }); child.on('close', resolve); });
-      clearInterval(timer); signal?.removeEventListener('abort', stop);
+      clearInterval(timer); clearTimeout(killer); signal?.removeEventListener('abort', stop);
     }
     let state;
     try {
@@ -69,8 +71,9 @@ export async function seatRun({ api, program, args, once, runner, signal, pollMs
       catch (error) {
         // Refused: someone holds it, or it waits for a person. Not tried again while it stays listed; the next item is.
         if (error.details?.status === 409) { skip.add(item.issueId); log({ event: 'skipped', issueKey: item.issueKey, reason: error.code }); continue; }
-        // No answer: the run may exist. It is not tried again blind; if it exists its lease lapses and a person clears it.
-        if (serverAway(error)) { log({ event: 'checkout_unanswered', issueKey: item.issueKey }); break; }
+        // No answer, a server error or a 429: not tried again at once. The inbox is read again after the wait. If the run
+        // exists after all, the inbox no longer lists the issue, its lease lapses and a person clears it.
+        if (serverAway(error)) { log({ event: 'checkout_deferred', issueKey: item.issueKey, reason: error.code }); break; }
         throw error;
       }
       if (typeof run?.id !== 'string') throw new CliError('invalid_response', 'Expected a run.', 5);
