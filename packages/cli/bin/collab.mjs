@@ -30,8 +30,7 @@ function parse(argv) {
       if (parts.length) throw new CliError('invalid_option', `--${key} does not take a value.`);
       options[key] = true;
     } else {
-      const value = parts.length ? parts.join('=') : argv[++i];
-      if (value === undefined || value.startsWith('--')) throw new CliError('missing_value', `--${key} requires a value.`);
+      const value = parts.length ? parts.join('=') : argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') ? argv[++i] : undefined;
       options[key] = value;
     }
   }
@@ -39,6 +38,7 @@ function parse(argv) {
 }
 function allowed(options, names) {
   if (Object.keys(options).some(key => !names.includes(key))) throw new CliError('unknown_flag', `Supported options: ${names.map(n => `--${n}`).join(', ')}`);
+  for (const key of Object.keys(options)) if (options[key] === undefined) throw new CliError('missing_value', `--${key} requires a value.`);
 }
 function checkedDeletePreview(value, identifier, projectId) {
   if (!value || typeof value.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(value.id) ||
@@ -113,9 +113,9 @@ async function update() {
 }
 async function main() {
   const { words, options, rest } = parse(process.argv.slice(2));
-  if (options.help || !words.length || words[0] === 'help' || words[0] === 'schema') return help();
   const name = commands[words[0]] ? words[0] : words.slice(0, 2).join(' ');
   if (rest && name !== 'seat run') throw new CliError('unexpected_arguments', 'Only collab seat run takes arguments after --.');
+  if (options.help || !words.length || words[0] === 'help' || words[0] === 'schema') return help();
   if (words[0] === 'orca') throw new CliError('orca_retired', 'Terminal dispatch was retired. Use worker setup/run with a dedicated owned Claude process.');
   if (['worker', 'coordinator'].includes(words[0]) && options['config-dir']) {
     if (!path.isAbsolute(options['config-dir'])) throw new CliError('invalid_config_dir', 'Use an absolute private --config-dir.');
@@ -197,8 +197,7 @@ async function main() {
   if (args.length !== parameters.length || args.some(a => !/^[a-zA-Z0-9_-]+$/.test(a))) throw new CliError('invalid_identifier', `Expected ${parameters.length} ID/key argument(s); only letters, digits, underscores and hyphens allowed.`);
   const textFiles = ['content', 'description', 'body', 'note'].filter(key => Object.hasOwn(spec.fields, key));
   // --project is declared only by a command that reads a project; elsewhere it used to be dropped without a word.
-  allowed(options, [...globals.filter(key => key !== 'project' || spec.query.projectId || spec.defaultProject), ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...Object.keys(spec.localOptions || {}).map(flagName), 'input', ...textFiles.map(key => `${key}-file`), 'yes', 'dry-run', 'all']);
-  if (options.all && !spec.pagination) throw new CliError('unsupported_pagination', '--all is supported only for issues, notes and worklogs lists.');
+  allowed(options, [...globals.filter(key => key !== 'project' || spec.query.projectId || spec.defaultProject), ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...Object.keys(spec.localOptions || {}).map(flagName), ...(Object.keys(spec.fields).length ? ['input'] : []), ...textFiles.map(key => `${key}-file`), ...(spec.method === 'DELETE' ? ['yes', 'dry-run'] : []), ...(spec.watch ? ['dry-run'] : []), ...(spec.pagination ? ['all'] : [])]);
   if (spec.method === 'DELETE' && !options.yes && !(spec.deletePreview && options['dry-run'])) throw new CliError('confirmation_required', 'Deletion requires --yes.');
   if (spec.requiredQuery?.includes('projectId') && options.project && options['project-id'] && options.project !== options['project-id']) {
     throw new CliError('conflicting_project', '--project and --project-id must identify the same project.');
@@ -209,7 +208,7 @@ async function main() {
     let input; try { input = JSON.parse(await boundedInput(options.input)); } catch { throw new CliError('invalid_input', 'Expected a JSON object, at most 1 MiB.'); }
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new CliError('invalid_input', 'Expected a JSON object.');
     for (const [key, value] of Object.entries(input)) {
-      if (!Object.hasOwn(spec.fields, key)) throw new CliError('unknown_field', 'Input contains an unsupported field. See collab schema.');
+      if (!Object.hasOwn(spec.fields, key) || (name === 'seat request' && key === 'project')) throw new CliError('unknown_field', 'Input contains an unsupported field. See collab schema.');
       body[key] = value;
     }
   }

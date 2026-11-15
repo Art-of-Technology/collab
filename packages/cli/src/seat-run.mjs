@@ -15,23 +15,26 @@ export async function seatRun({ api, program, args, once, runner, signal, pollMs
   const patient = async call => {
     for (;;) {
       try { return await call(); }
-      catch (error) { if (!serverAway(error) || signal?.aborted) throw error; await sleep(pollMs); }
+      catch (error) { if (!serverAway(error)) throw error; await delay(pollMs); }
     }
   };
   async function work(item, run, generation) {
     const issueKey = item.issueKey ?? item.issueId;
     log({ event: 'run_started', issueKey, runId: run.id });
     // The program's output goes to stderr: stdout is this command's one JSON result.
-    const child = spawn(program, args, { shell: false, windowsHide: true, stdio: ['inherit', 2, 2],
-      env: { ...process.env, COLLAB_RUN_ID: run.id, COLLAB_RUN_GENERATION: generation, COLLAB_ISSUE_KEY: issueKey } });
-    const stop = () => child.kill();
-    signal?.addEventListener('abort', stop, { once: true });
-    // A renew the server refuses means the run is fenced: the issue went to someone else or the run was marked lost.
-    // The program has to stop before anyone else can start, so it is stopped here and the run closed below.
-    const timer = setInterval(() => api('PATCH', `runs/${run.id}`, { event: 'renew', generation }).catch(error => { if (!serverAway(error)) stop(); }), renewMs);
-    let failed = false;
-    const exitCode = await new Promise(resolve => { child.on('error', () => { failed = true; resolve(null); }); child.on('close', resolve); });
-    clearInterval(timer); signal?.removeEventListener('abort', stop);
+    let failed = false, exitCode = null;
+    if (!signal?.aborted) {
+      const child = spawn(program, args, { shell: false, windowsHide: true, stdio: ['inherit', 2, 2],
+        env: { ...process.env, COLLAB_RUN_ID: run.id, COLLAB_RUN_GENERATION: generation, COLLAB_ISSUE_KEY: issueKey } });
+      const stop = () => child.kill();
+      signal?.addEventListener('abort', stop, { once: true });
+      // A renew the server refuses means the run is fenced: the issue went to someone else or the run was marked lost.
+      // The program has to stop before anyone else can start, so it is stopped here and the run closed below.
+      const timer = setInterval(() => api('PATCH', `runs/${run.id}`, { event: 'renew', generation }).catch(error => { if (!serverAway(error)) stop(); }), renewMs);
+      if (signal?.aborted) stop();
+      exitCode = await new Promise(resolve => { child.on('error', () => { failed = true; resolve(null); }); child.on('close', resolve); });
+      clearInterval(timer); signal?.removeEventListener('abort', stop);
+    }
     let state;
     try {
       state = (await patient(() => api('GET', `runs/${run.id}`))).run?.state;

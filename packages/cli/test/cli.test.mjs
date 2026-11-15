@@ -2116,12 +2116,17 @@ test('legacy watcher coalesces revision-only changes in its emitted callback con
 test('a flag a command does not declare is an error, and --project is one where the command takes no project', async t => {
   const f = await fixture(t);
   for (const args of [['inbox', 'list', '--agent', 'reviewer', '--project', 'X'], ['handoffs', 'get', 'handoff-one', '--agent', 'reviewer', '--project', 'X'],
-    ['issues', 'get', 'APP-1', '--naem', 'typo'], ['issues', 'get', 'APP-1', '--content-file', '-'], ['seat', 'show', '--once'], ['run', 'context', 'APP-1', '--note-file', '-']]) {
+    ['issues', 'get', 'APP-1', '--naem', 'typo'], ['issues', 'get', 'APP-1', '--content-file', '-'], ['seat', 'show', '--once'], ['run', 'context', 'APP-1', '--note-file', '-'],
+    ['seat', 'show', '--yes'], ['seat', 'show', '--all'], ['seat', 'show', '--input'], ['seat', 'run', '--dry-run', '--', 'node'], ['seat', 'show', '--unknown']]) {
     const result = await f.run(args);
     assert.equal(result.code, 2, args.join(' ')); assert.equal(result.error.error, 'unknown_flag', args.join(' '));
   }
   const stray = await f.run(['whoami', '--', 'program']);
   assert.equal(stray.code, 2); assert.equal(stray.error.error, 'unexpected_arguments');
+  for (const args of [['schema', '--', 'extra'], ['help', '--', 'extra'], ['seat', 'show', '--help', '--', 'extra']]) {
+    assert.equal((await f.run(args)).error.error, 'unexpected_arguments');
+  }
+  assert.equal((await f.run(['seat', 'inbox', '--wait-seconds'])).error.error, 'missing_value');
   assert.equal(f.calls.length, 0);
   // Where a command takes a project, the flag still selects it.
   assert.equal((await f.run(['issues', 'list', '--project', 'project-one'])).code, 0);
@@ -2158,6 +2163,10 @@ test('seat and run commands send the seat contract and nothing else', async t =>
   assert.equal(request.result.data.warning, 'seat_idle');
   assert.equal(request.result.diagnostics[0].warning, 'seat_idle'); assert.match(request.result.diagnostics[0].message, /person/);
   assert.equal((await sent(['seat', 'request', '--from-issue', 'APP-1', '--role', 'developer', '--title', 'Fix', '--body', 'Text', '--project', 'OPS'])).body.project, 'OPS');
+  const input = { project: 'OTHER', role: 'developer', title: 'Fix', body: 'Text', fromIssue: 'APP-1' };
+  assert.equal((await f.run(['seat', 'request', '--input', '-'], { input: JSON.stringify(input) })).error.error, 'unknown_field');
+  delete input.project;
+  assert.equal((await sent(['seat', 'request', '--input', '-', '--project', 'OPS'], { input: JSON.stringify(input) })).body.project, 'OPS');
   const before = f.calls.length;
   for (const args of [['run', 'finish', 'run-one', '--generation', 'gen-one', '--outcome', 'done'], ['run', 'renew', 'run-one'], ['run', 'start'], ['seat', 'request', '--role', 'release', '--title', 'T', '--body', 'B']]) {
     assert.equal((await f.run(args)).error.error, 'required_field', args.join(' '));
@@ -2246,6 +2255,22 @@ const sleeps = ms => `setTimeout(() => {}, ${ms})`;
 // Short waits, and a lease clock slow enough that only the renew tests see it tick.
 const fast = { pollMs: 20, renewMs: 60000, runner: 'test', log: () => {} };
 const outcome = result => result.runs.map(({ issueKey, runId, state, exitCode }) => ({ issueKey, runId, state, exitCode }));
+
+test('seat run closes a checkout interrupted by shutdown and retries cleanup outages', async () => {
+  const controller = new AbortController(), calls = [];
+  let reads = 0, closes = 0;
+  const api = async (method, route) => {
+    calls.push(`${method} ${route}`);
+    if (route === 'seats/me/inbox') return { items: [{ issueId: 'id-one', issueKey: 'APP-1' }] };
+    if (route === 'runs') { controller.abort(); return { run: { id: 'run-one' } }; }
+    if (method === 'GET' && ++reads === 1 || method === 'PATCH' && ++closes === 1) throw new CliError('transport_failed', 'offline');
+    return { run: { state: method === 'GET' ? 'running' : 'stopped' } };
+  };
+  const result = await seatRun({ ...fast, api, signal: controller.signal, program: 'nonexistent-program', args: [] });
+  assert.equal(result.stopped, true);
+  assert.equal(result.runs[0].state, 'stopped');
+  assert.deepEqual(calls, ['GET seats/me/inbox', 'POST runs', 'GET runs/run-one', 'GET runs/run-one', 'PATCH runs/run-one', 'PATCH runs/run-one']);
+});
 
 test('seat run: a program that finishes its run leaves it finished, and no close is sent', async t => {
   const s = await seatServer(t, { inbox: () => ['APP-1'] });
