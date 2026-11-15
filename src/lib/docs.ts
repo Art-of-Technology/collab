@@ -15,6 +15,9 @@ export type DocsNavSection = { title: string; pages: { slug: string; title: stri
 const SLUG = /^[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*$/;
 const root = () => join(process.cwd(), 'content', 'docs');
 
+/** The address of a page for people. The page "index" is /docs itself. */
+export const docHref = (slug: string) => (slug === 'index' ? '/docs' : `/docs/${slug}`);
+
 // The words of a heading or paragraph without their inline Markdown: links keep their text, code and emphasis lose their marks.
 const words = (tokens: Token[] = []): string => tokens.map(token => {
   if (token.type === 'html') return '';
