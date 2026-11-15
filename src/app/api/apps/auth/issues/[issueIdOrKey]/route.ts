@@ -18,6 +18,7 @@ import { emitIssueUpdated } from '@/lib/event-bus';
 import { TEMPLATE_FIELDS } from '@/lib/issue-templates';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
+import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
 
 // Schema for updating issues
 const UpdateIssueSchema = z.object({
@@ -261,20 +262,7 @@ export const PATCH = withAppAuth(
 
       // Handle assignee change
       if (updateData.assigneeId !== undefined) {
-        if (updateData.assigneeId) {
-          const member = await prisma.workspaceMember.findFirst({
-            where: {
-              userId: updateData.assigneeId,
-              workspaceId: context.workspace.id,
-            },
-          });
-          if (!member) {
-            return NextResponse.json(
-              { error: 'assignee_not_found', error_description: 'Assignee not found in workspace' },
-              { status: 404 }
-            );
-          }
-        }
+        if (updateData.assigneeId) await assertAssignable(prisma, existingIssue, updateData.assigneeId);
         update.assigneeId = updateData.assigneeId;
       }
 
@@ -443,6 +431,7 @@ export const PATCH = withAppAuth(
       return NextResponse.json(updatedIssue);
     } catch (error) {
       if (error instanceof TemplateRefused) return NextResponse.json(error.refusal, { status: 422 });
+      if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
       if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
         return NextResponse.json({ error: 'issue_conflict', error_description: 'Issue changed; reload and retry' }, { status: 409 });

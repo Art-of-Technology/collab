@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { emitIssueCreated } from '@/lib/event-bus';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { createRefusal, issueShape } from '@/lib/issue-template-enforcement';
+import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
 
 // Schema for creating new issues
 const CreateIssueSchema = z.object({
@@ -212,21 +213,8 @@ export const POST = withAppAuth(
         );
       }
 
-      // Validate assignee exists and is a workspace member
       if (issueData.assigneeId) {
-        const assignee = await prisma.workspaceMember.findFirst({
-          where: {
-            userId: issueData.assigneeId,
-            workspaceId: context.workspace.id
-          }
-        });
-
-        if (!assignee) {
-          return NextResponse.json(
-            { error: 'assignee_not_found', error_description: 'Assignee not found or not a workspace member' },
-            { status: 404 }
-          );
-        }
+        await assertAssignable(prisma, { workspaceId: context.workspace.id, projectId: project.id, agentRequestRole: null }, issueData.assigneeId);
       }
 
       // Validate parent issue if provided
@@ -421,6 +409,7 @@ export const POST = withAppAuth(
     } catch (error) {
       if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
       if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
+      if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
       if (error instanceof z.ZodError) {
         return NextResponse.json(
           { 

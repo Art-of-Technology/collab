@@ -148,7 +148,8 @@ test('project guard denies either move endpoint and fails closed on invalid conf
 test('issue move API denies bound source and destination before its transaction', async () => {
   const f = fixture();
   const permissions = { Permission: {}, checkUserPermissions: async () => new Proxy({}, { get: () => ({ hasPermission: true }) }), canActOnOwnContent: () => true };
-  const mutation = load('src/lib/issue-mutation.ts', { ...f.dependencies, '@/lib/permissions': permissions, '@/utils/html-normalizer': {} });
+  const mutation = load('src/lib/issue-mutation.ts', { ...f.dependencies, '@/lib/permissions': permissions, '@/utils/html-normalizer': {},
+    '@/lib/issue-assignee': { assertAssignable: async () => {}, HandoffError: class extends Error {} } });
   const route = load('src/app/api/issues/[issueId]/route.ts', {
     '@/lib/issue-mutation': mutation,
     ...f.dependencies,

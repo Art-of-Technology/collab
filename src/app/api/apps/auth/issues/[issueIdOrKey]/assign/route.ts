@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
+import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
 
 const AssignIssueSchema = z.object({
   assigneeId: z.string().cuid().optional(),
@@ -115,29 +116,7 @@ export const POST = withAppAuth(
         );
       }
 
-      const member = await prisma.workspaceMember.findFirst({
-        where: {
-          userId: data.assigneeId,
-          workspaceId: context.workspace.id,
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
-        },
-      });
-
-      if (!member) {
-        return NextResponse.json(
-          { error: 'assignee_not_found', error_description: 'User not found in workspace' },
-          { status: 404 }
-        );
-      }
+      await assertAssignable(prisma, issue, data.assigneeId);
 
       // Update issue assignee
       const updatedIssue = await prisma.issue.update({
@@ -204,11 +183,12 @@ export const POST = withAppAuth(
         assignment: {
           userId: data.assigneeId,
           role: data.role || 'ASSIGNEE',
-          user: member.user,
+          user: updatedIssue.assignee,
         },
       });
     } catch (error) {
       if (error instanceof TemplateRefused) return NextResponse.json(error.refusal, { status: 422 });
+      if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') return NextResponse.json({ error: 'issue_conflict', error_description: 'Issue changed; reload and retry' }, { status: 409 });
       if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
