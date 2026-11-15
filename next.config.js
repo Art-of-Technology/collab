@@ -4,6 +4,13 @@ const nextConfig = {
   output: 'standalone',
   // Published docs are read from disk at run time (src/lib/docs.ts); standalone output ships only the files it traced.
   outputFileTracingIncludes: { '/**': ['./content/docs/**/*'] },
+  // Adding .md to a docs address gives that page as plain Markdown (src/app/docs/raw).
+  async rewrites() {
+    return [
+      { source: '/docs.md', destination: '/docs/raw/index' },
+      { source: '/docs/:path*.md', destination: '/docs/raw/:path*' },
+    ];
+  },
 
   webpack: (config, { isServer }) => {
     if (!isServer) {
