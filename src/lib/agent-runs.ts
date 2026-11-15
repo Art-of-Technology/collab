@@ -385,7 +385,8 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
 /**
  * What a fresh session needs to work an issue, in one read: the issue, the exit note of the last run that finished, the
  * comments made after that run ended (all of them when no run has finished), the issues linked as blocking it, the
- * requests linked to it, and for a request the issues it was filed for. A run that ended without a note moves nothing:
+ * requests linked to it, and for a request the issues it was filed for (the ones it blocks or relates to from its own
+ * side, which is how filing links it). A run that ended without a note moves nothing:
  * what was said since the last note is still what the next session lacks. A read like any other: every token that
  * reads the workspace's issues gets it.
  */
@@ -401,7 +402,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: { gt: last.endedAt } }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
   const others = [
-    ...issue.sourceRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKED_BY', filedFor: relation.relationType !== 'BLOCKED_BY', issue: relation.targetIssue })),
+    ...issue.sourceRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKED_BY', filedFor: relation.relationType === 'BLOCKS' || relation.relationType === 'RELATES_TO', issue: relation.targetIssue })),
     ...issue.targetRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKS', filedFor: false, issue: relation.sourceIssue })),
   ];
   const key = issue.issueKey ?? issue.id;
@@ -412,7 +413,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     commentsSince,
     blockers: others.filter(other => other.blocksMe).map(other => toRef(other.issue)),
     requests: others.filter(other => other.issue.agentRequestRole).map(other => toRef(other.issue)),
-    // Filing a request links it to its source, from the request's side.
+    // Filing a request links it to its source from the request's side: it blocks the source or relates to it.
     requestFor: issue.agentRequestRole ? others.filter(other => other.filedFor && !other.issue.agentRequestRole).map(other => toRef(other.issue)) : [],
     // Where the rest is: the project's context, what was said before the last note, and the timeline, which holds a late exit note.
     commands: [`collab context get --project-id ${issue.projectId}`, `collab comments list ${key}`, `collab issues activity ${key}`],

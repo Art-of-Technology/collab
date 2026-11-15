@@ -123,6 +123,10 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     const asRequest = await context(review);
     assert.deepEqual([asRequest.issue.agentRequestRole, asRequest.requestFor, asRequest.requests, asRequest.blockers], ['review', [ref(target, 'to_do', 'todo')], [], []]);
     assert.deepEqual((await context(elsewhere)).requestFor, [ref(target, 'to_do', 'todo')]);
+    // What a request waits on, or is a child of, is not what it was filed for.
+    await link(review, 'BLOCKED_BY', open); await link(review, 'PARENT', related);
+    const waiting = await context(review);
+    assert.deepEqual([waiting.requestFor, waiting.blockers], [[ref(target, 'to_do', 'todo')], [ref(open, 'to_do', 'todo')]]);
   });
 
   await t.test('it is a read: any token of the workspace gets it, by key or by id, and nothing outside the workspace', async () => {
