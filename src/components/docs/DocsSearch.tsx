@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -14,11 +14,13 @@ export function DocsSearch() {
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState<DocsIndexEntry[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const request = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey)) return;
       event.preventDefault();
+      request.current?.abort();
       setFailed(false);
       setOpen(value => !value);
     };
@@ -30,13 +32,17 @@ export function DocsSearch() {
   // and the message of the failure goes when the search is closed.
   useEffect(() => {
     if (!open || index) return;
-    fetch('/docs-index.json')
+    const controller = new AbortController();
+    request.current = controller;
+    fetch('/docs-index.json', { signal: controller.signal })
       .then(response => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
-      .then(setIndex, () => setFailed(true));
+      .then(result => { if (!controller.signal.aborted) setIndex(result); }, () => { if (!controller.signal.aborted) setFailed(true); });
+    return () => controller.abort();
   }, [open, index]);
 
   const hits = index ? searchDocs(index, query) : [];
   const go = (href: string) => {
+    request.current?.abort();
     setOpen(false);
     setQuery('');
     router.push(href);
@@ -54,7 +60,7 @@ export function DocsSearch() {
         <span className="hidden sm:inline">Search the docs</span>
         <kbd className="hidden rounded border border-border px-1.5 font-sans text-[10px] sm:inline">⌘K</kbd>
       </button>
-      <Dialog open={open} onOpenChange={value => { setOpen(value); setFailed(false); }}>
+      <Dialog open={open} onOpenChange={value => { if (!value) request.current?.abort(); setOpen(value); setFailed(false); }}>
         <DialogContent className="overflow-hidden p-0" aria-describedby={undefined}>
           <DialogTitle className="sr-only">Search the docs</DialogTitle>
           {/* The shared search has already chosen and ordered the hits; the list must not filter them again. */}

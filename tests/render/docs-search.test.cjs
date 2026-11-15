@@ -190,11 +190,12 @@ test('the docs route gives one page as the loader has it, and says what is wrong
 });
 
 // The search box with its state held by the test: `state` is what each useState call returns, in order (open, query, index, failed).
-function box(state = [], reachable = true) {
+function box(state = [], reachable = true, fetchResponse) {
   const set = [], effects = [], pushed = [], listeners = {}, fetched = [];
   let at = 0;
   const react = {
     useState: initial => { const slot = at++; const value = slot in state ? state[slot] : initial; return [value, next => set.push([slot, typeof next === 'function' ? next(value) : next])]; },
+    useRef: initial => ({ current: initial }),
     useEffect: effect => effects.push(effect),
   };
   const part = name => Object.assign(props => jsx.jsx('div', props), { part: name });
@@ -203,8 +204,9 @@ function box(state = [], reachable = true) {
     react, 'react/jsx-runtime': jsx, 'next/navigation': { useRouter: () => ({ push: href => pushed.push(href) }) }, 'lucide-react': require('lucide-react'),
     '@/components/ui/dialog': parts, '@/components/ui/command': parts, '@/lib/docs-search': search,
   }, {
+    AbortController,
     document: { addEventListener: (type, listener) => { listeners[type] = listener; }, removeEventListener: () => {} },
-    fetch: async address => { fetched.push(address); return { ok: reachable, status: reachable ? 200 : 503, json: async () => docs.docsIndex() }; },
+    fetch: async address => { fetched.push(address); return fetchResponse ? fetchResponse() : { ok: reachable, status: reachable ? 200 : 503, json: async () => docs.docsIndex() }; },
   });
   const tree = DocsSearch();
   const all = (element, found = []) => {
@@ -277,6 +279,30 @@ test('an index that cannot be fetched is said so, and opening the search again t
   assert.deepEqual(failed.fetched, ['/docs-index.json']);
   assert.deepEqual(failed.set.slice(4), [[2, docs.docsIndex()]]);
   assert.deepEqual(text(box([true, 'nothing-like-this', docs.docsIndex()])), ['No page matches.']);
+});
+
+test('closing an opening ignores its pending fetch result', async () => {
+  for (const close of ['dialog', 'keyboard']) {
+    for (const succeeds of [false, true]) {
+      let settle;
+      const pending = new Promise((resolve, reject) => { settle = succeeds ? resolve : reject; });
+      const opening = box([true, 'zanzibar'], true, () => pending);
+      opening.effects[0]();
+      const cleanup = opening.effects[1]();
+      if (close === 'dialog') opening.parts('Dialog')[0].props.onOpenChange(false);
+      else opening.listeners.keydown({ key: 'k', metaKey: true, preventDefault() {} });
+      opening.set.length = 0;
+      settle(succeeds ? { ok: true, json: async () => docs.docsIndex() } : new Error('offline'));
+      await new Promise(resolve => setImmediate(resolve));
+      assert.deepEqual(opening.set, [], `${close}, success=${succeeds}`);
+      cleanup();
+      const retry = box([true, 'zanzibar']);
+      retry.effects.forEach(effect => effect());
+      await new Promise(resolve => setImmediate(resolve));
+      assert.deepEqual(retry.fetched, ['/docs-index.json']);
+      assert.deepEqual(retry.set, [[2, docs.docsIndex()]]);
+    }
+  }
 });
 
 test('the search box is in the layout of every docs page', () => {
