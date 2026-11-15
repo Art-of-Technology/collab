@@ -149,7 +149,20 @@ test('the same query through the browser\'s function and through the docs route 
     assert.deepEqual(body.results, JSON.parse(JSON.stringify(browser)), query);
   }
   assert.deepEqual((await ask('query=collab&limit=2')).body.results, JSON.parse(JSON.stringify(search.searchDocs(index, 'collab', 2))));
-  assert.equal((await ask('query=collab&limit=500')).body.results.length, search.searchDocs(index, 'collab', 20).length);
+});
+
+test('the docs route caps search results at 20', async () => {
+  const index = Array.from({ length: 25 }, (_, i) => ({
+    id: `/docs/page-${i}`, slug: `page-${i}`, title: 'Collab', heading: 'Collab', anchor: '', text: 'Collab',
+  }));
+  const route = load('src/app/api/apps/auth/docs/route.ts', {
+    'next/server': { NextResponse: { json: (body, init) => Response.json(body, init) } },
+    '@/lib/apps/auth-middleware': { withAppAuth: handler => request => handler(request, {}) },
+    '@/lib/docs': { docsIndex: () => index }, '@/lib/docs-search': search,
+  }, globals);
+  const response = await route.GET(new Request('http://localhost/api/apps/auth/docs?query=collab&limit=500'));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).results.length, 20);
 });
 
 test('the docs route gives one page as the loader has it, and says what is wrong otherwise', async () => {
