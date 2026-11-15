@@ -42,7 +42,6 @@ export function DocsSearch() {
 
   const hits = index ? searchDocs(index, query) : [];
   const go = (href: string) => {
-    request.current?.abort();
     setOpen(false);
     setQuery('');
     router.push(href);

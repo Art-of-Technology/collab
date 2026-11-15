@@ -272,12 +272,14 @@ test('an index that cannot be fetched is said so, and opening the search again t
   const failed = box([true, 'zanzibar', null, true]);
   failed.parts('Dialog')[0].props.onOpenChange(false);
   assert.deepEqual(failed.set, [[0, false], [3, false]]);
-  failed.effects.forEach(effect => effect());
+  failed.effects[0]();
   failed.listeners.keydown({ key: 'k', metaKey: true, preventDefault() {} });
   assert.deepEqual(failed.set.slice(2), [[3, false], [0, false]]);
+  const reopened = box([true, 'zanzibar']);
+  reopened.effects.forEach(effect => effect());
   await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(failed.fetched, ['/docs-index.json']);
-  assert.deepEqual(failed.set.slice(4), [[2, docs.docsIndex()]]);
+  assert.deepEqual(reopened.fetched, ['/docs-index.json']);
+  assert.deepEqual(reopened.set, [[2, docs.docsIndex()]]);
   assert.deepEqual(text(box([true, 'nothing-like-this', docs.docsIndex()])), ['No page matches.']);
 });
 
