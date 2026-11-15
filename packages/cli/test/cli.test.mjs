@@ -13,7 +13,8 @@ import { createHash } from 'node:crypto';
 import { aclFailureKind, windowsAcl } from '../src/windows-acl.mjs';
 import { commands } from '../src/commands.mjs';
 import { watchInbox } from '../src/inbox-watch.mjs';
-import { CliError } from '../src/client.mjs';
+import { CliError, request as apiRequest } from '../src/client.mjs';
+import { seatRun } from '../src/seat-run.mjs';
 
 const bin = fileURLToPath(new URL('../bin/collab.mjs', import.meta.url));
 const executable = process.env.COLLAB_CLI_EXECUTABLE;
@@ -1341,7 +1342,10 @@ test('Notes create uses project scope; updates do not silently move Notes', asyn
   const f = await fixture(t);
   assert.equal((await f.run(['notes', 'create', '--title', 'Decision', '--content-file', '-', '--project', 'project-one', '--type', 'DECISION', '--is-ai-context', 'true'], { input: '# Decision\nUse Collab.\n' })).code, 0);
   assert.deepEqual(JSON.parse(f.calls[0].body), { title: 'Decision', content: '# Decision\nUse Collab.\n', type: 'DECISION', isAiContext: true, projectId: 'project-one', scope: 'PROJECT' });
-  assert.equal((await f.run(['notes', 'update', 'note-one', '--project', 'project-other', '--content-file', '-'], { input: 'Updated' })).code, 0);
+  // An update takes no project: the flag is refused, where it used to be dropped without a word, and a project from the environment moves nothing.
+  assert.equal((await f.run(['notes', 'update', 'note-one', '--project', 'project-other', '--content-file', '-'], { input: 'Updated' })).error.error, 'unknown_flag');
+  assert.equal(f.calls.length, 1);
+  assert.equal((await f.run(['notes', 'update', 'note-one', '--content-file', '-'], { input: 'Updated', env: { COLLAB_PROJECT: 'project-other' } })).code, 0);
   assert.equal(f.calls[1].method, 'PUT'); assert.deepEqual(JSON.parse(f.calls[1].body), { content: 'Updated' });
 });
 
@@ -2107,4 +2111,325 @@ test('legacy watcher coalesces revision-only changes in its emitted callback con
   assert.equal(result.callbacks, 1);
   const emitted = readFileSync(output, 'utf8').trim().split('\n').map(JSON.parse);
   assert.equal(emitted.length, 1); assert.deepEqual(emitted[0].unseen, { items: [{ id: 'same', status: 'open' }], hasMore: false });
+});
+
+test('a flag a command does not declare is an error, and --project is one where the command takes no project', async t => {
+  const f = await fixture(t);
+  for (const args of [['inbox', 'list', '--agent', 'reviewer', '--project', 'X'], ['handoffs', 'get', 'handoff-one', '--agent', 'reviewer', '--project', 'X'],
+    ['issues', 'get', 'APP-1', '--naem', 'typo'], ['issues', 'get', 'APP-1', '--content-file', '-'], ['seat', 'show', '--once'], ['run', 'context', 'APP-1', '--note-file', '-'],
+    ['seat', 'show', '--yes'], ['seat', 'show', '--all'], ['seat', 'show', '--input'], ['seat', 'run', '--dry-run', '--', 'node'], ['seat', 'show', '--unknown']]) {
+    const result = await f.run(args);
+    assert.equal(result.code, 2, args.join(' ')); assert.equal(result.error.error, 'unknown_flag', args.join(' '));
+  }
+  const stray = await f.run(['whoami', '--', 'program']);
+  assert.equal(stray.code, 2); assert.equal(stray.error.error, 'unexpected_arguments');
+  for (const args of [['schema', '--', 'extra'], ['help', '--', 'extra'], ['seat', 'show', '--help', '--', 'extra']]) {
+    assert.equal((await f.run(args)).error.error, 'unexpected_arguments');
+  }
+  assert.equal((await f.run(['seat', 'inbox', '--wait-seconds'])).error.error, 'missing_value');
+  assert.equal(f.calls.length, 0);
+  // Where a command takes a project, the flag still selects it.
+  assert.equal((await f.run(['issues', 'list', '--project', 'project-one'])).code, 0);
+  assert.equal(new URL(f.calls.at(-1).url, f.url).searchParams.get('projectId'), 'project-one');
+  assert.equal((await f.run(['issues', 'create', '--project', 'project-one', '--title', 'New'])).code, 0);
+  assert.deepEqual(JSON.parse(f.calls.at(-1).body), { title: 'New', projectId: 'project-one' });
+  // Every command but seat run still previews with --dry-run and sends nothing.
+  const sentBefore = f.calls.length;
+  for (const args of [['projects', 'create', '--name', 'Platform', '--slug', 'platform', '--issue-prefix', 'PLAT', '--dry-run'], ['seat', 'show', '--dry-run'], ['run', 'renew', 'run-one', '--generation', 'g', '--dry-run']]) {
+    const preview = await f.run(args);
+    assert.equal(preview.code, 0, args.join(' ')); assert.equal(preview.data.dryRun, true);
+  }
+  assert.equal(f.calls.length, sentBefore);
+});
+
+test('seat and run commands send the seat contract and nothing else', async t => {
+  const f = await fixture(t, (req, res) => res.end(JSON.stringify(req.url.includes('/requests') ? { issue: { id: 'issue-nine', issueKey: 'OPS-9' }, warning: 'seat_idle' } : { items: [], run: { id: 'run-one' } })));
+  const sent = async (args, options) => {
+    const result = await f.run(args, options);
+    assert.equal(result.code, 0, `${args.join(' ')}: ${result.stderr}`);
+    const { method, url, body } = f.calls.at(-1);
+    return { method, url, body: body ? JSON.parse(body) : undefined, result };
+  };
+  assert.deepEqual({ ...await sent(['seat', 'show']), result: 0 }, { method: 'GET', url: '/api/apps/auth/seats/me', body: undefined, result: 0 });
+  assert.deepEqual({ ...await sent(['seat', 'inbox', '--workspace', 'w']), result: 0 }, { method: 'GET', url: '/api/apps/auth/seats/me/inbox?workspaceId=w', body: undefined, result: 0 });
+  assert.deepEqual({ ...await sent(['run', 'context', 'APP-1']), result: 0 }, { method: 'GET', url: '/api/apps/auth/issues/APP-1/run-context', body: undefined, result: 0 });
+  assert.deepEqual({ ...await sent(['run', 'renew', 'run-one', '--generation', 'gen-one']), result: 0 },
+    { method: 'PATCH', url: '/api/apps/auth/runs/run-one', body: { generation: 'gen-one', event: 'renew' }, result: 0 });
+  const note = '## Done\nIt works\n## Decisions\nNone\n## Evidence\nTests\n## Next\nNothing';
+  assert.deepEqual({ ...await sent(['run', 'finish', 'run-one', '--generation', 'gen-one', '--outcome', 'done', '--note-file', '-', '--status', 'waiting_for_deploy', '--also-finish', '["APP-2"]'], { input: note }), result: 0 },
+    { method: 'PATCH', url: '/api/apps/auth/runs/run-one', body: { generation: 'gen-one', outcome: 'done', status: 'waiting_for_deploy', alsoFinish: ['APP-2'], note, event: 'finish' }, result: 0 });
+  // A start by hand gets a generation of its own; the reply carries it for the finish.
+  const started = await sent(['run', 'start', '--issue', 'APP-1']);
+  assert.equal(started.url, '/api/apps/auth/runs'); assert.equal(started.method, 'POST');
+  assert.match(started.body.generation, /^[0-9a-f-]{36}$/);
+  assert.deepEqual({ ...started.body, generation: 0 }, { issue: 'APP-1', generation: 0, runner: 'collab-cli' });
+  // A request names its target project only when --project is given: a project from the environment is not one.
+  const request = await sent(['seat', 'request', '--from-issue', 'APP-1', '--role', 'release', '--title', 'Release 1.2', '--body-file', '-', '--blocks', 'true'], { input: 'Body text', env: { COLLAB_PROJECT: 'ambient' } });
+  assert.deepEqual({ ...request, result: 0 }, { method: 'POST', url: '/api/apps/auth/seats/me/requests', body: { role: 'release', title: 'Release 1.2', fromIssue: 'APP-1', blocks: true, body: 'Body text' }, result: 0 });
+  // The request went through, and the seat it went to may not be running: said on stderr, in words.
+  assert.equal(request.result.data.warning, 'seat_idle');
+  assert.equal(request.result.diagnostics[0].warning, 'seat_idle'); assert.match(request.result.diagnostics[0].message, /person/);
+  assert.equal((await sent(['seat', 'request', '--from-issue', 'APP-1', '--role', 'developer', '--title', 'Fix', '--body', 'Text', '--project', 'OPS'])).body.project, 'OPS');
+  const input = { project: 'OTHER', role: 'developer', title: 'Fix', body: 'Text', fromIssue: 'APP-1' };
+  assert.equal((await f.run(['seat', 'request', '--input', '-'], { input: JSON.stringify(input) })).error.error, 'unknown_field');
+  delete input.project;
+  assert.equal((await sent(['seat', 'request', '--input', '-', '--project', 'OPS'], { input: JSON.stringify(input) })).body.project, 'OPS');
+  const before = f.calls.length;
+  for (const args of [['run', 'finish', 'run-one', '--generation', 'gen-one', '--outcome', 'done'], ['run', 'renew', 'run-one'], ['run', 'start'], ['seat', 'request', '--role', 'release', '--title', 'T', '--body', 'B']]) {
+    assert.equal((await f.run(args)).error.error, 'required_field', args.join(' '));
+  }
+  assert.equal(f.calls.length, before);
+});
+
+test('seat inbox reads once, and with --wait-seconds waits for work without changing anything', async t => {
+  const f = await fixture(t, (_req, res, _body, calls) => res.end(JSON.stringify({ items: calls.length < 3 ? [] : [{ issueId: 'issue-one', issueKey: 'APP-1' }] })));
+  const once = await f.run(['seat', 'inbox']);
+  assert.deepEqual(once.data, { items: [] }); assert.equal(f.calls.length, 1);
+  const waited = await f.run(['seat', 'inbox', '--wait-seconds', '5']);
+  assert.equal(waited.code, 0, waited.stderr); assert.equal(waited.data.items[0].issueKey, 'APP-1');
+  assert.equal(f.calls.length, 3);
+  assert.ok(f.calls.every(call => call.method === 'GET' && call.url === '/api/apps/auth/seats/me/inbox'));
+  assert.equal((await f.run(['seat', 'inbox', '--wait-seconds', '61'])).error.error, 'invalid_timeout');
+});
+
+test('seat and run refusals keep their code and what is missing, and pass on nothing else from the server', async t => {
+  let answer;
+  const f = await fixture(t, (_req, res) => { res.writeHead(answer.status); res.end(JSON.stringify({ error_description: 'PRIVATE_SENTINEL', ...answer.body })); });
+  const refused = async (status, body, args) => {
+    answer = { status, body };
+    const result = await f.run(args, { input: 'text' });
+    assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+    const { message, ...error } = result.error;
+    assert.ok(message.length > 20);
+    return { code: result.code, ...error };
+  };
+  const finish = ['run', 'finish', 'run-one', '--generation', 'gen-one', '--outcome', 'in_review', '--note-file', '-'];
+  assert.deepEqual(await refused(422, { error: 'exit_note_required', missing: ['Evidence', 'Next', 7, 'x'.repeat(200)] }, finish),
+    { code: 5, error: 'exit_note_required', status: 422, missing: ['Evidence', 'Next', 'x'.repeat(80)] });
+  assert.deepEqual(await refused(422, { error: 'exit_state_required', missing: ['reviewRequest', 'askedUser'] }, finish),
+    { code: 5, error: 'exit_state_required', status: 422, missing: ['reviewRequest', 'askedUser'] });
+  assert.deepEqual(await refused(409, { error: 'run_fenced' }, finish), { code: 5, error: 'run_fenced', status: 409 });
+  assert.deepEqual(await refused(409, { error: 'needs_person' }, ['run', 'start', '--issue', 'APP-1']), { code: 5, error: 'needs_person', status: 409 });
+  assert.deepEqual(await refused(409, { error: 'already_running' }, ['run', 'start', '--issue', 'APP-1']), { code: 5, error: 'already_running', status: 409 });
+  assert.deepEqual(await refused(403, { error: 'not_assigned' }, ['run', 'start', '--issue', 'APP-1']), { code: 4, error: 'not_assigned', status: 403 });
+  assert.deepEqual(await refused(403, { error: 'seat_required' }, ['seat', 'show']), { code: 4, error: 'seat_required', status: 403 });
+  const request = ['seat', 'request', '--from-issue', 'APP-1', '--role', 'release', '--title', 'Release', '--body-file', '-'];
+  assert.deepEqual(await refused(429, { error: 'request_cap' }, request), { code: 5, error: 'request_cap', status: 429 });
+  assert.deepEqual(await refused(409, { error: 'no_default_seat' }, request), { code: 5, error: 'no_default_seat', status: 409 });
+  assert.deepEqual(await refused(403, { error: 'wrong_project' }, request), { code: 4, error: 'wrong_project', status: 403 });
+  assert.deepEqual(await refused(422, { error: 'template_required', issue_type: 'TASK', missing_sections: ['What', 'Why'], missing_fields: ['priority', 'PRIVATE_SENTINEL'] }, request),
+    { code: 5, error: 'template_required', status: 422, issueType: 'TASK', missingSections: ['What', 'Why'], missingFields: ['priority'] });
+  // A code with the wrong status, or on a route that is not a seat route, stays the plain refusal.
+  assert.deepEqual(await refused(400, { error: 'run_fenced' }, finish), { code: 5, error: 'invalid_request', status: 400 });
+  assert.deepEqual(await refused(409, { error: 'run_fenced', missing: ['Evidence'] }, ['issues', 'update', 'APP-1', '--title', 'T']), { code: 5, error: 'conflict', status: 409 });
+});
+
+// A stand-in for the seat routes that keeps state: an inbox, and runs that are checked out, renewed, finished and closed.
+async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [], fenceRenew = false, awayPolls = 0, throttled = 0 } = {}) {
+  const runs = new Map(), log = []; let polls = 0;
+  const f = await fixture(t, (req, res, body) => {
+    const route = `${req.method} ${req.url.split('?')[0].replace('/api/apps/auth/', '')}`;
+    const refuse = (status, error) => { res.writeHead(status); res.end(JSON.stringify({ error, error_description: 'PRIVATE_SENTINEL' })); };
+    if (route === 'GET seats/me/inbox') {
+      if (++polls <= awayPolls) return refuse(503, 'handoff_unavailable');
+      log.push(`inbox ${polls}`);
+      return res.end(JSON.stringify({ items: inbox(polls).map(key => ({ issueId: `id-${key}`, issueKey: key, title: key, priority: 'medium', category: 'todo', reason: 'assigned', lastRunAt: null })) }));
+    }
+    const input = body ? JSON.parse(body) : {};
+    if (route === 'POST runs') {
+      log.push(`checkout ${input.issue}`);
+      if (conflicts.includes(input.issue)) return refuse(409, 'already_running');
+      if (forbidden.includes(input.issue)) return refuse(403, 'seat_required');
+      if (throttled-- > 0) return refuse(429, 'rate_limited');
+      const run = { id: `run-${runs.size + 1}`, issueId: input.issue, generation: input.generation, runner: input.runner, state: 'running' };
+      runs.set(run.id, run);
+      return res.end(JSON.stringify({ run }));
+    }
+    const run = runs.get(route.split('/')[1]);
+    if (!run) return refuse(404, 'not_found');
+    if (req.method === 'PATCH') {
+      log.push(`${input.event} ${run.id}`);
+      if (input.generation !== run.generation || run.state !== 'running' || (input.event === 'renew' && fenceRenew)) return refuse(409, 'run_fenced');
+      if (input.event !== 'renew') run.state = input.event === 'finish' ? 'finished' : 'stopped';
+    }
+    res.end(JSON.stringify({ run }));
+  });
+  const api = (method, endpoint, body) => apiRequest(f.url, `/api/apps/auth/${endpoint}`, { token: 'synthetic-token', method, body, timeout: 5000 });
+  return { ...f, runs, log, api };
+}
+// Fake sessions, started as `node -e <script> <server url>`. The run is in the environment the runner adds.
+const finishes = "fetch(process.argv[1] + '/api/apps/auth/runs/' + process.env.COLLAB_RUN_ID, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ event: 'finish', generation: process.env.COLLAB_RUN_GENERATION }) }).then(response => response.text())";
+const sleeps = ms => `setTimeout(() => {}, ${ms})`;
+// Short waits, and a lease clock slow enough that only the renew tests see it tick.
+const fast = { pollMs: 20, renewMs: 60000, runner: 'test', log: () => {} };
+const outcome = result => result.runs.map(({ issueKey, runId, state, exitCode }) => ({ issueKey, runId, state, exitCode }));
+
+test('seat run closes a checkout interrupted by shutdown and retries cleanup outages', async () => {
+  const controller = new AbortController(), calls = [];
+  let reads = 0, closes = 0;
+  const api = async (method, route) => {
+    calls.push(`${method} ${route}`);
+    if (route === 'seats/me/inbox') return { items: [{ issueId: 'id-one', issueKey: 'APP-1' }] };
+    if (route === 'runs') { controller.abort(); return { run: { id: 'run-one' } }; }
+    if (method === 'GET' && ++reads === 1 || method === 'PATCH' && ++closes === 1) throw new CliError('transport_failed', 'offline');
+    return { run: { state: method === 'GET' ? 'running' : 'stopped' } };
+  };
+  const result = await seatRun({ ...fast, api, signal: controller.signal, program: 'nonexistent-program', args: [] });
+  assert.equal(result.stopped, true);
+  assert.equal(result.runs[0].state, 'stopped');
+  assert.deepEqual(calls, ['GET seats/me/inbox', 'POST runs', 'GET runs/run-one', 'GET runs/run-one', 'PATCH runs/run-one', 'PATCH runs/run-one']);
+});
+
+test('seat run: a program that finishes its run leaves it finished, and no close is sent', async t => {
+  const s = await seatServer(t, { inbox: () => ['APP-1'] });
+  const result = await seatRun({ ...fast, api: s.api, program: process.execPath, args: ['-e', finishes, s.url], once: true });
+  assert.deepEqual(outcome(result), [{ issueKey: 'APP-1', runId: 'run-1', state: 'finished', exitCode: 0 }]);
+  assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1', 'finish run-1']);
+  assert.equal(s.runs.get('run-1').runner, 'test');
+});
+
+test('seat run: a program that exits without finishing gets close, and its run is stopped', async t => {
+  const s = await seatServer(t, { inbox: () => ['APP-1'] });
+  const result = await seatRun({ ...fast, api: s.api, program: process.execPath, args: ['-e', 'process.exit(3)'], once: true });
+  assert.deepEqual(outcome(result), [{ issueKey: 'APP-1', runId: 'run-1', state: 'stopped', exitCode: 3 }]);
+  assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1', 'close run-1']);
+});
+
+test('seat run: a long program sees its lease renewed while it lives, then the run is closed', async t => {
+  const s = await seatServer(t, { inbox: () => ['APP-1'] });
+  await seatRun({ ...fast, renewMs: 100, api: s.api, program: process.execPath, args: ['-e', sleeps(1000)], once: true });
+  assert.ok(s.log.filter(line => line === 'renew run-1').length >= 2, s.log.join(', '));
+  assert.equal(s.log.at(-1), 'close run-1');
+  assert.equal(s.log.indexOf('close run-1'), s.log.length - 1, 'no renew follows the close');
+});
+
+test('seat run: a 409 on checkout is not retried; the next item is taken in the same poll, the refused one only after it left the inbox', async t => {
+  const controller = new AbortController();
+  const s = await seatServer(t, { conflicts: ['id-APP-1'], inbox: poll => { if (poll === 5) controller.abort(); return poll === 1 ? ['APP-1', 'APP-2'] : poll === 3 ? [] : ['APP-1']; } });
+  const result = await seatRun({ ...fast, api: s.api, program: process.execPath, args: ['-e', finishes, s.url], signal: controller.signal });
+  assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1', 'checkout id-APP-2', 'finish run-1', 'inbox 2', 'inbox 3', 'inbox 4', 'checkout id-APP-1', 'inbox 5']);
+  assert.deepEqual(outcome(result), [{ issueKey: 'APP-2', runId: 'run-1', state: 'finished', exitCode: 0 }]);
+  assert.equal(result.stopped, true);
+});
+
+test('seat run: a fenced renew stops the program and closes the run', async t => {
+  const s = await seatServer(t, { inbox: () => ['APP-1'], fenceRenew: true });
+  const start = Date.now();
+  const result = await seatRun({ ...fast, renewMs: 100, api: s.api, program: process.execPath, args: ['-e', sleeps(60000)], once: true });
+  assert.ok(Date.now() - start < 30000);
+  assert.deepEqual(s.log.slice(0, 3), ['inbox 1', 'checkout id-APP-1', 'renew run-1']);
+  assert.equal(s.log.at(-1), 'close run-1');
+  assert.equal(result.runs[0].state, 'stopped');
+});
+
+test('seat run: an issue whose run ends unfinished three times in a row is left alone, and a poll the server does not answer is skipped', async t => {
+  const controller = new AbortController(), events = [];
+  const s = await seatServer(t, { awayPolls: 1, inbox: poll => { if (poll === 8) controller.abort(); return ['APP-1']; } });
+  const result = await seatRun({ ...fast, log: event => events.push(event), api: s.api, program: process.execPath, args: ['-e', ''], signal: controller.signal });
+  assert.equal(s.log.filter(line => line === 'checkout id-APP-1').length, 3);
+  assert.deepEqual(outcome(result).map(run => run.state), ['stopped', 'stopped', 'stopped']);
+  assert.deepEqual(events.filter(event => event.event === 'left_alone').map(event => event.issueKey), ['APP-1']);
+});
+
+test('seat run: a program that cannot be started closes its run and fails', async t => {
+  const s = await seatServer(t, { inbox: () => ['APP-1'] });
+  for (const program of [path.join(s.dir, 'no-such-program'), '']) {
+    await assert.rejects(seatRun({ ...fast, api: s.api, program, args: [], once: true }), { code: 'program_failed' });
+  }
+  assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1', 'close run-1', 'inbox 2', 'checkout id-APP-1', 'close run-2']);
+});
+
+test('seat run reports the observed cleanup outcome when a program cannot start', async () => {
+  for (const [failureAt, code, message] of [
+    ['close', 'needs_person', 'A person must clear the unfinished run on the issue page.'],
+    ['read', 'needs_person', 'A person must clear the unfinished run on the issue page.'],
+    ['read', 'run_fenced', 'Check the issue page for the run status.'],
+    ['close', 'run_fenced', 'Check the issue page for the run status.'],
+    ['finished', null, 'Its run was already finished.'],
+    ['closed', null, 'Its run was closed.'],
+  ]) {
+    const calls = [];
+    const api = async (method, route) => {
+      calls.push(`${method} ${route}`);
+      if (route === 'seats/me/inbox') return { items: [{ issueId: 'one' }] };
+      if (route === 'runs') return { run: { id: 'run-one' } };
+      if (failureAt === (method === 'GET' ? 'read' : 'close')) throw new CliError(code, 'refused', 5, { status: 409 });
+      return { run: { state: failureAt === 'finished' ? 'finished' : method === 'GET' ? 'running' : 'stopped' } };
+    };
+    for (const program of ['', 'nonexistent-program']) {
+      await assert.rejects(seatRun({ ...fast, api, program, args: [], once: true }), error => {
+        assert.equal(error.code, 'program_failed');
+        assert.ok(error.message.includes(message), error.message);
+        return true;
+      });
+    }
+    assert.equal(calls.filter(call => call === 'PATCH runs/run-one').length, ['read', 'finished'].includes(failureAt) ? 0 : 2);
+  }
+});
+
+test('seat run ignores a renewal refused after the program exits', async () => {
+  let refuseRenew, killTimers = 0;
+  const originalTimeout = globalThis.setTimeout;
+  const api = async (method, route, body) => {
+    if (route === 'seats/me/inbox') return { items: [{ issueId: 'one' }] };
+    if (route === 'runs') return { run: { id: 'run-one' } };
+    if (body?.event === 'renew') return new Promise((_, reject) => { refuseRenew ??= reject; });
+    return { run: { state: method === 'GET' ? 'running' : 'stopped' } };
+  };
+  try {
+    globalThis.setTimeout = (callback, ms, ...args) => {
+      if (ms === 12345) killTimers++;
+      return originalTimeout(callback, ms, ...args);
+    };
+    const result = await seatRun({ ...fast, api, program: process.execPath, args: ['-e', sleeps(150)], once: true, renewMs: 10, killMs: 12345 });
+    assert.equal(result.runs[0].state, 'stopped');
+    assert.ok(refuseRenew);
+    refuseRenew(new CliError('run_fenced', 'fenced'));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(killTimers, 0);
+  } finally { globalThis.setTimeout = originalTimeout; }
+});
+
+test('collab seat run starts the program after -- with its arguments unchanged, no shell, and the run in its environment', async t => {
+  const s = await seatServer(t, { inbox: () => ['APP-1'] });
+  const seen = path.join(s.dir, 'seen.json');
+  const script = "require('node:fs').writeFileSync(process.argv[1], JSON.stringify({ args: process.argv.slice(2), run: process.env.COLLAB_RUN_ID, generation: process.env.COLLAB_RUN_GENERATION, issue: process.env.COLLAB_ISSUE_KEY, token: process.env.COLLAB_TOKEN })); console.log('session output')";
+  const args = ['two words', '$HOME', '*', '"quoted"', "it's", '--once', '--project', 'x', '; echo no'];
+  const result = await s.run(['seat', 'run', '--once', '--workspace', 'w', '--', process.execPath, '-e', script, seen, ...args]);
+  assert.equal(result.code, 0, result.stderr);
+  const run = s.runs.get('run-1');
+  assert.deepEqual(JSON.parse(readFileSync(seen, 'utf8')), { args, run: 'run-1', generation: run.generation, issue: 'APP-1', token: 'synthetic-token' });
+  // The program's output goes to stderr, so stdout stays the runner's one JSON result.
+  assert.deepEqual(outcome(result.data), [{ issueKey: 'APP-1', runId: 'run-1', state: 'stopped', exitCode: 0 }]);
+  assert.ok(result.stderr.includes('session output'));
+  assert.ok(s.calls.every(call => call.url.endsWith('?workspaceId=w')));
+  assert.match(run.runner, /^collab seat run: /);
+  const none = await s.run(['seat', 'run', '--once']);
+  assert.equal(none.code, 2); assert.equal(none.error.error, 'required_field');
+  assert.equal(s.runs.size, 1);
+});
+
+test('seat run: a checkout refused for another reason than a conflict ends the runner with that refusal', async t => {
+  const s = await seatServer(t, { inbox: () => ['APP-1', 'APP-2'], forbidden: ['id-APP-1'] });
+  await assert.rejects(seatRun({ ...fast, api: s.api, program: process.execPath, args: ['-e', ''] }), { code: 'seat_required' });
+  assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1']);
+});
+
+test('seat run: a checkout the server throttles is not repeated at once; the inbox is read again after the wait', async t => {
+  const events = [];
+  const s = await seatServer(t, { inbox: () => ['APP-1', 'APP-2'], throttled: 1 });
+  const result = await seatRun({ ...fast, log: event => events.push(event), api: s.api, program: process.execPath, args: ['-e', finishes, s.url], once: true });
+  assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1', 'inbox 2', 'checkout id-APP-1', 'finish run-1']);
+  assert.deepEqual(events[0], { event: 'checkout_deferred', issueKey: 'APP-1', reason: 'rate_limited' });
+  assert.equal(result.runs[0].state, 'finished');
+});
+
+test('seat run: a program that ignores the request to stop is killed, so a fenced session does not go on', { skip: windows }, async t => {
+  const s = await seatServer(t, { inbox: () => ['APP-1'], fenceRenew: true });
+  const start = Date.now();
+  // The renew comes after a second, when the program has long installed its handler.
+  const result = await seatRun({ ...fast, renewMs: 1000, killMs: 200, api: s.api, program: process.execPath, args: ['-e', `process.on('SIGTERM', () => {}); ${sleeps(20000)}`], once: true });
+  assert.ok(Date.now() - start < 10000, `took ${Date.now() - start} ms`);
+  assert.equal(s.log.at(-1), 'close run-1');
+  assert.deepEqual(outcome(result), [{ issueKey: 'APP-1', runId: 'run-1', state: 'stopped', exitCode: null }]);
 });

@@ -416,7 +416,9 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     // Filing a request links it to its source from the request's side: it blocks the source or relates to it.
     requestFor: issue.agentRequestRole ? others.filter(other => other.filedFor && !other.issue.agentRequestRole).map(other => toRef(other.issue)) : [],
     // Where the rest is: the project's context, what was said before the last note, and the timeline, which holds a late exit note.
-    commands: [`collab context get --project-id ${issue.projectId}`, `collab comments list ${key}`, `collab issues activity ${key}`],
+    commands: [`collab context get --project-id ${issue.projectId}`, `collab comments list ${key}`, `collab issues activity ${key}`,
+      `collab seat request --from-issue ${key} --role review|release|developer --title TITLE --body-file FILE`,
+      'collab run finish RUN_ID --generation GENERATION --outcome done|in_review|blocked --note-file FILE'],
   };
 }
 

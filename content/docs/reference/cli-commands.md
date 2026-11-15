@@ -480,6 +480,138 @@ ID is the resource ID.
 | --- | --- | --- |
 | `--agent` | string | required |
 
+## seat
+
+### `collab seat show`
+
+Reads.
+
+```sh
+collab seat show
+```
+
+The seat behind this token: its project and role. Refused with seat_required for a token that is not a seat.
+
+No flags of its own.
+
+### `collab seat inbox`
+
+Reads.
+
+```sh
+collab seat inbox
+```
+
+What to work on next, in order, each with its reason. With --wait-seconds 1..60 it polls until there is work, so a plain script can wait without a model. Reads only.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--wait-seconds` | integer | 1 to 60 seconds, without it the command reads once. A wait only reads; an empty wait returns `timedOut: true` |
+
+### `collab seat request`
+
+Writes.
+
+```sh
+collab seat request
+```
+
+Ask a seat for work on one of your issues: --role developer, review or release, --from-issue the issue it is for, --body or --body-file filled in from the Task template. --project names another project by ID or issue prefix; without it the request stays in your project. --blocks true makes your issue wait for it.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--project` | string |  |
+| `--role` | string | required |
+| `--title` | string | required |
+| `--body` | string | required |
+| `--from-issue` | string | required |
+| `--blocks` | boolean |  |
+
+### `collab seat run`
+
+Writes: it checks issues out and closes runs.
+
+```sh
+collab seat run
+```
+
+collab seat run [--once] -- PROGRAM [ARGS...]. Waits for the next issue in the inbox, checks it out and starts PROGRAM with ARGS as given, no shell, with COLLAB_RUN_ID, COLLAB_RUN_GENERATION and COLLAB_ISSUE_KEY in its environment. Renews the lease while PROGRAM lives; when it exits without having finished the run, closes it. One issue at a time; --once stops after one.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--once` | boolean |  |
+
+## run
+
+### `collab run start`
+
+Writes.
+
+```sh
+collab run start
+```
+
+Take an issue assigned to you. One run is open per issue. The reply carries the generation that renew and finish need.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--issue` | string | required |
+| `--generation` | string |  |
+| `--runner` | string |  |
+
+### `collab run context`
+
+Reads.
+
+```sh
+collab run context ID
+```
+
+What a fresh session needs to work an issue, in one read: the issue, the last exit note, comments since, blockers and requests.
+
+ID is the issue ID or key (such as APP-123).
+
+No flags of its own.
+
+### `collab run renew`
+
+Writes.
+
+```sh
+collab run renew ID
+```
+
+Extend a seat's 60 second lease. collab seat run does this for the program it starts.
+
+ID is the resource ID.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--generation` | string | required |
+
+### `collab run finish`
+
+Writes.
+
+```sh
+collab run finish ID
+```
+
+End a run with --outcome done, in_review or blocked and an exit note (--note or --note-file) with the headings ## Done, ## Decisions, ## Evidence and ## Next. in_review names --review-request or --asked-user; blocked names --blocked-by or --asked-user. --status picks the project status when the outcome has several.
+
+ID is the resource ID.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--generation` | string | required |
+| `--outcome` | string | required |
+| `--note` | string | required |
+| `--status` | string |  |
+| `--review-request` | string |  |
+| `--asked-user` | string |  |
+| `--blocked-by` | string |  |
+| `--also-finish` | array |  |
+
 ## search
 
 ### `collab search`

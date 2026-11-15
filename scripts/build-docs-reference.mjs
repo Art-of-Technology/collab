@@ -49,10 +49,10 @@ export function cliCommandsPage(table_ = commands) {
         spec.defaults?.[field] !== undefined && `CLI default: ${spec.defaults[field]}`,
         spec.defaultDescriptions?.[field] && `default: ${spec.defaultDescriptions[field]}`,
       ])]);
-      if (spec.wait) rows.push(['`--wait-seconds`', 'integer', '1 to 60 seconds, default 30. A wait only reads; an empty wait returns `timedOut: true`']);
+      if (spec.wait) rows.push(['`--wait-seconds`', 'integer', `1 to 60 seconds, ${spec.wait === 'optional' ? 'without it the command reads once' : 'default 30'}. A wait only reads; an empty wait returns \`timedOut: true\``]);
       lines.push(
         '', `### \`collab ${name}\``,
-        '', spec.method === 'GET' ? 'Reads.' : remove ? 'Deletes. Needs `--yes`.' : 'Writes.',
+        '', spec.seatRun ? 'Writes: it checks issues out and closes runs.' : spec.method === 'GET' ? 'Reads.' : remove ? 'Deletes. Needs `--yes`.' : 'Writes.',
         '', '```sh', ['collab', name, ...ids, ...(remove ? ['--yes'] : [])].join(' '), '```',
         ...(spec.description ? ['', spec.description] : []),
         ...(ids.length ? ['', `ID is the ${spec.path.startsWith('issues/') ? 'issue ID or key (such as APP-123)' : 'resource ID'}.${ids.length > 1 ? ' CHILD_ID is the relation or work log ID.' : ''}`] : []),

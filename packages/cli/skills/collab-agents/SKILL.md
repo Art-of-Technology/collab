@@ -1,6 +1,6 @@
 ---
 name: collab-agents
-description: Coordinate agent sessions and dedicated workers through Collab handoffs, role subscriptions, atomic work claims, progress and shared project context, and write Collab issues from the workspace's issue templates. Use it before creating or editing a Collab issue.
+description: Work a Collab issue as a seat (run context, requests to other seats, the exit note), coordinate agent sessions and dedicated workers through Collab handoffs, role subscriptions, atomic work claims, progress and shared project context, and write Collab issues from the workspace's issue templates. Use it before creating or editing a Collab issue.
 ---
 
 # Collab agent coordination
@@ -9,9 +9,82 @@ Use the installed `collab` CLI and its existing authorized login. Run `collab sc
 to check command availability. These commands require the agent-handoff server release.
 Do not log in, refresh credentials or change permissions automatically after an error.
 
-The manual commands below are for existing agent sessions. For a daemon-managed
+A project works in one of two ways. In a project that uses seats, work reaches you
+only as an issue assigned to your seat: follow [Seats](#seats) and nothing else here
+except [Write issues from the template](#write-issues-from-the-template). Handoffs,
+everything from [Join the workspace](#join-the-workspace) down, are for projects not
+switched yet.
+
+The manual handoff commands are for existing agent sessions. For a daemon-managed
 task, use the [dedicated-worker workflow](#dedicated-managed-workers) instead: the
 daemon owns registration, claims and reporting.
+
+## Seats
+
+A seat is one project and one role: developer, reviewer or release. `collab seat show`
+names yours; `seat_required` means this token is not a seat. Needs CLI 0.10.0 and the
+matching server.
+
+A seat session works one issue and then ends. A runner (`collab seat run`, or another
+that speaks the same contract) has checked the issue out, started you, and keeps the
+lease renewed while you live. Your run is in the environment: `COLLAB_ISSUE_KEY`,
+`COLLAB_RUN_ID` and `COLLAB_RUN_GENERATION`.
+
+1. Read the run context first. You start with no memory of the issue; this is it: the
+   issue, the last exit note, the comments since, blockers, requests and commands for the rest.
+
+   ```sh
+   collab run context "$COLLAB_ISSUE_KEY"
+   ```
+
+2. Do the work, in your project only. A seat cannot write to another project's issues
+   (`wrong_project`) and cannot change who an issue is assigned to (`seat_scope`).
+   Record progress as comments on the issue.
+3. When you need a review, a release, or work from another project, file a request.
+   Never hand work over in a direct message or a handoff.
+
+   ```sh
+   collab seat request --from-issue "$COLLAB_ISSUE_KEY" --role review --title 'Review the change for APP-123' --body-file request.md
+   ```
+
+   `--role` is `review`, `release` or `developer`. `--project ID_OR_PREFIX` sends it to
+   another project; `--blocks true` makes your issue wait for it. The body follows the
+   Task template (`collab templates get TASK`): state the problem and the evidence, not
+   the fix. The reply has the request's `issueKey`. `warning: seat_idle` means the seat
+   it went to may not be running: say so in your exit note, so a person sees it.
+   Refusals: `template_required` lists what the body lacks; `request_cap` means five
+   requests to that project are open already; `no_default_seat` means nobody would take it.
+4. End with an exit note. The next session on this issue starts from it.
+
+   ```sh
+   collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md
+   ```
+
+   The note has four headings, each on its own line: `## Done`, `## Decisions`,
+   `## Evidence`, `## Next`. Choose the outcome:
+
+   - `done`: the work is finished. `--status NAME` picks the status when the project has several done statuses.
+   - `in_review`: it waits for a review or an answer. Add `--review-request KEY` (a review request you filed) or `--asked-user USER_ID`.
+   - `blocked`: it cannot go on. Add `--blocked-by KEY` (an issue linked as blocking this one, such as a request filed with `--blocks true`) or `--asked-user USER_ID`.
+
+   `exit_note_required` and `exit_state_required` list what is `missing`: complete it
+   and send it again. `run_fenced` means the run no longer holds the issue and nothing was
+   changed: do not send the finish again, stop. Your note was kept on the timeline only
+   when the generation was the run's own and the run had not finished. Check with
+   `collab issues activity "$COLLAB_ISSUE_KEY"`; if it is not there, add it as a comment
+   so the work is not lost.
+   `statusUnmapped: true` in the reply means the project has no status for the outcome;
+   the outcome is recorded all the same.
+
+If you exit without finishing, the runner closes the run and the next session resumes
+the issue from the last exit note, so work you did not write down is lost. Do not wait
+inside a session for a review or an answer: finish `in_review` or `blocked`, and the
+issue comes back to the inbox when something happens.
+
+Without a runner: `collab seat inbox --wait-seconds 30` waits for work without a model,
+and `collab run start --issue KEY` takes an issue and returns the run's `id` and
+`generation`. A seat's lease lasts 60 seconds (`collab run renew`), so a seat is
+normally run with `collab seat run`; a person's own run has no lease.
 
 ## Join the workspace
 
@@ -322,12 +395,12 @@ Only the sender of open work or its current claimant may supersede it. The repla
 
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
-For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.3/packages/cli/README.md#agent-coordination).
+For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.10.0/packages/cli/README.md#agent-coordination).
 
 ## Host wake callback
 
 For automatic notifications, have the host supervisor follow the
-[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.3/packages/cli/README.md#wake-a-running-agent-through-its-host)
+[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.10.0/packages/cli/README.md#wake-a-running-agent-through-its-host)
 for command availability, setup, deadlines and adapter requirements.
 
 Require the host to provide and verify its adapter; never substitute a guessed
@@ -349,7 +422,7 @@ requirements above before claiming automatic wake-ups are active for that host.
 
 ### Dedicated managed workers
 
-Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.3/packages/cli/README.md#dedicated-managed-workers-cli-070)
+Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.10.0/packages/cli/README.md#dedicated-managed-workers-cli-070)
 for setup, supervision and recovery. Never use a custom terminal callback as a
 fallback. Preserve the saved login, stable identity, labels and private journals.
 
@@ -368,7 +441,7 @@ owner's qualification boundary described there.
 ## Project coordinator
 
 CLI 0.8.0 adds `coordinator setup/run/status/stop/install/uninstall` for one project.
-Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.9.3/packages/cli/README.md#project-coordinator-cli-080). A registered
+Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.10.0/packages/cli/README.md#project-coordinator-cli-080). A registered
 interactive agent without an approved execution route is not automatically wakeable.
 Only explicitly consented local dedicated workers can be dispatched. Check status
 and the issue timeline for actual claim/progress/result; do not call a queued wakeup

@@ -48,6 +48,8 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 3. `blocker_resolved` or `reply`: the issue is blocked and the last of the issues blocking it is now done, or someone else commented on it or on a request the seat filed for it.
 4. `assigned`: everything else, by priority (urgent, high, medium, low), oldest first.
 
+From the CLI: `collab seat inbox`. With `--wait-seconds 30` (1 to 60) it waits until there is work, so a plain script can wait without a model. `collab seat show` names the seat behind the token.
+
 - An issue that is being worked (a run is open on it) is not listed. Neither is an issue whose status is in the done group.
 - An issue in review or blocked is listed only when one of the things above happened after its last run ended. Blocking issues that were all done before that do not bring it back.
 - Whether an issue is in review or blocked is read from how its last run ended, so a project needs no "blocked" status. The status decides only for an issue with no run since it was assigned, or one reopened after a run finished it.
@@ -66,6 +68,8 @@ A run is one session working one issue. Only the issue's assignee starts one, an
 
 `GET /api/apps/auth/runs/<id>` returns the caller's own run.
 
+From the CLI: `collab run start --issue <key>` (it makes up the generation and the reply carries it) and `collab run renew <run id> --generation <value>`. A seat is normally run by a runner, which does both: see [Run a seat from the CLI](#run-a-seat-from-the-cli).
+
 - Taking an issue moves it to the first active status of the project's "in progress" group. It stays where it is when it is already in that group or the project has no active status in that group.
 - A second checkout of an issue with a live run gets `409 already_running`. Do not try it again: take the next issue. Only a person starting again on their own open run gets that run back, with its original generation.
 - An agent token that is not a seat takes no issue (`seat_required`).
@@ -76,11 +80,35 @@ A run is one session working one issue. Only the issue's assignee starts one, an
 - A person's own run has no lease and is never lost. If it is left open, a person who may assign issues clears it the same way.
 - An issue whose status is in the done group is not offered after a close or a clear either. Closing an issue ends it.
 
+## Run a seat from the CLI
+
+`collab seat run` is the interim runner. It waits for the seat's next issue in plain code, with no model running, and starts one fresh session per issue. It needs CLI 0.10.0, and the seat's token in `COLLAB_TOKEN` with `COLLAB_URL`.
+
+```sh
+collab seat run -- claude -p 'Work the Collab issue in $COLLAB_ISSUE_KEY. First run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
+collab seat run -- codex exec 'Work the Collab issue in $COLLAB_ISSUE_KEY. First run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
+```
+
+1. It reads the inbox and checks out the first available issue. If there is nothing to take, it waits 5 seconds before reading again.
+2. It starts the program after `--` in the current directory, with the arguments exactly as given and no shell in between. The program finds its run in `COLLAB_ISSUE_KEY`, `COLLAB_RUN_ID` and `COLLAB_RUN_GENERATION`.
+3. While the program lives it renews the lease every 15 seconds.
+4. When the program exits, it reads the run. A run the session finished is left alone; any other run is closed, so the issue is offered again with reason `resume`.
+5. Then it reads the inbox again. `--once` stops after one issue.
+
+- One issue at a time. Start a second runner for a second seat, not for the same one.
+- An issue whose checkout is refused with `409` is not tried again while the inbox keeps listing it; the next issue is taken in the same read.
+- When a renewal is refused (`run_fenced`), the runner stops the program and closes the run. A program that has not stopped after 10 seconds is killed.
+- After three runs in a row on one issue that ended without a finish, the runner leaves that issue alone until it is restarted or the issue leaves the inbox, and says so. A person should look at it.
+- While the server does not answer, as during a deploy, the runner keeps trying. A checkout that got no answer, a server error or a `429` is not repeated at once: the inbox is read again after 5 seconds. If the run exists after all, its lease lapses and a person clears it.
+- A release seat's unfinished run is not closed by the runner; a person clears it.
+- The program's output goes to the runner's standard error. Standard output carries one JSON result when the runner ends.
+- The session has the machine's normal permissions and no spend limit of its own, and its token use is not recorded. Give the session only the permission flags it needs to run `collab`, `git` and your tests unattended.
+
 ## Start from the run context
 
 A session starts with no memory of the issue. One read gives it what it needs:
 
-`GET /api/apps/auth/issues/<key>/run-context`, or the MCP tool `run_context`. The reply contains:
+`GET /api/apps/auth/issues/<key>/run-context`, the CLI command `collab run context <key>`, or the MCP tool `run_context`. The reply contains:
 
 - `issue`: its title, description, type, priority, status and the status's group, assignee, and `agentRequestRole` when it is a request.
 - `lastExitNote`: the exit note of the last run that finished, or `null`.
@@ -88,7 +116,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 - `blockers`: the issues linked as blocking this one, each with its status, so you can see which are done.
 - `requests`: the requests linked to this issue, each with its `requestRole` and status.
 - `requestFor`: when the issue is itself a request, the non-request issues it blocks or relates to from its own side.
-- `commands`: `collab` commands that fetch the rest: the project's context, the earlier comments and the timeline.
+- `commands`: `collab` commands that fetch the rest (the project's context, the earlier comments and the timeline) and the two that end the session's work: a request and the finish.
 
 A run that stopped without an exit note changes none of this: the comments since the last note are still what the next session has not seen. A late exit note is on the timeline only.
 
@@ -114,6 +142,8 @@ A seat asks for a review, a release or work in another project by filing a reque
 3. For another project, add `project`: its id or its issue prefix. Without it the request stays in the seat's own project.
 4. Write the `title` and the `body`. The request is a Task, so the body needs the sections of the workspace's Task template when the workspace enforces templates. State the problem and the evidence, not the fix.
 5. Add `"blocks": true` when the source issue cannot go on until the request is done. The request is then linked as blocking it; otherwise as related.
+
+From the CLI: `collab seat request --from-issue AA-12 --role review --title "Review the change for AA-12" --body-file request.md`, with `--project <id or prefix>` for another project and `--blocks true`.
 
 The reply contains `issue` with the request's `id` and `issueKey`. Then finish the run: `in_review` with `reviewRequest`, or `blocked` with `blockedBy`, naming the request.
 
@@ -145,6 +175,8 @@ The next run on an issue starts with no memory. Leave an exit note for the next 
 2. Write the `note` with the four headings `## Done`, `## Decisions`, `## Evidence` and `## Next`, each on a line of its own. It holds at most 16,000 characters.
 3. For `in_review`, say what the issue waits for: `reviewRequest` (a review request the caller filed, linked to this issue) or `askedUser` (the id of a person in the workspace). For `blocked`: `blockedBy` (an issue linked as blocking this one) or `askedUser`.
 4. Optionally name the `status` to move the issue to, and report the run's `usage`.
+
+From the CLI: `collab run finish <run id> --generation <value> --outcome done --note-file note.md`, with `--status`, `--review-request`, `--asked-user`, `--blocked-by` and `--also-finish '["<key>"]'` for the fields above. It does not report `usage`.
 
 The reply contains the finished `run` and `statusUnmapped`.
 

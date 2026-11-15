@@ -160,17 +160,37 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
     let retrievalMessage, configureRejected = false, template;
     try {
       const remote = JSON.parse(text), remoteCode = remote.error;
-      if (mutation && response.status === 422 && remoteCode === 'template_required' && /^\/api\/apps\/auth\/issues(?:\/[^/?]+(?:\/assign)?)?(?:\?|$)/.test(endpoint) &&
+      // Refusal details are passed on only as short plain strings, never the server's own message.
+      const names = (value, known) => (Array.isArray(value) ? value : []).filter(item => typeof item === 'string' && (!known || known.includes(item)))
+        .slice(0, 30).map(item => item.replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ').slice(0, 80));
+      if (mutation && response.status === 422 && remoteCode === 'template_required' && /^\/api\/apps\/auth\/(?:issues(?:\/[^/?]+(?:\/assign)?)?|seats\/me\/requests)(?:\?|$)/.test(endpoint) &&
           /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
-        // The one refusal whose details are passed on: the agent needs the names to complete its issue.
-        // Only short plain strings are copied, never the server's own message.
-        const names = (value, known) => (Array.isArray(value) ? value : []).filter(item => typeof item === 'string' && (!known || known.includes(item)))
-          .slice(0, 30).map(item => item.replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ').slice(0, 80));
+        // The agent needs the names to complete its issue or its request.
         const issueType = ['BUG', 'STORY', 'EPIC', 'MILESTONE', 'TASK'].find(type => type === remote.issue_type);
         code = remoteCode;
         retrievalMessage = `Collab refused the issue: required template sections or fields are missing. Run collab templates get ${issueType || 'TYPE'}.`;
         template = { ...(issueType && { issueType }), missingSections: names(remote.missing_sections),
           missingFields: names(remote.missing_fields, ['priority', 'dueDate', 'startDate', 'assigneeId', 'storyPoints', 'labels']) };
+      }
+      // Seats and runs: the session acts on the code, and on what a finish still lacks.
+      const seatRefusals = {
+        seat_required: [403, 'This needs a seat token: an agent token made for one project and one role.'],
+        seat_scope: [403, 'A seat cannot make this change.'],
+        wrong_project: [403, "A seat writes only to its own project's issues."],
+        not_assigned: [403, 'Only the assignee of an issue starts or finishes a run on it.'],
+        role_mismatch: [422, "The seat's role does not allow this."],
+        already_running: [409, 'A run is already open on this issue. Take another issue.'],
+        run_fenced: [409, 'This run no longer holds the issue: it ended, was marked lost, or the issue went to someone else. Nothing was changed; do not send it again. The note of a refused finish is kept on the issue timeline only when the generation was the run\'s own and the run had not finished: check with collab issues activity, and if it is not there, add it as a comment.'],
+        needs_person: [409, 'A person has to clear the unfinished run on the issue page before work continues.'],
+        exit_note_required: [422, 'The exit note needs ## Done, ## Decisions, ## Evidence and ## Next, each as a heading on its own line. Add what is missing and send it again.'],
+        exit_state_required: [422, 'The finish is incomplete: in_review names --review-request or --asked-user, blocked names --blocked-by or --asked-user, and --status must belong to the outcome. Add one of what is missing and send it again.'],
+        no_default_seat: [409, 'The project has no seat for that role, so nobody would take the request. Tell a person.'],
+        request_cap: [429, 'Your project already has 5 open requests in that project. One of them has to be done first.'],
+      };
+      if (/^\/api\/apps\/auth\/(?:seats\/me|runs|issues\/[^/?]+\/run-context)(?:[/?]|$)/.test(endpoint) && Object.hasOwn(seatRefusals, remoteCode) &&
+          seatRefusals[remoteCode][0] === response.status && /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
+        code = remoteCode; retrievalMessage = seatRefusals[remoteCode][1];
+        if (response.status === 422 && Array.isArray(remote.missing)) template = { missing: names(remote.missing) };
       }
       if (response.status === 409 && /^\/api\/apps\/auth\/agents\/reviews(?:\/[^/?]+)?(?:\?|$)/.test(endpoint) &&
           /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
