@@ -104,12 +104,16 @@ export async function requireSeat(db: DB, context: Pick<AppAuthContext, 'user'>)
 /**
  * Rule 2 for a route that lets seats write: a seat writes only to its own project. No effect for people and
  * for tokens that are not seats. A retired seat writes nothing, so retiring never widens what its tokens may do.
+ * Rule 8 is the one way out, and only the route that creates a comment passes `commentOn`: a seat comments on a
+ * request it filed, known by the field that only filing a request sets and by its reporter.
  */
-export async function seatWriteGuard(db: DB, context: Pick<AppAuthContext, 'user'>, projectId: string): Promise<void> {
+export async function seatWriteGuard(db: DB, context: Pick<AppAuthContext, 'user'>, projectId: string,
+  commentOn?: { agentRequestRole: string | null; reporterId: string | null }): Promise<void> {
   const seat = await db.agentSeat.findUnique({ where: { userId: context.user.id }, select: { projectId: true, retiredAt: true } });
   if (!seat) return;
   if (seat.retiredAt) throw new HandoffError('seat_scope', 'This seat is retired', 403);
-  if (seat.projectId !== projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
+  if (seat.projectId === projectId || (commentOn?.agentRequestRole && commentOn.reporterId === context.user.id)) return;
+  throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
 }
 
 const isSeatAccount = async (db: DB, userId: string) => !!await db.agentSeat.findUnique({ where: { userId }, select: { id: true } });

@@ -273,6 +273,24 @@ Reads. Scope: `prompts:read`.
 | `since` | string | UTC time in ISO 8601, for example 2026-11-12T09:00:00Z · format: date-time |
 | `maxTokens` | integer | minimum: 2048 · maximum: 64000 |
 
+## seat_inbox
+
+The issues assigned to this token's account, at most 50, in the order to work them, each with the reason it is offered. A seat gets the issues of its project.
+
+Reads. Scope: `issues:read`.
+
+No arguments of its own.
+
+## run_context
+
+What a fresh session needs to work an issue, in one read: the issue, the last exit note, the comments made since, what blocks it and the requests filed for it.
+
+Reads. Scope: `issues:read`.
+
+| Argument | Type | Details |
+| --- | --- | --- |
+| `issueIdOrKey` | string | required · An issue ID or key, for example CLB-123 · minimum length: 1 · maximum length: 128 |
+
 ## docs_search
 
 Search Collab's documentation: how Collab, its CLI and its agent features work. Returns the matching sections, best first, each with the slug of its page for docs_get. The same search as on the docs site.
