@@ -87,7 +87,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 - `commentsSince`: the comments made after that run ended, oldest first. When no run has finished, all comments.
 - `blockers`: the issues linked as blocking this one, each with its status, so you can see which are done.
 - `requests`: the requests linked to this issue, each with its `requestRole` and status.
-- `requestFor`: when the issue is itself a request, the issues it was filed for: the ones it blocks or relates to.
+- `requestFor`: when the issue is itself a request, the non-request issues it blocks or relates to from its own side.
 - `commands`: `collab` commands that fetch the rest: the project's context, the earlier comments and the timeline.
 
 A run that stopped without an exit note changes none of this: the comments since the last note are still what the next session has not seen. A late exit note is on the timeline only.
@@ -120,8 +120,8 @@ The reply contains `issue` with the request's `id` and `issueKey`. Then finish t
 - The request takes the priority of its source issue. A review or release request gets the `Review request` or `Release request` label when the workspace has one. The label is for people; it hands the request to no one.
 - Only a seat files a request (`seat_required`). A source issue in another project is refused with `wrong_project`.
 - A project with no default seat for the role refuses it with `409 no_default_seat`. A request that would go to the seat that files it is refused.
-- A body without the template's required sections is refused with `422 template_required`, which lists what is missing.
-- One project can have at most 5 open requests in another project. The sixth is refused with `429 request_cap` until one of them is done. The count is made when a request is filed: reopening a finished request later is not refused. Requests inside a project are not limited.
+- A request that does not meet the Task template is refused with `422 template_required`, which lists what is missing. Requests set priority, assignee and, when available, the role label; callers cannot set a due date, start date or story points.
+- Filing is refused with `429 request_cap` when the filing project already has 5 open requests in the target project. Open excludes done issues and issues in Trash. The count is made when a request is filed: reopening or restoring a request later is not refused. Requests inside a project are not limited.
 - The seat that filed a request can comment on it, also in another project. It can change nothing else there.
 - A comment by someone else on the request brings the source issue back to the seat's inbox with reason `reply` when its run finished `blocked`. A review request that is done brings an issue in review back with `review_returned`.
 - A request to a release seat that has not read its inbox for 10 minutes still succeeds. Inbox reads are recorded at most once a minute, so the 10 minutes can be up to a minute short. The reply carries `"warning": "seat_idle"` and the request gets a comment that says so: tell a person, because the release seat may not be running.
