@@ -69,8 +69,9 @@ export async function seatInbox(context: Pick<AppAuthContext, 'user' | 'workspac
 
   const reasonFor = ({ issue, stands, since }: typeof candidates[number]): InboxItem['reason'] | null => {
     if (stands === 'resume') return 'resume';
+    if (stands !== 'in_review' && stands !== 'blocked') return 'assigned';
     const detail = details.get(issue.id);
-    if (!detail) return 'assigned';
+    if (!detail) return null;
     const after = (date?: Date) => !!date && date > since;
     // shortcut: an issue's last change stands for the time it reached done, so editing a blocker or a review request
     // that was already done offers the waiting issue once more; read the status change itself once every path records one.

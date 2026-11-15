@@ -10,6 +10,18 @@ const A = 'cprojecta001', B = 'cprojectb001';
 const scopes = ['issues:read', 'issues:write', 'user:read'];
 const ago = minutes => new Date(Date.now() - minutes * 60_000);
 
+test('waiting issues missing from the visibility-filtered details are omitted', async () => {
+  const createdAt = ago(60);
+  const candidates = ['in_review', 'blocked', 'todo'].map(category => ({
+    id: category, issueKey: category, title: category, priority: 'medium', createdAt,
+    projectStatus: { category, isFinal: false }, helpers: [], agentRuns: [],
+  }));
+  const prisma = { issue: { findMany: async query => query.where.workspaceId ? candidates : [] } };
+  const { seatInbox } = load('src/lib/agent-runs.ts', { '@/lib/prisma': { prisma }, '@/lib/agent-seats': { seatFor: async () => null } }, { Date });
+  const result = await seatInbox({ user: { id: person }, workspace: { id: 'w' } });
+  assert.deepEqual(result.items.map(item => [item.issueId, item.reason]), [['todo', 'assigned']]);
+});
+
 let db;
 after(() => db?.stop());
 
