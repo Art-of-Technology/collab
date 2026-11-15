@@ -2339,6 +2339,34 @@ test('seat run: a program that cannot be started closes its run and fails', asyn
   assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1', 'close run-1', 'inbox 2', 'checkout id-APP-1', 'close run-2']);
 });
 
+test('seat run reports the observed cleanup outcome when a program cannot start', async () => {
+  for (const [failureAt, code, message] of [
+    ['close', 'needs_person', 'A person must clear the unfinished run on the issue page.'],
+    ['read', 'needs_person', 'A person must clear the unfinished run on the issue page.'],
+    ['read', 'run_fenced', 'Check the issue page for the run status.'],
+    ['close', 'run_fenced', 'Check the issue page for the run status.'],
+    ['finished', null, 'Its run was already finished.'],
+    ['closed', null, 'Its run was closed.'],
+  ]) {
+    const calls = [];
+    const api = async (method, route) => {
+      calls.push(`${method} ${route}`);
+      if (route === 'seats/me/inbox') return { items: [{ issueId: 'one' }] };
+      if (route === 'runs') return { run: { id: 'run-one' } };
+      if (failureAt === (method === 'GET' ? 'read' : 'close')) throw new CliError(code, 'refused', 5, { status: 409 });
+      return { run: { state: failureAt === 'finished' ? 'finished' : method === 'GET' ? 'running' : 'stopped' } };
+    };
+    for (const program of ['', 'nonexistent-program']) {
+      await assert.rejects(seatRun({ ...fast, api, program, args: [], once: true }), error => {
+        assert.equal(error.code, 'program_failed');
+        assert.ok(error.message.includes(message), error.message);
+        return true;
+      });
+    }
+    assert.equal(calls.filter(call => call === 'PATCH runs/run-one').length, ['read', 'finished'].includes(failureAt) ? 0 : 2);
+  }
+});
+
 test('seat run ignores a renewal refused after the program exits', async () => {
   let refuseRenew, killTimers = 0;
   const originalTimeout = globalThis.setTimeout;

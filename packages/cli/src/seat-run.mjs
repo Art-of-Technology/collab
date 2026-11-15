@@ -56,7 +56,7 @@ export async function seatRun({ api, program, args, once, runner, signal, pollMs
     }
     runs.push({ issueKey, runId: run.id, state, exitCode });
     log({ event: 'run_ended', issueKey, runId: run.id, state, exitCode });
-    if (failed) throw new CliError('program_failed', 'The program after -- could not be started. Its run was closed. Check the path and try again.', 2);
+    if (failed) throw new CliError('program_failed', `The program after -- could not be started. ${state === 'needs_person' ? 'A person must clear the unfinished run on the issue page.' : state === 'stopped' ? 'Its run was closed.' : state === 'finished' ? 'Its run was already finished.' : 'Check the issue page for the run status.'} Check the path and try again.`, 2);
     if (state === 'finished') return unfinished.delete(item.issueId);
     const count = (unfinished.get(item.issueId) ?? 0) + 1;
     unfinished.set(item.issueId, count);
