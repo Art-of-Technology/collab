@@ -164,6 +164,40 @@ test('repeated headings get -2, -3 and never share an id with another heading', 
   assert.equal(new Set(ids).size, ids.length);
 });
 
+test('a heading that ends with {#custom-id} gets that id, and the marker is not part of its text', () => {
+  const page = docsIn(fixture({ 'content/docs/custom.md': [
+    '# Collab CLI', '', 'The command line.', '',
+    '## Agent collaboration {#agents}', '## Agents', '### Install the `collab` CLI {#installation}', '## Agents {#agents}',
+    '## First {#_install}', '### Second {#-install}', '### Again {#_install}',
+  ].join('\n') })).docPage('custom');
+  assert.deepEqual(plain(page.headings), [
+    { depth: 2, text: 'Agent collaboration', id: 'agents' },
+    { depth: 2, text: 'Agents', id: 'agents-2' },
+    { depth: 3, text: 'Install the collab CLI', id: 'installation' },
+    { depth: 2, text: 'Agents', id: 'agents-3' },
+    { depth: 2, text: 'First', id: '_install' },
+    { depth: 3, text: 'Second', id: '-install' },
+    { depth: 3, text: 'Again', id: '_install-2' },
+  ]);
+  assert.equal(docs.headingId('Agent collaboration {#agents}', new Map()), 'agents');
+  assert.equal(docs.headingText('Agent collaboration {#agents}'), 'Agent collaboration');
+  assert.equal(docs.headingText('Braces {like this} stay'), 'Braces {like this} stay');
+});
+
+test('marker-shaped inline content remains heading text unless followed by a real marker', () => {
+  const page = docsIn(fixture({ 'content/docs/inline.md': [
+    '# Guide', '', '## Use `{#agents}`', '### [See {#agents}](/guide)',
+    '## *Use {#agents}*', '### Use `{#agents}` {#agents}', '## Other {#agents}',
+  ].join('\n') })).docPage('inline');
+  assert.deepEqual(plain(page.headings), [
+    { depth: 2, text: 'Use {#agents}', id: 'use-agents' },
+    { depth: 3, text: 'See {#agents}', id: 'see-agents' },
+    { depth: 2, text: 'Use {#agents}', id: 'use-agents-2' },
+    { depth: 3, text: 'Use {#agents}', id: 'agents' },
+    { depth: 2, text: 'Other', id: 'agents-2' },
+  ]);
+});
+
 test('headingId counts repeats in the map it is given', () => {
   const seen = new Map();
   assert.equal(docs.headingId('Agents', seen), 'agents');

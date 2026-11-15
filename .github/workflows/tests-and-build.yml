@@ -59,3 +59,19 @@ jobs:
           NEXT_PUBLIC_APP_URL: https://collab.weez.boo
           NODE_OPTIONS: --max-old-space-size=3072
         run: node node_modules/next/dist/bin/next build --webpack
+      # The docs are public and are read from files the standalone output must carry. Start the built
+      # server the way production runs it and fetch them without signing in.
+      - name: Public docs answer on the built server
+        env:
+          # Not a secret: the server refuses every page without a value here, and this step never signs in.
+          NEXTAUTH_SECRET: docs-check
+          NEXTAUTH_URL: http://127.0.0.1:3999
+        run: |
+          PORT=3999 HOSTNAME=127.0.0.1 node .next/standalone/server.js &
+          for attempt in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:3999/docs && break; sleep 1; done
+          for address in /docs /docs/cli /llms.txt /llms-full.txt; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3999$address")
+            [ "$status" = 200 ] || { echo "$address answered $status, not 200"; exit 1; }
+          done
+          curl -sf http://127.0.0.1:3999/docs/index.md | cmp - content/docs/index.md
+          curl -sf http://127.0.0.1:3999/docs.md | cmp - content/docs/index.md
