@@ -2333,8 +2333,33 @@ test('seat run: an issue whose run ends unfinished three times in a row is left 
 
 test('seat run: a program that cannot be started closes its run and fails', async t => {
   const s = await seatServer(t, { inbox: () => ['APP-1'] });
-  await assert.rejects(seatRun({ ...fast, api: s.api, program: path.join(s.dir, 'no-such-program'), args: [], once: true }), { code: 'program_failed' });
-  assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1', 'close run-1']);
+  for (const program of [path.join(s.dir, 'no-such-program'), '']) {
+    await assert.rejects(seatRun({ ...fast, api: s.api, program, args: [], once: true }), { code: 'program_failed' });
+  }
+  assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1', 'close run-1', 'inbox 2', 'checkout id-APP-1', 'close run-2']);
+});
+
+test('seat run ignores a renewal refused after the program exits', async () => {
+  let refuseRenew, killTimers = 0;
+  const originalTimeout = globalThis.setTimeout;
+  const api = async (method, route, body) => {
+    if (route === 'seats/me/inbox') return { items: [{ issueId: 'one' }] };
+    if (route === 'runs') return { run: { id: 'run-one' } };
+    if (body?.event === 'renew') return new Promise((_, reject) => { refuseRenew ??= reject; });
+    return { run: { state: method === 'GET' ? 'running' : 'stopped' } };
+  };
+  try {
+    globalThis.setTimeout = (callback, ms, ...args) => {
+      if (ms === 12345) killTimers++;
+      return originalTimeout(callback, ms, ...args);
+    };
+    const result = await seatRun({ ...fast, api, program: process.execPath, args: ['-e', sleeps(150)], once: true, renewMs: 10, killMs: 12345 });
+    assert.equal(result.runs[0].state, 'stopped');
+    assert.ok(refuseRenew);
+    refuseRenew(new CliError('run_fenced', 'fenced'));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(killTimers, 0);
+  } finally { globalThis.setTimeout = originalTimeout; }
 });
 
 test('collab seat run starts the program after -- with its arguments unchanged, no shell, and the run in its environment', async t => {

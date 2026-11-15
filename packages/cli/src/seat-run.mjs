@@ -24,18 +24,26 @@ export async function seatRun({ api, program, args, once, runner, signal, pollMs
     // The program's output goes to stderr: stdout is this command's one JSON result.
     let failed = false, exitCode = null;
     if (!signal?.aborted) {
-      const child = spawn(program, args, { shell: false, windowsHide: true, stdio: ['inherit', 2, 2],
-        env: { ...process.env, COLLAB_RUN_ID: run.id, COLLAB_RUN_GENERATION: generation, COLLAB_ISSUE_KEY: issueKey } });
-      // A program that does not stop when asked is killed: a fenced session must not go on working.
-      let killer;
-      const stop = () => { child.kill(); killer ??= setTimeout(() => child.kill('SIGKILL'), killMs); };
-      signal?.addEventListener('abort', stop, { once: true });
-      // A renew the server refuses means the run is fenced: the issue went to someone else or the run was marked lost.
-      // The program has to stop before anyone else can start, so it is stopped here and the run closed below.
-      const timer = setInterval(() => api('PATCH', `runs/${run.id}`, { event: 'renew', generation }).catch(error => { if (!serverAway(error)) stop(); }), renewMs);
-      if (signal?.aborted) stop();
-      exitCode = await new Promise(resolve => { child.on('error', () => { failed = true; resolve(null); }); child.on('close', resolve); });
-      clearInterval(timer); clearTimeout(killer); signal?.removeEventListener('abort', stop);
+      let child;
+      try {
+        child = spawn(program, args, { shell: false, windowsHide: true, stdio: ['inherit', 2, 2],
+          env: { ...process.env, COLLAB_RUN_ID: run.id, COLLAB_RUN_GENERATION: generation, COLLAB_ISSUE_KEY: issueKey } });
+      } catch { failed = true; }
+      if (child) {
+        // A program that does not stop when asked is killed: a fenced session must not go on working.
+        let killer, active = true;
+        const stop = () => { if (active) { child.kill(); killer ??= setTimeout(() => child.kill('SIGKILL'), killMs); } };
+        signal?.addEventListener('abort', stop, { once: true });
+        // A renew the server refuses means the run is fenced: the issue went to someone else or the run was marked lost.
+        // The program has to stop before anyone else can start, so it is stopped here and the run closed below.
+        const timer = setInterval(() => api('PATCH', `runs/${run.id}`, { event: 'renew', generation }).catch(error => { if (!serverAway(error)) stop(); }), renewMs);
+        if (signal?.aborted) stop();
+        exitCode = await new Promise(resolve => {
+          child.on('error', () => { failed = true; active = false; resolve(null); });
+          child.on('close', code => { active = false; resolve(code); });
+        });
+        clearInterval(timer); clearTimeout(killer); signal?.removeEventListener('abort', stop);
+      }
     }
     let state;
     try {
