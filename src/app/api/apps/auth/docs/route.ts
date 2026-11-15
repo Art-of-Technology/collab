@@ -9,7 +9,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAppAuth } from '@/lib/apps/auth-middleware';
 import { docPage, docsIndex } from '@/lib/docs';
-import { searchDocs } from '@/lib/docs-search';
+import { searchDocs, type DocsIndexEntry } from '@/lib/docs-search';
+
+// The pages are files in the image, so the index is read once per server process, and the search built on it is reused.
+let index: DocsIndexEntry[] | undefined;
 
 export const GET = withAppAuth(
   async (request: NextRequest) => {
@@ -29,7 +32,7 @@ export const GET = withAppAuth(
     const given = searchParams.get('limit');
     const asked = given?.trim() ? Number(given) : NaN;
     const limit = Number.isNaN(asked) ? 8 : Math.min(20, Math.max(1, Math.trunc(asked)));
-    return NextResponse.json({ results: searchDocs(docsIndex(), query, limit) });
+    return NextResponse.json({ results: searchDocs(index ??= docsIndex(), query, limit) });
   },
   // The documentation is public: any valid token may read it, whatever its scopes.
   { requiredScopes: [] }

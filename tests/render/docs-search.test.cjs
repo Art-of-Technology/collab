@@ -190,7 +190,7 @@ test('the docs route gives one page as the loader has it, and says what is wrong
 });
 
 // The search box with its state held by the test: `state` is what each useState call returns, in order (open, query, index, failed).
-function box(state = []) {
+function box(state = [], reachable = true) {
   const set = [], effects = [], pushed = [], listeners = {}, fetched = [];
   let at = 0;
   const react = {
@@ -204,7 +204,7 @@ function box(state = []) {
     '@/components/ui/dialog': parts, '@/components/ui/command': parts, '@/lib/docs-search': search,
   }, {
     document: { addEventListener: (type, listener) => { listeners[type] = listener; }, removeEventListener: () => {} },
-    fetch: async address => { fetched.push(address); return { ok: true, json: async () => docs.docsIndex() }; },
+    fetch: async address => { fetched.push(address); return { ok: reachable, status: reachable ? 200 : 503, json: async () => docs.docsIndex() }; },
   });
   const tree = DocsSearch();
   const all = (element, found = []) => {
@@ -222,16 +222,16 @@ test('⌘K and Ctrl+K open and close the search; other keys are left alone', () 
   const press = (search, event) => { const prevented = []; search.listeners.keydown({ preventDefault: () => prevented.push(true), ...event }); return prevented.length; };
   assert.equal(press(closed, { key: 'k', metaKey: true }), 1);
   assert.equal(press(closed, { key: 'K', ctrlKey: true }), 1);
-  assert.deepEqual(closed.set, [[0, true], [0, true]]);
+  assert.deepEqual(closed.set.filter(([slot]) => slot === 0), [[0, true], [0, true]]);
   assert.equal(press(closed, { key: 'k' }), 0);
   assert.equal(press(closed, { key: 'j', metaKey: true }), 0);
-  assert.equal(closed.set.length, 2);
+  assert.equal(closed.set.filter(([slot]) => slot === 0).length, 2);
   assert.deepEqual(closed.fetched, [], 'the index is not fetched before the search is opened');
 
   const open = box([true]);
   open.effects.forEach(effect => effect());
   press(open, { key: 'k', metaKey: true });
-  assert.deepEqual(open.set, [[0, false]]);
+  assert.deepEqual(open.set.filter(([slot]) => slot === 0), [[0, false]]);
   assert.deepEqual(open.fetched, ['/docs-index.json']);
 
   const [button] = closed.elements.filter(element => element.type === 'button');
@@ -255,6 +255,28 @@ test('the search box lists the hits of the shared search, and choosing one goes 
   loading.effects.forEach(effect => effect());
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(loading.set, [[2, index]]);
+});
+
+test('an index that cannot be fetched is said so, and opening the search again tries again', async () => {
+  const text = search => search.parts('CommandEmpty').map(part => part.props.children);
+  const down = box([true, 'zanzibar'], false);
+  assert.deepEqual(text(down), ['Loading…']);
+  down.effects.forEach(effect => effect());
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(down.set, [[3, true]]);
+  assert.deepEqual(text(box([true, 'zanzibar', null, true])), ['The search could not be loaded. Close it and open it again.']);
+
+  // Closing the search, with the dialog or with the key, takes the message away; the next opening fetches again.
+  const failed = box([true, 'zanzibar', null, true]);
+  failed.parts('Dialog')[0].props.onOpenChange(false);
+  assert.deepEqual(failed.set, [[0, false], [3, false]]);
+  failed.effects.forEach(effect => effect());
+  failed.listeners.keydown({ key: 'k', metaKey: true, preventDefault() {} });
+  assert.deepEqual(failed.set.slice(2), [[3, false], [0, false]]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(failed.fetched, ['/docs-index.json']);
+  assert.deepEqual(failed.set.slice(4), [[2, docs.docsIndex()]]);
+  assert.deepEqual(text(box([true, 'nothing-like-this', docs.docsIndex()])), ['No page matches.']);
 });
 
 test('the search box is in the layout of every docs page', () => {

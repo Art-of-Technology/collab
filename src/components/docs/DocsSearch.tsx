@@ -19,13 +19,15 @@ export function DocsSearch() {
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey)) return;
       event.preventDefault();
+      setFailed(false);
       setOpen(value => !value);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  // The index is fetched when the search is first opened, not with every page. After a failure, opening it again tries again.
+  // The index is fetched when the search is first opened, not with every page. After a failure, opening it again tries again,
+  // and the message of the failure goes when the search is closed.
   useEffect(() => {
     if (!open || index) return;
     fetch('/docs-index.json')
@@ -52,7 +54,7 @@ export function DocsSearch() {
         <span className="hidden sm:inline">Search the docs</span>
         <kbd className="hidden rounded border border-border px-1.5 font-sans text-[10px] sm:inline">⌘K</kbd>
       </button>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={value => { setOpen(value); setFailed(false); }}>
         <DialogContent className="overflow-hidden p-0" aria-describedby={undefined}>
           <DialogTitle className="sr-only">Search the docs</DialogTitle>
           {/* The shared search has already chosen and ordered the hits; the list must not filter them again. */}
