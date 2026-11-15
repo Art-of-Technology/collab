@@ -15,7 +15,7 @@ const require = createRequire(import.meta.url);
 
 // `collab` where a shell would run it: at the start of a line or after | ; & ( `, with an optional prompt and
 // variable assignments before it. The lower-case words after it are the command.
-const COMMAND = /(?:^|[|;&(`])[ \t]*(?:\$ )?(?:[A-Za-z_][A-Za-z0-9_]*=\S* )*collab((?: +[a-z][a-z0-9-]*)*)/gm;
+const COMMAND = /(?:^|[|;&(`])[ \t]*(?:\$[ \t]+)?(?:[A-Za-z_][A-Za-z0-9_]*=(?:[^\s'"\\]|\\.|'[^']*'|"(?:[^"\\]|\\.)*")*[ \t]+)*collab((?:[ \t]+[a-z][a-z0-9-]*)*)/gm;
 
 // Every command the CLI says it has: the API commands and the ones that run on the computer only.
 function cliCommands() {
@@ -55,14 +55,15 @@ export function checkDocs(root = repo) {
         // /docs, /docs.md, /docs/<page> and /docs/<page>.md are documentation; other addresses are not checked.
         const address = url.origin === 'https://docs.invalid' && url.pathname.match(/^\/docs(?:\/(.+?))?(\.md)?$/);
         if (!address) return;
-        const target = pages.get(decodeURIComponent(address[1] ?? 'index'));
+        const targetSlug = decodeURIComponent(address[1] ?? 'index');
+        const target = !address[2] && url.pathname !== docHref(targetSlug) ? null : pages.get(targetSlug);
         const id = decodeURIComponent(url.hash.slice(1));
         // A file in public/ is served at its own address (the developer docs keep two under /docs).
         if (!target) { if (!existsSync(join(root, 'public', url.pathname))) problems.push(`${file} links to ${href}, which is not a page.`); }
         else if (id && !address[2] && !target.headings.some(heading => heading.id === id)) problems.push(`${file} links to ${href}, but that page has no heading with the id "${id}".`);
       } else if (token.type === 'code' || token.type === 'codespan') {
         for (const [, after] of token.text.matchAll(COMMAND)) {
-          const words = after.trim().split(/ +/).filter(Boolean).slice(0, 2);
+          const words = after.trim().split(/[ \t]+/).filter(Boolean).slice(0, 2);
           const known = !words.length || commands.has(words.join(' ')) || commands.has(words[0]) || (words.length === 1 && groups.has(words[0]));
           if (!known) problems.push(`${file} names the command "collab ${words.join(' ')}", which the CLI does not have (packages/cli).`);
         }

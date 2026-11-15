@@ -263,6 +263,8 @@ Project context for an agent: with a projectId, the pipeline (status counts, own
 
 Reads. Scope: `prompts:read`.
 
+Pipeline context also requires `issues:read` and `context:read`. It is enabled by default when `projectId` is supplied unless `includeKnowledge` is true, or can be requested with `includePipeline=true`.
+
 | Argument | Type | Details |
 | --- | --- | --- |
 | `projectId` | string | minimum length: 1 · maximum length: 128 |

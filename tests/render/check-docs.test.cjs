@@ -57,6 +57,13 @@ test('a link to a docs page that does not exist fails', async () => {
   await one({ 'guides/seats.md': clean['guides/seats.md'] + '\n[The CLI](cli)\n' }, /guides\/seats\.md links to "cli".*\/docs\//);
 });
 
+test('the index has an HTML route only at /docs', async () => {
+  for (const href of ['/docs/index', '/docs/index#missing']) {
+    await one({ 'index.md': clean['index.md'] + `\n[Wrong](${href})\n` }, /which is not a page/);
+  }
+  assert.deepEqual(await check({ 'index.md': clean['index.md'] + '\n[Markdown](/docs/index.md) and [root Markdown](/docs.md).\n' }), []);
+});
+
 test('a link to a heading that does not exist fails, on another page and on the same page', async () => {
   await one({ 'index.md': clean['index.md'] + '\n[Missing](/docs/cli#uninstall)\n' }, /index\.md links to \/docs\/cli#uninstall, but that page has no heading with the id "uninstall"/);
   await one({ 'cli.md': clean['cli.md'] + '\nSee [missing](#nowhere).\n' }, /cli\.md links to #nowhere, but that page has no heading with the id "nowhere"/);
@@ -80,6 +87,13 @@ test('a collab command that the CLI does not have fails, in a code block and ins
   await one({ 'cli.md': clean['cli.md'].replace('| collab issues get CLB-1', '| collab auth frobnicate') }, /"collab auth frobnicate"/);
   // A group on its own is not a missing command, and neither is the word in a path or in a comment.
   assert.deepEqual(await check({ 'cli.md': clean['cli.md'] + '\nThe `collab issues` commands, the `collab-agents` skill and `~/.config/collab/work`.\n' }), []);
+});
+
+test('shell assignments with quoted values and tabs do not hide commands', async () => {
+  for (const command of ['LABEL="my agent" collab frobnicate', "LABEL='my agent'\tOTHER=x\tcollab\tissues\tfrobnicate", '$ LABEL=my\\ agent collab frobnicate']) {
+    await one({ 'cli.md': clean['cli.md'] + `\n\`\`\`sh\n${command}\n\`\`\`\n` }, /names the command "collab (frobnicate|issues frobnicate)"/);
+  }
+  assert.deepEqual(await check({ 'cli.md': clean['cli.md'] + '\n`LABEL="my agent"\tcollab\tissues\tlist`\n' }), []);
 });
 
 test('every problem is reported, not only the first', async () => {
@@ -175,6 +189,7 @@ test('the MCP reference lists every tool with the scope it needs and its argumen
     }
   }
   assert.match(section(page, '## whoami'), /`user:read` or `profile:read`/);
+  assert.match(section(page, '## context_get'), /Pipeline context also requires `issues:read` and `context:read`.*default when `projectId` is supplied unless `includeKnowledge` is true.*`includePipeline=true`/);
   assert.match(section(page, '## workspaces_list'), /`user:read` and `workspace:read`/);
   assert.match(section(page, '## docs_search'), /No scope: every valid token/);
   assert.match(section(page, '## issues_get'), /Reads\./);

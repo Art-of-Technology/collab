@@ -88,6 +88,7 @@ export function mcpToolsPage(tools, warning) {
       '', `## ${tool.name}`,
       '', tool.description.endsWith(warning) ? tool.description.slice(0, -warning.length) : tool.description,
       '', `${tool.method === 'GET' ? 'Reads.' : 'Writes.'} ${scopes ? `Scope: ${scopes}.` : 'No scope: every valid token.'}`,
+      ...(tool.name === 'context_get' ? ['', 'Pipeline context also requires `issues:read` and `context:read`. It is enabled by default when `projectId` is supplied unless `includeKnowledge` is true, or can be requested with `includePipeline=true`.'] : []),
       '', ...(rows.length ? table('Argument', rows) : ['No arguments of its own.']),
     );
   }
