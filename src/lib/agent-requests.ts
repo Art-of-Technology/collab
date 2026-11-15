@@ -57,23 +57,29 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
   // The fields a request states are the ones it sets itself: its source's priority, its role's label, and an assignee,
   // which a request always has or it is refused below.
   const { enforced, templates } = await getWorkspaceTemplates(workspaceId);
-  const refusal = enforced && createRefusal(templates, issueShape({ type: 'TASK', description: input.body, priority: source.priority,
-    assigneeId: kind.seat, labels: label ? [label] : [] }));
-  if (refusal) throw Object.assign(new HandoffError(refusal.error, refusal.error_description, 422), { body: refusal });
-
   const made = await prisma.$transaction(async tx => {
     // The lock that creating and retiring a seat take: the target project's seats stay as they are until this ends,
     // and requests into the project are counted and written one at a time.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${target.id}`}))`;
+    await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "userId" = ${me} FOR SHARE`;
+    await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${source.id} FOR UPDATE`;
+    const currentSource = await tx.issue.findFirst({ where: { id: source.id, workspaceId }, select: { id: true, projectId: true, priority: true } });
+    if (!currentSource) throw new HandoffError('not_found', 'Issue not found', 404);
+    await seatWriteGuard(tx, context, currentSource.projectId);
+    const currentSeat = await requireSeat(tx, context);
+    if (currentSeat.projectId !== seat.projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
+    const refusal = enforced && createRefusal(templates, issueShape({ type: 'TASK', description: input.body, priority: currentSource.priority,
+      assigneeId: kind.seat, labels: label ? [label] : [] }));
+    if (refusal) throw Object.assign(new HandoffError(refusal.error, refusal.error_description, 422), { body: refusal });
     const to = await tx.agentSeat.findFirst({ where: { projectId: target.id, role: kind.seat, isDefault: true, retiredAt: null },
       select: { userId: true, name: true, lastSeenAt: true } });
     if (!to) throw new HandoffError('no_default_seat', `The project has no ${kind.seat} seat to take this request`, 409);
     // Work reaches a seat by someone else's hand: a request to itself would be a seat assigning its own work.
     if (to.userId === me) throw new HandoffError('invalid_request', 'This request would go to the seat that files it');
     await assertAssignable(tx, { workspaceId, projectId: target.id, agentRequestRole: input.role }, to.userId);
-    if (target.id !== seat.projectId) {
+    if (target.id !== currentSeat.projectId) {
       // A request is from a project when a seat of that project reported it.
-      const open = await tx.issue.count({ where: { projectId: target.id, agentRequestRole: { not: null }, reporter: { agentSeat: { projectId: seat.projectId } }, ...NOT_DONE } });
+      const open = await tx.issue.count({ where: { projectId: target.id, agentRequestRole: { not: null }, reporter: { agentSeat: { projectId: currentSeat.projectId } }, ...NOT_DONE } });
       if (open >= REQUEST_CAP) throw new HandoffError('request_cap', `This project has ${REQUEST_CAP} open requests in that project; one of them has to be done first`, 429);
     }
 
@@ -81,7 +87,7 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
     const status = await tx.projectStatus.findFirst({ where: { projectId: target.id, isDefault: true }, select: { id: true, name: true } });
     const now = new Date();
     const issue = await tx.issue.create({ data: {
-      workspaceId, projectId: target.id, issueKey, type: 'TASK', title: input.title, description: input.body, priority: source.priority,
+      workspaceId, projectId: target.id, issueKey, type: 'TASK', title: input.title, description: input.body, priority: currentSource.priority,
       statusId: status?.id, statusValue: status?.name, status: status?.name, reporterId: me, assigneeId: to.userId, agentRequestRole: input.role,
       ...(label && { labels: { connect: { id: label.id } } }),
     } });

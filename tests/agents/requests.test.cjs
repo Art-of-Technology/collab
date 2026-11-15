@@ -51,11 +51,12 @@ test('requests: one seat asks another, in its own project or in another one', as
   const templates = load('src/lib/issue-templates.ts', { '@/lib/comment-html': load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') }) });
   const emitted = [];
   let forge = false;
+  let beforeIssueGuard;
   class ForgeProjectWriteError extends Error {}
   const guard = async () => { if (forge) throw new ForgeProjectWriteError('Use the Forge board'); };
   const deps = { zod, 'next/server': response, '@/lib/prisma': { prisma }, '@/lib/apps/auth-middleware': middleware, '@/lib/agent-seats': seats, '@/lib/issue-assignee': assignee,
     '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': response, './agent-handoffs': handoffs }, globals),
-    '@/lib/forge/legacy-write-guard': { ForgeProjectWriteError, assertLegacyIssueWriteAllowed: guard, assertLegacyProjectWriteAllowed: guard },
+    '@/lib/forge/legacy-write-guard': { ForgeProjectWriteError, assertLegacyIssueWriteAllowed: async () => { await guard(); await beforeIssueGuard?.(); }, assertLegacyProjectWriteAllowed: guard },
     '@/lib/issue-finder': {}, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens, '@/lib/issue-templates': templates,
     '@/lib/issue-template-store': load('src/lib/issue-template-store.ts', { '@/lib/prisma': { prisma }, '@/lib/issue-templates': templates }),
     '@/lib/event-bus': { emitIssueCreated: async made => { emitted.push(made.id); } } };
@@ -158,6 +159,24 @@ test('requests: one seat asks another, in its own project or in another one', as
     await refused(file(devA, mine, { project: 'BB' }), 400, 'assignee_not_found');
     await raw.workspaceMember.updateMany({ where: { userId: leadB.userId }, data: { status: true } });
     assert.equal(await requestCount(), before, 'a refused request writes nothing');
+  });
+
+  await t.test('filing rechecks the seat and source after concurrent changes', async () => {
+    const source = await issue(devA), leaving = await seat('race-a', A), before = await requestCount();
+    const race = async (by, change, code) => {
+      let resume, reached;
+      const paused = new Promise(resolve => { resume = resolve; });
+      const ready = new Promise(resolve => { reached = resolve; });
+      beforeIssueGuard = async () => { reached(); await paused; };
+      const pending = file(by, source, { project: 'BB' });
+      await ready;
+      try { await change(); } finally { beforeIssueGuard = undefined; resume(); }
+      await refused(pending, 403, code);
+    };
+    await race(devA, () => raw.issue.update({ where: { id: source.id }, data: { projectId: C } }), 'wrong_project');
+    await raw.issue.update({ where: { id: source.id }, data: { projectId: A } });
+    await race(leaving, () => seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: leaving.id }), 'seat_scope');
+    assert.equal(await requestCount(), before);
   });
 
   await t.test('the request body is held to the workspace\'s issue template', async () => {
