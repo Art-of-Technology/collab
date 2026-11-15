@@ -26,11 +26,11 @@ const plain = (tokens?: Token[]) => words(tokens).replace(/\s+/g, ' ').trim();
 
 // A heading may end with {#custom-id}. That id is used as written, so a heading can be reworded
 // without breaking the addresses that already link to it.
-const CUSTOM_ID = /\s*\{#([a-z0-9][a-z0-9_-]*)\}\s*$/;
+const CUSTOM_ID = /\s*\{#([a-z0-9_-]+)\}\s*$/;
 export const headingText = (text: string) => text.replace(CUSTOM_ID, '').trim();
 
-export function headingId(text: string, seen: Map<string, number>): string {
-  const base = text.match(CUSTOM_ID)?.[1]
+export function headingId(text: string, seen: Map<string, number>, customId: string | null = text.match(CUSTOM_ID)?.[1] ?? null): string {
+  const base = customId
     ?? (text.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').trim().replace(/\s+/g, '-') || 'section');
   let count = (seen.get(base) ?? 0) + 1;
   let id = count === 1 ? base : `${base}-${count}`;
@@ -60,7 +60,12 @@ export function docPage(slug: string): DocPage | null {
     if (token.type === 'heading') {
       const text = plain(token.tokens);
       if (token.depth === 1) title ??= text;
-      else if (token.depth === 2 || token.depth === 3) headings.push({ depth: token.depth, text: headingText(text), id: headingId(text, seen) });
+      else if (token.depth === 2 || token.depth === 3) {
+        // The marker counts only as plain text at the end of the heading, not inside code, a link or emphasis.
+        const last = token.tokens?.at(-1);
+        const customId = last?.type === 'text' ? last.raw.match(CUSTOM_ID)?.[1] ?? null : null;
+        headings.push({ depth: token.depth, text: customId ? headingText(text) : text, id: headingId(text, seen, customId) });
+      }
     } else if (token.type === 'paragraph' && title !== null) {
       summary ??= plain(token.tokens);
     }
