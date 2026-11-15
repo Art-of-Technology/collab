@@ -180,7 +180,7 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
         not_assigned: [403, 'Only the assignee of an issue starts or finishes a run on it.'],
         role_mismatch: [422, "The seat's role does not allow this."],
         already_running: [409, 'A run is already open on this issue. Take another issue.'],
-        run_fenced: [409, 'This run no longer holds the issue: it ended, was marked lost, or the issue went to someone else. Nothing was changed. If this was a finish, the note was kept on the issue timeline; do not send it again.'],
+        run_fenced: [409, 'This run no longer holds the issue: it ended, was marked lost, or the issue went to someone else. Nothing was changed; do not send it again. The note of a refused finish is kept on the issue timeline only when the generation was the run\'s own and the run had not finished: check with collab issues activity, and if it is not there, add it as a comment.'],
         needs_person: [409, 'A person has to clear the unfinished run on the issue page before work continues.'],
         exit_note_required: [422, 'The exit note needs ## Done, ## Decisions, ## Evidence and ## Next, each as a heading on its own line. Add what is missing and send it again.'],
         exit_state_required: [422, 'The finish is incomplete: in_review names --review-request or --asked-user, blocked names --blocked-by or --asked-user, and --status must belong to the outcome. Add one of what is missing and send it again.'],

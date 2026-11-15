@@ -68,8 +68,11 @@ lease renewed while you live. Your run is in the environment: `COLLAB_ISSUE_KEY`
    - `blocked`: it cannot go on. Add `--blocked-by KEY` (an issue linked as blocking this one, such as a request filed with `--blocks true`) or `--asked-user USER_ID`.
 
    `exit_note_required` and `exit_state_required` list what is `missing`: complete it
-   and send it again. `run_fenced` means the run no longer holds the issue; nothing was
-   changed and your note was kept on the timeline, so do not send it again: stop.
+   and send it again. `run_fenced` means the run no longer holds the issue and nothing was
+   changed: do not send the finish again, stop. Your note was kept on the timeline only
+   when the generation was the run's own and the run had not finished. Check with
+   `collab issues activity "$COLLAB_ISSUE_KEY"`; if it is not there, add it as a comment
+   so the work is not lost.
    `statusUnmapped: true` in the reply means the project has no status for the outcome;
    the outcome is recorded all the same.
 
