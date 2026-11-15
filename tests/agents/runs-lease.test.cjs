@@ -15,6 +15,7 @@ test('a unique-index refusal on the insert is answered as already_running', asyn
   const prisma = { issue: { findFirst: async () => ({ id: 'i' }) }, agentRun: { findMany: async () => [] },
     $transaction: async () => { throw Object.assign(new Error('unique'), { code: 'P2002' }); } };
   const { checkout } = load('src/lib/agent-runs.ts', { zod: require('zod'), '@/lib/prisma': { prisma }, '@/lib/issue-finder': {}, '@/lib/permissions': {},
+    '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent' },
     '@/lib/agent-seats': { HandoffError, seatFor: async () => null, seatWriteGuard: async () => {} } }, { Date });
   await assert.rejects(checkout({ user: { id: person }, workspace: { id: 'w' } }, { issue: 'i', generation: 'g', runner: 'r' }),
     error => error.code === 'already_running' && error.status === 409);
@@ -64,7 +65,7 @@ test('runs: checkout, the lease, lost runs and who may clear them', async t => {
     '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': response, './agent-handoffs': handoffs }, globals),
     '@/lib/issue-finder': load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } }),
     '@/lib/permissions': load('src/lib/permissions.ts', { './prisma': { prisma } }, { console }),
-    '@/lib/session': { getCurrentUser: async () => session && { id: session } } };
+    '@/lib/session': { getCurrentUser: async () => session && { id: session } }, '@/lib/agent-tokens': tokens };
   deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date });
   const inboxRoute = load('src/app/api/apps/auth/seats/me/inbox/route.ts', deps, globals);
   const runs = load('src/app/api/apps/auth/runs/route.ts', deps, globals);
@@ -142,6 +143,45 @@ test('runs: checkout, the lease, lost runs and who may clear them', async t => {
     assert.equal((await checkout(devA.token, doing))[0], 200);
     assert.equal(await statusOf(doing), `${A}-doing`);
     assert.deepEqual(await activities(doing, 'STATUS_CHANGED'), []);
+    for (const target of [plain, doing]) {
+      const updated = await raw.issue.findUniqueOrThrow({ where: { id: target.id } });
+      assert.ok(updated.firstStartedAt && updated.lastProgressAt);
+    }
+  });
+
+  await t.test('an agent without a seat cannot repeat checkout', async () => {
+    const agent = await tokens.createAgentToken({ workspaceId: 'w', actorId: owner, name: 'non-seat', access: 'write', expiresInDays: 30 });
+    const account = await raw.appToken.findUniqueOrThrow({ where: { id: agent.id } });
+    const target = await issue(account.userId);
+    const first = (await checkout(agent.token, target))[1].run;
+    assert.equal(first.leaseUntil, null);
+    await refused(checkout(agent.token, target, 'g2'), 409, 'already_running');
+    assert.equal((await act(agent.token, first.id, 'close'))[0], 200);
+  });
+
+  await t.test('expiry while waiting for the issue lock is recorded before checkout, renew, or close', async () => {
+    for (const action of ['checkout', 'renew', 'close']) {
+      const target = await issue(devA);
+      const { run } = (await checkout(devA.token, target))[1];
+      let release, ready;
+      const held = new Promise(resolve => { release = resolve; }), locked = new Promise(resolve => { ready = resolve; });
+      const competing = raw.$transaction(async tx => {
+        await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${target.id} FOR UPDATE`;
+        await tx.agentRun.update({ where: { id: run.id }, data: { leaseUntil: new Date(Date.now() + 1200) } });
+        ready(); await held;
+      }, { timeout: 15000 });
+      await locked;
+      const pending = action === 'checkout' ? checkout(devA.token, target, 'g2') : act(devA.token, run.id, action);
+      try {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      } finally { release(); await competing; }
+      const [status, body] = await pending;
+      assert.equal(status, action === 'close' ? 200 : 409);
+      if (action !== 'close') assert.equal(body.error, action === 'renew' ? 'run_fenced' : 'needs_person');
+      assert.equal((await stored(run.id)).state, action === 'close' ? 'stopped' : 'lost');
+      assert.equal((await activities(target, 'AGENT_RUN_LOST')).length, 1);
+      if (action !== 'close') await act(devA.token, run.id, 'close');
+    }
   });
 
   await t.test('rule 5: a lapsed lease is lost on the next read, needs a person or the runner\'s close, and then resumes', async () => {
