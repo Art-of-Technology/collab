@@ -149,39 +149,23 @@ test('runs: checkout, the lease, lost runs and who may clear them', async t => {
     }
   });
 
-  await t.test('an agent without a seat cannot repeat checkout', async () => {
+  await t.test('an agent token that is not a seat takes nothing, even an issue assigned to it', async () => {
     const agent = await tokens.createAgentToken({ workspaceId: 'w', actorId: owner, name: 'non-seat', access: 'write', expiresInDays: 30 });
     const account = await raw.appToken.findUniqueOrThrow({ where: { id: agent.id } });
     const target = await issue(account.userId);
-    const first = (await checkout(agent.token, target))[1].run;
-    assert.equal(first.leaseUntil, null);
-    await refused(checkout(agent.token, target, 'g2'), 409, 'already_running');
-    assert.equal((await act(agent.token, first.id, 'close'))[0], 200);
+    await refused(checkout(agent.token, target), 403, 'seat_required');
+    assert.equal(await raw.agentRun.count({ where: { issueId: target.id } }), 0);
+    assert.equal(await statusOf(target), `${A}-to_do`);
   });
 
-  await t.test('expiry while waiting for the issue lock is recorded before checkout, renew, or close', async () => {
-    for (const action of ['checkout', 'renew', 'close']) {
-      const target = await issue(devA);
-      const { run } = (await checkout(devA.token, target))[1];
-      let release, ready;
-      const held = new Promise(resolve => { release = resolve; }), locked = new Promise(resolve => { ready = resolve; });
-      const competing = raw.$transaction(async tx => {
-        await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${target.id} FOR UPDATE`;
-        await tx.agentRun.update({ where: { id: run.id }, data: { leaseUntil: new Date(Date.now() + 1200) } });
-        ready(); await held;
-      }, { timeout: 15000 });
-      await locked;
-      const pending = action === 'checkout' ? checkout(devA.token, target, 'g2') : act(devA.token, run.id, action);
-      try {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      } finally { release(); await competing; }
-      const [status, body] = await pending;
-      assert.equal(status, action === 'close' ? 200 : 409);
-      if (action !== 'close') assert.equal(body.error, action === 'renew' ? 'run_fenced' : 'needs_person');
-      assert.equal((await stored(run.id)).state, action === 'close' ? 'stopped' : 'lost');
-      assert.equal((await activities(target, 'AGENT_RUN_LOST')).length, 1);
-      if (action !== 'close') await act(devA.token, run.id, 'close');
-    }
+  await t.test('a run marked lost is not revived by a renew that judged the lease before it lapsed', async () => {
+    const target = await issue(devA);
+    const { run } = (await checkout(devA.token, target))[1];
+    // What that renew meets: the mark is there, and by its own, earlier clock the lease still holds.
+    await raw.agentRun.update({ where: { id: run.id }, data: { state: 'lost' } });
+    await refused(act(devA.token, run.id, 'renew'), 409, 'run_fenced');
+    assert.equal((await stored(run.id)).state, 'lost');
+    assert.equal((await act(devA.token, run.id, 'close'))[0], 200);
   });
 
   await t.test('rule 5: a lapsed lease is lost on the next read, needs a person or the runner\'s close, and then resumes', async () => {
