@@ -30,6 +30,14 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
     select: { id: true, name: true, slug: true },
     orderBy: { name: 'asc' },
   }) : [];
+  // A seat is tied to one project and may have an owner: the person whose logins run it.
+  const [projects, people] = tokens ? await Promise.all([
+    prisma.project.findMany({ where: { workspaceId: workspace.id }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    prisma.user.findMany({
+      where: { email: { not: null }, OR: [{ ownedWorkspaces: { some: { id: workspace.id } } }, { workspaceMemberships: { some: { workspaceId: workspace.id, status: true } } }] },
+      select: { id: true, name: true, email: true }, orderBy: { name: 'asc' },
+    }),
+  ]) : [[], []];
   const manageable = [];
   for (const { id, name, slug } of others) {
     if ((await checkUserPermission(session.user.id, id, Permission.MANAGE_WORKSPACE_PERMISSIONS)).hasPermission) manageable.push({ id, name, slug });
@@ -56,9 +64,12 @@ export default async function AgentTokensPage({ params }: { params: Promise<{ wo
       <AgentTokensManager
         workspaceId={workspace.id}
         workspaces={manageable}
+        projects={projects}
+        people={people.map(user => ({ id: user.id, name: user.name ?? user.email ?? user.id }))}
         tokens={tokens && tokens.map(token => ({
           id: token.id,
           name: token.name,
+          seat: token.seat,
           workspaces: token.workspaces,
           access: token.access,
           // Plain date text, so the server and the browser render the same thing.

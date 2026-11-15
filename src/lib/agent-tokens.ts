@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { encryptToken } from '@/lib/apps/crypto';
 import { prisma } from '@/lib/prisma';
 
@@ -37,9 +38,19 @@ export async function listAgentTokens(workspaceId: string) {
     where: { userId: { in: [...names.keys()] }, status: true, workspaceId: { not: workspaceId } },
     select: { userId: true, workspace: { select: { id: true, name: true, slug: true } } },
   }) : [];
+  // A token whose account is a seat is that seat's token, however it was minted.
+  const seats = names.size ? await prisma.agentSeat.findMany({
+    where: { userId: { in: [...names.keys()] } },
+    select: { id: true, userId: true, role: true, isDefault: true, retiredAt: true, project: { select: { name: true } } },
+  }) : [];
+  const seatOf = (userId: string | null) => {
+    const seat = seats.find(row => row.userId === userId);
+    return seat ? { id: seat.id, role: seat.role, project: seat.project.name, isDefault: seat.isDefault, retired: !!seat.retiredAt } : null;
+  };
   return tokens.map(token => ({
     id: token.id,
     name: names.get(token.userId ?? '') ?? 'Unknown',
+    seat: seatOf(token.userId),
     workspaces: elsewhere.filter(row => row.userId === token.userId)
       .map(({ workspace }) => ({ id: workspace.id, name: workspace.name, slug: workspace.slug })),
     access: (token.scopes.every(scope => scope.endsWith(':read')) ? 'read' : 'write') as AgentTokenAccess,
@@ -53,8 +64,10 @@ export async function listAgentTokens(workspaceId: string) {
  * Mint a token for a named service account: a member with no email, password or sign-in,
  * so everything done with the token is attributed to that name.
  */
-export async function createAgentToken(input: {
+export async function createAgentToken<S = undefined>(input: {
   workspaceId: string; actorId: string; name: string; access: AgentTokenAccess; expiresInDays: number;
+  /** Makes the account a seat in the minting transaction (src/lib/agent-seats.ts); when it throws, nothing is minted. */
+  seat?: (tx: Prisma.TransactionClient, account: { id: string; name: string | null }) => Promise<S>;
 }) {
   const app = await agentApp();
   if (app?.status !== 'PUBLISHED') return { error: 'unavailable' as const };
@@ -96,6 +109,7 @@ export async function createAgentToken(input: {
       update: membership?.status ? {} : { status: true, role: 'MEMBER' },
       create: { userId: account.id, workspaceId: input.workspaceId, role: 'MEMBER' },
     });
+    const seat = await input.seat?.(tx, account);
     const row = await tx.appToken.create({
       data: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, installationId: null, accessToken, tokenExpiresAt: expiresAt, scopes },
       select: { id: true },
@@ -105,10 +119,10 @@ export async function createAgentToken(input: {
       workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_token.created',
       details: { tokenId: row.id, serviceUserId: account.id, name: account.name, scopes, expiresAt: expiresAt.toISOString() },
     } });
-    return { id: row.id, name: account.name ?? wanted };
+    return { id: row.id, name: account.name ?? wanted, seat };
   });
   if (created.error) return { error: created.error };
-  return { id: created.id, name: created.name, scopes, expiresAt, token };
+  return { id: created.id, name: created.name, seat: created.seat as S, scopes, expiresAt, token };
 }
 
 /** Revoke one agent token of this workspace. False when it is absent or already revoked. */

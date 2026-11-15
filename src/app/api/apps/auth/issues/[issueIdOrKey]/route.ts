@@ -19,6 +19,7 @@ import { TEMPLATE_FIELDS } from '@/lib/issue-templates';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
+import { assertTokenMayAssign, seatWriteGuard } from '@/lib/agent-seats';
 
 // Schema for updating issues
 const UpdateIssueSchema = z.object({
@@ -225,15 +226,19 @@ export const PATCH = withAppAuth(
         );
       }
 
+      await seatWriteGuard(prisma, context, existingIssue.projectId);
+
       // A parent must be an issue of this workspace, as on create: checked before anything else looks at it.
-      if (updateData.parentId && !await prisma.issue.findFirst({
-        where: { id: updateData.parentId, workspaceId: context.workspace.id }, select: { id: true },
-      })) {
+      const parent = updateData.parentId ? await prisma.issue.findFirst({
+        where: { id: updateData.parentId, workspaceId: context.workspace.id }, select: { projectId: true },
+      }) : null;
+      if (updateData.parentId && !parent) {
         return NextResponse.json(
           { error: 'parent_issue_not_found', error_description: 'Parent issue not found' },
           { status: 404 }
         );
       }
+      if (parent) await seatWriteGuard(prisma, context, parent.projectId);
 
       await assertLegacyIssueWriteAllowed(
         existingIssue.id,
@@ -262,6 +267,7 @@ export const PATCH = withAppAuth(
 
       // Handle assignee change
       if (updateData.assigneeId !== undefined) {
+        await assertTokenMayAssign(prisma, context, updateData.assigneeId, true);
         if (updateData.assigneeId) await assertAssignable(prisma, existingIssue, updateData.assigneeId);
         update.assigneeId = updateData.assigneeId;
       }
@@ -455,7 +461,7 @@ export const PATCH = withAppAuth(
       );
     }
   },
-  { requiredScopes: ['issues:write'] }
+  { requiredScopes: ['issues:write'], seatWrites: true }
 );
 
 /**
@@ -467,11 +473,15 @@ export const DELETE = withAppAuth(
     try {
       const projectId = new URL(request.url).searchParams.get('projectId');
       if (!projectId) throw new IssueTrashError(400, 'Project is required');
+      await seatWriteGuard(prisma, context, projectId);
       const deletedIssue = await changeIssueTrash({ idOrKey: (await params).issueIdOrKey,
         workspaceId: context.workspace.id, projectId, action: 'TRASHED',
         actor: { userId: context.user.id, client: 'app', appId: context.app.id, installationId: context.installation.id } });
       return NextResponse.json({ message: 'Issue moved to Trash', deletedIssue });
-    } catch (error) { return issueTrashErrorResponse(error, 'app'); }
+    } catch (error) {
+      if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
+      return issueTrashErrorResponse(error, 'app');
+    }
   },
-  { requiredScopes: ['issues:write'] }
+  { requiredScopes: ['issues:write'], seatWrites: true }
 );

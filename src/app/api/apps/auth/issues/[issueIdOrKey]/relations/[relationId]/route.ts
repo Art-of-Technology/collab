@@ -7,6 +7,7 @@ import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/for
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { HandoffError, seatWriteGuard } from '@/lib/agent-seats';
 
 /**
  * DELETE /api/apps/auth/issues/:issueIdOrKey/relations/:relationId
@@ -59,6 +60,9 @@ export const DELETE = withAppAuth(
         );
       }
 
+      // A link is a write to both of its ends.
+      const ends = await prisma.issue.findMany({ where: { id: { in: [relation.sourceIssueId, relation.targetIssueId] } }, select: { projectId: true } });
+      for (const end of ends) await seatWriteGuard(prisma, context, end.projectId);
       await assertLegacyIssueWriteAllowed(relation.sourceIssueId, relation.targetIssueId);
 
       // Delete the relation
@@ -86,6 +90,7 @@ export const DELETE = withAppAuth(
         deletedRelationId: relationId,
       });
     } catch (error) {
+      if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
       if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       console.error('Error deleting relation:', error);
       return NextResponse.json(
@@ -94,5 +99,5 @@ export const DELETE = withAppAuth(
       );
     }
   },
-  { requiredScopes: ['issues:write'] }
+  { requiredScopes: ['issues:write'], seatWrites: true }
 );

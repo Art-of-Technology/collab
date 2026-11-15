@@ -25,6 +25,9 @@ function fixture() {
   const workspace = id => workspaces.find(row => row.id === id);
   const prisma = {
     app: { findUnique: async ({ where }) => apps.find(row => matches(row, where)) ?? null },
+    // No seats and no projects here: seats have their own tests on a real database (tests/agents/seats.test.cjs).
+    agentSeat: { findMany: async () => [], findUnique: async () => null },
+    project: { findMany: async () => [] },
     workspace: {
       findUnique: async ({ where }) => workspaces.find(row => matches(row, where)) ?? null,
       findFirst: async ({ where }) => workspaces.find(row => matches(row, where)) ?? null,

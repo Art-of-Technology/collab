@@ -12,6 +12,7 @@ import { Prisma } from '@prisma/client';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
+import { assertTokenMayAssign } from '@/lib/agent-seats';
 
 const AssignIssueSchema = z.object({
   assigneeId: z.string().cuid().optional(),
@@ -116,6 +117,7 @@ export const POST = withAppAuth(
         );
       }
 
+      await assertTokenMayAssign(prisma, context, data.assigneeId, true);
       await assertAssignable(prisma, issue, data.assigneeId);
 
       // Update issue assignee

@@ -429,6 +429,7 @@ export default function NewIssueModal({
               value={assigneeId} 
               onChange={setAssigneeId as any} 
               workspaceId={workspaceId} 
+              projectId={selectedProjectId}
             />
             <span className="text-xs text-muted-foreground self-center">Reporter: you</span>
             <IssueProjectSelector 

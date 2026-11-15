@@ -206,6 +206,7 @@ export function SubIssueItem({
           value={subIssue.assigneeId}
           onChange={(assigneeId) => onUpdate({ assigneeId })}
           workspaceId={workspaceId}
+          projectId={projectId}
         />
       </div>
 

@@ -181,6 +181,7 @@ export default function QuickIssueCreate({
           value={assigneeId}
           onChange={setAssigneeId}
           workspaceId={workspaceId}
+          projectId={selectedProjectId || undefined}
           placeholder="Assign to..."
         />
       </div>

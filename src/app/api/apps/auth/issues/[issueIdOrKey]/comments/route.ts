@@ -8,6 +8,7 @@ import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/for
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { HandoffError, seatWriteGuard } from '@/lib/agent-seats';
 import { z } from 'zod';
 
 const CreateCommentSchema = z.object({
@@ -161,6 +162,8 @@ export const POST = withAppAuth(
         );
       }
 
+      await seatWriteGuard(prisma, context, issue.projectId);
+
       // Validate parent comment if provided
       if (data.parentId) {
         const parentComment = await prisma.issueComment.findFirst({
@@ -219,6 +222,7 @@ export const POST = withAppAuth(
 
       return NextResponse.json(comment, { status: 201 });
     } catch (error) {
+      if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
       if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });
       if (error instanceof z.ZodError) {
         return NextResponse.json(
@@ -238,5 +242,5 @@ export const POST = withAppAuth(
       );
     }
   },
-  { requiredScopes: ['issues:write'] }
+  { requiredScopes: ['issues:write'], seatWrites: true }
 );

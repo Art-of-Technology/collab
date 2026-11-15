@@ -19,6 +19,7 @@ import { emitIssueCreated } from '@/lib/event-bus';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { createRefusal, issueShape } from '@/lib/issue-template-enforcement';
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
+import { assertTokenMayAssign, assignCapReached, seatWriteGuard } from '@/lib/agent-seats';
 
 // Schema for creating new issues
 const CreateIssueSchema = z.object({
@@ -213,7 +214,10 @@ export const POST = withAppAuth(
         );
       }
 
+      await seatWriteGuard(prisma, context, project.id);
+
       if (issueData.assigneeId) {
+        await assertTokenMayAssign(prisma, context, issueData.assigneeId, false);
         await assertAssignable(prisma, { workspaceId: context.workspace.id, projectId: project.id, agentRequestRole: null }, issueData.assigneeId);
       }
 
@@ -232,6 +236,7 @@ export const POST = withAppAuth(
             { status: 404 }
           );
         }
+        await seatWriteGuard(prisma, context, parentIssue.projectId);
       }
 
       // Create the issue with proper issue key generation using transaction
@@ -245,7 +250,11 @@ export const POST = withAppAuth(
       const refusal = enforced && createRefusal(templates, issueShape({ ...issueData, priority: body.priority === undefined ? undefined : issueData.priority }));
       if (refusal) return NextResponse.json(refusal, { status: 422 });
 
+      // An agent token over its daily cap of issues for seats still files the issue; it waits unassigned for a person.
+      let capped = false;
       const newIssue = await prisma.$transaction(async (tx) => {
+        capped = !!issueData.assigneeId && await assignCapReached(tx, context, issueData.assigneeId);
+        const assigneeId = capped ? undefined : issueData.assigneeId;
         const issueKey = await allocateIssueKey(tx, issueData.projectId);
 
         // Find the ProjectStatus for the given status and project
@@ -294,7 +303,7 @@ export const POST = withAppAuth(
             status: resolvedStatusName,
             priority: issueData.priority,
             projectId: issueData.projectId,
-            assigneeId: issueData.assigneeId,
+            assigneeId,
             parentId: issueData.parentId,
             workspaceId: context.workspace.id,
             reporterId: context.user.id,
@@ -363,11 +372,11 @@ export const POST = withAppAuth(
         if (issueData.labels?.length) await enqueueLabelHandoff(tx, context.user.id, created, []);
 
         // Create IssueAssignee record if issue is assigned to someone
-        if (issueData.assigneeId) {
+        if (assigneeId) {
           await tx.issueAssignee.create({
             data: {
               issueId: created.id,
-              userId: issueData.assigneeId,
+              userId: assigneeId,
               role: 'ASSIGNEE',
               status: 'APPROVED',
               assignedAt: new Date(),
@@ -404,7 +413,7 @@ export const POST = withAppAuth(
         { async: true }
       ).catch(() => {});
 
-      return NextResponse.json(newIssue, { status: 201 });
+      return NextResponse.json(capped ? { ...newIssue, warning: 'assign_cap' } : newIssue, { status: 201 });
 
     } catch (error) {
       if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
@@ -428,5 +437,5 @@ export const POST = withAppAuth(
       );
     }
   },
-  { requiredScopes: ['issues:write'] }
+  { requiredScopes: ['issues:write'], seatWrites: true }
 );

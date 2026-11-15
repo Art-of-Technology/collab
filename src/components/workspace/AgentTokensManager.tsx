@@ -24,6 +24,8 @@ export interface WorkspaceRef {
 export interface AgentTokenRow {
   id: string;
   name: string;
+  /** Set when the token's account is a seat: one project, one role. */
+  seat: { id: string; role: string; project: string; isDefault: boolean; retired: boolean } | null;
   /** Other workspaces the token's agent was let into. */
   workspaces: WorkspaceRef[];
   access: 'read' | 'write';
@@ -36,19 +38,30 @@ interface AgentTokensManagerProps {
   workspaceId: string;
   /** Other workspaces where the viewer may manage agent tokens, so an agent can be let into them. */
   workspaces: WorkspaceRef[];
+  /** Projects a seat can be created for, and the people who can own one. */
+  projects: { id: string; name: string }[];
+  people: { id: string; name: string }[];
   /** null while agent tokens are not set up on this deployment. */
   tokens: AgentTokenRow[] | null;
 }
 
 const accessLabel = { read: 'Read only', write: 'Read and write' } as const;
+const roleLabel: Record<string, string> = { developer: 'Developer', reviewer: 'Reviewer', release: 'Release' };
+// The select cannot hold an empty value.
+const NONE = 'none';
 
-export default function AgentTokensManager({ workspaceId, workspaces, tokens }: AgentTokensManagerProps) {
+export default function AgentTokensManager({ workspaceId, workspaces, projects, people, tokens }: AgentTokensManagerProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [access, setAccess] = useState<AgentTokenRow['access']>('read');
   const [days, setDays] = useState('90');
+  const [projectId, setProjectId] = useState(NONE);
+  const [role, setRole] = useState('developer');
+  const [ownerId, setOwnerId] = useState(NONE);
+  const [retiring, setRetiring] = useState<AgentTokenRow | null>(null);
+  const asSeat = projectId !== NONE;
   const [busy, setBusy] = useState(false);
   const [minted, setMinted] = useState<{ name: string; token: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -64,10 +77,12 @@ export default function AgentTokensManager({ workspaceId, workspaces, tokens }: 
   const create = async () => {
     setBusy(true);
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/agent-tokens`, {
+      const response = await fetch(`/api/workspaces/${workspaceId}/${asSeat ? 'agent-seats' : 'agent-tokens'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, access, expiresInDays: Number(days) }),
+        body: JSON.stringify(asSeat
+          ? { name, projectId, role, ownerId: ownerId === NONE ? null : ownerId, expiresInDays: Number(days) }
+          : { name, access, expiresInDays: Number(days) }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) return failed(data.error || 'Failed to create the token');
@@ -76,8 +91,11 @@ export default function AgentTokensManager({ workspaceId, workspaces, tokens }: 
       // The next token starts from the safe defaults again.
       setAccess('read');
       setDays('90');
+      setProjectId(NONE);
+      setRole('developer');
+      setOwnerId(NONE);
       setCopied(false);
-      setMinted({ name: data.name, token: data.token });
+      setMinted(asSeat ? { name: data.token.name, token: data.token.token } : { name: data.name, token: data.token });
       router.refresh();
     } catch {
       failed('Failed to create the token');
@@ -97,6 +115,24 @@ export default function AgentTokensManager({ workspaceId, workspaces, tokens }: 
       router.refresh();
     } catch {
       failed('Failed to revoke the token');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const retire = async () => {
+    if (!retiring?.seat) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/agent-seats/${retiring.seat.id}`, { method: 'DELETE' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return failed(data.error || 'Failed to retire the seat');
+      const count = data.unassigned?.length ?? 0;
+      toast({ title: 'Seat retired', description: `${retiring.name} takes no more work. ${count === 1 ? '1 open issue was' : `${count} open issues were`} unassigned.` });
+      setRetiring(null);
+      router.refresh();
+    } catch {
+      failed('Failed to retire the seat');
     } finally {
       setBusy(false);
     }
@@ -182,6 +218,12 @@ export default function AgentTokensManager({ workspaceId, workspaces, tokens }: 
                   <TableRow key={token.id}>
                     <TableCell className="font-medium">
                       {token.name}
+                      {token.seat && (
+                        <div className="text-xs font-normal text-muted-foreground">
+                          {token.seat.retired ? 'Retired seat' : `${roleLabel[token.seat.role] ?? token.seat.role} seat`} of {token.seat.project}
+                          {token.seat.isDefault && ', default for its role'}
+                        </div>
+                      )}
                       {token.workspaces.length > 0 && (
                         <div className="text-xs font-normal text-muted-foreground">
                           Also works in {token.workspaces.map(row => row.name).join(', ')}
@@ -198,6 +240,11 @@ export default function AgentTokensManager({ workspaceId, workspaces, tokens }: 
                       {choices(token).length > 0 && (
                         <Button variant="outline" size="sm" className="mr-2 text-xs h-7" onClick={() => setManagingId(token.id)}>
                           Workspaces
+                        </Button>
+                      )}
+                      {token.seat && !token.seat.retired && (
+                        <Button variant="outline" size="sm" className="mr-2 text-xs h-7" onClick={() => setRetiring(token)}>
+                          Retire seat
                         </Button>
                       )}
                       <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setRevoking(token)}>
@@ -226,15 +273,53 @@ export default function AgentTokensManager({ workspaceId, workspaces, tokens }: 
               <Input id="agent-token-name" value={name} maxLength={50} placeholder="Claude" onChange={event => setName(event.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="agent-token-access">Access</Label>
-              <Select value={access} onValueChange={value => setAccess(value as AgentTokenRow['access'])}>
-                <SelectTrigger id="agent-token-access"><SelectValue /></SelectTrigger>
+              <Label htmlFor="agent-token-project">Seat in a project</Label>
+              <Select value={projectId} onValueChange={setProjectId}>
+                <SelectTrigger id="agent-token-project"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="read">{accessLabel.read}</SelectItem>
-                  <SelectItem value="write">{accessLabel.write}</SelectItem>
+                  <SelectItem value={NONE}>No seat: a token for the whole workspace</SelectItem>
+                  {projects.map(project => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+            {asSeat ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="agent-token-role">Role</Label>
+                  <Select value={role} onValueChange={setRole}>
+                    <SelectTrigger id="agent-token-role"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(roleLabel).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="agent-token-owner">Owner</Label>
+                  <Select value={ownerId} onValueChange={setOwnerId}>
+                    <SelectTrigger id="agent-token-owner"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>No owner</SelectItem>
+                      {people.map(person => <SelectItem key={person.id} value={person.id}>{person.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  A seat can be assigned only this project&apos;s issues that fit its role, and its token can change only issues of this project.
+                  A developer seat takes ordinary issues; reviewer and release seats take only review and release requests.
+                </p>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="agent-token-access">Access</Label>
+                <Select value={access} onValueChange={value => setAccess(value as AgentTokenRow['access'])}>
+                  <SelectTrigger id="agent-token-access"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="read">{accessLabel.read}</SelectItem>
+                    <SelectItem value="write">{accessLabel.write}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="agent-token-expiry">Expires after</Label>
               <Select value={days} onValueChange={setDays}>
@@ -251,7 +336,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, tokens }: 
             <Button variant="outline" onClick={() => setCreating(false)} disabled={busy}>Cancel</Button>
             <Button onClick={create} disabled={busy || !name.trim()}>
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create token
+              {asSeat ? 'Create seat' : 'Create token'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -311,6 +396,17 @@ export default function AgentTokensManager({ workspaceId, workspaces, tokens }: 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!retiring}
+        onOpenChange={open => { if (!open) setRetiring(null); }}
+        title="Retire seat?"
+        description="The seat takes no more work and its open issues become unassigned. Its tokens can still read until you revoke them, but can change nothing."
+        confirmText="Retire seat"
+        isLoading={busy}
+        onConfirm={retire}
+        metadata={retiring?.seat ? { title: retiring.name, subtitle: `${roleLabel[retiring.seat.role] ?? retiring.seat.role} seat of ${retiring.seat.project}` } : undefined}
+      />
 
       <ConfirmDialog
         open={!!revoking}

@@ -1115,6 +1115,7 @@ export function IssueDetailContent({
                   value={issue.assigneeId}
                   onChange={(value) => handleUpdate({ assigneeId: value })}
                   workspaceId={workspaceId}
+                  projectId={issue.projectId}
                   disabled={isUpdating}
                 />
               </div>

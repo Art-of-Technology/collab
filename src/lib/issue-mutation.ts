@@ -112,6 +112,11 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
       if (body.assigneeId) {
         await assertAssignable(prisma, { workspaceId: existingIssue.workspaceId, projectId, agentRequestRole: existingIssue.agentRequestRole }, body.assigneeId);
       }
+      // A seat works one project: an issue that leaves the project leaves the seat too.
+      const unseated = moving && body.assigneeId === undefined && existingIssue.assigneeId
+        ? await tx.agentSeat.findFirst({ where: { userId: existingIssue.assigneeId, projectId: { not: projectId } }, select: { userId: true } })
+        : null;
+      if (unseated) updateData.assigneeId = null;
       if (body.reporterId && !await userHasWorkspaceAccess(body.reporterId, existingIssue.workspaceId)) {
         return { error: 'Invalid issue participant', status: 400 };
       }
@@ -195,6 +200,13 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
         include: getStandardIssueInclude(userId)
       });
       if (labelIds) await enqueueLabelHandoff(tx, userId, issue, current.labels.map(label => label.id));
+      if (unseated) {
+        await tx.issueAssignee.deleteMany({ where: { issueId: existingIssue.id, userId: unseated.userId } });
+        await tx.issueActivity.create({ data: {
+          action: 'UNASSIGNED', itemType: 'ISSUE', itemId: existingIssue.id, userId, workspaceId: existingIssue.workspaceId, projectId,
+          fieldName: 'assignee', oldValue: unseated.userId, newValue: '', details: JSON.stringify({ reason: 'moved_to_another_project' }),
+        } });
+      }
       if (assigneeChanged && issue.assigneeId) {
         await tx.issueAssignee.upsert({
           where: { issueId_userId: { issueId: existingIssue.id, userId: issue.assigneeId } },
