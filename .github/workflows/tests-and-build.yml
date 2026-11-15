@@ -70,7 +70,8 @@ jobs:
           PORT=3999 HOSTNAME=127.0.0.1 node .next/standalone/server.js &
           for attempt in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:3999/docs && break; sleep 1; done
           for address in /docs /docs/cli /llms.txt /llms-full.txt; do
-            curl -sf -o /dev/null "http://127.0.0.1:3999$address" || { echo "$address did not answer 200"; exit 1; }
+            status=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3999$address")
+            [ "$status" = 200 ] || { echo "$address answered $status, not 200"; exit 1; }
           done
           curl -sf http://127.0.0.1:3999/docs/index.md | cmp - content/docs/index.md
           curl -sf http://127.0.0.1:3999/docs.md | cmp - content/docs/index.md
