@@ -2968,22 +2968,22 @@ model AgentReceipt {
 // A seat is one project and one role, backed by an agent token's account. Its three partial unique
 // indexes (one release seat and one default seat per role in a project) exist only in the migration.
 model AgentSeat {
-  id          String    @id @default(cuid())
+  id          String     @id @default(cuid())
   workspaceId String
   projectId   String
   role        String // developer | reviewer | release
-  userId      String    @unique
+  userId      String     @unique
   ownerId     String?
   name        String
-  isDefault   Boolean   @default(false)
+  isDefault   Boolean    @default(false)
   lastSeenAt  DateTime?
   retiredAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user        User      @relation("AgentSeatAccount", fields: [userId], references: [id], onDelete: Cascade)
-  owner       User?     @relation("AgentSeatOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User       @relation("AgentSeatAccount", fields: [userId], references: [id], onDelete: Cascade)
+  owner       User?      @relation("AgentSeatOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   runs        AgentRun[]
 
   @@index([projectId, role])
@@ -2992,25 +2992,25 @@ model AgentSeat {
 // A run is one session working one issue. "One open run per issue" is a partial unique index that
 // exists only in the migration. leaseUntil is null for a person's run.
 model AgentRun {
-  id          String    @id @default(cuid())
+  id          String     @id @default(cuid())
   workspaceId String
   issueId     String
   seatId      String?
   userId      String
   runner      String
   generation  String
-  state       String    @default("running") // running | waiting | finished | lost | stopped
+  state       String     @default("running") // running | waiting | finished | lost | stopped
   outcome     String? // done | in_review | blocked
   note        String?
   ask         Json?
   usage       Json?
   leaseUntil  DateTime?
-  startedAt   DateTime  @default(now())
+  startedAt   DateTime   @default(now())
   endedAt     DateTime?
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  issue       Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issue       Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
   seat        AgentSeat? @relation(fields: [seatId], references: [id], onDelete: SetNull)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([issueId, startedAt])
   @@index([seatId, endedAt])
