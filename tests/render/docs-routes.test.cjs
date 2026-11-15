@@ -88,6 +88,20 @@ test('a title with square brackets still makes one working link in llms.txt', as
   assert.match(text, /^- \[Flags \\\[optional\\\]\]\(\/docs\/index\.md\): What a flag does\.$/m);
 });
 
+test('a title with backslashes and brackets remains one Markdown link', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'docs-routes-'));
+  fs.mkdirSync(path.join(dir, 'content/docs'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'content/docs/nav.json'), JSON.stringify([{ title: 'Start here', pages: ['index'] }]));
+  fs.writeFileSync(path.join(dir, 'content/docs/index.md'), '# Flags `\\[optional]`\n\nWhat a flag does.\n');
+  const globals = { Response, process: { cwd: () => dir, env: {} } };
+  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), 'isomorphic-dompurify': { default: require('isomorphic-dompurify') } }, globals);
+  const text = await (await load('src/app/llms.txt/route.ts', { '@/lib/docs': docs }, globals).GET()).text();
+  const list = require('marked').lexer(text).find(token => token.type === 'list');
+  const link = list.items[0].tokens[0].tokens.find(token => token.type === 'link');
+  assert.equal(link.tokens.map(token => token.text).join(''), 'Flags \\[optional]');
+  assert.equal(link.href, '/docs/index.md');
+});
+
 test('llms-full.txt is every navigation page in navigation order', async () => {
   const { full } = routes();
   const response = await full.GET();

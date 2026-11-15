@@ -18,8 +18,7 @@ export function GET() {
       '',
       `## ${section.title}`,
       '',
-      // A bracket in a title would end the link text early.
-      ...section.pages.map(page => `- [${page.title.replace(/[[\]]/g, '\\$&')}](${base}/docs/${page.slug}.md): ${summaries.get(page.slug)}`),
+      ...section.pages.map(page => `- [${page.title.replace(/[\\[\]]/g, '\\$&')}](${base}/docs/${page.slug}.md): ${summaries.get(page.slug)}`),
     ]),
   ];
   return new Response(`${lines.join('\n')}\n`, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
