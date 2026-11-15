@@ -52,12 +52,17 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
       OR: [{ statusId: null }, { projectStatus: { OR: [{ category: { not: 'done' } }, { category: null, isFinal: false }] } }],
     },
     select: {
-      id: true, issueKey: true, title: true, priority: true, createdAt: true, projectStatus: statusSelect,
+      id: true, issueKey: true, projectId: true, title: true, priority: true, createdAt: true, projectStatus: statusSelect,
       helpers: { where: { userId: me }, select: { assignedAt: true, approvedAt: true } },
       // One run at most is open per issue, and no run starts while it is, so an open run is always the latest.
       agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, endedAt: true } },
     },
   });
+  // A run that finished done leaves the issue to its status, so a reopened issue is offered again. A project with no
+  // status in the done group cannot show done: there the run says it, until the issue is assigned again.
+  const finished = [...new Set(issues.filter(issue => issue.agentRuns[0]?.outcome === 'done').map(issue => issue.projectId))];
+  const showsDone = new Set((finished.length ? await prisma.projectStatus.findMany({ where: { projectId: { in: finished }, isActive: true,
+    OR: [{ category: 'done' }, { category: null, isFinal: true }] }, select: { projectId: true }, distinct: ['projectId'] }) : []).map(status => status.projectId));
   const candidates = issues.flatMap(issue => {
     const last = issue.agentRuns[0];
     if (last && !last.endedAt) return [];
@@ -65,6 +70,7 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
     // Every path that assigns writes this row and stamps it again on a later assignment.
     const assigned = issue.helpers[0]?.approvedAt ?? issue.helpers[0]?.assignedAt ?? issue.createdAt;
     const run = last?.endedAt && last.endedAt >= assigned ? last : undefined;
+    if (run?.outcome === 'done' && !showsDone.has(issue.projectId)) return [];
     const stands = !run || run.outcome === 'done' ? category : run.outcome ?? 'resume';
     return [{ issue, last, stands, category: stands === 'resume' ? category : stands, since: run?.endedAt ?? assigned }];
   });

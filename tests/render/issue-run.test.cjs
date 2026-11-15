@@ -77,6 +77,18 @@ test('above the timeline: who is working the issue and since when, and a clear b
     }), 'Cem started working on this issue 5 minutes ago.Session has stopped: clear runThe run was not cleared. Reload the page and try again.');
   }
 
+  // A clear that worked takes the run out of view, also when the read after it fails.
+  let cleared = false;
+  global.fetch = async (url, options) => {
+    if (options?.method === 'POST') { cleared = true; return { ok: true }; }
+    if (cleared) throw new Error('offline');
+    return { ok: true, json: async () => ({ run }) };
+  };
+  assert.equal(await open(async () => {
+    await React.act(async () => document.querySelector('button').click());
+    return document.getElementById('root').textContent;
+  }), '');
+
   // No run open, or the read fails: nothing is shown.
   run = null;
   assert.equal(await open(), '');

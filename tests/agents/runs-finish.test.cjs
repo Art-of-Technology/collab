@@ -6,7 +6,7 @@ const { seatsDatabase } = require('./seats-db.cjs');
 
 // Token-facing routes accept only cuid-shaped ids.
 const owner = 'cowner00001', person = 'cperson0001', gone = 'cgone000001';
-const A = 'cprojecta001', B = 'cprojectb001';
+const A = 'cprojecta001', B = 'cprojectb001', C = 'cprojectc001';
 const scopes = ['issues:read', 'issues:write', 'user:read'];
 const ago = seconds => new Date(Date.now() - seconds * 1000);
 const HEADINGS = ['Done', 'Decisions', 'Evidence', 'Next'];
@@ -24,11 +24,12 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
     await prisma.workspaceMember.createMany({ data: [{ workspaceId: 'w', userId: person }, { workspaceId: 'w', userId: gone, status: false }] });
     // A has three statuses in the done group, the final one not first by order, and three in the review group: one switched off,
-    // and one stored before "in_review" but ordered after it. B has no review or blocked status.
-    for (const [id, statuses] of [[A, { old_review: -1, to_do: 0, in_progress: 1, qa_testing: 3, in_review: 2, blocked: 4, waiting_for_deploy: 5, done: 6, deprecated: 7 }], [B, { to_do: 0, done: 1 }]]) {
-      await prisma.project.create({ data: { id, workspaceId: 'w', name: id, slug: id, issuePrefix: id === A ? 'AA' : 'BB' } });
+    // and one stored before "in_review" but ordered after it. B has no review or blocked status, and C no done status that is in use.
+    for (const [id, statuses] of [[A, { old_review: -1, to_do: 0, in_progress: 1, qa_testing: 3, in_review: 2, blocked: 4, waiting_for_deploy: 5, done: 6, deprecated: 7 }],
+      [B, { to_do: 0, done: 1 }], [C, { to_do: 0, in_progress: 1, old_done: 2 }]]) {
+      await prisma.project.create({ data: { id, workspaceId: 'w', name: id, slug: id, issuePrefix: id.slice(8, 9).repeat(2).toUpperCase() } });
       await prisma.projectStatus.createMany({ data: Object.entries(statuses).map(([name, order]) => ({ id: `${id}-${name}`, projectId: id, name, displayName: name,
-        order, isFinal: name === 'done', isActive: name !== 'old_review' })) });
+        order, isFinal: name === 'done', isActive: !name.startsWith('old_') })) });
     }
     for (const [id, slug] of [['agent-app', 'collab-agent'], ['person-app', 'collab-cli']]) {
       await prisma.app.create({ data: { id, name: slug, slug, publisherId: 'system', status: 'PUBLISHED', visibility: 'PRIVATE', isSystemApp: true,
@@ -69,7 +70,7 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     const made = await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId, role, ownerId: person, name, expiresInDays: 30 });
     return { ...made.seat, token: made.token.token };
   };
-  const devA = await seat('dev-a', A), otherA = await seat('other-a', A), devB = await seat('dev-b', B), release = await seat('release-a', A, 'release');
+  const devA = await seat('dev-a', A), otherA = await seat('other-a', A), devB = await seat('dev-b', B), devC = await seat('dev-c', C), release = await seat('release-a', A, 'release');
   const personToken = 'collab_person_token';
   /** The person, shaped like a seat for the helpers below. */
   const me = { token: personToken, userId: person, projectId: A };
@@ -280,6 +281,24 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     await untouched(named.target, named.run, `${B}-to_do`);
   });
 
+  await t.test('review focus 3: an issue finished done in a project with no done status is not offered again until it is assigned again', async () => {
+    const { target, run } = await started(devC);
+    const [status, body] = await finish(devC, run.id, { outcome: 'done' });
+    assert.deepEqual([status, body.statusUnmapped, body.run.outcome, await statusOf(target)], [200, true, 'done', `${C}-in_progress`]);
+    // The status still says in progress; the run says done, and nothing else can.
+    assert.deepEqual(await offered(devC, target), []);
+    await raw.issueComment.create({ data: { issueId: target.id, authorId: person, content: 'Thanks' } });
+    assert.deepEqual(await offered(devC, target), []);
+    await raw.issueAssignee.updateMany({ where: { issueId: target.id }, data: { approvedAt: new Date(Date.now() + 1000) } });
+    assert.deepEqual(await offered(devC, target), ['assigned']);
+    // Where the project has a done status, the status speaks: an issue reopened after a done run is offered again.
+    const reopened = await started(devA);
+    await finish(devA, reopened.run.id, { outcome: 'done' });
+    assert.deepEqual(await offered(devA, reopened.target), []);
+    await move(reopened.target, 'to_do');
+    assert.deepEqual(await offered(devA, reopened.target), ['assigned']);
+  });
+
   await t.test('review focus 4: a finish after the run was lost is fenced, and its note is kept as a late entry', async () => {
     const { target, run } = await started(devA);
     await raw.agentRun.update({ where: { id: run.id }, data: { leaseUntil: ago(1) } });
@@ -443,7 +462,8 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.deepEqual([status, body.run.id, body.run.state, body.run.by, body.run.clearable, body.run.startedAt], [200, run.id, 'running', 'dev-a', false, run.startedAt]);
     // Reading the page is a read like the others: a lapsed lease is lost by then, and a person who may assign can clear it.
     await raw.agentRun.update({ where: { id: run.id }, data: { leaseUntil: ago(1) } });
-    assert.deepEqual((await open(target))[1].run.clearable, false, 'a member without the assign permission');
+    const lapsed = (await open(target))[1].run;
+    assert.deepEqual([lapsed.state, lapsed.clearable], ['lost', false], 'lost on this read; a member without the assign permission does not clear it');
     session = owner;
     // A run under a lease that still holds is its runner's.
     const held = await started(devA);
