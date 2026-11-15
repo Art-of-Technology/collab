@@ -73,8 +73,8 @@ test('native fresh bootstrap, subsequent migrations, and populated-target refusa
     }
     assert.equal(query(fresh, `SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname='AgentTransferOffer_one_pending_parent' AND i.indisunique AND i.indpred IS NOT NULL`), '1');
     assert.equal(run(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--skip-generate'], target(reference)).status, 0, 'build a separate migration reference');
-    query(reference, 'DROP TABLE "AgentReviewRequest", "AgentTransferOffer", "ForgeExecutionAttempt" CASCADE; ALTER TABLE "Version" DROP COLUMN "issueAccessInvalidated"');
-    for (const name of ['20260924010000_forge_execution_attempt', '20260924130000_version_access_invalidation', '20261030000200_agent_transfer_offer', '20261031000100_transfer_worker_guard', '20261031000200_transfer_recipient_guard', '20261031000300_pending_offer_serialization', '20261107000100_agent_review_guard']) {
+    query(reference, 'DROP TABLE "AgentReviewRequest", "AgentTransferOffer", "ForgeExecutionAttempt", "AgentRun", "AgentSeat" CASCADE; ALTER TABLE "Version" DROP COLUMN "issueAccessInvalidated"; ALTER TABLE "ProjectStatus" DROP COLUMN "category"; ALTER TABLE "Project" DROP COLUMN "agentMode", DROP COLUMN "agentSwitchedAt"; ALTER TABLE "Issue" DROP COLUMN "agentRequestRole"');
+    for (const name of ['20260924010000_forge_execution_attempt', '20260924130000_version_access_invalidation', '20261030000200_agent_transfer_offer', '20261031000100_transfer_worker_guard', '20261031000200_transfer_recipient_guard', '20261031000300_pending_offer_serialization', '20261107000100_agent_review_guard', '20261116000100_agent_seats']) {
       assert.equal(run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-f', path.join(root, 'prisma/migrations', name, 'migration.sql')], { ...pg, PGDATABASE: reference }).status, 0, 'apply the actual migration to the reference');
     }
     const reviewCatalog = `SELECT 'constraint:' || conname || ':' || pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='"AgentReviewRequest"'::regclass
@@ -83,6 +83,9 @@ test('native fresh bootstrap, subsequent migrations, and populated-target refusa
       UNION ALL SELECT 'function:' || p.proname || ':' || pg_get_functiondef(p.oid) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ('guard_review_request','guard_pending_review_claim','guard_review_against_transfer','cancel_reviews_on_owner_delete') ORDER BY 1`;
     assert.equal(query(fresh, reviewCatalog), query(reference, reviewCatalog), 'bootstrap review guards, constraints and indexes match the real migration');
     assert.equal(query(fresh, `SELECT count(*) FROM pg_constraint WHERE conrelid='"AgentReviewRequest"'::regclass AND contype='c'`), '10');
+    const seatCatalog = `SELECT c.relname || ':' || i.indisunique::text || ':' || pg_get_indexdef(c.oid) FROM pg_class c JOIN pg_index i ON i.indexrelid=c.oid WHERE i.indrelid IN ('"AgentSeat"'::regclass,'"AgentRun"'::regclass) ORDER BY 1`;
+    assert.equal(query(reference, seatCatalog).split('\n').filter(line => / WHERE /.test(line)).length, 3, 'reference has the three seat rules Prisma cannot model');
+    assert.equal(query(fresh, seatCatalog), query(reference, seatCatalog), 'bootstrap seat and run indexes match the real migration');
     const oldGuardNames = ['retain_version_access_invalidation', 'invalidate_child_version_access', 'invalidate_unlinked_version_access', 'invalidate_issue_version_access', 'invalidate_project_version_access', 'invalidate_status_version_access', 'guard_pending_transfer_offer', 'guard_transfer_managed_claim', 'guard_transfer_worker_conversion', 'serialize_pending_transfer_offer'];
     const oldGuards = oldGuardNames.map(name => `'${name}'`).join(',');
     const oldCatalog = `SELECT 'check:' || conname || ':' || convalidated::text || ':' || pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='"ForgeExecutionAttempt"'::regclass AND conname='ForgeExecutionAttempt_state_check'

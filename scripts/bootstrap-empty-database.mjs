@@ -56,6 +56,9 @@ try {
       JSON.stringify(reviewChecks.map(match => match[2])) !== JSON.stringify(reviewNames)) throw new Error('Review guard supplements need review.');
   const reviewSupplements = reviewChecks.map(match => `ALTER TABLE "AgentReviewRequest" ADD ${match[1]};`).join('\n') +
     '\n' + reviewIndex + '\n' + review.slice(reviewStart, -'COMMIT;\n'.length);
+  const seats = rows.find(row => row.name === '20261116000100_agent_seats')?.sql ?? '';
+  const seatIndexes = ['AgentRun_one_open', 'AgentSeat_one_release', 'AgentSeat_one_default'].map(name => seats.match(new RegExp(`^CREATE UNIQUE INDEX "${name}" [^;]* WHERE [^;]*;`, 'm'))?.[0]);
+  if (seatIndexes.some(index => !index)) throw new Error('Agent seat supplements need review.');
   // Reuse the exact unmodeled SQL contracts; fail closed if their format changes.
   const stateCheck = ready.match(/^  CONSTRAINT "ForgeExecutionAttempt_state_check" CHECK .+$/m)?.[0].trim();
   const activeIndex = ready.match(/^CREATE UNIQUE INDEX "ForgeExecutionAttempt_active_issue_key"[\s\S]*?;/m)?.[0];
@@ -83,6 +86,7 @@ ${transferWorkerSupplements}
 ${transferRecipientSupplements}
 ${pendingSerializationSupplements}
 ${reviewSupplements}
+${seatIndexes.join('\n')}
 COMMIT;
 `;
   // Keep credentials out of command arguments, logs and generated files.

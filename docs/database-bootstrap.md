@@ -14,7 +14,9 @@ rollout prerequisite](agent-review-contract.md#rollout-prerequisite).
 The contract includes agent handoffs, transfer offers, Git provider connections
 and issue Trash. Their modeled tables, indexes and foreign keys are represented
 by the current Prisma schema; transfer guards and the pending-offer partial index
-also require SQL supplements. This does not qualify upgrades of an existing
+also require SQL supplements. So do the three partial unique indexes of agent
+seats and runs (one open run per issue, one release seat per project, one default
+seat per project and role), taken from their migration by name. This does not qualify upgrades of an existing
 installation. In particular, do not use bootstrap
 or baseline commands on a populated database without a migration ledger. Apply
 only its separately reviewed upgrade SQL after a fresh backup. For Git provider
@@ -93,6 +95,8 @@ Recovery is an explicit operator investigation, not an automatic retry:
    functions and enabled triggers, the pending-offer partial unique index, and
    the review constraints, indexes, functions and enabled triggers on their
    expected tables, comparing their definitions with the review migration.
+   Inspect the three partial unique indexes on `AgentSeat` and `AgentRun`,
+   comparing their definitions with the agent seats migration.
    Verify `Version.issueAccessInvalidated` is non-null with default false.
    The expected catalog is defined by the pinned schema, original supplement SQL
    and `prisma/bootstrap-contract.json`; actual native readback is still required.
@@ -131,7 +135,8 @@ after a real COMMIT. It never selects an existing application database.
 
 The bootstrap contract is the authoritative list of admitted migrations and
 their checksums. The recipe retains the exact Ready, Version provenance,
-transfer and review guard and index supplements.
+transfer and review guard and index supplements, and the agent seat and run
+partial unique indexes.
 Historical migrations are unchanged. Fresh schema generation installs the Trash
 columns, durable audit table and restrictive Issue project/workspace foreign
 keys directly; it does not replay the Trash migration's ALTER statements.
