@@ -39,7 +39,7 @@
 - `headingId(text: string, seen: Map<string, number>) → string`
 
 - [ ] Tests: title is the first `# ` line and summary the first paragraph after it; repeated headings get `-2`, `-3`; an unknown slug gives null; a slug with `..` gives null.
-- [ ] The app builds with `output: 'standalone'` (`next.config.js:4`) and the image copies only `.next/standalone`, `.next/static` and `public` (`Dockerfile:62-76`). Verify by starting the built standalone server, not `next dev`, and fetching a docs page and its `.md`.
+- [ ] The app builds with `output: 'standalone'` (`next.config.js:4`) and the image copies only `.next/standalone`, `.next/static` and `public` (`Dockerfile:62-76`). Verify the built standalone bundle contains the `content/docs/` files; B2 verifies they can be served.
 
 ### Task B2: what agents read
 
@@ -47,6 +47,7 @@
 
 - [ ] If the rewrite cannot match the `.md` suffix, serve the Markdown at `/docs/raw/<slug>` and list those addresses in `llms.txt`; whichever address is used, the test below hits it on the built server.
 - [ ] Tests: `/docs/<slug>.md` returns `text/markdown` and exactly `docPage(slug).markdown`; `/llms.txt` has one line per navigation page with title, summary and the `.md` address; `/llms-full.txt` is every page in navigation order.
+- [ ] Start the built standalone server, not `next dev`, and fetch a Markdown page; verify its content matches the source file.
 
 ### Task B3: pages for people
 

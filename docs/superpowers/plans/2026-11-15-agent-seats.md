@@ -182,7 +182,7 @@
 **Files:** create `src/app/api/workspaces/[workspaceId]/projects/[projectId]/agent-mode/route.ts`, `scripts/seat-carry-over.mjs`; modify `src/lib/agent-handoffs.ts` (`sendHandoff`, the claim branch of `actOnHandoff`), `src/lib/agent-label-triggers.ts`, `src/app/(main)/[workspaceId]/projects/[projectSlug]/settings/ProjectSettingsClient.tsx` (a group select per status and the switch), `AGENTS.md` or `CLAUDE.md` of the repo that switches; test `tests/agents/agent-mode.test.cjs`.
 
 - [ ] Test: in a `seats` project, send and claim are refused with `project_uses_seats`, a subscribed label creates no handoff, and old handoffs can still be read; a `handoffs` project in the same workspace behaves as before.
-- [ ] Test: in a `seats` project, adding the `Release request` label to an issue files one release request through `fileRequest`, linked to that issue and assigned to the default release seat; adding it twice files one.
+- [ ] Test each label in a `seats` project: adding `Release request` or `Review request` to an issue files one matching request through `fileRequest`, linked to that issue and assigned to the default seat for that role; adding the same label twice files one.
 - [ ] A project can have seats and runs before it switches (that is how one issue is piloted); the switch only turns handoffs off for that project.
 - [ ] Test: a project can switch back to `handoffs`; the switch back is refused while a run is open in it.
 - [ ] The switch dialog lists every status of the project with its group, so a person corrects a wrong guess before switching; the switch is refused while the project has no status in group `in_progress` or `done`.
