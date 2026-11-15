@@ -22,9 +22,10 @@ const statusSelect = { select: { category: true, isFinal: true } } as const;
  * What the caller should work on next: the issues assigned to it, and for a seat only those of its project.
  * Never an issue with a run open, and never one whose status is in the done group. Where an issue stands is
  * read from its last run (resume when it ended without finishing, else its outcome); the status group speaks
- * for an issue that never had a run or whose last run finished done. An issue in review or blocked is
- * offered only when something happened after its reference time: the end of its last run, or without one
- * the time it was last assigned to the caller.
+ * for an issue that never had a run or whose last run finished done. A run that ended before the issue was
+ * last assigned to the caller says nothing: the assignment is new work. An issue in review or blocked is
+ * offered only when something happened after its reference time: the end of that run, or without one the
+ * time it was last assigned to the caller.
  */
 export async function seatInbox(context: Pick<AppAuthContext, 'user' | 'workspace'>): Promise<{ items: InboxItem[] }> {
   const me = context.user.id;
@@ -41,6 +42,7 @@ export async function seatInbox(context: Pick<AppAuthContext, 'user' | 'workspac
     },
     select: {
       id: true, issueKey: true, title: true, priority: true, createdAt: true, projectStatus: statusSelect,
+      helpers: { where: { userId: me }, select: { assignedAt: true, approvedAt: true } },
       // One run at most is open per issue, and no run starts while it is, so an open run is always the latest.
       agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, endedAt: true } },
     },
@@ -49,24 +51,26 @@ export async function seatInbox(context: Pick<AppAuthContext, 'user' | 'workspac
     const last = issue.agentRuns[0];
     if (last && !last.endedAt) return [];
     const category = categoryOf(issue.projectStatus);
-    const stands = !last || last.outcome === 'done' ? category : last.outcome ?? 'resume';
-    return [{ issue, last, stands, category: stands === 'resume' ? category : stands }];
+    // Every path that assigns writes this row and stamps it again on a later assignment.
+    const assigned = issue.helpers[0]?.approvedAt ?? issue.helpers[0]?.assignedAt ?? issue.createdAt;
+    const run = last?.endedAt && last.endedAt >= assigned ? last : undefined;
+    const stands = !run || run.outcome === 'done' ? category : run.outcome ?? 'resume';
+    return [{ issue, last, stands, category: stands === 'resume' ? category : stands, since: run?.endedAt ?? assigned }];
   });
 
   const waiting = candidates.filter(({ stands }) => stands === 'in_review' || stands === 'blocked').map(({ issue }) => issue.id);
   const replies = { where: { authorId: { not: me } }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } as const;
   const linked = { select: { agentRequestRole: true, reporterId: true, updatedAt: true, projectStatus: statusSelect, comments: replies } } as const;
   const details = new Map((waiting.length ? await prisma.issue.findMany({ where: { id: { in: waiting } }, select: {
-    id: true, comments: replies, helpers: { where: { userId: me }, select: { assignedAt: true, approvedAt: true } },
+    id: true, comments: replies,
     sourceRelations: { select: { relationType: true, targetIssue: linked } },
     targetRelations: { select: { relationType: true, sourceIssue: linked } },
   } }) : []).map(detail => [detail.id, detail]));
 
-  const reasonFor = ({ issue, last, stands }: typeof candidates[number]): InboxItem['reason'] | null => {
+  const reasonFor = ({ issue, stands, since }: typeof candidates[number]): InboxItem['reason'] | null => {
     if (stands === 'resume') return 'resume';
     const detail = details.get(issue.id);
     if (!detail) return 'assigned';
-    const since = last?.endedAt ?? detail.helpers[0]?.approvedAt ?? detail.helpers[0]?.assignedAt ?? issue.createdAt;
     const after = (date?: Date) => !!date && date > since;
     // shortcut: an issue's last change stands for the time it reached done, so editing a blocker or a review request
     // that was already done offers the waiting issue once more; read the status change itself once every path records one.

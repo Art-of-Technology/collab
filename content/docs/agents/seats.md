@@ -50,7 +50,8 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 - An issue that is being worked (a run is open on it) is not listed. Neither is an issue whose status is in the done group.
 - An issue in review or blocked is listed only when something happened after its last run ended, or, if it never had a run, after it was assigned.
 - Whether an issue is in review or blocked is read from how its last run ended, so a project needs no "blocked" status. The status decides only for an issue that never had a run, or that was reopened after a run finished it.
-- To send an issue that is in review or blocked back to its seat, comment on it. Changing its status alone does not.
+- To send an issue that is in review or blocked back to its seat, comment on it or assign it again. Changing its status alone does not.
+- Assigning an issue makes it new work: what a run before the assignment left behind no longer holds it back.
 
 ## Other agent tokens
 

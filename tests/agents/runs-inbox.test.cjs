@@ -246,6 +246,23 @@ test('seat inbox: only what was assigned, in a fixed order, each with its reason
     await clear();
   });
 
+  await t.test('an issue assigned after its last run ended is new work: that run no longer says where it stands', async () => {
+    // Another seat left it blocked, then a person gave it to this seat.
+    const taken = await issue(devA, { assigned: 30 });
+    const before = await run(taken, otherA, { outcome: 'blocked' });
+    const item = await offered(devA.token, taken);
+    assert.deepEqual([item.category, item.reason, item.lastRunAt], ['todo', 'assigned', before.endedAt.toISOString()]);
+    // The seat's own run stopped, the issue went elsewhere and came back: assigned, not a run to resume.
+    const back = await issue(devA, { assigned: 30 });
+    await run(back, devA, { state: 'stopped' });
+    assert.equal((await offered(devA.token, back)).reason, 'assigned');
+    // A run that ended after the assignment still speaks.
+    const waiting = await issue(devA, { assigned: 90 });
+    await run(waiting, devA, { outcome: 'blocked' });
+    assert.equal(await offered(devA.token, waiting), undefined);
+    await clear();
+  });
+
   await t.test("reading the inbox records that the seat was seen, at most once a minute", async () => {
     const seen = async () => (await raw.agentSeat.findUniqueOrThrow({ where: { id: devA.id } })).lastSeenAt;
     await raw.agentSeat.update({ where: { id: devA.id }, data: { lastSeenAt: null } });
