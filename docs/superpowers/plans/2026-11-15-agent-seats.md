@@ -110,10 +110,11 @@
 
 - [ ] Test rule 1: an unassigned issue and an issue assigned to someone else never appear.
 - [ ] Test: an issue with an open run (`running`, `waiting` or `lost`) is never offered, so a runner does not see work that is already being done.
-- [ ] Test rule 3 with one fixture of six issues: the order is resume, then in review with a new comment from someone else, then blocked with at least one blocking issue and all blocking issues in category `done`, then to do by priority (`urgent`, `high`, `medium`, `low`) and age; an in review issue with nothing new is absent; at most 50 items.
+- [ ] Test rule 3 with one fixture of six issues: the order is resume, then in review with something new, then blocked with something new, then to do by priority (`urgent`, `high`, `medium`, `low`) and age; an in review issue with nothing new is absent; at most 50 items.
 - [ ] Test: a status with `category` null counts as `done` when `isFinal`, otherwise as `todo`.
 - [ ] Test: where an issue stands comes from its last run: an issue whose last run finished `blocked` in a project with no "blocked" status is held back, and appears with reason `blocker_resolved` once its blocking issue is done. The status group is used only for issues that never had a run.
-- [ ] Test: a blocked issue with no blocking issues and no new reply is absent, both when its last run finished `blocked` with `askedUser` unanswered and when it has no run and its status is blocked.
+- [ ] "Something new" is measured from the issue's reference time: the end of its last run, or, when it never had a run, the time it was last assigned to the seat. An in review issue has something new when someone else commented after that time or a review request it filed reached `done` after it. A blocked issue has something new when someone else commented after that time (on the issue or on a request the seat filed for it), or when it has at least one blocking issue, all of them are in category `done`, and the latest of them reached `done` after that time.
+- [ ] Tests for blocked issues: with no blocking issue and no new reply it is absent, both when its last run finished `blocked` with `askedUser` unanswered and when it has no run and its status is blocked; when its only blocking issue was already `done` before its last run ended it is absent; when that person then replies it appears with reason `reply`; when a blocking issue reaches `done` after the last run ended it appears with reason `blocker_resolved`.
 - [ ] Test: an issue whose last run is `lost` is not offered; once that run is `stopped` it is offered first, with reason `resume`.
 
 ### Task A5: checkout and lease
