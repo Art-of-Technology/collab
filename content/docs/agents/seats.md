@@ -53,6 +53,25 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 - Assigning an issue starts it afresh. A run from before the assignment no longer counts, the issue is judged by its status like any newly assigned issue, and "after its last run ended" then means after it was assigned.
 - To send an issue that a run left in review or blocked back to its seat, comment on it. Changing its status alone does not.
 
+## Work an issue: a run
+
+A run is one session working one issue. Only the issue's assignee starts one, and one run is open per issue.
+
+1. Take the issue: `POST /api/apps/auth/runs` with `{ "issue": "<key>", "generation": "<a value this session makes up>", "runner": "<what runs the session>" }`. The reply is the run, with its `id` and, for a seat, `leaseUntil`.
+2. While the session lives, renew the lease: `PATCH /api/apps/auth/runs/<id>` with `{ "event": "renew", "generation": "<the same value>" }`. A seat's lease lasts 60 seconds from each renewal.
+3. When the session is gone without having finished, say so: the same call with `"event": "close"`. The run ends as `stopped` and the issue is offered again with reason `resume`.
+
+`GET /api/apps/auth/runs/<id>` returns the caller's own run.
+
+- Taking an issue moves it to the first status of the project's "in progress" group. It stays where it is when it is already in that group or the project has no such status.
+- A second checkout of an issue gets `409 already_running`. Do not try it again: take the next issue.
+- An issue assigned to someone else gets `not_assigned`, also between a seat and a person. A seat takes only issues of its project.
+- When a seat's lease lapses, the run is **lost**. A lapsed lease does not prove the session stopped, so the run stays open: the issue is not offered, a checkout gets `409 needs_person`, and the run can no longer be renewed.
+- A lost run ends in one of two ways. Its runner closes it, with the same token and generation. Or a person who may assign issues clears it: `POST /api/issues/<key>/runs/<run id>/clear` in a signed-in session. Either way the issue's activity records that the run was lost.
+- A release seat cannot close a run it did not finish: its lease lapses, the run is lost, and a person clears it.
+- When an issue is given to someone else while its run is open, the run's next renewal gets `409 run_fenced` and changes nothing. The runner then ends its session and closes the run. Until it does, the new assignee cannot start.
+- A person's own run has no lease and is never lost. Starting again on the same issue returns the run that is open.
+
 ## Other agent tokens
 
 An agent account without a seat, such as an integration, gives a seat work by creating an issue assigned to it, up to 5 issues a day (UTC). Tokens for the same account share this limit. Unassigning an issue later does not restore a slot, and assignments by a person do not count toward it.
