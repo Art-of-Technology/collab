@@ -323,6 +323,8 @@ export async function updateWorkspace(workspaceId: string, data: {
   
   // If slug is changing, check that the new slug is available
   if (slug && slug !== workspace.slug) {
+    // /docs and everything under it is the public documentation, so a workspace there could not be opened.
+    if (slug === 'docs') throw new Error('This slug is reserved for the documentation');
     const existingWorkspace = await prisma.workspace.findFirst({
       where: {
         slug,

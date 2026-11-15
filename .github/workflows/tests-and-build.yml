@@ -75,3 +75,9 @@ jobs:
           done
           curl -sf http://127.0.0.1:3999/docs/index.md | cmp - content/docs/index.md
           curl -sf http://127.0.0.1:3999/docs.md | cmp - content/docs/index.md
+          curl -sf http://127.0.0.1:3999/docs/cli.md | cmp - content/docs/cli.md
+          # Links elsewhere in the app and on other sites point at these headings of the CLI page.
+          curl -sf http://127.0.0.1:3999/docs/cli > docs-cli.html
+          for id in installation authentication workflow agents commands; do
+            grep -q "id=\"$id\"" docs-cli.html || { echo "/docs/cli has no heading with the id $id"; exit 1; }
+          done
