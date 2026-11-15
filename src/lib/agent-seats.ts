@@ -51,8 +51,8 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
     where: { projectId: input.projectId, role: input.role, retiredAt: null, userId: { not: account.id } }, select: { id: true, isDefault: true },
   });
   if (input.role === 'release' && others.length) throw new HandoffError('release_seat_exists', 'This project already has a release seat; retire it first', 409);
-  const isDefault = !!input.isDefault || (same && existing!.isDefault) || !others.some(seat => seat.isDefault);
-  if (isDefault) await tx.agentSeat.updateMany({ where: { id: { in: others.filter(seat => seat.isDefault).map(seat => seat.id) } }, data: { isDefault: false } });
+  const isDefault = same ? existing.isDefault : !!input.isDefault || !others.some(seat => seat.isDefault);
+  if (!same && isDefault) await tx.agentSeat.updateMany({ where: { id: { in: others.filter(seat => seat.isDefault).map(seat => seat.id) } }, data: { isDefault: false } });
   const data = { workspaceId: input.workspaceId, projectId: input.projectId, role: input.role, ownerId: same ? existing.ownerId : input.ownerId,
     name: account.name ?? input.name.trim(), isDefault, retiredAt: null };
   const seat = await tx.agentSeat.upsert({ where: { userId: account.id }, create: { ...data, userId: account.id }, update: data });

@@ -103,6 +103,10 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
   await t.test('the first active seat of a role in a project is its default; a token minted again under the name is the same seat', async () => {
     const second = await seat('dev-a2', A, 'developer');
     assert.equal(second.isDefault, false);
+    const rotated = await seat('dev-a2', A, 'developer', { isDefault: true });
+    assert.equal(rotated.isDefault, false);
+    assert.equal((await prisma.agentSeat.findUniqueOrThrow({ where: { id: devA.id } })).isDefault, true);
+    assert.equal((await seat('dev-a', A, 'developer')).isDefault, true);
     const again = await tokens.createAgentToken({ workspaceId: 'w', actorId: owner, name: 'dev-a', access: 'write', expiresInDays: 30 });
     assert.notEqual(again.token, devA.token);
     assert.equal((await send(seatsMe.GET, again.token, 'GET')).body.seat.id, devA.id);
@@ -206,6 +210,15 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
       const denied = await send(item.PATCH, devA.token, 'PATCH', { body: { parentId }, params: { issueIdOrKey: mine.id } });
       assert.equal(denied.body.error, 'wrong_project');
     }
+    await prisma.issue.update({ where: { id: theirs.id }, data: { deletedAt: new Date() } });
+    const { Prisma } = require('@prisma/client');
+    const visible = prisma.$extends(load('src/lib/issue-visibility.ts').issueVisibilityExtension(Prisma.dmmf.datamodel.models));
+    const visibleItem = load('src/app/api/apps/auth/issues/[issueIdOrKey]/route.ts', { ...deps, '@/lib/prisma': { prisma: visible, issueTrashPrisma: prisma } }, globals);
+    for (const parentId of [null, mine.id]) {
+      const denied = await send(visibleItem.PATCH, devA.token, 'PATCH', { body: { parentId }, params: { issueIdOrKey: mine.id } });
+      assert.equal(denied.body.error, 'wrong_project');
+    }
+    await prisma.issue.update({ where: { id: theirs.id }, data: { deletedAt: null } });
     // A person's token still may, as today.
     const byPerson = await send(relations.POST, personToken, 'POST', { body: { targetIssueId: theirs.id, relationType: 'BLOCKS' }, params: { issueIdOrKey: mine.id } });
     assert.equal(byPerson.status, 201, JSON.stringify(byPerson.body));
