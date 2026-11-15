@@ -235,8 +235,8 @@ test('/docs/cli keeps the ids existing links use, and the command list follows i
 
 test('/docs/cli still says how to install, sign in and where credentials stop', async () => {
   const { visit } = await site(repo);
-  // The words of the page: code is split into highlighting elements, and quotes are written as entities.
-  const words = renderToStaticMarkup(await visit('cli')).replace(/<[^>]+>/g, '');
+  // The words of the page without its elements: code is split into highlighting elements.
+  const words = require('isomorphic-dompurify').sanitize(renderToStaticMarkup(await visit('cli')), { ALLOWED_TAGS: [] });
   for (const text of [
     'curl -fsSL https://collab.weez.boo/install.sh', 'irm https://collab.weez.boo/install.ps1', 'collab --help',
     'npm install --global ./packages/cli', 'Node.js 22', 'collab auth login', 'collab inbox wait', '--wait-seconds',
