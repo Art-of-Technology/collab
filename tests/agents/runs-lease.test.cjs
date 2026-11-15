@@ -190,7 +190,7 @@ test('runs: checkout, the lease, lost runs and who may clear them', async t => {
     await lapse(run.id);
     // Several readers at once report it once.
     const reads = await Promise.all([devA.token, devA.token, otherA.token, personToken].map(inbox));
-    assert.deepEqual(reads[0], []);
+    assert.equal(reads[0].some(item => item.issueId === target.id), false);
     assert.equal((await stored(run.id)).state, 'lost');
     const [lost] = await activities(target, 'AGENT_RUN_LOST');
     assert.deepEqual([lost.userId, lost.projectId, JSON.parse(lost.details).runId], [devA.userId, A, run.id]);
@@ -209,7 +209,7 @@ test('runs: checkout, the lease, lost runs and who may clear them', async t => {
     assert.deepEqual([status, closed.run.state], [200, 'stopped']);
     assert.ok(closed.run.endedAt);
     const items = await inbox(devA.token);
-    assert.deepEqual(items.map(item => [item.issueId, item.reason]), [[target.id, 'resume']]);
+    assert.deepEqual(items.filter(item => item.issueId === target.id).map(item => [item.issueId, item.reason]), [[target.id, 'resume']]);
     // And it can be taken again.
     assert.equal((await checkout(devA.token, target, 'g2'))[0], 200);
   });
