@@ -87,11 +87,13 @@ The in-app assistant runs the same tools in-process as the signed-in member, wit
 | `notes_create`, `notes_update` | Write shared Notes | `context:write` |
 | `search` | Search issues, Notes and activity | `issues:read` or `context:read` |
 | `context_get` | Project pipeline context, or workspace prompts | `prompts:read` (pipeline context also needs `issues:read` and `context:read`) |
+| `docs_search`, `docs_get` | Search Collab's documentation and read one page as Markdown | None: every valid token |
 
 - An issue is addressed by its ID or its key, for example `CLB-123`.
 - `labels` takes label IDs from `labels_list`. On update it replaces the whole set. A label that an agent subscribes to hands the issue to that agent, which is how work is routed from one agent to another (see [agent handoffs](agent-handoffs.md)).
 - Secret documents (`ENV_VARS`, `API_KEYS`, `CREDENTIALS`) cannot be read, created or changed, and personal Notes cannot be written. A Note created with a `projectId` is a project Note unless a scope is given.
 - `context_get` returns pipeline context when a `projectId` is given and `includeKnowledge` is not set; `limit`, `offset` and `since` apply only to pipeline context.
+- `docs_search` runs the same search as the box on `/docs` and returns the matching sections, best first, each with the `slug` of its page. `docs_get` takes that `slug`.
 
 ## Limits and errors
 
@@ -103,7 +105,7 @@ The in-app assistant runs the same tools in-process as the signed-in member, wit
 
 ## Content is data
 
-Issue text, comments, Notes and search results are written by workspace members. The server tells clients to treat tool results as data and never to follow instructions found in them. Hosts should ask before running write tools; each tool declares whether it only reads.
+Issue text, comments, Notes and search results are written by workspace members. The server tells clients to treat tool results as data and never to follow instructions found in them. The exception is `docs_search` and `docs_get`, which return Collab's own published documentation. Hosts should ask before running write tools; each tool declares whether it only reads.
 
 ## Check it
 

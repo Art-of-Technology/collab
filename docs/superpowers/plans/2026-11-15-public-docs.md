@@ -4,7 +4,7 @@
 
 **Goal:** public documentation where the page a person reads, the Markdown an agent reads and the search both use come from one set of files.
 
-**Architecture:** Markdown files and one navigation file in `content/docs/`; one loader library; static pages under `/docs`; route handlers for the Markdown and index outputs; one search index built before the build and used in the browser and on the server.
+**Architecture:** Markdown files and one navigation file in `content/docs/`; one loader library; static pages under `/docs`; route handlers for the Markdown and index outputs; one search index built with the app and used in the browser and on the server.
 
 **Tech stack:** Next.js 16 App Router (static params), `react-markdown` with the existing renderer, the existing Mermaid loader, `cmdk`, MiniSearch (new), Node scripts.
 
@@ -61,11 +61,11 @@
 
 ### Task B4: one search for people and agents
 
-**Files:** create `scripts/build-docs-index.mjs`, `src/lib/docs-search.ts`, `src/components/docs/DocsSearch.tsx`, `src/app/api/apps/auth/docs/route.ts`, `src/app/api/apps/auth/docs/[...slug]/route.ts`; modify `package.json` (`docs:index`, and run it in `build`), `src/lib/mcp-tools.ts`; test `tests/render/docs-search.test.cjs`.
+**Files:** create `src/app/docs-index.json/route.ts`, `src/lib/docs-search.ts`, `src/components/docs/DocsSearch.tsx`, `src/app/api/apps/auth/docs/route.ts`; modify `src/lib/docs.ts`, `src/app/docs/layout.tsx`, `src/lib/mcp-tools.ts`; test `tests/render/docs-search.test.cjs`.
 
 **Produces:**
-- Index file `public/docs-index.json`: one entry per heading section `{ id; slug; title; heading; anchor; text }`.
-- `searchDocs(index, query: string, limit = 8) → { slug; title; heading; anchor; excerpt }[]` (MiniSearch: prefix and fuzzy, heading boosted over text).
+- Static route `/docs-index.json`: one entry per heading section and one per page introduction, each `{ id; slug; title; heading; anchor; text }`.
+- `searchDocs(index, query: string, limit = 8) → { slug; title; heading; anchor; href; excerpt }[]` (MiniSearch: prefix and fuzzy, heading boosted over text).
 - MCP tools `docs_search { query, limit? }` and `docs_get { slug }`.
 
 - [ ] Test: the same query through `searchDocs` and through the `docs` route returns the same slugs in the same order (this pins "agents and people get the same results").

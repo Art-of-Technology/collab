@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { lexer, type Token } from 'marked';
+import { lexer, type Token, type Tokens } from 'marked';
 import DOMPurify from 'isomorphic-dompurify';
+import type { DocsIndexEntry } from '@/lib/docs-search';
 
 // Published documentation: Markdown files in content/docs, listed in content/docs/nav.json.
 // The page, the plain Markdown, the index files, the search and the MCP tools all read it through here,
@@ -95,4 +96,32 @@ export function docsNav(): DocsNavSection[] {
 
 export function allDocs(): DocPage[] {
   return navSlugs().flatMap(section => section.pages.map(listed));
+}
+
+// All the words of a block, code included, so a term that only occurs in an example still finds its section.
+const blockWords = (token: Token): string =>
+  token.type === 'list' ? (token as Tokens.List).items.map(blockWords).join(' ')
+  : token.type === 'table' ? [...(token as Tokens.Table).header, ...(token as Tokens.Table).rows.flat()].map(cell => words(cell.tokens)).join(' ')
+  : token.type === 'list_item' || token.type === 'blockquote' ? (token.tokens ?? []).map(blockWords).join(' ')
+  : words([token]);
+
+/**
+ * What the search runs on: every navigation page cut at its headings, one entry per section and one for the part
+ * above the first heading. The anchors are the page's own heading ids, so a hit lands on its heading.
+ */
+export function docsIndex(): DocsIndexEntry[] {
+  return allDocs().flatMap(page => {
+    const entry = (heading: string, anchor: string): DocsIndexEntry =>
+      ({ id: docHref(page.slug) + (anchor && `#${anchor}`), slug: page.slug, title: page.title, heading, anchor, text: '' });
+    const entries = [entry(page.title, '')];
+    let next = 0;
+    for (const token of lexer(page.markdown)) {
+      if (token.type === 'heading' && token.depth === 1) continue;
+      if (token.type === 'heading' && (token.depth === 2 || token.depth === 3)) {
+        const heading = page.headings[next++];
+        entries.push(entry(heading.text, heading.id));
+      } else entries.at(-1)!.text += ` ${blockWords(token)}`;
+    }
+    return entries.map(row => ({ ...row, text: row.text.replace(/\s+/g, ' ').trim() }));
+  });
 }
