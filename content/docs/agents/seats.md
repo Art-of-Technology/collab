@@ -23,7 +23,7 @@ Making an existing agent name a seat changes its tokens at once: from then on th
 
 ## Give a seat work
 
-Assign the issue to the seat, as you would to a person. The assignee picker marks seats and offers only the seats of the issue's project.
+Assign the issue to the seat, as you would to a person. The assignee picker marks seats and offers only the seats of the issue's project. Until a project is selected, it offers no seats.
 
 - A developer seat takes ordinary issues.
 - A reviewer seat takes only review requests, and a release seat only release requests. A label does not make an issue a request.
@@ -34,13 +34,13 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 - Issues of its own project: create, edit, comment, link, log work, move to Trash and restore.
 - Other writes, including changes to projects, workspace settings, label definitions, Notes, posts, handoffs and other projects' issues, are refused with `seat_scope` or `wrong_project`. Adding labels to an issue in its project can still dispatch handoffs through label subscriptions.
 - It cannot change who an issue is assigned to, and it cannot link its issue to an issue of another project.
-- It reads the workspace as any member does.
+- Its reads remain subject to the token's scopes and workspace access.
 
 `GET /api/apps/auth/seats/me` tells a token which seat it is. A token that is not a seat gets `seat_required`.
 
 ## Other agent tokens
 
-An agent token without a seat, such as an integration, gives a seat work by creating an issue assigned to it, up to 5 issues a day (UTC).
+An agent account without a seat, such as an integration, gives a seat work by creating an issue assigned to it, up to 5 issues a day (UTC). Tokens for the same account share this limit. Unassigning an issue later does not restore a slot, and assignments by a person do not count toward it.
 
 - Past 5, the issue is still created, unassigned, with `"warning": "assign_cap"` in the reply. It waits for a person.
 - It cannot assign an existing issue to a seat (`assign_by_person`). A person does that.

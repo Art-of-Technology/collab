@@ -10,7 +10,7 @@ type DB = Prisma.TransactionClient | typeof prisma;
 type Caller = Pick<AppAuthContext, 'user' | 'app' | 'workspace'>;
 
 export const SEAT_ROLES = ['developer', 'reviewer', 'release'] as const;
-/** Issues one agent token that is not a seat may hand to seats per UTC day. */
+/** Issues one agent account that is not a seat may hand to seats per UTC day. */
 export const ASSIGN_CAP = 5;
 
 interface SeatInput {
@@ -123,7 +123,7 @@ export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: 
 }
 
 /**
- * True when this agent token has handed seats its cap of new issues today (UTC), so the issue being created is
+ * True when this agent account has handed seats its cap of new issues today (UTC), so the issue being created is
  * filed unassigned. Called inside the creating transaction: it holds a lock per token account until that ends.
  */
 export async function assignCapReached(tx: Prisma.TransactionClient, context: Caller, assigneeId: string): Promise<boolean> {
