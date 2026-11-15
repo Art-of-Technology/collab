@@ -206,7 +206,7 @@ Second migration: table `AgentRoutine { id, workspaceId, projectId, seatId, titl
 
 ### Task A11: close out the old issues
 
-- CLB-445: its remaining two-computer proof moves to the separate runner runner plan; close with that note.
+- CLB-445: its remaining two-computer proof moves to the separate runner's plan; close with that note.
 - CLB-447, 449, 454: resolved by design (the owning seat keeps the issue through review); close after the Collab project has switched and one review request has gone round.
 - CLB-448, 450, 451, 452, 453: the one-release-seat rule covers the Collab side; the deployment lock on the target and the Sportsbook pilot stay open and are re-scoped to "after Sportsbook switches".
 - CLB-471: closed by A7 (idle warning) and A9; "release agent on a server" moves to the separate runner's plan.
