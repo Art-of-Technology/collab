@@ -2,7 +2,9 @@
 const nextConfig = {
   // Enable standalone output for Docker optimization
   output: 'standalone',
-  
+  // Published docs are read from disk at run time (src/lib/docs.ts); standalone output ships only the files it traced.
+  outputFileTracingIncludes: { '/**': ['./content/docs/**/*'] },
+
   webpack: (config, { isServer }) => {
     if (!isServer) {
       // Don't attempt to load these server-only modules on the client
