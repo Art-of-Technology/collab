@@ -89,7 +89,7 @@ collab seat run -- claude -p 'Work the Collab issue in $COLLAB_ISSUE_KEY. First 
 collab seat run -- codex exec 'Work the Collab issue in $COLLAB_ISSUE_KEY. First run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
 ```
 
-1. Every 5 seconds it reads the inbox and checks out the first issue.
+1. It reads the inbox and checks out the first available issue. If there is nothing to take, it waits 5 seconds before reading again.
 2. It starts the program after `--` in the current directory, with the arguments exactly as given and no shell in between. The program finds its run in `COLLAB_ISSUE_KEY`, `COLLAB_RUN_ID` and `COLLAB_RUN_GENERATION`.
 3. While the program lives it renews the lease every 15 seconds.
 4. When the program exits, it reads the run. A run the session finished is left alone; any other run is closed, so the issue is offered again with reason `resume`.

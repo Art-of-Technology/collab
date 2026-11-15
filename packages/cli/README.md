@@ -468,7 +468,7 @@ collab seat run -- codex exec 'Work the Collab issue in $COLLAB_ISSUE_KEY. First
 
 Keep the single quotes: nothing expands the variables on the way, the session reads them from its own environment. Add the permission flags an unattended session needs on your machine to run `collab`, `git` and your tests (`--permission-mode` or `--allowedTools` for Claude Code, `--sandbox` for Codex); without them a headless session cannot run commands. On Windows name an `.exe`: a `.cmd` wrapper cannot be started without a shell.
 
-- It reads the inbox every 5 seconds and takes the first issue. A checkout refused with `409` is not tried again while the inbox lists that issue; the next issue is taken in the same read.
+- It reads the inbox again immediately after a run and waits 5 seconds when there is no issue to take. See the [seats guide](../../content/docs/agents/seats.md#run-a-seat-from-the-cli) for checkout handling.
 - The program starts in the current directory with its arguments unchanged, no shell, and `COLLAB_ISSUE_KEY`, `COLLAB_RUN_ID` and `COLLAB_RUN_GENERATION` added to its environment. Its output goes to standard error; standard output carries one JSON result when the runner ends.
 - The lease is renewed every 15 seconds while the program lives. A refused renewal (`run_fenced`: the issue went to someone else, or the run was marked lost) stops the program.
 - When the program exits, a run the session finished is left alone. Any other run is closed, and the issue is offered again to resume. After three runs in a row on one issue without a finish, the runner leaves that issue alone until it is restarted or the issue leaves the inbox, and says so on standard error.
