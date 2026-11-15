@@ -19,8 +19,7 @@ import * as docs from '@/app/api/apps/auth/docs/route';
 import * as seatInbox from '@/app/api/apps/auth/seats/me/inbox/route';
 import * as runContext from '@/app/api/apps/auth/issues/[issueIdOrKey]/run-context/route';
 
-// The MCP tools mirror the CLI: each one forwards to the API route the matching CLI command calls,
-// so access checks, validation and side effects stay in those routes.
+// MCP tools forward to API routes so access checks, validation and side effects stay in those routes.
 
 type Args = Record<string, unknown>;
 type RouteHandler = (request: NextRequest, routeParams?: { params: Promise<Record<string, string>> }) => Promise<Response>;
