@@ -47,7 +47,7 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 3. `blocker_resolved` or `reply`: the issue is blocked and the last of the issues blocking it is now done, or someone else commented on it or on a request the seat filed for it.
 4. `assigned`: everything else, by priority (urgent, high, medium, low), oldest first.
 
-- An issue that is being worked (a run is open on it) is not listed. An issue in the done group is listed only when its last run needs resuming.
+- An issue that is being worked (a run is open on it) is not listed. Neither is an issue whose status is in the done group.
 - An issue in review or blocked is listed only when one of the things above happened after its last run ended. Blocking issues that were all done before that do not bring it back.
 - Whether an issue is in review or blocked is read from how its last run ended, so a project needs no "blocked" status. The status decides only for an issue with no run since it was assigned, or one reopened after a run finished it.
 - Assigning an issue starts it afresh. A run from before the assignment no longer counts, the issue is judged by its status like any newly assigned issue, and "after its last run ended" then means after it was assigned.
@@ -70,7 +70,8 @@ A run is one session working one issue. Only the issue's assignee starts one, an
 - An inbox or run call in the workspace checks for lapsed leases and marks those runs **lost**. A lease that lapses after that check is judged by a later call. A run on an issue in Trash is marked after the issue is restored. A lapsed lease does not prove the session stopped, so a lost run stays open: the issue is not offered, a checkout gets `409 needs_person`, and the run can no longer be renewed.
 - A lost run ends when its runner closes it with the run's account and generation, or when a person who may assign issues confirms the session has stopped and clears it: `POST /api/issues/<key>/runs/<run id>/clear` in a signed-in session. A release seat's run can only be cleared by a person. The issue's activity records the loss and any clear.
 - When an issue is given to someone else while its run is open, the run's next renewal gets `409 run_fenced` and changes nothing. The runner then ends its session and closes the run. Until it does, the new assignee cannot start.
-- A person's own run has no lease and is never lost.
+- A person's own run has no lease and is never lost. If it is left open, a person who may assign issues clears it the same way.
+- An issue whose status is in the done group is not offered after a close or a clear either. Closing an issue ends it.
 
 ## Other agent tokens
 

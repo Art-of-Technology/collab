@@ -276,30 +276,29 @@ test('runs: checkout, the lease, lost runs and who may clear them', async t => {
     await raw.agentRun.update({ where: { id: run.id }, data: { startedAt: ago(86_400) } });
     await inbox(personToken);
     assert.equal((await stored(run.id)).state, 'running');
-    const previous = ago(100);
-    await raw.issue.update({ where: { id: target.id }, data: { statusId: `${A}-done`, firstStartedAt: null, lastProgressAt: previous } });
+    // Starting again changes nothing, on the run or on the issue.
+    const before = await raw.issue.update({ where: { id: target.id }, data: { statusId: `${A}-in_review` } });
     const [again, second] = await checkout(personToken, target, 'g2');
     assert.deepEqual([again, second.run.id, second.run.generation], [200, run.id, 'g1']);
-    const progressed = await raw.issue.findUniqueOrThrow({ where: { id: target.id } });
-    assert.equal(progressed.statusId, `${A}-in_progress`);
-    assert.ok(progressed.firstStartedAt && progressed.lastProgressAt > previous);
-    assert.equal((await activities(target, 'STATUS_CHANGED')).length, 2);
+    assert.deepEqual(await raw.issue.findUniqueOrThrow({ where: { id: target.id } }), before);
+    assert.equal((await activities(target, 'STATUS_CHANGED')).length, 1);
     assert.deepEqual([(await act(personToken, run.id, 'renew'))[0], (await stored(run.id)).leaseUntil], [200, null]);
     assert.equal((await act(personToken, run.id, 'close'))[1].run.state, 'stopped');
   });
 
-  await t.test('closed and cleared runs on done issues are offered to resume', async () => {
-    const closed = await issue(devB, { status: 'done' });
-    const first = (await checkout(devB.token, closed))[1].run;
-    assert.equal((await act(devB.token, first.id, 'close'))[0], 200);
-    assert.equal((await inbox(devB.token)).find(item => item.issueId === closed.id)?.reason, 'resume');
-
-    const cleared = await issue(devA);
-    const second = (await checkout(devA.token, cleared))[1].run;
-    await raw.issue.update({ where: { id: cleared.id }, data: { statusId: `${A}-done` } });
-    await lapse(second.id);
-    assert.equal((await clear(cleared, second.id))[0], 200);
-    assert.equal((await inbox(devA.token)).find(item => item.issueId === cleared.id)?.reason, 'resume');
+  await t.test("a person's run that was left open is cleared by a person who may assign, since it can never become lost", async () => {
+    const target = await issue(person);
+    const { run } = (await checkout(personToken, target))[1];
+    await raw.issue.update({ where: { id: target.id }, data: { assigneeId: devA.userId } });
+    await refused(checkout(devA.token, target), 409, 'already_running');
+    session = viewer;
+    await refused(clear(target, run.id), 403, 'forbidden');
+    session = owner;
+    const [status, cleared] = await clear(target, run.id);
+    session = person;
+    assert.deepEqual([status, cleared.run.state], [200, 'stopped']);
+    assert.equal((await activities(target, 'AGENT_RUN_CLEARED'))[0].userId, owner);
+    assert.equal((await checkout(devA.token, target))[0], 200);
   });
 
   await t.test('rejected checkout sweeps lapsed runs in the workspace', async () => {
