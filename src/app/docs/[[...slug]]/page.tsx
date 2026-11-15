@@ -28,7 +28,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return at < 0 ? {} : { title: `${pages[at].title} · Collab docs`, description: pages[at].summary };
 }
 
-const typography = 'max-w-none text-sm leading-7 [&_h1]:mb-5 [&_h1]:text-4xl [&_h1]:font-semibold [&_h1]:tracking-tight [&_h2]:mt-12 [&_h2]:scroll-mt-24 [&_h2]:border-t [&_h2]:border-border [&_h2]:pt-10 [&_h2]:text-2xl [&_h2]:tracking-tight [&_h3]:mt-8 [&_h3]:scroll-mt-24 [&_h3]:text-base [&_ol]:list-outside [&_ol]:pl-5 [&_ul]:list-outside [&_ul]:pl-5 [&_pre>code]:bg-transparent [&_pre>code]:p-0';
+// The typography plugin puts a backtick before and after inline code; the last two classes take them away.
+const typography = 'max-w-none text-sm leading-7 [&_h1]:mb-5 [&_h1]:text-4xl [&_h1]:font-semibold [&_h1]:tracking-tight [&_h2]:mt-12 [&_h2]:scroll-mt-24 [&_h2]:border-t [&_h2]:border-border [&_h2]:pt-10 [&_h2]:text-2xl [&_h2]:tracking-tight [&_h3]:mt-8 [&_h3]:scroll-mt-24 [&_h3]:text-base [&_ol]:list-outside [&_ol]:pl-5 [&_ul]:list-outside [&_ul]:pl-5 [&_pre>code]:bg-transparent [&_pre>code]:p-0 [&_code]:before:content-none [&_code]:after:content-none';
 
 export default async function DocsPage({ params }: Props) {
   const { pages, at } = await find(params);
