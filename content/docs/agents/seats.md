@@ -59,7 +59,7 @@ A run is one session working one issue. Only the issue's assignee starts one, an
 
 1. Take the issue: `POST /api/apps/auth/runs` with `{ "issue": "<key>", "generation": "<a value this session makes up>", "runner": "<what runs the session>" }`. The reply contains `run`, with its `id` and, for a seat, `leaseUntil`.
 2. While the session lives, renew the lease: `PATCH /api/apps/auth/runs/<id>` with `{ "event": "renew", "generation": "<the same value>" }`. A seat's lease lasts 60 seconds from each renewal.
-3. When the session is gone without having finished, say so: the same call with `"event": "close"`. The run ends as `stopped` and the issue is offered again with reason `resume`. A release seat cannot close an unfinished run; a person must clear it after its lease lapses.
+3. When the session is gone without having finished, say so: the same call with `"event": "close"`. The run ends as `stopped` and the issue can be offered again with reason `resume`, subject to the inbox rules above. A release seat cannot close an unfinished run; a person must clear it after its lease lapses.
 
 `GET /api/apps/auth/runs/<id>` returns the caller's own run.
 
@@ -67,9 +67,9 @@ A run is one session working one issue. Only the issue's assignee starts one, an
 - A second checkout of an issue with a live run gets `409 already_running`. Do not try it again: take the next issue. Only a person starting again on their own open run gets that run back, with its original generation.
 - An agent token that is not a seat takes no issue (`seat_required`).
 - An issue assigned to someone else gets `not_assigned`, also between a seat and a person. A seat takes only issues of its project.
-- An inbox or run call in the workspace checks for lapsed leases and marks those runs **lost**. A lease that lapses after that check is judged by a later call. A run on an issue in Trash is marked after the issue is restored. A lapsed lease does not prove the session stopped, so a lost run stays open: the issue is not offered, a checkout gets `409 needs_person`, and the run can no longer be renewed.
+- An inbox read or a valid run request checks the workspace for lapsed leases and marks those runs **lost**. A clear checks only after the person is authorized to clear that run. A lease that lapses after the check is judged by a later call. A run on an issue in Trash is marked after the issue is restored. A lapsed lease does not prove the session stopped, so a lost run stays open: the issue is not offered, a checkout gets `409 needs_person`, and the run can no longer be renewed.
 - A lost run ends when its runner closes it with the run's account and generation, or when a person who may assign issues confirms the session has stopped and clears it: `POST /api/issues/<key>/runs/<run id>/clear` in a signed-in session. A release seat's run can only be cleared by a person. The issue's activity records the loss and any clear.
-- When an issue is given to someone else while its run is open, the run's next renewal gets `409 run_fenced` and changes nothing. The runner then ends its session and closes the run. Until it does, the new assignee cannot start.
+- When an issue is given to someone else while its run is open, the run's next renewal gets `409 run_fenced` and changes nothing. The runner then ends its session and closes the run; a release seat's run must instead be cleared by a person after it is lost. Until the run ends, the new assignee cannot start.
 - A person's own run has no lease and is never lost. If it is left open, a person who may assign issues clears it the same way.
 - An issue whose status is in the done group is not offered after a close or a clear either. Closing an issue ends it.
 

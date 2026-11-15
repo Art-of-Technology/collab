@@ -121,7 +121,7 @@ const fenced = () => new HandoffError('run_fenced', 'This run is no longer the o
 
 /**
  * Rule 5: a seat's run whose lease lapsed is lost, and stays open, because a lapsed lease does not prove the session
- * stopped. Every inbox read and run call starts with this sweep, and it is the one place a lease is judged: what
+ * stopped. Inbox reads and valid run calls start with this sweep; an authorized clear also sweeps. It is the one place a lease is judged: what
  * follows in the call reads the run's state. A lease that lapses after the sweep is judged by the next call's sweep.
  * A person's run has no lease and is never lost.
  */
@@ -164,7 +164,7 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
       await seatWriteGuard(tx, context, issue.projectId);
       if (issue.assigneeId !== me) throw new HandoffError('not_assigned', 'Only the assignee of an issue starts a run on it', 403);
       const seat = await seatFor(tx, context);
-      // Runs are for seats and for people. An agent token without a seat would hold a run with no lease that nobody could clear.
+      // Runs are for seats and people; an agent without a seat would hold a run without a lease.
       if (!seat && context.app.slug === AGENT_APP_SLUG) throw new HandoffError('seat_required', 'An agent token takes an issue only as a seat', 403);
       const open = await tx.agentRun.findFirst({ where: { issueId: issue.id, endedAt: null }, select: { ...RUN, userId: true } });
       if (open) {
@@ -233,7 +233,7 @@ export async function actOnRun(context: Caller, runId: string, input: z.infer<ty
 }
 
 /**
- * A person with the assign permission confirms a run's session is gone, so its issue is offered again: a lost run,
+ * A person with the assign permission confirms a run's session is gone: a lost run,
  * or a person's run, which has no lease and so would otherwise stay open for good once it is abandoned.
  */
 export async function clearRun(userId: string, issueIdOrKey: string, runId: string) {
