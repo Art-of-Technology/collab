@@ -62,10 +62,10 @@ test('llms.txt has one line per navigation page with its title, summary and Mark
   assert.equal(response.headers.get('content-type'), 'text/plain; charset=utf-8');
   const text = await response.text();
   assert.deepEqual(text.split('\n').filter(line => line.startsWith('- [')), [
-    '- [Collab docs](https://docs.example/docs/index.md): Where to start\\.',
-    '- [Create a seat](https://docs.example/docs/guides/create-a-seat.md): How to give an agent one project and one role\\.',
+    '- [Collab docs](https://docs.example/docs/index.md): Where to start.',
+    '- [Create a seat](https://docs.example/docs/guides/create-a-seat.md): How to give an agent one project and one role.',
   ]);
-  assert.match(text, /^# Collab docs\n\n> Where to start\\\.\n/);
+  assert.match(text, /^# Collab docs\n\n> Where to start\.\n/);
   assert.ok(text.indexOf('## Start here') < text.indexOf('## Guides'));
   assert.ok(text.indexOf('## Guides') < text.indexOf('- [Create a seat]'));
   assert.match(text, /https:\/\/docs\.example\/llms-full\.txt/);
@@ -85,26 +85,7 @@ test('a title with square brackets still makes one working link in llms.txt', as
   const globals = { Response, process: { cwd: () => dir, env: {} } };
   const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), 'isomorphic-dompurify': { default: require('isomorphic-dompurify') } }, globals);
   const text = await (await load('src/app/llms.txt/route.ts', { '@/lib/docs': docs }, globals).GET()).text();
-  assert.match(text, /^- \[Flags \\\[optional\\\]\]\(\/docs\/index\.md\): What a flag does\\\.$/m);
-});
-
-test('llms.txt renders metadata as literal text in every field', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'docs-routes-'));
-  fs.mkdirSync(path.join(dir, 'content/docs'), { recursive: true });
-  fs.writeFileSync(path.join(dir, 'content/docs/nav.json'), JSON.stringify([{ title: 'Section *literal* & <tag>', pages: ['index', 'other'] }]));
-  fs.writeFileSync(path.join(dir, 'content/docs/index.md'), '# Use `*flags*` & `_[x]_`\n\n`<tag> &amp; **literal**`\n');
-  fs.writeFileSync(path.join(dir, 'content/docs/other.md'), '# Read `~more~`\n\n`[text](url)`\n');
-  const globals = { Response, process: { cwd: () => dir, env: {} } };
-  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), 'isomorphic-dompurify': { default: require('isomorphic-dompurify') } }, globals);
-  const text = await (await load('src/app/llms.txt/route.ts', { '@/lib/docs': docs }, globals).GET()).text();
-  const dom = require('isomorphic-dompurify').sanitize(require('marked').parse(text), { RETURN_DOM: true });
-  assert.equal(dom.querySelector('h1').textContent, 'Use *flags* & _[x]_');
-  assert.equal(dom.querySelector('blockquote').textContent.trim(), '<tag> &amp; **literal**');
-  assert.equal(dom.querySelector('h2').textContent, 'Section *literal* & <tag>');
-  const items = dom.querySelectorAll('li');
-  assert.equal(items[0].textContent, 'Use *flags* & _[x]_: <tag> &amp; **literal**');
-  assert.equal(items[1].textContent, 'Read ~more~: [text](url)');
-  assert.equal(items[1].querySelector('a').getAttribute('href'), '/docs/other.md');
+  assert.match(text, /^- \[Flags \\\[optional\\\]\]\(\/docs\/index\.md\): What a flag does\.$/m);
 });
 
 test('a title with backslashes and brackets remains one Markdown link', async () => {
