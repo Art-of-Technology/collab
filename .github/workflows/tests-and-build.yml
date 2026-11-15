@@ -39,6 +39,9 @@ jobs:
       - run: npm ci --legacy-peer-deps
       # Errors fail the check. Warnings do not: main had 56 of them when this was added.
       - run: npm run lint
+      # The published docs: no dead link or missing heading, every page in the navigation, every `collab` command real,
+      # and the two generated reference pages in step with the code (`npm run docs:reference` rewrites them).
+      - run: npm run docs:check
   production-build:
     name: production build
     runs-on: ubuntu-latest
@@ -69,7 +72,7 @@ jobs:
         run: |
           PORT=3999 HOSTNAME=127.0.0.1 node .next/standalone/server.js &
           for attempt in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:3999/docs && break; sleep 1; done
-          for address in /docs /docs/cli /llms.txt /llms-full.txt /docs-index.json; do
+          for address in /docs /docs/cli /docs/reference/cli-commands /docs/reference/mcp-tools /llms.txt /llms-full.txt /docs-index.json; do
             status=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3999$address")
             [ "$status" = 200 ] || { echo "$address answered $status, not 200"; exit 1; }
           done

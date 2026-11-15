@@ -60,7 +60,7 @@ async function renderer() {
 
 const component = (file, dependencies = {}, globals = {}) => load(file, { react: React, 'react/jsx-runtime': jsx, ...dependencies }, globals);
 
-// The page on the real loader and renderer; only the command list and the diagram drawing are stand-ins.
+// The page on the real loader and renderer; only the diagram drawing is a stand-in.
 async function site(root) {
   const docs = docsIn(root);
   const copy = component('src/components/docs/CopyMarkdownButton.tsx');
@@ -73,7 +73,6 @@ async function site(root) {
     '@/components/docs/OnThisPage': component('src/components/docs/OnThisPage.tsx'),
     '@/components/docs/CopyMarkdownButton': copy,
     '@/components/docs/DocsDiagrams': component('src/components/docs/DocsDiagrams.tsx', { '@/lib/mermaid-diagrams': { renderDiagrams() {} } }),
-    '../command-reference': { CommandReference: () => jsx.jsx('div', { id: 'command-list', children: 'Every command' }) },
   });
   const visit = slug => page.default({ params: Promise.resolve({ slug: slug ? slug.split('/') : undefined }) });
   return { docs, page, copy, visit };
@@ -219,7 +218,7 @@ test('a page\'s browser title and description are its title and summary', async 
   assert.equal(metadata.description, 'How to give an agent one project and one role.');
 });
 
-test('/docs/cli keeps the ids existing links use, and the command list follows its last heading', async () => {
+test('/docs/cli keeps the ids existing links use, and its last section leads to the command reference', async () => {
   const { visit } = await site(repo);
   const html = renderToStaticMarkup(await visit('cli'));
   const found = ids(html);
@@ -228,9 +227,8 @@ test('/docs/cli keeps the ids existing links use, and the command list follows i
   }
   assert.equal(new Set(found).size, found.length, 'ids must be unique');
   for (const [, target] of html.matchAll(/href="#([^"]+)"/g)) assert.ok(found.includes(target), target);
-  assert.ok(html.lastIndexOf('<h2 ') < html.indexOf('id="command-list"'), 'the command list comes after the Markdown');
   assert.equal(html.lastIndexOf('<h2 '), html.indexOf('<h2 id="commands"'));
-  assert.doesNotMatch(renderToStaticMarkup(await visit()), /id="command-list"/);
+  assert.match(html.slice(html.lastIndexOf('<h2 ')), /<a[^>]*href="\/docs\/reference\/cli-commands"/);
 });
 
 test('/docs/cli still says how to install, sign in and where credentials stop', async () => {

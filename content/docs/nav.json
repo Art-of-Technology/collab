@@ -1,4 +1,5 @@
 [
   { "title": "Start here", "pages": ["index", "cli"] },
-  { "title": "Agents", "pages": ["agents/seats"] }
+  { "title": "Agents", "pages": ["agents/seats"] },
+  { "title": "Reference", "pages": ["reference/cli-commands", "reference/mcp-tools"] }
 ]

@@ -70,6 +70,8 @@ A token is offered only the tools its scopes allow, so a read-only token never s
 
 The in-app assistant runs the same tools in-process as the signed-in member, with a token of its own app (`collab-assistant`). It works only in the chat's workspace: it is not offered the `workspaceId` argument or `workspaces_list`, so text it reads cannot steer it into, or make it list, the member's other workspaces.
 
+The list with every argument is made from the code and published at `/docs/reference/mcp-tools` (`content/docs/reference/mcp-tools.md`).
+
 | Tool | Does | Scope |
 | --- | --- | --- |
 | `whoami` | The account the token acts as | `user:read` or `profile:read` |
