@@ -113,10 +113,10 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
         await assertAssignable(prisma, { workspaceId: existingIssue.workspaceId, projectId, agentRequestRole: existingIssue.agentRequestRole }, body.assigneeId);
       }
       // A seat works one project: an issue that leaves the project leaves the seat too.
-      const unseated = moving && (body.assigneeId === undefined || body.assigneeId === null) && existingIssue.assigneeId
+      const unseated = moving && existingIssue.assigneeId
         ? await tx.agentSeat.findFirst({ where: { userId: existingIssue.assigneeId, projectId: { not: projectId } }, select: { userId: true } })
         : null;
-      if (unseated) updateData.assigneeId = null;
+      if (unseated && !body.assigneeId) updateData.assigneeId = null;
       if (body.reporterId && !await userHasWorkspaceAccess(body.reporterId, existingIssue.workspaceId)) {
         return { error: 'Invalid issue participant', status: 400 };
       }

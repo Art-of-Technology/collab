@@ -19,7 +19,7 @@ The first seat of a role in a project is the default for that role.
 
 To give a seat another token, create a token again under the same name. It belongs to the same seat, whether or not you pick the project again.
 
-Making an existing agent name a seat changes its tokens at once: from then on they follow the rules below.
+Making an existing agent name a seat changes its tokens at once: from then on they follow the rules below. Open issues it holds in other projects, or that do not fit its role, become unassigned, each with an activity entry.
 
 ## Give a seat work
 
@@ -27,7 +27,7 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 
 - A developer seat takes ordinary issues.
 - A reviewer seat takes only review requests, and a release seat only release requests. A label does not make an issue a request.
-- Moving an issue to another project without choosing a replacement assignee unassigns its seat. The issue's activity says why.
+- Moving an issue to another project takes it from its seat. The issue's activity says why.
 
 ## What a seat's token can change
 

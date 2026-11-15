@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { HandoffError } from '@/lib/agent-handoffs';
 import { AGENT_APP_SLUG, createAgentToken } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
+import { SEAT_TAKES } from '@/lib/issue-assignee';
 
 export { HandoffError };
 type DB = Prisma.TransactionClient | typeof prisma;
@@ -56,11 +57,35 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
   const data = { workspaceId: input.workspaceId, projectId: input.projectId, role: input.role, ownerId: input.ownerId,
     name: account.name ?? input.name.trim(), isDefault, retiredAt: null };
   const seat = await tx.agentSeat.upsert({ where: { userId: account.id }, create: { ...data, userId: account.id }, update: data });
+  // An account that had work before it took this seat keeps only what the seat may hold.
+  const takes = SEAT_TAKES[seat.role];
+  const unassigned = same ? [] : await unassignOpen(tx, seat, input.actorId, 'seat_created', { OR: [
+    { projectId: { not: seat.projectId } },
+    { agentRequestRole: { notIn: takes.filter((role): role is string => role !== null) } },
+    ...(takes.includes(null) ? [] : [{ agentRequestRole: null }]),
+  ] });
   await tx.appAuditLog.create({ data: {
     workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_seat.created',
-    details: { seatId: seat.id, serviceUserId: account.id, projectId: seat.projectId, role: seat.role, ownerId: seat.ownerId, isDefault },
+    details: { seatId: seat.id, serviceUserId: account.id, projectId: seat.projectId, role: seat.role, ownerId: seat.ownerId, isDefault, unassigned },
   } });
   return seat;
+}
+
+/** Unassign the seat account's issues that are not done (and match `only`), each with an activity entry that says why. Returns their keys. */
+async function unassignOpen(tx: Prisma.TransactionClient, seat: { id: string; userId: string }, actorId: string, reason: string, only: Prisma.IssueWhereInput = {}) {
+  // Take the account's issues first, so a change to one of them that is already under way finishes before it is read here.
+  await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "assigneeId" = ${seat.userId} FOR UPDATE`;
+  const issues = await tx.issue.updateManyAndReturn({
+    where: { assigneeId: seat.userId, NOT: { projectStatus: { OR: [{ category: 'done' }, { category: null, isFinal: true }] } }, ...only },
+    data: { assigneeId: null },
+    select: { id: true, issueKey: true, workspaceId: true, projectId: true },
+  });
+  await tx.issueAssignee.deleteMany({ where: { issueId: { in: issues.map(issue => issue.id) }, userId: seat.userId } });
+  await tx.issueActivity.createMany({ data: issues.map(issue => ({
+    action: 'UNASSIGNED', itemType: 'ISSUE', itemId: issue.id, userId: actorId, workspaceId: issue.workspaceId, projectId: issue.projectId,
+    fieldName: 'assignee', oldValue: seat.userId, newValue: '', details: JSON.stringify({ reason, seatId: seat.id }),
+  })) });
+  return issues.map(issue => issue.issueKey ?? issue.id);
 }
 
 /** The caller's seat, or null for a person, for a token that is not a seat, and for a retired seat. */
@@ -111,6 +136,7 @@ export async function assignCapReached(tx: Prisma.TransactionClient, context: Ca
   return handed >= ASSIGN_CAP;
 }
 
+/** The durable count behind the cap: one audit row per issue an agent token created for a seat. Unassigning the issue later does not give the slot back. */
 export async function recordSeatHandoff(tx: Prisma.TransactionClient, context: Caller, assigneeId: string, issueId: string): Promise<void> {
   if (context.app.slug === AGENT_APP_SLUG && await isSeatAccount(tx, assigneeId)) {
     await tx.appAuditLog.create({ data: { workspaceId: context.workspace.id, actorId: context.user.id,
@@ -135,24 +161,13 @@ export async function retireSeat(input: { workspaceId: string; actorId: string; 
     if (await tx.agentRun.count({ where: { seatId: seat.id, endedAt: null } })) {
       throw new HandoffError('already_running', 'This seat has a run open; let it finish, or clear it, before retiring the seat', 409);
     }
-    const issues = await tx.issue.updateManyAndReturn({
-      where: { assigneeId: seat.userId, NOT: { projectStatus: { OR: [{ category: 'done' }, { category: null, isFinal: true }] } } },
-      data: { assigneeId: null },
-      select: { id: true, issueKey: true, workspaceId: true, projectId: true },
-    });
-    const ids = issues.map(issue => issue.id);
-    await tx.issueAssignee.deleteMany({ where: { issueId: { in: ids }, userId: seat.userId } });
-    await tx.issueActivity.createMany({ data: issues.map(issue => ({
-      action: 'UNASSIGNED', itemType: 'ISSUE', itemId: issue.id, userId: input.actorId, workspaceId: issue.workspaceId, projectId: issue.projectId,
-      fieldName: 'assignee', oldValue: seat.userId, newValue: '', details: JSON.stringify({ reason: 'seat_retired', seatId: seat.id }),
-    })) });
+    const unassigned = await unassignOpen(tx, seat, input.actorId, 'seat_retired');
     await tx.agentSeat.update({ where: { id: seat.id }, data: { retiredAt: new Date(), isDefault: false } });
     if (seat.isDefault) {
       // Requests for this role keep a seat to go to.
       const next = await tx.agentSeat.findFirst({ where: { projectId: seat.projectId, role: seat.role, retiredAt: null }, orderBy: { createdAt: 'asc' }, select: { id: true } });
       if (next) await tx.agentSeat.update({ where: { id: next.id }, data: { isDefault: true } });
     }
-    const unassigned = issues.map(issue => issue.issueKey ?? issue.id);
     await tx.appAuditLog.create({ data: {
       workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_seat.retired',
       details: { seatId: seat.id, serviceUserId: seat.userId, projectId: seat.projectId, role: seat.role, unassigned },

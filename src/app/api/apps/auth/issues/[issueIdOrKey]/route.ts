@@ -240,7 +240,7 @@ export const PATCH = withAppAuth(
       }
       if (parent) await seatWriteGuard(prisma, context, parent.projectId);
       if (updateData.parentId !== undefined && existingIssue.parentId && updateData.parentId !== existingIssue.parentId) {
-        const oldParent = await prisma.issue.findUnique({ where: { id: existingIssue.parentId }, select: { projectId: true } });
+        const oldParent = await prisma.issue.findFirst({ where: { id: existingIssue.parentId }, select: { projectId: true } });
         if (oldParent) await seatWriteGuard(prisma, context, oldParent.projectId);
       }
 

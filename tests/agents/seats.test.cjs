@@ -351,6 +351,37 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     assert.deepEqual(assignments.map(row => row.issueId).sort(), [reassigned.id, completed.id].sort());
   });
 
+  await t.test('a move unseats the old project\'s seat also when the request names a replacement', async () => {
+    const replaced = await issue(A, { assigneeId: devA.userId });
+    await prisma.issueAssignee.create({ data: { issueId: replaced.id, userId: devA.userId, role: 'ASSIGNEE', status: 'APPROVED' } });
+    const result = await deps['@/lib/issue-mutation'].updateIssue(owner, replaced.id, { projectId: B, assigneeId: person }, 'w');
+    assert.equal(result.issue.assigneeId, person);
+    const [entry] = await prisma.issueActivity.findMany({ where: { itemId: replaced.id, action: 'UNASSIGNED' } });
+    assert.equal(entry?.oldValue, devA.userId);
+    assert.equal(JSON.parse(entry.details).reason, 'moved_to_another_project');
+    assert.deepEqual((await prisma.issueAssignee.findMany({ where: { issueId: replaced.id } })).map(row => row.userId), [person]);
+  });
+
+  await t.test('a name that had work before it became a seat keeps only what the seat may hold', async () => {
+    const legacy = await tokens.createAgentToken({ workspaceId: 'w', actorId: owner, name: 'legacy', access: 'write', expiresInDays: 30 });
+    const account = (await prisma.appToken.findUniqueOrThrow({ where: { id: legacy.id } })).userId;
+    const done = (await prisma.projectStatus.findFirstOrThrow({ where: { projectId: B, name: 'done' } })).id;
+    const elsewhere = await issue(B, { assigneeId: account }), request = await issue(A, { assigneeId: account, agentRequestRole: 'release' });
+    const fitting = await issue(A, { assigneeId: account }), finished = await issue(B, { assigneeId: account, statusId: done });
+    const made = await seat('legacy', A, 'developer');
+    assert.equal(made.userId, account);
+    const holder = async row => (await prisma.issue.findUniqueOrThrow({ where: { id: row.id } })).assigneeId;
+    assert.deepEqual([await holder(elsewhere), await holder(request), await holder(fitting), await holder(finished)], [null, null, account, account]);
+    const entries = await prisma.issueActivity.findMany({ where: { itemId: { in: [elsewhere.id, request.id, fitting.id, finished.id] }, action: 'UNASSIGNED' } });
+    assert.deepEqual(entries.map(row => row.itemId).sort(), [elsewhere.id, request.id].sort());
+    assert.ok(entries.every(row => JSON.parse(row.details).reason === 'seat_created' && row.userId === owner && row.oldValue === account));
+    // Its old token is the seat's token from that moment.
+    assert.equal((await send(seatsMe.GET, legacy.token, 'GET')).body.seat.id, made.id);
+    // A further token for the same seat changes nothing it holds.
+    await seat('legacy', A, 'developer');
+    assert.equal(await holder(fitting), account);
+  });
+
   await t.test('review focus 5: a seat is not retired while it has a run open; otherwise its open issues are unassigned', async () => {
     const worker = await seat('dev-retire', A, 'developer');
     const statuses = Object.fromEntries((await prisma.projectStatus.findMany({ where: { projectId: A } })).map(row => [row.name, row.id]));
