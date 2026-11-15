@@ -63,6 +63,20 @@ test('above the timeline: who is working the issue and since when, and a clear b
     return document.getElementById('root').textContent;
   }), 'Cem started working on this issue 5 minutes ago.Session has stopped: clear runThe run was not cleared. Reload the page and try again.');
 
+  for (const failure of ['http', 'network', 'json']) {
+    let reads = 0;
+    global.fetch = async (url, options) => {
+      if (options?.method === 'POST') return { ok: false };
+      if (reads++ === 0) return { ok: true, json: async () => ({ run }) };
+      if (failure === 'network') throw new Error('offline');
+      return { ok: failure !== 'http', json: async () => { throw new Error('invalid response'); } };
+    };
+    assert.equal(await open(async () => {
+      await React.act(async () => document.querySelector('button').click());
+      return document.getElementById('root').textContent;
+    }), 'Cem started working on this issue 5 minutes ago.Session has stopped: clear runThe run was not cleared. Reload the page and try again.');
+  }
+
   // No run open, or the read fails: nothing is shown.
   run = null;
   assert.equal(await open(), '');

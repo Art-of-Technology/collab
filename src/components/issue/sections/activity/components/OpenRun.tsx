@@ -12,10 +12,13 @@ export function OpenRun({ issueId }: { issueId: string }) {
   const [failed, setFailed] = useState(false);
   // Counts up after a clear, so the run is read again.
   const [reads, setReads] = useState(0);
+  useEffect(() => { setRun(null); setFailed(false); }, [issueId]);
   useEffect(() => {
     let current = true;
-    fetch(`/api/issues/${issueId}/runs`).then(reply => reply.ok ? reply.json() : { run: null }).catch(() => ({ run: null }))
-      .then(body => { if (current) setRun(body.run); });
+    fetch(`/api/issues/${issueId}/runs`).then(reply => {
+      if (!reply.ok) throw new Error("Failed to read run");
+      return reply.json();
+    }).then(body => { if (current) setRun(body.run); }).catch(() => {});
     return () => { current = false; };
   }, [issueId, reads]);
   if (!run) return null;
