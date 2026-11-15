@@ -213,8 +213,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
+    if (assigneeId !== undefined && typeof assigneeId !== 'string') return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
     if (assigneeId) {
-      if (typeof assigneeId !== 'string') return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
       await assertAssignable(prisma, { workspaceId: workspace.id, projectId: project.id, agentRequestRole: null }, assigneeId);
     }
 

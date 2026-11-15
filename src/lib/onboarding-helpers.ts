@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultStatusTemplates } from "@/lib/seed-status-templates";
+import { assertAssignable } from "@/lib/issue-assignee";
 
 /**
  * Automatically creates a Personal Workspace with a Default Project and View for a new user
@@ -192,6 +193,7 @@ export async function createPersonalWorkspaceForUser(userId: string, userName: s
       throw new Error('No project statuses found. Cannot create welcome issue.');
     }
     
+    await assertAssignable(tx, { workspaceId: workspace.id, projectId: project.id, agentRequestRole: null }, userId);
     const welcomeIssue = await tx.issue.create({
       data: {
         title: "Welcome to your personal workspace! 👋",

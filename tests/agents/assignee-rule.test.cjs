@@ -83,4 +83,29 @@ test('who may be assigned an issue is one rule on every path that sets an assign
     assert.equal(response.status, 400);
     assert.equal((await response.json()).error, 'assignee_not_found');
   });
+
+  await t.test('web create rejects non-string assignees without creating an issue', async () => {
+    for (const value of [false, 0, null, true, 1, {}, []]) {
+      const title = `invalid ${++count}`;
+      const response = await web.POST(request('POST', { title, workspaceId: 'w', projectId: project, assigneeId: value }));
+      assert.equal(response.status, 400);
+      assert.equal(await prisma.issue.count({ where: { title } }), 0);
+    }
+  });
+
+  await t.test('onboarding checks the welcome assignee in its transaction', async () => {
+    await prisma.statusTemplate.create({ data: { name: 'todo', displayName: 'To Do', order: 0, isDefault: true } });
+    const rule = deps['@/lib/issue-assignee'];
+    const onboarding = assignmentRule => load('src/lib/onboarding-helpers.ts', {
+      '@/lib/prisma': { prisma }, '@/lib/seed-status-templates': { ensureDefaultStatusTemplates: async () => {} },
+      '@/lib/issue-assignee': { assertAssignable: assignmentRule },
+    });
+    const result = await onboarding(rule.assertAssignable).createPersonalWorkspaceForUser(active, 'Active');
+    assert.equal(result.welcomeIssue.assigneeId, active);
+    await assert.rejects(onboarding(async (tx, issue, userId) => {
+      await rule.assertAssignable(tx, issue, userId);
+      throw new rule.HandoffError('assignee_not_found', 'Refused');
+    }).createPersonalWorkspaceForUser(stranger, 'Stranger'), { code: 'assignee_not_found' });
+    assert.equal(await prisma.workspace.count({ where: { ownerId: stranger } }), 0);
+  });
 });
