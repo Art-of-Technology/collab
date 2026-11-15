@@ -318,7 +318,7 @@ Requests are not retried automatically. After `outcome_unknown`, read the affect
 
 ## Command reference {#commands}
 
-Browse the API commands below, or run `collab schema` for the full machine-readable inventory. Boolean field values are `true` or `false`; arrays use JSON.
+Every API command, with its arguments and flags, is in the [CLI command reference](/docs/reference/cli-commands). Run `collab schema` for the same inventory as JSON. Boolean field values are `true` or `false`; arrays use JSON.
 
 | Local command | What it does |
 | --- | --- |

@@ -6,7 +6,6 @@ import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
 import { OnThisPage } from '@/components/docs/OnThisPage';
 import { CopyMarkdownButton } from '@/components/docs/CopyMarkdownButton';
 import { DocsDiagrams } from '@/components/docs/DocsDiagrams';
-import { CommandReference } from '../command-reference';
 
 // A docs page for people: the same Markdown an agent reads at /docs/<page>.md, from the same loader.
 // Only the pages of the navigation exist, all built ahead of time; /docs is the page "index".
@@ -51,8 +50,6 @@ export default async function DocsPage({ params }: Props) {
           <DocsDiagrams>
             <MarkdownRenderer content={page.markdown} headingIds={page.headings.map(heading => heading.id)} className={typography} />
           </DocsDiagrams>
-          {/* The command list is still a component until the generated reference page replaces it. */}
-          {page.slug === 'cli' && <CommandReference />}
           <footer className="mt-14 grid gap-4 border-t border-border py-8 text-sm sm:grid-cols-2">
             {previous ? (
               <Link href={docHref(previous.slug)} rel="prev" className="rounded-lg border border-border p-4 hover:bg-muted/40">
