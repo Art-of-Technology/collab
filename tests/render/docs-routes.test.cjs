@@ -19,7 +19,7 @@ fs.writeFileSync(path.join(root, 'content/docs/draft.md'), '# Draft\n\nNot liste
 // The routes run on the real loader, pointed at the folder above.
 function routes(appUrl) {
   const globals = { Response, process: { cwd: () => root, env: appUrl ? { NEXT_PUBLIC_APP_URL: appUrl } : {} } };
-  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked') }, globals);
+  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), 'isomorphic-dompurify': { default: require('isomorphic-dompurify') } }, globals);
   const route = file => load(file, { '@/lib/docs': docs }, globals);
   return {
     docs,
@@ -75,6 +75,17 @@ test('llms.txt has one line per navigation page with its title, summary and Mark
 test('llms.txt uses addresses from the site root when the public address is not configured', async () => {
   const text = await (await routes().llms.GET()).text();
   assert.match(text, /^- \[Create a seat\]\(\/docs\/guides\/create-a-seat\.md\): /m);
+});
+
+test('a title with square brackets still makes one working link in llms.txt', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'docs-routes-'));
+  fs.mkdirSync(path.join(dir, 'content/docs'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'content/docs/nav.json'), JSON.stringify([{ title: 'Start here', pages: ['index'] }]));
+  fs.writeFileSync(path.join(dir, 'content/docs/index.md'), '# Flags \\[optional\\]\n\nWhat a flag does.\n');
+  const globals = { Response, process: { cwd: () => dir, env: {} } };
+  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), 'isomorphic-dompurify': { default: require('isomorphic-dompurify') } }, globals);
+  const text = await (await load('src/app/llms.txt/route.ts', { '@/lib/docs': docs }, globals).GET()).text();
+  assert.match(text, /^- \[Flags \\\[optional\\\]\]\(\/docs\/index\.md\): What a flag does\.$/m);
 });
 
 test('llms-full.txt is every navigation page in navigation order', async () => {
