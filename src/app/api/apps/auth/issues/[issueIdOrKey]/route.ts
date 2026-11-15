@@ -406,6 +406,14 @@ export const PATCH = withAppAuth(
         });
 
         if (before) await enqueueLabelHandoff(tx, context.user.id, changed, before.labels.map(label => label.id));
+        if (updateData.assigneeId && updateData.assigneeId !== existingIssue.assigneeId) {
+          // As the other paths that change an assignee do: the seat inbox reads from this row when the issue was last assigned.
+          const assignee = { role: 'ASSIGNEE', status: 'APPROVED', approvedAt: new Date(), approvedBy: context.user.id } as const;
+          await tx.issueAssignee.upsert({
+            where: { issueId_userId: { issueId: existingIssue.id, userId: updateData.assigneeId } },
+            create: { issueId: existingIssue.id, userId: updateData.assigneeId, ...assignee }, update: assignee,
+          });
+        }
         return changed;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 

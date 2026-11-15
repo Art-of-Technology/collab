@@ -71,9 +71,14 @@ test('who may be assigned an issue is one rule on every path that sets an assign
         else assert.equal(issue?.assigneeId, owner);
       }
       for (const userId of [active, owner]) {
+        const started = new Date();
         const [status, issue] = await assign(userId);
         assert.ok(status >= 200 && status < 300, `${userId} got ${status}`);
         assert.equal(issue?.assigneeId, userId);
+        if (path.includes('create') || userId === owner) continue;
+        // A change of assignee records when: the seat inbox counts an issue's last run only if it ended after this.
+        const row = await prisma.issueAssignee.findUnique({ where: { issueId_userId: { issueId: issue.id, userId } } });
+        assert.ok(row?.approvedAt >= started, `${path} did not record when the issue was assigned`);
       }
     });
   }
