@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { Lexer, type Token } from 'marked';
 
 // Published documentation: Markdown files in content/docs, listed in content/docs/nav.json.
 // The page, the plain Markdown, the index files, the search and the MCP tools all read it through here,
@@ -14,7 +15,13 @@ const SLUG = /^[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*$/;
 const root = () => join(process.cwd(), 'content', 'docs');
 
 // Heading and summary text without its inline Markdown: links keep their words, code and emphasis lose their marks.
-const plain = (text: string) => text.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[`*]/g, '').trim();
+const plain = (text: string): string => {
+  const words = (tokens: Token[]): string => tokens.map(token => {
+    if ('tokens' in token && token.tokens) return words(token.tokens);
+    return 'text' in token ? token.text : '';
+  }).join('');
+  return words(Lexer.lexInline(text)).trim();
+};
 
 export function headingId(text: string, seen: Map<string, number>): string {
   const base = text.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').trim().replace(/\s+/g, '-') || 'section';
@@ -45,13 +52,16 @@ export function docPage(slug: string): DocPage | null {
   let stage: 'title' | 'gap' | 'summary' | 'done' = 'title';
   for (const raw of markdown.split('\n')) {
     const line = raw.trim();
-    const mark = line.match(/^(```|~~~)/)?.[1];
-    if (mark && (!fence || fence === mark)) {
-      fence = fence ? '' : mark;
-      if (stage !== 'title') stage = 'done';
+    const mark = line.match(/^(`{3,}|~{3,})/)?.[1];
+    if (!fence && mark) {
+      fence = mark;
+      if (stage === 'summary') stage = 'done';
       continue;
     }
-    if (fence) continue;
+    if (fence) {
+      if (mark && mark[0] === fence[0] && mark.length >= fence.length && line.slice(mark.length).trim() === '') fence = '';
+      continue;
+    }
     const heading = line.match(/^(#{1,6})\s+(.*?)(?:\s+#+)?$/);
     if (heading) {
       const depth = heading[1].length;
@@ -60,7 +70,7 @@ export function docPage(slug: string): DocPage | null {
         stage = 'gap';
         continue;
       }
-      if (stage !== 'title') stage = 'done';
+      if (stage === 'summary') stage = 'done';
       if (depth === 2 || depth === 3) {
         const text = plain(heading[2]);
         headings.push({ depth, text, id: headingId(text, seen) });

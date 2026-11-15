@@ -5,7 +5,7 @@ const path = require('node:path');
 
 // The loader reads content/docs under the working directory, so a test points it at a folder of its own.
 function docsIn(root) {
-  return load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path }, { process: { cwd: () => root } });
+  return load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked') }, { process: { cwd: () => root } });
 }
 
 // The loader runs in its own context, so its arrays are compared by value.
@@ -82,6 +82,36 @@ test('headings are the second and third level only, in order, and never read fro
     [2, 'Example 2'],
     [2, 'Example'],
   ]);
+});
+
+test('long fences hide headings until a matching closing fence', () => {
+  const page = docsIn(fixture({ 'content/docs/fences.md': [
+    '# Guide', '````md', '```', '## Hidden', '````',
+    '~~~~', '~~~', '### Hidden too', '~~~~~', '## Visible',
+  ].join('\n') })).docPage('fences');
+  assert.deepEqual(plain(page.headings.map(h => h.text)), ['Visible']);
+});
+
+test('inline Markdown is removed consistently without removing literal underscores', () => {
+  const page = docsIn(fixture({ 'content/docs/format.md': [
+    '# _Getting started_', '', 'Use **bold**, ~~old~~ and `code_name`.', '',
+    '## _Getting started_ with [the CLI](/cli)', '### Keep code_name',
+  ].join('\n') })).docPage('format');
+  assert.equal(page.title, 'Getting started');
+  assert.equal(page.summary, 'Use bold, old and code_name.');
+  assert.deepEqual(plain(page.headings.map(h => [h.text, h.id])), [
+    ['Getting started with the CLI', 'getting-started-with-the-cli'],
+    ['Keep code_name', 'keep-code_name'],
+  ]);
+});
+
+test('the first paragraph can follow headings and fenced blocks', () => {
+  const page = docsIn(fixture({ 'content/docs/intro.md': [
+    '# Guide', '## Introduction', '```', 'Not a paragraph', '```',
+    '### Details', 'Welcome.', 'More detail.', '', 'Later.',
+  ].join('\n') })).docPage('intro');
+  assert.equal(page.summary, 'Welcome. More detail.');
+  assert.deepEqual(plain(page.headings.map(h => h.text)), ['Introduction', 'Details']);
 });
 
 test('repeated headings get -2, -3 and never share an id with another heading', () => {
