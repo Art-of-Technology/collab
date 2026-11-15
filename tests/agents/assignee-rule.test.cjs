@@ -1,0 +1,86 @@
+const { test, after } = require('node:test');
+const assert = require('node:assert/strict');
+const { load } = require('../security/helpers.cjs');
+const { seatsDatabase } = require('./seats-db.cjs');
+
+// Token-facing routes accept only cuid-shaped ids.
+const owner = 'cowner00001', active = 'cactive0001', switchedOff = 'cswitchedoff1', stranger = 'cstranger001';
+const project = 'cprojectw001';
+
+let db;
+after(() => db?.stop());
+
+test('who may be assigned an issue is one rule on every path that sets an assignee', async t => {
+  db = await seatsDatabase(async prisma => {
+    await prisma.user.createMany({ data: [owner, active, switchedOff, stranger].map(id => ({ id, name: id })) });
+    await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
+    await prisma.workspaceMember.createMany({ data: [{ workspaceId: 'w', userId: active }, { workspaceId: 'w', userId: switchedOff, status: false }] });
+    await prisma.project.create({ data: { id: project, workspaceId: 'w', name: 'w', slug: 'w', issuePrefix: 'w' } });
+  });
+  const { prisma } = db;
+  const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } });
+  const handoffs = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'),
+    '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
+  const deps = { zod: require('zod'), '@prisma/client': require('@prisma/client'), 'next/server': { NextResponse: Response },
+    '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder,
+    '@/lib/issue-assignee': load('src/lib/issue-assignee.ts', { './agent-handoffs': handoffs }),
+    '@/lib/agent-label-triggers': load('src/lib/agent-label-triggers.ts', { 'node:crypto': require('node:crypto') }),
+    '@/lib/permissions': { Permission: {}, canActOnOwnContent: () => true, checkUserPermission: async () => ({ hasPermission: true }),
+      checkUserPermissions: async () => ({ undefined: { hasPermission: true } }) },
+    '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
+    '@/lib/forge/legacy-write-guard': { assertLegacyProjectWriteAllowed: async () => {}, assertLegacyIssueWriteAllowed: async () => {}, ForgeProjectWriteError: class extends Error {} },
+    '@/lib/apps/auth-middleware': { withAppAuth: handler => handler },
+    '@/lib/event-bus': { emitIssueCreated: async () => {}, emitIssueUpdated: async () => {} },
+    '@/lib/request-session': { getServerSession: async () => ({ user: { id: owner } }) }, '@/lib/auth-options': {},
+    '@/lib/session': { getCurrentUser: async () => ({ id: owner }) },
+    '@/lib/board-item-activity-service': { trackCreation: async () => {} }, '@/lib/redis': { publishEvent: async () => {} },
+    '@/utils/mentions': { extractMentionUserIds: () => [] },
+    '@/lib/notification-service': { NotificationService: { notifyUsers: async () => {} }, NotificationType: {} }, '@/utils/issueRelations': {},
+  };
+  deps['@/lib/issue-mutation'] = load('src/lib/issue-mutation.ts', deps);
+  const globals = { console, URL, Date };
+  const web = load('src/app/api/issues/route.ts', deps, globals);
+  const collection = load('src/app/api/apps/auth/issues/route.ts', deps, globals);
+  const item = load('src/app/api/apps/auth/issues/[issueIdOrKey]/route.ts', deps, globals);
+  const assignment = load('src/app/api/apps/auth/issues/[issueIdOrKey]/assign/route.ts', deps, globals);
+  const assistant = load('src/app/api/ai/action/route.ts', deps, globals);
+
+  const token = { user: { id: owner }, workspace: { id: 'w' }, token: { scopes: ['issues:read', 'issues:write'] } };
+  const request = (method, body) => new Request('https://example.test/api', { method, body: JSON.stringify(body) });
+  let count = 0;
+  const existing = async () => (await prisma.issue.create({ data: { workspaceId: 'w', projectId: project, title: 'Existing', issueKey: `w-${++count}` } })).id;
+  const at = id => ({ params: Promise.resolve({ issueIdOrKey: id }) });
+  // Each path takes the account to assign and answers [HTTP status, the assignee the database holds afterwards].
+  const stored = async where => (await prisma.issue.findFirst({ where }))?.assigneeId ?? null;
+  const created = async (title, send) => [(await send(title)).status, await stored({ title })];
+  const updated = async send => { const id = await existing(); return [(await send(id)).status, await stored({ id })]; };
+  const paths = {
+    'web create': userId => created(`web ${++count}`, title => web.POST(request('POST', { title, workspaceId: 'w', projectId: project, assigneeId: userId }))),
+    'web update': userId => updated(async id => { const result = await deps['@/lib/issue-mutation'].updateIssue(owner, id, { assigneeId: userId }, 'w'); return { status: result.status ?? 200 }; }),
+    'assistant create': userId => created(`assistant ${++count}`, title => assistant.POST(request('POST', { action: { type: 'create_issue', params: { title, projectId: project, assigneeId: userId } }, context: { workspace: { id: 'w' } } }))),
+    'token create': userId => created(`token ${++count}`, title => collection.POST(request('POST', { title, projectId: project, assigneeId: userId }), token)),
+    'token update': userId => updated(id => item.PATCH(request('PATCH', { assigneeId: userId }), token, at(id))),
+    'token assign': userId => updated(id => assignment.POST(request('POST', { assigneeId: userId }), token, at(id))),
+  };
+
+  for (const [path, assign] of Object.entries(paths)) {
+    await t.test(`${path}: refused for a switched-off membership and for a stranger, accepted for an active member and the owner`, async () => {
+      for (const userId of [switchedOff, stranger]) {
+        const [status, assignee] = await assign(userId);
+        assert.ok(status >= 400 && status < 500, `${userId} got ${status}`);
+        assert.equal(assignee, null, `${userId} must not end up assigned`);
+      }
+      for (const userId of [active, owner]) {
+        const [status, assignee] = await assign(userId);
+        assert.ok(status >= 200 && status < 300, `${userId} got ${status}`);
+        assert.equal(assignee, userId);
+      }
+    });
+  }
+
+  await t.test('token paths name the refusal', async () => {
+    const response = await assignment.POST(request('POST', { assigneeId: switchedOff }), token, at(await existing()));
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, 'assignee_not_found');
+  });
+});

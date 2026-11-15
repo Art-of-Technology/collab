@@ -11,6 +11,7 @@ import { extractMentionUserIds } from "@/utils/mentions";
 import { NotificationService, NotificationType } from "@/lib/notification-service";
 import { emitIssueCreated } from "@/lib/event-bus";
 import { buildIssueRelations, RelationMap } from "@/utils/issueRelations";
+import { assertAssignable, HandoffError } from "@/lib/issue-assignee";
 
 const RELATED_ISSUE_SELECT = {
   id: true,
@@ -210,6 +211,11 @@ export async function POST(request: NextRequest) {
     });
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    if (assigneeId) {
+      if (typeof assigneeId !== 'string') return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
+      await assertAssignable(prisma, { workspaceId: workspace.id, projectId: project.id, agentRequestRole: null }, assigneeId);
     }
 
     // A parent must be an issue of this workspace: checked before anything else looks at it.
@@ -438,6 +444,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
     if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
+    if (error instanceof HandoffError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error('[ISSUES_POST]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

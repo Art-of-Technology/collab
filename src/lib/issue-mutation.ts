@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { checkUserPermissions, canActOnOwnContent, Permission } from '@/lib/permissions';
 import { findIssueByIdOrKey, getStandardIssueInclude, issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { normalizeDescriptionHTML } from '@/utils/html-normalizer';
+import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
 
 const UpdateIssueSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
@@ -108,10 +109,11 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
       })) {
         return { error: 'Invalid destination project', status: 400 };
       }
-      for (const userId of [body.assigneeId, body.reporterId]) {
-        if (userId && !await userHasWorkspaceAccess(userId, existingIssue.workspaceId)) {
-          return { error: 'Invalid issue participant', status: 400 };
-        }
+      if (body.assigneeId) {
+        await assertAssignable(prisma, { workspaceId: existingIssue.workspaceId, projectId, agentRequestRole: existingIssue.agentRequestRole }, body.assigneeId);
+      }
+      if (body.reporterId && !await userHasWorkspaceAccess(body.reporterId, existingIssue.workspaceId)) {
+        return { error: 'Invalid issue participant', status: 400 };
       }
       const parentId = body.parentId !== undefined ? body.parentId : existingIssue.parentId;
       if ((body.parentId !== undefined || moving) && parentId &&
@@ -211,6 +213,7 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
 
   } catch (error) {
     if (error instanceof ForgeProjectWriteError) return { error: error.message, status: 409 };
+    if (error instanceof HandoffError) return { error: error.message, status: error.status };
     if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2034', 'P2002'].includes(error.code)) {
       return { error: 'Issue update conflict; reload and retry', status: 409 };
     }

@@ -6,6 +6,11 @@ const { resolve } = require('node:path');
 const { runInNewContext } = require('node:vm');
 const ts = require('typescript');
 
+// Stands in for the handoff service's error class where a fixture does not load that service.
+class HandoffError extends Error {
+  constructor(code, message, status = 400) { super(message); this.code = code; this.status = status; }
+}
+
 function load(file, dependencies = {}, globals = {}) {
   dependencies = { ...dependencies };
   if (file === 'src/lib/permissions.ts') {
@@ -57,6 +62,8 @@ function load(file, dependencies = {}, globals = {}) {
       }
       // A fixture that says nothing about issue templates gets a workspace that does not enforce them.
       if (!(name in dependencies) && name === '@/lib/issue-template-store') return { getWorkspaceTemplates: async () => ({ enforced: false, templates: {} }) };
+      // The real assignment rule, read through whatever database the fixture hands the code under test.
+      if (!(name in dependencies) && name === '@/lib/issue-assignee') return load('src/lib/issue-assignee.ts', { './agent-handoffs': { HandoffError } });
       if (!(name in dependencies) && name === '@/lib/issue-templates') {
         return load('src/lib/issue-templates.ts', { '@/lib/comment-html': load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') }) });
       }

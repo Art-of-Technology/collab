@@ -28,6 +28,8 @@ test('issue mutations reject mass assignment, foreign relations and read-only us
     issue: { findFirst: async ({ where }) => matches(existing, where) ? existing : null, findUnique: async () => existing, delete: async () => { writes++; },
       update: async ({ data }) => { writes++; return { ...existing, ...data }; } },
     project: { findFirst: async () => null },
+    // Who may be assigned is read from the workspace: here only alice is its owner or an active member.
+    workspace: { findFirst: async ({ where }) => where.OR[0].ownerId === 'alice' ? { id: where.id } : null },
     projectStatus: { findMany: async () => [] },
     taskLabel: { count: async () => 0 },
     issueFollower: { findMany: async () => [] }, projectFollower: { findMany: async () => [] },

@@ -6,11 +6,12 @@ import { prisma } from "@/lib/prisma";
 import { z } from 'zod';
 import { IssueType } from '@prisma/client';
 import { checkUserPermission, Permission } from '@/lib/permissions';
-import { findIssueByIdOrKey, userHasWorkspaceAccess } from '@/lib/issue-finder';
+import { findIssueByIdOrKey } from '@/lib/issue-finder';
 import { updateIssue } from '@/lib/issue-mutation';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, createRefusal, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
+import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
 
 export async function POST(req: Request) {
   try {
@@ -159,9 +160,6 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: 'No permission to create issues' }, { status: 403 });
         }
         const params = parsedParams.data;
-        if (params.assigneeId && !await userHasWorkspaceAccess(params.assigneeId, workspace.id)) {
-          return NextResponse.json({ error: 'Invalid issue participant' }, { status: 400 });
-        }
         if (params.labels?.length && await prisma.taskLabel.count({
           where: { id: { in: [...new Set(params.labels)] }, workspaceId: workspace.id },
         }) !== new Set(params.labels).size) {
@@ -198,6 +196,9 @@ export async function POST(req: Request) {
           }, { status: 404 });
         }
 
+        if (params.assigneeId) {
+          await assertAssignable(prisma, { workspaceId: workspace.id, projectId: project.id, agentRequestRole: null }, params.assigneeId);
+        }
         await assertLegacyProjectWriteAllowed(project.id);
 
         // The assistant is an agent: it is held to the workspace's issue templates.
@@ -299,6 +300,7 @@ export async function POST(req: Request) {
   } catch (error) {
     if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
     if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
+    if (error instanceof HandoffError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error('Error in AI action API:', error);
     return NextResponse.json(
       { error: "Failed to execute action" },
