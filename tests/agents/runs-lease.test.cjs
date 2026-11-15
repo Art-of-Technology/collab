@@ -276,10 +276,46 @@ test('runs: checkout, the lease, lost runs and who may clear them', async t => {
     await raw.agentRun.update({ where: { id: run.id }, data: { startedAt: ago(86_400) } });
     await inbox(personToken);
     assert.equal((await stored(run.id)).state, 'running');
+    const previous = ago(100);
+    await raw.issue.update({ where: { id: target.id }, data: { statusId: `${A}-done`, firstStartedAt: null, lastProgressAt: previous } });
     const [again, second] = await checkout(personToken, target, 'g2');
     assert.deepEqual([again, second.run.id, second.run.generation], [200, run.id, 'g1']);
+    const progressed = await raw.issue.findUniqueOrThrow({ where: { id: target.id } });
+    assert.equal(progressed.statusId, `${A}-in_progress`);
+    assert.ok(progressed.firstStartedAt && progressed.lastProgressAt > previous);
+    assert.equal((await activities(target, 'STATUS_CHANGED')).length, 2);
     assert.deepEqual([(await act(personToken, run.id, 'renew'))[0], (await stored(run.id)).leaseUntil], [200, null]);
     assert.equal((await act(personToken, run.id, 'close'))[1].run.state, 'stopped');
+  });
+
+  await t.test('closed and cleared runs on done issues are offered to resume', async () => {
+    const closed = await issue(devB, { status: 'done' });
+    const first = (await checkout(devB.token, closed))[1].run;
+    assert.equal((await act(devB.token, first.id, 'close'))[0], 200);
+    assert.equal((await inbox(devB.token)).find(item => item.issueId === closed.id)?.reason, 'resume');
+
+    const cleared = await issue(devA);
+    const second = (await checkout(devA.token, cleared))[1].run;
+    await raw.issue.update({ where: { id: cleared.id }, data: { statusId: `${A}-done` } });
+    await lapse(second.id);
+    assert.equal((await clear(cleared, second.id))[0], 200);
+    assert.equal((await inbox(devA.token)).find(item => item.issueId === cleared.id)?.reason, 'resume');
+  });
+
+  await t.test('rejected checkout sweeps lapsed runs in the workspace', async () => {
+    for (const rejected of ['unknown', 'forge']) {
+      const target = await issue(devA);
+      const run = (await checkout(devA.token, target))[1].run;
+      await lapse(run.id);
+      forge = rejected === 'forge';
+      try {
+        await refused(checkout(devA.token, rejected === 'unknown' ? { issueKey: 'K-0' } : target),
+          rejected === 'unknown' ? 404 : 409, rejected === 'unknown' ? 'not_found' : 'forge_connected_project');
+      } finally { forge = false; }
+      assert.equal((await stored(run.id)).state, 'lost');
+      assert.equal((await activities(target, 'AGENT_RUN_LOST')).length, 1);
+      await act(devA.token, run.id, 'close');
+    }
   });
 
   await t.test('seats and people cannot take each other\'s issues, and a seat takes nothing outside its project', async () => {

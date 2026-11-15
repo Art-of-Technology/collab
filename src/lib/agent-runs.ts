@@ -29,7 +29,7 @@ const statusSelect = { select: { category: true, isFinal: true } } as const;
 
 /**
  * What the caller should work on next: the issues assigned to it, and for a seat only those of its project.
- * Never an issue with a run open, and never one whose status is in the done group. Where an issue stands is
+ * Never an issue with a run open, or a done issue unless its last run needs resuming. Where an issue stands is
  * read from its last run (resume when it ended without finishing, else its outcome); the status group speaks
  * for an issue that never had a run or whose last run finished done. A run that ended before the issue was
  * last assigned to the caller says nothing: the assignment is new work. An issue in review or blocked is
@@ -48,7 +48,6 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
   const issues = await prisma.issue.findMany({
     where: {
       workspaceId: context.workspace.id, assigneeId: me, ...(seat && { projectId: seat.projectId }),
-      OR: [{ statusId: null }, { projectStatus: { OR: [{ category: { not: 'done' } }, { category: null, isFinal: false }] } }],
     },
     select: {
       id: true, issueKey: true, title: true, priority: true, createdAt: true, projectStatus: statusSelect,
@@ -65,6 +64,7 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
     const assigned = issue.helpers[0]?.approvedAt ?? issue.helpers[0]?.assignedAt ?? issue.createdAt;
     const run = last?.endedAt && last.endedAt >= assigned ? last : undefined;
     const stands = !run || run.outcome === 'done' ? category : run.outcome ?? 'resume';
+    if (category === 'done' && stands !== 'resume') return [];
     return [{ issue, last, stands, category: stands === 'resume' ? category : stands, since: run?.endedAt ?? assigned }];
   });
 
@@ -145,13 +145,13 @@ async function markLost(workspaceId: string) {
  */
 export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, input: z.infer<typeof checkoutSchema>) {
   const me = context.user.id;
+  await markLost(context.workspace.id);
   const found = await prisma.issue.findFirst({ where: { workspaceId: context.workspace.id, OR: [{ id: input.issue }, { issueKey: input.issue }] }, select: { id: true } });
   if (!found) throw new HandoffError('not_found', 'Issue not found', 404);
   // As on every other issue write: a Forge-connected project's issues change through its Forge board.
   await assertLegacyIssueWriteAllowed(found.id).catch(error => {
     throw error instanceof ForgeProjectWriteError ? new HandoffError('forge_connected_project', error.message, 409) : error;
   });
-  await markLost(context.workspace.id);
   try {
     return await prisma.$transaction(async tx => {
       // The seat's row, then the issue: the order retiring a seat takes them in. Held to the end, so a seat is not
@@ -167,16 +167,14 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
       // Runs are for seats and for people. An agent token without a seat would hold a run with no lease that nobody could clear.
       if (!seat && context.app.slug === AGENT_APP_SLUG) throw new HandoffError('seat_required', 'An agent token takes an issue only as a seat', 403);
       const open = await tx.agentRun.findFirst({ where: { issueId: issue.id, endedAt: null }, select: { ...RUN, userId: true } });
-      if (open) {
-        // A person has no lease to lose: starting again gives the run that is open.
-        if (open.userId === me && !open.leaseUntil) { const { userId: _, ...run } = open; return { run }; }
+      if (open && !(open.userId === me && !open.leaseUntil)) {
         if (open.state === 'lost') {
           throw new HandoffError('needs_person', 'The last run on this issue was lost: its runner confirms it stopped, or a person clears it', 409);
         }
         throw new HandoffError('already_running', 'A run is already open on this issue', 409);
       }
       const now = new Date();
-      const run = await tx.agentRun.create({ data: { workspaceId: context.workspace.id, issueId: issue.id, seatId: seat?.id, userId: me,
+      const run = open ? (({ userId: _, ...rest }) => rest)(open) : await tx.agentRun.create({ data: { workspaceId: context.workspace.id, issueId: issue.id, seatId: seat?.id, userId: me,
         runner: input.runner, generation: input.generation, leaseUntil: seat ? new Date(now.getTime() + LEASE_MS) : null }, select: RUN });
       const status = categoryOf(issue.projectStatus) === 'in_progress' ? null
         : await tx.projectStatus.findFirst({ where: { projectId: issue.projectId, category: 'in_progress', isActive: true }, orderBy: { order: 'asc' } });
