@@ -150,11 +150,14 @@ test('the CLI reference lists every command of the CLI with every flag it takes'
 test('the CLI reference follows the command table: a new command appears, with what is required', async () => {
   const { cliCommandsPage } = await import(referenceScript);
   const { commands } = await import(path.join(repo, 'packages/cli/src/commands.mjs'));
-  const page = cliCommandsPage({ ...commands, 'frob run': { method: 'POST', path: 'frob/:id', fields: { speedLimit: 'integer' }, query: {}, required: ['speedLimit'], description: 'Run a frob | carefully.' } });
+  const page = cliCommandsPage({ ...commands, 'frob run': { method: 'POST', path: 'frob/:id', fields: { speedLimit: 'integer', path: 'string' }, query: {}, required: ['speedLimit'],
+    defaultDescriptions: { path: 'C:\\frob | D:\\frob' }, description: 'Run a frob | carefully.' } });
   const part = section(page, '### `collab frob run`');
   assert.match(part, /collab frob run ID/);
   assert.match(part, /\| `--speed-limit` \| integer \| required \|/);
   assert.match(part, /Run a frob \| carefully\./);
+  // In a table cell a pipe and a backslash are escaped, so the cell shows them as they are written in the code.
+  assert.ok(part.includes('| `--path` | string | default: C:\\\\frob \\| D:\\\\frob |'), part);
   assert.notEqual(page, cliCommandsPage(commands));
 });
 

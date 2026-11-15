@@ -13,7 +13,8 @@ import { loadTs } from './load-ts.mjs';
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const generated = source => `This page is made from \`${source}\` by \`scripts/build-docs-reference.mjs\`. Do not edit it: change the code and run \`npm run docs:reference\`.`;
 
-const cell = text => String(text).replace(/\|/g, '\\|');
+// In a table cell a pipe would end the cell, and a backslash would escape what follows it.
+const cell = text => String(text).replace(/[\\|]/g, '\\$&');
 const table = (first, rows) => [`| ${first} | Type | Details |`, '| --- | --- | --- |', ...rows.map(row => `| ${row.map(cell).join(' | ')} |`)];
 const limits = rule => [
   rule?.enum && `values: ${rule.enum.join(', ')}`,
