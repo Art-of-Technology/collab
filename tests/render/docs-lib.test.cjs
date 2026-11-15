@@ -5,7 +5,7 @@ const path = require('node:path');
 
 // The loader reads content/docs under the working directory, so a test points it at a folder of its own.
 function docsIn(root) {
-  return load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path }, { process: { cwd: () => root } });
+  return load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked') }, { process: { cwd: () => root } });
 }
 
 // The loader runs in its own context, so its arrays are compared by value.
@@ -82,6 +82,68 @@ test('headings are the second and third level only, in order, and never read fro
     [2, 'Example 2'],
     [2, 'Example'],
   ]);
+});
+
+test('long fences hide headings until a matching closing fence', () => {
+  const page = docsIn(fixture({ 'content/docs/fences.md': [
+    '# Guide', '````md', '```', '## Hidden', '````',
+    '~~~~', '~~~', '### Hidden too', '~~~~~', '## Visible',
+  ].join('\n') })).docPage('fences');
+  assert.deepEqual(plain(page.headings.map(h => h.text)), ['Visible']);
+});
+
+test('inline Markdown is removed consistently without removing literal underscores', () => {
+  const page = docsIn(fixture({ 'content/docs/format.md': [
+    '# _Getting started_', '', 'Use **bold**, ~~old~~ and `code_name`.', '',
+    '## _Getting started_ with [the CLI](/cli)', '### Keep code_name',
+  ].join('\n') })).docPage('format');
+  assert.equal(page.title, 'Getting started');
+  assert.equal(page.summary, 'Use bold, old and code_name.');
+  assert.deepEqual(plain(page.headings.map(h => [h.text, h.id])), [
+    ['Getting started with the CLI', 'getting-started-with-the-cli'],
+    ['Keep code_name', 'keep-code_name'],
+  ]);
+});
+
+test('the first paragraph can follow headings and fenced blocks', () => {
+  const page = docsIn(fixture({ 'content/docs/intro.md': [
+    '# Guide', '## Introduction', '```', 'Not a paragraph', '```',
+    '### Details', 'Welcome.', 'More detail.', '', 'Later.',
+  ].join('\n') })).docPage('intro');
+  assert.equal(page.summary, 'Welcome. More detail.');
+  assert.deepEqual(plain(page.headings.map(h => h.text)), ['Introduction', 'Details']);
+});
+
+test('a rule, a list or a quote before the first paragraph is not the summary', () => {
+  const page = docsIn(fixture({ 'content/docs/blocks.md': [
+    '# Guide', '', '---', '', '- a list item', '', '> a quote', '', 'Welcome.', '', 'Later.',
+  ].join('\n') })).docPage('blocks');
+  assert.equal(page.summary, 'Welcome.');
+});
+
+test('a heading that uses a link defined elsewhere in the file keeps only its words', () => {
+  const page = docsIn(fixture({ 'content/docs/links.md': [
+    '# The [CLI][cli] guide', '', 'Read [the reference][cli] first.', '', '## [CLI][cli]', '', '[cli]: /docs/cli',
+  ].join('\n') })).docPage('links');
+  assert.equal(page.title, 'The CLI guide');
+  assert.equal(page.summary, 'Read the reference first.');
+  assert.deepEqual(plain(page.headings), [{ depth: 2, text: 'CLI', id: 'cli' }]);
+});
+
+test('indented code is not a heading and does not open a fence', () => {
+  const page = docsIn(fixture({ 'content/docs/indented.md': [
+    '# Guide', '', 'Text.', '', '    ## Example', '    ```', '', '## Real', '', '- a list', '', '  ## Inside the list',
+  ].join('\n') })).docPage('indented');
+  assert.deepEqual(plain(page.headings.map(h => h.text)), ['Real']);
+});
+
+test('a title or a heading underlined with = or - counts like one written with #', () => {
+  const page = docsIn(fixture({ 'content/docs/setext.md': [
+    'Guide', '=====', '', 'Welcome.', '', 'Steps', '-----', '', 'Text.',
+  ].join('\n') })).docPage('setext');
+  assert.equal(page.title, 'Guide');
+  assert.equal(page.summary, 'Welcome.');
+  assert.deepEqual(plain(page.headings), [{ depth: 2, text: 'Steps', id: 'steps' }]);
 });
 
 test('repeated headings get -2, -3 and never share an id with another heading', () => {
