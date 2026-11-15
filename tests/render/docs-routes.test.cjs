@@ -19,7 +19,7 @@ fs.writeFileSync(path.join(root, 'content/docs/draft.md'), '# Draft\n\nNot liste
 // The routes run on the real loader, pointed at the folder above.
 function routes(appUrl) {
   const globals = { Response, process: { cwd: () => root, env: appUrl ? { NEXT_PUBLIC_APP_URL: appUrl } : {} } };
-  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path }, globals);
+  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked') }, globals);
   const route = file => load(file, { '@/lib/docs': docs }, globals);
   return {
     docs,
