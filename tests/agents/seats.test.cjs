@@ -378,7 +378,12 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     // Its old token is the seat's token from that moment.
     assert.equal((await send(seatsMe.GET, legacy.token, 'GET')).body.seat.id, made.id);
     // A further token for the same seat changes nothing it holds.
-    await seat('legacy', A, 'developer');
+    for (const ownerId of [null, owner, 'cnobody00001']) {
+      const rotated = await seat('legacy', A, 'developer', { ownerId });
+      assert.equal(rotated.ownerId, person);
+      assert.equal((await prisma.agentSeat.findUniqueOrThrow({ where: { id: made.id } })).ownerId, person);
+      assert.equal((await send(seatsMe.GET, rotated.token, 'GET')).body.seat.ownerId, person);
+    }
     assert.equal(await holder(fitting), account);
   });
 

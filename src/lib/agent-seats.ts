@@ -39,22 +39,21 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
   if (!await tx.project.findFirst({ where: { id: input.projectId, workspaceId: input.workspaceId }, select: { id: true } })) {
     throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
   }
-  if (input.ownerId && !await tx.workspace.findFirst({
-    where: { id: input.workspaceId, OR: [{ ownerId: input.ownerId }, { members: { some: { userId: input.ownerId, status: true } } }] }, select: { id: true },
-  })) throw new HandoffError('owner_not_found', "The seat's owner is not an active member of this workspace");
-
   const existing = await tx.agentSeat.findUnique({ where: { userId: account.id } });
   const same = !!existing && !existing.retiredAt && existing.projectId === input.projectId && existing.role === input.role;
   if (existing && !existing.retiredAt && !same) {
     throw new HandoffError('seat_exists', `${existing.name} is already a ${existing.role} seat; retire it before giving the name another project or role`, 409);
   }
+  if (!same && input.ownerId && !await tx.workspace.findFirst({
+    where: { id: input.workspaceId, OR: [{ ownerId: input.ownerId }, { members: { some: { userId: input.ownerId, status: true } } }] }, select: { id: true },
+  })) throw new HandoffError('owner_not_found', "The seat's owner is not an active member of this workspace");
   const others = await tx.agentSeat.findMany({
     where: { projectId: input.projectId, role: input.role, retiredAt: null, userId: { not: account.id } }, select: { id: true, isDefault: true },
   });
   if (input.role === 'release' && others.length) throw new HandoffError('release_seat_exists', 'This project already has a release seat; retire it first', 409);
   const isDefault = !!input.isDefault || (same && existing!.isDefault) || !others.some(seat => seat.isDefault);
   if (isDefault) await tx.agentSeat.updateMany({ where: { id: { in: others.filter(seat => seat.isDefault).map(seat => seat.id) } }, data: { isDefault: false } });
-  const data = { workspaceId: input.workspaceId, projectId: input.projectId, role: input.role, ownerId: input.ownerId,
+  const data = { workspaceId: input.workspaceId, projectId: input.projectId, role: input.role, ownerId: same ? existing.ownerId : input.ownerId,
     name: account.name ?? input.name.trim(), isDefault, retiredAt: null };
   const seat = await tx.agentSeat.upsert({ where: { userId: account.id }, create: { ...data, userId: account.id }, update: data });
   // An account that had work before it took this seat keeps only what the seat may hold.
