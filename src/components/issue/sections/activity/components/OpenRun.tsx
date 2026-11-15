@@ -26,8 +26,10 @@ export function OpenRun({ issueId }: { issueId: string }) {
     const reply = await fetch(`/api/issues/${issueId}/runs/${run.id}/clear`, { method: "POST" }).catch(() => null);
     setFailed(!reply?.ok);
     // Cleared: the run is gone whatever the next read says.
-    if (reply?.ok) setRun(null);
-    setReads(count => count + 1);
+    if (reply?.ok) {
+      setRun(null);
+      setReads(count => count + 1);
+    }
   };
   return (
     <div role="status" className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-collab-600 px-2.5 py-1.5 text-xs text-collab-400">

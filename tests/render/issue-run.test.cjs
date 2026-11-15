@@ -63,6 +63,16 @@ test('above the timeline: who is working the issue and since when, and a clear b
     return document.getElementById('root').textContent;
   }), 'Cem started working on this issue 5 minutes ago.Session has stopped: clear runThe run was not cleared. Reload the page and try again.');
 
+  let readCount = 0;
+  global.fetch = async (url, options) => {
+    if (options?.method === 'POST') return { ok: false };
+    return { ok: true, json: async () => ({ run: readCount++ === 0 ? run : null }) };
+  };
+  assert.equal(await open(async () => {
+    await React.act(async () => document.querySelector('button').click());
+    return document.getElementById('root').textContent;
+  }), 'Cem started working on this issue 5 minutes ago.Session has stopped: clear runThe run was not cleared. Reload the page and try again.');
+
   for (const failure of ['http', 'network', 'json']) {
     let reads = 0;
     global.fetch = async (url, options) => {
