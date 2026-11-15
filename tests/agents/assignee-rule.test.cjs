@@ -48,10 +48,9 @@ test('who may be assigned an issue is one rule on every path that sets an assign
   const token = { user: { id: owner }, workspace: { id: 'w' }, token: { scopes: ['issues:read', 'issues:write'] } };
   const request = (method, body) => new Request('https://example.test/api', { method, body: JSON.stringify(body) });
   let count = 0;
-  const existing = async () => (await prisma.issue.create({ data: { workspaceId: 'w', projectId: project, title: 'Existing', issueKey: `w-${++count}` } })).id;
+  const existing = async () => (await prisma.issue.create({ data: { workspaceId: 'w', projectId: project, title: 'Existing', issueKey: `w-${++count}`, assigneeId: owner } })).id;
   const at = id => ({ params: Promise.resolve({ issueIdOrKey: id }) });
-  // Each path takes the account to assign and answers [HTTP status, the assignee the database holds afterwards].
-  const stored = async where => (await prisma.issue.findFirst({ where }))?.assigneeId ?? null;
+  const stored = async where => prisma.issue.findFirst({ where });
   const created = async (title, send) => [(await send(title)).status, await stored({ title })];
   const updated = async send => { const id = await existing(); return [(await send(id)).status, await stored({ id })]; };
   const paths = {
@@ -66,14 +65,15 @@ test('who may be assigned an issue is one rule on every path that sets an assign
   for (const [path, assign] of Object.entries(paths)) {
     await t.test(`${path}: refused for a switched-off membership and for a stranger, accepted for an active member and the owner`, async () => {
       for (const userId of [switchedOff, stranger]) {
-        const [status, assignee] = await assign(userId);
-        assert.ok(status >= 400 && status < 500, `${userId} got ${status}`);
-        assert.equal(assignee, null, `${userId} must not end up assigned`);
+        const [status, issue] = await assign(userId);
+        assert.equal(status, 400, `${userId} got ${status}`);
+        if (path.includes('create')) assert.equal(issue, null);
+        else assert.equal(issue?.assigneeId, owner);
       }
       for (const userId of [active, owner]) {
-        const [status, assignee] = await assign(userId);
+        const [status, issue] = await assign(userId);
         assert.ok(status >= 200 && status < 300, `${userId} got ${status}`);
-        assert.equal(assignee, userId);
+        assert.equal(issue?.assigneeId, userId);
       }
     });
   }
