@@ -54,6 +54,11 @@ export const getActionText = (activity: IssueActivity, itemType: string = 'issue
   if (activity.action === 'AGENT_LABEL_ADDED') return `${userName} added labels and notified role subscribers`;
   if (activity.action === 'AGENT_RUN_LOST') return `${userName} lost its run on this ${itemType}`;
   if (activity.action === 'AGENT_RUN_CLEARED') return `${userName} cleared a run on this ${itemType}`;
+  if (activity.action === 'AGENT_RUN_FINISHED') {
+    const outcome = typeof activity.details?.outcome === 'string' ? `: ${activity.details.outcome.replace(/_/g, ' ')}` : '';
+    return `${userName} finished a run on this ${itemType}${outcome}`;
+  }
+  if (activity.action === 'AGENT_RUN_LATE') return `${userName} sent an exit note after the run on this ${itemType} had ended; nothing else changed`;
   const actionName = getActionDisplayName(activity.action).toLowerCase();
   
   // Handle aggregated view activities
