@@ -144,4 +144,17 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     assert.equal((await read(devA.token, trashed.issueKey))[0], 404);
     assert.equal((await read('collab_at_unknown', target.issueKey))[0], 401);
   });
+
+  await t.test('linked issues from another workspace never appear in context', async () => {
+    const target = await issue({ agentRequestRole: 'review' });
+    const foreign = data => raw.issue.create({ data: { workspaceId: 'x', projectId: 'cprojectx001', title: 'Private', ...data } });
+    const outgoingBlocker = await foreign({}), incomingBlocker = await foreign({ agentRequestRole: 'developer' });
+    const outgoingRequest = await foreign({ agentRequestRole: 'release' }), filedFor = await foreign({});
+    await link(target, 'BLOCKED_BY', outgoingBlocker);
+    await link(incomingBlocker, 'BLOCKS', target);
+    await link(target, 'RELATES_TO', outgoingRequest);
+    await link(target, 'RELATES_TO', filedFor);
+    const reply = await context(target);
+    assert.deepEqual([reply.blockers, reply.requests, reply.requestFor], [[], [], []]);
+  });
 });

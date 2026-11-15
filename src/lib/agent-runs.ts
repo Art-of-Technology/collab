@@ -394,8 +394,8 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   const issue = await prisma.issue.findFirst({ where: { workspaceId: context.workspace.id, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] }, select: {
     ...REF, description: true, type: true, priority: true, assigneeId: true,
     agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { note: true, endedAt: true } },
-    sourceRelations: { select: { relationType: true, targetIssue: { select: REF } } },
-    targetRelations: { select: { relationType: true, sourceIssue: { select: REF } } },
+    sourceRelations: { where: { targetIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, targetIssue: { select: REF } } },
+    targetRelations: { where: { sourceIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, sourceIssue: { select: REF } } },
   } });
   if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
   const last = issue.agentRuns[0];
