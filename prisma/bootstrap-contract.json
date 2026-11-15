@@ -1,7 +1,7 @@
 {
   "format": "collab-empty-bootstrap-v1",
   "prismaVersion": "6.19.3",
-  "schemaSha256": "f9fe7c5a73b1a9b2b4de7e011a8c701fb5ae8cb5ac6e8d9e7dd1c5d3ed8d0a69",
+  "schemaSha256": "d7cba0774b972136f8a052643b9a29699195ee3132b32a672acd070771978258",
   "migrations": [
     {
       "name": "20250101000000_remove_task_relations_foreign_key",
