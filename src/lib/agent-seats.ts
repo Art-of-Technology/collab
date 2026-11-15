@@ -140,8 +140,10 @@ export async function assignCapReached(tx: Prisma.TransactionClient, context: Ca
 /** The durable count behind the cap: one audit row per issue an agent token created for a seat. Unassigning the issue later does not give the slot back. */
 export async function recordSeatHandoff(tx: Prisma.TransactionClient, context: Caller, assigneeId: string, issueId: string): Promise<void> {
   if (context.app.slug === AGENT_APP_SLUG && await isSeatAccount(tx, assigneeId)) {
+    // Stamped here, after the account's lock, and not by the database's default (the transaction's start): a creation
+    // that waited for the lock across midnight UTC is counted on the day it was let through.
     await tx.appAuditLog.create({ data: { workspaceId: context.workspace.id, actorId: context.user.id,
-      action: 'agent_seat.issue_handed', details: { issueId, assigneeId } } });
+      action: 'agent_seat.issue_handed', details: { issueId, assigneeId }, createdAt: new Date() } });
   }
 }
 

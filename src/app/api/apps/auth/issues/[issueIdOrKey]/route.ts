@@ -9,7 +9,7 @@ import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed } from '@/lib/for
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma, issueTrashPrisma } from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { enqueueLabelHandoff, InvalidIssueLabels } from '@/lib/agent-label-triggers';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
@@ -240,8 +240,9 @@ export const PATCH = withAppAuth(
       }
       if (parent) await seatWriteGuard(prisma, context, parent.projectId);
       if (updateData.parentId !== undefined && existingIssue.parentId && updateData.parentId !== existingIssue.parentId) {
-        const oldParent = await issueTrashPrisma.issue.findFirst({ where: { id: existingIssue.parentId }, select: { projectId: true } });
-        if (oldParent) await seatWriteGuard(prisma, context, oldParent.projectId);
+        const oldParent = await prisma.issue.findFirst({ where: { id: existingIssue.parentId }, select: { projectId: true } });
+        // A parent that cannot be read here is in Trash: its project is unknown, so a seat is refused and a person is not.
+        await seatWriteGuard(prisma, context, oldParent?.projectId ?? '');
       }
 
       await assertLegacyIssueWriteAllowed(
