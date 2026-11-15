@@ -164,6 +164,22 @@ test('repeated headings get -2, -3 and never share an id with another heading', 
   assert.equal(new Set(ids).size, ids.length);
 });
 
+test('a heading that ends with {#custom-id} gets that id, and the marker is not part of its text', () => {
+  const page = docsIn(fixture({ 'content/docs/custom.md': [
+    '# Collab CLI', '', 'The command line.', '',
+    '## Agent collaboration {#agents}', '## Agents', '### Install the `collab` CLI {#installation}', '## Agents {#agents}',
+  ].join('\n') })).docPage('custom');
+  assert.deepEqual(plain(page.headings), [
+    { depth: 2, text: 'Agent collaboration', id: 'agents' },
+    { depth: 2, text: 'Agents', id: 'agents-2' },
+    { depth: 3, text: 'Install the collab CLI', id: 'installation' },
+    { depth: 2, text: 'Agents', id: 'agents-3' },
+  ]);
+  assert.equal(docs.headingId('Agent collaboration {#agents}', new Map()), 'agents');
+  assert.equal(docs.headingText('Agent collaboration {#agents}'), 'Agent collaboration');
+  assert.equal(docs.headingText('Braces {like this} stay'), 'Braces {like this} stay');
+});
+
 test('headingId counts repeats in the map it is given', () => {
   const seen = new Map();
   assert.equal(docs.headingId('Agents', seen), 'agents');
