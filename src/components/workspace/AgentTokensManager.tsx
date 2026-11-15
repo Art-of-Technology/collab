@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, KeyRound, Loader2, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { workspaceMemberUsersKey } from '@/hooks/queries/useWorkspaceSelectorData';
 
 export interface WorkspaceRef {
   id: string;
@@ -53,6 +55,7 @@ const NONE = 'none';
 
 export default function AgentTokensManager({ workspaceId, workspaces, projects, people, tokens, seats = [] }: AgentTokensManagerProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
@@ -98,6 +101,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
       setOwnerId(NONE);
       setCopied(false);
       setMinted(asSeat ? { name: data.token.name, token: data.token.token } : { name: data.name, token: data.token });
+      await queryClient.invalidateQueries({ queryKey: workspaceMemberUsersKey(workspaceId) });
       router.refresh();
     } catch {
       failed('Failed to create the token');
@@ -114,6 +118,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
       if (!response.ok) return failed('Failed to revoke the token');
       toast({ title: 'Token revoked', description: `${revoking.name} can no longer use it.` });
       setRevoking(null);
+      await queryClient.invalidateQueries({ queryKey: workspaceMemberUsersKey(workspaceId) });
       router.refresh();
     } catch {
       failed('Failed to revoke the token');
@@ -132,6 +137,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
       const count = data.unassigned?.length ?? 0;
       toast({ title: 'Seat retired', description: `${retiring.name} takes no more work. ${count === 1 ? '1 open issue was' : `${count} open issues were`} unassigned.` });
       setRetiring(null);
+      await queryClient.invalidateQueries({ queryKey: workspaceMemberUsersKey(workspaceId) });
       router.refresh();
     } catch {
       failed('Failed to retire the seat');

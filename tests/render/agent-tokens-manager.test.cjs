@@ -4,6 +4,9 @@ const dom = new JSDOM('<div id="root"></div>', { url: 'https://collab.test/works
 global.window = dom.window; global.document = dom.window.document; global.IS_REACT_ACT_ENVIRONMENT = true;
 const React = require('react');
 const { createRoot } = require('react-dom/client');
+const { QueryClient } = require('@tanstack/react-query');
+const queryClient = new QueryClient();
+const memberKey = ['workspace-member-users', 'w1'];
 
 const calls = [], notices = [];
 let refreshed = 0, answer = { ok: true, json: async () => ({}) };
@@ -11,6 +14,8 @@ const el = tag => ({ children, id, onClick, disabled, htmlFor }) => React.create
 const parts = (names, tag = 'div') => Object.fromEntries(names.map(name => [name, el(tag)]));
 const Manager = load('src/components/workspace/AgentTokensManager.tsx', {
   react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
+  '@tanstack/react-query': { useQueryClient: () => queryClient },
+  '@/hooks/queries/useWorkspaceSelectorData': { workspaceMemberUsersKey: id => ['workspace-member-users', id] },
   'next/navigation': { useRouter: () => ({ refresh: () => { refreshed += 1; } }) },
   'lucide-react': new Proxy({}, { get: () => () => null }),
   '@/components/ui/badge': { Badge: el('span') },
@@ -103,7 +108,9 @@ test('a token created with a project is a seat: project, role and owner go to th
     await choose(1, 'release');
     await choose(2, 'u1');
     answer = { ok: true, json: async () => ({ seat: { id: 's1' }, token: { name: 'rel', token: 'collab_at_seat' } }) };
+    queryClient.setQueryData(memberKey, [{ id: 'agent' }]);
     await React.act(async () => buttons('Create seat')[0].click());
+    assert.equal(queryClient.getQueryState(memberKey).isInvalidated, true);
     assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats', 'POST', { name: 'rel', projectId: 'p1', role: 'release', ownerId: 'u1', expiresInDays: 90 }]);
     assert.match(document.body.textContent, /Copy the token for rel/);
     assert.equal(document.querySelector('input[readonly]').value, 'collab_at_seat');
@@ -129,19 +136,27 @@ test('a seat is named on its token and can be retired; a retired seat and a plai
     assert.equal(buttons('Revoke').length, 3);
 
     const before = refreshed;
+    queryClient.setQueryData(memberKey, [{ id: 'agent' }]);
     await React.act(async () => buttons('Retire seat')[0].click());
     answer = { ok: true, json: async () => ({ unassigned: ['CLB-1'] }) };
     await React.act(async () => buttons('Confirm: Retire seat')[0].click());
+    assert.equal(queryClient.getQueryState(memberKey).isInvalidated, true);
     assert.deepEqual(calls.at(-1), ['/api/workspaces/w1/agent-seats/s1', 'DELETE', undefined]);
     assert.equal(notices.at(-1).description, 'rel takes no more work. 1 open issue was unassigned.');
     assert.equal(refreshed, before + 1);
+
+    queryClient.setQueryData(memberKey, [{ id: 'agent' }]);
+    await React.act(async () => buttons('Revoke')[0].click());
+    answer = { ok: true, json: async () => ({}) };
+    await React.act(async () => buttons('Confirm: Revoke')[0].click());
+    assert.equal(queryClient.getQueryState(memberKey).isInvalidated, true);
 
     await React.act(async () => buttons('Retire seat')[0].click());
     answer = { ok: false, json: async () => ({ error: 'This seat has a run open; let it finish, or clear it, before retiring the seat' }) };
     await React.act(async () => buttons('Confirm: Retire seat')[0].click());
     assert.equal(notices.at(-1).variant, 'destructive');
     assert.match(notices.at(-1).description, /has a run open/);
-    assert.equal(refreshed, before + 1);
+    assert.equal(refreshed, before + 2);
   } finally { await React.act(async () => root.unmount()); }
 });
 

@@ -79,6 +79,7 @@ async function unassignOpen(tx: Prisma.TransactionClient, seat: { id: string; us
     UPDATE "Issue" i SET "assigneeId" = NULL, "updatedAt" = ${new Date()}
     WHERE i."assigneeId" = ${seat.userId}
       AND NOT EXISTS (SELECT 1 FROM "ProjectStatus" s WHERE s."id" = i."statusId" AND (s."category" = 'done' OR (s."category" IS NULL AND s."isFinal")))
+      AND (i."statusId" IS NOT NULL OR LOWER(COALESCE(NULLIF(TRIM(i."statusValue"), ''), NULLIF(TRIM(i."status"), ''), '')) NOT IN ('done', 'complete', 'completed', 'closed', 'resolved', 'cancelled', 'canceled'))
       ${misfit}
     RETURNING i."id", i."issueKey", i."workspaceId", i."projectId"`;
   await tx.$executeRaw`DELETE FROM "IssueAssignee" WHERE "userId" = ${seat.userId} AND "issueId" = ANY(${issues.map(issue => issue.id)})`;

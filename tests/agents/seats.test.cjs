@@ -381,10 +381,12 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     const done = (await prisma.projectStatus.findFirstOrThrow({ where: { projectId: B, name: 'done' } })).id;
     const elsewhere = await issue(B, { assigneeId: account }), request = await issue(A, { assigneeId: account, agentRequestRole: 'release' });
     const fitting = await issue(A, { assigneeId: account }), finished = await issue(B, { assigneeId: account, statusId: done });
+    const legacyDone = await issue(B, { assigneeId: account, status: '  CLOSED  ', statusValue: '' });
     const made = await seat('legacy', A, 'developer');
     assert.equal(made.userId, account);
     const holder = async row => (await prisma.issue.findUniqueOrThrow({ where: { id: row.id } })).assigneeId;
     assert.deepEqual([await holder(elsewhere), await holder(request), await holder(fitting), await holder(finished)], [null, null, account, account]);
+    assert.equal(await holder(legacyDone), account);
     const entries = await prisma.issueActivity.findMany({ where: { itemId: { in: [elsewhere.id, request.id, fitting.id, finished.id] }, action: 'UNASSIGNED' } });
     assert.deepEqual(entries.map(row => row.itemId).sort(), [elsewhere.id, request.id].sort());
     assert.ok(entries.every(row => JSON.parse(row.details).reason === 'seat_created' && row.userId === owner && row.oldValue === account));
@@ -406,6 +408,7 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     const open = await issue(A, { assigneeId: worker.userId, statusId: statuses.to_do });
     const bare = await issue(A, { assigneeId: worker.userId });
     const finished = await issue(A, { assigneeId: worker.userId, statusId: statuses.done });
+    const legacyDone = await issue(A, { assigneeId: worker.userId, status: 'todo', statusValue: ' Done ' });
     const run = await prisma.agentRun.create({ data: { workspaceId: 'w', issueId: open.id, seatId: worker.id, userId: worker.userId, runner: 'test', generation: 'g1' } });
     await refuses(seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: worker.id }), 'already_running', 409);
     assert.equal((await prisma.agentSeat.findUniqueOrThrow({ where: { id: worker.id } })).retiredAt, null);
@@ -422,6 +425,7 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
       assert.equal(JSON.parse(entry.details).reason, 'seat_retired');
     }
     assert.equal((await prisma.issue.findUniqueOrThrow({ where: { id: finished.id } })).assigneeId, worker.userId, 'finished work keeps its name');
+    assert.equal((await prisma.issue.findUniqueOrThrow({ where: { id: legacyDone.id } })).assigneeId, worker.userId);
     await refuses(seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: worker.id }), 'not_found', 404);
     await refuses(seats.retireSeat({ workspaceId: 'other', actorId: owner, seatId: devA.id }), 'not_found', 404);
 
