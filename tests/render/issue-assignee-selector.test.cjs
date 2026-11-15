@@ -43,3 +43,9 @@ test('an issue that already has a seat the picker would not offer still shows wh
   assert.equal(picker.current, 'dev-two');
   assert.ok(!picker.names.some(name => name.startsWith('dev-two')));
 });
+
+test('a current assignee absent from active members remains visible', async () => {
+  const picker = await choices({ projectId: 'p1', value: 'inactive', currentAssignee: { id: 'inactive', name: 'Retired agent' } });
+  assert.equal(picker.current, 'Retired agent');
+  assert.ok(!picker.names.some(name => name.includes('Retired agent')));
+});

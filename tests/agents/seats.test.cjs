@@ -201,6 +201,11 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     const made = await send(issues.POST, devA.token, 'POST', { body: { title: 'Child of B', projectId: A, parentId: theirs.id } });
     assert.equal(made.body.error, 'wrong_project');
     assert.equal(await prisma.issueRelation.count({ where: { OR: [{ sourceIssueId: theirs.id }, { targetIssueId: theirs.id }] } }), 0);
+    await prisma.issue.update({ where: { id: mine.id }, data: { parentId: theirs.id } });
+    for (const parentId of [null, mine.id]) {
+      const denied = await send(item.PATCH, devA.token, 'PATCH', { body: { parentId }, params: { issueIdOrKey: mine.id } });
+      assert.equal(denied.body.error, 'wrong_project');
+    }
     // A person's token still may, as today.
     const byPerson = await send(relations.POST, personToken, 'POST', { body: { targetIssueId: theirs.id, relationType: 'BLOCKS' }, params: { issueIdOrKey: mine.id } });
     assert.equal(byPerson.status, 201, JSON.stringify(byPerson.body));
@@ -259,13 +264,14 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
       assert.equal(made.body.assigneeId, devA.userId);
       assert.equal(made.body.warning, undefined);
     }
+    await prisma.issue.updateMany({ where: { title: 'crm 1' }, data: { assigneeId: null } });
     const sixth = await create(integration.token, 'crm 6');
     assert.equal(sixth.status, 201);
     assert.equal(sixth.body.assigneeId, null);
     assert.equal(sixth.body.warning, 'assign_cap');
     assert.equal(await prisma.issueAssignee.count({ where: { issueId: sixth.body.id } }), 0);
     // Yesterday's issues do not count, and an issue it assigns to a person is not capped.
-    await prisma.issue.updateMany({ where: { title: { in: ['crm 1', 'crm 2'] } }, data: { createdAt: new Date(Date.now() - 86_400_000) } });
+    await prisma.appAuditLog.updateMany({ where: { actorId: (await prisma.appToken.findUniqueOrThrow({ where: { id: integration.id } })).userId, action: 'agent_seat.issue_handed' }, data: { createdAt: new Date(Date.now() - 86_400_000) } });
     assert.equal((await create(integration.token, 'crm 7')).body.assigneeId, devA.userId);
     const toPerson = await send(issues.POST, integration.token, 'POST', { body: { title: 'crm person', projectId: A, assigneeId: person } });
     assert.equal(toPerson.body.assigneeId, person);
@@ -291,6 +297,12 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     const [entry] = await prisma.issueActivity.findMany({ where: { itemId: moved.id, action: 'UNASSIGNED' } });
     assert.equal(entry.oldValue, devA.userId);
     assert.equal(JSON.parse(entry.details).reason, 'moved_to_another_project');
+    const explicit = await issue(A, { assigneeId: devA.userId });
+    await prisma.issueAssignee.create({ data: { issueId: explicit.id, userId: devA.userId, role: 'ASSIGNEE', status: 'APPROVED' } });
+    assert.equal((await deps['@/lib/issue-mutation'].updateIssue(owner, explicit.id, { projectId: B, assigneeId: null }, 'w')).issue.assigneeId, null);
+    const activity = await prisma.issueActivity.findFirstOrThrow({ where: { itemId: explicit.id, action: 'UNASSIGNED' } });
+    assert.equal(JSON.parse(activity.details).reason, 'moved_to_another_project');
+    assert.equal(await prisma.issueAssignee.count({ where: { issueId: explicit.id } }), 0);
     // A person stays assigned through a move.
     const kept = await issue(A, { assigneeId: person });
     assert.equal((await deps['@/lib/issue-mutation'].updateIssue(owner, kept.id, { projectId: B }, 'w')).issue.assigneeId, person);

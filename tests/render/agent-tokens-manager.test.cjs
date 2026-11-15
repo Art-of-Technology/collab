@@ -203,3 +203,14 @@ test('Connect an agent shows the endpoint of this deployment and copies each com
     assert.match(document.body.textContent, /no public address configured/);
   } finally { await React.act(async () => root.unmount()); }
 });
+
+test('an active seat without tokens can still be retired', async () => {
+  const root = await render({ workspaces: [], tokens: [], seats: [{ id: 's1', name: 'Agent', role: 'release', project: 'Collab', isDefault: true }] });
+  try {
+    assert.match(document.body.textContent, /Agent.*Release seat of Collab/);
+    await React.act(async () => buttons('Retire seat')[0].click());
+    answer = { ok: true, json: async () => ({ unassigned: [] }) };
+    await React.act(async () => buttons('Confirm: Retire seat')[0].click());
+    assert.deepEqual(calls.at(-1).slice(0, 2), ['/api/workspaces/w1/agent-seats/s1', 'DELETE']);
+  } finally { await React.act(async () => root.unmount()); }
+});

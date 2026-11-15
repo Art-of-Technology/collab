@@ -43,6 +43,7 @@ interface AgentTokensManagerProps {
   people: { id: string; name: string }[];
   /** null while agent tokens are not set up on this deployment. */
   tokens: AgentTokenRow[] | null;
+  seats?: { id: string; name: string; role: string; project: string; isDefault: boolean }[];
 }
 
 const accessLabel = { read: 'Read only', write: 'Read and write' } as const;
@@ -50,7 +51,7 @@ const roleLabel: Record<string, string> = { developer: 'Developer', reviewer: 'R
 // The select cannot hold an empty value.
 const NONE = 'none';
 
-export default function AgentTokensManager({ workspaceId, workspaces, projects, people, tokens }: AgentTokensManagerProps) {
+export default function AgentTokensManager({ workspaceId, workspaces, projects, people, tokens, seats = [] }: AgentTokensManagerProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [creating, setCreating] = useState(false);
@@ -60,7 +61,8 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
   const [projectId, setProjectId] = useState(NONE);
   const [role, setRole] = useState('developer');
   const [ownerId, setOwnerId] = useState(NONE);
-  const [retiring, setRetiring] = useState<AgentTokenRow | null>(null);
+  const [retiring, setRetiring] = useState<{ name: string; seat: NonNullable<AgentTokenRow['seat']> } | null>(null);
+  const orphanSeats = seats.filter(seat => !tokens?.some(token => token.seat?.id === seat.id));
   const asSeat = projectId !== NONE;
   const [busy, setBusy] = useState(false);
   const [minted, setMinted] = useState<{ name: string; token: string } | null>(null);
@@ -200,6 +202,12 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4">
+          {orphanSeats.map(seat => (
+            <div key={seat.id} className="flex items-center justify-between gap-3 py-2">
+              <span>{seat.name} <span className="text-xs text-muted-foreground">{roleLabel[seat.role] ?? seat.role} seat of {seat.project}{seat.isDefault && ', default for its role'}</span></span>
+              <Button variant="outline" size="sm" onClick={() => setRetiring({ name: seat.name, seat: { ...seat, retired: false } })}>Retire seat</Button>
+            </div>
+          ))}
           {tokens.length === 0 ? (
             <p className="text-sm text-muted-foreground">No agent tokens yet.</p>
           ) : (
@@ -243,7 +251,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                         </Button>
                       )}
                       {token.seat && !token.seat.retired && (
-                        <Button variant="outline" size="sm" className="mr-2 text-xs h-7" onClick={() => setRetiring(token)}>
+                        <Button variant="outline" size="sm" className="mr-2 text-xs h-7" onClick={() => setRetiring({ name: token.name, seat: token.seat! })}>
                           Retire seat
                         </Button>
                       )}

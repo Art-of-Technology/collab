@@ -19,7 +19,7 @@ import { emitIssueCreated } from '@/lib/event-bus';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { createRefusal, issueShape } from '@/lib/issue-template-enforcement';
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
-import { assertTokenMayAssign, assignCapReached, seatWriteGuard } from '@/lib/agent-seats';
+import { assertTokenMayAssign, assignCapReached, recordSeatHandoff, seatWriteGuard } from '@/lib/agent-seats';
 
 // Schema for creating new issues
 const CreateIssueSchema = z.object({
@@ -373,6 +373,7 @@ export const POST = withAppAuth(
 
         // Create IssueAssignee record if issue is assigned to someone
         if (assigneeId) {
+          await recordSeatHandoff(tx, context, assigneeId, created.id);
           await tx.issueAssignee.create({
             data: {
               issueId: created.id,

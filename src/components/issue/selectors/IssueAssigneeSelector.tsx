@@ -20,6 +20,7 @@ interface IssueAssigneeSelectorProps extends IssueSelectorProps {
   workspaceId?: string;
   /** The issue's project: a seat is offered only for issues of its own project. */
   projectId?: string;
+  currentAssignee?: IssueUser | null;
 }
 
 export function IssueAssigneeSelector({
@@ -29,6 +30,7 @@ export function IssueAssigneeSelector({
   placeholder = "Assign to...",
   workspaceId,
   projectId,
+  currentAssignee,
 }: IssueAssigneeSelectorProps) {
   const { data: session } = useSession();
   const { data: members = [], isLoading } = useWorkspaceMemberUsers(workspaceId);
@@ -45,7 +47,7 @@ export function IssueAssigneeSelector({
   };
 
   // Read from every member, so an issue still shows a seat it was given before the seat changed.
-  const selectedUser = members.find(user => user.id === value);
+  const selectedUser = members.find(user => user.id === value) ?? (currentAssignee?.id === value ? currentAssignee : undefined);
   const currentUserId = session?.user?.id;
 
   // Filter users based on search query

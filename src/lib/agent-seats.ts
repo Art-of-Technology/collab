@@ -6,7 +6,7 @@ import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 
 export { HandoffError };
 type DB = Prisma.TransactionClient | typeof prisma;
-type Caller = Pick<AppAuthContext, 'user' | 'app'>;
+type Caller = Pick<AppAuthContext, 'user' | 'app' | 'workspace'>;
 
 export const SEAT_ROLES = ['developer', 'reviewer', 'release'] as const;
 /** Issues one agent token that is not a seat may hand to seats per UTC day. */
@@ -107,8 +107,15 @@ export async function assignCapReached(tx: Prisma.TransactionClient, context: Ca
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`assign-cap:${context.user.id}`}))`;
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
-  const handed = await tx.issue.count({ where: { reporterId: context.user.id, createdAt: { gte: today }, assignee: { agentSeat: { isNot: null } } } });
+  const handed = await tx.appAuditLog.count({ where: { actorId: context.user.id, action: 'agent_seat.issue_handed', createdAt: { gte: today } } });
   return handed >= ASSIGN_CAP;
+}
+
+export async function recordSeatHandoff(tx: Prisma.TransactionClient, context: Caller, assigneeId: string, issueId: string): Promise<void> {
+  if (context.app.slug === AGENT_APP_SLUG && await isSeatAccount(tx, assigneeId)) {
+    await tx.appAuditLog.create({ data: { workspaceId: context.workspace.id, actorId: context.user.id,
+      action: 'agent_seat.issue_handed', details: { issueId, assigneeId } } });
+  }
 }
 
 /**

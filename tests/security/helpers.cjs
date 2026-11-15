@@ -75,7 +75,7 @@ function load(file, dependencies = {}, globals = {}) {
       }
       // A fixture that says nothing about seats is called by people and by tokens that are not seats.
       if (!(name in dependencies) && name === '@/lib/agent-seats') {
-        return { HandoffError, seatWriteGuard: async () => {}, assertTokenMayAssign: async () => {}, assignCapReached: async () => false };
+        return { HandoffError, seatWriteGuard: async () => {}, assertTokenMayAssign: async () => {}, assignCapReached: async () => false, recordSeatHandoff: async () => {} };
       }
       if (!(name in dependencies) && name === '@/lib/issue-templates') {
         return load('src/lib/issue-templates.ts', { '@/lib/comment-html': load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') }) });
