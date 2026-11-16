@@ -271,8 +271,9 @@ export const PATCH = withAppAuth(
       }
 
       // Handle assignee change
+      let leadAssignment = false;
       if (updateData.assigneeId !== undefined) {
-        await assertTokenMayAssign(prisma, context, updateData.assigneeId, true, true);
+        leadAssignment = await assertTokenMayAssign(prisma, context, updateData.assigneeId, true, true);
         if (updateData.assigneeId) await assertAssignable(prisma, existingIssue, updateData.assigneeId);
         update.assigneeId = updateData.assigneeId;
       }
@@ -350,11 +351,19 @@ export const PATCH = withAppAuth(
       let placedByLead = false;
       const updatedIssue = await prisma.$transaction(async tx => {
         const currentAssignee = updateData.assigneeId ? await tx.issue.findUniqueOrThrow({
-          where: { id: existingIssue.id }, select: { assigneeId: true },
+          where: { id: existingIssue.id }, select: { id: true, workspaceId: true, projectId: true, agentRequestRole: true, assigneeId: true },
         }) : null;
+        if (leadAssignment && currentAssignee && updateData.assigneeId) {
+          if (!await assertTokenMayAssign(tx, context, updateData.assigneeId, true, true)) {
+            throw new HandoffError('seat_scope', 'A seat cannot change who an issue is assigned to', 403);
+          }
+          await seatWriteGuard(tx, context, currentAssignee.projectId);
+          await assertAssignable(tx, currentAssignee, updateData.assigneeId);
+        }
         // A lead seat's assignment is held to its rules here, on the rows this transaction reads, and leaves its own timeline entry.
         if (updateData.assigneeId && updateData.assigneeId !== currentAssignee?.assigneeId) {
-          placedByLead = await leadPlaces(tx, context, existingIssue, updateData.assigneeId);
+          placedByLead = await leadPlaces(tx, context, currentAssignee!, updateData.assigneeId);
+          if (leadAssignment && !placedByLead) throw new HandoffError('seat_scope', 'A seat cannot change who an issue is assigned to', 403);
         }
         const before = updateData.labels === undefined && !guarded?.enforced ? null : await tx.issue.findUniqueOrThrow({
           where: { id: existingIssue.id }, select: ISSUE_SHAPE_SELECT,

@@ -131,16 +131,17 @@ const isSeatAccount = async (db: DB, userId: string) => !!await db.agentSeat.fin
  * is what holds the lead to its project, its limit and what people decided. With `existingIssue`, an agent token that
  * is not a seat is refused when the assignee is a seat: it gives seats work only by creating issues, where its daily cap counts.
  */
-export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: string | null, existingIssue: boolean, leadPlacesNext = false): Promise<void> {
+export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: string | null, existingIssue: boolean, leadPlacesNext = false): Promise<boolean> {
   const seat = await db.agentSeat.findUnique({ where: { userId: context.user.id }, select: { role: true, retiredAt: true } });
   if (seat) {
     const leads = leadPlacesNext && existingIssue && !!assigneeId && assigneeId !== context.user.id && seat.role === 'lead' && !seat.retiredAt && await isSeatAccount(db, assigneeId);
     if (!leads) throw new HandoffError('seat_scope', 'A seat cannot change who an issue is assigned to', 403);
-    return;
+    return true;
   }
   if (existingIssue && assigneeId && context.app.slug === AGENT_APP_SLUG && await isSeatAccount(db, assigneeId)) {
     throw new HandoffError('assign_by_person', 'An agent token gives a seat work by creating an issue; an existing issue is assigned to a seat by a person', 403);
   }
+  return false;
 }
 
 /**

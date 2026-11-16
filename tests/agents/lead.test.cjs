@@ -106,6 +106,31 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
   const lead = await seat('lead-a', A, 'lead'), devA = await seat('dev-a', A), otherA = await seat('other-a', A), reviewerA = await seat('reviewer-a', A, 'reviewer');
   const leadB = await seat('lead-b', B, 'lead'), devB = await seat('dev-b', B);
 
+  await t.test('lead assignment rechecks the lead and issue inside the transaction', async () => {
+    let change;
+    const racingSeats = { ...seats, assertTokenMayAssign: async (...args) => {
+      const result = await seats.assertTokenMayAssign(...args);
+      if (change && args[0] === prisma) { const run = change; change = null; await run(); }
+      return result;
+    } };
+    const racingItem = load('src/app/api/apps/auth/issues/[issueIdOrKey]/route.ts', { ...deps, '@/lib/agent-seats': racingSeats }, globals);
+    const race = async (target, action) => {
+      change = action;
+      const reply = await send(racingItem.PATCH, lead.token, 'PATCH', { body: { assigneeId: devA.userId }, params: { issueIdOrKey: target.issueKey } });
+      return [reply.status, reply.body.error];
+    };
+    const moved = await issue(A);
+    assert.deepEqual(await race(moved, () => raw.issue.update({ where: { id: moved.id }, data: { projectId: B } })), [403, 'wrong_project']);
+    assert.equal(await holder(moved), null);
+    const request = await issue(A);
+    assert.deepEqual(await race(request, () => raw.issue.update({ where: { id: request.id }, data: { agentRequestRole: 'review' } })), [422, 'role_mismatch']);
+    assert.equal(await holder(request), null);
+    const retired = await issue(A);
+    assert.deepEqual(await race(retired, () => raw.agentSeat.update({ where: { id: lead.id }, data: { retiredAt: new Date() } })), [403, 'seat_scope']);
+    assert.equal(await holder(retired), null);
+    await raw.agentSeat.update({ where: { id: lead.id }, data: { retiredAt: null } });
+  });
+
   await t.test('a project has one lead seat; it takes ordinary issues and no requests', async () => {
     await assert.rejects(seat('lead-a2', A, 'lead'), error => error.code === 'lead_seat_exists' && error.status === 409);
     assert.deepEqual(await give(personToken, await issue(A, { type: 'EPIC' }), lead.userId), [200, undefined]);
