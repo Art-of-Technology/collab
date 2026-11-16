@@ -221,6 +221,17 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     assert.equal((await ask(gone.credential))[0], 200);
     await prisma.workspaceMember.updateMany({ where: { userId: other }, data: { status: false } });
     assert.equal((await ask(gone.credential))[0], 401);
+    // Switched off between the ask's first look and the making of a token: the token is not made.
+    await prisma.workspaceMember.updateMany({ where: { userId: other }, data: { status: true } });
+    const live = () => prisma.appToken.count({ where: { userId: theirs.userId, isRevoked: false } });
+    const before = await live(), find = prisma.agentSeat.findMany;
+    prisma.agentSeat.findMany = async (...args) => {
+      const found = await find.apply(prisma.agentSeat, args);
+      if (args[0]?.where?.ownerId === other) await prisma.workspaceMember.updateMany({ where: { userId: other }, data: { status: false } });
+      return found;
+    };
+    try { assert.equal((await ask(gone.credential))[0], 401); } finally { prisma.agentSeat.findMany = find; }
+    assert.equal(await live(), before);
 
     const late = await pair('late');
     await prisma.agentRunner.updateMany({ where: { pairingCode: late.code.replace('-', '') }, data: { pairingExpiresAt: new Date(Date.now() - 1000) } });

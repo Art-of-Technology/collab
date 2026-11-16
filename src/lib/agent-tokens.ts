@@ -122,7 +122,8 @@ export async function createAgentToken<S = undefined>(input: {
     if (input.mint === false) return { id: null, name: account.name ?? wanted, seat };
     const row = await tx.appToken.create({
       data: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, installationId: null, accessToken, tokenHash: createHash('sha256').update(token).digest('hex'), tokenExpiresAt: expiresAt, scopes,
-        runnerId: input.runnerId ?? null },
+        // Stamped here, after the name's lock, so an account's tokens sort in the order they were made.
+        runnerId: input.runnerId ?? null, createdAt: new Date() },
       select: { id: true },
     });
     // The audit row is the only record of who minted the token.
