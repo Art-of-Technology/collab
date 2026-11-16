@@ -69,7 +69,7 @@ test('actual bootstrap CLI emits one guarded schema transaction then ordered nat
   assert.ok(apply.input.indexOf('COLLAB_BOOTSTRAP_DATABASE_NOT_EMPTY') < apply.input.indexOf(schemaSql));
   assert.match(apply.input, /COMMIT;\n$/);
   assert.deepEqual(contract.migrations.slice(-12).map(row => row.name), [
-    '20261026000100_agent_operations', '20261027000100_managed_workers', '20261029000100_project_coordinator', '20261030000200_agent_transfer_offer', '20261031000100_transfer_worker_guard', '20261031000200_transfer_recipient_guard', '20261031000300_pending_offer_serialization', '20261107000100_agent_review_guard', '20261113000100_issue_templates', '20261113000200_app_approved_version', '20261114000100_handoff_claimed_once', '20261116000100_agent_seats',
+    '20261027000100_managed_workers', '20261029000100_project_coordinator', '20261030000200_agent_transfer_offer', '20261031000100_transfer_worker_guard', '20261031000200_transfer_recipient_guard', '20261031000300_pending_offer_serialization', '20261107000100_agent_review_guard', '20261113000100_issue_templates', '20261113000200_app_approved_version', '20261114000100_handoff_claimed_once', '20261116000100_agent_seats', '20261116000200_app_token_hash',
   ]);
   // The seat rules Prisma cannot model reach a fresh database as the migration's own statements.
   const seats = fs.readFileSync(path.join(root, 'prisma/migrations/20261116000100_agent_seats/migration.sql'), 'utf8');

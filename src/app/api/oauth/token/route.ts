@@ -230,6 +230,7 @@ async function handleAuthorizationCodeGrant(
           workspaceId: authCodeData.workspaceId,
           userId: authCodeData.userId,
           accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
+          tokenHash: createHash('sha256').update(accessToken).digest('hex'),
           refreshToken: Buffer.from(encryptedRefreshToken).toString('base64'),
           tokenExpiresAt: expiresAt,
           scopes: authCodeData.scope ? authCodeData.scope.split(' ') : ['read'],
@@ -259,6 +260,7 @@ async function handleAuthorizationCodeGrant(
             installationId: installation.id,
             userId: authCodeData.userId, // The user who authorized this token
             accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
+            tokenHash: createHash('sha256').update(accessToken).digest('hex'),
             refreshToken: Buffer.from(encryptedRefreshToken).toString('base64'),
             tokenExpiresAt: expiresAt,
             scopes: authCodeData.scope ? authCodeData.scope.split(' ') : ['read'],
@@ -386,6 +388,7 @@ async function handleRefreshTokenGrant(
         where: { id: tokenData.tokenId },
         data: {
           accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
+          tokenHash: createHash('sha256').update(newAccessToken).digest('hex'),
           tokenExpiresAt: expiresAt,
           scopes: normalizeScopes(tokenData.scope),
           updatedAt: new Date()

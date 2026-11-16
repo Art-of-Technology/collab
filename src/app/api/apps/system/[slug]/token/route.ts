@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { encryptToken, decryptToken } from '@/lib/apps/crypto';
 import { z } from 'zod';
 
@@ -180,6 +180,7 @@ export async function POST(
         where: { id: existingToken.id },
         data: {
           accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
+          tokenHash: createHash('sha256').update(accessToken).digest('hex'),
           refreshToken: Buffer.from(encryptedRefreshToken).toString('base64'),
           tokenExpiresAt: expiresAt,
           scopes: scopes,
@@ -201,6 +202,7 @@ export async function POST(
           installationId: null, // System apps don't have installations
           userId: null, // System tokens are not user-specific
           accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
+          tokenHash: createHash('sha256').update(accessToken).digest('hex'),
           refreshToken: Buffer.from(encryptedRefreshToken).toString('base64'),
           tokenExpiresAt: expiresAt,
           scopes: scopes,

@@ -251,18 +251,19 @@ export async function authenticateAppRequest(
  * 2. System app tokens (no installation required)
  */
 type VerifiedToken = { id: string; accessToken: string };
-// shortcut: remembers which stored row a presented token already decrypted to, so a repeat request
-// skips the scrypt scan. A token this process has not seen still scans every stored token; move to
-// an indexed token-hash column when that first request must be bounded too.
+// Remembers which stored row a presented token already decrypted to, so a repeat request derives no key.
 const verifiedTokens = new Map<string, VerifiedToken>();
 
+// The stored AppToken.tokenHash. A hash only finds the row; the row's decrypted token decides.
+const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
+
 async function findInstallationByAccessToken(token: string) {
-  const fingerprint = createHash('sha256').update(token).digest('base64');
+  const fingerprint = tokenHash(token);
   const verified = verifiedTokens.get(fingerprint);
   if (verified) {
     const installation = await matchAccessToken(token, fingerprint, verified);
     if (installation) return installation;
-    // Revoked, rotated or removed since it was remembered: check every stored token again.
+    // Revoked, rotated or removed since it was remembered: look it up again.
     verifiedTokens.delete(fingerprint);
   }
   return matchAccessToken(token, fingerprint);
@@ -273,7 +274,9 @@ async function matchAccessToken(token: string, fingerprint: string, verified?: V
   // Find tokens from active installations OR system app tokens
   const appTokens = await prisma.appToken.findMany({
     where: {
-      ...(verified && { id: verified.id, accessToken: verified.accessToken }),
+      // One indexed read: the row with this token's hash, and the rows that have no hash yet
+      // (older than the column, or written by a version that does not know it).
+      ...(verified ? { id: verified.id, accessToken: verified.accessToken } : { AND: [{ OR: [{ tokenHash: fingerprint }, { tokenHash: null }] }] }),
       isRevoked: false,
       OR: [
         // Regular app tokens (linked to installation)
@@ -333,6 +336,9 @@ async function matchAccessToken(token: string, fingerprint: string, verified?: V
     }
   });
 
+  // The row found by its hash goes first, so a token that has one costs one key derivation.
+  appTokens.sort((a, b) => Number(b.tokenHash === fingerprint) - Number(a.tokenHash === fingerprint));
+
   // Check each token's access token
   for (const appToken of appTokens) {
     if (!appToken.accessToken) continue;
@@ -348,6 +354,22 @@ async function matchAccessToken(token: string, fingerprint: string, verified?: V
       // A damaged token must not block other valid tokens.
       console.error('Failed to decrypt stored access token');
       continue;
+    }
+
+    // Each row decrypted here gets its hash, so it is decrypted for a lookup once. A hash that differs
+    // was left by a version that replaced the token without it.
+    const storedHash = verified ? appToken.tokenHash : tokenHash(decryptedToken);
+    if (storedHash !== appToken.tokenHash) {
+      try {
+        // Only while the row still holds the token this hash was computed from. updatedAt is kept:
+        // a refresh token's age is counted from it.
+        await prisma.appToken.updateMany({
+          where: { id: appToken.id, accessToken: appToken.accessToken },
+          data: { tokenHash: storedHash, updatedAt: appToken.updatedAt },
+        });
+      } catch {
+        // The hash only saves work, so a failed write refuses nobody: the row is tried again next time.
+      }
     }
 
     // Compare with provided token

@@ -259,6 +259,7 @@ async function handleAuthorizationCodeGrant(
       where: { id: existingToken.id },
       data: {
         accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
+        tokenHash: createHash('sha256').update(accessToken).digest('hex'),
         refreshToken: Buffer.from(encryptedRefreshToken).toString('base64'),
         tokenExpiresAt: expiresAt,
         scopes,
@@ -276,6 +277,7 @@ async function handleAuthorizationCodeGrant(
         userId: authCode.userId,
         installationId: null, // System apps don't have installations
         accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
+        tokenHash: createHash('sha256').update(accessToken).digest('hex'),
         refreshToken: Buffer.from(encryptedRefreshToken).toString('base64'),
         tokenExpiresAt: expiresAt,
         scopes,
@@ -377,6 +379,7 @@ async function handleRefreshTokenGrant(
     where: { id: matchedToken.id },
     data: {
       accessToken: Buffer.from(encryptedAccessToken).toString('base64'),
+      tokenHash: createHash('sha256').update(newAccessToken).digest('hex'),
       tokenExpiresAt: expiresAt,
       scopes,
       updatedAt: new Date()

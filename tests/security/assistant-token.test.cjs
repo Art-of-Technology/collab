@@ -13,7 +13,7 @@ function fixture() {
   const workspace = { id: 'w1', slug: 'one', name: 'One', ownerId: 'owner', members: [{ userId: 'alice', status: true }, { userId: 'bob', status: true }] };
   const tokens = [], logs = [];
   const stored = (appId, userId, value) => tokens.push({ id: `token-${tokens.length}`, appId, app: apps.find(app => app.id === appId), workspaceId: 'w1', workspace, userId,
-    installationId: null, installation: null, accessToken: Buffer.from(value).toString('base64'), scopes: MCP_SCOPES, isRevoked: false, tokenExpiresAt: new Date(Date.now() + 60_000), createdAt: new Date() });
+    installationId: null, installation: null, accessToken: Buffer.from(value).toString('base64'), tokenHash: null, scopes: MCP_SCOPES, isRevoked: false, tokenExpiresAt: new Date(Date.now() + 60_000), createdAt: new Date() });
   const prisma = {
     app: { findUnique: async ({ where }) => apps.find(row => matches(row, where)) ?? null, findFirst: async ({ where }) => apps.find(row => matches(row, where)) ?? null },
     appOAuthClient: { findUnique: async () => null },
