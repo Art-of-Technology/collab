@@ -16,11 +16,11 @@ const request = (bearer, using = auth) => using.authenticateAppRequest({ headers
 const stored = async bearer => (await crypto.encryptToken(bearer)).toString('base64');
 const hashOf = bearer => createHash('sha256').update(bearer).digest('hex');
 // A process that has seen no token yet, as after a restart.
-const freshProcess = () => load('src/lib/apps/auth-middleware.ts', {
+const freshProcess = (onDecrypt = async () => {}) => load('src/lib/apps/auth-middleware.ts', {
   'next/server': { NextResponse: { json: (body, init) => ({ body, status: init?.status ?? 200 }) } },
   '@/lib/prisma': { prisma }, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), '@/lib/post-access': load('src/lib/post-access.ts'),
   // Each decryption is one scrypt derivation: the cost that made lease calls outlast their timeout (CLB-460).
-  '@/lib/apps/crypto': { ...crypto, decryptToken: async data => { derivations++; return crypto.decryptToken(data); } },
+  '@/lib/apps/crypto': { ...crypto, decryptToken: async data => { derivations++; const token = await crypto.decryptToken(data); await onDecrypt(); return token; } },
 }, { Buffer, URL, console });
 
 before(async () => {
@@ -128,6 +128,21 @@ test('rows older than the hash are found by the old scan once and by their hash 
   derivations = 0;
   assert.equal((await request('nobody', restarted)).error.statusCode, 401);
   assert.equal(derivations, 0);
+});
+
+test('backfill does not overwrite a concurrent revocation timestamp', async () => {
+  const before = new Date('2026-01-01T00:00:00Z');
+  const revokedAt = new Date('2026-02-01T00:00:00Z');
+  await prisma.appToken.create({ data: { id: 'race', appId: 'cli', workspaceId: 'w', userId: 'alice', accessToken: await stored('race'), updatedAt: before } });
+  const process = freshProcess(async () => {
+    await prisma.appToken.update({ where: { id: 'race' }, data: { isRevoked: true, revokedAt, updatedAt: revokedAt } });
+  });
+  assert.equal((await request('race', process)).success, true);
+  const row = await prisma.appToken.findUnique({ where: { id: 'race' } });
+  assert.equal(row.isRevoked, true);
+  assert.deepEqual(row.updatedAt, revokedAt);
+  assert.equal(row.tokenHash, null);
+  assert.equal((await request('race', process)).error.statusCode, 401);
 });
 
 test('a minted agent token is stored with its hash and never in plain', async () => {

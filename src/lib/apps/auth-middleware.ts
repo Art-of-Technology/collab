@@ -364,7 +364,7 @@ async function matchAccessToken(token: string, fingerprint: string, verified?: V
         // Only while the row still holds the token this hash was computed from. updatedAt is kept:
         // a refresh token's age is counted from it.
         await prisma.appToken.updateMany({
-          where: { id: appToken.id, accessToken: appToken.accessToken },
+          where: { id: appToken.id, accessToken: appToken.accessToken, updatedAt: appToken.updatedAt },
           data: { tokenHash: storedHash, updatedAt: appToken.updatedAt },
         });
       } catch {
