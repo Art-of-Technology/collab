@@ -194,6 +194,8 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     const bare = [`${note('Next')}\n\n## Next`, `## Next\n\n${note('Next')}`];
     for (const outcome of ['in_review', 'blocked']) for (const empty of bare) assert.deepEqual(await missing({ outcome, askedUser: person, note: empty }), ['nextStep']);
     for (const outcome of ['in_review', 'blocked']) assert.deepEqual(await missing({ outcome, askedUser: person, note: `${bare[0]}\n\n###` }), ['nextStep']);
+    // Nor is a list item with nothing in it.
+    assert.deepEqual(await missing({ outcome: 'blocked', askedUser: person, note: `${bare[0]}\n\n- \n1.` }), ['nextStep']);
     assert.deepEqual(await missing({ outcome: 'blocked', askedUser: person, nextStep: 'First this.\nThen that.' }), ['nextStep']);
     for (const separator of ['\u2028', '\u2029']) for (const outcome of ['done', 'in_review', 'blocked']) {
       assert.deepEqual(await missing({ outcome, ...(outcome !== 'done' && { askedUser: person }), nextStep: `Review${separator}Deploy` }), ['nextStep']);
@@ -208,6 +210,10 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     const details = JSON.parse((await activities(target, 'AGENT_RUN_FINISHED'))[0].details);
     assert.deepEqual([details.pullRequest, details.headCommit, details.nextStep], [pullRequest, headCommit, nextStep]);
     assert.deepEqual(await facts(target), { pullRequest, headCommit, nextStep });
+    // A pull request number is as long as a provider's can be.
+    const numbered = await started(devA);
+    assert.equal((await finish(devA, numbered.run.id, { outcome: 'done', pullRequest: 'acme/app#2147483647', headCommit }))[0], 200);
+    assert.equal((await facts(numbered.target)).pullRequest, 'acme/app#2147483647');
 
     // A CLI before 0.12.0 cannot send the field: the first line under ## Next is the next step. Work without a pull request names none.
     const old = await started(devA);
