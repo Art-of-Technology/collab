@@ -265,6 +265,16 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     assert.equal((await admit(person, { code: one.code }))[0], 201);
     let held = await fetched(one.credential);
 
+    for (const removed of [false, true]) {
+      if (removed) await prisma.workspaceMember.delete({ where: key });
+      else await prisma.workspaceMember.update({ where: key, data: { status: false } });
+      await refuses(seat('dev', 'reviewer', person, { byRunner: true }), 'seat_exists', 409);
+      assert.equal(await member(), removed ? null : false);
+      assert.equal((await seat('dev', 'developer', person, { byRunner: true })).seat.id, mine.id);
+      assert.equal(await member(), true);
+      assert.equal(await me(held.token), 200);
+    }
+
     // Someone who manages members switches the agent off; its person then replaces the runner, which revokes what it fetched.
     await prisma.workspaceMember.update({ where: key, data: { status: false } });
     assert.equal(await me(held.token), 403);
