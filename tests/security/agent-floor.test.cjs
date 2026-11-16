@@ -758,7 +758,8 @@ test("labels follow the camera, collapse to dots from afar, and the view re-fram
     assert.equal(tag.style.transform, "");
     f.size(1200, 640);
     assert.equal(overlay.dataset.zoom, "near");
-    const placed = /^translate\(-50%,-100%\) translate\(([\d.]+)px,([\d.]+)px\)$/;
+    // A DOM writes a transform back with a space after each comma, as browsers do; older test DOMs did not.
+    const placed = /^translate\(-50%, ?-100%\) translate\(([\d.]+)px, ?([\d.]+)px\)$/;
     for (const label of [tag, sign]) {
       const [, x, y] = label.style.transform.match(placed);
       assert.ok(x > 0 && x < 1200 && y > 0 && y < 640, label.style.transform);

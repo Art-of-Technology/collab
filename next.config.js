@@ -40,6 +40,10 @@ const nextConfig = {
     'bcrypt',
     // Server-only and large: kept out of the bundle so it does not add to the build's memory use.
     '@modelcontextprotocol/server',
+    // The server's sanitizer and its DOM library: loaded from node_modules at run time. Bundling the DOM library
+    // took the build past its memory limit.
+    'isomorphic-dompurify',
+    'jsdom',
   ],
   images: {
     // Keep SVG optimization available for callers that have not opted out.
