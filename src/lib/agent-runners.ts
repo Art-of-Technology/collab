@@ -129,9 +129,12 @@ export async function runnerSeats(db: DB, projectId: string) {
 /**
  * What a runner asks with its credential: the seats that are its to run, which are the seats made for a runner, not
  * retired, in its workspace and owned by the person it was admitted for. `have` lists the ids of the tokens the runner
- * holds. A seat whose current token is among them is answered without one. Every other seat gets a new token and the
- * runner's earlier tokens for that seat end: a first ask, a lost file, a lost answer and a token revoked by a person
- * all read the same. A stored token is never decrypted to be sent again. The credential does nothing else.
+ * holds. A seat for which it holds a usable token is answered without one, and the runner's tokens for that seat from
+ * before the one it holds end. A seat for which it holds none gets a new token: a first ask, a lost file, a lost
+ * answer and a token revoked by a person all read the same. A token ends only when the runner shows it holds a newer
+ * one, or when a second newer one is made: answers can arrive late or out of order, so the token a new one replaces
+ * keeps working until then, and a runner has at most two usable tokens for a seat. A stored token is never decrypted
+ * to be sent again. The credential does nothing else.
  */
 export async function fetchSeats(credential: string, have: string[]) {
   const refused = () => new HandoffError('runner_refused', 'This runner credential is not accepted', 401);
@@ -150,18 +153,26 @@ export async function fetchSeats(credential: string, have: string[]) {
   const seats = await prisma.agentSeat.findMany({ where: { workspaceId, ownerId, byRunner: true, retiredAt: null }, orderBy: { createdAt: 'asc' },
     select: { id: true, userId: true, name: true, role: true, project: { select: { id: true, name: true, issuePrefix: true } } } });
   const held = seats.length ? await prisma.appToken.findMany({ where: { runnerId: runner.id, userId: { in: seats.map(seat => seat.userId) }, isRevoked: false, tokenExpiresAt: { gt: now } },
-    orderBy: { createdAt: 'desc' }, select: { id: true, userId: true, tokenExpiresAt: true } }) : [];
+    orderBy: { createdAt: 'desc' }, select: { id: true, userId: true, tokenExpiresAt: true, createdAt: true } }) : [];
   const answer = [];
   for (const { userId, ...seat } of seats) {
-    const current = held.find(token => token.userId === userId);
-    if (current && have.includes(current.id)) { answer.push({ ...seat, tokenId: current.id, expiresAt: current.tokenExpiresAt }); continue; }
+    // The newest of the seat's tokens that the runner says it holds.
+    const kept = held.find(token => token.userId === userId && have.includes(token.id));
+    if (kept) {
+      const before = held.filter(token => token.userId === userId && token.createdAt < kept.createdAt).map(token => token.id);
+      if (before.length) await prisma.appToken.updateMany({ where: { id: { in: before }, isRevoked: false }, data: { isRevoked: true, revokedAt: now } });
+      answer.push({ ...seat, tokenId: kept.id, expiresAt: kept.tokenExpiresAt });
+      continue;
+    }
     try {
       const minted = await createAgentToken({ workspaceId, actorId: ownerId, name: seat.name, access: 'write', expiresInDays: RUNNER_TOKEN_DAYS, runnerId: runner.id,
         seat: async (tx, account) => {
           // Held to the end: removing the runner waits for this token and revokes it, and a runner removed first gets none.
           if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentRunner" WHERE "id" = ${runner.id} AND "removedAt" IS NULL FOR SHARE`).length) throw refused();
           if (!await tx.agentSeat.count({ where: { id: seat.id, userId: account.id, ownerId, byRunner: true, retiredAt: null } })) throw new HandoffError('seat_changed', 'The seat changed while its token was made');
-          await tx.appToken.updateMany({ where: { runnerId: runner.id, userId: account.id, isRevoked: false }, data: { isRevoked: true, revokedAt: new Date() } });
+          // The newest token so far keeps working beside the new one: its answer may still be on its way to the runner.
+          const [, ...before] = await tx.appToken.findMany({ where: { runnerId: runner.id, userId: account.id, isRevoked: false }, orderBy: { createdAt: 'desc' }, select: { id: true } });
+          if (before.length) await tx.appToken.updateMany({ where: { id: { in: before.map(token => token.id) } }, data: { isRevoked: true, revokedAt: new Date() } });
         } });
       // `problem` names why a seat has no token this time (its member is switched off, or it changed); the next ask tries again.
       answer.push(minted.error ? { ...seat, tokenId: null, expiresAt: null, problem: minted.error }

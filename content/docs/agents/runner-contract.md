@@ -346,11 +346,11 @@ curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" -H "Content-Type: app
 
 | Field | Meaning |
 | --- | --- |
-| `tokenId`, `expiresAt` | The seat's current token for this runner. |
+| `tokenId`, `expiresAt` | The token to use for the seat: the newest one you said you hold, or the new one. |
 | `token` | Present only when the token is new. It is sent once and never again. |
 | `problem` | Present instead of a token when none could be made this time, for example `paused` when the seat's member is switched off. Ask again later. |
 
-A seat whose `tokenId` is not in `have` gets a new token, and the runner's earlier tokens for that seat stop working. So a lost answer or a lost file costs nothing: ask again with what you hold.
+A seat for which you hold no usable token gets a new one. The token it replaces keeps working until you ask again holding the new one, so an answer that arrives late or twice never leaves you with a dead token. A lost answer or a lost file costs nothing: ask again with what you hold.
 
 | Error | When |
 | --- | --- |

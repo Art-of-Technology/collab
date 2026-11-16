@@ -103,9 +103,12 @@ export function AgentModeSettings({ workspaceId, projectSlug }: { workspaceId: s
             {state.runnerSeats.map(seat => (
               <div key={seat.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3 rounded-xl bg-collab-900 border border-collab-700 text-sm">
                 <span className="text-collab-50 flex-1">{seat.name} <span className="text-xs text-collab-500 capitalize">{seat.role}{seat.owner ? `, owned by ${seat.owner}` : ""}</span></span>
-                {seat.fetchedAt
-                  ? <span className="text-xs text-collab-500">Fetched by {seat.runner ?? "a runner"} on {new Date(seat.fetchedAt).toLocaleDateString()} · {seat.lastSeenAt ? `last used ${new Date(seat.lastSeenAt).toLocaleString()}` : "not used yet"}</span>
-                  : <span className="text-xs text-amber-400">No runner yet</span>}
+                <span className="text-xs text-collab-500">
+                  {seat.fetchedAt
+                    ? `Fetched by ${seat.runner ?? "a runner"} on ${new Date(seat.fetchedAt).toLocaleDateString()}`
+                    : <span className="text-amber-400">No runner yet</span>}
+                  {" · "}{seat.lastSeenAt ? `last used ${new Date(seat.lastSeenAt).toLocaleString()}` : "not used yet"}
+                </span>
               </div>
             ))}
           </div>

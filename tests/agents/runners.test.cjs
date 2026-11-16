@@ -142,16 +142,34 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     assert.equal(await me(first.credential), 401);
   });
 
-  await t.test('a token the runner holds is not sent again; one it does not hold is replaced and the old one ends', async () => {
+  await t.test('a token the runner holds is not sent again; a token ends only when the runner shows it holds a newer one', async () => {
     const [, holding] = await ask(first.credential, [mine.token.tokenId, 'something-else']);
     assert.deepEqual(holding.seats.map(row => [row.tokenId, row.token]), [[mine.token.tokenId, undefined]]);
     assert.equal(await prisma.appToken.count({ where: { userId: mine.userId } }), 1);
-    // The answer was lost, or the runner's file was.
+    // Two asks that overlap, as when a slow one is sent again: whichever answer arrives last, the runner holds a token that works.
+    const [[, one], [, two]] = await Promise.all([ask(first.credential), ask(first.credential)]);
+    // In the order the server made them, which is not the order they were asked for.
+    const made = (await prisma.appToken.findMany({ where: { id: { in: [one.seats[0].tokenId, two.seats[0].tokenId] } }, orderBy: { createdAt: 'asc' }, select: { id: true } })).map(row => row.id);
+    const [older, newer] = made.map(id => [one.seats[0], two.seats[0]].find(row => row.tokenId === id));
+    assert.notEqual(older.tokenId, newer.tokenId);
+    assert.deepEqual([await me(older.token), await me(newer.token)], [200, 200]);
+    assert.equal(await me(mine.token.token), 401, 'two newer tokens were made since: the first one ended');
+    // Holding the older of the two changes nothing: the newer answer may still arrive.
+    assert.equal((await ask(first.credential, [older.tokenId]))[1].seats[0].tokenId, older.tokenId);
+    assert.deepEqual([await me(older.token), await me(newer.token)], [200, 200]);
+    // Holding the newer one ends the older.
+    assert.deepEqual((await ask(first.credential, [older.tokenId, newer.tokenId]))[1].seats.map(row => [row.tokenId, row.token]), [[newer.tokenId, undefined]]);
+    assert.deepEqual([await me(older.token), await me(newer.token)], [401, 200]);
+    // A runner that lost its file gets a new token; the lost one works until the runner asks holding the new one.
     const [, again] = await ask(first.credential);
-    assert.notEqual(again.seats[0].tokenId, mine.token.tokenId);
-    assert.equal(await me(mine.token.token), 401, 'the token the runner said it no longer holds');
-    assert.equal(await me(again.seats[0].token), 200);
-    mine.token = again.seats[0];
+    assert.deepEqual([await me(newer.token), await me(again.seats[0].token)], [200, 200]);
+    await ask(first.credential, [again.seats[0].tokenId]);
+    assert.deepEqual([await me(newer.token), await me(again.seats[0].token)], [401, 200]);
+    // A token a person revoked reads as one the runner does not hold.
+    await prisma.appToken.update({ where: { id: again.seats[0].tokenId }, data: { isRevoked: true } });
+    const [, renewed] = await ask(first.credential, [again.seats[0].tokenId]);
+    assert.equal(await me(renewed.seats[0].token), 200);
+    mine.token = renewed.seats[0];
   });
 
   await t.test('a person sees per seat whether a runner fetched its token, and a runner is listed for its person and the owner', async () => {
