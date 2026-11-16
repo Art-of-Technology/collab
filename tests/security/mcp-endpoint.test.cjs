@@ -38,7 +38,7 @@ function fixture({ timers = { setTimeout, clearTimeout } } = {}) {
   ];
   const tokens = [];
   const token = (value, scopes, extra = {}) => tokens.push({
-    id: `token-${tokens.length}`, accessToken: Buffer.from(value).toString('base64'), userId: 'agent', scopes, isRevoked: false,
+    id: `token-${tokens.length}`, accessToken: Buffer.from(value).toString('base64'), tokenHash: null, userId: 'agent', scopes, isRevoked: false,
     installationId: null, installation: null, appId: app.id, app, workspaceId: 'w1', workspace: workspaces[0], tokenExpiresAt: new Date(Date.now() + 60_000), ...extra,
   });
   token('full', ALL); token('readonly', READ); token('expired', ALL, { tokenExpiresAt: new Date(Date.now() - 1000) });
