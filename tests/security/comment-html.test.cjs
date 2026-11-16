@@ -169,3 +169,20 @@ test('board comments remain literal and preserve edit controls and drafts', asyn
     global.window = previous.window; global.document = previous.document; global.IS_REACT_ACT_ENVIRONMENT = previous.flag;
   }
 });
+
+// The server renders descriptions and comments for days without a restart. With the DOM library of November 2026
+// every sanitized document stayed registered on the shared window, so each call was slower than the last
+// (CLB-508; the docs loader hit the same thing as CLB-507). A turn of the event loop between calls is how a server runs.
+test('rendering on the server does not get slower with every call', async () => {
+  const description = '## Summary\n\nThe login page times out.\n\n## Steps to reproduce\n\n1. Open the page\n2. Wait';
+  const lap = async () => {
+    const start = process.hrtime.bigint();
+    for (let i = 0; i < 1000; i++) { commentHtml(description, null, true); await new Promise(setImmediate); }
+    return Number(process.hrtime.bigint() - start) / 1e6;
+  };
+  const first = await lap(), second = await lap(), third = await lap();
+  // 3,000 calls. The leaking library took about 1 s, then 3 s, then 5 s. Fast enough passes whatever the laps look like,
+  // so one pause on a busy runner does not fail it.
+  const growing = second > first * 2 && third > second * 1.25;
+  assert.ok(first + second + third < 1500 || !growing, `${Math.round(first)} ms, then ${Math.round(second)} ms, then ${Math.round(third)} ms`);
+});

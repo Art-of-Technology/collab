@@ -96,7 +96,7 @@
     "dompurify": "3.4.16",
     "entities": "^8.1.0",
     "framer-motion": "^12.6.0",
-    "isomorphic-dompurify": "2.36.0",
+    "isomorphic-dompurify": "4.7.0",
     "lodash": "^4.17.21",
     "lowlight": "^3.3.0",
     "lru-cache": "^11.1.0",

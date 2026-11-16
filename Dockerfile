@@ -1,5 +1,8 @@
 # Multi-stage build for production-ready Next.js application
 FROM node:22-alpine AS base
+# The server's DOM library (jsdom 31, used by the sanitizer) needs Node 22.22.2 or newer. Fail here, with the reason,
+# when the builder still has an older node:22-alpine: pull the base image again.
+RUN node -e "const [major, minor, patch] = process.versions.node.split('.').map(Number); if (major < 22 || (major === 22 && (minor < 22 || (minor === 22 && patch < 2)))) { console.error('This image needs Node 22.22.2 or newer; the base image has ' + process.version + '. Run: docker pull node:22-alpine'); process.exit(1); }"
 
 # Install dependencies only when needed
 FROM base AS deps
