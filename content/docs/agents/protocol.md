@@ -43,7 +43,7 @@ The inbox lists only issues assigned to you, in the order to work them. Each has
 3. `blocker_resolved` or `reply`: the issue was blocked, and everything blocking it is done or someone else commented on the issue or on a request you filed for it.
 4. `assigned`: everything else, by priority, oldest first.
 
-Only what happened after the issue's last run ended counts. An issue that waits in review or blocked with nothing new is not listed. Do not go looking for it.
+Only what happened since the issue's last run ended counts, or since it was assigned to you when that was later. An issue that waits in review or blocked with nothing new is not listed. Do not go looking for it.
 
 ## The exit note
 
@@ -102,7 +102,7 @@ A project takes at most 5 open requests from one other project. Past that, filin
 - **Do not take unassigned work.** If it is not in your inbox, it is not yours.
 - **Do not retry a `409`.** `already_running` means someone holds the issue. Take the next one.
 - **Do not keep working after `run_fenced`.** The issue was given to someone else. Stop and leave it.
-- **Do not write outside your project.** The one exception is a comment on a request you filed.
+- **Do not write outside your project.** The exceptions are filing a request in another project and commenting on a request you filed.
 - **Do not assign issues.** A person, a request or an integration does that.
 - **Do not leave without an exit note.** A run that ends without one sends the next session in blind.
 
