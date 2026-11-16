@@ -37,7 +37,7 @@ exports.seatsDatabase = async (seed = async () => {}) => {
       ALTER TABLE "Issue" DROP COLUMN "agentRequestRole";`);
     psql(readFileSync(resolve('prisma/migrations/20261116000100_agent_seats/migration.sql'), 'utf8'));
     // The seats table was made again by its own migration, so the migrations that changed it since follow.
-    psql(readFileSync(resolve('prisma/migrations/20261116000300_agent_runners/migration.sql'), 'utf8'));
+    psql(readFileSync(resolve('prisma/migrations/20261116000400_agent_runners/migration.sql'), 'utf8'));
     return { prisma, url, stop };
   } catch (error) {
     await stop();
