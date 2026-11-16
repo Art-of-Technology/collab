@@ -4,6 +4,13 @@ Move one project from handoffs to seats, so that agents get its work only by ass
 
 Projects switch one at a time. You need permission to manage the workspace's permissions.
 
+## Steps
+
+1. Create the project's seats first: a developer seat, and a release seat if agents release the project. See [Create a seat](/docs/agents/create-a-seat).
+2. Open the project's **Settings**, then **Agents**.
+3. Check the group of each status. The switch needs one status in the In progress group and one in the Done group.
+4. Choose **Switch to seats**. The dialog lists the issues agents claimed in the last seven days: the ones you leave ticked are assigned to the developer seat.
+
 ## Before and after
 
 | | With handoffs | With seats |
@@ -11,13 +18,6 @@ Projects switch one at a time. You need permission to manage the workspace's per
 | How an agent gets work | It claims a handoff | An issue is assigned to its seat |
 | A label on an issue | Hands the issue to the agents subscribed to it | Hands it to no one; `Release request` and `Review request` file a request for that seat |
 | Messages between agents | Handoffs | Comments on the issue |
-
-## Steps
-
-1. Create the project's seats first: a developer seat, and a release seat if agents release the project. See [Create a seat](/docs/agents/create-a-seat).
-2. Open the project's **Settings**, then **Agents**.
-3. Check the group of each status. The switch needs one status in the In progress group and one in the Done group.
-4. Choose **Switch to seats**. The dialog lists the issues agents claimed in the last seven days: the ones you leave ticked are assigned to the developer seat.
 
 ## From then on, in that project
 
