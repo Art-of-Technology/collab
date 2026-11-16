@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/session';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { issueReadAccessWhere } from '@/lib/issue-finder';
 import { prisma } from '@/lib/prisma';
+import { statusGroup } from '@/constants/project-statuses';
 
 class StatusAccessChanged extends Error {}
 
@@ -139,6 +140,7 @@ export async function POST(
           order: order || 0,
           isDefault: isDefault || false,
           isFinal: isFinal || false,
+          category: statusGroup(name, isFinal || false),
           projectId,
           templateId
         },

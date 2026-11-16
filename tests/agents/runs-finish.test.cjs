@@ -124,6 +124,28 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.deepEqual(await activities(target, 'AGENT_RUN_FINISHED'), []);
   };
 
+  await t.test('a project made through the API has statuses a run can move its issue to (CLB-506)', async () => {
+    // The rule for a new status gives every status here the group the migration gave it.
+    const { statusGroup } = load('src/constants/project-statuses.ts');
+    for (const status of await raw.projectStatus.findMany({ where: { projectId: { in: [A, B, C] } } })) assert.equal(statusGroup(status.name, status.isFinal), status.category, status.name);
+
+    const token = 'collab_project_token';
+    await raw.appScope.create({ data: { appId: 'person-app', scope: 'projects:write' } });
+    await raw.appToken.create({ data: { appId: 'person-app', workspaceId: 'w', userId: person, installationId: null,
+      accessToken: Buffer.from(token).toString('base64'), scopes: [...scopes, 'projects:write'] } });
+    const [made, project] = await call(load('src/app/api/apps/auth/projects/route.ts', deps, globals).POST, token, { body: { name: 'Data Flow', slug: 'data-flow', issuePrefix: 'DF' } });
+    assert.equal(made, 201, JSON.stringify(project));
+    assert.deepEqual(Object.fromEntries(project.statuses.map(status => [status.name, status.category])),
+      { backlog: 'todo', todo: 'todo', in_progress: 'in_progress', in_review: 'in_review', done: 'done', cancelled: 'done' });
+    const statusId = name => project.statuses.find(status => status.name === name).id;
+    const dev = await seat('dev-df', project.id);
+    const target = await issue(dev, { statusId: statusId('backlog') });
+    const run = await checkout(dev, target);
+    assert.equal(await statusOf(target), statusId('in_progress'), 'the checkout moves the issue');
+    const [status, body] = await finish(dev, run.id, { outcome: 'in_review', askedUser: person, status: 'in_review' });
+    assert.deepEqual([status, body.statusUnmapped, await statusOf(target)], [200, false, statusId('in_review')]);
+  });
+
   await t.test('rule 6: a note without all four headings is refused, with the headings that are missing', async () => {
     const { target, run } = await started(devA);
     assert.deepEqual((await refused(finish(devA, run.id, { outcome: 'done', note: note('Evidence') }), 422, 'exit_note_required')).missing, ['Evidence']);

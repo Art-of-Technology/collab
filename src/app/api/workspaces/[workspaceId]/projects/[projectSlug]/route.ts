@@ -4,7 +4,7 @@ import { authConfig } from '@/lib/auth';
 import { prisma, issueTrashPrisma } from '@/lib/prisma';
 import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
-import { generateInternalStatusName } from '@/constants/project-statuses';
+import { generateInternalStatusName, statusGroup } from '@/constants/project-statuses';
 
 export async function GET(
   request: NextRequest,
@@ -240,6 +240,7 @@ export async function PATCH(
               data: {
                 name: internalNames[i], displayName: status.name, color: status.color, order: i,
                 isDefault: status.isDefault || false, isFinal: internalNames[i] === 'done',
+                category: statusGroup(internalNames[i]),
                 projectId: currentProject.id
               }
             });

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultStatusTemplates } from "@/lib/seed-status-templates";
 import { assertAssignable } from "@/lib/issue-assignee";
+import { statusGroup } from "@/constants/project-statuses";
 
 /**
  * Automatically creates a Personal Workspace with a Default Project and View for a new user
@@ -112,6 +113,7 @@ export async function createPersonalWorkspaceForUser(userId: string, userName: s
           order: status.order,
           isDefault: status.isDefault,
           isFinal: status.name === 'done' || status.name === 'completed',
+          category: statusGroup(status.name),
           iconName: status.iconName,
           projectId: project.id,
           templateId: status.id

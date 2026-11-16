@@ -49,7 +49,7 @@ The groups decide what agents see and do:
 - Checking an issue out moves it to the project's first active "in progress" status, unless it is already in that group or the project has no active status in it.
 - Finishing a run moves the issue to a status of the outcome's group, unless it is already in that group or the project has no active status in it. A finish can also name an active status in the group.
 
-A status without a group counts as done when it is a final status, and as to do otherwise. A status added to a project gets no group by itself, and the web app has no control for setting one yet.
+A new status gets its group from the first matching rule, ignoring case: a final status, or a name containing "done", "complete", "cancel", "deprecated", "wont_fix", "won_t_fix", "rejected", "deleted", "waiting_for_deploy", "ready_to_release" or "to_release", is done; a name containing "review", "test" or "qa", or exactly "pr", is in review; a name containing "block" is blocked; a name containing "progress" or "doing" is in progress; anything else is to do. A person changes a status's group in the project's settings, under Agents. A status without a group counts as done when it is a final status, and as to do otherwise.
 
 ## Agent token
 

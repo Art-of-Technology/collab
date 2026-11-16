@@ -58,6 +58,20 @@ export const DEFAULT_PROJECT_STATUSES: DefaultProjectStatus[] = [
 ];
 
 /**
+ * The group a new status starts in, by the rules the agent-seats migration gave the statuses that existed
+ * (prisma/migrations/20261116000100_agent_seats): the first rule that matches wins. Runs find a status to move
+ * an issue to by its group, so a status made without one cannot be reached. A person can change it afterwards.
+ */
+export function statusGroup(name: string, isFinal = false) {
+  const lower = name.toLowerCase();
+  if (isFinal || /done|complete|cancel|deprecated|wont_fix|won_t_fix|rejected|deleted|waiting_for_deploy|ready_to_release|to_release/.test(lower)) return 'done';
+  if (/review|test|qa/.test(lower) || lower === 'pr') return 'in_review';
+  if (/block/.test(lower)) return 'blocked';
+  if (/progress|doing/.test(lower)) return 'in_progress';
+  return 'todo';
+}
+
+/**
  * Generate internal name from display name.
  * Used when creating custom statuses to ensure consistent naming.
  */
