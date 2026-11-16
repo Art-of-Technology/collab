@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 import { generateUniqueViewSlug } from '@/lib/utils';
-import { statusGroup } from '@/constants/project-statuses';
+import { defaultStatusName, statusGroup } from '@/constants/project-statuses';
 
 // Function to generate a unique issue prefix within a workspace
 async function generateUniqueIssuePrefix(workspaceId: string, requestedPrefix?: string, projectName?: string): Promise<string> {
@@ -325,6 +325,7 @@ export async function POST(
           isDefault: true,
         }
       });
+      const defaultName = defaultStatusName(defaultStatuses);
 
       // Create the project statuses
       await tx.projectStatus.createMany({
@@ -333,7 +334,7 @@ export async function POST(
           displayName: status.displayName,
           color: status.color,
           order: status.order,
-          isDefault: status.isDefault,
+          isDefault: status.name === defaultName,
           isFinal: status.name === 'done' || status.name === 'completed',
           category: statusGroup(status.name),
           iconName: status.iconName,

@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { DEFAULT_STATUS_ORDER } from '@/constants/project-statuses';
 import { NOT_DONE } from '@/lib/agent-runs';
 import { ASSIGN_CAP, countSeatHandoff, HandoffError, requireSeat, seatHandoffCapReached, seatWriteGuard } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
@@ -106,7 +107,7 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
   }
 
   const issueKey = await allocateIssueKey(tx, projectId);
-  const status = await tx.projectStatus.findFirst({ where: { projectId, isDefault: true }, select: { id: true, name: true } });
+  const status = await tx.projectStatus.findFirst({ where: { projectId, isDefault: true }, orderBy: DEFAULT_STATUS_ORDER, select: { id: true, name: true } });
   const now = new Date();
   const issue = await tx.issue.create({ data: {
     workspaceId, projectId, issueKey, type: 'TASK', title: input.title, description: input.body, priority: input.source.priority,
