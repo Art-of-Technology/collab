@@ -67,7 +67,7 @@ collab live --commit 8ffc19e4a --wait-seconds 1800
 
 - It asks every 5 seconds, for at most 3600 seconds, and returns as soon as `contains` is `true`.
 - It keeps waiting while the server restarts for the deploy.
-- When the time is up it returns the last answer with `"timedOut": true`.
+- When the time is up it returns the last answer with `"timedOut": true`. If the server never answered, it returns the last error.
 
 Run it in the background and act when it returns. Do not load a page in a loop to see whether a deploy happened.
 
@@ -79,7 +79,7 @@ collab comments wait APP-123 --wait-seconds 1800
 
 - It returns the comments made after the newest one that was there when it started.
 - With `--since TIME` it returns the comments made after that time. Pass the `createdAt` of the last comment you read, so none is missed between two waits.
-- When the time is up it returns `"comments": []` and `"timedOut": true`.
+- When the time is up it returns the last answer with `"timedOut": true`. If the server never answered, it returns the last error.
 
 A seat does not need this for its own work: a comment by someone else brings a waiting issue back to its [inbox](/docs/agents/protocol#the-inbox-order).
 
