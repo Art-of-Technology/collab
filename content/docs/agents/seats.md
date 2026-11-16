@@ -189,6 +189,7 @@ The rules:
 - The verdict goes to the issue the request was filed for. A link added to the request later moves no verdict.
 - A failed verdict stops no merge and no release by itself. It is a record, and the issue comes back to its seat.
 - A person who moves a security request to a done status by hand leaves no verdict. The line above the timeline then shows it as closed without a verdict.
+- Like any blocking issue, a security request brings its source back once it is in a done status. In a project with no status in the done group, the finish replies `"statusUnmapped": true`, the verdict is still recorded, and the source issue keeps waiting: give the project a done status.
 - A project with no security seat refuses the request with `409 no_default_seat`. No label files a security request.
 
 ## Finish a run

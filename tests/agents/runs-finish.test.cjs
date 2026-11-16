@@ -292,25 +292,6 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.equal((await finish(devA, second.run.id, { outcome: 'blocked', blockedBy: other.id }))[0], 200);
   });
 
-  await t.test('security verdict resolves a blocker without a mapped done status', async () => {
-    const security = await seat('security-c', C, 'security');
-    for (const [verdict, direction] of [['passed', 'BLOCKS'], ['failed', 'BLOCKED_BY']]) {
-      const source = await started(devA);
-      const request = await issue(security, { agentRequestRole: 'security', reporterId: devA.userId });
-      const other = await issue(null);
-      if (direction === 'BLOCKS') await link(request, direction, source.target);
-      else await link(source.target, direction, request);
-      await link(other, 'BLOCKS', source.target);
-      assert.equal((await finish(devA, source.run.id, { outcome: 'blocked', blockedBy: request.issueKey }))[0], 200);
-      const run = await checkout(security, request);
-      const [status, body] = await finish(security, run.id, { outcome: 'done', verdict, reviewed: 'commit' });
-      assert.deepEqual([status, body.statusUnmapped, await statusOf(request)], [200, true, `${C}-in_progress`]);
-      assert.deepEqual(await offered(devA, source.target), []);
-      await move(other, 'done');
-      assert.deepEqual(await offered(devA, source.target), ['blocker_resolved']);
-    }
-  });
-
   await t.test('review focus 3: a project with no status in the group still finishes, and says the status was left alone', async () => {
     const { target, run } = await started(devB);
     const [status, body] = await finish(devB, run.id, { outcome: 'blocked', askedUser: person });

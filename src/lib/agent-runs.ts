@@ -78,19 +78,12 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
 
   const waiting = candidates.filter(({ stands }) => stands === 'in_review' || stands === 'blocked').map(({ issue }) => issue.id);
   const replies = { where: { authorId: { not: me } }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } as const;
-  const linked = { select: { agentRequestRole: true, reporterId: true, updatedAt: true, projectId: true, assigneeId: true, createdAt: true,
-    projectStatus: statusSelect, comments: replies, agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, endedAt: true } },
-    helpers: { select: { userId: true, assignedAt: true, approvedAt: true } } } } as const;
+  const linked = { select: { agentRequestRole: true, reporterId: true, updatedAt: true, projectStatus: statusSelect, comments: replies } } as const;
   const details = new Map((waiting.length ? await prisma.issue.findMany({ where: { id: { in: waiting } }, select: {
     id: true, comments: replies,
     sourceRelations: { select: { relationType: true, targetIssue: linked } },
     targetRelations: { select: { relationType: true, sourceIssue: linked } },
   } }) : []).map(detail => [detail.id, detail]));
-  const linkedProjects = [...new Set([...details.values()].flatMap(detail => [
-    ...detail.sourceRelations.map(relation => relation.targetIssue), ...detail.targetRelations.map(relation => relation.sourceIssue),
-  ]).filter(issue => issue.agentRequestRole === 'security').map(issue => issue.projectId))];
-  const linkedShowsDone = new Set((linkedProjects.length ? await prisma.projectStatus.findMany({ where: { projectId: { in: linkedProjects }, isActive: true,
-    OR: [{ category: 'done' }, { category: null, isFinal: true }] }, select: { projectId: true }, distinct: ['projectId'] }) : []).map(status => status.projectId));
 
   const reasonFor = ({ issue, stands, since }: typeof candidates[number]): InboxItem['reason'] | null => {
     if (stands === 'resume') return 'resume';
@@ -112,14 +105,7 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
       return after(detail.comments[0]?.createdAt) ? 'reply' : null;
     }
     const blockers = others.filter(other => other.blocksMe).map(other => other.issue);
-    const resolvedAt = (other: typeof blockers[number]) => {
-      if (isDone(other)) return other.updatedAt;
-      const last = other.agentRuns[0], assignment = other.helpers.find(helper => helper.userId === other.assigneeId);
-      const assigned = assignment?.approvedAt ?? assignment?.assignedAt ?? other.createdAt;
-      return other.agentRequestRole === 'security' && !linkedShowsDone.has(other.projectId) && last?.outcome === 'done' && last.endedAt && last.endedAt >= assigned ? last.endedAt : null;
-    };
-    const resolutions = blockers.map(resolvedAt);
-    if (resolutions.length && resolutions.every(Boolean) && resolutions.some(date => after(date ?? undefined))) return 'blocker_resolved';
+    if (blockers.length && blockers.every(isDone) && blockers.some(doneAfter)) return 'blocker_resolved';
     return [detail, ...requests].some(other => after(other.comments[0]?.createdAt)) ? 'reply' : null;
   };
   const rank = (priority: string) => (PRIORITIES.indexOf(priority.toLowerCase()) + PRIORITIES.length + 1) % (PRIORITIES.length + 1);
