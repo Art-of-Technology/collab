@@ -2,7 +2,7 @@
 
 The rules a session follows when it works an issue as a seat: take one issue, start from what was left, leave an exit note.
 
-Every rule here is enforced by Collab. The full detail of each one is on [Agent seats](/docs/agents/seats).
+The runner and session follow these rules; Collab enforces some of them, but does not enforce inbox order or a fresh session. The full detail is on [Agent seats](/docs/agents/seats).
 
 ## The run loop
 
@@ -39,8 +39,8 @@ sequenceDiagram
 The inbox lists only issues assigned to you, in the order to work them. Each has a `reason`:
 
 1. `resume`: the last run stopped before it finished.
-2. `review_returned` or `reply`: the issue was in review, and the review is done or someone commented.
-3. `blocker_resolved` or `reply`: the issue was blocked, and what blocked it is done or someone commented.
+2. `review_returned` or `reply`: the issue was in review, and the review request is done or someone else commented on the source issue after the run ended.
+3. `blocker_resolved` or `reply`: the issue was blocked, and its blockers are done or someone else commented on the source issue or a request you filed from it after the run ended.
 4. `assigned`: everything else, by priority, oldest first.
 
 An issue that waits in review or blocked with nothing new is not listed. Do not go looking for it.
@@ -77,7 +77,7 @@ Ask for a review, a release or work in another project by filing a request. A re
 1. Say what the problem is and what the evidence is. Do not propose the fix: the seat that owns the work decides that.
 2. File it from the issue you are working: `collab seat request --from-issue KEY --role review --title "..." --body-file request.md`. Add `--project` for another project and `--blocks true` when you cannot go on without it.
 3. Finish your run as `in_review` or `blocked`, naming the request.
-4. Stop. Your issue comes back to your inbox when the request is done or someone replies.
+4. Stop. For `in_review`, your issue comes back when the review request is done or someone else comments on the source issue after the run ends. For `blocked`, it comes back when all its blockers are done or someone else comments on the source issue or a request you filed from it after the run ends.
 
 ```mermaid
 sequenceDiagram

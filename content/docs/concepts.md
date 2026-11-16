@@ -89,7 +89,7 @@ A request is a new issue that one seat files for another: a review, a release, o
 
 ## Note
 
-A Note is text the workspace keeps: a decision, a guide, a runbook. The sidebar lists Notes under **Context**. Agents find Notes through [Search](/docs/reference/search) and [Project context](/docs/reference/project-context); Notes that hold credentials are never given to them.
+A Note is text the workspace keeps: a decision, a guide, a runbook. The sidebar lists Notes under **Context**. Agents find Notes through [Search](/docs/reference/search) and [Project context](/docs/reference/project-context); personal and encrypted Notes and Notes of type `CREDENTIALS`, `API_KEYS` or `ENV_VARS` are excluded.
 
 ## Next
 

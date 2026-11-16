@@ -58,7 +58,7 @@ A score ranks results within one mode. It is not a confidence value.
 
 ## What is never returned
 
-- Encrypted Notes, and Notes that hold credentials, API keys or environment variables.
+- Encrypted Notes and Notes of type `CREDENTIALS`, `API_KEYS` or `ENV_VARS`.
 - Personal Notes.
 - Anything in a workspace or project the token cannot read. Access is checked before the search and again before the reply.
 
