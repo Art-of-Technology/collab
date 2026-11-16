@@ -134,8 +134,12 @@ export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: 
  * True when this agent account, known not to be a seat, has handed seats its cap of new issues today (UTC). Called
  * inside the transaction that would hand over one more: it holds a lock per token account until that ends.
  */
-export async function seatHandoffCapReached(tx: Prisma.TransactionClient, actorId: string): Promise<boolean> {
+export async function lockSeatHandoffCap(tx: Prisma.TransactionClient, actorId: string): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`assign-cap:${actorId}`}))`;
+}
+
+export async function seatHandoffCapReached(tx: Prisma.TransactionClient, actorId: string): Promise<boolean> {
+  await lockSeatHandoffCap(tx, actorId);
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
   return await tx.appAuditLog.count({ where: { actorId, action: 'agent_seat.issue_handed', createdAt: { gte: today } } }) >= ASSIGN_CAP;

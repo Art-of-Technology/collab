@@ -370,6 +370,13 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     const two = await send(issues.POST, integration.token, 'POST', { body: { title: 'crm two', projectId: A, assigneeId: devA.userId, labels: ['clabelrelease1'] } });
     assert.equal(two.status, 201, JSON.stringify(two.body));
     assert.equal(await prisma.appAuditLog.count({ where: { ...handed, createdAt: { gte: new Date(Date.now() - 60_000) } } }), 3);
+    await prisma.appAuditLog.updateMany({ where: handed, data: { createdAt: new Date(Date.now() - 86_400_000) } });
+    const concurrent = await Promise.all([
+      send(issues.POST, integration.token, 'POST', { body: { title: 'concurrent assigned', projectId: A, assigneeId: devA.userId } }),
+      send(issues.POST, integration.token, 'POST', { body: { title: 'concurrent release', projectId: A, labels: ['clabelrelease1'] } }),
+    ]);
+    for (const result of concurrent) assert.equal(result.status, 201, JSON.stringify(result.body));
+    assert.equal(await prisma.appAuditLog.count({ where: { ...handed, createdAt: { gte: new Date(Date.now() - 60_000) } } }), 2);
     await prisma.project.update({ where: { id: A }, data: { agentMode: 'handoffs' } });
   });
 
