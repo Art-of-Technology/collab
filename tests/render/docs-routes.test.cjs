@@ -19,7 +19,7 @@ fs.writeFileSync(path.join(root, 'content/docs/draft.md'), '# Draft\n\nNot liste
 // The routes run on the real loader, pointed at the folder above.
 function routes(appUrl) {
   const globals = { Response, process: { cwd: () => root, env: appUrl ? { NEXT_PUBLIC_APP_URL: appUrl } : {} } };
-  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), 'isomorphic-dompurify': { default: require('isomorphic-dompurify') } }, globals);
+  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), entities: require('entities') }, globals);
   const route = file => load(file, { '@/lib/docs': docs }, globals);
   return {
     docs,
@@ -83,7 +83,7 @@ test('a title with square brackets still makes one working link in llms.txt', as
   fs.writeFileSync(path.join(dir, 'content/docs/nav.json'), JSON.stringify([{ title: 'Start here', pages: ['index'] }]));
   fs.writeFileSync(path.join(dir, 'content/docs/index.md'), '# Flags \\[optional\\]\n\nWhat a flag does.\n');
   const globals = { Response, process: { cwd: () => dir, env: {} } };
-  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), 'isomorphic-dompurify': { default: require('isomorphic-dompurify') } }, globals);
+  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), entities: require('entities') }, globals);
   const text = await (await load('src/app/llms.txt/route.ts', { '@/lib/docs': docs }, globals).GET()).text();
   assert.match(text, /^- \[Flags \\\[optional\\\]\]\(\/docs\/index\.md\): What a flag does\.$/m);
 });
@@ -94,7 +94,7 @@ test('a title with backslashes and brackets remains one Markdown link', async ()
   fs.writeFileSync(path.join(dir, 'content/docs/nav.json'), JSON.stringify([{ title: 'Start here', pages: ['index'] }]));
   fs.writeFileSync(path.join(dir, 'content/docs/index.md'), '# Flags `\\[optional]`\n\nWhat a flag does.\n');
   const globals = { Response, process: { cwd: () => dir, env: {} } };
-  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), 'isomorphic-dompurify': { default: require('isomorphic-dompurify') } }, globals);
+  const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), entities: require('entities') }, globals);
   const text = await (await load('src/app/llms.txt/route.ts', { '@/lib/docs': docs }, globals).GET()).text();
   const list = require('marked').lexer(text).find(token => token.type === 'list');
   const link = list.items[0].tokens[0].tokens.find(token => token.type === 'link');
