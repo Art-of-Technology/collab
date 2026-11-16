@@ -37,7 +37,7 @@ export const GET = withAppAuth(
     try {
       const { issueIdOrKey } = await params;
       const { searchParams } = new URL(request.url);
-      const flat = searchParams.get('flat') === 'true';
+      const flat = searchParams.get('flat') === 'true' || searchParams.has('since');
       // Only comments made after this moment: what `collab comments wait` asks for.
       const since = searchParams.has('since') ? new Date(searchParams.get('since')!) : null;
       if (since && Number.isNaN(since.getTime())) {

@@ -25,7 +25,6 @@ async function contains(revision: string, commit: string) {
     }
   } catch { /* unknown */ }
   // History does not change, so a yes or a no holds while this process runs. An unknown is asked again after a minute.
-  if (answers.size >= 1000) answers.clear();
   answers.set(commit, { contains: answer, until: answer === null ? Date.now() + UNKNOWN_MS : Infinity });
   return answer;
 }

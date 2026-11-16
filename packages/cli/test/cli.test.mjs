@@ -2244,6 +2244,27 @@ test('comments wait returns the comments made after the newest one, or says that
   assert.equal((await f.run(['comments', 'wait', 'APP-1', '--since', 'yesterday'])).error.error, 'invalid_value');
 });
 
+test('new waits survive outages and retain the last answer at the deadline', async t => {
+  const first = { id: 'one', createdAt: '2026-11-16T10:00:00.000Z' };
+  let mode = 'baseline';
+  const f = await fixture(t, (req, res, _body, calls) => {
+    if (mode === 'baseline' && calls.length === 1) { res.writeHead(503); return res.end('{}'); }
+    if (mode === 'baseline') return res.end(JSON.stringify({ comments: new URL(req.url, 'http://localhost').searchParams.has('since') ? [{ id: 'two' }] : [first] }));
+    if (calls.length === 1) return res.end(JSON.stringify(mode === 'live' ? { contains: false } : { comments: [] }));
+    setTimeout(() => { res.writeHead(503); res.end('{}'); }, 1200);
+  });
+  const recovered = await f.run(['comments', 'wait', 'APP-1', '--wait-seconds', '10']);
+  assert.deepEqual(recovered.data.comments, [{ id: 'two' }]);
+  for (const kind of ['live', 'comments']) {
+    mode = kind; f.calls.length = 0;
+    const args = kind === 'live' ? ['live', '--commit', 'a'.repeat(40)] : ['comments', 'wait', 'APP-1', '--since', first.createdAt];
+    const result = await f.run([...args, '--wait-seconds', '6']);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.data.timedOut, true);
+    assert.deepEqual(kind === 'live' ? result.data.contains : result.data.comments, kind === 'live' ? false : []);
+  }
+});
+
 test('seat and run refusals keep their code and what is missing, and pass on nothing else from the server', async t => {
   let answer;
   const f = await fixture(t, (_req, res) => { res.writeHead(answer.status); res.end(JSON.stringify({ error_description: 'PRIVATE_SENTINEL', ...answer.body })); });

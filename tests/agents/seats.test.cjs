@@ -327,10 +327,14 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
   await t.test('CLB-527: comments can be read from a time on, which is what a wait for a new comment asks', async () => {
     const work = await issue(A), params = { issueIdOrKey: work.id };
     const at = minute => new Date(Date.UTC(2026, 10, 16, 10, minute));
-    await prisma.issueComment.createMany({ data: [0, 5].map(minute => ({ issueId: work.id, authorId: person, content: `at ${minute}`, createdAt: at(minute) })) });
+    const parent = await prisma.issueComment.create({ data: { issueId: work.id, authorId: person, content: 'at 0', createdAt: at(0) } });
+    await prisma.issueComment.createMany({ data: [{ issueId: work.id, authorId: person, content: 'at 5', createdAt: at(5) },
+      { issueId: work.id, authorId: person, parentId: parent.id, content: 'reply at 5', createdAt: at(5) }] });
     const read = async query => (await send(comments.GET, personToken, 'GET', { params, query })).body.comments.map(row => row.content);
-    assert.deepEqual(await read('?flat=true'), ['at 0', 'at 5']);
-    assert.deepEqual(await read(`?flat=true&since=${at(0).toISOString()}`), ['at 5']);
+    assert.deepEqual((await read('?flat=true')).sort(), ['at 0', 'at 5', 'reply at 5']);
+    assert.deepEqual((await read(`?flat=true&since=${at(0).toISOString()}`)).sort(), ['at 5', 'reply at 5']);
+    assert.deepEqual((await read(`?since=${at(0).toISOString()}`)).sort(), ['at 5', 'reply at 5']);
+    assert.deepEqual(await read(''), ['at 0', 'at 5']);
     assert.deepEqual(await read(`?flat=true&since=${at(5).toISOString()}`), []);
     assert.equal((await send(comments.GET, personToken, 'GET', { params, query: '?since=yesterday' })).status, 400);
   });

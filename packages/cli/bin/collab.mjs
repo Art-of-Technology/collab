@@ -423,8 +423,7 @@ async function main() {
       if (!Array.isArray(result?.items)) throw new CliError('invalid_response', 'Expected inbox items.', 5);
       return result.items.length;
     });
-    // The newest comment there is now, by the server's clock: the wait is for one after it.
-    if (name === 'comments wait' && !query.has('since')) query.set('since', (await send()).comments?.at(-1)?.createdAt ?? new Date(0).toISOString());
+    let baseline = name === 'comments wait' && !query.has('since');
     let last;
     for (;;) {
       const window = deadline - Date.now();
@@ -435,9 +434,19 @@ async function main() {
       let result;
       try { result = await send(Math.min(timeout, Math.max(1000, window))); } catch (error) {
         // A long wait outlives a deploy: while the server restarts it asks again, until its own time is up.
-        if (!spec.waitMax || !serverAway(error) || Date.now() >= deadline) throw error;
+        if (!spec.waitMax || !serverAway(error)) throw error;
+        if (Date.now() >= deadline) {
+          if (last) return { ...last, timedOut: true };
+          throw error;
+        }
       }
       if (result) {
+        if (baseline) {
+          query.set('since', result.comments?.at(-1)?.createdAt ?? new Date(0).toISOString());
+          baseline = false;
+          last = result;
+          continue;
+        }
         if (ready(result)) return result;
         last = result;
       }

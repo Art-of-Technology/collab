@@ -179,6 +179,11 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
     // An agent token that is not a seat asks for a release by label, as a person does, and for a review it does not.
     await tokens.createAgentToken({ workspaceId: 'w', actorId: owner, name: 'crm', access: 'write', expiresInDays: 30 });
     const crm = await raw.user.findFirstOrThrow({ where: { name: 'crm' } }), unasked = await issue(S);
+    await label(person, asked, []);
+    await refused(label(crm.id, asked, ['Review request']), 'assign_by_person', 403);
+    await refused(label(crm.id, asked, ['Review request', 'Release request']), 'assign_by_person', 403);
+    assert.equal((await requestsFor(asked)).length, 1);
+    assert.deepEqual((await raw.issue.findUniqueOrThrow({ where: { id: asked.id }, include: { labels: true } })).labels, []);
     await refused(label(crm.id, unasked, ['Review request']), 'assign_by_person', 403);
     await refused(label(crm.id, unasked, ['Review request', 'Release request']), 'assign_by_person', 403);
     assert.deepEqual(await requestsFor(unasked), []);

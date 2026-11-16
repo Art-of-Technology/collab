@@ -68,6 +68,17 @@ test('live: a build that was not told its commit says so and asks nothing', asyn
   }
 });
 
+test('live: definitive answers survive more than 1000 distinct queries', async () => {
+  const live = route(REVISION);
+  await live.get(AHEAD);
+  await live.get(BEHIND);
+  for (let n = 0; n < 1001; n++) await live.get(n.toString(16).padStart(40, '0'));
+  const count = live.asked.length;
+  assert.equal((await live.get(AHEAD)).body.contains, true);
+  assert.equal((await live.get(BEHIND)).body.contains, false);
+  assert.equal(live.asked.length, count);
+});
+
 test('live: git archive, which a release is built from, writes the commit into the route', t => {
   const cwd = resolve(__dirname, '../..');
   let head;

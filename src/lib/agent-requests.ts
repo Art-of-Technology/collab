@@ -141,11 +141,12 @@ export async function labelRequests(tx: Prisma.TransactionClient, me: string, is
   if (!source || source.agentRequestRole) return true;
   for (const role of ['review', 'release'] as const) {
     const kind = REQUESTS[role], label = added.find(candidate => candidate.name === kind.label);
-    if (!label || await tx.issue.count({ where: { projectId: issue.projectId, agentRequestRole: role,
-      sourceRelations: { some: { targetIssueId: issue.id, relationType: { in: ['RELATES_TO', 'BLOCKS'] } } }, ...NOT_DONE } })) continue;
+    if (!label) continue;
     if (role !== 'release' && !await tx.agentSeat.findFirst({ where: { userId: me, retiredAt: null }, select: { id: true } }) && await tx.appToken.findFirst({ where: { userId: me, app: { slug: AGENT_APP_SLUG } }, select: { id: true } })) {
       throw new HandoffError('assign_by_person', `An agent token that is not a seat does not ask for a ${role} by label; a person or a seat of the project adds it`, 403);
     }
+    if (await tx.issue.count({ where: { projectId: issue.projectId, agentRequestRole: role,
+      sourceRelations: { some: { targetIssueId: issue.id, relationType: { in: ['RELATES_TO', 'BLOCKS'] } } }, ...NOT_DONE } })) continue;
     // The seat's row, not the project's seat lock that `fileRequest` takes before it locks its source issue: this
     // transaction already holds the issue, and the other order could deadlock with it. Retiring a seat waits for the row.
     await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "projectId" = ${issue.projectId} AND "role" = ${kind.seat} AND "isDefault" AND "retiredAt" IS NULL FOR SHARE`;
