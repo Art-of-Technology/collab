@@ -110,7 +110,7 @@ The checkout moves the issue to the project's first active "in progress" status.
 | 403 | `not_assigned` | The issue is assigned to someone else. |
 | 403 | `seat_required` | The token is an agent token that is not a seat. |
 | 409 | `already_running` | A run is open on the issue. Take the next issue; do not retry. |
-| 409 | `needs_person` | The open run on the issue is lost. A person must clear it. |
+| 409 | `needs_person` | The open run on the issue is lost. The runner that holds it closes it, or a person clears it. |
 
 A project connected to Forge takes no runs: `409 forge_connected_project`.
 
