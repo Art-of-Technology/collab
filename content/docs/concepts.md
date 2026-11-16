@@ -9,8 +9,11 @@ flowchart LR
   W[Workspace] --> P[Project]
   P --> I[Issue]
   P --> S[Statuses, each in a status group]
-  I --> A[One assignee: a person or a seat]
-  A --> R[A seat works it in a run]
+  I --> A[Optional assignee]
+  A --> H[Person]
+  A --> T[Seat]
+  H --> R[Person starts a run]
+  T --> U[Seat starts a run]
 ```
 
 ## Workspace
