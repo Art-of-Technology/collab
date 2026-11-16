@@ -312,6 +312,7 @@ test('the search box is in the layout of every docs page', () => {
   const { default: Layout } = load('src/app/docs/layout.tsx', {
     'react/jsx-runtime': jsx, 'next/link': require('next/link'), 'next/image': require('next/image'), 'lucide-react': require('lucide-react'),
     '@/lib/docs': docs, '@/components/docs/DocsSidebar': stub('DocsSidebar'), '@/components/docs/DocsSearch': stub('DocsSearch'),
+    'next/font/google': { Geist: () => ({ className: 'font-geist' }) },
   });
   const seen = [];
   (function walk(element) {

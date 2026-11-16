@@ -5,9 +5,9 @@ export function OnThisPage({ headings }: { headings: DocHeading[] }) {
   if (!headings.length) return null;
   return (
     <nav aria-label="On this page" className="space-y-3">
-      <p className="mb-4 text-xs font-medium">On this page</p>
+      <p className="mb-4 text-xs font-semibold text-foreground">On this page</p>
       {headings.map(heading => (
-        <a key={heading.id} href={`#${heading.id}`} className={`block text-xs leading-5 text-muted-foreground hover:text-foreground ${heading.depth === 3 ? 'pl-3' : ''}`}>
+        <a key={heading.id} href={`#${heading.id}`} className={`block text-[13px] leading-5 text-collab-400 hover:text-foreground ${heading.depth === 3 ? 'pl-3' : ''}`}>
           {heading.text}
         </a>
       ))}
