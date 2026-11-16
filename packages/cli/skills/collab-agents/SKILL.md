@@ -73,7 +73,7 @@ lease renewed while you live. Your run is in the environment: `COLLAB_ISSUE_KEY`
    - `in_review`: it waits for a review or an answer. Add `--review-request KEY` (a review request you filed) or `--asked-user USER_ID`.
    - `blocked`: it cannot go on. Add `--blocked-by KEY` (an issue linked as blocking this one, such as a request filed with `--blocks true`) or `--asked-user USER_ID`.
 
-   A security seat finishes a security request `done` with `--verdict passed` or `--verdict failed` and `--reviewed 'PR 12 at abc1234'` (the commit or pull request it read). The findings go in the exit note. Both are written to the timeline of the request and of the issue it was filed for.
+   A security seat finishes a security request `done` with `--verdict passed` or `--verdict failed` and `--reviewed 'PR 12 at abc1234'` (the commit or pull request it read). The findings go in the exit note on the request. The verdict is written to the timeline of the request and of the issue it was filed for; open the request to read the findings.
 
    `exit_note_required` and `exit_state_required` list what is `missing`: complete it
    and send it again. `run_fenced` means the run no longer holds the issue and nothing was

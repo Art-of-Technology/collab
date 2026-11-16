@@ -131,6 +131,21 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     assert.deepEqual([waiting.requestFor, waiting.blockers], [[ref(target, 'to_do', 'todo')], [ref(open, 'to_do', 'todo')]]);
   });
 
+  await t.test('security request context uses its own latest verdict, not a nested request verdict', async () => {
+    const target = await issue(), request = await issue({ agentRequestRole: 'security' }), child = await issue({ agentRequestRole: 'security' });
+    await link(request, 'BLOCKS', target); await link(child, 'BLOCKS', request);
+    const verdict = (item, subject, result, reviewed, minutes) => raw.issueActivity.create({ data: {
+      itemType: 'ISSUE', itemId: item.id, action: 'SECURITY_VERDICT', workspaceId: 'w', projectId: A, userId: person,
+      details: JSON.stringify({ requestId: subject.id, verdict: result, reviewed }), createdAt: ago(minutes),
+    } });
+    await verdict(request, child, 'failed', 'child commit', 10);
+    assert.equal((await context(target)).requests[0].verdict, undefined);
+    await verdict(request, request, 'failed', 'old commit', 30);
+    await verdict(request, request, 'passed', 'new commit', 20);
+    const result = (await context(target)).requests[0];
+    assert.deepEqual([result.verdict, result.reviewed], ['passed', 'new commit']);
+  });
+
   await t.test('it is a read: any token of the workspace gets it, by key or by id, and nothing outside the workspace', async () => {
     const target = await issue();
     for (const [token, name] of [[devB.token, target.issueKey], [personToken, target.id]]) {

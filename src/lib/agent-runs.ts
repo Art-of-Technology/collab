@@ -427,8 +427,12 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   const key = issue.issueKey ?? issue.id;
   const reviewed = others.filter(other => other.issue.agentRequestRole === 'security').map(other => other.issue.id);
   // Oldest first, so a request that was reopened and judged again shows its last verdict.
-  const verdicts = new Map((reviewed.length ? await prisma.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: reviewed }, action: 'SECURITY_VERDICT' },
-    orderBy: { createdAt: 'asc' }, select: { itemId: true, details: true } }) : []).map(row => [row.itemId, JSON.parse(row.details ?? '{}')]));
+  const verdicts = new Map<string, { verdict: string; reviewed: string }>();
+  for (const row of reviewed.length ? await prisma.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: reviewed }, action: 'SECURITY_VERDICT' },
+    orderBy: { createdAt: 'asc' }, select: { itemId: true, details: true } }) : []) {
+    const details = JSON.parse(row.details ?? '{}');
+    if (details.requestId === row.itemId) verdicts.set(row.itemId, details);
+  }
   const security = issue.agentRequestRole === 'security';
   return {
     issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, description: issue.description, type: issue.type, priority: issue.priority, projectId: issue.projectId,
