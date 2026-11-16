@@ -142,6 +142,28 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     assert.equal(await me(first.credential), 401);
   });
 
+  await t.test('retirement that holds the seat row prevents a new runner token', async () => {
+    const changing = (await seat('changing', 'security', person, { byRunner: true })).seat;
+    let pending;
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "id" = ${changing.id} FOR UPDATE`;
+      pending = ask(first.credential, [mine.token.tokenId]);
+      let waiting = false;
+      for (let attempt = 0; attempt < 100 && !waiting; attempt++) {
+        const rows = await prisma.$queryRaw`SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%AgentSeat%' AND pid <> pg_backend_pid()`;
+        waiting = rows.length > 0;
+        if (!waiting) await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      await tx.agentSeat.update({ where: { id: changing.id }, data: { retiredAt: new Date() } });
+      assert.ok(waiting, 'the mint must wait for the seat row');
+    }, { timeout: 10000 });
+    const [, result] = await pending;
+    const changed = result.seats.find(row => row.id === changing.id);
+    assert.equal(changed.problem, 'seat_changed');
+    assert.equal(changed.tokenId, null);
+    assert.equal(await prisma.appToken.count({ where: { userId: changing.userId } }), 0);
+  });
+
   await t.test('a token the runner holds is not sent again; a token ends only when the runner shows it holds a newer one', async () => {
     const [, holding] = await ask(first.credential, [mine.token.tokenId, 'something-else']);
     assert.deepEqual(holding.seats.map(row => [row.tokenId, row.token]), [[mine.token.tokenId, undefined]]);

@@ -172,7 +172,8 @@ export async function fetchSeats(credential: string, have: string[]) {
           // The person again, on the row that switching a member off holds: someone switched off first gets no token.
           await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${ownerId} AND "workspaceId" = ${workspaceId} FOR SHARE`;
           if (!await tx.workspace.findFirst({ where: inWorkspace(workspaceId, ownerId), select: { id: true } })) throw refused();
-          if (!await tx.agentSeat.count({ where: { id: seat.id, userId: account.id, ownerId, byRunner: true, retiredAt: null } })) throw new HandoffError('seat_changed', 'The seat changed while its token was made');
+          await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "id" = ${seat.id} FOR SHARE`;
+          if (!await tx.agentSeat.count({ where: { id: seat.id, userId: account.id, workspaceId, ownerId, projectId: seat.project.id, name: seat.name, role: seat.role, byRunner: true, retiredAt: null } })) throw new HandoffError('seat_changed', 'The seat changed while its token was made');
           // The newest token so far keeps working beside the new one: its answer may still be on its way to the runner.
           const [, ...before] = await tx.appToken.findMany({ where: { runnerId: runner.id, userId: account.id, isRevoked: false }, orderBy: { createdAt: 'desc' }, select: { id: true } });
           if (before.length) await tx.appToken.updateMany({ where: { id: { in: before.map(token => token.id) } }, data: { isRevoked: true, revokedAt: new Date() } });
