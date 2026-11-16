@@ -102,6 +102,10 @@ export const commands = {
       mode: { enum: ['exact', 'keyword', 'semantic', 'hybrid', 'fuzzy'] }, type: { enum: ['all', 'issue', 'note', 'activity'] },
       after: { format: 'date-time' }, before: { format: 'date-time' } },
   }),
+  'live': command('GET', 'live', {}, { commit: string }, {
+    wait: 'optional', waitMax: 3600, pollMs: 5000, ready: result => [true, false, null].includes(result?.contains) ? result.contains : undefined, constraints: { commit: { pattern: '^[0-9a-f]{7,40}$' } },
+    description: 'The commit of Collab that the server runs. With --commit ID also contains: true, false, or null when it cannot be told. With --wait-seconds 1..3600 it asks every 5 seconds until the server runs that commit, through the restart of a deploy, or returns timedOut: true. Reads only.',
+  }),
   'whoami': command('GET', 'user/me'),
   'workspaces list': command('GET', 'user/workspaces'),
   'workspace get': command('GET', 'workspace'),
@@ -129,6 +133,10 @@ export const commands = {
   'issues activity': command('GET', 'issues/:id/activity', {}, { limit: integer, action: string }),
   'comments list': command('GET', 'issues/:id/comments', {}, { flat: boolean }),
   'comments add': command('POST', 'issues/:id/comments', { content: string, parentId: string }, {}, { required: ['content'] }),
+  'comments wait': command('GET', 'issues/:id/comments', {}, { since: string }, {
+    wait: true, waitMax: 3600, pollMs: 5000, ready: result => Array.isArray(result?.comments) ? result.comments.length > 0 : undefined, defaults: { flat: true }, constraints: { since: { format: 'date-time' } },
+    description: 'Wait for a new comment on an issue without a model: asks every 5 seconds for up to --wait-seconds 1..3600 (default 30) and returns the new comments, or timedOut: true. --since is the createdAt of the last comment you have read; without it, comments made after the command starts. Keeps waiting while the server restarts. Reads only.',
+  }),
   'relations list': command('GET', 'issues/:id/relations'),
   'relations add': command('POST', 'issues/:id/relations', { targetIssueId: string, relationType: string }, {}, { required: ['targetIssueId', 'relationType'] }),
   'relations delete': command('DELETE', 'issues/:id/relations/:childId'),

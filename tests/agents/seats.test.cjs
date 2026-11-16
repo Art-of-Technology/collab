@@ -47,7 +47,6 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
   const deps = { zod, '@prisma/client': require('@prisma/client'), 'next/server': { NextResponse: Response },
     '@/lib/prisma': { prisma, issueTrashPrisma: prisma }, '@/lib/issue-finder': finder, '@/lib/issue-assignee': assignee, '@/lib/agent-seats': seats,
     '@/lib/agent-handoffs': handoffs, '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': { NextResponse: Response }, './agent-handoffs': handoffs }, globals),
-    '@/lib/agent-label-triggers': load('src/lib/agent-label-triggers.ts', { 'node:crypto': require('node:crypto') }),
     '@/lib/permissions': { Permission: {}, canActOnOwnContent: () => true, checkUserPermission: async () => ({ hasPermission: true }),
       checkUserPermissions: async () => ({ undefined: { hasPermission: true } }) },
     '@/utils/html-normalizer': { normalizeDescriptionHTML: value => value },
@@ -55,6 +54,11 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     '@/lib/apps/auth-middleware': middleware,
     '@/lib/event-bus': { emitIssueCreated: async () => {}, emitIssueUpdated: async () => {}, emitIssueDeleted: async () => {} },
   };
+  // The real label rule, so a label on an issue of a project that uses seats files its request.
+  deps['@/lib/agent-tokens'] = tokens;
+  deps['@/lib/agent-runs'] = load('src/lib/agent-runs.ts', deps, { Date });
+  deps['@/lib/agent-label-triggers'] = load('src/lib/agent-label-triggers.ts', { 'node:crypto': require('node:crypto'),
+    '@/lib/agent-requests': load('src/lib/agent-requests.ts', deps, { Date }) });
   deps['@/lib/issue-mutation'] = load('src/lib/issue-mutation.ts', deps);
   const route = path => load(`src/app/api/apps/auth/${path}/route.ts`, deps, globals);
   const issues = route('issues'), item = route('issues/[issueIdOrKey]'), assign = route('issues/[issueIdOrKey]/assign'),
@@ -322,6 +326,73 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     assert.equal((await send(assign.POST, integration.token, 'POST', { body: { assigneeId: person }, params: waiting })).status, 200);
     for (let n = 1; n <= 7; n++) assert.equal((await create(personToken, `person ${n}`)).body.assigneeId, devA.userId, 'a person is never capped');
     assert.equal((await send(assign.POST, personToken, 'POST', { body: { assigneeId: devA.userId }, params: waiting })).status, 200);
+  });
+
+  await t.test('CLB-527: a release request by label from a token that is not a seat counts toward its five a day', async () => {
+    const actorId = (await prisma.appToken.findUniqueOrThrow({ where: { id: integration.id } })).userId;
+    const handed = { actorId, action: 'agent_seat.issue_handed' };
+    await prisma.project.update({ where: { id: A }, data: { agentMode: 'seats' } });
+    await prisma.appAuditLog.updateMany({ where: handed, data: { createdAt: new Date(Date.now() - 86_400_000) } });
+    const ask = async (token, work) => send(item.PATCH, token, 'PATCH', { body: { labels: ['clabelrelease1'] }, params: { issueIdOrKey: work.id } });
+    const requests = work => prisma.issue.count({ where: { agentRequestRole: 'release', sourceRelations: { some: { targetIssueId: work.id } } } });
+    // One issue for a seat and four release requests are its five.
+    assert.equal((await send(issues.POST, integration.token, 'POST', { body: { title: 'crm first', projectId: A, assigneeId: devA.userId } })).body.assigneeId, devA.userId);
+    for (let n = 1; n <= 4; n++) {
+      const work = await issue(A), asked = await ask(integration.token, work);
+      assert.equal(asked.status, 200, JSON.stringify(asked.body));
+      assert.equal(await requests(work), 1);
+    }
+    assert.equal(await prisma.appAuditLog.count({ where: { ...handed, createdAt: { gte: new Date(Date.now() - 60_000) } } }), 5);
+    // The sixth is refused whole: no request, and the label is not left on the issue asking nobody.
+    const over = await issue(A), sixth = await ask(integration.token, over);
+    assert.equal(sixth.status, 429, JSON.stringify(sixth.body));
+    assert.equal(sixth.body.error, 'assign_cap');
+    assert.equal(await requests(over), 0);
+    assert.deepEqual((await prisma.issue.findUniqueOrThrow({ where: { id: over.id }, include: { labels: true } })).labels, []);
+    // The same on create: a new issue that brings the label is not filed.
+    const before = await prisma.issue.count();
+    const born = await send(issues.POST, integration.token, 'POST', { body: { title: 'crm labelled', projectId: A, labels: ['clabelrelease1'] } });
+    assert.equal(born.status, 429, JSON.stringify(born.body));
+    assert.equal(born.body.error, 'assign_cap');
+    assert.equal(await prisma.issue.count(), before);
+    // The count is one count: an issue it creates for a seat now waits unassigned.
+    assert.equal((await send(issues.POST, integration.token, 'POST', { body: { title: 'crm later', projectId: A, assigneeId: devA.userId } })).body.warning, 'assign_cap');
+    // A person and a seat of the project are not counted, and tomorrow the token asks again.
+    assert.equal((await ask(personToken, over)).status, 200);
+    assert.equal(await requests(over), 1);
+    const bySeat = await issue(A);
+    assert.equal((await ask(devA.token, bySeat)).status, 200);
+    assert.equal(await requests(bySeat), 1);
+    await prisma.appAuditLog.updateMany({ where: handed, data: { createdAt: new Date(Date.now() - 86_400_000) } });
+    const next = await issue(A);
+    // One call that assigns a new issue to a seat and asks for its release hands seats two issues.
+    assert.equal((await ask(integration.token, next)).status, 200);
+    const two = await send(issues.POST, integration.token, 'POST', { body: { title: 'crm two', projectId: A, assigneeId: devA.userId, labels: ['clabelrelease1'] } });
+    assert.equal(two.status, 201, JSON.stringify(two.body));
+    assert.equal(await prisma.appAuditLog.count({ where: { ...handed, createdAt: { gte: new Date(Date.now() - 60_000) } } }), 3);
+    await prisma.appAuditLog.updateMany({ where: handed, data: { createdAt: new Date(Date.now() - 86_400_000) } });
+    const concurrent = await Promise.all([
+      send(issues.POST, integration.token, 'POST', { body: { title: 'concurrent assigned', projectId: A, assigneeId: devA.userId } }),
+      send(issues.POST, integration.token, 'POST', { body: { title: 'concurrent release', projectId: A, labels: ['clabelrelease1'] } }),
+    ]);
+    for (const result of concurrent) assert.equal(result.status, 201, JSON.stringify(result.body));
+    assert.equal(await prisma.appAuditLog.count({ where: { ...handed, createdAt: { gte: new Date(Date.now() - 60_000) } } }), 2);
+    await prisma.project.update({ where: { id: A }, data: { agentMode: 'handoffs' } });
+  });
+
+  await t.test('CLB-527: comments can be read from a time on, which is what a wait for a new comment asks', async () => {
+    const work = await issue(A), params = { issueIdOrKey: work.id };
+    const at = minute => new Date(Date.UTC(2026, 10, 16, 10, minute));
+    const parent = await prisma.issueComment.create({ data: { issueId: work.id, authorId: person, content: 'at 0', createdAt: at(0) } });
+    await prisma.issueComment.createMany({ data: [{ issueId: work.id, authorId: person, content: 'at 5', createdAt: at(5) },
+      { issueId: work.id, authorId: person, parentId: parent.id, content: 'reply at 5', createdAt: at(5) }] });
+    const read = async query => (await send(comments.GET, personToken, 'GET', { params, query })).body.comments.map(row => row.content);
+    assert.deepEqual((await read('?flat=true')).sort(), ['at 0', 'at 5', 'reply at 5']);
+    assert.deepEqual((await read(`?flat=true&since=${at(0).toISOString()}`)).sort(), ['at 5', 'reply at 5']);
+    assert.deepEqual((await read(`?since=${at(0).toISOString()}`)).sort(), ['at 5', 'reply at 5']);
+    assert.deepEqual(await read(''), ['at 0', 'at 5']);
+    assert.deepEqual(await read(`?flat=true&since=${at(5).toISOString()}`), []);
+    assert.equal((await send(comments.GET, personToken, 'GET', { params, query: '?since=yesterday' })).status, 400);
   });
 
   await t.test('review focus 2: an issue moved to another project loses its seat, and the activity says why', async () => {

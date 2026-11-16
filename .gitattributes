@@ -1,1 +1,2 @@
 prisma/migrations/20261107000100_agent_review_guard/migration.sql text eol=lf
+src/app/api/apps/auth/live/route.ts export-subst

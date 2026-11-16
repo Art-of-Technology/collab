@@ -49,7 +49,7 @@ export function cliCommandsPage(table_ = commands) {
         spec.defaults?.[field] !== undefined && `CLI default: ${spec.defaults[field]}`,
         spec.defaultDescriptions?.[field] && `default: ${spec.defaultDescriptions[field]}`,
       ])]);
-      if (spec.wait) rows.push(['`--wait-seconds`', 'integer', `1 to 60 seconds, ${spec.wait === 'optional' ? 'without it the command reads once' : 'default 30'}. A wait only reads; an empty wait returns \`timedOut: true\``]);
+      if (spec.wait) rows.push(['`--wait-seconds`', 'integer', `1 to ${spec.waitMax ?? 60} seconds, ${spec.wait === 'optional' ? 'without it the command reads once' : 'default 30'}. A wait only reads; an empty wait returns \`timedOut: true\``]);
       lines.push(
         '', `### \`collab ${name}\``,
         '', spec.seatRun ? 'Writes: it checks issues out and closes runs.' : spec.method === 'GET' ? 'Reads.' : remove ? 'Deletes. Needs `--yes`.' : 'Writes.',

@@ -19,7 +19,7 @@ import { emitIssueCreated } from '@/lib/event-bus';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { createRefusal, issueShape } from '@/lib/issue-template-enforcement';
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
-import { assertTokenMayAssign, assignCapReached, recordSeatHandoff, seatWriteGuard } from '@/lib/agent-seats';
+import { assertTokenMayAssign, assignCapReached, lockSeatHandoffCap, recordSeatHandoff, seatWriteGuard } from '@/lib/agent-seats';
 
 // Schema for creating new issues
 const CreateIssueSchema = z.object({
@@ -253,6 +253,7 @@ export const POST = withAppAuth(
       // An agent token over its daily cap of issues for seats still files the issue; it waits unassigned for a person.
       let capped = false;
       const newIssue = await prisma.$transaction(async (tx) => {
+        if (issueData.labels?.length) await lockSeatHandoffCap(tx, context.user.id);
         capped = !!issueData.assigneeId && await assignCapReached(tx, context, issueData.assigneeId);
         const assigneeId = capped ? undefined : issueData.assigneeId;
         const issueKey = await allocateIssueKey(tx, issueData.projectId);
@@ -369,11 +370,12 @@ export const POST = withAppAuth(
           }
         });
 
+        // Counted before the labels are read: a release request the labels ask for is one more issue for a seat.
+        if (assigneeId) await recordSeatHandoff(tx, context, assigneeId, created.id);
         if (issueData.labels?.length) await enqueueLabelHandoff(tx, context.user.id, created, []);
 
         // Create IssueAssignee record if issue is assigned to someone
         if (assigneeId) {
-          await recordSeatHandoff(tx, context, assigneeId, created.id);
           await tx.issueAssignee.create({
             data: {
               issueId: created.id,

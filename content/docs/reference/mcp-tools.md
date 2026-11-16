@@ -130,7 +130,7 @@ Writes. Scope: `issues:write`.
 
 ## comments_list
 
-Comments on an issue.
+Comments on an issue. With since, only those made after that time.
 
 Reads. Scope: `issues:read`.
 
@@ -138,6 +138,7 @@ Reads. Scope: `issues:read`.
 | --- | --- | --- |
 | `issueIdOrKey` | string | required · An issue ID or key, for example CLB-123 · minimum length: 1 · maximum length: 128 |
 | `flat` | boolean |  |
+| `since` | string | UTC time in ISO 8601, for example 2026-11-12T09:00:00Z · format: date-time |
 
 ## comments_add
 
@@ -290,6 +291,16 @@ Reads. Scope: `issues:read`.
 | Argument | Type | Details |
 | --- | --- | --- |
 | `issueIdOrKey` | string | required · An issue ID or key, for example CLB-123 · minimum length: 1 · maximum length: 128 |
+
+## live_revision
+
+The commit of Collab's own code that this server runs. With commit, also whether that commit is in it: contains is true, false, or null when it cannot be told.
+
+Reads. No scope: every valid token.
+
+| Argument | Type | Details |
+| --- | --- | --- |
+| `commit` | string | A commit ID of the Collab repository, 7 to 40 lowercase hex characters |
 
 ## docs_search
 

@@ -219,6 +219,10 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
           /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
         code = remoteCode; retrievalMessage = "This issue's project uses seats, so it takes no new handoff, claim or transfer. Ask for the work with collab seat request, or have a person assign the issue to a seat.";
       }
+      if (mutation && response.status === 429 && remoteCode === 'assign_cap' && /^\/api\/apps\/auth\/issues(?:\/[^/?]+)?(?:\?|$)/.test(endpoint) &&
+          /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
+        code = remoteCode; retrievalMessage = 'This token has given seats its 5 new issues for today (UTC), release requests by label among them. Nothing was changed. A person or a seat of the project asks for this release; do not send it again today.';
+      }
       if (method === 'POST' && body?.event === 'configure' && /^\/api\/apps\/auth\/agents\/worker(?:\?|$)/.test(endpoint) &&
           response.headers.get('content-type')?.includes('application/json')) {
         const rejections = { invalid_request: 400, invalid_json: 400, body_too_large: 413, invalid_labels: 400,

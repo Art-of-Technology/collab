@@ -180,6 +180,20 @@ test('handoff review conflicts use fixed guidance only on handoff endpoints', as
   assert.ok(!unrelated.stderr.includes('PRIVATE_SENTINEL'));
 });
 
+test('a release label refused by the daily cap names the cap, and no other 429 does', async t => {
+  let status = 429;
+  const f = await fixture(t, (_req, res) => { res.writeHead(status); res.end(JSON.stringify({ error: 'assign_cap', error_description: 'PRIVATE_SENTINEL' })); });
+  for (const args of [['issues', 'update', 'APP-1', '--labels', '["release"]'], ['issues', 'create', '--project-id', 'p', '--title', 'T', '--labels', '["release"]']]) {
+    const result = await f.run(args);
+    assert.equal(result.error.error, 'assign_cap', result.stderr);
+    assert.match(result.error.message, /5 new issues/);
+    assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  }
+  assert.equal((await f.run(['comments', 'add', 'APP-1', '--content', 'Text'])).error.error, 'rate_limited');
+  status = 403;
+  assert.equal((await f.run(['issues', 'update', 'APP-1', '--labels', '["release"]'])).error.error, 'forbidden');
+});
+
 test('a handoff or transfer refused because the project uses seats says to file a request', async t => {
   const f = await fixture(t, (_req, res) => {
     res.writeHead(409); res.end(JSON.stringify({ error: 'project_uses_seats', error_description: 'PRIVATE_SENTINEL' }));
@@ -2214,6 +2228,112 @@ test('seat inbox reads once, and with --wait-seconds waits for work without chan
   assert.equal(f.calls.length, 3);
   assert.ok(f.calls.every(call => call.method === 'GET' && call.url === '/api/apps/auth/seats/me/inbox'));
   assert.equal((await f.run(['seat', 'inbox', '--wait-seconds', '61'])).error.error, 'invalid_timeout');
+});
+
+test('live names the running commit, and with --wait-seconds waits through a restart until a commit is in it', async t => {
+  const commit = 'a'.repeat(40);
+  const f = await fixture(t, (_req, res, _body, calls) => {
+    if (calls.length === 2) { res.writeHead(503); return res.end('{}'); }
+    res.end(JSON.stringify({ revision: 'b'.repeat(40), ...(calls.length > 1 && { commit, contains: calls.length > 2 }) }));
+  });
+  assert.deepEqual((await f.run(['live'])).data, { revision: 'b'.repeat(40) });
+  const waited = await f.run(['live', '--commit', commit, '--wait-seconds', '30']);
+  assert.equal(waited.code, 0, waited.stderr); assert.equal(waited.data.contains, true); assert.equal(waited.data.timedOut, undefined);
+  assert.deepEqual(f.calls.map(call => call.url), ['/api/apps/auth/live', ...Array(2).fill(`/api/apps/auth/live?commit=${commit}`)]);
+  assert.equal((await f.run(['live', '--wait-seconds', '5'])).error.error, 'required_field');
+  assert.equal((await f.run(['live', '--commit', 'main'])).error.error, 'invalid_value');
+  assert.equal((await f.run(['live', '--commit', commit, '--wait-seconds', '3601'])).error.error, 'invalid_timeout');
+  assert.equal(f.calls.length, 3);
+});
+
+test('comments wait returns the comments made after the newest one, or says that the time is up', async t => {
+  const first = { id: 'one', createdAt: '2026-11-16T10:00:00.000Z' }, second = { id: 'two', createdAt: '2026-11-16T10:05:00.000Z' };
+  let later = [second];
+  const f = await fixture(t, (req, res) => res.end(JSON.stringify({ issueKey: 'APP-1', comments: new URL(req.url, 'http://localhost').searchParams.has('since') ? later : [first] })));
+  const waited = await f.run(['comments', 'wait', 'APP-1']);
+  assert.equal(waited.code, 0, waited.stderr); assert.deepEqual(waited.data.comments, [second]);
+  assert.deepEqual(f.calls.map(call => call.url), ['/api/apps/auth/issues/APP-1/comments?flat=true',
+    `/api/apps/auth/issues/APP-1/comments?flat=true&since=${encodeURIComponent(first.createdAt)}`]);
+  later = [];
+  const quiet = await f.run(['comments', 'wait', 'APP-1', '--since', second.createdAt, '--wait-seconds', '1']);
+  assert.equal(quiet.code, 0, quiet.stderr); assert.deepEqual(quiet.data.comments, []); assert.equal(quiet.data.timedOut, true);
+  assert.equal(f.calls.at(-1).url, `/api/apps/auth/issues/APP-1/comments?since=${encodeURIComponent(second.createdAt)}&flat=true`);
+  assert.equal((await f.run(['comments', 'wait', 'APP-1', '--since', 'yesterday'])).error.error, 'invalid_value');
+});
+
+test('comments wait does not return the comments it started from when the server then stays away', async t => {
+  const f = await fixture(t, (_req, res, _body, calls) => {
+    if (calls.length === 1) return res.end(JSON.stringify({ issueKey: 'APP-1', comments: [{ id: 'one', createdAt: '2026-11-16T10:00:00.000Z' }] }));
+    res.writeHead(503); res.end('{}');
+  });
+  const result = await f.run(['comments', 'wait', 'APP-1', '--wait-seconds', '2']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.data, { issueKey: 'APP-1', comments: [], timedOut: true });
+});
+
+test('new waits survive outages and retain the last answer at the deadline', async t => {
+  const first = { id: 'one', createdAt: '2026-11-16T10:00:00.000Z' };
+  let mode = 'baseline';
+  const f = await fixture(t, (req, res, _body, calls) => {
+    if (mode === 'baseline' && calls.length === 1) { res.writeHead(503); return res.end('{}'); }
+    if (mode === 'baseline') return res.end(JSON.stringify({ comments: new URL(req.url, 'http://localhost').searchParams.has('since') ? [{ id: 'two' }] : [first] }));
+    if (calls.length === 1) return res.end(JSON.stringify(mode === 'live' ? { contains: false } : { comments: [] }));
+    setTimeout(() => { res.writeHead(503); res.end('{}'); }, 1200);
+  });
+  const recovered = await f.run(['comments', 'wait', 'APP-1', '--wait-seconds', '10']);
+  assert.deepEqual(recovered.data.comments, [{ id: 'two' }]);
+  for (const kind of ['live', 'comments']) {
+    mode = kind; f.calls.length = 0;
+    const args = kind === 'live' ? ['live', '--commit', 'a'.repeat(40)] : ['comments', 'wait', 'APP-1', '--since', first.createdAt];
+    const result = await f.run([...args, '--wait-seconds', '6']);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.data.timedOut, true);
+    assert.deepEqual(kind === 'live' ? result.data.contains : result.data.comments, kind === 'live' ? false : []);
+  }
+});
+
+test('new waits return the last outage error without requesting after the deadline', async t => {
+  const f = await fixture(t, (_req, res, _body, calls) => {
+    if (calls.length === 1) { res.writeHead(503); return res.end('{}'); }
+    res.end(JSON.stringify({ contains: true, comments: [{ id: 'new' }] }));
+  });
+  for (const args of [
+    ['live', '--commit', 'a'.repeat(40)],
+    ['comments', 'wait', 'APP-1'],
+    ['comments', 'wait', 'APP-1', '--since', '2026-11-16T10:00:00.000Z'],
+  ]) {
+    f.calls.length = 0;
+    const result = await f.run([...args, '--wait-seconds', '1']);
+    assert.equal(result.error.error, 'server_error');
+    assert.equal(f.calls.length, 1);
+  }
+});
+
+test('every wait refuses an answer that is not what it waits for, after one request', async t => {
+  let answer;
+  const f = await fixture(t, (_req, res) => { res.setHeader('content-type', 'application/json'); res.end(answer); });
+  for (const args of [
+    ['seat', 'inbox'],
+    ['inbox', 'wait', '--agent', 'reviewer'],
+    ['live', '--commit', 'a'.repeat(40)],
+    ['comments', 'wait', 'APP-1'],
+    ['comments', 'wait', 'APP-1', '--since', '2026-11-16T10:00:00.000Z'],
+  ]) {
+    for (answer of ['null', 'false', '0', '""', '[]', '{}']) {
+      f.calls.length = 0;
+      const result = await f.run([...args, '--wait-seconds', '2']);
+      assert.equal(result.error?.error, 'invalid_response', `${args.join(' ')} answered ${answer}`);
+      assert.equal(f.calls.length, 1, `${args.join(' ')} answered ${answer}`);
+    }
+  }
+  // An answer it does expect, with nothing in it: the wait ends when its time is up and asks no more.
+  answer = JSON.stringify({ items: [], contains: null, comments: [] });
+  for (const args of [['seat', 'inbox'], ['live', '--commit', 'a'.repeat(40)], ['comments', 'wait', 'APP-1', '--since', '2026-11-16T10:00:00.000Z']]) {
+    f.calls.length = 0;
+    const started = Date.now(), result = await f.run([...args, '--wait-seconds', '1']);
+    assert.equal(result.data?.timedOut, true, args.join(' '));
+    assert.ok(f.calls.length <= 2 && Date.now() - started < (windows ? 60000 : 5000), `${args.join(' ')}: ${f.calls.length} requests`);
+  }
 });
 
 test('seat and run refusals keep their code and what is missing, and pass on nothing else from the server', async t => {

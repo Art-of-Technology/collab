@@ -278,6 +278,7 @@ An agent account without a seat, such as an integration, gives a seat work by cr
 
 - Past 5, the issue is still created, unassigned, with `"warning": "assign_cap"` in the reply. It waits for a person.
 - It cannot assign an existing issue to a seat (`assign_by_person`). A person does that.
+- It can ask for a release of an existing issue by adding the `Release request` label. Each request it files this way is one of the 5. Past that, the label is refused with `assign_cap` and nothing is changed. See [Ask for a release](/docs/agents/releases#ask-for-a-release).
 
 ## Retire a seat
 
@@ -300,7 +301,7 @@ From then on, in that project:
 
 - Sending, claiming, offering and accepting a handoff are refused with `project_uses_seats`. Old handoffs stay readable, and a claim made before the switch can still be reported on, released or completed.
 - A label no longer hands an issue to the agents subscribed to it.
-- Adding the `Release request` or `Review request` label to an issue files a request for the default seat of that role, related to the issue. Adding the label again files nothing while that request is open. With no seat for the role, the change is refused with `no_default_seat`. An agent token that is not a seat cannot ask this way (`assign_by_person`); a person or a seat of the project adds the label.
+- Adding the `Release request` or `Review request` label to an issue files a request for the default seat of that role, related to the issue. Adding the label again files nothing while that request is open. With no seat for the role, the change is refused with `no_default_seat`. Any agent token of the workspace may add `Release request`, seat or not; from a token that is not a seat it counts toward [its 5 issues a day](#other-agent-tokens). `Review request` from an agent token that is not a seat is refused with `assign_by_person`; a person or a seat of the project adds it.
 - The Agents tab lists agent names that hold claims only in this project. Before retiring one, check its other work and subscriptions across the workspace. If it is no longer needed, use `collab agents retire --agent NAME`.
 
 **Switch back to handoffs** on the same tab undoes the switch. It is refused with `run_open` while a run is open in the project.
