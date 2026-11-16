@@ -159,7 +159,7 @@ const finishSchema = z.object({
   status: text(64).optional(), reviewRequest: text(128).optional(), askedUser: text(128).optional(), blockedBy: text(128).optional(),
   verdict: z.enum(['passed', 'failed']).optional(), reviewed: text(200).optional(),
   // Checked in `exitFacts`, so a wrong one is refused like a missing heading, with its name.
-  pullRequest: text(220).optional(), headCommit: text(64).optional(), nextStep: text(300).optional(),
+  pullRequest: z.string().trim().optional(), headCommit: z.string().trim().optional(), nextStep: z.string().trim().optional(),
   // The shape a managed worker reports (`workerSchema` in src/lib/agent-handoffs.ts), so one reader serves both.
   usage: z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), chargedUSD: amount, reservedUSD: amount, estimatedUSD: amount, unknownUSD: amount,
     restarts: z.number().int().min(0).max(100), starts: tally, totalStarts: tally,
@@ -306,11 +306,11 @@ const FACTS = ['pullRequest', 'headCommit', 'nextStep'] as const;
 function exitFacts(input: Finish) {
   // A CLI before 0.12.0 cannot send the field: for it the first line under `## Next` is the next step, so its finish is not stranded.
   const written = input.outcome === 'done' ? undefined : input.note.split(/^## Next[ \t]*$/m)[1]?.split('\n').map(line => line.trim()).find(Boolean);
-  const nextStep = input.nextStep ?? (written && !/^#+\s/.test(written) ? written.replace(/^(?:[-*]|\d+\.)\s+/, '').slice(0, 300) : undefined);
+  const nextStep = input.nextStep ?? (written && !/^#+(?:\s|$)/.test(written) ? written.replace(/^(?:[-*]|\d+\.)\s+/, '').slice(0, 300) : undefined);
   const missing: string[] = [];
-  if (input.pullRequest ? !PULL_REQUEST.test(input.pullRequest) : input.headCommit) missing.push('pullRequest');
-  if (input.headCommit ? !COMMIT.test(input.headCommit) : input.pullRequest) missing.push('headCommit');
-  if (nextStep ? /[\r\n]/.test(nextStep) : input.outcome !== 'done') missing.push('nextStep');
+  if (input.pullRequest !== undefined ? !PULL_REQUEST.test(input.pullRequest) : input.headCommit !== undefined) missing.push('pullRequest');
+  if (input.headCommit !== undefined ? !COMMIT.test(input.headCommit) : input.pullRequest !== undefined) missing.push('headCommit');
+  if (nextStep !== undefined ? !nextStep || nextStep.length > 300 || /[\r\n]/.test(nextStep) : input.outcome !== 'done') missing.push('nextStep');
   if (missing.length) throw incomplete('exit_note_required', 'The exit note\'s fields are incomplete: pullRequest is owner/repository#number and comes with headCommit, '
     + `the full 40-character commit it was left at; a run that finishes ${input.outcome === 'done' ? 'in review or blocked' : input.outcome} gives nextStep, the first thing to do next, in one line`, missing);
   return { ...(input.pullRequest && { pullRequest: input.pullRequest, headCommit: input.headCommit }), ...(nextStep && { nextStep }) };

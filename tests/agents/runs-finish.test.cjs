@@ -187,15 +187,17 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.equal(await facts(target), null);
     // A pull request without the commit, or with one that is not a full hash; a commit without its pull request.
     assert.deepEqual(await missing({ outcome: 'done', pullRequest }), ['headCommit']);
-    for (const short of ['a1b2c3d', 'A1'.repeat(20), `${headCommit}0`]) assert.deepEqual(await missing({ outcome: 'done', pullRequest, headCommit: short }), ['headCommit']);
+    for (const short of ['', 'a1b2c3d', 'A1'.repeat(20), `${headCommit}0`, 'a'.repeat(65)]) assert.deepEqual(await missing({ outcome: 'done', pullRequest, headCommit: short }), ['headCommit']);
     assert.deepEqual(await missing({ outcome: 'done', headCommit }), ['pullRequest']);
-    for (const loose of ['12', 'app#12', 'https://github.com/acme/app/pull/12', 'acme/app#0']) assert.deepEqual(await missing({ outcome: 'done', pullRequest: loose, headCommit }), ['pullRequest']);
+    for (const loose of ['', 'x'.repeat(221), '12', 'app#12', 'https://github.com/acme/app/pull/12', 'acme/app#0']) assert.deepEqual(await missing({ outcome: 'done', pullRequest: loose, headCommit }), ['pullRequest']);
     // In review and blocked need a next step: nothing under ## Next, or only the next heading, is none. It is one line.
     const bare = [`${note('Next')}\n\n## Next`, `## Next\n\n${note('Next')}`];
     for (const outcome of ['in_review', 'blocked']) for (const empty of bare) assert.deepEqual(await missing({ outcome, askedUser: person, note: empty }), ['nextStep']);
+    for (const outcome of ['in_review', 'blocked']) assert.deepEqual(await missing({ outcome, askedUser: person, note: `${bare[0]}\n\n###` }), ['nextStep']);
     assert.deepEqual(await missing({ outcome: 'blocked', askedUser: person, nextStep: 'First this.\nThen that.' }), ['nextStep']);
     assert.deepEqual(await missing({ outcome: 'in_review', askedUser: person, note: bare[0], pullRequest }), ['headCommit', 'nextStep']);
-    await refused(finish(devA, run.id, { outcome: 'blocked', askedUser: person, nextStep: 'x'.repeat(301) }), 400, 'invalid_request');
+    for (const outcome of ['done', 'in_review', 'blocked']) for (const nextStep of ['', 'x'.repeat(301)])
+      assert.deepEqual(await missing({ outcome, ...(outcome !== 'done' && { askedUser: person }), nextStep }), ['nextStep']);
     await untouched(target, run);
 
     assert.equal((await finish(devA, run.id, { outcome: 'blocked', askedUser: person, pullRequest, headCommit, nextStep }))[0], 200);
