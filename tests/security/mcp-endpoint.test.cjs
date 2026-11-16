@@ -218,7 +218,7 @@ function declaredAccess(file, method) {
   const source = readFileSync(resolve(process.env.SECURITY_TEST_ROOT || resolve(__dirname, '../../'), `src/app/api/apps/auth/${file}/route.ts`), 'utf8');
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
   const exports = {};
-  runInNewContext(outputText, { exports, URL, console, require: name => name === '@/lib/apps/auth-middleware' ? { withAppAuth: (_handler, options) => ({ options }) } : stub });
+  runInNewContext(outputText, { exports, URL, console, process: { env: {} }, require: name => name === '@/lib/apps/auth-middleware' ? { withAppAuth: (_handler, options) => ({ options }) } : stub });
   return exports[method].options;
 }
 

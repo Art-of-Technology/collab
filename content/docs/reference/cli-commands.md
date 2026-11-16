@@ -638,6 +638,23 @@ status and assigneeId filter issues and their activity; neither can be used with
 | `--limit` | integer | minimum: 1 · maximum: 50 · CLI default: 20 |
 | `--max-tokens` | integer | minimum: 1024 · maximum: 64000 · CLI default: 8000 |
 
+## live
+
+### `collab live`
+
+Reads.
+
+```sh
+collab live
+```
+
+The commit of Collab that the server runs. With --commit ID also contains: true, false, or null when it cannot be told. With --wait-seconds 1..3600 it asks every 5 seconds until the server runs that commit, through the restart of a deploy, or returns timedOut: true. Reads only.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--commit` | string |  |
+| `--wait-seconds` | integer | 1 to 60 seconds, without it the command reads once. A wait only reads; an empty wait returns `timedOut: true` |
+
 ## whoami
 
 ### `collab whoami`
@@ -1004,6 +1021,23 @@ ID is the issue ID or key (such as APP-123).
 | --- | --- | --- |
 | `--content` | string | required |
 | `--parent-id` | string |  |
+
+### `collab comments wait`
+
+Reads.
+
+```sh
+collab comments wait ID
+```
+
+Wait for a new comment on an issue without a model: asks every 5 seconds for up to --wait-seconds 1..3600 (default 30) and returns the new comments, or timedOut: true. --since is the createdAt of the last comment you have read; without it, comments made after the command starts. Keeps waiting while the server restarts. Reads only.
+
+ID is the issue ID or key (such as APP-123).
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--since` | string | format: date-time |
+| `--wait-seconds` | integer | 1 to 60 seconds, default 30. A wait only reads; an empty wait returns `timedOut: true` |
 
 ## relations
 

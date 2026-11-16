@@ -29,7 +29,7 @@ function route(revision) {
 test('live: any valid token reads the running revision and whether a commit is in it', async () => {
   const live = route(REVISION);
   // The access rule: a valid token and no scope, as for the documentation.
-  assert.deepEqual(live.options(), { requiredScopes: [] });
+  assert.equal(JSON.stringify(live.options()), '{"requiredScopes":[]}');
   assert.deepEqual(await live.get(), { status: 200, body: { revision: REVISION } });
 
   // The running commit itself, in full or shortened, needs no question to GitHub.

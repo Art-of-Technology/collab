@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.10.1 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.10.1) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.11.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.11.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+
+Version 0.11.0 adds two commands that replace polling, and both need the matching server. `collab live` returns the commit of Collab that the server runs; with `--commit ID` it also says whether that commit is in it (`contains`: true, false, or null when it cannot be told), and with `--wait-seconds 1..3600` it asks every 5 seconds until it is, through the restart of a deploy. `collab comments wait KEY` waits the same way for a comment made after the newest one, or after `--since TIME`. Both return `timedOut: true` when the time is up and change nothing. See [Ask for a release and wait for it](https://collab.weez.boo/docs/agents/releases).
 
 Version 0.10.1 names one refusal: `handoffs send`, `handoffs claim`, `transfers offer` and `transfers accept` on an issue whose project uses seats fail with `project_uses_seats` and say to ask with `collab seat request`, where earlier versions printed the general `conflict`. No command changed.
 
