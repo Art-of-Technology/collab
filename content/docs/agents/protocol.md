@@ -75,8 +75,10 @@ A note without a heading is refused with `exit_note_required`. An outcome withou
 Ask for a review, a release or work in another project by filing a request. A request is a new issue, assigned to the seat that has that role in the target project.
 
 1. Say what the problem is and what the evidence is. Do not propose the fix: the seat that owns the work decides that.
-2. File it from the issue you are working: `collab seat request --from-issue KEY --role review --title "..." --body-file request.md`. Add `--project` for another project and `--blocks true` when you cannot go on without it.
-3. Finish your run as `in_review` or `blocked`, naming the request.
+2. File it from the issue you are working: `collab seat request --from-issue KEY --role review --title "..." --body-file request.md`. Add `--project` for another project.
+3. Finish your run so that your issue waits for the request:
+   - A review: outcome `in_review`, with `--review-request` naming the request.
+   - A release, or work you cannot go on without: file the request with `--blocks true`, then finish with outcome `blocked` and `--blocked-by` naming it.
 4. Stop. Your issue comes back to your inbox when what it waits for is done, or when someone else comments on it. The exact rules are under [The inbox order](#the-inbox-order).
 
 ```mermaid
