@@ -350,7 +350,7 @@ curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" -H "Content-Type: app
 | `token` | Present only when the token is new. It is sent once and never again. |
 | `problem` | Present instead of a token when none could be made this time, for example `paused` when the seat's member is switched off. Ask again later. |
 
-A seat for which you hold no usable token gets a new one. The token it replaces keeps working until you ask again holding the new one, so an answer that arrives late or twice never leaves you with a dead token. A lost answer or a lost file costs nothing: ask again with what you hold.
+A seat for which you hold no usable token gets a new one. The token it replaces keeps working until you ask again holding the new one, or until a second newer token is made. With three overlapping asks, the first answer can arrive last with a revoked token. If a retained token is refused, ask again with what you hold to get a new one. If an answer or file is lost, ask again with what you hold.
 
 | Error | When |
 | --- | --- |
