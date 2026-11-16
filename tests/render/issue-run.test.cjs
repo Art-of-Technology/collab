@@ -5,7 +5,8 @@ global.window = dom.window; global.document = dom.window.document; global.IS_REA
 const React = require('react');
 const { createRoot } = require('react-dom/client');
 
-const base = { react: React, 'react/jsx-runtime': require('react/jsx-runtime'), 'date-fns': { formatDistanceToNow: () => '5 minutes ago' } };
+const base = { react: React, 'react/jsx-runtime': require('react/jsx-runtime'), 'date-fns': { formatDistanceToNow: () => '5 minutes ago' },
+  'next/navigation': { useParams: () => ({ workspaceId: 'acme' }) } };
 const helpers = load('src/components/issue/sections/activity/utils/activityHelpers.ts');
 const { ActivityItem } = load('src/components/issue/sections/activity/components/ActivityItem.tsx', { ...base,
   '@/components/ui/custom-avatar': { CustomAvatar: () => null }, './ActivityIcon': { ActivityIcon: () => null },
@@ -31,6 +32,33 @@ test('the timeline shows an exit note under the run that left it, as handoff not
   assert.ok(late.includes(`Exit note${note}`), late);
   // A handoff's note keeps its own label.
   assert.ok((await entry('AGENT_PROGRESS', { agent: { name: 'navy' }, content: 'Half way' })).includes('Handoff detailsHalf way'));
+});
+
+test('a security review is on the timeline and above it: who asked, the verdict, what was reviewed, and a link to the request', async () => {
+  const links = () => [...document.querySelectorAll('a')].map(link => [link.textContent, link.getAttribute('href')]);
+  const item = (action, details, by = 'sec-a') => shown(React.createElement(ActivityItem, { activity: { id: 'a1', action, details, createdAt: '2026-11-15T10:00:00.000Z', user: { ...user, name: by } } }),
+    async () => [document.getElementById('root').textContent, links()]);
+  assert.deepEqual(await item('SECURITY_REQUESTED', { requestId: 'r1', requestKey: 'SEC-7' }, 'dev-a'), ['dev-a asked for a security reviewSEC-75 minutes ago', [['SEC-7', '/acme/issues/SEC-7']]]);
+  // On the request itself the entry names the issue it was filed for.
+  assert.deepEqual(await item('SECURITY_REQUESTED', { forIssueId: 'i1', forIssueKey: 'APP-1' }, 'dev-a'), ['dev-a asked for a security reviewAPP-15 minutes ago', [['APP-1', '/acme/issues/APP-1']]]);
+  assert.deepEqual(await item('SECURITY_VERDICT', { verdict: 'failed', reviewed: 'PR 12 at abc1234', requestKey: 'SEC-7' }),
+    ['sec-a reviewed PR 12 at abc1234 for security: failedSEC-75 minutes ago', [['SEC-7', '/acme/issues/SEC-7']]]);
+  assert.ok((await item('SECURITY_VERDICT', { verdict: 'passed', reviewed: 'PR 12 at def5678', requestKey: 'SEC-9' }))[0].startsWith('sec-a reviewed PR 12 at def5678 for security: passed'));
+  // The verdict on the request's own timeline links to the issue it was filed for, not to itself.
+  assert.deepEqual((await item('SECURITY_VERDICT', { verdict: 'passed', reviewed: 'PR 12', requestKey: 'SEC-9', forIssueKey: 'APP-1' }))[1], [['APP-1', '/acme/issues/APP-1']]);
+  // An ordinary entry carries no such link.
+  assert.deepEqual((await item('AGENT_RUN_FINISHED', { outcome: 'done', requestKey: 'SEC-7' }))[1], []);
+
+  const security = [{ requestKey: 'SEC-7', state: 'failed', reviewed: 'PR 12 at abc1234', by: 'sec-a' }, { requestKey: 'SEC-9', state: 'passed', reviewed: 'PR 12 at def5678', by: 'sec-b' },
+    { requestKey: 'SEC-11', state: 'closed' }, { requestKey: 'SEC-12', state: 'open' }];
+  let run = null;
+  global.fetch = async () => ({ ok: true, json: async () => ({ run, security }) });
+  const open = () => shown(React.createElement(OpenRun, { issueId: 'i1' }), async () => [document.getElementById('root').textContent, links()]);
+  const line = 'Security reviewSEC-7 failed: PR 12 at abc1234, by sec-aSEC-9 passed: PR 12 at def5678, by sec-bSEC-11 closed without a verdictSEC-12 open';
+  assert.deepEqual(await open(), [line, [['SEC-7', '/acme/issues/SEC-7'], ['SEC-9', '/acme/issues/SEC-9'], ['SEC-11', '/acme/issues/SEC-11'], ['SEC-12', '/acme/issues/SEC-12']]]);
+  // With a run open both lines show.
+  run = { id: 'r1', state: 'running', startedAt: '2026-11-15T10:00:00.000Z', by: 'dev-a', clearable: false };
+  assert.equal((await open())[0], `${line}dev-a started working on this issue 5 minutes ago.`);
 });
 
 test('above the timeline: who is working the issue and since when, and a clear button only where a run can be cleared', async () => {

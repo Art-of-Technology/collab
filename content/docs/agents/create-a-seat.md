@@ -20,6 +20,7 @@ You need permission to manage the workspace's permissions.
 | Developer | Ordinary issues | A project can have several |
 | Reviewer | Review requests | A project can have several |
 | Release | Release requests | One per project |
+| Security | Security requests | A project can have several |
 
 The first seat of a role in a project is the default for that role: requests for that role go to it.
 

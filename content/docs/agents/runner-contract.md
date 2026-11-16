@@ -155,12 +155,14 @@ The session that did the work finishes the run. Needs `issues:write`.
 | `outcome` | yes | `done`, `in_review` or `blocked`. |
 | `note` | yes | The exit note, up to 16,000 characters, with the headings `## Done`, `## Decisions`, `## Evidence` and `## Next`, each on a line of its own. |
 | `reviewRequest`, `blockedBy`, `askedUser` | see below | What the issue waits for. |
+| `verdict`, `reviewed` | see below | For a security request that finishes `done`: `passed` or `failed`, and the commit or pull request that was read, up to 200 characters. |
 | `status` | no | The name of the status to move the issue to. It must be an active status of the outcome's group. |
 | `usage` | no | What the run cost. See below. |
 
 - `in_review` must carry `reviewRequest` (a review request this seat filed for the issue) or `askedUser` (the id of a person in the workspace).
 - `blocked` must carry `blockedBy` (an issue linked as blocking this one) or `askedUser`.
 - `done` carries none of the three.
+- A security request that finishes `done` must carry `verdict` and `reviewed`; no other finish takes them. See [Security review](/docs/agents/seats#security-review).
 - A release seat may add `alsoFinish`: 1 to 20 other release requests to finish with the same note. See [Finish a run](/docs/agents/seats#finish-a-run).
 
 ```json
@@ -178,7 +180,7 @@ The reply is `{ "run": { ... }, "statusUnmapped": false }`. `statusUnmapped` is 
 | Status | `error` | Extra key | When |
 | --- | --- | --- | --- |
 | 422 | `exit_note_required` | `missing`: the headings not found | The note lacks a heading. |
-| 422 | `exit_state_required` | `missing`: the fields to supply | The outcome lacks what it waits for, or names something that cannot bring the issue back: a request or blocker that is done or not linked, a person who is not an active member, a status outside the outcome's group. |
+| 422 | `exit_state_required` | `missing`: the fields to supply | The outcome lacks what it waits for, a security request finishes `done` without `verdict` or `reviewed`, or the finish names something that cannot bring the issue back: a request or blocker that is done or not linked, a person who is not an active member, a status outside the outcome's group. |
 | 400 | `invalid_request` | | A field the outcome does not take, an unknown key, or a `usage` that is not complete. |
 | 409 | `run_fenced` | | The run is not the one working the issue any more. If the generation matches and the run had not finished already, the note is kept on the issue's timeline as a late exit note. |
 | 404 | `not_found` | | The run is not the caller's, or its issue is in Trash. |
@@ -233,7 +235,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `requestFor` | When the issue is itself a request: the issues it was filed for. |
 | `commands` | `collab` commands that fetch the rest and end the session's work. |
 
-An issue in `blockers`, `requests` or `requestFor` has `id`, `issueKey`, `title`, `projectId`, `status` and `category`. A request also has `requestRole`.
+An issue in `blockers`, `requests` or `requestFor` has `id`, `issueKey`, `title`, `projectId`, `status` and `category`. A request also has `requestRole`; a security request that has its verdict also has `verdict` and `reviewed`.
 
 ## File a request: POST seats/me/requests
 
@@ -241,12 +243,12 @@ Needs `issues:write`. Only a seat may call it.
 
 | Field | Required | What it is |
 | --- | --- | --- |
-| `role` | yes | `developer`, `review` or `release`. |
+| `role` | yes | `developer`, `review`, `release` or `security`. |
 | `title` | yes | Up to 200 characters. |
 | `body` | yes | Up to 32,000 characters. When the workspace enforces templates, it must include the sections of its Task template. |
 | `fromIssue` | yes | The key or id of the issue the request comes from. It must be in the seat's own project. |
 | `project` | no | The target project's id or issue prefix. Without it, the seat's own project. |
-| `blocks` | no | `true` links the request as blocking the source issue; otherwise as related. |
+| `blocks` | no | `true` links the request as blocking the source issue; otherwise as related. A `security` request always blocks. |
 
 The reply names the new issue:
 
@@ -255,6 +257,8 @@ The reply names the new issue:
 ```
 
 A request to a release seat that has not read its inbox for 10 minutes adds `"warning": "seat_idle"`. The request is still filed: tell a person.
+
+A `security` request adds `"blocks": true`: it blocks the source issue whatever `blocks` said.
 
 | Status | `error` | When |
 | --- | --- | --- |

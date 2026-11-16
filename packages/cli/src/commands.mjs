@@ -77,7 +77,7 @@ export const commands = {
   }),
   'seat request': command('POST', 'seats/me/requests', { project: string, role: string, title: string, body: string, fromIssue: string, blocks: boolean }, {}, {
     required: ['role', 'title', 'body', 'fromIssue'],
-    description: 'Ask a seat for work on one of your issues: --role developer, review or release, --from-issue the issue it is for, --body or --body-file filled in from the Task template. --project names another project by ID or issue prefix; without it the request stays in your project. --blocks true makes your issue wait for it.',
+    description: 'Ask a seat for work on one of your issues: --role developer, review, release or security, --from-issue the issue it is for, --body or --body-file filled in from the Task template. --project names another project by ID or issue prefix; without it the request stays in your project. --blocks true makes your issue wait for it; a security request always does.',
   }),
   'seat run': command('GET', 'seats/me/inbox', {}, {}, {
     seatRun: true, localOptions: { once: boolean },
@@ -88,9 +88,9 @@ export const commands = {
   }),
   'run context': command('GET', 'issues/:id/run-context', {}, {}, { description: 'What a fresh session needs to work an issue, in one read: the issue, the last exit note, comments since, blockers and requests.' }),
   'run renew': command('PATCH', 'runs/:id', { generation: string }, {}, { event: 'renew', required: ['generation'], description: "Extend a seat's 60 second lease. collab seat run does this for the program it starts." }),
-  'run finish': command('PATCH', 'runs/:id', { generation: string, outcome: string, note: string, status: string, reviewRequest: string, askedUser: string, blockedBy: string, alsoFinish: array }, {}, {
+  'run finish': command('PATCH', 'runs/:id', { generation: string, outcome: string, note: string, status: string, reviewRequest: string, askedUser: string, blockedBy: string, alsoFinish: array, verdict: string, reviewed: string }, {}, {
     event: 'finish', required: ['generation', 'outcome', 'note'],
-    description: 'End a run with --outcome done, in_review or blocked and an exit note (--note or --note-file) with the headings ## Done, ## Decisions, ## Evidence and ## Next. in_review names --review-request or --asked-user; blocked names --blocked-by or --asked-user. --status picks the project status when the outcome has several.',
+    description: 'End a run with --outcome done, in_review or blocked and an exit note (--note or --note-file) with the headings ## Done, ## Decisions, ## Evidence and ## Next. in_review names --review-request or --asked-user; blocked names --blocked-by or --asked-user. --status picks the project status when the outcome has several. A security request finishes done with --verdict passed or failed and --reviewed, the commit or pull request that was read.',
   }),
   'search': command('GET', 'search', {}, { query: string, mode: string, ...projectQuery, type: string, status: string,
     assigneeId: string, after: string, before: string, ...offset, maxTokens: integer }, {

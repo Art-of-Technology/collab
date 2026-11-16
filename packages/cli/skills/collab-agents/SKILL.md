@@ -24,9 +24,9 @@ daemon owns registration, claims and reporting.
 
 ## Seats
 
-A seat is one project and one role: developer, reviewer or release. `collab seat show`
+A seat is one project and one role: developer, reviewer, release or security. `collab seat show`
 names yours; `seat_required` means this token is not a seat. Needs CLI 0.10.0 and the
-matching server.
+matching server; the security role and its verdict need CLI 0.10.2.
 
 A seat session works one issue and then ends. A runner (`collab seat run`, or another
 that speaks the same contract) has checked the issue out, started you, and keeps the
@@ -43,15 +43,18 @@ lease renewed while you live. Your run is in the environment: `COLLAB_ISSUE_KEY`
 2. Do the work, in your project only. A seat cannot write to another project's issues
    (`wrong_project`) and cannot change who an issue is assigned to (`seat_scope`).
    Record progress as comments on the issue.
-3. When you need a review, a release, or work from another project, file a request.
+3. When you need a review, a release, a security review, or work from another project, file a request.
    Never hand work over in a direct message or a handoff.
 
    ```sh
    collab seat request --from-issue "$COLLAB_ISSUE_KEY" --role review --title 'Review the change for APP-123' --body-file request.md
    ```
 
-   `--role` is `review`, `release` or `developer`. `--project ID_OR_PREFIX` sends it to
-   another project; `--blocks true` makes your issue wait for it. The body follows the
+   `--role` is `review`, `release`, `security` or `developer`. `--project ID_OR_PREFIX` sends it to
+   another project; `--blocks true` makes your issue wait for it. A security request always
+   blocks: finish `blocked --blocked-by` its key, and when your issue comes back read the
+   request's `verdict` in the run context. After `failed`, fix the findings and file a new
+   security request for the new commit. The body follows the
    Task template (`collab templates get TASK`): state the problem and the evidence, not
    the fix. The reply has the request's `issueKey`. `warning: seat_idle` means the seat
    it went to may not be running: say so in your exit note, so a person sees it.
@@ -69,6 +72,8 @@ lease renewed while you live. Your run is in the environment: `COLLAB_ISSUE_KEY`
    - `done`: the work is finished. `--status NAME` picks the status when the project has several done statuses.
    - `in_review`: it waits for a review or an answer. Add `--review-request KEY` (a review request you filed) or `--asked-user USER_ID`.
    - `blocked`: it cannot go on. Add `--blocked-by KEY` (an issue linked as blocking this one, such as a request filed with `--blocks true`) or `--asked-user USER_ID`.
+
+   A security seat finishes a security request `done` with `--verdict passed` or `--verdict failed` and `--reviewed 'PR 12 at abc1234'` (the commit or pull request it read). The findings go in the exit note on the request. The verdict is written to the timeline of the request and of the issue it was filed for; open the request to read the findings.
 
    `exit_note_required` and `exit_state_required` list what is `missing`: complete it
    and send it again. `run_fenced` means the run no longer holds the issue and nothing was
@@ -398,12 +403,12 @@ Only the sender of open work or its current claimant may supersede it. The repla
 
 Read the shared timeline with `collab issues activity ISSUE_KEY --workspace WORKSPACE_ID`.
 The issue activity UI shows agent names, pickup, progress, release, handoff and completion.
-For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.10.1/packages/cli/README.md#agent-coordination).
+For supported delivery triggers and release requirements, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.10.2/packages/cli/README.md#agent-coordination).
 
 ## Host wake callback
 
 For automatic notifications, have the host supervisor follow the
-[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.10.1/packages/cli/README.md#wake-a-running-agent-through-its-host)
+[CLI wake callback contract](https://github.com/Art-of-Technology/collab/blob/cli-v0.10.2/packages/cli/README.md#wake-a-running-agent-through-its-host)
 for command availability, setup, deadlines and adapter requirements.
 
 Require the host to provide and verify its adapter; never substitute a guessed
@@ -425,7 +430,7 @@ requirements above before claiming automatic wake-ups are active for that host.
 
 ### Dedicated managed workers
 
-Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.10.1/packages/cli/README.md#dedicated-managed-workers-cli-070)
+Follow the [dedicated worker guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.10.2/packages/cli/README.md#dedicated-managed-workers-cli-070)
 for setup, supervision and recovery. Never use a custom terminal callback as a
 fallback. Preserve the saved login, stable identity, labels and private journals.
 
@@ -444,7 +449,7 @@ owner's qualification boundary described there.
 ## Project coordinator
 
 CLI 0.8.0 adds `coordinator setup/run/status/stop/install/uninstall` for one project.
-Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.10.1/packages/cli/README.md#project-coordinator-cli-080). A registered
+Use the [coordinator guide](https://github.com/Art-of-Technology/collab/blob/cli-v0.10.2/packages/cli/README.md#project-coordinator-cli-080). A registered
 interactive agent without an approved execution route is not automatically wakeable.
 Only explicitly consented local dedicated workers can be dispatched. Check status
 and the issue timeline for actual claim/progress/result; do not call a queued wakeup

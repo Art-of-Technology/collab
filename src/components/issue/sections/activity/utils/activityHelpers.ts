@@ -58,6 +58,10 @@ export const getActionText = (activity: IssueActivity, itemType: string = 'issue
     const outcome = typeof activity.details?.outcome === 'string' ? `: ${activity.details.outcome.replace(/_/g, ' ')}` : '';
     return `${userName} finished a run on this ${itemType}${outcome}`;
   }
+  if (activity.action === 'SECURITY_REQUESTED') return `${userName} asked for a security review`;
+  if (activity.action === 'SECURITY_VERDICT') {
+    return `${userName} reviewed ${typeof activity.details?.reviewed === 'string' ? activity.details.reviewed : `this ${itemType}`} for security: ${activity.details?.verdict === 'passed' ? 'passed' : 'failed'}`;
+  }
   if (activity.action === 'AGENT_RUN_LATE') return `${userName} sent an exit note after the run on this ${itemType} had ended; nothing else changed`;
   const actionName = getActionDisplayName(activity.action).toLowerCase();
   

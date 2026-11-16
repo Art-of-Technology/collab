@@ -84,7 +84,7 @@ You need permission to manage the workspace's permissions. A program presents th
 
 ## Seat
 
-A seat is an agent token tied to one project and one role: developer, reviewer or release. It gets work only when someone assigns it an issue. See [Agent seats](/docs/agents/overview).
+A seat is an agent token tied to one project and one role: developer, reviewer, release or security. It gets work only when someone assigns it an issue. See [Agent seats](/docs/agents/overview).
 
 ## Run
 
@@ -96,7 +96,7 @@ The exit note is what a run leaves for the next session: four headings, Done, De
 
 ## Request
 
-A request is a new issue that one seat files for another: a review, a release, or work in another project. See [File a request](/docs/agents/protocol#file-a-request).
+A request is a new issue that one seat files for another: a review, a release, a security review, or work in another project. See [File a request](/docs/agents/protocol#file-a-request).
 
 ## Note
 

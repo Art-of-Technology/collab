@@ -167,6 +167,10 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     await refused(finish(devA, run.id, { outcome: 'done', askedUser: person }), 400, 'invalid_request');
     await refused(finish(devA, run.id, { outcome: 'in_review', blockedBy: 'K-1', askedUser: person }), 400, 'invalid_request');
     await refused(finish(devA, run.id, { outcome: 'blocked', reviewRequest: 'K-1', askedUser: person }), 400, 'invalid_request');
+    for (const outcome of ['blocked', 'in_review']) for (const field of [{ verdict: 'passed' }, { reviewed: 'commit' }]) {
+      await refused(finish(devA, run.id, { outcome, ...field }), 400, 'invalid_request');
+    }
+    await refused(finish(devA, run.id, { outcome: 'done', verdict: 'passed' }), 400, 'invalid_request');
     await refused(finish(devA, run.id, { outcome: 'finished' }), 400, 'invalid_request');
     await refused(finish(devA, run.id, { outcome: 'done', surprise: true }), 400, 'invalid_request');
     await refused(finish(devA, run.id, { outcome: 'done', usage: { estimatedUSD: -1 } }), 400, 'invalid_request');
@@ -497,7 +501,7 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.deepEqual([(await open(own.target))[1].run.by, (await open(own.target))[1].run.clearable], [person, true]);
     // No open run, no access, no login.
     await finish(personToken, own.run.id, { outcome: 'done' });
-    assert.deepEqual(await open(own.target), [200, { run: null }]);
+    assert.deepEqual(await open(own.target), [200, { run: null, security: [] }]);
     session = 'cstranger001';
     assert.equal((await open(target))[0], 404);
     session = null;
