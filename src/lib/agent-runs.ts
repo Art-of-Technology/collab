@@ -306,7 +306,7 @@ const FACTS = ['pullRequest', 'headCommit', 'nextStep'] as const;
 function exitFacts(input: Finish) {
   // A CLI before 0.12.0 cannot send the field: for it the first line under `## Next` is the next step, so its finish is not stranded.
   const written = input.outcome === 'done' ? undefined : input.note.split(/^## Next[ \t]*$/m)[1]?.split('\n').map(line => line.trim()).find(Boolean);
-  const nextStep = input.nextStep ?? (written && !/^#+(?:\s|$)/.test(written) ? written.replace(/^(?:[-*]|\d+\.)\s+/, '').slice(0, 300) : undefined);
+  const nextStep = input.nextStep ?? (written && !/^#+(?:\s|$)/.test(written) ? written.replace(/^(?:[-*+]|\d+[.)])\s+/, '').slice(0, 300) : undefined);
   const missing: string[] = [];
   if (input.pullRequest !== undefined ? !PULL_REQUEST.test(input.pullRequest) : input.headCommit !== undefined) missing.push('pullRequest');
   if (input.headCommit !== undefined ? !COMMIT.test(input.headCommit) : input.pullRequest !== undefined) missing.push('headCommit');

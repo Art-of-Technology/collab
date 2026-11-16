@@ -209,6 +209,12 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     const old = await started(devA);
     assert.equal((await finish(devA, old.run.id, { outcome: 'blocked', askedUser: person, note: `${note('Next')}\n\n## Next\n\n1. Wait for the release.\n2. Check the page.` }))[0], 200);
     assert.deepEqual(await facts(old.target), { pullRequest: null, headCommit: null, nextStep: 'Wait for the release.' });
+    // Any Markdown list mark is taken off the line.
+    for (const mark of ['- ', '* ', '+ ', '2) ']) {
+      const listed = await started(devA);
+      assert.equal((await finish(devA, listed.run.id, { outcome: 'blocked', askedUser: person, note: `${note('Next')}\n\n## Next\n\n${mark}Deploy it.` }))[0], 200);
+      assert.equal((await facts(listed.target)).nextStep, 'Deploy it.');
+    }
     // Done may leave the next step out, and then the note's text is not read for one.
     const done = await started(devA);
     assert.equal((await finish(devA, done.run.id, { outcome: 'done', note: bare[0] }))[0], 200);
