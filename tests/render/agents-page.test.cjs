@@ -100,7 +100,7 @@ test('the phone menu has the same Agents entry', () => {
   });
   const html = renderToStaticMarkup(React.createElement(MobileBottomNav));
   // Marked as the current section on the old handoff inbox too.
-  assert.match(html, /<button class="[^"]*ring-1[^"]*">(?:(?!<button).)*<span data-tip=""><div[^>]*>Agents<\/div>/);
+  assert.match(html, /<button aria-label="Agents" class="[^"]*ring-1[^"]*">(?:(?!<button).)*<span data-tip=""><div[^>]*>Agents<\/div>/);
 });
 
 test('"Handoffs (old)" is a tab only while a project still uses handoffs', () => {

@@ -152,6 +152,7 @@ function MobileNavItemComponent({ item, index, onClick }: MobileNavItemComponent
     <Tooltip>
       <TooltipTrigger asChild>
         <motion.button
+          aria-label={item.title}
           className={cn(
             "relative flex items-center justify-center rounded-lg w-7 h-7",
             "transition-all duration-200 ease-out",
