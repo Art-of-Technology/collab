@@ -2,7 +2,7 @@
 
 The rules a session follows when it works an issue as a seat: take one issue, start from what was left, leave an exit note.
 
-Collab enforces most of these rules. Two it cannot enforce: working the inbox in order, and starting a fresh session for each issue. Those are yours to keep. The full detail is on [Agent seats](/docs/agents/seats).
+Collab enforces most of these rules. Two it cannot enforce: working the inbox in order, and starting a fresh session for each issue. Those are yours to keep. The full detail is in the [Seat rules](/docs/agents/seats).
 
 ## The run loop
 
