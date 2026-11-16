@@ -107,15 +107,16 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
   const leadB = await seat('lead-b', B, 'lead'), devB = await seat('dev-b', B);
 
   await t.test('lead assignment rechecks the lead and issue inside the transaction', async () => {
-    let change;
+    let change, inside;
     const racingSeats = { ...seats, assertTokenMayAssign: async (...args) => {
       const result = await seats.assertTokenMayAssign(...args);
-      if (change && args[0] === prisma) { const run = change; change = null; await run(); }
+      if (change && (args[0] === prisma) !== inside) { const run = change; change = null; await run(); }
       return result;
     } };
     const racingItem = load('src/app/api/apps/auth/issues/[issueIdOrKey]/route.ts', { ...deps, '@/lib/agent-seats': racingSeats }, globals);
-    const race = async (target, action) => {
-      change = action;
+    // `within`: the change lands after the transaction's first read, not before the transaction.
+    const race = async (target, action, within = false) => {
+      change = action; inside = within;
       const reply = await send(racingItem.PATCH, lead.token, 'PATCH', { body: { assigneeId: devA.userId }, params: { issueIdOrKey: target.issueKey } });
       return [reply.status, reply.body.error];
     };
@@ -129,6 +130,11 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     assert.deepEqual(await race(retired, () => raw.agentSeat.update({ where: { id: lead.id }, data: { retiredAt: new Date() } })), [403, 'seat_scope']);
     assert.equal(await holder(retired), null);
     await raw.agentSeat.update({ where: { id: lead.id }, data: { retiredAt: null } });
+    // A seat's row written while the placement runs (its inbox stamps it) is a conflict to retry, not a server error.
+    const stamped = await issue(A);
+    assert.deepEqual(await race(stamped, () => raw.agentSeat.update({ where: { id: devA.id }, data: { lastSeenAt: new Date() } }), true), [409, 'issue_conflict']);
+    assert.equal(await holder(stamped), null);
+    assert.deepEqual(await give(lead.token, stamped, devA.userId), [200, undefined]);
   });
 
   await t.test('a project has one lead seat; it takes ordinary issues and no requests', async () => {
@@ -203,6 +209,14 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     await raw.issue.update({ where: { id: placed[0].id }, data: { statusId: `${A}-done` } });
     const next = await issue(A);
     assert.deepEqual(await give(lead.token, next, capped.userId), [200, undefined]);
+
+    // A done issue is not counted, so it is not placed either, nor is one the same call marks done: reopened, they would pass the limit.
+    const closed = await issue(A, { statusId: `${A}-done` }), closing = await issue(A);
+    assert.deepEqual(await give(lead.token, closed, otherA.userId), [403, 'seat_scope']);
+    const both = await send(item.PATCH, lead.token, 'PATCH', { body: { assigneeId: otherA.userId, status: 'done' }, params: { issueIdOrKey: closing.issueKey } });
+    assert.deepEqual([both.status, both.body.error], [403, 'seat_scope']);
+    assert.deepEqual([await holder(closed), await holder(closing)], [null, null]);
+    assert.equal(await raw.issueActivity.count({ where: { itemId: { in: [closed.id, closing.id] }, action: 'LEAD_ASSIGNED' } }), 0);
 
     // Two placements at once that each fit: one gets in.
     const raced = await seat('raced-a', A);

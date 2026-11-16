@@ -213,9 +213,9 @@ A lead seat decides which seat works which issue. It is a seat like the others: 
 What the lead may assign:
 
 - An issue of its own project, to another seat of that project. That seat's role must take the issue, as for any assignment.
-- Only an existing issue, and only through the call above. Creating an issue with an assignee, unassigning, and assigning to a person or to itself are refused with `seat_scope`. Another project's issue or seat is refused with `wrong_project`, a retired seat with `assignee_not_found`.
+- Only an existing issue, and only through the call above. Creating an issue with an assignee, unassigning, assigning to a person or to itself, and assigning an issue that is done or that the same call marks done are refused with `seat_scope`. Another project's issue or seat is refused with `wrong_project`, a retired seat with `assignee_not_found`.
 - Only an issue with no assignee that no lead has placed before, or an issue whose current assignee the lead itself set. Anything else was decided by someone else and stands: `403 assign_by_person`. So an issue a person assigned is not moved, and an issue the lead placed that was then unassigned, by a person or because its seat was retired, waits for a person.
-- A seat holds at most 3 open issues from the lead. One more is refused with `429 lead_cap`, and the lead waits. Open means not in a done status. Issues a person gave the seat do not count. The limit is checked when the lead assigns: reopening a done issue or restoring one from Trash is not refused, and that issue counts from then on. Two assignments at the same moment that would pass the limit together: one is refused with `409 issue_conflict`.
+- A seat holds at most 3 open issues from the lead. One more is refused with `429 lead_cap`, and the lead waits. Open means not in a done status. Issues a person gave the seat do not count. The limit is checked when the lead assigns, and a done issue cannot be assigned: reopening an issue that was done after the lead placed it, or restoring one from Trash, is not refused, and that issue counts from then on. Two assignments at the same moment that would pass the limit together: one is refused with `409 issue_conflict`.
 - Every assignment is on the issue's **Activity** tab under the lead's name, with the seat it went to.
 
 What brings the epic back, each as the `reason` in the lead's inbox:
@@ -223,9 +223,9 @@ What brings the epic back, each as the `reason` in the lead's inbox:
 - `child_done`: a child issue reached a done status after the lead's last run started.
 - `child_blocked`: a run on a child issue finished `blocked` after the lead's last run started.
 - `child_idle`: a seat has held a child issue for 2 hours and no run has started on it since it was assigned. Offered once per assignment, when the 2 hours are up.
+- `reply`, as for any blocked issue: someone else commented on the epic.
 
 Children are measured from the start of the lead's last run, not its end: a child that finishes while the lead's session is running may be unseen by it, so the epic comes back once more.
-- `reply`, as for any blocked issue: someone else commented on the epic.
 
 The rules:
 

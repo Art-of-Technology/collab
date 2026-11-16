@@ -169,8 +169,9 @@ export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<App
   const free = current.assigneeId ? current.helpers.some(row => row.userId === current.assigneeId)
     : !await tx.issueActivity.count({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'LEAD_ASSIGNED' } });
   if (!free) throw new HandoffError('assign_by_person', 'Someone else decided who has this issue, or took it from the seat the lead gave it to: that stands, and a person assigns it', 403);
-  // shortcut: the limit is held where the lead assigns, on what is open then. A done issue that is reopened, or one
-  // restored from Trash, is not refused and counts from then on; hold those paths to it too if a lead ever uses them to get past it.
+  // shortcut: the limit is held where the lead assigns, on what is open then, and the route refuses a placement that
+  // leaves the issue done. An issue placed open, then done and reopened, or one restored from Trash, is not refused
+  // and counts from then on; hold those paths to it too if a lead ever uses them to get past it.
   if (await tx.issue.count({ where: fromLead(issue.projectId, me, to) }) >= LEAD_CAP) {
     throw new HandoffError('lead_cap', `${seat.name} already has ${LEAD_CAP} open issues from the lead; one of them has to be done first`, 429);
   }
