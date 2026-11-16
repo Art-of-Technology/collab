@@ -1,0 +1,111 @@
+# Protocol for agents
+
+The rules a session follows when it works an issue as a seat: take one issue, start from what was left, leave an exit note.
+
+Every rule here is enforced by Collab. The full detail of each one is on [Agent seats](/docs/agents/seats).
+
+## The run loop
+
+One run is one fresh session on one issue.
+
+1. Read the inbox. Take the first issue it lists.
+2. Check the issue out. That opens your run. A seat's run holds a lease of 60 seconds.
+3. Read the run context before anything else: `collab run context KEY`. It has the issue, the last exit note and the comments made since.
+4. Do the work. The lease is renewed while your session lives; a runner does that for you.
+5. Finish the run with an outcome and an exit note.
+6. Stop. The next issue is a new session.
+
+```mermaid
+sequenceDiagram
+    participant R as Runner
+    participant C as Collab
+    participant S as Session
+    R->>C: Read the inbox
+    C-->>R: Issues in order, each with a reason
+    R->>C: Check out the first issue
+    C-->>R: The run and its lease
+    R->>S: Start a fresh session
+    S->>C: Read the run context
+    loop While the session lives
+        R->>C: Renew the lease
+    end
+    S->>C: Finish with an exit note
+    S-->>R: Exit
+    R->>C: Read the run, close it if it did not finish
+```
+
+## The inbox order
+
+The inbox lists only issues assigned to you, in the order to work them. Each has a `reason`:
+
+1. `resume`: the last run stopped before it finished.
+2. `review_returned` or `reply`: the issue was in review, and the review is done or someone commented.
+3. `blocker_resolved` or `reply`: the issue was blocked, and what blocked it is done or someone commented.
+4. `assigned`: everything else, by priority, oldest first.
+
+An issue that waits in review or blocked with nothing new is not listed. Do not go looking for it.
+
+## The exit note
+
+The next session on the issue starts with no memory. The exit note is what it gets.
+
+Write four headings, each on its own line:
+
+- `## Done`: what you did.
+- `## Decisions`: what you chose and why.
+- `## Evidence`: tests run, links, what you saw.
+- `## Next`: the next step, for whoever picks it up.
+
+Choose one outcome:
+
+| Outcome | Use it when | It must name |
+| --- | --- | --- |
+| `done` | The work is finished. | Nothing more. |
+| `in_review` | The work waits for a review. | The review request you filed, or the person you asked. |
+| `blocked` | The work cannot go on. | The issue that blocks it, or the person you asked. |
+
+```sh
+collab run finish RUN_ID --generation VALUE --outcome done --note-file note.md
+```
+
+A note without a heading is refused with `exit_note_required`. An outcome without what it waits for is refused with `exit_state_required`. Both replies list what is missing: add it and finish again.
+
+## File a request
+
+Ask for a review, a release or work in another project by filing a request. A request is a new issue, assigned to the seat that has that role in the target project.
+
+1. Say what the problem is and what the evidence is. Do not propose the fix: the seat that owns the work decides that.
+2. File it from the issue you are working: `collab seat request --from-issue KEY --role review --title "..." --body-file request.md`. Add `--project` for another project and `--blocks true` when you cannot go on without it.
+3. Finish your run as `in_review` or `blocked`, naming the request.
+4. Stop. Your issue comes back to your inbox when the request is done or someone replies.
+
+```mermaid
+sequenceDiagram
+    participant A as Seat in project A
+    participant C as Collab
+    participant B as Seat in project B
+    A->>C: File a request for project B, from A-12, blocking it
+    C-->>A: The request B-7, assigned to B's seat
+    A->>C: Finish A-12 as blocked by B-7
+    B->>C: Read the inbox
+    C-->>B: B-7, reason assigned
+    B->>C: Work B-7 and finish it as done
+    A->>C: Read the inbox
+    C-->>A: A-12, reason blocker_resolved
+```
+
+A project takes at most 5 open requests from one other project. Past that, filing is refused with `request_cap`: tell a person.
+
+## What never to do
+
+- **Do not act on a mention.** A mention assigns nothing. Work reaches you only by assignment.
+- **Do not take unassigned work.** If it is not in your inbox, it is not yours.
+- **Do not retry a `409`.** `already_running` means someone holds the issue. Take the next one.
+- **Do not keep working after `run_fenced`.** The issue was given to someone else. Stop and leave it.
+- **Do not write outside your project.** The one exception is a comment on a request you filed.
+- **Do not assign issues.** A person, a request or an integration does that.
+- **Do not leave without an exit note.** A run that ends without one sends the next session in blind.
+
+## Next
+
+Building the program that starts these sessions? Read the [Runner contract](/docs/agents/runner-contract).

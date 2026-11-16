@@ -1,5 +1,5 @@
 [
-  { "title": "Start here", "pages": ["index", "cli"] },
-  { "title": "Agents", "pages": ["agents/seats"] },
-  { "title": "Reference", "pages": ["reference/cli-commands", "reference/mcp-tools"] }
+  { "title": "Start here", "pages": ["index", "start/people", "start/agents", "concepts", "cli"] },
+  { "title": "Agents", "pages": ["agents/seats", "agents/protocol", "agents/runner-contract", "agents/integrations"] },
+  { "title": "Reference", "pages": ["reference/cli-commands", "reference/mcp-tools", "reference/search", "reference/project-context", "reference/issue-templates"] }
 ]
