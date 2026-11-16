@@ -32,9 +32,10 @@ export const requestSchema = z.object({
 
 /**
  * Rule 8: a seat asks a seat of a role for work on one of its project's issues. The request is a new Task in the target
- * project (the seat's own when none is named, which is how review and release are asked for), held to the workspace's
- * issue template, reported by the asking seat, assigned to the target project's default seat for the role, and linked
- * to the issue it came from: it blocks that issue when `blocks`, else it relates to it. It takes its source's priority.
+ * project (the seat's own when none is named, which is how review and release are asked for), its body held to the
+ * workspace's issue template, reported by the asking seat, assigned to the target project's default seat for the role,
+ * and linked to the issue it came from: it blocks that issue when `blocks`, else it relates to it. It takes its
+ * source's priority.
  * `agentRequestRole` is what makes it a request; the role's label is added for people to see and hands it to nobody.
  * One project has at most five open requests in another; inside a project there is no cap. A request to a release
  * seat that is away still succeeds, with a warning and a comment that says so.
@@ -57,9 +58,10 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
 
   const kind = REQUESTS[input.role];
   const label = kind.label ? await prisma.taskLabel.findFirst({ where: { workspaceId, name: kind.label }, select: { id: true } }) : null;
-  // The fields a request states are the ones it sets itself: its source's priority, its role's label, and an assignee,
-  // which a request always has or it is refused below.
+  // Only the body is held to the template. A request's fields are the server's (its source's priority, its role's
+  // label, its assignee) and the asking seat can state no other, so a required field could only refuse every request.
   const { enforced, templates } = await getWorkspaceTemplates(workspaceId);
+  const sections = { ...templates, TASK: { ...templates.TASK, requiredFields: [] } };
   const made = await prisma.$transaction(async tx => {
     // The lock that creating and retiring a seat take: the target project's seats stay as they are until this ends,
     // and requests into the project are counted and written one at a time.
@@ -71,8 +73,7 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
     await seatWriteGuard(tx, context, currentSource.projectId);
     const currentSeat = await requireSeat(tx, context);
     if (currentSeat.projectId !== seat.projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
-    const refusal = enforced && createRefusal(templates, issueShape({ type: 'TASK', description: input.body, priority: currentSource.priority,
-      assigneeId: kind.seat, labels: label ? [label] : [] }));
+    const refusal = enforced && createRefusal(sections, issueShape({ type: 'TASK', description: input.body }));
     if (refusal) throw Object.assign(new HandoffError(refusal.error, refusal.error_description, 422), { body: refusal });
     return writeRequest(tx, { workspaceId, me, projectId: target.id, from: currentSeat.projectId, role: input.role, title: input.title, body: input.body,
       source: currentSource, blocks: input.blocks, labelId: label?.id });

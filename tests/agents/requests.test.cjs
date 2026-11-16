@@ -185,11 +185,14 @@ test('requests: one seat asks another, in its own project or in another one', as
     assert.deepEqual([refusal.issue_type, refusal.missing_sections, refusal.missing_fields], ['TASK', ['Done when'], []]);
     assert.match(refusal.error_description, /Missing required sections: Done when\./);
     assert.equal(await requestCount(), before);
-    // What the request sets itself counts: its source's priority, its assignee, and its role's label.
+    // Only the body is held to the template. A request's fields are the server's, and the asking seat can state no
+    // other: a template that requires story points and labels refused every request in its workspace (CLB-510).
     await raw.issueTemplate.create({ data: { workspaceId: 'w', issueType: 'TASK', version: 2, updatedById: owner,
-      sections: [{ title: 'What', required: true, guidance: 'The change.' }], requiredFields: ['priority', 'assigneeId', 'labels'] } });
+      sections: [{ title: 'What', required: true, guidance: 'The change.' }], requiredFields: ['storyPoints', 'labels', 'dueDate'] } });
     await filed(devA, source, { role: 'review', body: body('Why', 'Done when') });
-    assert.deepEqual((await refused(file(devA, source, { project: 'BB' }), 422, 'template_required')).missing_fields, ['labels'], 'a developer request has no label');
+    await filed(devA, source, { project: 'BB', body: body('Why', 'Done when') });
+    const noSection = await refused(file(devA, source, { project: 'BB', body: body('What') }), 422, 'template_required');
+    assert.deepEqual([noSection.missing_sections, noSection.missing_fields, noSection.template.requiredFields], [['What'], [], []]);
     await raw.issueTemplate.deleteMany();
     // A workspace that does not hold agents to its templates does not hold requests to them either.
     await raw.workspace.update({ where: { id: 'w' }, data: { issueTemplatesEnforced: false } });
