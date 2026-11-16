@@ -155,7 +155,7 @@ The session that did the work finishes the run. Needs `issues:write`.
 | `outcome` | yes | `done`, `in_review` or `blocked`. |
 | `note` | yes | The exit note, up to 16,000 characters, with the headings `## Done`, `## Decisions`, `## Evidence` and `## Next`, each on a line of its own. |
 | `reviewRequest`, `blockedBy`, `askedUser` | see below | What the issue waits for. |
-| `nextStep` | for `in_review` and `blocked` | The first thing to do next, in one line of at most 300 characters. Without the field, the first line under `## Next` is taken, so a client that cannot send it is not refused. |
+| `nextStep` | for `in_review` and `blocked` | The first thing to do next, in one line of at most 300 characters. If absent for those outcomes, the first non-empty line under `## Next` is used, with a leading list mark removed and truncated to 300 characters; a heading is not a next step. `done` does not use this fallback. |
 | `pullRequest`, `headCommit` | no, but together | The pull request as `owner/repository#number`, and the full lowercase 40-character commit it was left at. Neither is taken without the other. |
 | `verdict`, `reviewed` | see below | For a security request that finishes `done`: `passed` or `failed`, and the commit or pull request that was read, up to 200 characters. |
 | `status` | no | The name of the status to move the issue to. It must be an active status of the outcome's group. |
@@ -234,6 +234,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | --- | --- |
 | `issue` | `id`, `issueKey`, `title`, `description`, `type`, `priority`, `projectId`, `status`, `category`, `assigneeId` and `agentRequestRole`. |
 | `lastExitNote` | The note of the last run that finished, or `null`. |
+| `lastExitFacts` | `null` if no run finished; otherwise `pullRequest`, `headCommit` and `nextStep`, each `null` when the last finished run supplied none. |
 | `commentsSince` | The comments made after that run ended, oldest first: `id`, `content`, `createdAt`, `parentId` and `author` with `id` and `name`. All comments when no run has finished. |
 | `blockers` | The issues linked as blocking this one. |
 | `requests` | The requests linked to this issue. |
