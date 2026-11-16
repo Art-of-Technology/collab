@@ -1,17 +1,19 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
-const { resolve } = require('node:path');
+const { mkdtempSync, rmSync, writeFileSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join, resolve } = require('node:path');
 const { load } = require('./helpers.cjs');
 
 const FILE = 'src/app/api/apps/auth/live/route.ts';
 const RACED = 'f'.repeat(40);
 const REVISION = 'b'.repeat(40), AHEAD = 'a'.repeat(40), BEHIND = 'c'.repeat(40), UNKNOWN = 'd'.repeat(40);
 
-function route(revision) {
+function route(revision, file = FILE) {
   const asked = [], clock = { now: 1_000_000 }, statuses = { [AHEAD]: 'ahead', [BEHIND]: 'behind' };
   let options;
-  const { GET } = load(FILE, { 'next/server': { NextResponse: Response },
+  const { GET } = load(file, { 'next/server': { NextResponse: Response },
     '@/lib/apps/auth-middleware': { withAppAuth: (handler, given) => { options = given; return handler; } } }, {
     URL, AbortSignal, process: { env: { COLLAB_REVISION: revision } }, Date: { now: () => clock.now },
     fetch: async url => {
@@ -104,11 +106,15 @@ test('live: definitive answers survive more than 1000 distinct queries', async (
   assert.equal(live.asked.length, count);
 });
 
-test('live: git archive, which a release is built from, writes the commit into the route', t => {
+test('live: the route of a git archive, which a release is built from, answers with the archived commit', async t => {
   const cwd = resolve(__dirname, '../..');
   let head;
   try { head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
   catch { return t.skip('not a git checkout'); }
   const archived = execFileSync('sh', ['-c', `git archive HEAD -- ${FILE} | tar -xO`], { cwd, encoding: 'utf8' });
-  assert.ok(archived.includes(`['${head}', process.env.COLLAB_REVISION]`), 'the placeholder became the commit');
+  const dir = mkdtempSync(join(tmpdir(), 'live-archive-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'route.ts'), archived);
+  // No COLLAB_REVISION: what it answers is what the archive wrote.
+  assert.deepEqual((await route(undefined, join(dir, 'route.ts')).get()).body, { revision: head });
 });
