@@ -1,6 +1,6 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { mkdtempSync, readFileSync, rmSync } = require('node:fs');
+const { mkdtempSync, rmSync } = require('node:fs');
 const { createHash } = require('node:crypto');
 const { tmpdir, userInfo } = require('node:os');
 const { join, resolve } = require('node:path');
@@ -32,10 +32,9 @@ before(async () => {
   execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'db', 'push', '--skip-generate', '--schema', resolve('prisma/schema.prisma')],
     { env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
   prisma = new PrismaClient({ datasources: { db: { url } } });
-  // The column and its index come from the migration itself, as they do in production.
+  // The column, its index and its trigger come from the migration itself, as they do in production.
   await prisma.$executeRawUnsafe('ALTER TABLE "AppToken" DROP COLUMN "tokenHash"');
-  const migration = readFileSync(resolve('prisma/migrations/20261116000200_app_token_hash/migration.sql'), 'utf8');
-  for (const statement of migration.split(';').filter(part => part.trim())) await prisma.$executeRawUnsafe(statement);
+  execFileSync(join(bindir, 'psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', directory, '-d', 'postgres', '-f', resolve('prisma/migrations/20261116000200_app_token_hash/migration.sql')], { stdio: 'pipe' });
   crypto = load('src/lib/apps/crypto.ts', { crypto: require('node:crypto'), util: require('node:util'), bcrypt: {} },
     { Buffer, process: { env: { APP_TOKENS_KEY: 'k'.repeat(32) } }, console });
   auth = freshProcess();
@@ -100,12 +99,26 @@ test('a revoked token is refused by a process that never saw it, without derivin
   assert.equal(derivations, 0);
 });
 
-test('a token replaced in place by a version that does not know the hash is found again by its hash', async () => {
-  // The rotation test above left the old token's hash on the row; refusing the old token corrected it.
-  assert.equal((await prisma.appToken.findUnique({ where: { id: 'token-10' } })).tokenHash, hashOf('rotated'));
+test('a token replaced in place by a version that does not know the hash is accepted before the old one is ever presented', async () => {
+  await prisma.appToken.create({ data: { id: 'replaced', appId: 'cli', workspaceId: 'w', userId: 'alice', accessToken: await stored('replaced-old'), tokenHash: hashOf('replaced-old') } });
+  // What that version does: a new token, and no word about the hash.
+  await prisma.appToken.update({ where: { id: 'replaced' }, data: { accessToken: await stored('replaced-new') } });
+  assert.equal((await prisma.appToken.findUnique({ where: { id: 'replaced' } })).tokenHash, null);
+  assert.equal((await request('replaced-new', freshProcess())).success, true);
+  assert.equal((await prisma.appToken.findUnique({ where: { id: 'replaced' } })).tokenHash, hashOf('replaced-new'));
   derivations = 0;
-  assert.equal((await request('rotated', freshProcess())).success, true);
+  const restarted = freshProcess();
+  assert.equal((await request('replaced-new', restarted)).success, true);
   assert.equal(derivations, 1);
+  assert.equal((await request('replaced-old', restarted)).error.statusCode, 401);
+});
+
+test('a replacement that brings its own hash keeps it, and storing a hash alone changes nothing else', async () => {
+  await prisma.appToken.create({ data: { id: 'kept', appId: 'cli', workspaceId: 'w', userId: 'alice', accessToken: await stored('kept-old'), tokenHash: hashOf('kept-old') } });
+  await prisma.appToken.update({ where: { id: 'kept' }, data: { accessToken: await stored('kept-new'), tokenHash: hashOf('kept-new') } });
+  assert.equal((await prisma.appToken.findUnique({ where: { id: 'kept' } })).tokenHash, hashOf('kept-new'));
+  await prisma.appToken.update({ where: { id: 'kept' }, data: { isRevoked: true } });
+  assert.equal((await prisma.appToken.findUnique({ where: { id: 'kept' } })).tokenHash, hashOf('kept-new'));
 });
 
 test('rows older than the hash are found by the old scan once and by their hash from then on', async () => {

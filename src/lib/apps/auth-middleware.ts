@@ -356,8 +356,9 @@ async function matchAccessToken(token: string, fingerprint: string, verified?: V
       continue;
     }
 
-    // Each row decrypted here gets its hash, so it is decrypted for a lookup once. A hash that differs
-    // was left by a version that replaced the token without it.
+    // Each row decrypted here gets its hash, so it is decrypted for a lookup once. A row has none when it
+    // is older than the column, or when a version that does not know the column replaced its token (the
+    // database then drops the old hash).
     const storedHash = verified ? appToken.tokenHash : tokenHash(decryptedToken);
     if (storedHash !== appToken.tokenHash) {
       try {
