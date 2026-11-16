@@ -15,6 +15,7 @@ import {
   Star,
   Sparkles,
   Lightbulb,
+  BookOpen,
   Grid3X3,
   MessageSquare,
   FolderKanban,
@@ -111,6 +112,8 @@ export default function SimplifiedSidebar({
     { name: "Timeline", href: `${workspaceBase}/timeline`, icon: MessageSquare, current: pathname.includes("/timeline"), badge: 0 },
     { name: "Context", href: `${workspaceBase}/notes`, icon: FileText, current: pathname.includes("/notes"), badge: 0 },
     { name: "Feature Requests", href: `${workspaceBase}/features`, icon: Lightbulb, current: pathname.includes("/features"), badge: 0 },
+    // The public documentation. It has its own layout, so it is never the current page of this menu.
+    { name: "Docs", href: "/docs", icon: BookOpen, current: false, badge: 0 },
   ];
 
   // ── Collapsed State ──

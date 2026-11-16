@@ -261,11 +261,12 @@ test('the layout lists every section and page of the navigation and marks the pa
   const docs = docsIn(fixture());
   let pathname = '/docs/guides/create-a-seat';
   const sidebar = component('src/components/docs/DocsSidebar.tsx', {
-    'next/link': require('next/link'), 'next/navigation': { usePathname: () => pathname },
+    'next/link': require('next/link'), 'next/navigation': { usePathname: () => pathname }, 'lucide-react': require('lucide-react'),
   });
   const { default: Layout } = load('src/app/docs/layout.tsx', {
     'react/jsx-runtime': jsx, 'next/link': require('next/link'), 'next/image': require('next/image'),
     'lucide-react': require('lucide-react'), '@/lib/docs': docs, '@/components/docs/DocsSidebar': sidebar,
+    'next/font/google': { Geist: () => ({ className: 'font-geist' }) },
     // The search box has its own tests in docs-search.test.cjs.
     '@/components/docs/DocsSearch': { DocsSearch: () => null },
   });
@@ -274,14 +275,22 @@ test('the layout lists every section and page of the navigation and marks the pa
   const nav = html.match(/<nav aria-label="Documentation"[^>]*>.*?<\/nav>/s)?.[0];
   assert.ok(nav, 'sidebar');
   assert.ok(nav.indexOf('Start here') < nav.indexOf('Guides'));
-  assert.deepEqual([...nav.matchAll(/<a([^>]*)href="(\/docs[^"]*)"([^>]*)>([^<]+)</g)].map(match => [match[2], match[4], /aria-current="page"/.test(match[1] + match[3])]), [
+  // Every page is a link with an icon before its title.
+  const links = [...nav.matchAll(/<a([^>]*)href="(\/docs[^"]*)"([^>]*)>(<svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg>)([^<]+)</gs)];
+  assert.deepEqual(links.map(match => [match[2], match[5], /aria-current="page"/.test(match[1] + match[3])]), [
     ['/docs', 'Collab docs', false],
     ['/docs/guides/create-a-seat', 'Create a seat', true],
     ['/docs/guides/last', 'Last page', false],
   ]);
+  // The landing page has its own icon; a page the menu does not know gets the plain page icon.
+  const icon = match => match[4].match(/lucide-[a-z-]+/)?.[0];
+  assert.notEqual(icon(links[0]), icon(links[1]));
+  assert.equal(icon(links[1]), icon(links[2]));
+  // The docs are set in their own typeface.
+  assert.match(html, /^<div class="font-geist /);
   assert.match(html, /href="\/dev\/docs"/);
   pathname = '/docs';
-  assert.match(renderToStaticMarkup(Layout({ children: 'The page' })), /<a[^>]*aria-current="page"[^>]*>Collab docs</);
+  assert.match(renderToStaticMarkup(Layout({ children: 'The page' })), /<a[^>]*aria-current="page"[^>]*><svg.*?<\/svg>Collab docs</s);
 });
 
 test('diagrams are drawn in the page\'s own element after it is on screen', () => {
