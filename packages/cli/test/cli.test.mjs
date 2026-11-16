@@ -180,6 +180,27 @@ test('handoff review conflicts use fixed guidance only on handoff endpoints', as
   assert.ok(!unrelated.stderr.includes('PRIVATE_SENTINEL'));
 });
 
+test('a handoff or transfer refused because the project uses seats says to file a request', async t => {
+  const f = await fixture(t, (_req, res) => {
+    res.writeHead(409); res.end(JSON.stringify({ error: 'project_uses_seats', error_description: 'PRIVATE_SENTINEL' }));
+  });
+  const id = '12345678-1234-4234-8234-123456789012';
+  const refused = [
+    await f.run(['handoffs', 'send', '--agent', 'author', '--issue', 'APP-1', '--content', 'Pass', '--to-agents', '["peer"]']),
+    await f.run(['handoffs', 'claim', 'h', '--agent', 'author']),
+    await f.run(['transfers', 'offer', '--agent', 'author', '--handoff-id', 'h', '--to-agent', 'peer', '--request-id', id, '--content', 'Transfer']),
+    await f.run(['transfers', 'accept', 'o', '--agent', 'peer']),
+  ];
+  for (const result of refused) {
+    assert.equal(result.error.error, 'project_uses_seats');
+    assert.match(result.error.message, /collab seat request/);
+    assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  }
+  const unrelated = await f.run(['agents', 'list']);
+  assert.equal(unrelated.error.error, 'conflict');
+  assert.equal(f.calls.length, 5);
+});
+
 test('a review denied by workspace scope fails without retry or leaking server details', async t => {
   const f = await fixture(t, (_req, res) => {
     res.writeHead(403); res.end(JSON.stringify({ error: 'forbidden', error_description: 'PRIVATE_SENTINEL' }));
