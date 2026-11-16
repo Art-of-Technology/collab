@@ -5,14 +5,23 @@ import { withAppAuth } from '@/lib/apps/auth-middleware';
 // placeholder below (`export-subst` in .gitattributes). A checkout keeps the placeholder; COLLAB_REVISION may name the commit there.
 const REVISION = ['$Format:%H$', process.env.COLLAB_REVISION].find(value => /^[0-9a-f]{40}$/.test(value ?? '')) ?? null;
 const REPOSITORY = 'Art-of-Technology/collab';
-const UNKNOWN_MS = 60_000;
-const answers = new Map<string, { contains: boolean | null; until: number }>();
+const UNKNOWN_MS = 60_000, KEPT = 1000;
+// History does not change, so a yes or a no holds while this process runs. An unknown is asked again after a minute, and
+// it never replaces a yes or a no: two requests for one commit can end differently.
+const answers = new Map<string, boolean>(), unknownUntil = new Map<string, number>();
+// Any valid token can ask about any commit ID, so each map keeps only its newest entries. One that was dropped is asked again.
+function keep<Value>(map: Map<string, Value>, key: string, value: Value) {
+  map.delete(key);
+  if (map.size >= KEPT) map.delete(map.keys().next().value!);
+  map.set(key, value);
+}
 
 /** Whether the running revision has `commit` in its history. Null when that cannot be told: GitHub does not know the commit, or does not answer. */
 async function contains(revision: string, commit: string) {
   if (revision.startsWith(commit)) return true;
   const known = answers.get(commit);
-  if (known && known.until > Date.now()) return known.contains;
+  if (known !== undefined) return known;
+  if ((unknownUntil.get(commit) ?? 0) > Date.now()) return null;
   let answer: boolean | null = null;
   try {
     // shortcut: GitHub's public API without a token, 60 requests an hour per address; one request per commit asked about. Give it a token when agents ask about more.
@@ -24,9 +33,11 @@ async function contains(revision: string, commit: string) {
       if (['ahead', 'identical', 'behind', 'diverged'].includes(status)) answer = status === 'ahead' || status === 'identical';
     }
   } catch { /* unknown */ }
-  // History does not change, so a yes or a no holds while this process runs. An unknown is asked again after a minute.
-  answers.set(commit, { contains: answer, until: answer === null ? Date.now() + UNKNOWN_MS : Infinity });
-  return answer;
+  if (answer !== null) {
+    keep(answers, commit, answer);
+    unknownUntil.delete(commit);
+  } else if (!answers.has(commit)) keep(unknownUntil, commit, Date.now() + UNKNOWN_MS);
+  return answers.get(commit) ?? answer;
 }
 
 // GET /api/apps/auth/live[?commit=SHA] - the revision this server runs, and whether a commit is in it.

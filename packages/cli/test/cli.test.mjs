@@ -2244,6 +2244,16 @@ test('comments wait returns the comments made after the newest one, or says that
   assert.equal((await f.run(['comments', 'wait', 'APP-1', '--since', 'yesterday'])).error.error, 'invalid_value');
 });
 
+test('comments wait does not return the comments it started from when the server then stays away', async t => {
+  const f = await fixture(t, (_req, res, _body, calls) => {
+    if (calls.length === 1) return res.end(JSON.stringify({ issueKey: 'APP-1', comments: [{ id: 'one', createdAt: '2026-11-16T10:00:00.000Z' }] }));
+    res.writeHead(503); res.end('{}');
+  });
+  const result = await f.run(['comments', 'wait', 'APP-1', '--wait-seconds', '2']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.data, { issueKey: 'APP-1', comments: [], timedOut: true });
+});
+
 test('new waits survive outages and retain the last answer at the deadline', async t => {
   const first = { id: 'one', createdAt: '2026-11-16T10:00:00.000Z' };
   let mode = 'baseline';

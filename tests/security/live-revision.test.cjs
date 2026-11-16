@@ -5,6 +5,7 @@ const { resolve } = require('node:path');
 const { load } = require('./helpers.cjs');
 
 const FILE = 'src/app/api/apps/auth/live/route.ts';
+const RACED = 'f'.repeat(40);
 const REVISION = 'b'.repeat(40), AHEAD = 'a'.repeat(40), BEHIND = 'c'.repeat(40), UNKNOWN = 'd'.repeat(40);
 
 function route(revision) {
@@ -17,6 +18,12 @@ function route(revision) {
       asked.push(url);
       const commit = /compare\/([0-9a-f]+)\.\.\./.exec(url)[1];
       if (commit === 'e'.repeat(40)) throw new Error('offline');
+      if (commit.startsWith('f')) {
+        // Ahead; but the second of two questions about RACED fails, after the first was answered.
+        if (commit !== RACED || asked.filter(one => one.includes(RACED)).length === 1) return Response.json({ status: 'ahead' });
+        await new Promise(resolve => setImmediate(resolve));
+        throw new Error('offline');
+      }
       return statuses[commit] ? Response.json({ status: statuses[commit] }) : Response.json({ message: 'Not Found' }, { status: 404 });
     } });
   const get = async commit => {
@@ -57,6 +64,24 @@ test('live: any valid token reads the running revision and whether a commit is i
     assert.equal((await live.get(encodeURIComponent(commit))).status, 400, commit);
   }
   assert.equal(live.asked.length, 5);
+});
+
+test('live: an unknown never replaces a yes, and what is kept is bounded', async () => {
+  const live = route(REVISION);
+  // Two requests for one commit at once: the first is answered, the second fails later.
+  assert.deepEqual((await Promise.all([live.get(RACED), live.get(RACED)])).map(reply => reply.body.contains), [true, true]);
+  assert.equal(live.asked.length, 2);
+  assert.equal((await live.get(RACED)).body.contains, true);
+  assert.equal(live.asked.length, 2);
+
+  // The newest 1000 answers are kept; the oldest is asked again.
+  const commit = n => `f${n.toString(16).padStart(39, '0')}`;
+  for (let n = 0; n < 1000; n++) await live.get(commit(n));
+  const count = live.asked.length;
+  await live.get(commit(999));
+  assert.equal(live.asked.length, count);
+  await live.get(RACED);
+  assert.equal(live.asked.length, count + 1);
 });
 
 test('live: a build that was not told its commit says so and asks nothing', async () => {

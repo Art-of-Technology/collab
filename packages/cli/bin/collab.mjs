@@ -444,7 +444,8 @@ async function main() {
         if (baseline) {
           query.set('since', result.comments?.at(-1)?.createdAt ?? new Date(0).toISOString());
           baseline = false;
-          last = result;
+          // What was there before the wait is not what it waited for.
+          last = { ...result, comments: [] };
           continue;
         }
         if (ready(result)) return result;
