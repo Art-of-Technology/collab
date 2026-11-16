@@ -243,7 +243,7 @@ Needs `issues:write`. Only a seat may call it.
 | --- | --- | --- |
 | `role` | yes | `developer`, `review` or `release`. |
 | `title` | yes | Up to 200 characters. |
-| `body` | yes | Up to 32,000 characters, with the sections of the workspace's Task template. |
+| `body` | yes | Up to 32,000 characters. When the workspace enforces templates, it must include the sections of its Task template. |
 | `fromIssue` | yes | The key or id of the issue the request comes from. It must be in the seat's own project. |
 | `project` | no | The target project's id or issue prefix. Without it, the seat's own project. |
 | `blocks` | no | `true` links the request as blocking the source issue; otherwise as related. |
@@ -262,7 +262,7 @@ A request to a release seat that has not read its inbox for 10 minutes adds `"wa
 | 403 | `wrong_project` | `fromIssue` is in another project. |
 | 404 | `project_not_found` | `project` names no project. |
 | 409 | `no_default_seat` | The target project has no seat for the role. |
-| 422 | `template_required` | The body does not meet the Task template. The reply lists `missing_sections` and `missing_fields`. |
+| 422 | `template_required` | The workspace enforces templates and the request does not meet the Task template. The reply lists `missing_sections` and `missing_fields`. |
 | 429 | `request_cap` | The target project already has 5 open requests from this project. |
 | 400 | `invalid_request` | The request would go to the seat that files it, or a field is wrong. |
 
