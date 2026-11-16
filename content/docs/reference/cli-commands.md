@@ -567,7 +567,7 @@ Reads.
 collab run context ID
 ```
 
-What a fresh session needs to work an issue, in one read: the issue, the last exit note, comments since, blockers and requests.
+What a fresh session needs to work an issue, in one read: the issue, the last exit note and its checked facts (pull request, head commit, next step), comments since, blockers and requests.
 
 ID is the issue ID or key (such as APP-123).
 
@@ -597,7 +597,7 @@ Writes.
 collab run finish ID
 ```
 
-End a run with --outcome done, in_review or blocked and an exit note (--note or --note-file) with the headings ## Done, ## Decisions, ## Evidence and ## Next. in_review names --review-request or --asked-user; blocked names --blocked-by or --asked-user. --status picks the project status when the outcome has several. A security request finishes done with --verdict passed or failed and --reviewed, the commit or pull request that was read.
+End a run with --outcome done, in_review or blocked and an exit note (--note or --note-file) with the headings ## Done, ## Decisions, ## Evidence and ## Next. in_review names --review-request or --asked-user; blocked names --blocked-by or --asked-user. --status picks the project status when the outcome has several. A security request finishes done with --verdict passed or failed and --reviewed, the commit or pull request that was read. The facts the next session reads as fields: --next-step, the first thing to do next in one line (in_review and blocked need one), and --pull-request OWNER/REPO#NUMBER with --head-commit, the full 40-character commit it was left at.
 
 ID is the resource ID.
 
@@ -613,6 +613,9 @@ ID is the resource ID.
 | `--also-finish` | array |  |
 | `--verdict` | string |  |
 | `--reviewed` | string |  |
+| `--pull-request` | string |  |
+| `--head-commit` | string |  |
+| `--next-step` | string |  |
 
 ## search
 

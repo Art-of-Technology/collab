@@ -119,6 +119,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 
 - `issue`: its title, description, type, priority, status and the status's group, assignee, and `agentRequestRole` when it is a request.
 - `lastExitNote`: the exit note of the last run that finished, or `null`.
+- `lastExitFacts`: what that run left as checked fields: `pullRequest`, `headCommit` and `nextStep`, each `null` where the run gave none. `null` when no run has finished. See [Finish a run](#finish-a-run).
 - `commentsSince`: the comments made after that run ended, oldest first. When no run has finished, all comments.
 - `blockers`: the issues linked as blocking this one, each with its status, so you can see which are done.
 - `requests`: the requests linked to this issue, each with its `requestRole` and status. A security request that has its verdict also has `verdict` and `reviewed`.
@@ -256,13 +257,25 @@ The next run on an issue starts with no memory. Leave an exit note for the next 
 1. Choose the `outcome`: `done`, `in_review` or `blocked`.
 2. Write the `note` with the four headings `## Done`, `## Decisions`, `## Evidence` and `## Next`, each on a line of its own. It holds at most 16,000 characters.
 3. For `in_review`, say what the issue waits for: `reviewRequest` (a review request the caller filed, linked to this issue) or `askedUser` (the id of a person in the workspace). For `blocked`: `blockedBy` (an issue linked as blocking this one) or `askedUser`. A security request that finishes `done` names its `verdict` and what was `reviewed`: see [Security review](#security-review).
-4. Optionally name the `status` to move the issue to, and report the run's `usage`.
+4. Give the facts the next session needs as fields, not only inside the note:
 
-From the CLI: `collab run finish <run id> --generation <value> --outcome done --note-file note.md`, with `--status`, `--review-request`, `--asked-user`, `--blocked-by`, `--verdict`, `--reviewed` and `--also-finish '["<key>"]'` for the fields above. It does not report `usage`.
+   | Field | CLI option | What it is | When |
+   | --- | --- | --- | --- |
+   | `nextStep` | `--next-step` | The first thing to do next, in one line of at most 300 characters. | Needed for `in_review` and `blocked`. `done` may leave it out. |
+   | `pullRequest` | `--pull-request` | The pull request, as `owner/repository#number`. | When the work has one. |
+   | `headCommit` | `--head-commit` | The full 40-character commit the pull request was left at. | Always with `pullRequest`, never without it. |
+
+5. Optionally name the `status` to move the issue to, and report the run's `usage`.
+
+From the CLI: `collab run finish <run id> --generation <value> --outcome done --note-file note.md`, with `--status`, `--review-request`, `--asked-user`, `--blocked-by`, `--next-step`, `--pull-request`, `--head-commit`, `--verdict`, `--reviewed` and `--also-finish '["<key>"]'` for the fields above. The three options for the facts need CLI 0.12.0. It does not report `usage`.
 
 The reply contains the finished `run` and `statusUnmapped`.
 
 - A note without one of the headings is refused with `422 exit_note_required`, and `missing` in the reply lists the headings.
+- So is a fact that is wrong or missing, with its field in `missing`: a `pullRequest` that is not `owner/repository#number` or comes without `headCommit`, a `headCommit` that is not a full lowercase 40-character hash or comes without `pullRequest`, and `in_review` or `blocked` without a `nextStep`. The run stays open.
+- The facts are on the issue's timeline above the exit note, and the next session gets them as `lastExitFacts` in [the run context](#start-from-the-run-context).
+- The state of the pull request (open, approved, merged) is not a field: it changes after the session ends.
+- A CLI before 0.12.0 cannot send these fields. Its finish is still accepted: without `nextStep`, the first line under `## Next` is the next step.
 - `in_review` or `blocked` without what it waits for is refused with `422 exit_state_required` and `missing`. The one exception is a [lead seat](#lead-seat) that waits for its issue's children. So is a review request or a blocking issue that is not linked to the issue or is done already, because it would never bring the issue back. `askedUser` is another person who is an active member, not an agent.
 - The issue moves to a status of the outcome's group. `status` names it and must be an active status of that group. Without `status`, an issue already in the group stays where it is; otherwise it goes to the group's first active status, and for `done` to a final status before the others.
 - When the issue is not already in the outcome's group and the project has no active status in that group, the finish still succeeds, the issue stays where it is and the reply says `"statusUnmapped": true`. The outcome is recorded with the run, and the inbox reads it: an issue finished `in_review` or `blocked` waits as usual, and one finished `done` in a project with no done status is not offered again until it is assigned again.

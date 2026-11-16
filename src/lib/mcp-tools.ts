@@ -146,7 +146,7 @@ export const tools: McpTool[] = [
     },
   }),
   tool('seat_inbox', 'The issues assigned to this token\'s account, at most 50, in the order to work them, each with the reason it is offered. A seat gets the issues of its project.', ['issues:read'], 'GET', 'seats/me/inbox', seatInbox.GET),
-  tool('run_context', 'What a fresh session needs to work an issue, in one read: the issue, the last exit note, the comments made since, what blocks it and the requests filed for it.', ['issues:read'], 'GET', 'issues/:issueIdOrKey/run-context', runContext.GET, { issueIdOrKey }, ['issueIdOrKey']),
+  tool('run_context', 'What a fresh session needs to work an issue, in one read: the issue, the last exit note and its checked facts (pull request, head commit, next step), the comments made since, what blocks it and the requests filed for it.', ['issues:read'], 'GET', 'issues/:issueIdOrKey/run-context', runContext.GET, { issueIdOrKey }, ['issueIdOrKey']),
   tool('live_revision', 'The commit of Collab\'s own code that this server runs. With commit, also whether that commit is in it: contains is true, false, or null when it cannot be told.', [], 'GET', 'live', live.GET, {
     commit: { type: 'string', pattern: '^[0-9a-f]{7,40}$', description: 'A commit ID of the Collab repository, 7 to 40 lowercase hex characters' },
   }, [], { description: 'The commit of Collab\'s own code that this server runs. With commit, also whether that commit is in it: contains is true, false, or null when it cannot be told.' }),

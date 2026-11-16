@@ -65,6 +65,7 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
   const runs = load('src/app/api/apps/auth/runs/route.ts', deps, globals);
   const one = load('src/app/api/apps/auth/runs/[id]/route.ts', deps, globals);
   const openRoute = load('src/app/api/issues/[issueId]/runs/route.ts', deps, globals);
+  const contextRoute = load('src/app/api/apps/auth/issues/[issueIdOrKey]/run-context/route.ts', deps, globals);
 
   const seat = async (name, projectId, role = 'developer') => {
     const made = await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId, role, ownerId: person, name, expiresInDays: 30 });
@@ -175,6 +176,41 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     await refused(finish(devA, run.id, { outcome: 'done', surprise: true }), 400, 'invalid_request');
     await refused(finish(devA, run.id, { outcome: 'done', usage: { estimatedUSD: -1 } }), 400, 'invalid_request');
     await untouched(target, run);
+  });
+
+  await t.test('rule 6: a pull request comes with the full commit it was left at, in review and blocked say the next step, and the next session reads them as fields', async () => {
+    const { target, run } = await started(devA);
+    const pullRequest = 'acme/app#12', headCommit = 'a1'.repeat(20), nextStep = 'Merge when the review approves this head';
+    const missing = async body => (await refused(finish(devA, run.id, body), 422, 'exit_note_required')).missing;
+    const facts = async issue => (await contextRoute.GET(new Request('https://collab.test/api', { headers: { Authorization: `Bearer ${devA.token}` } }),
+      { params: Promise.resolve({ issueIdOrKey: issue.issueKey }) })).json().then(reply => reply.lastExitFacts);
+    assert.equal(await facts(target), null);
+    // A pull request without the commit, or with one that is not a full hash; a commit without its pull request.
+    assert.deepEqual(await missing({ outcome: 'done', pullRequest }), ['headCommit']);
+    for (const short of ['a1b2c3d', 'A1'.repeat(20), `${headCommit}0`]) assert.deepEqual(await missing({ outcome: 'done', pullRequest, headCommit: short }), ['headCommit']);
+    assert.deepEqual(await missing({ outcome: 'done', headCommit }), ['pullRequest']);
+    for (const loose of ['12', 'app#12', 'https://github.com/acme/app/pull/12', 'acme/app#0']) assert.deepEqual(await missing({ outcome: 'done', pullRequest: loose, headCommit }), ['pullRequest']);
+    // In review and blocked need a next step: nothing under ## Next, or only the next heading, is none. It is one line.
+    const bare = [`${note('Next')}\n\n## Next`, `## Next\n\n${note('Next')}`];
+    for (const outcome of ['in_review', 'blocked']) for (const empty of bare) assert.deepEqual(await missing({ outcome, askedUser: person, note: empty }), ['nextStep']);
+    assert.deepEqual(await missing({ outcome: 'blocked', askedUser: person, nextStep: 'First this.\nThen that.' }), ['nextStep']);
+    assert.deepEqual(await missing({ outcome: 'in_review', askedUser: person, note: bare[0], pullRequest }), ['headCommit', 'nextStep']);
+    await refused(finish(devA, run.id, { outcome: 'blocked', askedUser: person, nextStep: 'x'.repeat(301) }), 400, 'invalid_request');
+    await untouched(target, run);
+
+    assert.equal((await finish(devA, run.id, { outcome: 'blocked', askedUser: person, pullRequest, headCommit, nextStep }))[0], 200);
+    const details = JSON.parse((await activities(target, 'AGENT_RUN_FINISHED'))[0].details);
+    assert.deepEqual([details.pullRequest, details.headCommit, details.nextStep], [pullRequest, headCommit, nextStep]);
+    assert.deepEqual(await facts(target), { pullRequest, headCommit, nextStep });
+
+    // A CLI before 0.12.0 cannot send the field: the first line under ## Next is the next step. Work without a pull request names none.
+    const old = await started(devA);
+    assert.equal((await finish(devA, old.run.id, { outcome: 'blocked', askedUser: person, note: `${note('Next')}\n\n## Next\n\n1. Wait for the release.\n2. Check the page.` }))[0], 200);
+    assert.deepEqual(await facts(old.target), { pullRequest: null, headCommit: null, nextStep: 'Wait for the release.' });
+    // Done may leave the next step out, and then the note's text is not read for one.
+    const done = await started(devA);
+    assert.equal((await finish(devA, done.run.id, { outcome: 'done', note: bare[0] }))[0], 200);
+    assert.deepEqual(await facts(done.target), { pullRequest: null, headCommit: null, nextStep: null });
   });
 
   await t.test('a valid finish ends the run, keeps note and usage, writes the timeline and moves the issue', async () => {
@@ -466,7 +502,7 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     await refused(finish(personToken, run.id, { outcome: 'done', alsoFinish: ['K-1'] }), 422, 'role_mismatch');
     const [status, body] = await finish(personToken, run.id, { outcome: 'in_review', askedUser: owner });
     assert.deepEqual([status, body.run.state, body.run.outcome, await statusOf(target)], [200, 'finished', 'in_review', `${A}-in_review`]);
-    assert.deepEqual(JSON.parse((await activities(target, 'AGENT_RUN_FINISHED'))[0].details), { runId: run.id, seatId: null, outcome: 'in_review', content: note(), askedUser: owner });
+    assert.deepEqual(JSON.parse((await activities(target, 'AGENT_RUN_FINISHED'))[0].details), { runId: run.id, seatId: null, outcome: 'in_review', content: note(), nextStep: 'What there is to say under Next.', askedUser: owner });
   });
 
   await t.test('a run on an issue in Trash is out of reach, so a finish writes nothing until the issue is restored', async () => {

@@ -21,7 +21,7 @@ flowchart LR
 
 - While a seat works the issue, the issue's **Activity** tab shows the open run: who is working it and since when.
 - **Agents** in the left menu shows the same from the seat's side: **Seat inbox** lists the issues that wait for each seat, and **Seats** the issue each seat works on now.
-- When the run finishes, its exit note is on the issue's timeline. A run that stopped before it finished leaves no note.
+- When the run finishes, its exit note is on the issue's timeline. Above the note stand the facts the seat gave as checked fields: the pull request with the commit it was left at, and the next step. A run that stopped before it finished leaves no note.
 
 ## Read the exit note
 
