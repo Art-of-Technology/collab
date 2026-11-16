@@ -44,7 +44,9 @@ test('the switch dialog shows every status with its group and does not switch a 
   try {
     assert.deepEqual(calls.at(-1), ['/api/workspaces/w/projects/p/agent-mode', 'GET', undefined]);
     assert.match(document.body.textContent, /This project uses handoffs/);
-    assert.match(document.body.textContent, /retire each with collab agents retire --agent NAME: old-agent/);
+    assert.match(document.body.textContent, /claims only in this project: old-agent/);
+    assert.match(document.body.textContent, /Before retiring one, check its other work and subscriptions across the workspace/);
+    assert.match(document.body.textContent, /If it is no longer needed, use collab agents retire --agent NAME/);
     assert.deepEqual([...document.querySelectorAll('select')].map(select => select.value), ['todo', 'todo', 'done']);
     assert.equal(button('Save groups').disabled, true, 'nothing to save yet');
 

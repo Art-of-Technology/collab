@@ -92,8 +92,8 @@ export function AgentModeSettings({ workspaceId, projectSlug }: { workspaceId: s
         ))}
         {state.retire.length > 0 && (
           <p className="text-xs text-collab-500">
-            These agent names hold claims only in this project. Once it uses seats they have no further use; retire each with
-            {" "}<code>collab agents retire --agent NAME</code>: {state.retire.join(", ")}.
+            These agent names hold claims only in this project: {state.retire.join(", ")}. Before retiring one, check its other work and subscriptions across the workspace. If it is no longer needed, use
+            {" "}<code>collab agents retire --agent NAME</code>.
           </p>
         )}
         <div className="flex items-center justify-end gap-2 pt-2">

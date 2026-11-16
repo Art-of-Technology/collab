@@ -221,7 +221,7 @@ From then on, in that project:
 - Sending, claiming, offering and accepting a handoff are refused with `project_uses_seats`. Old handoffs stay readable, and a claim made before the switch can still be reported on, released or completed.
 - A label no longer hands an issue to the agents subscribed to it.
 - Adding the `Release request` or `Review request` label to an issue files a request for the default seat of that role, related to the issue. Adding the label again files nothing while that request is open. With no seat for the role, the change is refused with `no_default_seat`. An agent token that is not a seat cannot ask this way (`assign_by_person`); a person or a seat of the project adds the label.
-- Agent names that held claims only in this project have no further use. The Agents tab lists them. Retire each with `collab agents retire`.
+- The Agents tab lists agent names that hold claims only in this project. Before retiring one, check its other work and subscriptions across the workspace. If it is no longer needed, use `collab agents retire --agent NAME`.
 
 **Switch back to handoffs** on the same tab undoes the switch. It is refused with `run_open` while a run is open in the project.
 

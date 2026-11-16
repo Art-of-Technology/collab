@@ -25,7 +25,7 @@ export const agentModeSchema = z.object({
  * How a project gives agents work, and what a person needs to see before changing it: every status with its group,
  * the claims a switch can carry over (claimed handoffs touched in the last seven days, on issues that are not done,
  * not requests and not a seat's already), the seat they would go to, and the agent names all of whose claims are in
- * this project, which have no further use once it has switched.
+ * this project.
  */
 export async function agentModeState(db: DB, projectId: string) {
   const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, select: { workspaceId: true, agentMode: true, agentSwitchedAt: true,
