@@ -1,7 +1,7 @@
 # Organisation agent floor
 
-Delivery plan: **CLB-441**. Open **Agent inbox → Organisation floor** at
-`/{workspace}/agent-inbox/floor`.
+Delivery plan: **CLB-441**. Open **Agents → Floor** in the left menu, at
+`/{workspace}/agents/floor`. The old address `/{workspace}/agent-inbox/floor` leads there.
 
 The floor is a read-only view of the workspace's registered agents and recent
 handoffs. Projects have separate rooms, with up to six rooms on screen and

@@ -40,7 +40,6 @@ export const NOT_DONE = { OR: [{ statusId: null }, { projectStatus: { OR: [{ cat
  * time it was last assigned to the caller.
  */
 export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }> {
-  const me = context.user.id;
   await markLost(context.workspace.id);
   const seat = await seatFor(prisma, context);
   if (seat) {
@@ -48,9 +47,14 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
       where: { id: seat.id, OR: [{ lastSeenAt: null }, { lastSeenAt: { lt: new Date(Date.now() - 60_000) } }] }, data: { lastSeenAt: new Date() },
     });
   }
+  return inboxOf(context.workspace.id, context.user.id, seat);
+}
+
+/** The read of `seatInbox` alone. It marks no run lost and records no sign of life, so a person's page can ask it for a seat. */
+export async function inboxOf(workspaceId: string, me: string, seat: { projectId: string } | null): Promise<{ items: InboxItem[] }> {
   const issues = await prisma.issue.findMany({
     where: {
-      workspaceId: context.workspace.id, assigneeId: me, ...(seat && { projectId: seat.projectId }), ...NOT_DONE,
+      workspaceId, assigneeId: me, ...(seat && { projectId: seat.projectId }), ...NOT_DONE,
     },
     select: {
       id: true, issueKey: true, projectId: true, title: true, priority: true, createdAt: true, projectStatus: statusSelect,

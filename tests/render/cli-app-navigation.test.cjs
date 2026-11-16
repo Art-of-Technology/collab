@@ -6,13 +6,14 @@ const { renderToStaticMarkup } = require('react-dom/server');
 test('installed CLI opens public documentation while web apps retain their workspace routes', () => {
   const Empty = () => null;
   const { default: Sidebar } = load('src/components/layout/SimplifiedSidebar.tsx', {
-    react: { ...React, useState: () => [false, () => {}], useMemo: fn => fn() },
+    react: React,
     'react/jsx-runtime': jsx,
     'next/link': require('next/link'), 'next/image': require('next/image'),
     'next/navigation': { useRouter: () => ({}) },
     'lucide-react': require('lucide-react'),
     '@/lib/sign-out': { signOutCurrentSession: () => { throw new Error('Unexpected sign out'); } },
     '@/components/ui/button': { Button: Empty },
+    '@/components/ui/input': { Input: Empty },
     '@/components/ui/scroll-area': { ScrollArea: Empty },
     '@/components/ui/dropdown-menu': Object.fromEntries(['DropdownMenu', 'DropdownMenuContent', 'DropdownMenuItem', 'DropdownMenuSeparator', 'DropdownMenuTrigger'].map(name => [name, Empty])),
     '@/components/ui/user-avatar': { UserAvatar: Empty },
@@ -20,6 +21,7 @@ test('installed CLI opens public documentation while web apps retain their works
     '@/context/WorkspaceContext': { useWorkspace: () => ({ currentWorkspace: { id: 'workspace', slug: 'weezboo' } }) },
     '@/hooks/queries/useProjects': { useProjects: () => ({ data: [] }) },
     '@/hooks/queries/useViews': { useViews: () => ({ data: [] }) },
+    '@/hooks/queries/useSeatsWaiting': { useSeatsWaiting: () => ({ data: 0 }) },
     '@/hooks/queries/useInstalledApps': { useInstalledApps: () => ({ data: [
       { id: 'cli', app: { slug: 'collab-cli', name: 'Collab CLI' } },
       { id: 'calendar', app: { slug: 'google-calendar-sync', name: 'Calendar' } },
@@ -33,7 +35,7 @@ test('installed CLI opens public documentation while web apps retain their works
     '@/components/layout/sidebar/NotificationPopover': { default: Empty },
     '@/context/MentionContext': { useMention: () => ({ unreadCoclawCount: 0 }) },
   });
-  const html = renderToStaticMarkup(Sidebar({}));
+  const html = renderToStaticMarkup(React.createElement(Sidebar, {}));
   assert.match(html, /href="\/docs\/cli"[^>]*>.*?Collab CLI/);
   assert.doesNotMatch(html, /href="\/weezboo\/apps\/collab-cli"/);
   assert.match(html, /href="\/weezboo\/apps\/google-calendar-sync"/);

@@ -19,6 +19,8 @@ A seat is an agent that works one project in one role and gets work only when so
 
 The first seat of a role in a project is the default for that role.
 
+A person finds the seats under **Agents** in the app's left menu: **Seats** lists each seat of the projects that person can read with the issue it works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**.
+
 To give a seat another token, create a token again under the same name. It belongs to the same seat, whether or not you pick the project again.
 
 Making an existing agent name a seat changes its tokens at once: from then on they follow the rules below. Open issues it holds in other projects, or that do not fit its role, become unassigned, each with an activity entry.

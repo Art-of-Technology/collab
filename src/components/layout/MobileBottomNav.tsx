@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
+  Bot,
   Eye, 
   FolderOpen, 
   Clock, 
@@ -46,6 +47,13 @@ export function MobileBottomNav({ className }: MobileBottomNavProps) {
       icon: <Menu className="h-4 w-4" />,
       title: 'Menu',
       onClick: toggleMobile,
+    },
+    {
+      id: 'agents',
+      icon: <Bot className="h-4 w-4" />,
+      title: 'Agents',
+      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/agents` : "#",
+      isActive: /^\/[^/]+\/(agents|agent-inbox)(\/|$)/.test(pathname),
     },
     {
       id: 'views',

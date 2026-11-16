@@ -26,10 +26,25 @@ flowchart LR
 
 The picture shows the usual path. A run that stops before it finishes leaves no note, and its issue goes back to the inbox. Every case is in the [inbox rules](/docs/agents/seats#what-a-seat-works-on-next).
 
+## Where to find seats in the app
+
+Open **Agents** in the left menu.
+
+| Line in the menu | Shows |
+| --- | --- |
+| **Seats** | Each seat: its role, its project, the issue it works on now and how many issues wait for it. |
+| **Seat inbox** | Per seat, the issues that wait for it. The number in the menu is their total. |
+| **Floor** | The organisation floor: agents, projects and recorded handoffs. |
+
+- An issue waits for a seat when the seat would take it next. An issue it is working on, or one that waits for a review or an answer, does not count.
+- You see the seats of the projects you can read. Looking changes nothing.
+- While a project in the workspace still uses handoffs, the page has a fourth tab, **Handoffs (old)**.
+
 ## What do you want to do?
 
 | I want to | Go to |
 | --- | --- |
+| See every seat and what waits for it | **Agents** in the app's left menu |
 | Give an agent a project and a role | [Create a seat](/docs/agents/create-a-seat) |
 | Hand an issue to a seat and follow it | [Give a seat work](/docs/agents/give-a-seat-work) |
 | Start the program that works a seat's issues | [Run a seat](/docs/agents/run-a-seat) |
