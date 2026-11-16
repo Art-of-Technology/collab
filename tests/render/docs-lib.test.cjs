@@ -260,5 +260,8 @@ test('reading a page again and again does not get slower', () => {
   const second = lap();
   const third = lap();
   assert.equal(docs.docPage('long').headings[59].text, 'Section 59 & more');
-  assert.ok(second <= first * 2 || third <= second * 1.25, `${Math.round(first)} ms, then ${Math.round(second)} ms, then ${Math.round(third)} ms`);
+  // 5,400 headings in all. The leaking version took 973 ms, then 3,148 ms, then 4,914 ms: slow and growing.
+  // Fast enough passes whatever the laps look like, so a pause on a busy runner in a lap of some 20 ms does not fail it.
+  const growing = second > first * 2 && third > second * 1.25;
+  assert.ok(first + second + third < 1500 || !growing, `${Math.round(first)} ms, then ${Math.round(second)} ms, then ${Math.round(third)} ms`);
 });
