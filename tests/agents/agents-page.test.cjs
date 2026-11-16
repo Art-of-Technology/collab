@@ -57,7 +57,7 @@ test('the Agents page reads the seats a person may see, what each works on and w
   const fresh = await issue(dev.userId, 'to_do', { priority: 'low' });
   const resumed = await issue(dev.userId, 'to_do', { priority: 'low' });
   await run(resumed, { state: 'stopped', endedAt: ago(60) });
-  const busy = await issue(dev.userId);
+  const busy = await issue(dev.userId, 'to_do', { issueKey: null });
   const open = await run(busy, { state: 'running', leaseUntil: ago(-1), startedAt: ago(10) });
   // In review with nothing new since its run, done, trashed, unassigned and a person's own: none of them waits for a seat.
   await run(await issue(dev.userId, 'in_review'), { state: 'finished', outcome: 'in_review', endedAt: ago(30) });
@@ -68,7 +68,7 @@ test('the Agents page reads the seats a person may see, what each works on and w
     assert.deepEqual(view.workspace, { id: 'w', slug: 'team' });
     assert.deepEqual(view.seats.map(row => [row.id, row.role, row.project, row.isDefault]), [['dev-a', 'developer', 'Alpha', true], ['rev-a', 'reviewer', 'Alpha', true]]);
     assert.deepEqual(Object.keys(view.seats[0]).sort(), ['id', 'isDefault', 'name', 'project', 'role', 'waiting', 'working']);
-    assert.deepEqual(plain(view.seats[0].working), [{ id: open.id, issueKey: busy.issueKey, title: busy.title, since: open.startedAt.toISOString(), lost: false }]);
+    assert.deepEqual(plain(view.seats[0].working), [{ id: open.id, issueId: busy.id, issueKey: null, title: busy.title, since: open.startedAt.toISOString(), lost: false }]);
     // What waits is the seat's own inbox: the issue to resume first, then the one never started.
     assert.deepEqual(view.seats[0].waiting.map(item => [item.issueKey, item.reason]), [[resumed.issueKey, 'resume'], [fresh.issueKey, 'assigned']]);
     assert.deepEqual(plain(view.seats[0].waiting), plain((await runs.seatInbox({ user: { id: dev.userId }, workspace: { id: 'w' } })).items));

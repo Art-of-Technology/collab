@@ -25,7 +25,7 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
       id: true, userId: true, name: true, role: true, isDefault: true, projectId: true, project: { select: { name: true } },
       // A runner works one issue at a time, but a lost run stays open until someone clears it, so a seat can have several.
       runs: { where: { endedAt: null, issue: issueReadAccessWhere(userId) }, orderBy: { startedAt: 'desc' },
-        select: { id: true, state: true, leaseUntil: true, startedAt: true, issue: { select: { issueKey: true, title: true } } } },
+        select: { id: true, state: true, leaseUntil: true, startedAt: true, issue: { select: { id: true, issueKey: true, title: true } } } },
     },
     orderBy: [{ project: { name: 'asc' } }, { role: 'asc' }, { name: 'asc' }],
   });
@@ -41,7 +41,7 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
     workspace,
     seats: rows.map(({ userId: _account, runs, project, projectId: _project, ...seat }, index) => ({
       ...seat, project: project.name,
-      working: runs.map(run => ({ id: run.id, issueKey: run.issue.issueKey, title: run.issue.title, since: run.startedAt.toISOString(),
+      working: runs.map(run => ({ id: run.id, issueId: run.issue.id, issueKey: run.issue.issueKey, title: run.issue.title, since: run.startedAt.toISOString(),
         // A lapsed lease is a lost run whether or not a seat has read its inbox since and marked it.
         lost: run.state === 'lost' || (!!run.leaseUntil && run.leaseUntil < now) })),
       waiting: inboxes[index].filter(item => readable.has(item.issueId)),

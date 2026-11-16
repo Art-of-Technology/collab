@@ -118,7 +118,7 @@ test('"Handoffs (old)" is a tab only while a project still uses handoffs', () =>
 
 const seats = [
   { id: 'seat-dev', name: 'Collab Developer', role: 'developer', isDefault: true, project: 'Collab',
-    working: [{ id: 'run-1', issueKey: 'CLB-9', title: 'Being worked', since: '2026-11-16T10:00:00.000Z', lost: false }],
+    working: [{ id: 'run-1', issueId: 'i9', issueKey: 'CLB-9', title: 'Being worked', since: '2026-11-16T10:00:00.000Z', lost: false }],
     waiting: [{ issueId: 'i1', issueKey: 'CLB-1', title: '<b>First</b>', priority: 'high', category: 'todo', reason: 'resume', lastRunAt: null }] },
   { id: 'seat-rel', name: 'Collab Release', role: 'release', isDefault: true, project: 'Collab', working: [], waiting: [] },
 ];
@@ -175,6 +175,14 @@ test('Inbox tab: per seat, the issues that wait for it, with the reason and with
   assert.match(html, /<section id="seat-seat-dev"[^>]*>.*?href="\/team\/issues\/CLB-1"[^>]*>CLB-1 &lt;b&gt;First&lt;\/b&gt;<\/a>.*?To resume.*?high.*?<\/section>/s);
   assert.match(html, /<section id="seat-seat-rel"[^>]*>.*?0 waiting.*?Nothing waits for this seat\./s);
   assert.doesNotMatch(html, /<b>First/);
+});
+
+test('working and waiting issues without keys link by issue ID', async () => {
+  const view = { workspace: { id: 'ws', slug: 'team' }, seats: [{ ...seats[0],
+    working: [{ ...seats[0].working[0], issueId: 'working/id', issueKey: null, lost: true }],
+    waiting: [{ ...seats[0].waiting[0], issueId: 'waiting/id', issueKey: null }] }] };
+  assert.match(await page({ view }).open(), /href="\/team\/issues\/working%2Fid"[^>]*>Being worked<\/a>/);
+  assert.match(await page({ view }).open('inbox'), /href="\/team\/issues\/waiting%2Fid"[^>]*>&lt;b&gt;First&lt;\/b&gt;<\/a>/);
 });
 
 test('Floor tab: the existing floor under the same tabs; its old address leads there', async () => {

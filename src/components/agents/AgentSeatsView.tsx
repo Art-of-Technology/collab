@@ -13,9 +13,8 @@ const REASONS: Record<string, string> = {
 /** The Seats and the Inbox tab of the Agents page: the same seats, once as a table and once with what waits for each. */
 export function AgentSeatsView({ workspace, seats, tab, handoffs, canManage }: Props) {
   const base = `/${encodeURIComponent(workspace.slug || workspace.id)}`;
-  const issue = (key: string | null, title: string) => key
-    ? <Link className="text-primary underline-offset-4 hover:underline" href={`${base}/issues/${encodeURIComponent(key)}`}>{key} {title}</Link>
-    : <span>{title}</span>;
+  const issue = (id: string, key: string | null, title: string) =>
+    <Link className="text-primary underline-offset-4 hover:underline" href={`${base}/issues/${encodeURIComponent(key || id)}`}>{key && `${key} `}{title}</Link>;
   return <main className="mx-auto w-full max-w-5xl space-y-6 p-6">
     <AgentsTabs base={base} current={tab} handoffs={handoffs} />
     <div className="flex flex-wrap items-start justify-between gap-4">
@@ -38,7 +37,7 @@ export function AgentSeatsView({ workspace, seats, tab, handoffs, canManage }: P
           <th scope="row" className="p-3 font-medium">{seat.name}{seat.isDefault && <span className="block text-xs font-normal text-muted-foreground">Default for its role</span>}</th>
           <td className="p-3 capitalize">{seat.role}</td>
           <td className="p-3">{seat.project}</td>
-          <td className="space-y-2 p-3">{seat.working.length ? seat.working.map(run => <div key={run.id}>{issue(run.issueKey, run.title)}
+          <td className="space-y-2 p-3">{seat.working.length ? seat.working.map(run => <div key={run.id}>{issue(run.issueId, run.issueKey, run.title)}
             {run.lost && <span className="block text-xs text-muted-foreground">The run is lost: clear it on the issue&apos;s Activity tab.</span>}</div>) : <span className="text-muted-foreground">Nothing</span>}</td>
           <td className="p-3">{seat.waiting.length ? <Link className="text-primary hover:underline" href={`${base}/agents/inbox#seat-${seat.id}`}>{seat.waiting.length}</Link> : <span className="text-muted-foreground">0</span>}</td>
         </tr>)}</tbody>
@@ -47,7 +46,7 @@ export function AgentSeatsView({ workspace, seats, tab, handoffs, canManage }: P
       <h2 className="font-medium">{seat.name} <span className="text-sm font-normal text-muted-foreground"><span className="capitalize">{seat.role}</span> seat of {seat.project} · {seat.waiting.length} waiting</span></h2>
       {seat.waiting.length === 0 ? <p className="text-sm text-muted-foreground">Nothing waits for this seat.</p> : <ol className="divide-y text-sm">
         {seat.waiting.map(item => <li key={item.issueId} className="flex flex-wrap items-center justify-between gap-2 py-2">
-          <span className="min-w-0 break-words">{issue(item.issueKey, item.title)}</span>
+          <span className="min-w-0 break-words">{issue(item.issueId, item.issueKey, item.title)}</span>
           <span className="flex gap-2 text-xs text-muted-foreground"><span className="rounded border px-2 py-0.5">{REASONS[item.reason] ?? item.reason}</span><span className="rounded border px-2 py-0.5 capitalize">{item.priority}</span></span>
         </li>)}
       </ol>}
