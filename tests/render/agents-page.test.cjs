@@ -107,12 +107,12 @@ test('"Handoffs (old)" is a tab only while a project still uses handoffs', () =>
   const { AgentsTabs } = load('src/components/agents/AgentsTabs.tsx', { 'react/jsx-runtime': jsx, 'next/link': link });
   const tabs = props => renderToStaticMarkup(React.createElement(AgentsTabs, { base: '/team', ...props }));
   const mixed = tabs({ current: 'inbox', handoffs: true });
-  assert.match(text(mixed), /Agents Seats Inbox Floor Handoffs \(old\)/);
+  assert.match(text(mixed), /Agents Seats Inbox Floor Runners Handoffs \(old\)/);
   assert.match(mixed, /<a[^>]*href="\/team\/agent-inbox"[^>]*>Handoffs \(old\)<\/a>/);
   assert.match(mixed, /<a[^>]*aria-current="page"[^>]*>Inbox<\/a>/);
-  for (const [name, href] of [['Seats', '/team/agents'], ['Inbox', '/team/agents/inbox'], ['Floor', '/team/agents/floor']]) assert.match(mixed, new RegExp(`<a[^>]*href="${href}"[^>]*>${name}</a>`));
+  for (const [name, href] of [['Seats', '/team/agents'], ['Inbox', '/team/agents/inbox'], ['Floor', '/team/agents/floor'], ['Runners', '/team/agents/runners']]) assert.match(mixed, new RegExp(`<a[^>]*href="${href}"[^>]*>${name}</a>`));
   const switched = tabs({ current: 'seats', handoffs: false });
-  assert.match(text(switched), /Agents Seats Inbox Floor $/);
+  assert.match(text(switched), /Agents Seats Inbox Floor Runners $/);
   assert.doesNotMatch(switched, /Handoffs|agent-inbox/);
 });
 
@@ -134,21 +134,23 @@ function page({ user = 'alice', view = { workspace: { id: 'ws', slug: 'team' }, 
       assert.deepEqual([userId, workspaceId, permission], ['alice', 'ws', 'manage']); return { hasPermission: manage };
     } },
     '@/lib/agents-page': { usesHandoffs: async workspaceId => { assert.equal(workspaceId, 'ws'); return handoffs; },
+      readRunnersTab: async (userId, workspaceId) => { calls.push('runners'); assert.deepEqual([userId, workspaceId], ['alice', 'team']); return view && { workspace: view.workspace, people: [{ id: 'alice', name: 'Alice' }] }; },
       readSeats: async (userId, workspaceId) => { calls.push('seats'); assert.deepEqual([userId, workspaceId], ['alice', 'team']); return view; } },
     '@/lib/agent-floor': { readAgentFloor: async (userId, workspaceId) => { calls.push('floor'); assert.deepEqual([userId, workspaceId], ['alice', 'team']); return view && { workspace: { ...view.workspace, name: 'Team' } }; } },
     '@/components/agents/AgentsTabs': tabs,
     '@/components/agents/AgentSeatsView': load('src/components/agents/AgentSeatsView.tsx', { 'react/jsx-runtime': jsx, 'next/link': link,
       '@/components/ui/button': { Button: ({ children }) => children }, '@/components/agents/AgentsTabs': tabs }),
+    '@/components/agents/AgentRunnersView': { AgentRunnersView: props => React.createElement('section', null, `Runners of ${props.workspaceId} for ${props.me}, people: ${props.people.map(person => person.name)}`) },
     '@/components/agents/floor/OrganisationFloor': { OrganisationFloor: ({ initial }) => React.createElement('section', null, `Floor of ${initial.workspace.name}`) },
   }).default;
   return { calls, open: async (...tab) => renderToStaticMarkup(await Page({ params: Promise.resolve({ workspaceId: 'team', ...(tab.length && { tab }) }) })) };
 }
 
 test('the Agents page reads nothing for a visitor, a stranger to the workspace or an unknown tab', async () => {
-  for (const [options, tab, error] of [[{ user: null }, [], /redirect:\/login/], [{ view: null }, [], /404/], [{ view: null }, ['inbox'], /404/], [{ view: null }, ['floor'], /404/]]) {
+  for (const [options, tab, error] of [[{ user: null }, [], /redirect:\/login/], [{ view: null }, [], /404/], [{ view: null }, ['inbox'], /404/], [{ view: null }, ['floor'], /404/], [{ view: null }, ['runners'], /404/]]) {
     await assert.rejects(page(options).open(...tab), error);
   }
-  for (const tab of [['handoffs'], ['seats'], ['seats', 'extra'], ['inbox', 'x'], ['floor', 'x']]) {
+  for (const tab of [['handoffs'], ['seats'], ['seats', 'extra'], ['inbox', 'x'], ['floor', 'x'], ['runners', 'x']]) {
     const f = page(); await assert.rejects(f.open(...tab), /404/); assert.deepEqual(f.calls, []);
   }
   const anonymous = page({ user: null }); await assert.rejects(anonymous.open('floor'), /redirect:\/login/); assert.deepEqual(anonymous.calls, []);
@@ -167,6 +169,17 @@ test('Seats tab: each seat with its role, project, what it works on now and how 
   const lost = await page({ view: { workspace: { id: 'ws', slug: null }, seats: [{ ...seats[0], working: [{ ...seats[0].working[0], id: 'run-2', issueKey: 'CLB-12', title: 'Next' }, { ...seats[0].working[0], lost: true }] }] } }).open();
   assert.match(text(lost), /CLB-12 Next CLB-9 Being worked The run is lost: clear it on the issue&#x27;s Activity tab\. 1 /); assert.match(lost, /href="\/ws\/issues\/CLB-9"/);
   assert.match(await page({ view: { workspace: { id: 'ws', slug: 'team' }, seats: [] } }).open(), /No seats in the projects you can read/);
+});
+
+test('Runners tab: any member of the workspace opens it, and a seat with no runner says so on the Seats tab', async () => {
+  const f = page(), html = await f.open('runners');
+  assert.deepEqual(f.calls, ['runners']);
+  assert.match(html, /<a[^>]*aria-current="page"[^>]*>Runners<\/a>/);
+  assert.match(text(html), /Runners of ws for alice, people: Alice/);
+  const waiting = await page({ view: { workspace: { id: 'ws', slug: 'team' }, seats: [{ ...seats[0], noRunner: true }, seats[1]] } }).open();
+  assert.equal(text(waiting).match(/No runner yet/g).length, 1);
+  assert.match(waiting, /No runner yet: its work waits until its owner admits a <a[^>]*href="\/team\/agents\/runners"[^>]*>runner<\/a>/);
+  assert.doesNotMatch(await page().open(), /No runner yet/);
 });
 
 test('Inbox tab: per seat, the issues that wait for it, with the reason and without running their text', async () => {

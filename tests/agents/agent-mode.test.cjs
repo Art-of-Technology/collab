@@ -308,6 +308,7 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
   await t.test('only a person who manages the workspace reads or changes the mode', async () => {
     let session = null, allowed = false;
     const route = load('src/app/api/workspaces/[workspaceId]/projects/[projectSlug]/agent-mode/route.ts', { ...deps,
+      '@/lib/agent-runners': load('src/lib/agent-runners.ts', { crypto: require('node:crypto'), '@/lib/prisma': { prisma }, '@/lib/agent-handoffs': handoffs, '@/lib/agent-tokens': tokens }, { Date }),
       '@/lib/request-session': { getServerSession: async () => session }, '@/lib/auth-options': {},
       '@/lib/slug-resolvers': { resolveWorkspaceSlug: async value => (value === 'w' ? 'w' : null) },
       '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_PERMISSIONS: 'manage' },
@@ -326,10 +327,12 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
     assert.equal((await call('GET', 'nowhere'))[0], 404);
     const [status, state] = await call('GET', 'h');
     assert.deepEqual([status, state.mode, state.statuses.length, state.claims.length], [200, 'handoffs', 3, 2]);
+    // With the project's seats that a runner runs: none here.
+    assert.deepEqual(state.runnerSeats, []);
     for (const bad of ['{', { mode: 'both' }, { categories: { [`${H}-done`]: 'finished' } }, { mode: 'seats', extra: true }]) assert.equal((await call('PATCH', 'h', bad))[0], 400);
     await raw.projectStatus.update({ where: { id: `${H}-in_progress` }, data: { category: 'todo' } });
     assert.deepEqual(await call('PATCH', 'h', { mode: 'seats' }), [422, { error: (await set(H, { mode: 'seats' }).catch(error => error)).message, code: 'status_groups_required', missing: ['in_progress'] }]);
     const [ok, switched] = await call('PATCH', 'h', { mode: 'seats', categories: { [`${H}-in_progress`]: 'in_progress' } });
-    assert.deepEqual([ok, switched.mode], [200, 'seats']);
+    assert.deepEqual([ok, switched.mode, switched.runnerSeats], [200, 'seats', []]);
   });
 });

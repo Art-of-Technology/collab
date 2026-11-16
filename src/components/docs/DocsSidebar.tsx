@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Armchair, ArrowLeftRight, Bot, Compass, FileText, Home, LayoutTemplate, Layers, Play, Plug, ScrollText, Search, Send, SquareTerminal, Terminal, User,
+  Armchair, ArrowLeftRight, Bot, Compass, FileText, Home, KeyRound, LayoutTemplate, Layers, Play, Plug, ScrollText, Search, Send, SquareTerminal, Terminal, User,
   UserPlus, Webhook, Workflow, Wrench,
   type LucideIcon,
 } from 'lucide-react';
@@ -21,6 +21,7 @@ const ICONS: Record<string, LucideIcon> = {
   '/docs/agents/create-a-seat': UserPlus,
   '/docs/agents/give-a-seat-work': Send,
   '/docs/agents/run-a-seat': Play,
+  '/docs/agents/admit-a-runner': KeyRound,
   '/docs/agents/switch-to-seats': ArrowLeftRight,
   '/docs/agents/seats': ScrollText,
   '/docs/agents/protocol': Workflow,

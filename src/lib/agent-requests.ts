@@ -95,7 +95,7 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
   title: string; body: string; source: { id: string; issueKey: string | null; projectId: string; priority: string }; blocks?: boolean; labelId?: string }) {
   const { workspaceId, me, projectId } = input, kind = REQUESTS[input.role];
   const to = await tx.agentSeat.findFirst({ where: { projectId, role: kind.seat, isDefault: true, retiredAt: null },
-    select: { userId: true, name: true, lastSeenAt: true } });
+    select: { userId: true, name: true, lastSeenAt: true, byRunner: true } });
   if (!to) throw new HandoffError('no_default_seat', `The project has no ${kind.seat} seat to take this request`, 409);
   // Work reaches a seat by someone else's hand: a request to itself would be a seat assigning its own work.
   if (to.userId === me) throw new HandoffError('invalid_request', 'This request would go to the seat that files it');
@@ -131,7 +131,12 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
     await tx.issueComment.create({ data: { issueId: issue.id, authorId: me, content: `${to.name}, this project's release seat, ${to.lastSeenAt
       ? `last read its inbox at ${to.lastSeenAt.toISOString()}` : 'has never read its inbox'}. This request waits until it does. If the release seat is not running, a person has to start it.` } });
   }
-  return { issue, idle };
+  // A seat a runner runs works only once a runner holds its token.
+  const waits = to.byRunner && !await tx.appToken.count({ where: { userId: to.userId, runnerId: { not: null }, isRevoked: false, tokenExpiresAt: { gt: now } } });
+  if (waits) {
+    await tx.issueComment.create({ data: { issueId: issue.id, authorId: me, content: `${to.name} is run by a runner, and no runner has fetched its token yet. This request waits until one has: the seat's owner admits a runner under Agents, Runners.` } });
+  }
+  return { issue, idle: idle || waits };
 }
 
 /**

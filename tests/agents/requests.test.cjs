@@ -250,6 +250,21 @@ test('requests: one seat asks another, in its own project or in another one', as
     await settle(B);
   });
 
+  await t.test('a request to a seat that no runner has fetched yet succeeds, with a warning and a comment, until a runner holds its token', async () => {
+    const source = await issue(devA);
+    const made = await seats.createSeat({ workspaceId: 'w', actorId: owner, projectId: C, role: 'reviewer', ownerId: person, name: 'rev-c', expiresInDays: 30, byRunner: true });
+    assert.equal(made.token, null);
+    const waiting = await filed(devA, source, { project: 'CC', role: 'review' });
+    assert.equal(waiting.reply.warning, 'seat_idle');
+    assert.equal(waiting.row.assigneeId, made.seat.userId);
+    assert.match(waiting.row.comments[0].content, /^rev-c is run by a runner, and no runner has fetched its token yet/);
+    await raw.appToken.create({ data: { appId: 'agent-app', workspaceId: 'w', userId: made.seat.userId, accessToken: 'fetched', scopes, runnerId: 'crunner00001', tokenExpiresAt: new Date(Date.now() + 60_000) } });
+    const fetched = await filed(devA, await issue(devA), { project: 'CC', role: 'review' });
+    assert.equal(fetched.reply.warning, undefined);
+    assert.equal(fetched.row.comments.length, 0);
+    await settle(C);
+  });
+
   await t.test('a request to a release seat that has not read its inbox for ten minutes succeeds, with a warning and a comment', async () => {
     const source = await issue(devA);
     const releaseB = await seat('rel-b', B, 'release');

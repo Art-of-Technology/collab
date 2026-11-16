@@ -12,6 +12,7 @@ model User {
   agentRegistrations     AgentRegistration[]
   agentSeat              AgentSeat?          @relation("AgentSeatAccount")
   agentSeatsOwned        AgentSeat[]         @relation("AgentSeatOwner")
+  agentRunners           AgentRunner[]
   agentRuns              AgentRun[]
   id                     String                  @id @default(cuid())
   name                   String?
@@ -384,6 +385,7 @@ model Workspace {
   agentTransferOffers AgentTransferOffer[]
   agentReviewRequests AgentReviewRequest[]
   agentSeats          AgentSeat[]
+  agentRunners        AgentRunner[]
   agentRuns           AgentRun[]
   id                  String                @id @default(cuid())
   name                String
@@ -2223,6 +2225,7 @@ model AppToken {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   tokenHash      String?   @unique // SHA-256 (hex) of the plain access token; null until the app has decrypted the row once
+  runnerId       String? // The runner that fetched this token (AgentRunner.id); null for a token made by hand
 
   installation AppInstallation? @relation(fields: [installationId], references: [id], onDelete: Cascade)
   app          App?             @relation("SystemAppTokens", fields: [appId], references: [id], onDelete: Cascade)
@@ -2234,6 +2237,7 @@ model AppToken {
   @@index([userId])
   @@index([isRevoked])
   @@index([tokenExpiresAt])
+  @@index([runnerId])
 }
 
 model AppScope {
@@ -2981,6 +2985,7 @@ model AgentSeat {
   retiredAt   DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+  byRunner    Boolean    @default(false) // run by a runner, which fetches its tokens; no token is made by hand
   workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user        User       @relation("AgentSeatAccount", fields: [userId], references: [id], onDelete: Cascade)
@@ -2988,6 +2993,29 @@ model AgentSeat {
   runs        AgentRun[]
 
   @@index([projectId, role])
+}
+
+// A runner is one program on one machine under one person's logins. It starts a pairing and holds its credential
+// from then on; the credential works once a person has admitted the runner by its code. Until then workspaceId and
+// ownerId are null. Only the SHA-256 of the credential is stored.
+model AgentRunner {
+  id               String     @id @default(cuid())
+  workspaceId      String?
+  ownerId          String?
+  name             String
+  credentialHash   String     @unique
+  pairingCode      String?    @unique
+  pairingExpiresAt DateTime?
+  admittedById     String?
+  admittedAt       DateTime?
+  lastSeenAt       DateTime?
+  removedAt        DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  workspace        Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner            User?      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, ownerId])
 }
 
 // A run is one session working one issue. "One open run per issue" is a partial unique index that

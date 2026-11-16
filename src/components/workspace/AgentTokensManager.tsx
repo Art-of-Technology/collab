@@ -63,6 +63,8 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
   const [projectId, setProjectId] = useState(NONE);
   const [role, setRole] = useState('developer');
   const [ownerId, setOwnerId] = useState(NONE);
+  // The seat's tokens are fetched by its owner's runner: none is made or shown here.
+  const [byRunner, setByRunner] = useState(false);
   const [retiring, setRetiring] = useState<{ name: string; seat: NonNullable<AgentTokenRow['seat']> } | null>(null);
   const orphanSeats = seats.filter(seat => !tokens?.some(token => token.seat?.id === seat.id));
   const asSeat = projectId !== NONE;
@@ -85,7 +87,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(asSeat
-          ? { name, projectId, role, ownerId: ownerId === NONE ? null : ownerId, expiresInDays: Number(days) }
+          ? { name, projectId, role, ownerId: ownerId === NONE ? null : ownerId, expiresInDays: Number(days), ...(byRunner && { byRunner }) }
           : { name, access, expiresInDays: Number(days) }),
       });
       const data = await response.json().catch(() => ({}));
@@ -98,8 +100,10 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
       setProjectId(NONE);
       setRole('developer');
       setOwnerId(NONE);
+      setByRunner(false);
       setCopied(false);
-      setMinted(asSeat ? { name: data.token.name, token: data.token.token } : { name: data.name, token: data.token });
+      if (asSeat && !data.token) toast({ title: 'Seat created', description: `${data.seat.name} has no token yet. Its owner's runner fetches one the next time it asks.` });
+      else setMinted(asSeat ? { name: data.token.name, token: data.token.token } : { name: data.name, token: data.token });
       await queryClient.invalidateQueries({ queryKey: ['workspace-member-users'] });
       router.refresh();
     } catch {
@@ -316,6 +320,12 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="agent-token-by-runner">Run by the owner&apos;s runner
+                    <span className="block text-xs font-normal text-muted-foreground">No token is made or shown. The runner admitted for the owner fetches it. The seat needs an owner.</span>
+                  </Label>
+                  <Switch id="agent-token-by-runner" checked={byRunner} onCheckedChange={setByRunner} />
+                </div>
                 <p className="text-xs text-muted-foreground">
                   A seat can be assigned only this project&apos;s issues that fit its role, and its token can change only issues of this project.
                   A developer seat takes ordinary issues; reviewer, release and security seats take only review, release and security requests. A lead seat takes an epic and assigns its child issues to the project's other seats.
@@ -333,7 +343,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                 </Select>
               </div>
             )}
-            <div className="space-y-2">
+            {!(asSeat && byRunner) && <div className="space-y-2">
               <Label htmlFor="agent-token-expiry">Expires after</Label>
               <Select value={days} onValueChange={setDays}>
                 <SelectTrigger id="agent-token-expiry"><SelectValue /></SelectTrigger>
@@ -343,11 +353,11 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                   <SelectItem value="365">365 days</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </div>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreating(false)} disabled={busy}>Cancel</Button>
-            <Button onClick={create} disabled={busy || !name.trim()}>
+            <Button onClick={create} disabled={busy || !name.trim() || (asSeat && byRunner && ownerId === NONE)}>
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {asSeat ? 'Create seat' : 'Create token'}
             </Button>
