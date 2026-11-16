@@ -525,26 +525,11 @@ model AppOAuthClient {
 ```
 
 ### Token Storage
-```prisma
-model AppInstallation {
-  id              String    @id @default(cuid())
-  appId           String
-  workspaceId     String
-  userId          String
-  status          String    // "PENDING", "ACTIVE", "SUSPENDED"
-  scopes          String[]  // Granted OAuth scopes
-  accessToken     String?   // Encrypted access token
-  refreshToken    String?   // Encrypted refresh token
-  tokenExpiresAt  DateTime? // Access token expiration
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  app             App                           @relation(fields: [appId], references: [id], onDelete: Cascade)
-  workspace       Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user            User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  authorizationCodes AppOAuthAuthorizationCode[]
-}
-```
+Tokens are stored in `AppToken`; see the [Prisma schema](../prisma/schema.prisma)
+for its fields. An indexed SHA-256 hash locates an access token, but the
+decrypted token must still match before it is accepted. The app checks older
+rows without a hash and attempts to backfill each one it decrypts. Refresh-token lookup
+continues to decrypt and compare stored values.
 
 ## OAuth Flow
 

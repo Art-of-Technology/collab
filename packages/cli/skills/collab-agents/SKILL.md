@@ -24,9 +24,9 @@ daemon owns registration, claims and reporting.
 
 ## Seats
 
-A seat is one project and one role: developer, reviewer or release. `collab seat show`
+A seat is one project and one role: developer, reviewer, release or security. `collab seat show`
 names yours; `seat_required` means this token is not a seat. Needs CLI 0.10.0 and the
-matching server.
+matching server; the security role and its verdict need CLI 0.10.2.
 
 A seat session works one issue and then ends. A runner (`collab seat run`, or another
 that speaks the same contract) has checked the issue out, started you, and keeps the
@@ -43,15 +43,18 @@ lease renewed while you live. Your run is in the environment: `COLLAB_ISSUE_KEY`
 2. Do the work, in your project only. A seat cannot write to another project's issues
    (`wrong_project`) and cannot change who an issue is assigned to (`seat_scope`).
    Record progress as comments on the issue.
-3. When you need a review, a release, or work from another project, file a request.
+3. When you need a review, a release, a security review, or work from another project, file a request.
    Never hand work over in a direct message or a handoff.
 
    ```sh
    collab seat request --from-issue "$COLLAB_ISSUE_KEY" --role review --title 'Review the change for APP-123' --body-file request.md
    ```
 
-   `--role` is `review`, `release` or `developer`. `--project ID_OR_PREFIX` sends it to
-   another project; `--blocks true` makes your issue wait for it. The body follows the
+   `--role` is `review`, `release`, `security` or `developer`. `--project ID_OR_PREFIX` sends it to
+   another project; `--blocks true` makes your issue wait for it. A security request always
+   blocks: finish `blocked --blocked-by` its key, and when your issue comes back read the
+   request's `verdict` in the run context. After `failed`, fix the findings and file a new
+   security request for the new commit. The body follows the
    Task template (`collab templates get TASK`): state the problem and the evidence, not
    the fix. The reply has the request's `issueKey`. `warning: seat_idle` means the seat
    it went to may not be running: say so in your exit note, so a person sees it.
@@ -69,6 +72,8 @@ lease renewed while you live. Your run is in the environment: `COLLAB_ISSUE_KEY`
    - `done`: the work is finished. `--status NAME` picks the status when the project has several done statuses.
    - `in_review`: it waits for a review or an answer. Add `--review-request KEY` (a review request you filed) or `--asked-user USER_ID`.
    - `blocked`: it cannot go on. Add `--blocked-by KEY` (an issue linked as blocking this one, such as a request filed with `--blocks true`) or `--asked-user USER_ID`.
+
+   A security seat finishes a security request `done` with `--verdict passed` or `--verdict failed` and `--reviewed 'PR 12 at abc1234'` (the commit or pull request it read). The findings go in the exit note on the request. The verdict is written to the timeline of the request and of the issue it was filed for; open the request to read the findings.
 
    `exit_note_required` and `exit_state_required` list what is `missing`: complete it
    and send it again. `run_fenced` means the run no longer holds the issue and nothing was

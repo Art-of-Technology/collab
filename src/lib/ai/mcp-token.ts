@@ -11,7 +11,7 @@
  * The stream route calls refreshMcpToken() when a token stops working.
  */
 
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { encryptToken, decryptToken } from '@/lib/apps/crypto';
 import { MCP_SCOPES } from '@/lib/mcp-oauth';
 
@@ -171,6 +171,7 @@ async function createFreshToken(
       userId,
       installationId: null,
       accessToken: Buffer.from(encrypted).toString('base64'),
+      tokenHash: createHash('sha256').update(accessToken).digest('hex'),
       tokenExpiresAt: expiresAt,
       scopes: [...MCP_SCOPES],
       isRevoked: false,

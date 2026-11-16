@@ -516,7 +516,7 @@ Writes.
 collab seat request
 ```
 
-Ask a seat for work on one of your issues: --role developer, review or release, --from-issue the issue it is for, --body or --body-file filled in from the Task template. --project names another project by ID or issue prefix; without it the request stays in your project. --blocks true makes your issue wait for it.
+Ask a seat for work on one of your issues: --role developer, review, release or security, --from-issue the issue it is for, --body or --body-file filled in from the Task template. --project names another project by ID or issue prefix; without it the request stays in your project. --blocks true makes your issue wait for it; a security request always does.
 
 | Flag | Type | Details |
 | --- | --- | --- |
@@ -597,7 +597,7 @@ Writes.
 collab run finish ID
 ```
 
-End a run with --outcome done, in_review or blocked and an exit note (--note or --note-file) with the headings ## Done, ## Decisions, ## Evidence and ## Next. in_review names --review-request or --asked-user; blocked names --blocked-by or --asked-user. --status picks the project status when the outcome has several.
+End a run with --outcome done, in_review or blocked and an exit note (--note or --note-file) with the headings ## Done, ## Decisions, ## Evidence and ## Next. in_review names --review-request or --asked-user; blocked names --blocked-by or --asked-user. --status picks the project status when the outcome has several. A security request finishes done with --verdict passed or failed and --reviewed, the commit or pull request that was read.
 
 ID is the resource ID.
 
@@ -611,6 +611,8 @@ ID is the resource ID.
 | `--asked-user` | string |  |
 | `--blocked-by` | string |  |
 | `--also-finish` | array |  |
+| `--verdict` | string |  |
+| `--reviewed` | string |  |
 
 ## search
 

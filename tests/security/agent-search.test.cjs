@@ -64,7 +64,7 @@ function harness() {
     app: { findUnique: async () => ({ isSystemApp: state.isSystemApp }) },
     project: { findFirst: async ({ where }) => projects.find(p => matches(p, where)) || null },
     user: { findUnique: async () => ({ id: 'alice', email: 'alice@example.test', name: 'Alice' }) },
-    appToken: { findMany: async ({ where }) => [{ isRevoked: state.tokenRevoked, accessToken: 'Y2lwaGVy', userId: 'alice', scopes: state.scopes, tokenExpiresAt: null,
+    appToken: { findMany: async ({ where }) => [{ isRevoked: state.tokenRevoked, accessToken: 'Y2lwaGVy', tokenHash: null, userId: 'alice', scopes: state.scopes, tokenExpiresAt: null,
       installation: { id: 'installation', appId: 'app', status: 'ACTIVE', workspaceId: 'w', installedById: 'bob', scopes: ['issues:read', 'context:read'], workspace,
         app: { id: 'app', name: 'App', slug: 'app', status: 'PUBLISHED', scopes: ['issues:read', 'context:read'].map(scope => ({ scope })) } } }].filter(row => matches(row, where)) },
   };

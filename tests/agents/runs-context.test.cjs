@@ -83,7 +83,7 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     assert.deepEqual(said(fresh), ['first', 'second', 'third']);
     assert.deepEqual(fresh.commentsSince[2], { id: fresh.commentsSince[2].id, content: 'third', createdAt: fresh.commentsSince[2].createdAt, parentId: null, author: { id: person, name: person } });
     assert.deepEqual(fresh.commands, [`collab context get --project-id ${A}`, `collab comments list ${target.issueKey}`, `collab issues activity ${target.issueKey}`,
-      `collab seat request --from-issue ${target.issueKey} --role review|release|developer --title TITLE --body-file FILE`,
+      `collab seat request --from-issue ${target.issueKey} --role review|release|security|developer --title TITLE --body-file FILE`,
       'collab run finish RUN_ID --generation GENERATION --outcome done|in_review|blocked --note-file FILE']);
     assert.deepEqual([fresh.blockers, fresh.requests, fresh.requestFor], [[], [], []]);
 
@@ -129,6 +129,21 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     await link(review, 'BLOCKED_BY', open); await link(review, 'PARENT', related);
     const waiting = await context(review);
     assert.deepEqual([waiting.requestFor, waiting.blockers], [[ref(target, 'to_do', 'todo')], [ref(open, 'to_do', 'todo')]]);
+  });
+
+  await t.test('security request context uses its own latest verdict, not a nested request verdict', async () => {
+    const target = await issue(), request = await issue({ agentRequestRole: 'security' }), child = await issue({ agentRequestRole: 'security' });
+    await link(request, 'BLOCKS', target); await link(child, 'BLOCKS', request);
+    const verdict = (item, subject, result, reviewed, minutes) => raw.issueActivity.create({ data: {
+      itemType: 'ISSUE', itemId: item.id, action: 'SECURITY_VERDICT', workspaceId: 'w', projectId: A, userId: person,
+      details: JSON.stringify({ requestId: subject.id, verdict: result, reviewed }), createdAt: ago(minutes),
+    } });
+    await verdict(request, child, 'failed', 'child commit', 10);
+    assert.equal((await context(target)).requests[0].verdict, undefined);
+    await verdict(request, request, 'failed', 'old commit', 30);
+    await verdict(request, request, 'passed', 'new commit', 20);
+    const result = (await context(target)).requests[0];
+    assert.deepEqual([result.verdict, result.reviewed], ['passed', 'new commit']);
   });
 
   await t.test('it is a read: any token of the workspace gets it, by key or by id, and nothing outside the workspace', async () => {

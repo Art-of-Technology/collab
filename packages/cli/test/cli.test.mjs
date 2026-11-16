@@ -2179,6 +2179,9 @@ test('seat and run commands send the seat contract and nothing else', async t =>
   const note = '## Done\nIt works\n## Decisions\nNone\n## Evidence\nTests\n## Next\nNothing';
   assert.deepEqual({ ...await sent(['run', 'finish', 'run-one', '--generation', 'gen-one', '--outcome', 'done', '--note-file', '-', '--status', 'waiting_for_deploy', '--also-finish', '["APP-2"]'], { input: note }), result: 0 },
     { method: 'PATCH', url: '/api/apps/auth/runs/run-one', body: { generation: 'gen-one', outcome: 'done', status: 'waiting_for_deploy', alsoFinish: ['APP-2'], note, event: 'finish' }, result: 0 });
+  // A security seat ends its request with the verdict and what it read.
+  assert.deepEqual((await sent(['run', 'finish', 'run-one', '--generation', 'gen-one', '--outcome', 'done', '--note', note, '--verdict', 'failed', '--reviewed', 'PR 12 at abc1234'])).body,
+    { generation: 'gen-one', outcome: 'done', note, verdict: 'failed', reviewed: 'PR 12 at abc1234', event: 'finish' });
   // A start by hand gets a generation of its own; the reply carries it for the finish.
   const started = await sent(['run', 'start', '--issue', 'APP-1']);
   assert.equal(started.url, '/api/apps/auth/runs'); assert.equal(started.method, 'POST');

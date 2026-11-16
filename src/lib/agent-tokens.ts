@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { encryptToken } from '@/lib/apps/crypto';
 import { prisma } from '@/lib/prisma';
@@ -111,7 +111,7 @@ export async function createAgentToken<S = undefined>(input: {
     });
     const seat = await input.seat?.(tx, account);
     const row = await tx.appToken.create({
-      data: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, installationId: null, accessToken, tokenExpiresAt: expiresAt, scopes },
+      data: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, installationId: null, accessToken, tokenHash: createHash('sha256').update(token).digest('hex'), tokenExpiresAt: expiresAt, scopes },
       select: { id: true },
     });
     // The audit row is the only record of who minted the token.

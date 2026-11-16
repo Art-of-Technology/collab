@@ -2222,6 +2222,7 @@ model AppToken {
   revokedAt      DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  tokenHash      String?   @unique // SHA-256 (hex) of the plain access token; null until the app has decrypted the row once
 
   installation AppInstallation? @relation(fields: [installationId], references: [id], onDelete: Cascade)
   app          App?             @relation("SystemAppTokens", fields: [appId], references: [id], onDelete: Cascade)
