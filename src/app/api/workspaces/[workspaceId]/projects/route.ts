@@ -334,7 +334,7 @@ export async function POST(
           color: status.color,
           order: status.order,
           isDefault: status.isDefault,
-          isFinal: false,
+          isFinal: status.name === 'done' || status.name === 'completed',
           category: statusGroup(status.name),
           iconName: status.iconName,
           projectId: newProject.id
