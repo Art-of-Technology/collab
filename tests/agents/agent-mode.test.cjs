@@ -176,12 +176,23 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
     // The seat a request would go to cannot ask itself.
     await refused(label(relS.userId, await issue(S), ['Release request']), 'invalid_request', 400);
 
-    // An agent token that is not a seat gives seats work only by creating issues, where its daily cap counts.
+    // An agent token that is not a seat asks for a release by label, as a person does, and for a review it does not.
     await tokens.createAgentToken({ workspaceId: 'w', actorId: owner, name: 'crm', access: 'write', expiresInDays: 30 });
     const crm = await raw.user.findFirstOrThrow({ where: { name: 'crm' } }), unasked = await issue(S);
-    await refused(label(crm.id, unasked, ['Release request']), 'assign_by_person', 403);
+    await label(person, asked, []);
+    await refused(label(crm.id, asked, ['Review request']), 'assign_by_person', 403);
+    await refused(label(crm.id, asked, ['Review request', 'Release request']), 'assign_by_person', 403);
+    assert.equal((await requestsFor(asked)).length, 1);
+    assert.deepEqual((await raw.issue.findUniqueOrThrow({ where: { id: asked.id }, include: { labels: true } })).labels, []);
+    await refused(label(crm.id, unasked, ['Review request']), 'assign_by_person', 403);
+    await refused(label(crm.id, unasked, ['Review request', 'Release request']), 'assign_by_person', 403);
     assert.deepEqual(await requestsFor(unasked), []);
+    await label(crm.id, unasked, ['backend', 'Release request']);
+    filed = await requestsFor(unasked);
+    assert.deepEqual(filed.map(row => [row.agentRequestRole, row.assigneeId, row.reporterId]), [['release', relS.userId, crm.id]]);
     await label(crm.id, unasked, ['backend']);
+    await label(crm.id, unasked, ['backend', 'Release request']);
+    assert.equal((await requestsFor(unasked)).length, 1, 'asking again while the request is open files nothing');
 
     // With no seat to take it, the edit is refused whole: the label is not left on the issue asking nobody.
     await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: revS.id });

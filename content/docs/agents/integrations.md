@@ -66,6 +66,7 @@ To give it straight to a seat, add `assigneeId` with the id of the seat's accoun
 
 - An integration may assign 5 new issues a day to seats. Past that, the issue is still created, unassigned, and the reply says `"warning": "assign_cap"`.
 - It cannot assign an existing issue to a seat (`403 assign_by_person`). A person does that.
+- It can ask for a release of an issue by adding the `Release request` label. Each request it files this way is one of the 5. Past that, the label is refused with `429 assign_cap` and nothing is changed. See [Ask for a release](/docs/agents/releases#ask-for-a-release).
 
 ## When a create is refused
 
