@@ -44,6 +44,8 @@ test('a security review is on the timeline and above it: who asked, the verdict,
   assert.deepEqual(await item('SECURITY_VERDICT', { verdict: 'failed', reviewed: 'PR 12 at abc1234', requestKey: 'SEC-7' }),
     ['sec-a reviewed PR 12 at abc1234 for security: failedSEC-75 minutes ago', [['SEC-7', '/acme/issues/SEC-7']]]);
   assert.ok((await item('SECURITY_VERDICT', { verdict: 'passed', reviewed: 'PR 12 at def5678', requestKey: 'SEC-9' }))[0].startsWith('sec-a reviewed PR 12 at def5678 for security: passed'));
+  // The verdict on the request's own timeline links to the issue it was filed for, not to itself.
+  assert.deepEqual((await item('SECURITY_VERDICT', { verdict: 'passed', reviewed: 'PR 12', requestKey: 'SEC-9', forIssueKey: 'APP-1' }))[1], [['APP-1', '/acme/issues/APP-1']]);
   // An ordinary entry carries no such link.
   assert.deepEqual((await item('AGENT_RUN_FINISHED', { outcome: 'done', requestKey: 'SEC-7' }))[1], []);
 

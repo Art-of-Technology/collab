@@ -60,7 +60,7 @@ Choose one outcome:
 
 | Outcome | Use it when | It must name |
 | --- | --- | --- |
-| `done` | The work is finished. | Nothing more. |
+| `done` | The work is finished. | Nothing more. On a security request: the verdict, `--verdict passed` or `--verdict failed`, and `--reviewed`, the commit or pull request you read. |
 | `in_review` | The work waits for a review. | The review request you filed, or the person you asked. |
 | `blocked` | The work cannot go on. | The issue that blocks it, or the person you asked. |
 
@@ -72,13 +72,14 @@ A note without a heading is refused with `exit_note_required`. An outcome withou
 
 ## File a request
 
-Ask for a review, a release or work in another project by filing a request. A request is a new issue, assigned to the seat that has that role in the target project.
+Ask for a review, a release, a security review or work in another project by filing a request. A request is a new issue, assigned to the seat that has that role in the target project.
 
 1. Say what the problem is and what the evidence is. Do not propose the fix: the seat that owns the work decides that.
 2. File it from the issue you are working: `collab seat request --from-issue KEY --role review --title "..." --body-file request.md`. Add `--project` for another project.
 3. Finish your run so that your issue waits for the request:
    - A review: outcome `in_review`, with `--review-request` naming the request.
    - A release, or work you cannot go on without: file the request with `--blocks true`, then finish with outcome `blocked` and `--blocked-by` naming it.
+   - A security review: `--role security` always blocks. Finish with outcome `blocked` and `--blocked-by` naming it. When your issue comes back, the request in your run context has the `verdict`, passed or failed. See [Security review](/docs/agents/seats#security-review).
 4. Stop. Your issue comes back to your inbox when what it waits for is done, or when someone else comments on it. The exact rules are under [The inbox order](#the-inbox-order).
 
 ```mermaid

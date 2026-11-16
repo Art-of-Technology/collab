@@ -347,11 +347,12 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
       // somebody added later would put a verdict on an issue nobody reviewed. A request that asked for a review of
       // its own has a second such entry, which names that request and no issue it is for.
       const filedFor = (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'SECURITY_REQUESTED' }, select: { details: true } }))
-        .map(row => JSON.parse(row.details ?? '{}').forIssueId).find(id => typeof id === 'string');
-      const source = filedFor ? await tx.issue.findFirst({ where: { id: filedFor, workspaceId }, select: { id: true, projectId: true } }) : null;
+        .map(row => JSON.parse(row.details ?? '{}')).find(details => typeof details.forIssueId === 'string');
+      const source = filedFor ? await tx.issue.findFirst({ where: { id: filedFor.forIssueId, workspaceId }, select: { id: true, projectId: true } }) : null;
+      // The request's own entry also names the issue it was filed for, so each timeline links to the other side.
       await tx.issueActivity.createMany({ data: [issue, ...(source ? [source] : [])].map(target => ({ action: 'SECURITY_VERDICT', itemType: 'ISSUE', itemId: target.id,
         userId: me, workspaceId, projectId: target.projectId, details: JSON.stringify({ verdict: input.verdict, reviewed: input.reviewed,
-          requestId: issue.id, requestKey: issue.issueKey ?? issue.id, runId: run.id, seatId: run.seatId }) })) });
+          requestId: issue.id, requestKey: issue.issueKey ?? issue.id, runId: run.id, seatId: run.seatId, ...(target === issue && source && { forIssueKey: filedFor.forIssueKey }) }) })) });
     }
     for (const { id } of extras) {
       const extra = await tx.issue.findFirst({ where: { id }, select: ISSUE });
@@ -440,8 +441,10 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     lastExitNote: last?.note ?? null,
     commentsSince,
     blockers: others.filter(other => other.blocksMe).map(other => toRef(other.issue)),
-    requests: others.filter(other => other.issue.agentRequestRole).map(other => ({ ...toRef(other.issue),
-      ...(verdicts.has(other.issue.id) && { verdict: verdicts.get(other.issue.id).verdict, reviewed: verdicts.get(other.issue.id).reviewed }) })),
+    requests: others.filter(other => other.issue.agentRequestRole).map(other => {
+      const judged = verdicts.get(other.issue.id);
+      return { ...toRef(other.issue), ...(judged && { verdict: judged.verdict, reviewed: judged.reviewed }) };
+    }),
     // Filing a request links it to its source from the request's side: it blocks the source or relates to it.
     requestFor: issue.agentRequestRole ? others.filter(other => other.filedFor && !other.issue.agentRequestRole).map(other => toRef(other.issue)) : [],
     // Where the rest is: the project's context, what was said before the last note, and the timeline, which holds a late exit note.
@@ -462,8 +465,9 @@ export async function securityReviews(issue: { id: string; workspaceId: string }
   const reviews = new Map<string, { requestKey: string; state: string; reviewed?: string; by?: string | null }>();
   for (const row of rows) {
     const details = JSON.parse(row.details ?? '{}');
-    // A request's own "asked" entry names the issue it is for, not a request.
-    if (typeof details.requestId !== 'string') continue;
+    // A request's own "asked" entry names the issue it is for, not a request, and its own verdict is of no request
+    // filed for it: only what was filed for this issue is listed.
+    if (typeof details.requestId !== 'string' || (row.action === 'SECURITY_VERDICT' && !reviews.has(details.requestId))) continue;
     reviews.set(details.requestId, row.action === 'SECURITY_VERDICT'
       ? { requestKey: details.requestKey, state: details.verdict, reviewed: details.reviewed, by: row.user.name }
       : { requestKey: details.requestKey, state: 'open' });

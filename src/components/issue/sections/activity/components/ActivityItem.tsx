@@ -13,8 +13,8 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
   const actionText = getActionText(activity, itemType);
   const showChangeDetails = shouldShowChangeDetails(activity);
   const { workspaceId } = useParams<{ workspaceId?: string }>();
-  // A security entry names the other side: the request on the issue it was filed for, that issue on the request.
-  const securityKey = activity.action.startsWith('SECURITY_') ? activity.details?.requestKey ?? activity.details?.forIssueKey : null;
+  // A security entry links to the other side: the request on the issue it was filed for, that issue on the request.
+  const securityKey = activity.action.startsWith('SECURITY_') ? activity.details?.forIssueKey ?? activity.details?.requestKey : null;
 
   return (
     <div className="group flex gap-2.5 py-1.5 hover:bg-collab-950 rounded-md px-1">

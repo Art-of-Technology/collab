@@ -305,7 +305,9 @@ test('requests: one seat asks another, in its own project or in another one', as
     assert.equal((await finish(secA, reviewing, 'v1', { verdict: 'failed', reviewed: 'PR 12 at abc1234' }))[0], 200);
     const failed = { verdict: 'failed', reviewed: 'PR 12 at abc1234', requestId: first.row.id, requestKey: first.row.issueKey, runId: reviewing, seatId: secA.id };
     assert.deepEqual(await timeline(first.row), [['SECURITY_REQUESTED', devA.userId, A, { forIssueId: source.id, forIssueKey: source.issueKey }],
-      ['SECURITY_REQUESTED', secA.userId, A, { requestId: opinion.row.id, requestKey: opinion.row.issueKey }], ['SECURITY_VERDICT', secA.userId, A, failed]]);
+      ['SECURITY_REQUESTED', secA.userId, A, { requestId: opinion.row.id, requestKey: opinion.row.issueKey }], ['SECURITY_VERDICT', secA.userId, A, { ...failed, forIssueKey: source.issueKey }]]);
+    // The request's own page lists what was filed for it, not itself.
+    assert.deepEqual(await reviews(first.row), [{ requestKey: opinion.row.issueKey, state: 'open' }]);
     assert.deepEqual(await timeline(source), [['SECURITY_REQUESTED', devA.userId, A, { requestId: first.row.id, requestKey: first.row.issueKey }], ['SECURITY_VERDICT', secA.userId, A, failed]]);
     assert.deepEqual(await timeline(other), []);
     // The issue comes back whatever the verdict, and its next session reads the verdict with the request.

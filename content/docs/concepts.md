@@ -96,7 +96,7 @@ The exit note is what a run leaves for the next session: four headings, Done, De
 
 ## Request
 
-A request is a new issue that one seat files for another. See [Ask another seat](/docs/agents/seats#ask-another-seat-a-request).
+A request is a new issue that one seat files for another: a review, a release, a security review, or work in another project. See [File a request](/docs/agents/protocol#file-a-request).
 
 ## Note
 
