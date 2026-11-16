@@ -14,7 +14,7 @@ The Collab App Store enables third-party developers to ship apps that workspace 
 - `AppVersion`: immutable snapshot of every imported manifest version.
 - `AppScope`: normalized list of granted scopes used during consent.
 - `AppOAuthClient`: stores OAuth credentials and redirect URIs. See [credential storage](#security-guarantees).
-- `AppInstallation`: tracks workspace installs, OAuth tokens (AES-256-GCM encrypted and base64-encoded) and granted scopes.
+- `AppInstallation`: tracks workspace installs and granted scopes. See [token storage](../oauth-endpoints.md#token-storage) for OAuth tokens.
 - `AppWebhook` / `AppWebhookDelivery`: manage webhook subscriptions and delivery attempts per installation.
 
 ## Developer Workflow
@@ -218,7 +218,7 @@ For `mfe_remote` app types, the `mfe` configuration object is required:
    - Creates a `PENDING` installation with requested scopes and logs the attempt (`logAppInstallAttempt`).
 3. The client fetches `/api/apps/:slug` to resolve OAuth metadata and opens `/auth/mcp?endpoint=regular` for consent.
 4. Authorization follows the [OAuth consent and workspace contract](../oauth-endpoints.md#explicit-approval); see that reference for client PKCE requirements and scope validation.
-5. The app exchanges the code via `POST /api/oauth/token` (Authorization Code or Refresh Token grant). Access/refresh tokens are random opaque values, encrypted using AES-256-GCM (`encryptToken`) and persisted on the installation.
+5. The app exchanges the code via `POST /api/oauth/token` (Authorization Code or Refresh Token grant). See [token storage](../oauth-endpoints.md#token-storage) for how tokens are persisted.
 6. Once the partner app receives tokens it should call `POST /api/apps/installations/:id/ack` with the Bearer access token so we can log `logAppInstallSuccess` and mark the install as completed.
 7. Introspection is available through `POST /api/oauth/introspect` for apps to validate long-lived tokens. See the [token reference](../oauth-endpoints.md#2-token-endpoint) for expiration and renewal; refresh tokens are validated by decrypting and comparing stored values.
 8. Uninstallation happens via `POST /api/apps/:slug/uninstall`, setting the installation status to `REMOVED`, clearing webhooks and emitting an `app.uninstalled` event.
