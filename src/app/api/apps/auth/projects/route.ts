@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
+import { statusGroup } from '@/constants/project-statuses';
 
 const CreateProjectSchema = z.object({
   name: z.string().min(1).max(100),
@@ -185,6 +186,7 @@ export const POST = withAppAuth(
           const created = await tx.projectStatus.create({
             data: {
               ...status,
+              category: statusGroup(status.name, status.isFinal),
               projectId: newProject.id,
             },
           });

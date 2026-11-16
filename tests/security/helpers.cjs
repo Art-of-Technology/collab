@@ -85,6 +85,8 @@ function load(file, dependencies = {}, globals = {}) {
       if (!(name in dependencies) && ['@/lib/issue-template-enforcement', '@/lib/auth-error-diagnostics', '@/lib/issue-key-allocation', '@/lib/note-tag-access', '@/lib/issue-mutation', '@/lib/post-access', '@/lib/delete-post-comment', '@/lib/user-utils', '@/lib/notification-access', '@/lib/secrets/access', '@/lib/issue-finder', '@/lib/shared-issue-key-utils'].includes(name)) {
         return load(`src/${name.slice(2)}.ts`, dependencies, globals);
       }
+      // The status rules are pure, so no fixture has to stand in for them.
+      if (!(name in dependencies) && name === '@/constants/project-statuses') return load('src/constants/project-statuses.ts');
       if (!(name in dependencies) && name === '@/lib/agent-label-triggers') return load('src/lib/agent-label-triggers.ts', { 'node:crypto': require('node:crypto') });
       if (!(name in dependencies) && name === '@prisma/client') return require('@prisma/client');
       if (!(name in dependencies) && name === 'crypto') return require('node:crypto');

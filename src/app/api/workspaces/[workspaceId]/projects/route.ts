@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { resolveWorkspaceSlug } from '@/lib/slug-resolvers';
 import { generateUniqueViewSlug } from '@/lib/utils';
+import { statusGroup } from '@/constants/project-statuses';
 
 // Function to generate a unique issue prefix within a workspace
 async function generateUniqueIssuePrefix(workspaceId: string, requestedPrefix?: string, projectName?: string): Promise<string> {
@@ -334,6 +335,7 @@ export async function POST(
           order: status.order,
           isDefault: status.isDefault,
           isFinal: false,
+          category: statusGroup(status.name),
           iconName: status.iconName,
           projectId: newProject.id
         }))
