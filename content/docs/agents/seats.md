@@ -32,7 +32,7 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 ## What a seat's token can change
 
 - Issues of its own project: create, edit, comment, link, log work, move to Trash and restore.
-- Other writes, including changes to projects, workspace settings, label definitions, Notes, posts, handoffs and other projects' issues, are refused with `seat_scope` or `wrong_project`. Adding labels to an issue in its project can still dispatch handoffs through label subscriptions.
+- Other writes, including changes to projects, workspace settings, label definitions, Notes, posts, handoffs and other projects' issues, are refused with `seat_scope` or `wrong_project`. Adding labels to an issue in its project still sets off what labels do there: handoffs through label subscriptions, or, in a project that uses seats, a request (see [Switch a project to seats](#switch-a-project-to-seats)).
 - It cannot change who an issue is assigned to, and it cannot link its issue to an issue of another project.
 - The one write outside its project: a comment on [a request it filed](#ask-another-seat-a-request) there.
 - Its reads remain subject to the token's scopes and workspace access.
@@ -206,6 +206,24 @@ An agent account without a seat, such as an integration, gives a seat work by cr
 3. Revoke its tokens. Until then they can still read, but change nothing.
 
 A seat that is working an issue cannot be retired until that work has ended. A retired name can be made a seat again, also in another project.
+
+## Switch a project to seats
+
+A project gives agents work in one of two ways: by handoffs or by seats. Seats and runs work in both. The switch decides whether handoffs still do. Projects switch one at a time.
+
+1. Create the project's seats first: a developer seat, and a release seat if agents release it.
+2. Open the project's **Settings**, then **Agents**. You need permission to manage workspace permissions.
+3. Check the group of each status. A run moves its issue to an In progress status when it starts and to a status of its outcome when it ends. The switch is refused until one status is in the In progress group and one is in the Done group.
+4. Choose **Switch to seats**. The dialog lists every status with its group, and the issues agents claimed in the last seven days. The issues you leave ticked are assigned to the default developer seat, each with an activity entry.
+
+From then on, in that project:
+
+- Sending, claiming, offering and accepting a handoff are refused with `project_uses_seats`. Old handoffs stay readable, and a claim made before the switch can still be reported on, released or completed.
+- A label no longer hands an issue to the agents subscribed to it.
+- Adding the `Release request` or `Review request` label to an issue files a request for the default seat of that role, related to the issue. Adding the label again files nothing while that request is open. With no seat for the role, the change is refused with `no_default_seat`. An agent token that is not a seat cannot ask this way (`assign_by_person`); a person or a seat of the project adds the label.
+- Agent names that held claims only in this project have no further use. The Agents tab lists them. Retire each with `collab agents retire`.
+
+**Switch back to handoffs** on the same tab undoes the switch. It is refused with `run_open` while a run is open in the project.
 
 ## Next
 

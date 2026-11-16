@@ -178,6 +178,16 @@ async function validLabels(db: DB, workspaceId: string, labelIds: string[]) {
   if (count !== unique.length) throw new HandoffError('invalid_labels', 'Labels must belong to this workspace');
   return unique;
 }
+/**
+ * A project that uses seats takes no new handoff, claim or transfer: work reaches an agent there as an issue assigned
+ * to its seat. What exists stays readable, and a claim made before the switch can still be reported on, released or completed.
+ */
+async function requireHandoffsMode(db: DB, projectId: string) {
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { agentMode: true } });
+  if (project?.agentMode === 'seats') {
+    throw new HandoffError('project_uses_seats', 'This project uses seats: work reaches an agent as an issue assigned to its seat, and is asked for with a request, not a handoff', 409);
+  }
+}
 async function activity(db: DB, context: AppAuthContext, agent: Agent, issue: { id: string; projectId: string },
   handoffId: string, action: string, content?: string, extra = {}) {
   await db.issueActivity.create({ data: { itemType: 'ISSUE', itemId: issue.id, workspaceId: context.workspace.id,
@@ -348,6 +358,7 @@ export async function sendHandoff(context: AppAuthContext, input: z.infer<typeof
     const sourceKey = `manual:${agent.id}:${input.requestId || randomUUID()}`;
     const issue = await db.issue.findFirst({ where: { AND: [issueScope(context), { OR: [{ id: input.issue }, { issueKey: input.issue }] }] }, select: { id: true, projectId: true } });
     if (!issue) throw new HandoffError('issue_not_found', 'Issue not found or access denied', 404);
+    await requireHandoffsMode(db, issue.projectId);
     const labelIds = await validLabels(db, context.workspace.id, input.toLabels);
     const recipientNames = [...new Set(input.toAgents)];
     if (await db.agentRegistration.count({ where: { workspaceId: context.workspace.id, name: { in: recipientNames } } }) !== recipientNames.length) {
@@ -399,6 +410,7 @@ export async function createTransferOffer(context: AppAuthContext, input: z.infe
       }
       return retry;
     }
+    await requireHandoffsMode(db, prior.issue.projectId);
     if (prior.status !== 'claimed' || prior.claimedById !== sender.id) throw new HandoffError('claim_required', 'Only the current owner can offer this work', 409);
     let recipient = await db.agentRegistration.findFirst({ where: { workspaceId: context.workspace.id, name: input.toAgent } });
     if (!recipient || recipient.id === sender.id || recipient.managedWorker) throw new HandoffError('recipient_not_found', 'A different registered manual agent is required', 404);
@@ -505,6 +517,7 @@ export async function actOnTransferOffer(context: AppAuthContext, offerId: strin
       await activity(db, context, agent, offer.issue, offer.parentId, 'transfer_cancelled', undefined, { offerId: offer.id });
       return { ...result, issue: offer.issue };
     }
+    await requireHandoffsMode(db, offer.issue.projectId);
     if (offer.status === 'accepted') {
       if (!offer.acceptedHandoffId) throw new HandoffError('offer_closed', 'Accepted handoff is unavailable', 409);
       return { offer, handoff: await visibleHandoff(db, context, agent, offer.acceptedHandoffId) };
@@ -707,6 +720,7 @@ export async function actOnHandoff(context: AppAuthContext, id: string, input: z
       return { id, action: input.action, status: handoff.status };
     }
     if (input.action === 'claim') {
+      await requireHandoffsMode(db, handoff.issue.projectId);
       if (agent.managedWorker && handoff.sourceKey.startsWith('transfer-offer:')) throw new HandoffError('managed_agent', 'Managed workers cannot claim transfer successors', 409);
       if (handoff.sourceKey.startsWith('transfer-offer:') && !await db.agentTransferOffer.findFirst({ where: {
         id: handoff.sourceKey.slice('transfer-offer:'.length), workspaceId: context.workspace.id,

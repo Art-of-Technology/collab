@@ -77,6 +77,8 @@ function load(file, dependencies = {}, globals = {}) {
       if (!(name in dependencies) && name === '@/lib/agent-seats') {
         return { HandoffError, seatWriteGuard: async () => {}, assertTokenMayAssign: async () => {}, assignCapReached: async () => false, recordSeatHandoff: async () => {} };
       }
+      // A fixture that says nothing about seats has no project that uses them, so labels go to their subscribers.
+      if (!(name in dependencies) && name === '@/lib/agent-requests') return { labelRequests: async () => false };
       if (!(name in dependencies) && name === '@/lib/issue-templates') {
         return load('src/lib/issue-templates.ts', { '@/lib/comment-html': load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') }) });
       }
