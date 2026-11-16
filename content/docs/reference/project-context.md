@@ -25,7 +25,7 @@ The token needs the scopes `prompts:read`, `issues:read` and `context:read`.
 
 Every issue and Note comes with its id, a link and `updatedAt`. A Note is an excerpt: read the Note itself when you need all of it.
 
-Personal and encrypted Notes and Notes of type `CREDENTIALS`, `API_KEYS` or `ENV_VARS` are never included.
+Personal, shared-scope and encrypted Notes and Notes of type `CREDENTIALS`, `API_KEYS` or `ENV_VARS` are never included, even when the token can read them.
 
 ## Limits
 
