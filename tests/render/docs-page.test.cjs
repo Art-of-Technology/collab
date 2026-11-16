@@ -288,7 +288,7 @@ test('the layout lists every section and page of the navigation and marks the pa
   assert.equal(icon(links[1]), icon(links[2]));
   // The docs are set in their own typeface.
   assert.match(html, /^<div class="font-geist /);
-  assert.match(html, /href="\/dev\/docs"/);
+  assert.match(nav, /<a[^>]*href="\/dev\/docs"[^>]*><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg><span>API reference /s);
   pathname = '/docs';
   assert.match(renderToStaticMarkup(Layout({ children: 'The page' })), /<a[^>]*aria-current="page"[^>]*><svg.*?<\/svg>Collab docs</s);
 });

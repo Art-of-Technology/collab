@@ -53,7 +53,7 @@ export function DocsSidebar({ sections }: { sections: DocsSidebarSection[] }) {
       ))}
       <div className="border-t border-border pt-5">
         <p className="mb-2 px-3 text-xs font-semibold text-foreground">Build integrations</p>
-        <Link href="/dev/docs" className="block px-3 py-1.5 text-sm text-collab-400 hover:text-foreground">API reference <span className="text-xs">↗</span></Link>
+        <Link href="/dev/docs" className="flex items-start gap-2.5 px-3 py-1.5 text-sm text-collab-400 hover:text-foreground"><FileText className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><span>API reference <span className="text-xs">↗</span></span></Link>
         <p className="px-3 text-xs text-muted-foreground">Sign in to explore the API.</p>
       </div>
     </nav>
