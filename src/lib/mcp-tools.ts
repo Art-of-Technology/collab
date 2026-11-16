@@ -18,6 +18,7 @@ import * as aiContext from '@/app/api/apps/auth/ai-context/route';
 import * as docs from '@/app/api/apps/auth/docs/route';
 import * as seatInbox from '@/app/api/apps/auth/seats/me/inbox/route';
 import * as runContext from '@/app/api/apps/auth/issues/[issueIdOrKey]/run-context/route';
+import * as live from '@/app/api/apps/auth/live/route';
 
 // MCP tools forward to API routes so access checks, validation and side effects stay in those routes.
 
@@ -105,7 +106,7 @@ export const tools: McpTool[] = [
     description: orNull(text), assigneeId: orNull(id), parentId: orNull(id), dueDate: orNull(dateTime), startDate: orNull(dateTime),
     storyPoints: orNull(integer(1)), color: orNull(text), progress: integer(0, 100), timeEstimateMinutes: orNull(integer(1)),
   }, ['issueIdOrKey']),
-  tool('comments_list', 'Comments on an issue.', ['issues:read'], 'GET', 'issues/:issueIdOrKey/comments', comments.GET, { issueIdOrKey, flat: flag }, ['issueIdOrKey']),
+  tool('comments_list', 'Comments on an issue. With since, only those made after that time.', ['issues:read'], 'GET', 'issues/:issueIdOrKey/comments', comments.GET, { issueIdOrKey, flat: flag, since: dateTime }, ['issueIdOrKey']),
   tool('comments_add', 'Add a comment to an issue as the token\'s identity.', ['issues:write'], 'POST', 'issues/:issueIdOrKey/comments', comments.POST, {
     issueIdOrKey, content: { type: 'string', minLength: 1 }, parentId: id,
   }, ['issueIdOrKey', 'content']),
@@ -146,6 +147,9 @@ export const tools: McpTool[] = [
   }),
   tool('seat_inbox', 'The issues assigned to this token\'s account, at most 50, in the order to work them, each with the reason it is offered. A seat gets the issues of its project.', ['issues:read'], 'GET', 'seats/me/inbox', seatInbox.GET),
   tool('run_context', 'What a fresh session needs to work an issue, in one read: the issue, the last exit note, the comments made since, what blocks it and the requests filed for it.', ['issues:read'], 'GET', 'issues/:issueIdOrKey/run-context', runContext.GET, { issueIdOrKey }, ['issueIdOrKey']),
+  tool('live_revision', 'The commit of Collab\'s own code that this server runs. With commit, also whether that commit is in it: contains is true, false, or null when it cannot be told.', [], 'GET', 'live', live.GET, {
+    commit: { type: 'string', pattern: '^[0-9a-f]{7,40}$', description: 'A commit ID of the Collab repository, 7 to 40 lowercase hex characters' },
+  }, [], { description: 'The commit of Collab\'s own code that this server runs. With commit, also whether that commit is in it: contains is true, false, or null when it cannot be told.' }),
   docsTool('docs_search', 'Search Collab\'s documentation: how Collab, its CLI and its agent features work. Returns the matching sections, best first, each with the slug of its page for docs_get. The same search as on the docs site.', {
     query: { type: 'string', minLength: 1, maxLength: 500 }, limit: integer(1, 20),
   }, ['query']),

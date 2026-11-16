@@ -2213,6 +2213,37 @@ test('seat inbox reads once, and with --wait-seconds waits for work without chan
   assert.equal((await f.run(['seat', 'inbox', '--wait-seconds', '61'])).error.error, 'invalid_timeout');
 });
 
+test('live names the running commit, and with --wait-seconds waits through a restart until a commit is in it', async t => {
+  const commit = 'a'.repeat(40);
+  const f = await fixture(t, (_req, res, _body, calls) => {
+    if (calls.length === 2) { res.writeHead(503); return res.end('{}'); }
+    res.end(JSON.stringify({ revision: 'b'.repeat(40), ...(calls.length > 1 && { commit, contains: calls.length > 2 }) }));
+  });
+  assert.deepEqual((await f.run(['live'])).data, { revision: 'b'.repeat(40) });
+  const waited = await f.run(['live', '--commit', commit, '--wait-seconds', '30']);
+  assert.equal(waited.code, 0, waited.stderr); assert.equal(waited.data.contains, true); assert.equal(waited.data.timedOut, undefined);
+  assert.deepEqual(f.calls.map(call => call.url), ['/api/apps/auth/live', ...Array(2).fill(`/api/apps/auth/live?commit=${commit}`)]);
+  assert.equal((await f.run(['live', '--wait-seconds', '5'])).error.error, 'required_field');
+  assert.equal((await f.run(['live', '--commit', 'main'])).error.error, 'invalid_value');
+  assert.equal((await f.run(['live', '--commit', commit, '--wait-seconds', '3601'])).error.error, 'invalid_timeout');
+  assert.equal(f.calls.length, 3);
+});
+
+test('comments wait returns the comments made after the newest one, or says that the time is up', async t => {
+  const first = { id: 'one', createdAt: '2026-11-16T10:00:00.000Z' }, second = { id: 'two', createdAt: '2026-11-16T10:05:00.000Z' };
+  let later = [second];
+  const f = await fixture(t, (req, res) => res.end(JSON.stringify({ issueKey: 'APP-1', comments: new URL(req.url, 'http://localhost').searchParams.has('since') ? later : [first] })));
+  const waited = await f.run(['comments', 'wait', 'APP-1']);
+  assert.equal(waited.code, 0, waited.stderr); assert.deepEqual(waited.data.comments, [second]);
+  assert.deepEqual(f.calls.map(call => call.url), ['/api/apps/auth/issues/APP-1/comments?flat=true',
+    `/api/apps/auth/issues/APP-1/comments?flat=true&since=${encodeURIComponent(first.createdAt)}`]);
+  later = [];
+  const quiet = await f.run(['comments', 'wait', 'APP-1', '--since', second.createdAt, '--wait-seconds', '1']);
+  assert.equal(quiet.code, 0, quiet.stderr); assert.deepEqual(quiet.data.comments, []); assert.equal(quiet.data.timedOut, true);
+  assert.equal(f.calls.at(-1).url, `/api/apps/auth/issues/APP-1/comments?since=${encodeURIComponent(second.createdAt)}&flat=true`);
+  assert.equal((await f.run(['comments', 'wait', 'APP-1', '--since', 'yesterday'])).error.error, 'invalid_value');
+});
+
 test('seat and run refusals keep their code and what is missing, and pass on nothing else from the server', async t => {
   let answer;
   const f = await fixture(t, (_req, res) => { res.writeHead(answer.status); res.end(JSON.stringify({ error_description: 'PRIVATE_SENTINEL', ...answer.body })); });

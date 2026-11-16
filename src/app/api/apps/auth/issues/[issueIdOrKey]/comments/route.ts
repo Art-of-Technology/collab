@@ -38,6 +38,11 @@ export const GET = withAppAuth(
       const { issueIdOrKey } = await params;
       const { searchParams } = new URL(request.url);
       const flat = searchParams.get('flat') === 'true';
+      // Only comments made after this moment: what `collab comments wait` asks for.
+      const since = searchParams.has('since') ? new Date(searchParams.get('since')!) : null;
+      if (since && Number.isNaN(since.getTime())) {
+        return NextResponse.json({ error: 'invalid_request', error_description: 'since is a time in ISO 8601.' }, { status: 400 });
+      }
 
       const issue = await findIssue(issueIdOrKey, context.workspace.id);
       if (!issue) {
@@ -51,6 +56,7 @@ export const GET = withAppAuth(
         where: {
           issueId: issue.id,
           ...(flat ? {} : { parentId: null }), // Only top-level if not flat
+          ...(since && { createdAt: { gt: since } }),
         },
         orderBy: { createdAt: 'asc' },
         include: {

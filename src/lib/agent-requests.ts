@@ -130,8 +130,8 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
  * reported by whoever added the label and related to the issue. Nothing is filed while a request of that role for the
  * issue is still open, so adding the label twice asks once, nor for an issue that is itself a request. With no seat to
  * take it the refusal undoes the whole edit, so the label never sits there asking nobody. The text is the server's
- * and points at the issue, so it is not held to the issue template. An agent token that is not a seat asks nothing
- * this way: it gives seats work only by creating issues, where its daily cap counts.
+ * and points at the issue, so it is not held to the issue template. An agent token that is not a seat asks for a
+ * release this way and for nothing else (decided 16 Nov 2026, CLB-527): a review it asks for only as a seat.
  */
 export async function labelRequests(tx: Prisma.TransactionClient, me: string, issue: { id: string; workspaceId: string; projectId: string },
   added: { id: string; name: string }[]) {
@@ -143,7 +143,7 @@ export async function labelRequests(tx: Prisma.TransactionClient, me: string, is
     const kind = REQUESTS[role], label = added.find(candidate => candidate.name === kind.label);
     if (!label || await tx.issue.count({ where: { projectId: issue.projectId, agentRequestRole: role,
       sourceRelations: { some: { targetIssueId: issue.id, relationType: { in: ['RELATES_TO', 'BLOCKS'] } } }, ...NOT_DONE } })) continue;
-    if (!await tx.agentSeat.findFirst({ where: { userId: me, retiredAt: null }, select: { id: true } }) && await tx.appToken.findFirst({ where: { userId: me, app: { slug: AGENT_APP_SLUG } }, select: { id: true } })) {
+    if (role !== 'release' && !await tx.agentSeat.findFirst({ where: { userId: me, retiredAt: null }, select: { id: true } }) && await tx.appToken.findFirst({ where: { userId: me, app: { slug: AGENT_APP_SLUG } }, select: { id: true } })) {
       throw new HandoffError('assign_by_person', `An agent token that is not a seat does not ask for a ${role} by label; a person or a seat of the project adds it`, 403);
     }
     // The seat's row, not the project's seat lock that `fileRequest` takes before it locks its source issue: this

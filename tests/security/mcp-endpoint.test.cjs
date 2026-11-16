@@ -6,8 +6,8 @@ const READ = ALL.filter(scope => scope.endsWith(':read'));
 const CHALLENGE = `Bearer resource_metadata="${ORIGIN}/.well-known/oauth-protected-resource/api/mcp"`;
 const READ_TOOLS = ['whoami', 'workspaces_list', 'projects_list', 'projects_statuses', 'labels_list', 'issues_list', 'issues_get', 'comments_list', 'notes_list', 'notes_get', 'search', 'context_get', 'seat_inbox', 'run_context'];
 const WRITE_TOOLS = ['issues_create', 'issues_update', 'comments_add', 'relations_add', 'worklogs_add', 'notes_create', 'notes_update'];
-// The published documentation is public: these two are offered to every valid token, whatever its scopes.
-const DOCS_TOOLS = ['docs_search', 'docs_get'];
+// The published documentation and the running revision are Collab's own and public: offered to every valid token, whatever its scopes.
+const DOCS_TOOLS = ['docs_search', 'docs_get', 'live_revision'];
 
 // Every app-auth route a tool forwards to, with the scopes the real route declares.
 const ROUTES = {
@@ -26,6 +26,7 @@ const ROUTES = {
   'search': { GET: { requiredScopes: ['issues:read', 'context:read'], scopeMode: 'any' } },
   'ai-context': { GET: { requiredScopes: ['prompts:read'] } },
   'docs': { GET: { requiredScopes: [] } },
+  'live': { GET: { requiredScopes: [] } },
   'seats/me/inbox': { GET: { requiredScopes: ['issues:read'] } },
   'issues/[issueIdOrKey]/run-context': { GET: { requiredScopes: ['issues:read'] } },
 };
@@ -200,7 +201,7 @@ test('every tool forwards to its own route and method', async () => {
     labels_list: 'GET labels', issues_list: 'GET issues', issues_get: 'GET issues/[issueIdOrKey]', issues_create: 'POST issues', issues_update: 'PATCH issues/[issueIdOrKey]',
     comments_list: 'GET issues/[issueIdOrKey]/comments', comments_add: 'POST issues/[issueIdOrKey]/comments', relations_add: 'POST issues/[issueIdOrKey]/relations',
     worklogs_add: 'POST issues/[issueIdOrKey]/work-logs', notes_list: 'GET context', notes_get: 'GET context/[id]', notes_create: 'POST context', notes_update: 'PUT context/[id]',
-    search: 'GET search', context_get: 'GET ai-context', docs_search: 'GET docs', docs_get: 'GET docs',
+    search: 'GET search', context_get: 'GET ai-context', docs_search: 'GET docs', docs_get: 'GET docs', live_revision: 'GET live',
     seat_inbox: 'GET seats/me/inbox', run_context: 'GET issues/[issueIdOrKey]/run-context' };
   for (const [name, route] of Object.entries(expected)) {
     const before = f.calls.length;

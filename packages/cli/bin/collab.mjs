@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { workerCommands, runWorker } from '../src/worker.mjs';
 import { coordinatorCommands, runCoordinator } from '../src/coordinator.mjs';
-import { watchInbox } from '../src/inbox-watch.mjs';
+import { serverAway, watchInbox } from '../src/inbox-watch.mjs';
 import { seatRun } from '../src/seat-run.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { commands, flagName, scopes } from '../src/commands.mjs';
@@ -284,7 +284,9 @@ async function main() {
   if (timeout < 1000 || timeout > 120000) throw new CliError('invalid_timeout', 'Timeout must be 1..120 seconds.');
   const waits = spec.wait && (spec.wait !== 'optional' || options['wait-seconds'] !== undefined);
   const waitSeconds = waits ? converted(options['wait-seconds'] ?? '30', 'integer') : 0;
-  if (waits && (waitSeconds < 1 || waitSeconds > 60)) throw new CliError('invalid_timeout', 'Wait must be 1..60 seconds.');
+  const waitMax = spec.waitMax ?? 60;
+  if (waits && (waitSeconds < 1 || waitSeconds > waitMax)) throw new CliError('invalid_timeout', `Wait must be 1..${waitMax} seconds.`);
+  if (name === 'live' && waits && !query.has('commit')) throw new CliError('required_field', 'Waiting needs --commit: the commit to wait for.');
   if (name === 'reviews wait' && !/^[a-zA-Z0-9_-]{1,128}$/.test(options['reviewer-id'] || '')) {
     throw new CliError('invalid_value', '--reviewer-id must be the immutable registration ID from agents list.');
   }
@@ -417,6 +419,12 @@ async function main() {
   }
   if (waits) {
     const deadline = Date.now() + waitSeconds * 1000;
+    const ready = spec.ready ?? (result => {
+      if (!Array.isArray(result?.items)) throw new CliError('invalid_response', 'Expected inbox items.', 5);
+      return result.items.length;
+    });
+    // The newest comment there is now, by the server's clock: the wait is for one after it.
+    if (name === 'comments wait' && !query.has('since')) query.set('since', (await send()).comments?.at(-1)?.createdAt ?? new Date(0).toISOString());
     let last;
     for (;;) {
       const window = deadline - Date.now();
@@ -424,14 +432,19 @@ async function main() {
         await delay(Math.max(0, window));
         return { ...last, timedOut: true };
       }
-      const result = await send(Math.min(timeout, Math.max(1000, window)));
-      if (!Array.isArray(result?.items)) throw new CliError('invalid_response', 'Expected inbox items.', 5);
-      if (result.items.length) return result;
-      last = result;
+      let result;
+      try { result = await send(Math.min(timeout, Math.max(1000, window))); } catch (error) {
+        // A long wait outlives a deploy: while the server restarts it asks again, until its own time is up.
+        if (!spec.waitMax || !serverAway(error) || Date.now() >= deadline) throw error;
+      }
+      if (result) {
+        if (ready(result)) return result;
+        last = result;
+      }
       const remaining = deadline - Date.now();
-      if (remaining <= 0) return { ...result, timedOut: true };
-      await delay(Math.min(1000, remaining));
-      if (Date.now() >= deadline) return { ...result, timedOut: true };
+      if (last && remaining <= 0) return { ...last, timedOut: true };
+      await delay(Math.max(0, Math.min(spec.pollMs ?? 1000, remaining)));
+      if (last && Date.now() >= deadline) return { ...last, timedOut: true };
     }
   }
   if (!options.all) return send();
