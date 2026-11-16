@@ -5,8 +5,8 @@ import { HandoffError } from './agent-handoffs';
 export { HandoffError };
 type DB = Prisma.TransactionClient | typeof prisma;
 
-/** The request roles each seat role takes; null is an ordinary issue. An issue's request role is `review` where the seat's role is `reviewer`. */
-export const SEAT_TAKES: Record<string, (string | null)[]> = { developer: [null, 'developer'], reviewer: ['review'], release: ['release'], security: ['security'] };
+/** The request roles each seat role takes; null is an ordinary issue. An issue's request role is `review` where the seat's role is `reviewer`. A lead takes the epic it works from, and no request. */
+export const SEAT_TAKES: Record<string, (string | null)[]> = { developer: [null, 'developer'], reviewer: ['review'], release: ['release'], security: ['security'], lead: [null] };
 
 /**
  * The one place that decides who may be assigned an issue. Every path that sets an assignee calls it,
@@ -30,7 +30,7 @@ export async function assertAssignable(
   if (seat.retiredAt) throw new HandoffError('assignee_not_found', 'This seat is retired');
   if (seat.projectId !== issue.projectId) throw new HandoffError('wrong_project', 'A seat can be assigned only issues of its own project', 403);
   if (!SEAT_TAKES[seat.role]?.includes(issue.agentRequestRole)) {
-    throw new HandoffError('role_mismatch', seat.role === 'developer'
+    throw new HandoffError('role_mismatch', seat.role === 'lead' ? 'A lead seat takes no requests' : seat.role === 'developer'
       ? 'A developer seat does not take review, release or security requests'
       : `A ${seat.role} seat takes only ${seat.role === 'reviewer' ? 'review' : seat.role} requests`, 422);
   }

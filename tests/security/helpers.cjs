@@ -75,7 +75,7 @@ function load(file, dependencies = {}, globals = {}) {
       }
       // A fixture that says nothing about seats is called by people and by tokens that are not seats.
       if (!(name in dependencies) && name === '@/lib/agent-seats') {
-        return { HandoffError, seatWriteGuard: async () => {}, assertTokenMayAssign: async () => {}, assignCapReached: async () => false, recordSeatHandoff: async () => {} };
+        return { HandoffError, seatWriteGuard: async () => {}, assertTokenMayAssign: async () => {}, leadPlaces: async () => false, assignCapReached: async () => false, recordSeatHandoff: async () => {} };
       }
       // A fixture that says nothing about seats has no project that uses them, so labels go to their subscribers.
       if (!(name in dependencies) && name === '@/lib/agent-requests') return { labelRequests: async () => false };

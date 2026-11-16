@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultStatusTemplates } from "@/lib/seed-status-templates";
 import { assertAssignable } from "@/lib/issue-assignee";
-import { statusGroup } from "@/constants/project-statuses";
+import { defaultStatusName, statusGroup } from "@/constants/project-statuses";
 
 /**
  * Automatically creates a Personal Workspace with a Default Project and View for a new user
@@ -105,13 +105,14 @@ export async function createPersonalWorkspaceForUser(userId: string, userName: s
     });
 
     if (defaultStatuses.length > 0) {
+      const defaultName = defaultStatusName(defaultStatuses);
       await tx.projectStatus.createMany({
         data: defaultStatuses.map(status => ({
           name: status.name,
           displayName: status.displayName,
           color: status.color,
           order: status.order,
-          isDefault: status.isDefault,
+          isDefault: status.name === defaultName,
           isFinal: status.name === 'done' || status.name === 'completed',
           category: statusGroup(status.name),
           iconName: status.iconName,

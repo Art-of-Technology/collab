@@ -42,6 +42,7 @@ export function ActivityIcon({ action, className }: ActivityIconProps) {
       case 'PRIORITY_CHANGED':
         return <AlertTriangle className="h-3 w-3 text-orange-500" />;
       case 'ASSIGNED':
+      case 'LEAD_ASSIGNED':
       case 'UNASSIGNED':
       case 'REPORTER_CHANGED':
         return <User className="h-3 w-3 text-cyan-500" />;

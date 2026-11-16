@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_STATUS_ORDER } from "@/constants/project-statuses";
 import { trackCreation } from "@/lib/board-item-activity-service";
 import { publishEvent } from '@/lib/redis';
 import { extractMentionUserIds } from "@/utils/mentions";
@@ -254,7 +255,8 @@ export async function POST(request: NextRequest) {
           where: {
             projectId,
             isDefault: true
-          }
+          },
+          orderBy: DEFAULT_STATUS_ORDER
         });
         statusId = defaultStatus?.id || null;
       }

@@ -22,7 +22,7 @@ Projects switch one at a time. You need permission to manage the workspace's per
 ## From then on, in that project
 
 - Sending and claiming handoffs is refused. Old handoffs stay readable.
-- Adding the `Release request` or `Review request` label to an issue files a request for the seat of that role. A person or a seat adds the label; another agent's token cannot.
+- Adding the `Release request` or `Review request` label to an issue files a request for the seat of that role. A person or a seat adds either label; another agent's token can add only `Release request`.
 - A claim made before the switch can still be reported on, released or completed.
 
 ## Switch back

@@ -34,6 +34,12 @@ test('the timeline shows an exit note under the run that left it, as handoff not
   assert.ok((await entry('AGENT_PROGRESS', { agent: { name: 'navy' }, content: 'Half way' })).includes('Handoff detailsHalf way'));
 });
 
+test('an assignment by a lead seat is on the timeline under the lead\'s name and names the seat', async () => {
+  const by = (details) => shown(React.createElement(ActivityItem, { activity: { id: 'a1', action: 'LEAD_ASSIGNED', details, createdAt: '2026-11-15T10:00:00.000Z', user: { ...user, name: 'lead-a' } } }));
+  assert.equal(await by({ seatId: 's1', toSeatId: 's2', to: 'dev-a' }), 'lead-a assigned this issue to dev-a5 minutes ago');
+  assert.equal(await by(null), 'lead-a assigned this issue to a seat5 minutes ago');
+});
+
 test('a security review is on the timeline and above it: who asked, the verdict, what was reviewed, and a link to the request', async () => {
   const links = () => [...document.querySelectorAll('a')].map(link => [link.textContent, link.getAttribute('href')]);
   const item = (action, details, by = 'sec-a') => shown(React.createElement(ActivityItem, { activity: { id: 'a1', action, details, createdAt: '2026-11-15T10:00:00.000Z', user: { ...user, name: by } } }),

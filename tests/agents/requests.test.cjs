@@ -135,6 +135,15 @@ test('requests: one seat asks another, in its own project or in another one', as
     await settle(B);
   });
 
+  await t.test('a request starts in the first status by order where every status is stored as the default (CLB-524)', async () => {
+    // A project made in the web app before the fix. Its first status is stored last and is last by name, so a read without an order does not return it.
+    await raw.projectStatus.updateMany({ where: { projectId: B }, data: { isDefault: true } });
+    await raw.projectStatus.update({ where: { id: `${B}-to_do` }, data: { displayName: 'To do' } });
+    assert.equal((await filed(devA, await issue(devA), { project: 'BB' })).row.statusId, `${B}-to_do`);
+    await raw.projectStatus.updateMany({ where: { projectId: B, name: { not: 'to_do' } }, data: { isDefault: false } });
+    await settle(B);
+  });
+
   await t.test('a request comes from a seat, from an issue of its own project, and goes to a seat that is not itself', async () => {
     const mine = await issue(devA), theirs = await issue(devB), before = await requestCount();
     await refused(file(devA, theirs, { project: 'BB' }), 403, 'wrong_project');

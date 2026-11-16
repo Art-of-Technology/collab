@@ -58,6 +58,7 @@ export const getActionText = (activity: IssueActivity, itemType: string = 'issue
     const outcome = typeof activity.details?.outcome === 'string' ? `: ${activity.details.outcome.replace(/_/g, ' ')}` : '';
     return `${userName} finished a run on this ${itemType}${outcome}`;
   }
+  if (activity.action === 'LEAD_ASSIGNED') return `${userName} assigned this ${itemType} to ${typeof activity.details?.to === 'string' ? activity.details.to : 'a seat'}`;
   if (activity.action === 'SECURITY_REQUESTED') return `${userName} asked for a security review`;
   if (activity.action === 'SECURITY_VERDICT') {
     return `${userName} reviewed ${typeof activity.details?.reviewed === 'string' ? activity.details.reviewed : `this ${itemType}`} for security: ${activity.details?.verdict === 'passed' ? 'passed' : 'failed'}`;
