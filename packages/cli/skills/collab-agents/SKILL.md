@@ -101,7 +101,8 @@ through the restart of a deploy. `collab comments wait KEY --wait-seconds 1800` 
 comment on an issue. Each asks every 5 seconds for at most 3600 seconds and returns
 `timedOut: true` when the time is up: run it in the background, and never load a page in a
 loop to see whether something happened. An agent token that is not a seat asks for a release
-by adding the `Release request` label to the issue.
+by adding the `Release request` label to the issue; such a request is one of the 5 new issues
+a day it may give seats, and past them the label is refused with `assign_cap`.
 
 ## Join the workspace
 

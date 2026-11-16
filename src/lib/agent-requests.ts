@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { NOT_DONE } from '@/lib/agent-runs';
-import { HandoffError, requireSeat, seatWriteGuard } from '@/lib/agent-seats';
+import { ASSIGN_CAP, countSeatHandoff, HandoffError, requireSeat, seatHandoffCapReached, seatWriteGuard } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { emitIssueCreated } from '@/lib/event-bus';
@@ -141,7 +141,8 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
  * issue is still open, so adding the label twice asks once, nor for an issue that is itself a request. With no seat to
  * take it the refusal undoes the whole edit, so the label never sits there asking nobody. The text is the server's
  * and points at the issue, so it is not held to the issue template. An agent token that is not a seat asks for a
- * release this way and for nothing else (decided 16 Nov 2026, CLB-527): a review it asks for only as a seat.
+ * release this way and for nothing else (decided 16 Nov 2026, CLB-527): a review it asks for only as a seat. Its
+ * release request is a new issue for a seat, so rule 7's daily cap counts it with the issues the token creates for seats.
  */
 export async function labelRequests(tx: Prisma.TransactionClient, me: string, issue: { id: string; workspaceId: string; projectId: string },
   added: { id: string; name: string }[]) {
@@ -149,10 +150,13 @@ export async function labelRequests(tx: Prisma.TransactionClient, me: string, is
   if (project?.agentMode !== 'seats') return false;
   const source = await tx.issue.findUnique({ where: { id: issue.id }, select: { id: true, issueKey: true, title: true, priority: true, agentRequestRole: true } });
   if (!source || source.agentRequestRole) return true;
+  let agent: boolean | undefined;
   for (const role of ['review', 'release'] as const) {
     const kind = REQUESTS[role], label = added.find(candidate => candidate.name === kind.label);
     if (!label) continue;
-    if (role !== 'release' && !await tx.agentSeat.findFirst({ where: { userId: me, retiredAt: null }, select: { id: true } }) && await tx.appToken.findFirst({ where: { userId: me, app: { slug: AGENT_APP_SLUG } }, select: { id: true } })) {
+    // An agent token that is not a seat.
+    agent ??= !await tx.agentSeat.findFirst({ where: { userId: me, retiredAt: null }, select: { id: true } }) && !!await tx.appToken.findFirst({ where: { userId: me, app: { slug: AGENT_APP_SLUG } }, select: { id: true } });
+    if (role !== 'release' && agent) {
       throw new HandoffError('assign_by_person', `An agent token that is not a seat does not ask for a ${role} by label; a person or a seat of the project adds it`, 403);
     }
     if (await tx.issue.count({ where: { projectId: issue.projectId, agentRequestRole: role,
@@ -160,11 +164,17 @@ export async function labelRequests(tx: Prisma.TransactionClient, me: string, is
     // The seat's row, not the project's seat lock that `fileRequest` takes before it locks its source issue: this
     // transaction already holds the issue, and the other order could deadlock with it. Retiring a seat waits for the row.
     await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "projectId" = ${issue.projectId} AND "role" = ${kind.seat} AND "isDefault" AND "retiredAt" IS NULL FOR SHARE`;
+    // shortcut: an issue edit is serializable, so it does not see an issue the same token created for a seat after the edit
+    // began; in that instant the count can end one over the cap. A counter row per account closes it if that matters.
+    if (agent && await seatHandoffCapReached(tx, me)) {
+      throw new HandoffError('assign_cap', `An agent token that is not a seat gives seats ${ASSIGN_CAP} new issues a day (UTC), release requests by label among them; a person or a seat of the project asks for this one`, 429);
+    }
     const name = source.issueKey ?? source.id;
     // shortcut: no issue.created event, so semantic search learns of this request only when it is next edited; emit after commit if that matters.
-    await writeRequest(tx, { workspaceId: issue.workspaceId, me, projectId: issue.projectId, role, source: { ...source, projectId: issue.projectId }, labelId: label.id,
+    const made = await writeRequest(tx, { workspaceId: issue.workspaceId, me, projectId: issue.projectId, role, source: { ...source, projectId: issue.projectId }, labelId: label.id,
       title: `${kind.label}: ${name} ${source.title}`.slice(0, 200),
       body: `Asked for by adding the "${kind.label}" label to ${name}.\n\nRead ${name}, its comments and its timeline for what is asked.` });
+    if (agent) await countSeatHandoff(tx, issue.workspaceId, me, made.issue.id, made.issue.assigneeId!);
   }
   return true;
 }

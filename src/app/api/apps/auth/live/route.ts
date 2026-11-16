@@ -24,7 +24,8 @@ async function contains(revision: string, commit: string) {
   if ((unknownUntil.get(commit) ?? 0) > Date.now()) return null;
   let answer: boolean | null = null;
   try {
-    // shortcut: GitHub's public API without a token, 60 requests an hour per address; one request per commit asked about. Give it a token when agents ask about more.
+    // shortcut: GitHub's public API without a token, 60 requests an hour per address. A commit GitHub knows costs one request,
+    // one it does not know (not pushed, mistyped) one a minute for as long as it is asked about. Give it a token when agents ask about more.
     // Page 2 at one commit a page: the comparison without its list of changed files (16 KB instead of 2 MB).
     const response = await fetch(`https://api.github.com/repos/${REPOSITORY}/compare/${commit}...${revision}?per_page=1&page=2`,
       { headers: { accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(5000) });

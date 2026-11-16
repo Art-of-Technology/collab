@@ -120,7 +120,8 @@ const isSeatAccount = async (db: DB, userId: string) => !!await db.agentSeat.fin
 
 /**
  * Rule 7 for a token that sets an assignee. A seat never does. With `existingIssue`, an agent token that is not
- * a seat is refused when the assignee is a seat: it gives seats work only by creating issues, where its daily cap counts.
+ * a seat is refused when the assignee is a seat: it gives seats work only by creating issues and by asking for a
+ * release by label, and its daily cap counts both.
  */
 export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: string | null, existingIssue: boolean): Promise<void> {
   if (await isSeatAccount(db, context.user.id)) throw new HandoffError('seat_scope', 'A seat cannot change who an issue is assigned to', 403);
@@ -130,26 +131,31 @@ export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: 
 }
 
 /**
- * True when this agent account has handed seats its cap of new issues today (UTC), so the issue being created is
- * filed unassigned. Called inside the creating transaction: it holds a lock per token account until that ends.
+ * True when this agent account, known not to be a seat, has handed seats its cap of new issues today (UTC). Called
+ * inside the transaction that would hand over one more: it holds a lock per token account until that ends.
  */
-export async function assignCapReached(tx: Prisma.TransactionClient, context: Caller, assigneeId: string): Promise<boolean> {
-  if (context.app.slug !== AGENT_APP_SLUG || !await isSeatAccount(tx, assigneeId)) return false;
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`assign-cap:${context.user.id}`}))`;
+export async function seatHandoffCapReached(tx: Prisma.TransactionClient, actorId: string): Promise<boolean> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`assign-cap:${actorId}`}))`;
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
-  const handed = await tx.appAuditLog.count({ where: { actorId: context.user.id, action: 'agent_seat.issue_handed', createdAt: { gte: today } } });
-  return handed >= ASSIGN_CAP;
+  return await tx.appAuditLog.count({ where: { actorId, action: 'agent_seat.issue_handed', createdAt: { gte: today } } }) >= ASSIGN_CAP;
 }
 
-/** The durable count behind the cap: one audit row per issue an agent token created for a seat. Unassigning the issue later does not give the slot back. */
+/** For an issue being created: true when it is for a seat and the cap is reached, so it is filed unassigned. */
+export async function assignCapReached(tx: Prisma.TransactionClient, context: Caller, assigneeId: string): Promise<boolean> {
+  return context.app.slug === AGENT_APP_SLUG && await isSeatAccount(tx, assigneeId) && seatHandoffCapReached(tx, context.user.id);
+}
+
+/**
+ * The durable count behind the cap: one audit row per new issue an agent token that is not a seat gave a seat. Unassigning the issue later does not give the slot back.
+ * Stamped here, after the account's lock, and not by the database's default (the transaction's start): a write
+ * that waited for the lock across midnight UTC is counted on the day it was let through.
+ */
+export const countSeatHandoff = (tx: Prisma.TransactionClient, workspaceId: string, actorId: string, issueId: string, assigneeId: string) =>
+  tx.appAuditLog.create({ data: { workspaceId, actorId, action: 'agent_seat.issue_handed', details: { issueId, assigneeId }, createdAt: new Date() } });
+
 export async function recordSeatHandoff(tx: Prisma.TransactionClient, context: Caller, assigneeId: string, issueId: string): Promise<void> {
-  if (context.app.slug === AGENT_APP_SLUG && await isSeatAccount(tx, assigneeId)) {
-    // Stamped here, after the account's lock, and not by the database's default (the transaction's start): a creation
-    // that waited for the lock across midnight UTC is counted on the day it was let through.
-    await tx.appAuditLog.create({ data: { workspaceId: context.workspace.id, actorId: context.user.id,
-      action: 'agent_seat.issue_handed', details: { issueId, assigneeId }, createdAt: new Date() } });
-  }
+  if (context.app.slug === AGENT_APP_SLUG && await isSeatAccount(tx, assigneeId)) await countSeatHandoff(tx, context.workspace.id, context.user.id, issueId, assigneeId);
 }
 
 /**

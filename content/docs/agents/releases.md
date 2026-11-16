@@ -39,6 +39,7 @@ The label files one request for the release seat, related to the issue and repor
 
 - Only the release label works this way. `Review request` from an agent token that is not a seat is refused with `403 assign_by_person`, and the whole update with it.
 - With no release seat in the project the update is refused with `409 no_default_seat`.
+- A token that is not a seat gives seats 5 new issues a day (UTC), and a release request filed by label is one of them. Past that the update is refused with `429 assign_cap` and nothing is changed: a person or a seat of the project asks for that release, or the token asks again the next day. Adding the label while a request is open files nothing and counts nothing.
 
 ## Know what is live
 

@@ -180,6 +180,20 @@ test('handoff review conflicts use fixed guidance only on handoff endpoints', as
   assert.ok(!unrelated.stderr.includes('PRIVATE_SENTINEL'));
 });
 
+test('a release label refused by the daily cap names the cap, and no other 429 does', async t => {
+  let status = 429;
+  const f = await fixture(t, (_req, res) => { res.writeHead(status); res.end(JSON.stringify({ error: 'assign_cap', error_description: 'PRIVATE_SENTINEL' })); });
+  for (const args of [['issues', 'update', 'APP-1', '--labels', '["release"]'], ['issues', 'create', '--project-id', 'p', '--title', 'T', '--labels', '["release"]']]) {
+    const result = await f.run(args);
+    assert.equal(result.error.error, 'assign_cap', result.stderr);
+    assert.match(result.error.message, /5 new issues/);
+    assert.ok(!result.stderr.includes('PRIVATE_SENTINEL'));
+  }
+  assert.equal((await f.run(['comments', 'add', 'APP-1', '--content', 'Text'])).error.error, 'rate_limited');
+  status = 403;
+  assert.equal((await f.run(['issues', 'update', 'APP-1', '--labels', '["release"]'])).error.error, 'forbidden');
+});
+
 test('a handoff or transfer refused because the project uses seats says to file a request', async t => {
   const f = await fixture(t, (_req, res) => {
     res.writeHead(409); res.end(JSON.stringify({ error: 'project_uses_seats', error_description: 'PRIVATE_SENTINEL' }));
@@ -2292,6 +2306,33 @@ test('new waits return the last outage error without requesting after the deadli
     const result = await f.run([...args, '--wait-seconds', '1']);
     assert.equal(result.error.error, 'server_error');
     assert.equal(f.calls.length, 1);
+  }
+});
+
+test('every wait refuses an answer that is not what it waits for, after one request', async t => {
+  let answer;
+  const f = await fixture(t, (_req, res) => { res.setHeader('content-type', 'application/json'); res.end(answer); });
+  for (const args of [
+    ['seat', 'inbox'],
+    ['inbox', 'wait', '--agent', 'reviewer'],
+    ['live', '--commit', 'a'.repeat(40)],
+    ['comments', 'wait', 'APP-1'],
+    ['comments', 'wait', 'APP-1', '--since', '2026-11-16T10:00:00.000Z'],
+  ]) {
+    for (answer of ['null', 'false', '0', '""', '[]', '{}']) {
+      f.calls.length = 0;
+      const result = await f.run([...args, '--wait-seconds', '2']);
+      assert.equal(result.error?.error, 'invalid_response', `${args.join(' ')} answered ${answer}`);
+      assert.equal(f.calls.length, 1, `${args.join(' ')} answered ${answer}`);
+    }
+  }
+  // An answer it does expect, with nothing in it: the wait ends when its time is up and asks no more.
+  answer = JSON.stringify({ items: [], contains: null, comments: [] });
+  for (const args of [['seat', 'inbox'], ['live', '--commit', 'a'.repeat(40)], ['comments', 'wait', 'APP-1', '--since', '2026-11-16T10:00:00.000Z']]) {
+    f.calls.length = 0;
+    const started = Date.now(), result = await f.run([...args, '--wait-seconds', '1']);
+    assert.equal(result.data?.timedOut, true, args.join(' '));
+    assert.ok(f.calls.length <= 2 && Date.now() - started < (windows ? 60000 : 5000), `${args.join(' ')}: ${f.calls.length} requests`);
   }
 });
 

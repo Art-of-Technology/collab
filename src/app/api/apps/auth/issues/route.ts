@@ -369,11 +369,12 @@ export const POST = withAppAuth(
           }
         });
 
+        // Counted before the labels are read: a release request the labels ask for is one more issue for a seat.
+        if (assigneeId) await recordSeatHandoff(tx, context, assigneeId, created.id);
         if (issueData.labels?.length) await enqueueLabelHandoff(tx, context.user.id, created, []);
 
         // Create IssueAssignee record if issue is assigned to someone
         if (assigneeId) {
-          await recordSeatHandoff(tx, context, assigneeId, created.id);
           await tx.issueAssignee.create({
             data: {
               issueId: created.id,

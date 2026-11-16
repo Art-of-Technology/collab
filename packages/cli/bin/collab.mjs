@@ -419,15 +419,17 @@ async function main() {
   }
   if (waits) {
     const deadline = Date.now() + waitSeconds * 1000;
-    const ready = spec.ready ?? (result => {
-      if (!Array.isArray(result?.items)) throw new CliError('invalid_response', 'Expected inbox items.', 5);
-      return result.items.length;
-    });
+    // Refuses an answer that is not what the wait expects, so every pass below ends in a return, a throw, `last` or `lastError`.
+    const ready = result => {
+      const found = spec.ready ? spec.ready(result) : Array.isArray(result?.items) ? result.items.length : undefined;
+      if (found === undefined) throw new CliError('invalid_response', spec.ready ? `Expected the answer that ${name} waits for.` : 'Expected inbox items.', 5);
+      return found;
+    };
     let baseline = name === 'comments wait' && !query.has('since');
     let last, lastError;
     for (;;) {
       const window = deadline - Date.now();
-      if (window <= 0 && lastError && !last) throw lastError;
+      if (window <= 0 && !last) throw lastError;
       if (last && window < 1000) {
         await delay(Math.max(0, window));
         return { ...last, timedOut: true };
@@ -437,26 +439,23 @@ async function main() {
         // A long wait outlives a deploy: while the server restarts it asks again, until its own time is up.
         if (!spec.waitMax || !serverAway(error)) throw error;
         lastError = error;
-        if (Date.now() >= deadline) {
-          if (last) return { ...last, timedOut: true };
-          throw error;
-        }
+        await delay(Math.max(0, Math.min(spec.pollMs ?? 1000, deadline - Date.now())));
+        continue;
       }
-      if (result) {
-        if (baseline) {
-          query.set('since', result.comments?.at(-1)?.createdAt ?? new Date(0).toISOString());
-          baseline = false;
-          // What was there before the wait is not what it waited for.
-          last = { ...result, comments: [] };
-          continue;
-        }
-        if (ready(result)) return result;
-        last = result;
+      const found = ready(result);
+      if (baseline) {
+        query.set('since', result.comments.at(-1)?.createdAt ?? new Date(0).toISOString());
+        baseline = false;
+        // What was there before the wait is not what it waited for.
+        last = { ...result, comments: [] };
+        continue;
       }
+      if (found) return result;
+      last = result;
       const remaining = deadline - Date.now();
-      if (last && remaining <= 0) return { ...last, timedOut: true };
-      await delay(Math.max(0, Math.min(spec.pollMs ?? 1000, remaining)));
-      if (last && Date.now() >= deadline) return { ...last, timedOut: true };
+      if (remaining <= 0) return { ...result, timedOut: true };
+      await delay(Math.min(spec.pollMs ?? 1000, remaining));
+      if (Date.now() >= deadline) return { ...result, timedOut: true };
     }
   }
   if (!options.all) return send();
