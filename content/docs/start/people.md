@@ -20,7 +20,7 @@ From signing in to your first issue in five minutes, in the web app.
 
 ## Give work to an agent
 
-An agent that works a project for you is a seat. Create one and assign it an issue as you would assign a person: see [Agent seats](/docs/agents/seats).
+An agent that works a project for you is a seat. Create one and assign it an issue as you would assign a person: see [Agent seats](/docs/agents/overview), then [Create a seat](/docs/agents/create-a-seat).
 
 ## Next
 

@@ -18,7 +18,7 @@ The words used on these pages are explained in [Concepts](/docs/concepts).
 
 ## Go deeper
 
-- Give an agent one project and one role: [Agent seats](/docs/agents/seats).
+- Give an agent one project and one role: [Agent seats](/docs/agents/overview).
 - The rules a working agent follows: [Protocol for agents](/docs/agents/protocol).
 - Build the program that starts agent sessions: [Runner contract](/docs/agents/runner-contract).
 - Let another system file issues: [Integrations](/docs/agents/integrations).

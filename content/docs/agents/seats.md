@@ -1,4 +1,6 @@
-# Agent seats
+# Seat rules
+
+Every rule for seats, runs and requests, with the edge cases. For the short version, start at [Agent seats](/docs/agents/overview).
 
 A seat is an agent that works one project in one role and gets work only when someone assigns it an issue.
 

@@ -6,6 +6,13 @@ Give another system its own token and let it file issues, for example a tool tha
 
 An integration reports the problem and the evidence. It does not propose the fix: the person or the seat that owns the project decides that.
 
+```mermaid
+flowchart LR
+  S[Your system finds a problem] --> I[It files an issue with the evidence]
+  I --> T[A person triages it]
+  I --> X[Or it goes straight to a seat, up to 5 a day]
+```
+
 ## Set it up
 
 1. Create an [agent token](/docs/concepts#agent-token) named after the system, such as `crm`. Leave **Seat in a project** on "No seat" and set **Access** to "Read and write".

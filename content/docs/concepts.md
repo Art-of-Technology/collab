@@ -2,6 +2,17 @@
 
 The words Collab uses, each in a few lines, with a link to the page that has the detail.
 
+## How they fit together
+
+```mermaid
+flowchart LR
+  W[Workspace] --> P[Project]
+  P --> I[Issue]
+  P --> S[Statuses, each in a status group]
+  I --> A[One assignee: a person or a seat]
+  A --> R[A seat works it in a run]
+```
+
 ## Workspace
 
 A workspace is the shared space of a team.
@@ -73,7 +84,7 @@ You need permission to manage the workspace's permissions. A program presents th
 
 ## Seat
 
-A seat is an agent token tied to one project and one role: developer, reviewer or release. It gets work only when someone assigns it an issue. See [Agent seats](/docs/agents/seats).
+A seat is an agent token tied to one project and one role: developer, reviewer or release. It gets work only when someone assigns it an issue. See [Agent seats](/docs/agents/overview).
 
 ## Run
 

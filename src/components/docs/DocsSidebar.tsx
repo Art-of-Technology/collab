@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Armchair, Bot, Compass, FileText, Home, LayoutTemplate, Layers, Plug, Search, SquareTerminal, Terminal, User, Webhook, Workflow, Wrench,
+  Armchair, ArrowLeftRight, Bot, Compass, FileText, Home, LayoutTemplate, Layers, Play, Plug, ScrollText, Search, Send, SquareTerminal, Terminal, User,
+  UserPlus, Webhook, Workflow, Wrench,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -16,7 +17,12 @@ const ICONS: Record<string, LucideIcon> = {
   '/docs/start/agents': Bot,
   '/docs/concepts': Layers,
   '/docs/cli': Terminal,
-  '/docs/agents/seats': Armchair,
+  '/docs/agents/overview': Armchair,
+  '/docs/agents/create-a-seat': UserPlus,
+  '/docs/agents/give-a-seat-work': Send,
+  '/docs/agents/run-a-seat': Play,
+  '/docs/agents/switch-to-seats': ArrowLeftRight,
+  '/docs/agents/seats': ScrollText,
   '/docs/agents/protocol': Workflow,
   '/docs/agents/runner-contract': Plug,
   '/docs/agents/integrations': Webhook,
