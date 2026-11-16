@@ -6,7 +6,7 @@ A seat is an agent that works one project in one role and gets work only when so
 
 ## What a seat is
 
-- One project and one role: developer, reviewer or release. A project has at most one active release seat.
+- One project and one role: developer, reviewer, release or security. A project has at most one active release seat.
 - A service account with its own name, backed by an agent token. It cannot sign in.
 - Optionally an owner: the person whose logins run it.
 
@@ -28,7 +28,7 @@ Making an existing agent name a seat changes its tokens at once: from then on th
 Assign the issue to the seat, as you would to a person. The assignee picker marks seats and offers only the seats of the issue's project. Until a project is selected, it offers no seats.
 
 - A developer seat takes ordinary issues.
-- A reviewer seat takes only review requests, and a release seat only release requests. A label does not make an issue a request.
+- A reviewer seat takes only review requests, a release seat only release requests, and a security seat only security requests. A label does not make an issue a request.
 - Moving an issue to another project takes it from its seat. The issue's activity says why.
 
 ## What a seat's token can change
@@ -116,7 +116,7 @@ A session starts with no memory of the issue. One read gives it what it needs:
 - `lastExitNote`: the exit note of the last run that finished, or `null`.
 - `commentsSince`: the comments made after that run ended, oldest first. When no run has finished, all comments.
 - `blockers`: the issues linked as blocking this one, each with its status, so you can see which are done.
-- `requests`: the requests linked to this issue, each with its `requestRole` and status.
+- `requests`: the requests linked to this issue, each with its `requestRole` and status. A security request that has its verdict also has `verdict` and `reviewed`.
 - `requestFor`: when the issue is itself a request, the non-request issues it blocks or relates to from its own side.
 - `commands`: `collab` commands that fetch the rest (the project's context, the earlier comments and the timeline) and the two that end the session's work: a request and the finish.
 
@@ -126,7 +126,7 @@ Any token that can read the workspace's issues can read an issue's run context. 
 
 ## Ask another seat: a request
 
-A seat asks for a review, a release or work in another project by filing a request. A request is a new issue in the target project, assigned to that project's default seat for the role and linked to the issue it came from.
+A seat asks for a review, a release, a security review or work in another project by filing a request. A request is a new issue in the target project, assigned to that project's default seat for the role and linked to the issue it came from.
 
 `POST /api/apps/auth/seats/me/requests`:
 
@@ -139,11 +139,11 @@ A seat asks for a review, a release or work in another project by filing a reque
 }
 ```
 
-1. Choose the `role`: `review` goes to the reviewer seat, `release` to the release seat, `developer` to the developer seat.
+1. Choose the `role`: `review` goes to the reviewer seat, `release` to the release seat, `security` to the security seat, `developer` to the developer seat.
 2. Name the issue the request comes from in `fromIssue`. It must be an issue of the seat's own project.
 3. For another project, add `project`: its id or its issue prefix. Without it the request stays in the seat's own project.
 4. Write the `title` and the `body`. The request is a Task, so the body needs the sections of the workspace's Task template when the workspace enforces templates. State the problem and the evidence, not the fix.
-5. Add `"blocks": true` when the source issue cannot go on until the request is done. The request is then linked as blocking it; otherwise as related.
+5. Add `"blocks": true` when the source issue cannot go on until the request is done. The request is then linked as blocking it; otherwise as related. A security request always blocks: see [Security review](#security-review).
 
 From the CLI: `collab seat request --from-issue AA-12 --role review --title "Review the change for AA-12" --body-file request.md`, with `--project <id or prefix>` for another project and `--blocks true`.
 
@@ -157,6 +157,39 @@ The reply contains `issue` with the request's `id` and `issueKey`. Then finish t
 - The seat that filed a request can comment on it, also in another project. It can change nothing else there.
 - A comment by someone else on the request brings the source issue back to the seat's inbox with reason `reply` when its run finished `blocked`. A review request that is done brings an issue in review back with `review_returned`.
 - A request to a release seat that has not read its inbox for 10 minutes still succeeds. Inbox reads are recorded at most once a minute, so the 10 minutes can be up to a minute short. The reply carries `"warning": "seat_idle"` and the request gets a comment that says so: tell a person, because the release seat may not be running.
+
+## Security review
+
+A security seat gives a change an independent read before it goes on. Any seat asks for one with a request of role `security`.
+
+| Step | Who | What happens |
+| --- | --- | --- |
+| 1 | The asking seat | Files the request with `"role": "security"`, then finishes its run `blocked` with `blockedBy` naming the request. |
+| 2 | Collab | Assigns the request to the project's default security seat and links it as blocking the source issue, also when the caller sent `"blocks": false`. The reply says `"blocks": true`. |
+| 3 | The security seat | Works the request and finishes it `done` with `"verdict"`: `"passed"` or `"failed"`, and `"reviewed"`: the commit or pull request it read. The findings go in the exit note. |
+| 4 | Collab | Writes the verdict to the timeline of the request and of the source issue. The source issue returns to its seat's inbox with reason `blocker_resolved`, whatever the verdict. |
+
+From the CLI:
+
+```sh
+collab seat request --from-issue AA-12 --role security --title "Security review of AA-12" --body-file request.md
+collab run finish <run id> --generation <value> --outcome done --verdict failed --reviewed "PR 12 at abc1234" --note-file note.md
+```
+
+Where a person reads it, on the source issue's **Activity** tab:
+
+- Above the timeline, one line lists every security request of the issue with where it stands: open, passed, failed, or closed without a verdict. Each links to its request.
+- The timeline shows each step in order: who asked, who reviewed, what was reviewed and the verdict, with a link to the request. The request's timeline has the exit note.
+
+The rules:
+
+- Finishing a security request `done` without `verdict` or `reviewed` is refused with `422 exit_state_required`, and `missing` lists them. `reviewed` holds at most 200 characters. Any other finish that carries either is refused with `400 invalid_request`.
+- After `failed`, fix the findings and file a new security request for the new commit. Each request keeps its own verdict, so the issue shows the history: failed, then passed.
+- The next session on the source issue reads the verdict in its [run context](#start-from-the-run-context): the request under `requests` has `verdict` and `reviewed`.
+- The verdict goes to the issue the request was filed for. A link added to the request later moves no verdict.
+- A failed verdict stops no merge and no release by itself. It is a record, and the issue comes back to its seat.
+- A person who moves a security request to a done status by hand leaves no verdict. The line above the timeline then shows it as closed without a verdict.
+- A project with no security seat refuses the request with `409 no_default_seat`. No label files a security request.
 
 ## Finish a run
 
@@ -175,10 +208,10 @@ The next run on an issue starts with no memory. Leave an exit note for the next 
 
 1. Choose the `outcome`: `done`, `in_review` or `blocked`.
 2. Write the `note` with the four headings `## Done`, `## Decisions`, `## Evidence` and `## Next`, each on a line of its own. It holds at most 16,000 characters.
-3. For `in_review`, say what the issue waits for: `reviewRequest` (a review request the caller filed, linked to this issue) or `askedUser` (the id of a person in the workspace). For `blocked`: `blockedBy` (an issue linked as blocking this one) or `askedUser`.
+3. For `in_review`, say what the issue waits for: `reviewRequest` (a review request the caller filed, linked to this issue) or `askedUser` (the id of a person in the workspace). For `blocked`: `blockedBy` (an issue linked as blocking this one) or `askedUser`. A security request that finishes `done` names its `verdict` and what was `reviewed`: see [Security review](#security-review).
 4. Optionally name the `status` to move the issue to, and report the run's `usage`.
 
-From the CLI: `collab run finish <run id> --generation <value> --outcome done --note-file note.md`, with `--status`, `--review-request`, `--asked-user`, `--blocked-by` and `--also-finish '["<key>"]'` for the fields above. It does not report `usage`.
+From the CLI: `collab run finish <run id> --generation <value> --outcome done --note-file note.md`, with `--status`, `--review-request`, `--asked-user`, `--blocked-by`, `--verdict`, `--reviewed` and `--also-finish '["<key>"]'` for the fields above. It does not report `usage`.
 
 The reply contains the finished `run` and `statusUnmapped`.
 

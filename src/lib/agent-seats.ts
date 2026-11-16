@@ -9,7 +9,7 @@ export { HandoffError };
 type DB = Prisma.TransactionClient | typeof prisma;
 type Caller = Pick<AppAuthContext, 'user' | 'app' | 'workspace'>;
 
-export const SEAT_ROLES = ['developer', 'reviewer', 'release'] as const;
+export const SEAT_ROLES = ['developer', 'reviewer', 'release', 'security'] as const;
 /** Issues one agent account that is not a seat may hand to seats per UTC day. */
 export const ASSIGN_CAP = 5;
 
@@ -23,7 +23,7 @@ interface SeatInput {
  * token in one step; asking again under the same name gives the same seat a further token.
  */
 export async function createSeat(input: SeatInput) {
-  if (!(SEAT_ROLES as readonly string[]).includes(input.role)) throw new HandoffError('invalid_role', 'A seat is a developer, a reviewer or a release seat');
+  if (!(SEAT_ROLES as readonly string[]).includes(input.role)) throw new HandoffError('invalid_role', 'A seat is a developer, a reviewer, a release or a security seat');
   const minted = await createAgentToken({
     workspaceId: input.workspaceId, actorId: input.actorId, name: input.name, access: 'write', expiresInDays: input.expiresInDays,
     seat: (tx, account) => writeSeat(tx, input, account),

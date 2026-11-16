@@ -16,7 +16,8 @@ import {
   Play,
   Pause,
   Square,
-  Eye
+  Eye,
+  ShieldCheck
 } from 'lucide-react';
 import { ActivityIconProps } from '../types/activity';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,9 @@ export function ActivityIcon({ action, className }: ActivityIconProps) {
         return <Move className="h-3 w-3 text-purple-500" />;
       case 'STATUS_CHANGED':
         return <ArrowRightLeft className="h-3 w-3 text-indigo-500" />;
+      case 'SECURITY_REQUESTED':
+      case 'SECURITY_VERDICT':
+        return <ShieldCheck className="h-3 w-3 text-teal-500" />;
       case 'PRIORITY_CHANGED':
         return <AlertTriangle className="h-3 w-3 text-orange-500" />;
       case 'ASSIGNED':

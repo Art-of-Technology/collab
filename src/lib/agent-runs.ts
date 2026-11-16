@@ -129,6 +129,7 @@ const amount = z.number().finite().nonnegative(), tally = z.number().int().nonne
 const finishSchema = z.object({
   event: z.literal('finish'), generation: text(128), outcome: z.enum(['done', 'in_review', 'blocked']), note: text(16_000),
   status: text(64).optional(), reviewRequest: text(128).optional(), askedUser: text(128).optional(), blockedBy: text(128).optional(),
+  verdict: z.enum(['passed', 'failed']).optional(), reviewed: text(200).optional(),
   // The shape a managed worker reports (`workerSchema` in src/lib/agent-handoffs.ts), so one reader serves both.
   usage: z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), chargedUSD: amount, reservedUSD: amount, estimatedUSD: amount, unknownUSD: amount,
     restarts: z.number().int().min(0).max(100), starts: tally, totalStarts: tally,
@@ -262,14 +263,16 @@ export async function actOnRun(context: Caller, runId: string, input: z.infer<ty
 }
 
 type Finish = z.infer<typeof finishSchema>;
-const ISSUE = { id: true, issueKey: true, projectId: true, assigneeId: true, statusId: true, projectStatus: { select: { name: true, ...statusSelect.select } } } as const;
+const ISSUE = { id: true, issueKey: true, projectId: true, assigneeId: true, statusId: true, agentRequestRole: true, projectStatus: { select: { name: true, ...statusSelect.select } } } as const;
 
 /**
  * Rule 6: a run finishes `done`, `in_review` or `blocked` with an exit note that has all four headings, and says what
  * an issue in review or blocked waits for. It is accepted from the session that holds the run (its account and
  * generation) while the run is not lost and the issue is still the caller's. Anything else is fenced and changes
  * neither the run nor the issue; the note of a run that had not finished is kept on the timeline, so the work is
- * not lost. Returns whether the project had no status to move the issue to.
+ * not lost. A security request finishes done only with its verdict, passed or failed, and what was reviewed (a commit
+ * or a pull request); the verdict is written to the request's timeline and to that of the issue it was filed for.
+ * Returns whether the project had no status to move the issue to.
  */
 async function finish(context: Caller, run: { id: string; issueId: string; seatId: string | null; runner: string; seat: { role: string } | null }, input: Finish) {
   const me = context.user.id, workspaceId = context.workspace.id;
@@ -331,9 +334,25 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
       waits.askedUser = asked.id;
     }
 
+    const security = issue.agentRequestRole === 'security' && input.outcome === 'done';
+    const lacking = security ? (['verdict', 'reviewed'] as const).filter(name => !input[name]) : [];
+    if (lacking.length) throw incomplete('exit_state_required', 'A security request is finished done with a verdict, passed or failed, and reviewed: the commit or pull request that was read', lacking);
+    if (!security && (input.verdict || input.reviewed)) throw new HandoffError('invalid_request', 'Only a security request that finishes done takes a verdict');
+
     // Every issue here is in one project: when it has no status for the outcome, the first issue already says so.
     const unmapped = await settle(tx, me, workspaceId, issue, input, now);
     await entry(issue, 'AGENT_RUN_FINISHED', { runId: run.id, ...waits });
+    if (security) {
+      // The issue the request was filed for is read from what filing wrote, never from the request's links: a link
+      // somebody added later would put a verdict on an issue nobody reviewed. A request that asked for a review of
+      // its own has a second such entry, which names that request and no issue it is for.
+      const filedFor = (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'SECURITY_REQUESTED' }, select: { details: true } }))
+        .map(row => JSON.parse(row.details ?? '{}').forIssueId).find(id => typeof id === 'string');
+      const source = filedFor ? await tx.issue.findFirst({ where: { id: filedFor, workspaceId }, select: { id: true, projectId: true } }) : null;
+      await tx.issueActivity.createMany({ data: [issue, ...(source ? [source] : [])].map(target => ({ action: 'SECURITY_VERDICT', itemType: 'ISSUE', itemId: target.id,
+        userId: me, workspaceId, projectId: target.projectId, details: JSON.stringify({ verdict: input.verdict, reviewed: input.reviewed,
+          requestId: issue.id, requestKey: issue.issueKey ?? issue.id, runId: run.id, seatId: run.seatId }) })) });
+    }
     for (const { id } of extras) {
       const extra = await tx.issue.findFirst({ where: { id }, select: ISSUE });
       if (!extra) throw new HandoffError('not_found', 'alsoFinish names an issue that is not in this workspace', 404);
@@ -385,8 +404,8 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
 /**
  * What a fresh session needs to work an issue, in one read: the issue, the exit note of the last run that finished, the
  * comments made after that run ended (all of them when no run has finished), the issues linked as blocking it, the
- * requests linked to it, and for a request the issues it was filed for (the ones it blocks or relates to from its own
- * side, which is how filing links it). A run that ended without a note moves nothing:
+ * requests linked to it (a security request with its verdict, once it has one), and for a request the issues it was
+ * filed for (the ones it blocks or relates to from its own side, which is how filing links it). A run that ended without a note moves nothing:
  * what was said since the last note is still what the next session lacks. A read like any other: every token that
  * reads the workspace's issues gets it.
  */
@@ -406,32 +425,64 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     ...issue.targetRelations.map(relation => ({ blocksMe: relation.relationType === 'BLOCKS', filedFor: false, issue: relation.sourceIssue })),
   ];
   const key = issue.issueKey ?? issue.id;
+  const reviewed = others.filter(other => other.issue.agentRequestRole === 'security').map(other => other.issue.id);
+  // Oldest first, so a request that was reopened and judged again shows its last verdict.
+  const verdicts = new Map((reviewed.length ? await prisma.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: { in: reviewed }, action: 'SECURITY_VERDICT' },
+    orderBy: { createdAt: 'asc' }, select: { itemId: true, details: true } }) : []).map(row => [row.itemId, JSON.parse(row.details ?? '{}')]));
+  const security = issue.agentRequestRole === 'security';
   return {
     issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, description: issue.description, type: issue.type, priority: issue.priority, projectId: issue.projectId,
       status: issue.projectStatus?.name ?? null, category: categoryOf(issue.projectStatus), assigneeId: issue.assigneeId, agentRequestRole: issue.agentRequestRole },
     lastExitNote: last?.note ?? null,
     commentsSince,
     blockers: others.filter(other => other.blocksMe).map(other => toRef(other.issue)),
-    requests: others.filter(other => other.issue.agentRequestRole).map(other => toRef(other.issue)),
+    requests: others.filter(other => other.issue.agentRequestRole).map(other => ({ ...toRef(other.issue),
+      ...(verdicts.has(other.issue.id) && { verdict: verdicts.get(other.issue.id).verdict, reviewed: verdicts.get(other.issue.id).reviewed }) })),
     // Filing a request links it to its source from the request's side: it blocks the source or relates to it.
     requestFor: issue.agentRequestRole ? others.filter(other => other.filedFor && !other.issue.agentRequestRole).map(other => toRef(other.issue)) : [],
     // Where the rest is: the project's context, what was said before the last note, and the timeline, which holds a late exit note.
     commands: [`collab context get --project-id ${issue.projectId}`, `collab comments list ${key}`, `collab issues activity ${key}`,
-      `collab seat request --from-issue ${key} --role review|release|developer --title TITLE --body-file FILE`,
-      'collab run finish RUN_ID --generation GENERATION --outcome done|in_review|blocked --note-file FILE'],
+      `collab seat request --from-issue ${key} --role review|release|security|developer --title TITLE --body-file FILE`,
+      `collab run finish RUN_ID --generation GENERATION --outcome done|in_review|blocked --note-file FILE${security ? ' --verdict passed|failed --reviewed COMMIT_OR_PULL_REQUEST' : ''}`],
   };
 }
 
-/** The run that is open on an issue, for its page: who holds it, since when, and whether this person may clear it now. */
+/**
+ * The security requests filed for an issue, oldest first, each where it stands: `open`, `passed` or `failed` with what
+ * was reviewed and by whom, or `closed` when it was closed without a verdict (a person moved it to done by hand).
+ * Read from what filing and finishing wrote on the issue's timeline.
+ */
+export async function securityReviews(issue: { id: string; workspaceId: string }) {
+  const rows = await prisma.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: issue.id, action: { in: ['SECURITY_REQUESTED', 'SECURITY_VERDICT'] } },
+    orderBy: { createdAt: 'asc' }, select: { action: true, details: true, user: { select: { name: true } } } });
+  const reviews = new Map<string, { requestKey: string; state: string; reviewed?: string; by?: string | null }>();
+  for (const row of rows) {
+    const details = JSON.parse(row.details ?? '{}');
+    // A request's own "asked" entry names the issue it is for, not a request.
+    if (typeof details.requestId !== 'string') continue;
+    reviews.set(details.requestId, row.action === 'SECURITY_VERDICT'
+      ? { requestKey: details.requestKey, state: details.verdict, reviewed: details.reviewed, by: row.user.name }
+      : { requestKey: details.requestKey, state: 'open' });
+  }
+  const waiting = [...reviews].filter(([, review]) => review.state === 'open').map(([id]) => id);
+  const open = new Set((waiting.length ? await prisma.issue.findMany({ where: { id: { in: waiting }, workspaceId: issue.workspaceId, ...NOT_DONE }, select: { id: true } }) : []).map(row => row.id));
+  return [...reviews].map(([id, review]) => review.state === 'open' && !open.has(id) ? { ...review, state: 'closed' } : review);
+}
+
+/**
+ * For an issue's page: the run that is open on it (who holds it, since when, and whether this person may clear it
+ * now) and its security reviews.
+ */
 export async function openRun(userId: string, issueIdOrKey: string) {
   const issue = await findIssueByIdOrKey<{ id: string; workspaceId: string }>(issueIdOrKey, { userId, select: { id: true, workspaceId: true } });
   if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
   await markLost(issue.workspaceId);
+  const security = await securityReviews(issue);
   const run = await prisma.agentRun.findFirst({ where: { issueId: issue.id, endedAt: null }, select: { id: true, state: true, startedAt: true, leaseUntil: true, user: { select: { name: true } } } });
-  if (!run) return { run: null };
+  if (!run) return { run: null, security };
   // What `clearRun` accepts: a lost run, or a run without a lease, from a person who may assign issues.
   const clearable = (run.state === 'lost' || !run.leaseUntil) && (await checkUserPermission(userId, issue.workspaceId, Permission.ASSIGN_TASK)).hasPermission;
-  return { run: { id: run.id, state: run.state, startedAt: run.startedAt, by: run.user.name, clearable } };
+  return { run: { id: run.id, state: run.state, startedAt: run.startedAt, by: run.user.name, clearable }, security };
 }
 
 /**

@@ -21,12 +21,13 @@ const REQUESTS = {
   developer: { seat: 'developer', label: null },
   review: { seat: 'reviewer', label: 'Review request' },
   release: { seat: 'release', label: 'Release request' },
+  security: { seat: 'security', label: null },
 } as const;
 type RequestRole = keyof typeof REQUESTS;
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 export const requestSchema = z.object({
-  project: text(128).optional(), role: z.enum(['developer', 'review', 'release']), title: text(200), body: text(32_000),
+  project: text(128).optional(), role: z.enum(['developer', 'review', 'release', 'security']), title: text(200), body: text(32_000),
   fromIssue: text(128), blocks: z.boolean().optional(),
 }).strict();
 
@@ -34,8 +35,8 @@ export const requestSchema = z.object({
  * Rule 8: a seat asks a seat of a role for work on one of its project's issues. The request is a new Task in the target
  * project (the seat's own when none is named, which is how review and release are asked for), its body held to the
  * workspace's issue template, reported by the asking seat, assigned to the target project's default seat for the role,
- * and linked to the issue it came from: it blocks that issue when `blocks`, else it relates to it. It takes its
- * source's priority.
+ * and linked to the issue it came from: it blocks that issue when `blocks`, else it relates to it. A security request
+ * always blocks, whatever the caller says, and the reply says so. It takes its source's priority.
  * `agentRequestRole` is what makes it a request; the role's label is added for people to see and hands it to nobody.
  * One project has at most five open requests in another; inside a project there is no cap. A request to a release
  * seat that is away still succeeds, with a warning and a comment that says so.
@@ -68,7 +69,7 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${target.id}`}))`;
     await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "userId" = ${me} FOR SHARE`;
     await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${source.id} FOR UPDATE`;
-    const currentSource = await tx.issue.findFirst({ where: { id: source.id, workspaceId }, select: { id: true, projectId: true, priority: true } });
+    const currentSource = await tx.issue.findFirst({ where: { id: source.id, workspaceId }, select: { id: true, issueKey: true, projectId: true, priority: true } });
     if (!currentSource) throw new HandoffError('not_found', 'Issue not found', 404);
     await seatWriteGuard(tx, context, currentSource.projectId);
     const currentSeat = await requireSeat(tx, context);
@@ -82,7 +83,7 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
   // Fire-and-forget, as for every new issue: this is what makes it searchable.
   emitIssueCreated(made.issue, { userId: me, workspaceId, workspaceName: context.workspace.name || '', workspaceSlug: context.workspace.slug || '', source: 'agent-request' },
     { async: true }).catch(() => {});
-  return { issue: { id: made.issue.id, issueKey: made.issue.issueKey }, ...(made.idle && { warning: 'seat_idle' as const }) };
+  return { issue: { id: made.issue.id, issueKey: made.issue.issueKey }, ...(input.role === 'security' && { blocks: true as const }), ...(made.idle && { warning: 'seat_idle' as const }) };
 }
 
 /**
@@ -90,7 +91,7 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
  * default seat for the role and linked to its source. Call it inside a transaction in which that seat cannot be retired.
  */
 async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: string; me: string; projectId: string; from?: string; role: RequestRole;
-  title: string; body: string; source: { id: string; priority: string }; blocks?: boolean; labelId?: string }) {
+  title: string; body: string; source: { id: string; issueKey: string | null; projectId: string; priority: string }; blocks?: boolean; labelId?: string }) {
   const { workspaceId, me, projectId } = input, kind = REQUESTS[input.role];
   const to = await tx.agentSeat.findFirst({ where: { projectId, role: kind.seat, isDefault: true, retiredAt: null },
     select: { userId: true, name: true, lastSeenAt: true } });
@@ -113,7 +114,16 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
     ...(input.labelId && { labels: { connect: { id: input.labelId } } }),
   } });
   await tx.issueAssignee.create({ data: { issueId: issue.id, userId: to.userId, role: 'ASSIGNEE', status: 'APPROVED', assignedAt: now, approvedAt: now, approvedBy: me } });
-  await tx.issueRelation.create({ data: { sourceIssueId: issue.id, targetIssueId: input.source.id, relationType: input.blocks ? 'BLOCKS' : 'RELATES_TO', createdBy: me } });
+  const security = input.role === 'security';
+  await tx.issueRelation.create({ data: { sourceIssueId: issue.id, targetIssueId: input.source.id, relationType: input.blocks || security ? 'BLOCKS' : 'RELATES_TO', createdBy: me } });
+  if (security) {
+    // On both timelines. The request's entry is what its verdict is later written from: the issue it was filed for,
+    // kept where a link added afterwards cannot change it.
+    const asked = (target: { id: string; projectId: string }, details: object) => ({ action: 'SECURITY_REQUESTED', itemType: 'ISSUE', itemId: target.id, userId: me,
+      workspaceId, projectId: target.projectId, details: JSON.stringify(details) });
+    await tx.issueActivity.createMany({ data: [asked(issue, { forIssueId: input.source.id, forIssueKey: input.source.issueKey ?? input.source.id }),
+      asked(input.source, { requestId: issue.id, requestKey: issue.issueKey ?? issue.id })] });
+  }
   // Only a release seat is expected to be there all the time: a project has one, and a release waits on it.
   const idle = kind.seat === 'release' && !(to.lastSeenAt && to.lastSeenAt.getTime() > now.getTime() - IDLE_MS);
   if (idle) {
@@ -151,7 +161,7 @@ export async function labelRequests(tx: Prisma.TransactionClient, me: string, is
     await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "projectId" = ${issue.projectId} AND "role" = ${kind.seat} AND "isDefault" AND "retiredAt" IS NULL FOR SHARE`;
     const name = source.issueKey ?? source.id;
     // shortcut: no issue.created event, so semantic search learns of this request only when it is next edited; emit after commit if that matters.
-    await writeRequest(tx, { workspaceId: issue.workspaceId, me, projectId: issue.projectId, role, source, labelId: label.id,
+    await writeRequest(tx, { workspaceId: issue.workspaceId, me, projectId: issue.projectId, role, source: { ...source, projectId: issue.projectId }, labelId: label.id,
       title: `${kind.label}: ${name} ${source.title}`.slice(0, 200),
       body: `Asked for by adding the "${kind.label}" label to ${name}.\n\nRead ${name}, its comments and its timeline for what is asked.` });
   }

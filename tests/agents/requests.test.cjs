@@ -263,4 +263,78 @@ test('requests: one seat asks another, in its own project or in another one', as
     assert.equal((await filed(devA, source, { project: 'BB', role: 'release' })).reply.warning, undefined);
     await settle(B);
   });
+
+  await t.test('a security request always blocks, and is done only with a verdict that both timelines keep', async () => {
+    const secA = await seat('sec-a', A, 'security'), secB = await seat('sec-b', B, 'security');
+    assert.deepEqual([secA.isDefault, secB.isDefault], [true, true], 'the first security seat of a project is its default');
+    const source = await issue(devA), other = await issue(devA);
+    await refused(file(devA, source, { project: 'CC', role: 'security' }), 409, 'no_default_seat');
+    const start = async (by, target, generation) => (await call(runs.POST, by.token, { body: { issue: target.issueKey, generation, runner: 'test' } }))[1].run.id;
+    const finish = (by, id, generation, sent) => call(one.PATCH, by.token, { params: { id }, body: { event: 'finish', generation, outcome: 'done', note, ...sent } });
+    const timeline = async target => (await raw.issueActivity.findMany({ where: { itemId: target.id, action: { startsWith: 'SECURITY_' } }, orderBy: { createdAt: 'asc' } }))
+      .map(row => [row.action, row.userId, row.projectId, JSON.parse(row.details)]);
+    // Through JSON: the module's objects are another realm's, which a deep comparison does not take as equal.
+    const reviews = async target => JSON.parse(JSON.stringify(await deps['@/lib/agent-runs'].securityReviews({ id: target.id, workspaceId: 'w' })));
+
+    // The caller says it does not block: it blocks all the same, and the reply says so.
+    const asking = await start(devA, source, 's1');
+    const first = await filed(devA, source, { role: 'security', blocks: false });
+    assert.equal(first.reply.blocks, true);
+    assert.deepEqual([first.row.projectId, first.row.assigneeId, first.row.agentRequestRole, first.row.sourceRelations.map(relation => [relation.targetIssueId, relation.relationType])],
+      [A, secA.userId, 'security', [[source.id, 'BLOCKS']]]);
+    assert.deepEqual(await reviews(source), [{ requestKey: first.row.issueKey, state: 'open' }]);
+    assert.equal((await finish(devA, asking, 's1', { outcome: 'blocked', blockedBy: first.row.issueKey }))[0], 200);
+    assert.deepEqual(await offered(devA, source), []);
+    // Only a security seat takes it, and a security seat takes nothing else.
+    for (const [role, who] of [['security', devA], [null, secA], ['review', secA]]) {
+      await assert.rejects(assignee.assertAssignable(prisma, { workspaceId: 'w', projectId: A, agentRequestRole: role }, who.userId), { code: 'role_mismatch', status: 422 });
+    }
+
+    // Done needs the verdict and what was reviewed; a refusal lists what is missing and changes nothing.
+    const reviewing = await start(secA, first.row, 'v1');
+    assert.deepEqual((await refused(finish(secA, reviewing, 'v1'), 422, 'exit_state_required')).missing, ['verdict', 'reviewed']);
+    assert.deepEqual((await refused(finish(secA, reviewing, 'v1', { verdict: 'passed' }), 422, 'exit_state_required')).missing, ['reviewed']);
+    await refused(finish(secA, reviewing, 'v1', { verdict: 'maybe', reviewed: 'PR 12' }), 400, 'invalid_request');
+    await refused(finish(secA, reviewing, 'v1', { outcome: 'blocked', askedUser: person, verdict: 'passed', reviewed: 'PR 12' }), 400, 'invalid_request');
+    assert.equal((await raw.agentRun.findUniqueOrThrow({ where: { id: reviewing } })).endedAt, null);
+    // A link somebody adds later moves no verdict: it goes to the issue the request was filed for. Nor does a second
+    // opinion the security seat asks for on its own request.
+    await raw.issueRelation.create({ data: { sourceIssueId: first.row.id, targetIssueId: other.id, relationType: 'BLOCKS', createdBy: devA.userId } });
+    const opinion = await filed(secA, first.row, { role: 'security', project: 'BB' });
+    await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal((await finish(secA, reviewing, 'v1', { verdict: 'failed', reviewed: 'PR 12 at abc1234' }))[0], 200);
+    const failed = { verdict: 'failed', reviewed: 'PR 12 at abc1234', requestId: first.row.id, requestKey: first.row.issueKey, runId: reviewing, seatId: secA.id };
+    assert.deepEqual(await timeline(first.row), [['SECURITY_REQUESTED', devA.userId, A, { forIssueId: source.id, forIssueKey: source.issueKey }],
+      ['SECURITY_REQUESTED', secA.userId, A, { requestId: opinion.row.id, requestKey: opinion.row.issueKey }], ['SECURITY_VERDICT', secA.userId, A, failed]]);
+    assert.deepEqual(await timeline(source), [['SECURITY_REQUESTED', devA.userId, A, { requestId: first.row.id, requestKey: first.row.issueKey }], ['SECURITY_VERDICT', secA.userId, A, failed]]);
+    assert.deepEqual(await timeline(other), []);
+    // The issue comes back whatever the verdict, and its next session reads the verdict with the request.
+    assert.deepEqual(await offered(devA, source), ['blocker_resolved']);
+    const context = await deps['@/lib/agent-runs'].runContext({ user: { id: devA.userId }, workspace: { id: 'w' } }, source.issueKey);
+    assert.deepEqual([...context.requests].map(request => [request.issueKey, request.requestRole, request.verdict, request.reviewed]), [[first.row.issueKey, 'security', 'failed', 'PR 12 at abc1234']]);
+
+    await raw.issue.update({ where: { id: opinion.row.id }, data: { statusId: `${B}-done` } });
+    // The fix gets a request of its own, here in another project: each keeps its verdict, so the issue shows the history.
+    const second = await filed(devA, source, { role: 'security', project: 'BB', blocks: true });
+    assert.deepEqual([second.row.projectId, second.row.assigneeId, second.reply.blocks], [B, secB.userId, true]);
+    const again = await start(secB, second.row, 'v2');
+    assert.equal((await finish(secB, again, 'v2', { verdict: 'passed', reviewed: 'PR 12 at def5678' }))[0], 200);
+    assert.deepEqual((await timeline(source)).map(([action, by, project, details]) => [action, by, project, details.verdict ?? details.requestKey]), [
+      ['SECURITY_REQUESTED', devA.userId, A, first.row.issueKey], ['SECURITY_VERDICT', secA.userId, A, 'failed'],
+      ['SECURITY_REQUESTED', devA.userId, A, second.row.issueKey], ['SECURITY_VERDICT', secB.userId, A, 'passed']]);
+    // What the issue's page reads: every request with where it stands, oldest first.
+    const third = await filed(devA, source, { role: 'security' });
+    const closed = await filed(devA, source, { role: 'security' });
+    await raw.issue.update({ where: { id: closed.row.id }, data: { statusId: `${A}-done` } });
+    assert.deepEqual(await reviews(source), [
+      { requestKey: first.row.issueKey, state: 'failed', reviewed: 'PR 12 at abc1234', by: 'sec-a' },
+      { requestKey: second.row.issueKey, state: 'passed', reviewed: 'PR 12 at def5678', by: 'sec-b' },
+      { requestKey: third.row.issueKey, state: 'open' }, { requestKey: closed.row.issueKey, state: 'closed' }]);
+
+    // Nothing but a security request that finishes done takes a verdict.
+    const plain = await issue(devA), plainRun = await start(devA, plain, 'p1');
+    await refused(finish(devA, plainRun, 'p1', { verdict: 'passed', reviewed: 'PR 12' }), 400, 'invalid_request');
+    assert.equal((await finish(devA, plainRun, 'p1'))[0], 200);
+    await settle(A); await settle(B);
+  });
 });

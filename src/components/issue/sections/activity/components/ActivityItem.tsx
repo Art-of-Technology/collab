@@ -1,6 +1,7 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
+import { useParams } from "next/navigation";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
 import { ActivityItemProps } from "../types/activity";
 import { ActivityIcon } from "./ActivityIcon";
@@ -11,6 +12,9 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
   const actionDisplayName = getActionDisplayName(activity.action);
   const actionText = getActionText(activity, itemType);
   const showChangeDetails = shouldShowChangeDetails(activity);
+  const { workspaceId } = useParams<{ workspaceId?: string }>();
+  // A security entry names the other side: the request on the issue it was filed for, that issue on the request.
+  const securityKey = activity.action.startsWith('SECURITY_') ? activity.details?.requestKey ?? activity.details?.forIssueKey : null;
 
   return (
     <div className="group flex gap-2.5 py-1.5 hover:bg-collab-950 rounded-md px-1">
@@ -25,6 +29,9 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
           <span className="text-xs text-collab-400">
             {actionText}
           </span>
+          {typeof securityKey === 'string' && (
+            <a className="text-xs text-collab-400 underline" href={`${workspaceId ? `/${workspaceId}` : ''}/issues/${securityKey}`}>{securityKey}</a>
+          )}
           <span className="text-[10px] text-collab-500">
             {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
           </span>

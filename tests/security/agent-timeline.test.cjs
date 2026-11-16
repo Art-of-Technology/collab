@@ -5,7 +5,7 @@ const { renderToStaticMarkup } = require('react-dom/server');
 const { load } = require('./helpers.cjs');
 const helpers = load('src/components/issue/sections/activity/utils/activityHelpers.ts');
 const { ActivityItem } = load('src/components/issue/sections/activity/components/ActivityItem.tsx', {
-  'react/jsx-runtime': require('react/jsx-runtime'), 'date-fns': require('date-fns'),
+  'react/jsx-runtime': require('react/jsx-runtime'), 'date-fns': require('date-fns'), 'next/navigation': { useParams: () => ({}) },
   '@/components/ui/custom-avatar': { CustomAvatar: () => null },
   './ActivityIcon': { ActivityIcon: () => null }, './ActivityChangeDetails': { ActivityChangeDetails: () => null },
   '../utils/activityHelpers': helpers,
