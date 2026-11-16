@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.10.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.10.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.10.1 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.10.1) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+
+Version 0.10.1 names one refusal: `handoffs send`, `handoffs claim`, `transfers offer` and `transfers accept` on an issue whose project uses seats fail with `project_uses_seats` and say to ask with `collab seat request`, where earlier versions printed the general `conflict`. No command changed.
 
 Version 0.10.0 adds the seat commands (`seat show`, `seat inbox`, `seat request`, `run start`, `run context`, `run renew`, `run finish`) and `collab seat run`, which starts one fresh session per issue assigned to a seat: see [Seats and the interim runner](#seats-and-the-interim-runner-cli-0100). They need the matching server. A flag a command does not declare is now refused with `unknown_flag`; this includes `--project` on a command that takes no project (`inbox`, `handoffs`, `issues get` and others), where it used to be dropped without a word.
 

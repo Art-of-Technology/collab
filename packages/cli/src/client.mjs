@@ -215,6 +215,10 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
           /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
         code = remoteCode; retrievalMessage = 'Resolve or cancel the active review before changing this claim.';
       }
+      if (response.status === 409 && remoteCode === 'project_uses_seats' && /^\/api\/apps\/auth\/agents\/(?:handoffs|transfer-offers)(?:\/[^/?]+)?(?:\?|$)/.test(endpoint) &&
+          /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
+        code = remoteCode; retrievalMessage = "This issue's project uses seats, so it takes no new handoff, claim or transfer. Ask for the work with collab seat request, or have a person assign the issue to a seat.";
+      }
       if (method === 'POST' && body?.event === 'configure' && /^\/api\/apps\/auth\/agents\/worker(?:\?|$)/.test(endpoint) &&
           response.headers.get('content-type')?.includes('application/json')) {
         const rejections = { invalid_request: 400, invalid_json: 400, body_too_large: 413, invalid_labels: 400,
