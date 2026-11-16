@@ -22,6 +22,8 @@ export const fromLead = (projectId: string, lead: string, seat: string) => ({ pr
 interface SeatInput {
   workspaceId: string; actorId: string; projectId: string; role: string; ownerId: string | null;
   name: string; expiresInDays: number; isDefault?: boolean;
+  /** The seat is run by its owner's runner, which fetches its tokens: none is made here, and none is shown to anyone. */
+  byRunner?: boolean;
 }
 
 /**
@@ -30,13 +32,15 @@ interface SeatInput {
  */
 export async function createSeat(input: SeatInput) {
   if (!(SEAT_ROLES as readonly string[]).includes(input.role)) throw new HandoffError('invalid_role', 'A seat is a developer, a reviewer, a release, a security or a lead seat');
+  // A runner is given only the seats of the person it was admitted for, so a seat without an owner would reach no runner.
+  if (input.byRunner && !input.ownerId) throw new HandoffError('owner_required', 'A seat run by a runner needs an owner: it goes to the runner admitted for that person');
   const minted = await createAgentToken({
     workspaceId: input.workspaceId, actorId: input.actorId, name: input.name, access: 'write', expiresInDays: input.expiresInDays,
-    seat: (tx, account) => writeSeat(tx, input, account),
+    seat: (tx, account) => writeSeat(tx, input, account), mint: !input.byRunner,
   });
   if (minted.error) return { error: minted.error };
-  const { seat, ...token } = minted;
-  return { seat, token };
+  const { seat, token: secret, ...token } = minted;
+  return { seat, token: secret ? { ...token, token: secret } : null };
 }
 
 async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account: { id: string; name: string | null }) {
@@ -50,6 +54,13 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
   if (existing && !existing.retiredAt && !same) {
     throw new HandoffError('seat_exists', `${existing.name} is already a ${existing.role} seat; retire it before giving the name another project or role`, 409);
   }
+  if (same && existing.byRunner !== !!input.byRunner) throw new HandoffError('seat_exists', `${existing.name} is run by hand; retire it before giving the seat to a runner`, 409);
+  // Tokens a person once saw, or another person's runner fetched, would work the seat beside its runner's. And a token
+  // a runner fetched for the seat before it was retired would work the seat made again by hand, whoever owns it now.
+  if (!same && await tx.appToken.count({ where: { userId: account.id, isRevoked: false, tokenExpiresAt: { gte: new Date() }, ...(!input.byRunner && { runnerId: { not: null } }) } })) {
+    throw new HandoffError('tokens_exist', input.byRunner ? `${account.name ?? input.name} still has usable tokens; revoke them before a runner runs the seat`
+      : `${account.name ?? input.name} still has usable tokens a runner fetched; revoke them before the seat is made again`, 409);
+  }
   if (!same && input.ownerId && !await tx.workspace.findFirst({
     where: { id: input.workspaceId, OR: [{ ownerId: input.ownerId }, { members: { some: { userId: input.ownerId, status: true } } }] }, select: { id: true },
   })) throw new HandoffError('owner_not_found', "The seat's owner is not an active member of this workspace");
@@ -61,13 +72,13 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
   const isDefault = same ? existing.isDefault : !!input.isDefault || !others.some(seat => seat.isDefault);
   if (!same && isDefault) await tx.agentSeat.updateMany({ where: { id: { in: others.filter(seat => seat.isDefault).map(seat => seat.id) } }, data: { isDefault: false } });
   const data = { workspaceId: input.workspaceId, projectId: input.projectId, role: input.role, ownerId: same ? existing.ownerId : input.ownerId,
-    name: account.name ?? input.name.trim(), isDefault, retiredAt: null };
+    name: account.name ?? input.name.trim(), isDefault, retiredAt: null, byRunner: !!input.byRunner };
   const seat = await tx.agentSeat.upsert({ where: { userId: account.id }, create: { ...data, userId: account.id }, update: data });
   // An account that had work before it took this seat keeps only what the seat may hold.
   const unassigned = same ? [] : await unassignOpen(tx, seat, input.actorId, 'seat_created', seat);
   await tx.appAuditLog.create({ data: {
     workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_seat.created',
-    details: { seatId: seat.id, serviceUserId: account.id, projectId: seat.projectId, role: seat.role, ownerId: seat.ownerId, isDefault, unassigned },
+    details: { seatId: seat.id, serviceUserId: account.id, projectId: seat.projectId, role: seat.role, ownerId: seat.ownerId, isDefault, unassigned, ...(seat.byRunner && { byRunner: true }) },
   } });
   return seat;
 }

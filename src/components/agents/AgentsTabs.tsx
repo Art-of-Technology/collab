@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-export type AgentsTab = 'seats' | 'inbox' | 'floor' | 'handoffs';
+export type AgentsTab = 'seats' | 'inbox' | 'floor' | 'runners' | 'handoffs';
 
 /** The heading and the tabs every Agents page starts with. "Handoffs (old)" is listed only while a project still uses handoffs. */
 export function AgentsTabs({ base, current, handoffs, className = '' }: { base: string; current: AgentsTab; handoffs: boolean; className?: string }) {
@@ -8,6 +8,7 @@ export function AgentsTabs({ base, current, handoffs, className = '' }: { base: 
     ['seats', 'Seats', `${base}/agents`],
     ['inbox', 'Inbox', `${base}/agents/inbox`],
     ['floor', 'Floor', `${base}/agents/floor`],
+    ['runners', 'Runners', `${base}/agents/runners`],
     ...(handoffs ? [['handoffs', 'Handoffs (old)', `${base}/agent-inbox`] as [AgentsTab, string, string]] : []),
   ];
   return <header className={`space-y-4 ${className}`}>

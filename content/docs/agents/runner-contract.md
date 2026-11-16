@@ -302,6 +302,8 @@ Collab applies no rate limit of its own to these calls beyond `request_cap`.
 | Open requests from one project to another | 5 |
 | Release seat counts as idle | 10 minutes without an inbox read |
 | JSON body | 64 KiB |
+| Pairing code | Works once, for 15 minutes |
+| Token fetched by a runner | 30 days |
 
 `collab seat run` reads the inbox every 5 seconds when it is empty and renews every 15 seconds.
 
@@ -311,6 +313,58 @@ Collab applies no rate limit of its own to these calls beyond `request_cap`.
 - Holding the logins and secrets the session uses. Collab stores none of them.
 - Limiting what a session may do on its machine. Collab decides which work a role gets, not which commands a session runs.
 - Spend limits, and the `usage` reported on finish.
+
+## A runner fetches its seats
+
+A runner can get its seats' tokens from Collab instead of having them entered by hand. These two calls are under `/api/runner`, not `/api/apps/auth`, and neither takes a seat's token. People's steps are on [Admit a runner](/docs/agents/admit-a-runner).
+
+| Call | Carries | Does |
+| --- | --- | --- |
+| `POST /api/runner/pair` | Nothing | Starts a pairing: answers with the runner's credential and a code to show. |
+| `POST /api/runner/seats` | The runner credential | Lists the runner's seats, with a token for each seat whose token the runner does not hold. |
+
+1. Call `pair` once. Keep the credential in a file only the runner's user can read. Show the code to the person.
+2. Call `seats` about once a minute, not more often. Until a person has typed the code into Collab it answers `403 runner_pending`.
+3. Keep each token you are given. Send the ids of the tokens you hold as `have` on every call: `{"have":[]}` only while you hold none, because every new token costs the server work.
+4. When a seat is no longer in the answer, stop running it and delete its token.
+
+```sh
+curl -X POST -H "Content-Type: application/json" -d '{"name":"seat-runner on build-1"}' https://collab.example.com/api/runner/pair
+```
+
+```json
+{ "code": "K7QF-M2XD", "credential": "collab_rc_...", "expiresAt": "2026-11-16T10:15:00.000Z" }
+```
+
+```sh
+curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" -H "Content-Type: application/json" -d '{"have":["cmw..."]}' https://collab.example.com/api/runner/seats
+```
+
+```json
+{
+  "runner": { "id": "cmw...", "name": "seat-runner on build-1", "workspaceId": "cm8...", "ownerId": "cm8..." },
+  "seats": [
+    { "id": "cmw...", "name": "App Developer", "role": "developer", "project": { "id": "cm9...", "name": "App", "issuePrefix": "APP" },
+      "tokenId": "cmw...", "expiresAt": "2026-12-16T10:02:11.000Z", "token": "collab_at_..." }
+  ]
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `tokenId`, `expiresAt` | The token to use for the seat: the newest one you said you hold, or the new one. |
+| `token` | Present only when the token is new. It is sent once and never again. |
+| `problem` | Present instead of a token when none could be made this time. Ask again later. `paused` means the seat's agent is switched off or removed: asking never switches it on again, a person does. |
+
+A seat for which you hold no usable token gets a new one. The token it replaces keeps working until you ask again holding the new one, or until a second newer token is made. With three overlapping asks, the first answer can arrive last with a revoked token. If a retained token is refused, ask again with what you hold to get a new one. If an answer or file is lost, ask again with what you hold.
+
+| Error | When |
+| --- | --- |
+| `403 runner_pending` | No person has admitted the runner yet. Ask again. |
+| `401 runner_refused` | The credential is unknown, the runner was removed or replaced, its person left the workspace, or the pairing ran out after 15 minutes. Stop every seat and pair again. |
+| `429 pairing_busy` | 50 pairings are waiting on this server. Try `pair` again in a few minutes. |
+
+A runner credential does nothing else. It reads no issue and writes nothing, and every other call refuses it.
 
 ## A person's own sessions
 

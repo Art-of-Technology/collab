@@ -75,6 +75,11 @@ module.exports = withSentryConfig(
     // For all available options, see:
     // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 
+    // Neither CI nor the release build passes a Sentry token, so source maps were made and never uploaded. Making them
+    // took the server compile to 2.8 GB of the 3 GB heap the builder allows; without them it peaks at 1.7 GB
+    // (measured on 16 Nov 2026 for CLB-516). Switch them on again only together with a token and that memory.
+    sourcemaps: { disable: true },
+
     org: "stech-technology-uk-limited",
     project: "collab",
 
