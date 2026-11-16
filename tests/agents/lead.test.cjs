@@ -211,12 +211,14 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     assert.deepEqual(await give(lead.token, next, capped.userId), [200, undefined]);
 
     // A done issue is not counted, so it is not placed either, nor is one the same call marks done: reopened, they would pass the limit.
-    const closed = await issue(A, { statusId: `${A}-done` }), closing = await issue(A);
-    assert.deepEqual(await give(lead.token, closed, otherA.userId), [403, 'seat_scope']);
-    const both = await send(item.PATCH, lead.token, 'PATCH', { body: { assigneeId: otherA.userId, status: 'done' }, params: { issueIdOrKey: closing.issueKey } });
-    assert.deepEqual([both.status, both.body.error], [403, 'seat_scope']);
-    assert.deepEqual([await holder(closed), await holder(closing)], [null, null]);
-    assert.equal(await raw.issueActivity.count({ where: { itemId: { in: [closed.id, closing.id] }, action: 'LEAD_ASSIGNED' } }), 0);
+    for (const target of [otherA, capped]) {
+      const closed = await issue(A, { statusId: `${A}-done` }), closing = await issue(A);
+      assert.deepEqual(await give(lead.token, closed, target.userId), [403, 'seat_scope']);
+      const both = await send(item.PATCH, lead.token, 'PATCH', { body: { assigneeId: target.userId, status: 'done' }, params: { issueIdOrKey: closing.issueKey } });
+      assert.deepEqual([both.status, both.body.error], [403, 'seat_scope']);
+      assert.deepEqual([await holder(closed), await holder(closing)], [null, null]);
+      assert.equal(await raw.issueActivity.count({ where: { itemId: { in: [closed.id, closing.id] }, action: 'LEAD_ASSIGNED' } }), 0);
+    }
 
     // Two placements at once that each fit: one gets in.
     const raced = await seat('raced-a', A);

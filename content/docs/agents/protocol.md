@@ -124,7 +124,7 @@ The exact rules are under [Lead seat](/docs/agents/seats#lead-seat).
 
 - **Do not act on a mention.** A mention assigns nothing. Work reaches you only by assignment.
 - **Do not take unassigned work.** If it is not in your inbox, it is not yours.
-- **Do not retry a `409`.** `already_running` means someone holds the issue. Take the next one.
+- **Handle `409` by its error code.** For `issue_conflict`, reload the issue and retry. `already_running` means someone holds the issue; take the next one.
 - **Do not keep working after `run_fenced`.** The issue was given to someone else. Stop and leave it.
 - **Do not write outside your project.** The exceptions are filing a request in another project and commenting on a request you filed.
 - **Do not assign issues.** A person, a request, an integration or the project's lead seat does that.

@@ -148,19 +148,19 @@ export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: 
 /**
  * The lead's exception to rule 7, where it is decided: inside the transaction that sets the assignee of an existing
  * issue, which must be serializable, so two placements that each fit the limit cannot both get in. It does nothing and
- * returns false for a caller that is not a lead seat. A lead gives an issue of its project to another seat of that
+ * returns null for a caller that is not a lead seat. A lead gives an issue of its project to another seat of that
  * project, when the issue has no assignee and no lead has placed it before, or when the lead's own placement is still
  * the one in effect. Anything else was decided by someone else and stands (`assign_by_person`). A seat holds at most
  * `LEAD_CAP` open issues from the lead (`lead_cap`). The placement is on the issue's timeline under the lead's name.
  */
 export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<AppAuthContext, 'user'>,
-  issue: { id: string; workspaceId: string; projectId: string; agentRequestRole: string | null }, to: string): Promise<boolean> {
+  issue: { id: string; workspaceId: string; projectId: string; agentRequestRole: string | null }, to: string): Promise<{ name: string } | null> {
   const me = context.user.id;
   // Both seats' rows, held to the end and read after that: neither is retired while this runs, retiring waits for it,
   // and a retirement that got in first refuses this.
   const rows = await tx.$queryRaw<{ id: string; name: string; userId: string }[]>`SELECT "id", "name", "userId" FROM "AgentSeat" WHERE "userId" IN (${me}, ${to}) ORDER BY "id" FOR SHARE`;
   const lead = await tx.agentSeat.findFirst({ where: { userId: me, role: 'lead', retiredAt: null }, select: { id: true, projectId: true } });
-  if (!lead) return false;
+  if (!lead) return null;
   if (lead.projectId !== issue.projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
   const seat = rows.find(row => row.userId === to);
   if (!seat || to === me) throw new HandoffError('seat_scope', 'A lead seat assigns issues only to the other seats of its project', 403);
@@ -172,12 +172,9 @@ export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<App
   // shortcut: the limit is held where the lead assigns, on what is open then, and the route refuses a placement that
   // leaves the issue done. An issue placed open, then done and reopened, or one restored from Trash, is not refused
   // and counts from then on; hold those paths to it too if a lead ever uses them to get past it.
-  if (await tx.issue.count({ where: fromLead(issue.projectId, me, to) }) >= LEAD_CAP) {
-    throw new HandoffError('lead_cap', `${seat.name} already has ${LEAD_CAP} open issues from the lead; one of them has to be done first`, 429);
-  }
   await tx.issueActivity.create({ data: { action: 'LEAD_ASSIGNED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId: issue.workspaceId, projectId: issue.projectId,
     fieldName: 'assignee', oldValue: current.assigneeId ?? '', newValue: to, details: JSON.stringify({ seatId: lead.id, toSeatId: seat.id, to: seat.name }) } });
-  return true;
+  return { name: seat.name };
 }
 
 /**

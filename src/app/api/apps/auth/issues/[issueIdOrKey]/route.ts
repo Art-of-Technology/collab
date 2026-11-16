@@ -19,7 +19,7 @@ import { TEMPLATE_FIELDS } from '@/lib/issue-templates';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
-import { assertTokenMayAssign, leadPlaces, NOT_DONE, seatWriteGuard } from '@/lib/agent-seats';
+import { assertTokenMayAssign, fromLead, LEAD_CAP, leadPlaces, NOT_DONE, seatWriteGuard } from '@/lib/agent-seats';
 
 // Schema for updating issues
 const UpdateIssueSchema = z.object({
@@ -350,6 +350,7 @@ export const PATCH = withAppAuth(
       // Update issue
       let placedByLead = false;
       const updatedIssue = await prisma.$transaction(async tx => {
+        let leadTarget: { name: string } | null = null;
         const currentAssignee = updateData.assigneeId ? await tx.issue.findUniqueOrThrow({
           where: { id: existingIssue.id }, select: { id: true, workspaceId: true, projectId: true, agentRequestRole: true, assigneeId: true },
         }) : null;
@@ -362,7 +363,8 @@ export const PATCH = withAppAuth(
         }
         // A lead seat's assignment is held to its rules here, on the rows this transaction reads, and leaves its own timeline entry.
         if (updateData.assigneeId && updateData.assigneeId !== currentAssignee?.assigneeId) {
-          placedByLead = await leadPlaces(tx, context, currentAssignee!, updateData.assigneeId);
+          leadTarget = await leadPlaces(tx, context, currentAssignee!, updateData.assigneeId);
+          placedByLead = !!leadTarget;
           if (leadAssignment && !placedByLead) throw new HandoffError('seat_scope', 'A seat cannot change who an issue is assigned to', 403);
         }
         const before = updateData.labels === undefined && !guarded?.enforced ? null : await tx.issue.findUniqueOrThrow({
@@ -425,6 +427,9 @@ export const PATCH = withAppAuth(
         // The lead's limit counts open issues, so a done one, or one this request marks done, would be placed uncounted and could be reopened past it.
         if (placedByLead && !await tx.issue.count({ where: { id: existingIssue.id, ...NOT_DONE } })) {
           throw new HandoffError('seat_scope', 'A lead seat assigns only issues that are not done', 403);
+        }
+        if (leadTarget && updateData.assigneeId && await tx.issue.count({ where: { ...fromLead(currentAssignee!.projectId, context.user.id, updateData.assigneeId), id: { not: existingIssue.id } } }) >= LEAD_CAP) {
+          throw new HandoffError('lead_cap', `${leadTarget.name} already has ${LEAD_CAP} open issues from the lead; one of them has to be done first`, 429);
         }
         if (before) await enqueueLabelHandoff(tx, context.user.id, changed, before.labels.map(label => label.id));
         if (updateData.assigneeId && updateData.assigneeId !== currentAssignee?.assigneeId) {
