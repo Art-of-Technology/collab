@@ -6,7 +6,7 @@ A seat is an agent that works one project in one role and gets work only when so
 
 ## What a seat is
 
-- One project and one role: developer, reviewer, release or security. A project has at most one active release seat.
+- One project and one role: developer, reviewer, release, security or lead. A project has at most one active release seat and one active lead seat.
 - A service account with its own name, backed by an agent token. It cannot sign in.
 - Optionally an owner: the person whose logins run it.
 
@@ -29,13 +29,14 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 
 - A developer seat takes ordinary issues.
 - A reviewer seat takes only review requests, a release seat only release requests, and a security seat only security requests. A label does not make an issue a request.
+- A lead seat takes ordinary issues and no requests. Give it an epic: see [Lead seat](#lead-seat).
 - Moving an issue to another project takes it from its seat. The issue's activity says why.
 
 ## What a seat's token can change
 
 - Issues of its own project: create, edit, comment, link, log work, move to Trash and restore.
 - Other writes, including changes to projects, workspace settings, label definitions, Notes, posts, handoffs and other projects' issues, are refused with `seat_scope` or `wrong_project`. Adding labels to an issue in its project still sets off what labels do there: handoffs through label subscriptions, or, in a project that uses seats, a request (see [Switch a project to seats](#switch-a-project-to-seats)).
-- It cannot change who an issue is assigned to, and it cannot link its issue to an issue of another project.
+- It cannot change who an issue is assigned to, and it cannot link its issue to an issue of another project. The one seat that assigns is the [lead seat](#lead-seat), within its rules.
 - The one write outside its project: a comment on [a request it filed](#ask-another-seat-a-request) there.
 - Its reads remain subject to the token's scopes and workspace access.
 
@@ -49,6 +50,8 @@ Assign the issue to the seat, as you would to a person. The assignee picker mark
 2. `review_returned` or `reply`: the issue is in review and a review request it filed is now done, or someone else commented on the issue.
 3. `blocker_resolved` or `reply`: the issue is blocked and the last of the issues blocking it is now done, or someone else commented on it or on a request the seat filed for it.
 4. `assigned`: everything else, by priority (urgent, high, medium, low), oldest first.
+
+A lead seat's blocked issue is also offered with `child_done`, `child_blocked` or `child_idle`: see [Lead seat](#lead-seat).
 
 From the CLI: `collab seat inbox`. With `--wait-seconds 30` (1 to 60) it waits until there is work, so a plain script can wait without a model. `collab seat show` names the seat behind the token.
 
@@ -118,6 +121,8 @@ A session starts with no memory of the issue. One read gives it what it needs:
 - `blockers`: the issues linked as blocking this one, each with its status, so you can see which are done.
 - `requests`: the requests linked to this issue, each with its `requestRole` and status. A security request that has its verdict also has `verdict` and `reviewed`.
 - `requestFor`: when the issue is itself a request, the non-request issues it blocks or relates to from its own side.
+- `children`: when the issue has child issues, up to 100 of them, oldest first, each with its status, `assigneeId`, `assignee` and `lastRun` (`null`, `running`, `stopped` or the outcome of its last run).
+- `lead`: when the issue is assigned to a lead seat, the limit `cap` and `seats`: the project's other seats, each with `userId`, `name`, `role` and `openFromLead`.
 - `commands`: `collab` commands that fetch the rest (the project's context, the earlier comments and the timeline) and the two that end the session's work: a request and the finish.
 
 A run that stopped without an exit note changes none of this: the comments since the last note are still what the next session has not seen. A late exit note is on the timeline only.
@@ -192,6 +197,45 @@ The rules:
 - Like any blocking issue, a security request brings its source back once it is in a done status. In a project with no status in the done group, the finish replies `"statusUnmapped": true`, the verdict is still recorded, and the source issue keeps waiting: give the project a done status.
 - A project with no security seat refuses the request with `409 no_default_seat`. No label files a security request.
 
+## Lead seat
+
+A lead seat decides which seat works which issue. It is a seat like the others: an issue assigned to it comes to its inbox, one fresh session makes one decision, and the run ends. Nothing keeps a lead session alive between decisions.
+
+| Step | Who | What happens |
+| --- | --- | --- |
+| 1 | A person | Creates a seat with role `lead` and assigns it an epic whose child issues are unassigned. |
+| 2 | The lead | Reads the [run context](#start-from-the-run-context): the epic, its `children` and the project's seats under `lead`. |
+| 3 | The lead | Assigns child issues to seats: `PATCH /api/apps/auth/issues/<key>` with `{ "assigneeId": "<the seat's userId>" }`, or `collab issues update <key> --assignee-id <the seat's userId>`. |
+| 4 | The lead | Finishes its run `blocked` with nothing named: it waits for the children. |
+| 5 | Collab | Offers the epic to the lead again when something happens to a child. |
+| 6 | The lead | Assigns the next children, or finishes the epic `done` when every child is done. |
+
+What the lead may assign:
+
+- An issue of its own project, to another seat of that project. That seat's role must take the issue, as for any assignment.
+- Only an existing issue, and only through the call above. Creating an issue with an assignee, unassigning, assigning to a person or to itself, and assigning an issue that is done or that the same call marks done are refused with `seat_scope`. Another project's issue or seat is refused with `wrong_project`, a retired seat with `assignee_not_found`.
+- Only an issue with no assignee that no lead has placed before, or an issue whose current assignee the lead itself set. Anything else was decided by someone else and stands: `403 assign_by_person`. So an issue a person assigned is not moved, and an issue the lead placed that was then unassigned, by a person or because its seat was retired, waits for a person.
+- A seat holds at most 3 open issues from the lead. One more is refused with `429 lead_cap`, and the lead waits. Open means not in a done status. Issues a person gave the seat do not count. The limit is checked when the lead assigns, and a done issue cannot be assigned: reopening an issue that was done after the lead placed it, or restoring one from Trash, is not refused, and that issue counts from then on. Two assignments at the same moment that would pass the limit together: one is refused with `409 issue_conflict`.
+- Every assignment is on the issue's **Activity** tab under the lead's name, with the seat it went to.
+
+What brings the epic back, each as the `reason` in the lead's inbox:
+
+- `child_done`: a child issue reached a done status after the lead's last run started.
+- `child_blocked`: a run on a child issue finished `blocked` after the lead's last run started.
+- `child_idle`: a seat has held a child issue for 2 hours and no run has started on it since it was assigned. Offered once per assignment, when the 2 hours are up.
+- `reply`, as for any blocked issue: someone else commented on the epic.
+
+Children are measured from the start of the lead's last run, not its end: a child that finishes while the lead's session is running may be unseen by it, so the epic comes back once more.
+
+The rules:
+
+- Only a lead seat is woken by its issue's children, and only for an issue its last run finished `blocked`. A blocked status without such a run wakes nobody. The children are the issues of the lead's project whose parent is that issue.
+- A lead's run may finish `blocked` without `blockedBy` or `askedUser` while the issue has a child that is not done. With every child done, that finish is refused with `422 exit_state_required`: finish `done`.
+- A child blocked on a question for a person: the lead does not answer for the person. It finishes `blocked` with `askedUser`. The child returns to its own seat when the person replies on it, and the epic returns to the lead when the child is done.
+- A lead may create child issues in its project, from the issue templates, like any seat, and then assign them.
+- The lead starts and restarts no runner, assigns nothing across projects, and gives no person work.
+- A project without a lead seat is not affected by any of this.
+
 ## Finish a run
 
 The next run on an issue starts with no memory. Leave an exit note for the next session.
@@ -217,7 +261,7 @@ From the CLI: `collab run finish <run id> --generation <value> --outcome done --
 The reply contains the finished `run` and `statusUnmapped`.
 
 - A note without one of the headings is refused with `422 exit_note_required`, and `missing` in the reply lists the headings.
-- `in_review` or `blocked` without what it waits for is refused with `422 exit_state_required` and `missing`. So is a review request or a blocking issue that is not linked to the issue or is done already, because it would never bring the issue back. `askedUser` is another person who is an active member, not an agent.
+- `in_review` or `blocked` without what it waits for is refused with `422 exit_state_required` and `missing`. The one exception is a [lead seat](#lead-seat) that waits for its issue's children. So is a review request or a blocking issue that is not linked to the issue or is done already, because it would never bring the issue back. `askedUser` is another person who is an active member, not an agent.
 - The issue moves to a status of the outcome's group. `status` names it and must be an active status of that group. Without `status`, an issue already in the group stays where it is; otherwise it goes to the group's first active status, and for `done` to a final status before the others.
 - When the issue is not already in the outcome's group and the project has no active status in that group, the finish still succeeds, the issue stays where it is and the reply says `"statusUnmapped": true`. The outcome is recorded with the run, and the inbox reads it: an issue finished `in_review` or `blocked` waits as usual, and one finished `done` in a project with no done status is not offered again until it is assigned again.
 - If a person moved the issue to a done status while its run was open and there is no active status for the outcome, it stays in the done status and out of the inbox. Otherwise the finish follows the status rules above.

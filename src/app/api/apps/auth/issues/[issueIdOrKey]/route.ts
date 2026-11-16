@@ -19,7 +19,7 @@ import { TEMPLATE_FIELDS } from '@/lib/issue-templates';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
-import { assertTokenMayAssign, seatWriteGuard } from '@/lib/agent-seats';
+import { assertTokenMayAssign, fromLead, LEAD_CAP, leadPlaces, NOT_DONE, seatWriteGuard } from '@/lib/agent-seats';
 
 // Schema for updating issues
 const UpdateIssueSchema = z.object({
@@ -271,8 +271,9 @@ export const PATCH = withAppAuth(
       }
 
       // Handle assignee change
+      let leadAssignment = false;
       if (updateData.assigneeId !== undefined) {
-        await assertTokenMayAssign(prisma, context, updateData.assigneeId, true);
+        leadAssignment = await assertTokenMayAssign(prisma, context, updateData.assigneeId, true, true);
         if (updateData.assigneeId) await assertAssignable(prisma, existingIssue, updateData.assigneeId);
         update.assigneeId = updateData.assigneeId;
       }
@@ -347,10 +348,25 @@ export const PATCH = withAppAuth(
         ? await getWorkspaceTemplates(context.workspace.id) : null;
 
       // Update issue
+      let placedByLead = false;
       const updatedIssue = await prisma.$transaction(async tx => {
+        let leadTarget: { name: string } | null = null;
         const currentAssignee = updateData.assigneeId ? await tx.issue.findUniqueOrThrow({
-          where: { id: existingIssue.id }, select: { assigneeId: true },
+          where: { id: existingIssue.id }, select: { id: true, workspaceId: true, projectId: true, agentRequestRole: true, assigneeId: true },
         }) : null;
+        if (leadAssignment && currentAssignee && updateData.assigneeId) {
+          if (!await assertTokenMayAssign(tx, context, updateData.assigneeId, true, true)) {
+            throw new HandoffError('seat_scope', 'A seat cannot change who an issue is assigned to', 403);
+          }
+          await seatWriteGuard(tx, context, currentAssignee.projectId);
+          await assertAssignable(tx, currentAssignee, updateData.assigneeId);
+        }
+        // A lead seat's assignment is held to its rules here, on the rows this transaction reads, and leaves its own timeline entry.
+        if (updateData.assigneeId && updateData.assigneeId !== currentAssignee?.assigneeId) {
+          leadTarget = await leadPlaces(tx, context, currentAssignee!, updateData.assigneeId);
+          placedByLead = !!leadTarget;
+          if (leadAssignment && !placedByLead) throw new HandoffError('seat_scope', 'A seat cannot change who an issue is assigned to', 403);
+        }
         const before = updateData.labels === undefined && !guarded?.enforced ? null : await tx.issue.findUniqueOrThrow({
           where: { id: existingIssue.id }, select: ISSUE_SHAPE_SELECT,
         });
@@ -408,6 +424,15 @@ export const PATCH = withAppAuth(
           },
         });
 
+        // The lead's limit counts open issues, so a done one, or one this request marks done, would be placed uncounted and could be reopened past it.
+        if (placedByLead && !await tx.issue.count({ where: { id: existingIssue.id, ...NOT_DONE } })) {
+          throw new HandoffError('seat_scope', 'A lead seat assigns only issues that are not done', 403);
+        }
+        // shortcut: the limit is held where the lead assigns, on what is open then. An issue placed open, then done and
+        // reopened, or one restored from Trash, is not refused and counts from then on; hold those paths to it too if a lead ever uses them to get past it.
+        if (leadTarget && updateData.assigneeId && await tx.issue.count({ where: { ...fromLead(currentAssignee!.projectId, context.user.id, updateData.assigneeId), id: { not: existingIssue.id } } }) >= LEAD_CAP) {
+          throw new HandoffError('lead_cap', `${leadTarget.name} already has ${LEAD_CAP} open issues from the lead; one of them has to be done first`, 429);
+        }
         if (before) await enqueueLabelHandoff(tx, context.user.id, changed, before.labels.map(label => label.id));
         if (updateData.assigneeId && updateData.assigneeId !== currentAssignee?.assigneeId) {
           const assignee = { role: 'ASSIGNEE', status: 'APPROVED', approvedAt: new Date(), approvedBy: context.user.id } as const;
@@ -421,6 +446,7 @@ export const PATCH = withAppAuth(
 
       // Create activity records
       for (const change of changes) {
+        if (placedByLead && change.fieldName === 'assignee') continue;
         await prisma.issueActivity.create({
           data: {
             action: 'UPDATED',
@@ -454,7 +480,8 @@ export const PATCH = withAppAuth(
       if (error instanceof TemplateRefused) return NextResponse.json(error.refusal, { status: 422 });
       if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });
       if (error instanceof InvalidIssueLabels) return NextResponse.json({ error: 'invalid_labels' }, { status: 400 });
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+      // P2010 with 40001 is the same lost race, reported by the raw row lock in `leadPlaces`.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === 'P2034' || (error.code === 'P2010' && error.meta?.code === '40001'))) {
         return NextResponse.json({ error: 'issue_conflict', error_description: 'Issue changed; reload and retry' }, { status: 409 });
       }
       if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: 'forge_connected_project', error_description: error.message }, { status: 409 });

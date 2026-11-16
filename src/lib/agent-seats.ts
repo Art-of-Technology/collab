@@ -3,15 +3,21 @@ import { prisma } from '@/lib/prisma';
 import { HandoffError } from '@/lib/agent-handoffs';
 import { AGENT_APP_SLUG, createAgentToken } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
-import { SEAT_TAKES } from '@/lib/issue-assignee';
+import { SEAT_TAKES, assertAssignable } from '@/lib/issue-assignee';
 
 export { HandoffError };
 type DB = Prisma.TransactionClient | typeof prisma;
 type Caller = Pick<AppAuthContext, 'user' | 'app' | 'workspace'>;
 
-export const SEAT_ROLES = ['developer', 'reviewer', 'release', 'security'] as const;
+export const SEAT_ROLES = ['developer', 'reviewer', 'release', 'security', 'lead'] as const;
 /** Issues one agent account that is not a seat may hand to seats per UTC day. */
 export const ASSIGN_CAP = 5;
+/** Open issues one seat may hold from its project's lead seat. */
+export const LEAD_CAP = 3;
+/** The issues that are not in a status of the done group. */
+export const NOT_DONE = { OR: [{ statusId: null }, { projectStatus: { OR: [{ category: { not: 'done' } }, { category: null, isFinal: false }] } }] };
+/** The open issues a seat holds because the lead gave them to it: the lead's hand is on the row that made the seat the assignee. */
+export const fromLead = (projectId: string, lead: string, seat: string) => ({ projectId, assigneeId: seat, ...NOT_DONE, helpers: { some: { userId: seat, approvedBy: lead } } });
 
 interface SeatInput {
   workspaceId: string; actorId: string; projectId: string; role: string; ownerId: string | null;
@@ -23,7 +29,7 @@ interface SeatInput {
  * token in one step; asking again under the same name gives the same seat a further token.
  */
 export async function createSeat(input: SeatInput) {
-  if (!(SEAT_ROLES as readonly string[]).includes(input.role)) throw new HandoffError('invalid_role', 'A seat is a developer, a reviewer, a release or a security seat');
+  if (!(SEAT_ROLES as readonly string[]).includes(input.role)) throw new HandoffError('invalid_role', 'A seat is a developer, a reviewer, a release, a security or a lead seat');
   const minted = await createAgentToken({
     workspaceId: input.workspaceId, actorId: input.actorId, name: input.name, access: 'write', expiresInDays: input.expiresInDays,
     seat: (tx, account) => writeSeat(tx, input, account),
@@ -50,7 +56,8 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
   const others = await tx.agentSeat.findMany({
     where: { projectId: input.projectId, role: input.role, retiredAt: null, userId: { not: account.id } }, select: { id: true, isDefault: true },
   });
-  if (input.role === 'release' && others.length) throw new HandoffError('release_seat_exists', 'This project already has a release seat; retire it first', 409);
+  // One lead per project too. Nothing but this check holds it, which is enough under the project's lock taken above.
+  if ((input.role === 'release' || input.role === 'lead') && others.length) throw new HandoffError(`${input.role}_seat_exists`, `This project already has a ${input.role} seat; retire it first`, 409);
   const isDefault = same ? existing.isDefault : !!input.isDefault || !others.some(seat => seat.isDefault);
   if (!same && isDefault) await tx.agentSeat.updateMany({ where: { id: { in: others.filter(seat => seat.isDefault).map(seat => seat.id) } }, data: { isDefault: false } });
   const data = { workspaceId: input.workspaceId, projectId: input.projectId, role: input.role, ownerId: same ? existing.ownerId : input.ownerId,
@@ -119,15 +126,54 @@ export async function seatWriteGuard(db: DB, context: Pick<AppAuthContext, 'user
 const isSeatAccount = async (db: DB, userId: string) => !!await db.agentSeat.findUnique({ where: { userId }, select: { id: true } });
 
 /**
- * Rule 7 for a token that sets an assignee. A seat never does. With `existingIssue`, an agent token that is not
- * a seat is refused when the assignee is a seat: it gives seats work only by creating issues and by asking for a
+ * Rule 7 for a token that sets an assignee. A seat never does, with one exception: a lead seat gives an existing issue
+ * to another seat. Only a caller that goes on to run `leadPlaces` in its write passes `leadPlacesNext`, because that
+ * is what holds the lead to its project, its limit and what people decided. With `existingIssue`, an agent token that
+ * is not a seat is refused when the assignee is a seat: it gives seats work only by creating issues and by asking for a
  * release by label, and its daily cap counts both.
  */
-export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: string | null, existingIssue: boolean): Promise<void> {
-  if (await isSeatAccount(db, context.user.id)) throw new HandoffError('seat_scope', 'A seat cannot change who an issue is assigned to', 403);
+export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: string | null, existingIssue: boolean, leadPlacesNext = false): Promise<boolean> {
+  const seat = await db.agentSeat.findUnique({ where: { userId: context.user.id }, select: { role: true, retiredAt: true } });
+  if (seat) {
+    const leads = leadPlacesNext && existingIssue && !!assigneeId && assigneeId !== context.user.id && seat.role === 'lead' && !seat.retiredAt && await isSeatAccount(db, assigneeId);
+    if (!leads) throw new HandoffError('seat_scope', 'A seat cannot change who an issue is assigned to', 403);
+    return true;
+  }
   if (existingIssue && assigneeId && context.app.slug === AGENT_APP_SLUG && await isSeatAccount(db, assigneeId)) {
     throw new HandoffError('assign_by_person', 'An agent token gives a seat work by creating an issue; an existing issue is assigned to a seat by a person', 403);
   }
+  return false;
+}
+
+/**
+ * The lead's exception to rule 7, where it is decided: inside the transaction that sets the assignee of an existing
+ * issue, which must be serializable, so two placements that each fit the limit cannot both get in. It does nothing and
+ * returns null for a caller that is not a lead seat. A lead gives an issue of its project to another seat of that
+ * project, when the issue has no assignee and no lead has placed it before, or when the lead's own placement is still
+ * the one in effect. Anything else was decided by someone else and stands (`assign_by_person`). The placement is on
+ * the issue's timeline under the lead's name. It returns the seat for the caller's two checks after its update, where
+ * the status the request sets is known: the issue is not done (`seat_scope`), and the seat holds at most `LEAD_CAP`
+ * open issues from the lead (`lead_cap`).
+ */
+export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<AppAuthContext, 'user'>,
+  issue: { id: string; workspaceId: string; projectId: string; agentRequestRole: string | null }, to: string): Promise<{ name: string } | null> {
+  const me = context.user.id;
+  // Both seats' rows, held to the end and read after that: neither is retired while this runs, retiring waits for it,
+  // and a retirement that got in first refuses this.
+  const rows = await tx.$queryRaw<{ id: string; name: string; userId: string }[]>`SELECT "id", "name", "userId" FROM "AgentSeat" WHERE "userId" IN (${me}, ${to}) ORDER BY "id" FOR SHARE`;
+  const lead = await tx.agentSeat.findFirst({ where: { userId: me, role: 'lead', retiredAt: null }, select: { id: true, projectId: true } });
+  if (!lead) return null;
+  if (lead.projectId !== issue.projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
+  const seat = rows.find(row => row.userId === to);
+  if (!seat || to === me) throw new HandoffError('seat_scope', 'A lead seat assigns issues only to the other seats of its project', 403);
+  await assertAssignable(tx, issue, to);
+  const current = await tx.issue.findUniqueOrThrow({ where: { id: issue.id }, select: { assigneeId: true, helpers: { where: { approvedBy: me }, select: { userId: true } } } });
+  const free = current.assigneeId ? current.helpers.some(row => row.userId === current.assigneeId)
+    : !await tx.issueActivity.count({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'LEAD_ASSIGNED' } });
+  if (!free) throw new HandoffError('assign_by_person', 'Someone else decided who has this issue, or took it from the seat the lead gave it to: that stands, and a person assigns it', 403);
+  await tx.issueActivity.create({ data: { action: 'LEAD_ASSIGNED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId: issue.workspaceId, projectId: issue.projectId,
+    fieldName: 'assignee', oldValue: current.assigneeId ?? '', newValue: to, details: JSON.stringify({ seatId: lead.id, toSeatId: seat.id, to: seat.name }) } });
+  return { name: seat.name };
 }
 
 /**

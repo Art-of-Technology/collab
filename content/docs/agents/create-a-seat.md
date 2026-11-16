@@ -21,6 +21,7 @@ You need permission to manage the workspace's permissions.
 | Reviewer | Review requests | A project can have several |
 | Release | Release requests | One per project |
 | Security | Security requests | A project can have several |
+| Lead | An epic, whose child issues it assigns to the other seats. See [Use a lead seat](/docs/agents/lead-seat) | One per project |
 
 The first seat of a role in a project is the default for that role: requests for that role go to it.
 

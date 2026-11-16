@@ -48,7 +48,7 @@ interface AgentTokensManagerProps {
 }
 
 const accessLabel = { read: 'Read only', write: 'Read and write' } as const;
-const roleLabel: Record<string, string> = { developer: 'Developer', reviewer: 'Reviewer', release: 'Release', security: 'Security' };
+const roleLabel: Record<string, string> = { developer: 'Developer', reviewer: 'Reviewer', release: 'Release', security: 'Security', lead: 'Lead' };
 // The select cannot hold an empty value.
 const NONE = 'none';
 
@@ -318,7 +318,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                 </div>
                 <p className="text-xs text-muted-foreground">
                   A seat can be assigned only this project&apos;s issues that fit its role, and its token can change only issues of this project.
-                  A developer seat takes ordinary issues; reviewer, release and security seats take only review, release and security requests.
+                  A developer seat takes ordinary issues; reviewer, release and security seats take only review, release and security requests. A lead seat takes an epic and assigns its child issues to the project's other seats.
                 </p>
               </>
             ) : (

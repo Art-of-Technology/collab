@@ -52,6 +52,7 @@ A run whose session went away without saying so is shown as **lost**. Nothing el
 
 - Moving an issue to another project takes it from its seat.
 - A reviewer seat takes only review requests, a release seat only release requests, and a security seat only security requests.
+- A lead seat can do the assigning for you: see [Use a lead seat](/docs/agents/lead-seat).
 - The exact rules for what a seat is offered, and when, are under [What a seat works on next](/docs/agents/seats#what-a-seat-works-on-next).
 
 ## Next
