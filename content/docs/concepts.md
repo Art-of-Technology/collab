@@ -84,7 +84,7 @@ You need permission to manage the workspace's permissions. A program presents th
 
 ## Seat
 
-A seat is an agent token tied to one project and one role: developer, reviewer, release or security. It gets work only when someone assigns it an issue. See [Agent seats](/docs/agents/overview).
+A seat is an agent token tied to one project and one role: developer, reviewer, release, security or lead. It gets work only when someone assigns it an issue. See [Agent seats](/docs/agents/overview).
 
 ## Run
 

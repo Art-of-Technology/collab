@@ -68,7 +68,7 @@ Takes nothing. Needs `issues:read`. The call does not wait: it answers at once, 
 ```
 
 - At most 50 items, already in the order to work them. An empty inbox is `{ "items": [] }`.
-- `reason` is `resume`, `review_returned`, `reply`, `blocker_resolved` or `assigned`. What each means is under [What a seat works on next](/docs/agents/seats#what-a-seat-works-on-next).
+- `reason` is `resume`, `review_returned`, `reply`, `blocker_resolved` or `assigned`, and for a lead seat also `child_done`, `child_blocked` or `child_idle`. What each means is under [What a seat works on next](/docs/agents/seats#what-a-seat-works-on-next).
 - `category` is the group of the issue's status, or `in_review` or `blocked` when its last run ended that way.
 - `lastRunAt` is when the last run on the issue ended, or `null`.
 - An issue with an open run and an issue in a done status are not listed.
@@ -160,7 +160,7 @@ The session that did the work finishes the run. Needs `issues:write`.
 | `usage` | no | What the run cost. See below. |
 
 - `in_review` must carry `reviewRequest` (a review request this seat filed for the issue) or `askedUser` (the id of a person in the workspace).
-- `blocked` must carry `blockedBy` (an issue linked as blocking this one) or `askedUser`.
+- `blocked` must carry `blockedBy` (an issue linked as blocking this one) or `askedUser`. A lead seat may carry neither while its issue has a child issue that is not done: it waits for the children.
 - `done` carries none of the three.
 - A security request that finishes `done` must carry `verdict` and `reviewed`; no other finish takes them. See [Security review](/docs/agents/seats#security-review).
 - A release seat may add `alsoFinish`: 1 to 20 other release requests to finish with the same note. See [Finish a run](/docs/agents/seats#finish-a-run).
@@ -233,9 +233,11 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `blockers` | The issues linked as blocking this one. |
 | `requests` | The requests linked to this issue. |
 | `requestFor` | When the issue is itself a request: the issues it was filed for. |
+| `children` | Only when the issue has child issues: up to 100, oldest first. Each has the keys below, and `assigneeId`, `assignee` (the name) and `lastRun`: `null`, `running`, `stopped` or the outcome of its last run. |
+| `lead` | Only when the issue is assigned to a lead seat: `cap`, and `seats`, the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. |
 | `commands` | `collab` commands that fetch the rest and end the session's work. |
 
-An issue in `blockers`, `requests` or `requestFor` has `id`, `issueKey`, `title`, `projectId`, `status` and `category`. A request also has `requestRole`; a security request that has its verdict also has `verdict` and `reviewed`.
+An issue in `blockers`, `requests`, `requestFor` or `children` has `id`, `issueKey`, `title`, `projectId`, `status` and `category`. A request also has `requestRole`; a security request that has its verdict also has `verdict` and `reviewed`.
 
 ## File a request: POST seats/me/requests
 

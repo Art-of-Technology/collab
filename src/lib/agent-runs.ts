@@ -1,15 +1,18 @@
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { HandoffError, seatFor, seatWriteGuard } from '@/lib/agent-seats';
+import { HandoffError, LEAD_CAP, NOT_DONE, fromLead, seatFor, seatWriteGuard } from '@/lib/agent-seats';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import { findIssueByIdOrKey } from '@/lib/issue-finder';
 import { checkUserPermission, Permission } from '@/lib/permissions';
 
+export { NOT_DONE };
 export const INBOX_LIMIT = 50;
 export const LEASE_MS = 60_000;
+/** A child issue that a seat has held this long without starting a run brings its parent back to the lead. */
+export const CHILD_IDLE_MS = 2 * 60 * 60_000;
 /** The states of a run whose session is taken to be alive. */
 const LIVE = ['running', 'waiting'];
 type Caller = Pick<AppAuthContext, 'user' | 'workspace'>;
@@ -19,7 +22,7 @@ const ORDER: Record<string, number> = { resume: 0, in_review: 1, blocked: 2 };
 
 export interface InboxItem {
   issueId: string; issueKey: string | null; title: string; priority: string; category: string;
-  reason: 'resume' | 'review_returned' | 'reply' | 'blocker_resolved' | 'assigned'; lastRunAt: string | null;
+  reason: 'resume' | 'review_returned' | 'reply' | 'blocker_resolved' | 'child_done' | 'child_blocked' | 'child_idle' | 'assigned'; lastRunAt: string | null;
 }
 
 type Status = { category: string | null; isFinal: boolean } | null;
@@ -27,8 +30,6 @@ type Status = { category: string | null; isFinal: boolean } | null;
 const categoryOf = (status: Status) => status?.category ?? (status?.isFinal ? 'done' : 'todo');
 const isDone = (issue: { projectStatus: Status }) => categoryOf(issue.projectStatus) === 'done';
 const statusSelect = { select: { category: true, isFinal: true } } as const;
-/** The issues that are not in a status of the done group, as a query reads `categoryOf`. */
-export const NOT_DONE = { OR: [{ statusId: null }, { projectStatus: { OR: [{ category: { not: 'done' } }, { category: null, isFinal: false }] } }] };
 
 /**
  * What the caller should work on next: the issues assigned to it, and for a seat only those of its project.
@@ -37,7 +38,8 @@ export const NOT_DONE = { OR: [{ statusId: null }, { projectStatus: { OR: [{ cat
  * for an issue that never had a run or whose last run finished done. A run that ended before the issue was
  * last assigned to the caller says nothing: the assignment is new work. An issue in review or blocked is
  * offered only when something happened after its reference time: the end of that run, or without one the
- * time it was last assigned to the caller.
+ * time it was last assigned to the caller. For a lead seat, what happens to the children of a blocked issue counts
+ * too: one reached done, one's run finished blocked, or one has sat with a seat for `CHILD_IDLE_MS` without a run.
  */
 export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }> {
   const me = context.user.id;
@@ -85,6 +87,14 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
     targetRelations: { select: { relationType: true, sourceIssue: linked } },
   } }) : []).map(detail => [detail.id, detail]));
 
+  // Only a lead waits for children, so nobody else pays for this read.
+  const children = seat?.role === 'lead' && waiting.length ? await prisma.issue.findMany({ where: { parentId: { in: waiting }, projectId: seat.projectId }, select: {
+    parentId: true, createdAt: true, updatedAt: true, assigneeId: true, projectStatus: statusSelect, assignee: { select: { agentSeat: { select: { id: true } } } },
+    helpers: { select: { userId: true, assignedAt: true, approvedAt: true } },
+    agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, startedAt: true, endedAt: true } },
+  } }) : [];
+  const now = Date.now();
+
   const reasonFor = ({ issue, stands, since }: typeof candidates[number]): InboxItem['reason'] | null => {
     if (stands === 'resume') return 'resume';
     if (stands !== 'in_review' && stands !== 'blocked') return 'assigned';
@@ -106,6 +116,15 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
     }
     const blockers = others.filter(other => other.blocksMe).map(other => other.issue);
     if (blockers.length && blockers.every(isDone) && blockers.some(doneAfter)) return 'blocker_resolved';
+    const own = children.filter(child => child.parentId === issue.id);
+    if (own.some(doneAfter)) return 'child_done';
+    if (own.some(child => !isDone(child) && child.agentRuns[0]?.outcome === 'blocked' && after(child.agentRuns[0].endedAt ?? undefined))) return 'child_blocked';
+    // Once per assignment: the moment a child had sat too long is after the lead last looked, and has come.
+    if (own.some(child => {
+      const held = child.helpers.find(row => row.userId === child.assigneeId);
+      const assigned = (held?.approvedAt ?? held?.assignedAt ?? child.createdAt).getTime(), due = assigned + CHILD_IDLE_MS;
+      return !isDone(child) && child.assignee?.agentSeat && (child.agentRuns[0]?.startedAt.getTime() ?? 0) < assigned && due > since.getTime() && due <= now;
+    })) return 'child_idle';
     return [detail, ...requests].some(other => after(other.comments[0]?.createdAt)) ? 'reply' : null;
   };
   const rank = (priority: string) => (PRIORITIES.indexOf(priority.toLowerCase()) + PRIORITIES.length + 1) % (PRIORITIES.length + 1);
@@ -240,7 +259,7 @@ export async function actOnRun(context: Caller, runId: string, input: z.infer<ty
   const me = context.user.id;
   const own = { id: runId, workspaceId: context.workspace.id, userId: me };
   await markLost(context.workspace.id);
-  const run = await prisma.agentRun.findFirst({ where: own, select: { issueId: true, seatId: true, runner: true, leaseUntil: true, seat: { select: { role: true } } } });
+  const run = await prisma.agentRun.findFirst({ where: own, select: { issueId: true, seatId: true, runner: true, leaseUntil: true, seat: { select: { role: true, projectId: true } } } });
   if (!run) throw new HandoffError('not_found', 'Run not found', 404);
   const live = { ...own, generation: input.generation, endedAt: null };
   if (input.event === 'finish') {
@@ -274,7 +293,7 @@ const ISSUE = { id: true, issueKey: true, projectId: true, assigneeId: true, sta
  * or a pull request); the verdict is written to the request's timeline and to that of the issue it was filed for.
  * Returns whether the project had no status to move the issue to.
  */
-async function finish(context: Caller, run: { id: string; issueId: string; seatId: string | null; runner: string; seat: { role: string } | null }, input: Finish) {
+async function finish(context: Caller, run: { id: string; issueId: string; seatId: string | null; runner: string; seat: { role: string; projectId: string } | null }, input: Finish) {
   const me = context.user.id, workspaceId = context.workspace.id;
   const absent = NOTE_HEADINGS.filter(heading => !new RegExp(`^## ${heading}[ \\t]*$`, 'm').test(input.note));
   if (absent.length) throw incomplete('exit_note_required', `The exit note needs each of these as a heading on its own line: ${absent.map(heading => `## ${heading}`).join(', ')}`, absent);
@@ -283,7 +302,10 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
   const stray = given.filter(name => !waitsFor.includes(name));
   if (stray.length) throw new HandoffError('invalid_request', `A run that finishes ${input.outcome} does not take ${stray.join(' or ')}`);
   if (input.outcome !== 'done' && (input.verdict || input.reviewed)) throw new HandoffError('invalid_request', 'Only a security request that finishes done takes a verdict');
-  if (waitsFor.length && !given.length) throw incomplete('exit_state_required', `A run that finishes ${input.outcome} names ${waitsFor.join(' or ')}`, waitsFor);
+  // A lead waits for the children of its issue: blocked with nothing named, while one of them, in its project as the inbox reads them, is not done.
+  const forChildren = input.outcome === 'blocked' && !given.length && run.seat?.role === 'lead'
+    && !!await prisma.issue.count({ where: { parentId: run.issueId, projectId: run.seat.projectId, ...NOT_DONE } });
+  if (waitsFor.length && !given.length && !forChildren) throw incomplete('exit_state_required', `A run that finishes ${input.outcome} names ${waitsFor.join(' or ')}`, waitsFor);
   if (input.alsoFinish && run.seat?.role !== 'release') throw new HandoffError('role_mismatch', 'Only a release seat finishes other issues with its run', 422);
   if (input.alsoFinish && input.outcome !== 'done') throw incomplete('exit_state_required', 'Other issues are finished with a run only when it is done', ['alsoFinish']);
 
@@ -407,7 +429,9 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
  * What a fresh session needs to work an issue, in one read: the issue, the exit note of the last run that finished, the
  * comments made after that run ended (all of them when no run has finished), the issues linked as blocking it, the
  * requests linked to it (a security request with its verdict, once it has one), and for a request the issues it was
- * filed for (the ones it blocks or relates to from its own side, which is how filing links it). A run that ended without a note moves nothing:
+ * filed for (the ones it blocks or relates to from its own side, which is how filing links it). An issue with child issues
+ * lists them, each with its assignee and how its last run ended; when the issue is a lead seat's, the project's other
+ * seats come with it, each with the open issues it holds from the lead, and the limit. A run that ended without a note moves nothing:
  * what was said since the last note is still what the next session lacks. A read like any other: every token that
  * reads the workspace's issues gets it.
  */
@@ -417,8 +441,14 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { note: true, endedAt: true } },
     sourceRelations: { where: { targetIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, targetIssue: { select: REF } } },
     targetRelations: { where: { sourceIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, sourceIssue: { select: REF } } },
+    // shortcut: the first 100 children, oldest first; page them when an epic outgrows that.
+    children: { where: { workspaceId: context.workspace.id }, orderBy: { createdAt: 'asc' }, take: 100, select: { ...REF, assigneeId: true, assignee: { select: { name: true } },
+      agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, endedAt: true } } } },
   } });
   if (!issue) throw new HandoffError('not_found', 'Issue not found', 404);
+  const lead = issue.assigneeId ? await prisma.agentSeat.findFirst({ where: { userId: issue.assigneeId, projectId: issue.projectId, role: 'lead', retiredAt: null }, select: { userId: true } }) : null;
+  const seats = lead ? await prisma.agentSeat.findMany({ where: { projectId: issue.projectId, retiredAt: null, userId: { not: lead.userId } }, orderBy: { createdAt: 'asc' },
+    select: { userId: true, name: true, role: true } }) : [];
   const last = issue.agentRuns[0];
   const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: { gt: last.endedAt } }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
@@ -448,9 +478,14 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     }),
     // Filing a request links it to its source from the request's side: it blocks the source or relates to it.
     requestFor: issue.agentRequestRole ? others.filter(other => other.filedFor && !other.issue.agentRequestRole).map(other => toRef(other.issue)) : [],
+    ...(issue.children.length && { children: issue.children.map(child => ({ ...toRef(child), assigneeId: child.assigneeId, assignee: child.assignee?.name ?? null,
+      lastRun: child.agentRuns[0] ? child.agentRuns[0].endedAt ? child.agentRuns[0].outcome ?? 'stopped' : 'running' : null })) }),
+    ...(lead && { lead: { cap: LEAD_CAP, seats: await Promise.all(seats.map(async seat => ({ ...seat,
+      openFromLead: await prisma.issue.count({ where: fromLead(issue.projectId, lead.userId, seat.userId) }) }))) } }),
     // Where the rest is: the project's context, what was said before the last note, and the timeline, which holds a late exit note.
     commands: [`collab context get --project-id ${issue.projectId}`, `collab comments list ${key}`, `collab issues activity ${key}`,
       `collab seat request --from-issue ${key} --role review|release|security|developer --title TITLE --body-file FILE`,
+      ...(lead ? ['collab issues update CHILD_KEY --assignee-id SEAT_USER_ID'] : []),
       `collab run finish RUN_ID --generation GENERATION --outcome done|in_review|blocked --note-file FILE${security ? ' --verdict passed|failed --reviewed COMMIT_OR_PULL_REQUEST' : ''}`],
   };
 }

@@ -43,6 +43,8 @@ The inbox lists only issues assigned to you, in the order to work them. Each has
 3. `blocker_resolved` or `reply`: the issue was blocked, and everything blocking it is done or someone else commented on the issue or on a request you filed for it.
 4. `assigned`: everything else, by priority, oldest first.
 
+A lead seat's blocked issue also returns with `child_done`, `child_blocked` or `child_idle`: see [If you are a lead seat](#if-you-are-a-lead-seat).
+
 Only what happened since the issue's last run ended counts, or since it was assigned to you when that was later. An issue that waits in review or blocked with nothing new is not listed. Do not go looking for it.
 
 ## The exit note
@@ -99,6 +101,25 @@ sequenceDiagram
 
 A project takes at most 5 open requests from one other project. Past that, filing is refused with `request_cap`: tell a person.
 
+## If you are a lead seat
+
+You do not do the work. You decide which seat gets which child issue of the epic you were assigned.
+
+| Step | What you do |
+| --- | --- |
+| 1 | Read the run context. `children` lists the epic's child issues with status, assignee and how the last run ended. `lead.seats` lists the project's other seats, each with `openFromLead`, and `lead.cap` is the limit. |
+| 2 | Assign child issues in the order the epic gives: `collab issues update CHILD_KEY --assignee-id SEAT_USER_ID`. |
+| 3 | Finish with outcome `blocked` and nothing named. That means: waiting for the children. |
+| 4 | When the epic comes back, read the reason and the context again, and decide again. |
+| 5 | When every child is done, finish the epic with outcome `done`. |
+
+- `lead_cap`: the seat has its limit of open issues from you. Do not try another route. Finish and wait.
+- `assign_by_person`: someone else decided who has that issue. Leave it.
+- A child blocked on a question for a person: do not answer it. Finish `blocked` with `--asked-user`, naming the person.
+- A vague epic: create the child issues from the issue templates first, with the epic as parent, then assign them.
+
+The exact rules are under [Lead seat](/docs/agents/seats#lead-seat).
+
 ## What never to do
 
 - **Do not act on a mention.** A mention assigns nothing. Work reaches you only by assignment.
@@ -106,7 +127,7 @@ A project takes at most 5 open requests from one other project. Past that, filin
 - **Do not retry a `409`.** `already_running` means someone holds the issue. Take the next one.
 - **Do not keep working after `run_fenced`.** The issue was given to someone else. Stop and leave it.
 - **Do not write outside your project.** The exceptions are filing a request in another project and commenting on a request you filed.
-- **Do not assign issues.** A person, a request or an integration does that.
+- **Do not assign issues.** A person, a request, an integration or the project's lead seat does that.
 - **Do not leave without an exit note.** A run that ends without one sends the next session in blind.
 
 ## Next

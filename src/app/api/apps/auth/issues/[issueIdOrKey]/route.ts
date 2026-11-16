@@ -19,7 +19,7 @@ import { TEMPLATE_FIELDS } from '@/lib/issue-templates';
 import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 import { ISSUE_SHAPE_SELECT, TemplateRefused, issueShape, updateRefusal } from '@/lib/issue-template-enforcement';
 import { assertAssignable, HandoffError } from '@/lib/issue-assignee';
-import { assertTokenMayAssign, seatWriteGuard } from '@/lib/agent-seats';
+import { assertTokenMayAssign, leadPlaces, seatWriteGuard } from '@/lib/agent-seats';
 
 // Schema for updating issues
 const UpdateIssueSchema = z.object({
@@ -272,7 +272,7 @@ export const PATCH = withAppAuth(
 
       // Handle assignee change
       if (updateData.assigneeId !== undefined) {
-        await assertTokenMayAssign(prisma, context, updateData.assigneeId, true);
+        await assertTokenMayAssign(prisma, context, updateData.assigneeId, true, true);
         if (updateData.assigneeId) await assertAssignable(prisma, existingIssue, updateData.assigneeId);
         update.assigneeId = updateData.assigneeId;
       }
@@ -347,10 +347,15 @@ export const PATCH = withAppAuth(
         ? await getWorkspaceTemplates(context.workspace.id) : null;
 
       // Update issue
+      let placedByLead = false;
       const updatedIssue = await prisma.$transaction(async tx => {
         const currentAssignee = updateData.assigneeId ? await tx.issue.findUniqueOrThrow({
           where: { id: existingIssue.id }, select: { assigneeId: true },
         }) : null;
+        // A lead seat's assignment is held to its rules here, on the rows this transaction reads, and leaves its own timeline entry.
+        if (updateData.assigneeId && updateData.assigneeId !== currentAssignee?.assigneeId) {
+          placedByLead = await leadPlaces(tx, context, existingIssue, updateData.assigneeId);
+        }
         const before = updateData.labels === undefined && !guarded?.enforced ? null : await tx.issue.findUniqueOrThrow({
           where: { id: existingIssue.id }, select: ISSUE_SHAPE_SELECT,
         });
@@ -421,6 +426,7 @@ export const PATCH = withAppAuth(
 
       // Create activity records
       for (const change of changes) {
+        if (placedByLead && change.fieldName === 'assignee') continue;
         await prisma.issueActivity.create({
           data: {
             action: 'UPDATED',
