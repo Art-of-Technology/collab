@@ -1,7 +1,9 @@
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { NOT_DONE } from '@/lib/agent-runs';
 import { HandoffError, requireSeat, seatWriteGuard } from '@/lib/agent-seats';
+import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { emitIssueCreated } from '@/lib/event-bus';
 import { assertLegacyIssueWriteAllowed, assertLegacyProjectWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
@@ -20,6 +22,7 @@ const REQUESTS = {
   review: { seat: 'reviewer', label: 'Review request' },
   release: { seat: 'release', label: 'Release request' },
 } as const;
+type RequestRole = keyof typeof REQUESTS;
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 export const requestSchema = z.object({
@@ -71,39 +74,85 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
     const refusal = enforced && createRefusal(templates, issueShape({ type: 'TASK', description: input.body, priority: currentSource.priority,
       assigneeId: kind.seat, labels: label ? [label] : [] }));
     if (refusal) throw Object.assign(new HandoffError(refusal.error, refusal.error_description, 422), { body: refusal });
-    const to = await tx.agentSeat.findFirst({ where: { projectId: target.id, role: kind.seat, isDefault: true, retiredAt: null },
-      select: { userId: true, name: true, lastSeenAt: true } });
-    if (!to) throw new HandoffError('no_default_seat', `The project has no ${kind.seat} seat to take this request`, 409);
-    // Work reaches a seat by someone else's hand: a request to itself would be a seat assigning its own work.
-    if (to.userId === me) throw new HandoffError('invalid_request', 'This request would go to the seat that files it');
-    await assertAssignable(tx, { workspaceId, projectId: target.id, agentRequestRole: input.role }, to.userId);
-    if (target.id !== currentSeat.projectId) {
-      // A request is from a project when a seat of that project reported it.
-      const open = await tx.issue.count({ where: { projectId: target.id, agentRequestRole: { not: null }, reporter: { agentSeat: { projectId: currentSeat.projectId } }, ...NOT_DONE } });
-      if (open >= REQUEST_CAP) throw new HandoffError('request_cap', `This project has ${REQUEST_CAP} open requests in that project; one of them has to be done first`, 429);
-    }
-
-    const issueKey = await allocateIssueKey(tx, target.id);
-    const status = await tx.projectStatus.findFirst({ where: { projectId: target.id, isDefault: true }, select: { id: true, name: true } });
-    const now = new Date();
-    const issue = await tx.issue.create({ data: {
-      workspaceId, projectId: target.id, issueKey, type: 'TASK', title: input.title, description: input.body, priority: currentSource.priority,
-      statusId: status?.id, statusValue: status?.name, status: status?.name, reporterId: me, assigneeId: to.userId, agentRequestRole: input.role,
-      ...(label && { labels: { connect: { id: label.id } } }),
-    } });
-    await tx.issueAssignee.create({ data: { issueId: issue.id, userId: to.userId, role: 'ASSIGNEE', status: 'APPROVED', assignedAt: now, approvedAt: now, approvedBy: me } });
-    await tx.issueRelation.create({ data: { sourceIssueId: issue.id, targetIssueId: source.id, relationType: input.blocks ? 'BLOCKS' : 'RELATES_TO', createdBy: me } });
-    // Only a release seat is expected to be there all the time: a project has one, and a release waits on it.
-    const idle = kind.seat === 'release' && !(to.lastSeenAt && to.lastSeenAt.getTime() > now.getTime() - IDLE_MS);
-    if (idle) {
-      await tx.issueComment.create({ data: { issueId: issue.id, authorId: me, content: `${to.name}, this project's release seat, ${to.lastSeenAt
-        ? `last read its inbox at ${to.lastSeenAt.toISOString()}` : 'has never read its inbox'}. This request waits until it does. If the release seat is not running, a person has to start it.` } });
-    }
-    return { issue, idle };
+    return writeRequest(tx, { workspaceId, me, projectId: target.id, from: currentSeat.projectId, role: input.role, title: input.title, body: input.body,
+      source: currentSource, blocks: input.blocks, labelId: label?.id });
   });
 
   // Fire-and-forget, as for every new issue: this is what makes it searchable.
   emitIssueCreated(made.issue, { userId: me, workspaceId, workspaceName: context.workspace.name || '', workspaceSlug: context.workspace.slug || '', source: 'agent-request' },
     { async: true }).catch(() => {});
   return { issue: { id: made.issue.id, issueKey: made.issue.issueKey }, ...(made.idle && { warning: 'seat_idle' as const }) };
+}
+
+/**
+ * What every request has, however it was asked for: a Task in `projectId`, reported by `me`, assigned to that project's
+ * default seat for the role and linked to its source. Call it inside a transaction in which that seat cannot be retired.
+ */
+async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: string; me: string; projectId: string; from?: string; role: RequestRole;
+  title: string; body: string; source: { id: string; priority: string }; blocks?: boolean; labelId?: string }) {
+  const { workspaceId, me, projectId } = input, kind = REQUESTS[input.role];
+  const to = await tx.agentSeat.findFirst({ where: { projectId, role: kind.seat, isDefault: true, retiredAt: null },
+    select: { userId: true, name: true, lastSeenAt: true } });
+  if (!to) throw new HandoffError('no_default_seat', `The project has no ${kind.seat} seat to take this request`, 409);
+  // Work reaches a seat by someone else's hand: a request to itself would be a seat assigning its own work.
+  if (to.userId === me) throw new HandoffError('invalid_request', 'This request would go to the seat that files it');
+  await assertAssignable(tx, { workspaceId, projectId, agentRequestRole: input.role }, to.userId);
+  if (input.from && input.from !== projectId) {
+    // A request is from a project when a seat of that project reported it.
+    const open = await tx.issue.count({ where: { projectId, agentRequestRole: { not: null }, reporter: { agentSeat: { projectId: input.from } }, ...NOT_DONE } });
+    if (open >= REQUEST_CAP) throw new HandoffError('request_cap', `This project has ${REQUEST_CAP} open requests in that project; one of them has to be done first`, 429);
+  }
+
+  const issueKey = await allocateIssueKey(tx, projectId);
+  const status = await tx.projectStatus.findFirst({ where: { projectId, isDefault: true }, select: { id: true, name: true } });
+  const now = new Date();
+  const issue = await tx.issue.create({ data: {
+    workspaceId, projectId, issueKey, type: 'TASK', title: input.title, description: input.body, priority: input.source.priority,
+    statusId: status?.id, statusValue: status?.name, status: status?.name, reporterId: me, assigneeId: to.userId, agentRequestRole: input.role,
+    ...(input.labelId && { labels: { connect: { id: input.labelId } } }),
+  } });
+  await tx.issueAssignee.create({ data: { issueId: issue.id, userId: to.userId, role: 'ASSIGNEE', status: 'APPROVED', assignedAt: now, approvedAt: now, approvedBy: me } });
+  await tx.issueRelation.create({ data: { sourceIssueId: issue.id, targetIssueId: input.source.id, relationType: input.blocks ? 'BLOCKS' : 'RELATES_TO', createdBy: me } });
+  // Only a release seat is expected to be there all the time: a project has one, and a release waits on it.
+  const idle = kind.seat === 'release' && !(to.lastSeenAt && to.lastSeenAt.getTime() > now.getTime() - IDLE_MS);
+  if (idle) {
+    await tx.issueComment.create({ data: { issueId: issue.id, authorId: me, content: `${to.name}, this project's release seat, ${to.lastSeenAt
+      ? `last read its inbox at ${to.lastSeenAt.toISOString()}` : 'has never read its inbox'}. This request waits until it does. If the release seat is not running, a person has to start it.` } });
+  }
+  return { issue, idle };
+}
+
+/**
+ * Rule 9, for labels added to an issue; call inside the issue's write transaction. False for a project that uses
+ * handoffs, where the caller hands the labels to their subscribers. In a project that uses seats a label hands work to
+ * nobody, and the label of a request role asks for that request: one Task for the project's default seat of the role,
+ * reported by whoever added the label and related to the issue. Nothing is filed while a request of that role for the
+ * issue is still open, so adding the label twice asks once, nor for an issue that is itself a request. With no seat to
+ * take it the refusal undoes the whole edit, so the label never sits there asking nobody. The text is the server's
+ * and points at the issue, so it is not held to the issue template. An agent token that is not a seat asks nothing
+ * this way: it gives seats work only by creating issues, where its daily cap counts.
+ */
+export async function labelRequests(tx: Prisma.TransactionClient, me: string, issue: { id: string; workspaceId: string; projectId: string },
+  added: { id: string; name: string }[]) {
+  const project = await tx.project.findUnique({ where: { id: issue.projectId }, select: { agentMode: true } });
+  if (project?.agentMode !== 'seats') return false;
+  const source = await tx.issue.findUnique({ where: { id: issue.id }, select: { id: true, issueKey: true, title: true, priority: true, agentRequestRole: true } });
+  if (!source || source.agentRequestRole) return true;
+  for (const role of ['review', 'release'] as const) {
+    const kind = REQUESTS[role], label = added.find(candidate => candidate.name === kind.label);
+    if (!label || await tx.issue.count({ where: { projectId: issue.projectId, agentRequestRole: role,
+      sourceRelations: { some: { targetIssueId: issue.id, relationType: { in: ['RELATES_TO', 'BLOCKS'] } } }, ...NOT_DONE } })) continue;
+    if (!await tx.agentSeat.findFirst({ where: { userId: me, retiredAt: null }, select: { id: true } }) && await tx.appToken.findFirst({ where: { userId: me, app: { slug: AGENT_APP_SLUG } }, select: { id: true } })) {
+      throw new HandoffError('assign_by_person', `An agent token that is not a seat does not ask for a ${role} by label; a person or a seat of the project adds it`, 403);
+    }
+    // The seat's row, not the project's seat lock that `fileRequest` takes before it locks its source issue: this
+    // transaction already holds the issue, and the other order could deadlock with it. Retiring a seat waits for the row.
+    await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "projectId" = ${issue.projectId} AND "role" = ${kind.seat} AND "isDefault" AND "retiredAt" IS NULL FOR SHARE`;
+    const name = source.issueKey ?? source.id;
+    // shortcut: no issue.created event, so semantic search learns of this request only when it is next edited; emit after commit if that matters.
+    await writeRequest(tx, { workspaceId: issue.workspaceId, me, projectId: issue.projectId, role, source, labelId: label.id,
+      title: `${kind.label}: ${name} ${source.title}`.slice(0, 200),
+      body: `Asked for by adding the "${kind.label}" label to ${name}.\n\nRead ${name}, its comments and its timeline for what is asked.` });
+  }
+  return true;
 }

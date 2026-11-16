@@ -87,7 +87,7 @@ function fixture() {
     'server-only': {},
     '@/lib/permissions': { Permission: { DELETE_ANY_TASK: 'any', DELETE_SELF_TASK: 'self' }, checkUserPermissions: async () => ({ any: { hasPermission: true }, self: { hasPermission: true } }), canActOnOwnContent: () => true },
     '@/lib/event-bus': { emitIssueCreated: async () => {}, emitIssueDeleted: async () => {} },
-    '@/lib/agent-label-triggers': load('src/lib/agent-label-triggers.ts', {}),
+    '@/lib/agent-label-triggers': load('src/lib/agent-label-triggers.ts', { '@/lib/agent-requests': { labelRequests: async () => false } }),
   };
   dependencies['@/lib/issue-trash'] = load('src/lib/issue-trash.ts', dependencies);
   dependencies['@/lib/issue-trash-response'] = load('src/lib/issue-trash-response.ts', dependencies);

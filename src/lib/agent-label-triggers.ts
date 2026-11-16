@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
+import { labelRequests } from '@/lib/agent-requests';
 
 type LabelledIssue = { id: string; workspaceId: string; projectId: string; issueKey: string | null; labels: { id: string }[] };
 export class InvalidIssueLabels extends Error {}
@@ -11,10 +12,11 @@ export async function enqueueLabelHandoff(db: Prisma.TransactionClient, userId: 
   issue: LabelledIssue, previousLabelIds: string[]) {
   const labelIds = [...new Set(issue.labels.map(label => label.id))];
   if (!labelIds.length) return;
-  const labels = await db.taskLabel.findMany({ where: { id: { in: labelIds }, workspaceId: issue.workspaceId }, select: { id: true } });
+  const labels = await db.taskLabel.findMany({ where: { id: { in: labelIds }, workspaceId: issue.workspaceId }, select: { id: true, name: true } });
   if (labels.length !== labelIds.length) throw new InvalidIssueLabels('Labels must belong to the issue workspace');
   const added = labelIds.filter(id => !previousLabelIds.includes(id));
   if (!added.length) return;
+  if (await labelRequests(db, userId, issue, labels.filter(label => added.includes(label.id)))) return;
   const subscribers = await db.agentRegistration.findMany({
     where: { workspaceId: issue.workspaceId, labelIds: { hasSome: added } }, select: { labelIds: true },
   });

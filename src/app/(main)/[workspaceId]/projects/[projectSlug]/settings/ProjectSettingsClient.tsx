@@ -41,6 +41,7 @@ import {
   Archive,
   Activity,
   RefreshCw,
+  Bot,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace } from "@/context/WorkspaceContext";
@@ -54,6 +55,7 @@ import { isValidNewIssuePrefix } from "@/lib/shared-issue-key-utils";
 import { GitConnections } from "@/components/git-providers/GitConnections";
 import { GitHubOAuthConnection } from "@/components/github/GitHubOAuthConnection";
 import { IssueTrash } from "@/components/issues/IssueTrash";
+import { AgentModeSettings } from "@/components/agents/AgentModeSettings";
 
 interface ProjectSettingsClientProps {
   workspaceId: string;
@@ -61,11 +63,12 @@ interface ProjectSettingsClientProps {
 }
 
 // Tab configuration
-type SettingsTab = "general" | "statuses" | "github" | "trash" | "danger";
+type SettingsTab = "general" | "statuses" | "agents" | "github" | "trash" | "danger";
 
 const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "general", label: "General", icon: <FileText className="h-4 w-4" /> },
   { id: "statuses", label: "Statuses", icon: <Circle className="h-4 w-4" /> },
+  { id: "agents", label: "Agents", icon: <Bot className="h-4 w-4" /> },
   { id: "github", label: "Git providers", icon: <Github className="h-4 w-4" /> },
   { id: "trash", label: "Trash", icon: <Trash2 className="h-4 w-4" /> },
   { id: "danger", label: "Danger Zone", icon: <AlertTriangle className="h-4 w-4" /> },
@@ -786,6 +789,8 @@ export default function ProjectSettingsClient({
               <GitConnections projectId={project.id} />
             </div>
           )}
+
+          {activeTab === "agents" && <AgentModeSettings workspaceId={currentWorkspace?.id ?? project.workspaceId ?? workspaceId} projectSlug={projectSlug} />}
 
           {activeTab === "trash" && <IssueTrash workspaceId={currentWorkspace?.id ?? project.workspaceId ?? workspaceId} projectId={project.id} />}
 
