@@ -95,6 +95,7 @@ export async function setAgentMode(input: { workspaceId: string; projectId: stri
         await assertAssignable(tx, { workspaceId, projectId, agentRequestRole: null }, carryTo.userId);
         const now = new Date();
         await tx.issue.update({ where: { id: issueId }, data: { assigneeId: carryTo.userId } });
+        if (claim.assigneeId) await tx.issueAssignee.deleteMany({ where: { issueId, userId: claim.assigneeId, role: 'ASSIGNEE' } });
         await tx.issueAssignee.upsert({ where: { issueId_userId: { issueId, userId: carryTo.userId } },
           create: { issueId, userId: carryTo.userId, role: 'ASSIGNEE', status: 'APPROVED', assignedAt: now, approvedAt: now, approvedBy: actorId },
           update: { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: now, approvedAt: now, approvedBy: actorId } });

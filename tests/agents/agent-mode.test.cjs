@@ -232,6 +232,10 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
       return handoff;
     };
     const recent = await issue(C, { assigneeId: person }), stale = await issue(C), done = await issue(C, { statusId: `${C}-done` });
+    await raw.issueAssignee.createMany({ data: [
+      { issueId: recent.id, userId: person, role: 'ASSIGNEE', status: 'APPROVED', approvedBy: owner },
+      { issueId: recent.id, userId: owner, role: 'HELPER', status: 'APPROVED', approvedBy: owner },
+    ] });
     const seated = await issue(C, { assigneeId: devC.userId }), shared = await issue(C), request = await issue(C, { agentRequestRole: 'release' });
     const handoff = await claim(recent, 'solo', new Date(Date.now() - 6 * 86_400_000));
     await claim(recent, 'worker', new Date(Date.now() - 6.5 * 86_400_000));
@@ -250,6 +254,7 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
     await refused(set(C, { mode: 'seats', carryOver: [recent.id, stale.id] }), 'invalid_request', 400);
     assert.deepEqual([(await read(C)).mode, (await raw.issue.findUniqueOrThrow({ where: { id: recent.id } })).assigneeId], ['handoffs', person],
       'a refused carry-over switches nothing and moves nothing');
+    assert.ok(await raw.issueAssignee.findUnique({ where: { issueId_userId: { issueId: recent.id, userId: person } } }));
     await refused(set(H, { mode: 'seats', carryOver: [(await read(H)).claims[0].issueId] }), 'no_default_seat', 409);
     assert.equal((await read(H)).mode, 'handoffs');
 
@@ -257,7 +262,8 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
     assert.deepEqual(after.claims.map(row => row.issueKey), [shared.issueKey], 'what went to a seat is no longer waiting; what was not picked stays where it was');
     const moved = await raw.issue.findUniqueOrThrow({ where: { id: recent.id }, include: { helpers: true } });
     assert.equal(moved.assigneeId, devC.userId);
-    assert.deepEqual(moved.helpers.map(helper => [helper.userId, helper.role, helper.status, helper.approvedBy]), [[devC.userId, 'ASSIGNEE', 'APPROVED', owner]]);
+    assert.deepEqual(moved.helpers.map(helper => [helper.userId, helper.role, helper.status, helper.approvedBy]).sort(),
+      [[devC.userId, 'ASSIGNEE', 'APPROVED', owner], [owner, 'HELPER', 'APPROVED', owner]].sort());
     const [entry] = await raw.issueActivity.findMany({ where: { itemId: recent.id, action: 'ASSIGNED' } });
     assert.deepEqual([entry.userId, entry.projectId, entry.oldValue, entry.newValue, JSON.parse(entry.details)],
       [owner, C, person, devC.userId, { reason: 'seat_carry_over', agent: 'solo', handoffId: handoff.id }]);
