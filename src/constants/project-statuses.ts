@@ -1,3 +1,5 @@
+import type { Prisma } from '@prisma/client';
+
 export interface DefaultProjectStatus {
   name: string;          // Internal name (database)
   displayName: string;   // User-facing name (UI)
@@ -52,7 +54,7 @@ export const DEFAULT_PROJECT_STATUSES: DefaultProjectStatus[] = [
     displayName: 'Done',
     color: '#10b981',
     order: 4,
-    isDefault: true,
+    isDefault: false,
     isFinal: true
   }
 ];
@@ -70,6 +72,21 @@ export function statusGroup(name: string, isFinal = false) {
   if (/progress|doing/.test(lower)) return 'in_progress';
   return 'todo';
 }
+
+/**
+ * The one status of a new project that issues start in: the first of the to do group by order, or the first of all
+ * when the set has none. On a StatusTemplate row `isDefault` means "part of the standard set", so it cannot be copied.
+ */
+export function defaultStatusName(statuses: { name: string; order: number }[]) {
+  const byOrder = [...statuses].sort((a, b) => a.order - b.order);
+  return (byOrder.find(status => statusGroup(status.name) === 'todo') ?? byOrder[0])?.name;
+}
+
+/**
+ * The order every read of "the project's default status" uses. Projects made in the web app before CLB-524 store
+ * every status as the default, and without an order the database chooses which of them a new issue starts in.
+ */
+export const DEFAULT_STATUS_ORDER: Prisma.ProjectStatusOrderByWithRelationInput[] = [{ order: 'asc' }, { id: 'asc' }];
 
 /**
  * Generate internal name from display name.

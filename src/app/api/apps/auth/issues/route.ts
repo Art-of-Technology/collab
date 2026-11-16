@@ -13,6 +13,7 @@ import { ForgeProjectWriteError, assertLegacyIssueWriteAllowed, assertLegacyProj
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { DEFAULT_STATUS_ORDER } from '@/constants/project-statuses';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
 import { z } from 'zod';
 import { emitIssueCreated } from '@/lib/event-bus';
@@ -285,7 +286,8 @@ export const POST = withAppAuth(
             where: {
               projectId: issueData.projectId,
               isDefault: true
-            }
+            },
+            orderBy: DEFAULT_STATUS_ORDER
           });
           if (defaultStatus) {
             statusId = defaultStatus.id;
