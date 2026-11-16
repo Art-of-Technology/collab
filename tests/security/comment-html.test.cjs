@@ -181,8 +181,6 @@ test('rendering on the server does not get slower with every call', async () => 
     return Number(process.hrtime.bigint() - start) / 1e6;
   };
   const first = await lap(), second = await lap(), third = await lap();
-  // 3,000 calls. The leaking library took about 1 s, then 3 s, then 5 s. Fast enough passes whatever the laps look like,
-  // so one pause on a busy runner does not fail it.
-  const growing = second > first * 2 && third > second * 1.25;
+  const growing = third > second * 1.5;
   assert.ok(first + second + third < 1500 || !growing, `${Math.round(first)} ms, then ${Math.round(second)} ms, then ${Math.round(third)} ms`);
 });
