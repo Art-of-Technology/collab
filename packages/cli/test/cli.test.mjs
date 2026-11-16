@@ -2275,6 +2275,23 @@ test('new waits survive outages and retain the last answer at the deadline', asy
   }
 });
 
+test('new waits return the last outage error without requesting after the deadline', async t => {
+  const f = await fixture(t, (_req, res, _body, calls) => {
+    if (calls.length === 1) { res.writeHead(503); return res.end('{}'); }
+    res.end(JSON.stringify({ contains: true, comments: [{ id: 'new' }] }));
+  });
+  for (const args of [
+    ['live', '--commit', 'a'.repeat(40)],
+    ['comments', 'wait', 'APP-1'],
+    ['comments', 'wait', 'APP-1', '--since', '2026-11-16T10:00:00.000Z'],
+  ]) {
+    f.calls.length = 0;
+    const result = await f.run([...args, '--wait-seconds', '1']);
+    assert.equal(result.error.error, 'server_error');
+    assert.equal(f.calls.length, 1);
+  }
+});
+
 test('seat and run refusals keep their code and what is missing, and pass on nothing else from the server', async t => {
   let answer;
   const f = await fixture(t, (_req, res) => { res.writeHead(answer.status); res.end(JSON.stringify({ error_description: 'PRIVATE_SENTINEL', ...answer.body })); });

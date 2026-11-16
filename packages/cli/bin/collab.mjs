@@ -424,9 +424,10 @@ async function main() {
       return result.items.length;
     });
     let baseline = name === 'comments wait' && !query.has('since');
-    let last;
+    let last, lastError;
     for (;;) {
       const window = deadline - Date.now();
+      if (window <= 0 && lastError && !last) throw lastError;
       if (last && window < 1000) {
         await delay(Math.max(0, window));
         return { ...last, timedOut: true };
@@ -435,6 +436,7 @@ async function main() {
       try { result = await send(Math.min(timeout, Math.max(1000, window))); } catch (error) {
         // A long wait outlives a deploy: while the server restarts it asks again, until its own time is up.
         if (!spec.waitMax || !serverAway(error)) throw error;
+        lastError = error;
         if (Date.now() >= deadline) {
           if (last) return { ...last, timedOut: true };
           throw error;
