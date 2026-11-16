@@ -80,7 +80,7 @@ test('the Agents page reads the seats a person may see, what each works on and w
     await raw.agentSeat.update({ where: { id: 'rev-a' }, data: { byRunner: false } });
     // The Runners tab: the owner gets the people a runner can be admitted for, a member gets nobody, a stranger nothing.
     await raw.user.update({ where: { id: member }, data: { email: 'member@example.test' } });
-    assert.deepEqual(plain(await page.readRunnersTab(owner, 'team')), { workspace: { id: 'w', slug: 'team' }, people: [{ id: member, name: member }] });
+    assert.deepEqual(plain(await page.readRunnersTab(owner, 'team')), { workspace: { id: 'w', slug: 'team' }, people: [{ id: member, name: member }, { id: owner, name: owner }] });
     assert.deepEqual(plain(await page.readRunnersTab(member, 'team')), { workspace: { id: 'w', slug: 'team' }, people: [] });
     assert.equal(await page.readRunnersTab(stranger, 'team'), null);
     assert.deepEqual(plain(view.seats[0].working), [{ id: open.id, issueId: busy.id, issueKey: null, title: busy.title, since: open.startedAt.toISOString(), lost: false }]);

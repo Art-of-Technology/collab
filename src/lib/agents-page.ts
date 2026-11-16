@@ -20,7 +20,7 @@ export async function readRunnersTab(userId: string, workspaceIdOrSlug: string) 
   const workspace = await prisma.workspace.findFirst({ where: postWorkspaceAccessWhere(userId, workspaceIdOrSlug), select: { id: true, slug: true, ownerId: true } });
   if (!workspace) return null;
   const people = workspace.ownerId !== userId ? [] : await prisma.user.findMany({
-    where: { email: { not: null }, OR: [{ ownedWorkspaces: { some: { id: workspace.id } } }, { workspaceMemberships: { some: { workspaceId: workspace.id, status: true } } }] },
+    where: { OR: [{ id: userId }, { email: { not: null }, workspaceMemberships: { some: { workspaceId: workspace.id, status: true } } }] },
     select: { id: true, name: true, email: true }, orderBy: { name: 'asc' },
   });
   return { workspace: { id: workspace.id, slug: workspace.slug }, people: people.map(person => ({ id: person.id, name: person.name || person.email || person.id })) };
