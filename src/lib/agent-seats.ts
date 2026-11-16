@@ -55,9 +55,11 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
     throw new HandoffError('seat_exists', `${existing.name} is already a ${existing.role} seat; retire it before giving the name another project or role`, 409);
   }
   if (same && existing.byRunner !== !!input.byRunner) throw new HandoffError('seat_exists', `${existing.name} is run by hand; retire it before giving the seat to a runner`, 409);
-  // Tokens a person once saw, or another person's runner fetched, would work the seat beside its runner's.
-  if (!same && input.byRunner && await tx.appToken.count({ where: { userId: account.id, isRevoked: false, tokenExpiresAt: { gte: new Date() } } })) {
-    throw new HandoffError('tokens_exist', `${account.name ?? input.name} still has usable tokens; revoke them before a runner runs the seat`, 409);
+  // Tokens a person once saw, or another person's runner fetched, would work the seat beside its runner's. And a token
+  // a runner fetched for the seat before it was retired would work the seat made again by hand, whoever owns it now.
+  if (!same && await tx.appToken.count({ where: { userId: account.id, isRevoked: false, tokenExpiresAt: { gte: new Date() }, ...(!input.byRunner && { runnerId: { not: null } }) } })) {
+    throw new HandoffError('tokens_exist', input.byRunner ? `${account.name ?? input.name} still has usable tokens; revoke them before a runner runs the seat`
+      : `${account.name ?? input.name} still has usable tokens a runner fetched; revoke them before the seat is made again`, 409);
   }
   if (!same && input.ownerId && !await tx.workspace.findFirst({
     where: { id: input.workspaceId, OR: [{ ownerId: input.ownerId }, { members: { some: { userId: input.ownerId, status: true } } }] }, select: { id: true },

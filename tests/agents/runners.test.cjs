@@ -27,7 +27,7 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
   const crypto = { encryptToken: async value => Buffer.from(value), decryptToken: async data => Buffer.from(data).toString(), getEncryptionKey: () => {} };
   const zod = require('zod');
   const response = { NextResponse: Response };
-  const globals = { console, URL, Date, Buffer };
+  const globals = { console, URL, Date, Buffer, process: { env: { NEXTAUTH_URL: 'https://collab.test' } } };
   const handoffs = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod,
     '@/lib/prisma': { prisma }, '@/lib/issue-finder': load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } }), '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
   const tokens = load('src/lib/agent-tokens.ts', { crypto: require('node:crypto'), '@/lib/prisma': { prisma }, '@/lib/apps/crypto': crypto }, { Buffer, Date });
@@ -48,8 +48,9 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
   const admitRoute = load('src/app/api/workspaces/[workspaceId]/agent-runners/route.ts', { ...deps, ...session }, globals);
   const removeRoute = load('src/app/api/workspaces/[workspaceId]/agent-runners/[runnerId]/route.ts', { ...deps, ...session }, globals);
 
-  const post = async (handler, bearer, sent, params = {}) => {
-    const reply = await handler(new Request('https://collab.test/api', { method: 'POST', headers: { ...(bearer && { Authorization: `Bearer ${bearer}` }) }, body: JSON.stringify(sent) }),
+  // As Collab's own page sends it, unless a test says otherwise.
+  const post = async (handler, bearer, sent, params = {}, headers = { 'Content-Type': 'application/json', Origin: 'https://collab.test' }) => {
+    const reply = await handler(new Request('https://collab.test/api', { method: 'POST', headers: { ...headers, ...(bearer && { Authorization: `Bearer ${bearer}` }) }, body: JSON.stringify(sent) }),
       { params: Promise.resolve(params) });
     return [reply.status, await reply.json(), reply.headers.get('cache-control')];
   };
@@ -60,6 +61,15 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
   const refuses = (promise, code, status) => assert.rejects(promise, error => error.code === code && error.status === status, `expected ${code}`);
   const seat = (name, role, ownerId, extra = {}) => seats.createSeat({ workspaceId: 'w', actorId: owner, projectId: A, role, ownerId, name, expiresInDays: 30, ...extra });
   const pair = async name => (await post(pairRoute.POST, null, { name }))[1];
+  const admit = (as, sent, workspaceId = 'w', headers) => { signedIn = as; return post(admitRoute.POST, null, sent, { workspaceId }, headers); };
+  /** Until another session waits for a lock on this table. */
+  const waitsFor = async table => {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if ((await prisma.$queryRaw`SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE ${`%${table}%`} AND pid <> pg_backend_pid()`).length) return true;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    return false;
+  };
 
   let mine, theirs, first;
 
@@ -102,8 +112,12 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
   });
 
   await t.test('a member admits a runner for themselves only; the owner for anyone; a code works once', async () => {
-    const admit = (as, sent, workspaceId = 'w') => { signedIn = as; return post(admitRoute.POST, null, sent, { workspaceId }); };
     assert.equal((await admit(null, { code: first.code }))[0], 401);
+    // Only Collab's own page admits: another origin, no origin and a body that is not sent as JSON are refused, and the code is not used up.
+    for (const headers of [{ 'Content-Type': 'application/json', Origin: 'https://other.example' }, { 'Content-Type': 'application/json' }, { 'Content-Type': 'text/plain', Origin: 'https://collab.test' }]) {
+      assert.deepEqual((await admit(person, { code: first.code }, 'w', headers)).slice(0, 2).map(part => part.code ?? part), [403, 'same_origin']);
+    }
+    assert.equal(await prisma.agentRunner.count({ where: { workspaceId: { not: null } } }), 0);
     assert.equal((await admit(stranger, { code: first.code }))[0], 404, 'not a member of this workspace');
     assert.deepEqual((await admit(person, { code: first.code, ownerId: other })).slice(0, 2).map(part => part.code ?? part), [403, 'owner_only']);
     assert.equal((await admit(person, { code: 'AAAA-AAAA' }))[1].code, 'code_not_found');
@@ -148,12 +162,7 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "id" = ${changing.id} FOR UPDATE`;
       pending = ask(first.credential, [mine.token.tokenId]);
-      let waiting = false;
-      for (let attempt = 0; attempt < 100 && !waiting; attempt++) {
-        const rows = await prisma.$queryRaw`SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%AgentSeat%' AND pid <> pg_backend_pid()`;
-        waiting = rows.length > 0;
-        if (!waiting) await new Promise(resolve => setTimeout(resolve, 20));
-      }
+      const waiting = await waitsFor('AgentSeat');
       await tx.agentSeat.update({ where: { id: changing.id }, data: { retiredAt: new Date() } });
       assert.ok(waiting, 'the mint must wait for the seat row');
     }, { timeout: 10000 });
@@ -187,7 +196,7 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     assert.deepEqual([await me(newer.token), await me(again.seats[0].token)], [200, 200]);
     await ask(first.credential, [again.seats[0].tokenId]);
     assert.deepEqual([await me(newer.token), await me(again.seats[0].token)], [401, 200]);
-    // A token a person revoked reads as one the runner does not hold.
+    // A token that ended while the seat's agent stayed on (as when another of its tokens still works) reads as one the runner does not hold.
     await prisma.appToken.update({ where: { id: again.seats[0].tokenId }, data: { isRevoked: true } });
     const [, renewed] = await ask(first.credential, [again.seats[0].tokenId]);
     assert.equal(await me(renewed.seats[0].token), 200);
@@ -234,6 +243,92 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     // Their own.
     const { id } = await prisma.agentRunner.findFirstOrThrow({ where: { ownerId: other, removedAt: null } });
     assert.equal((await remove(other, id)).status, 200);
+  });
+
+  await t.test('a runner never switches a seat\'s agent back on: switched off or removed, the seat gets no token until a person makes it again', async () => {
+    const key = { userId_workspaceId: { userId: mine.userId, workspaceId: 'w' } };
+    const member = async () => (await prisma.workspaceMember.findUnique({ where: key, select: { status: true } }))?.status ?? null;
+    const usable = () => prisma.appToken.count({ where: { userId: mine.userId, isRevoked: false, tokenExpiresAt: { gt: new Date() } } });
+    /** The ask gives the seat a problem and no token, and the agent is as a person left it. */
+    const stays = async (credential, left) => {
+      const [status, answer] = await ask(credential);
+      assert.equal(status, 200, JSON.stringify(answer));
+      assert.deepEqual(answer.seats.map(row => [row.name, row.problem, row.tokenId, row.token]), [['dev', 'paused', null, undefined]]);
+      assert.deepEqual([await member(), await usable()], [left, 0]);
+    };
+    const fetched = async credential => {
+      const [, answer] = await ask(credential);
+      assert.equal(await me(answer.seats[0].token), 200);
+      return answer.seats[0];
+    };
+    const one = await pair('one');
+    assert.equal((await admit(person, { code: one.code }))[0], 201);
+    let held = await fetched(one.credential);
+
+    // Someone who manages members switches the agent off; its person then replaces the runner, which revokes what it fetched.
+    await prisma.workspaceMember.update({ where: key, data: { status: false } });
+    assert.equal(await me(held.token), 403);
+    const two = await pair('two');
+    const [, admitted] = await admit(person, { code: two.code });
+    assert.deepEqual(admitted.replaced, ['one']);
+    await stays(two.credential, false);
+
+    // Switched off, and the token runs out.
+    await prisma.workspaceMember.update({ where: key, data: { status: true } });
+    held = await fetched(two.credential);
+    await prisma.workspaceMember.update({ where: key, data: { status: false } });
+    await prisma.appToken.update({ where: { id: held.tokenId }, data: { tokenExpiresAt: new Date(Date.now() - 1000) } });
+    await stays(two.credential, false);
+
+    // Its last usable token revoked on the Agent tokens page, which switches the agent off; then removed from the workspace.
+    await prisma.workspaceMember.update({ where: key, data: { status: true } });
+    held = await fetched(two.credential);
+    assert.equal(await tokens.revokeAgentToken({ workspaceId: 'w', actorId: owner, tokenId: held.tokenId }), true);
+    await stays(two.credential, false);
+    await prisma.workspaceMember.delete({ where: key });
+    await stays(two.credential, null);
+
+    // A person who manages agent tokens makes the seat again, and its runner fetches as before.
+    assert.equal((await seat('dev', 'developer', person, { byRunner: true })).seat.id, mine.id);
+    assert.equal(await member(), true);
+    mine.token = await fetched(two.credential);
+    mine.credential = two.credential;
+    mine.runnerId = admitted.runner.id;
+  });
+
+  await t.test('a retired seat is not made again by hand while a token a runner fetched for it still works', async () => {
+    const made = (await seat('again', 'security', person, { byRunner: true })).seat;
+    const [, answer] = await ask(mine.credential, [mine.token.tokenId]);
+    const got = answer.seats.find(row => row.id === made.id);
+    assert.equal(await me(got.token), 200);
+    await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: made.id });
+    assert.equal(await me(got.token), 403, 'a retired seat');
+    // For another owner, by hand: the first owner's runner would hold a token of the new seat.
+    await refuses(seat('again', 'security', other), 'tokens_exist', 409);
+    assert.equal(await prisma.appToken.count({ where: { userId: made.userId } }), 1, 'no token was made for the refused seat');
+    assert.equal((await prisma.agentSeat.findUniqueOrThrow({ where: { id: made.id } })).ownerId, person);
+    assert.equal(await tokens.revokeAgentToken({ workspaceId: 'w', actorId: owner, tokenId: got.tokenId }), true);
+    const again = await seat('again', 'security', other);
+    assert.deepEqual([again.seat.id, again.seat.ownerId, again.seat.byRunner], [made.id, other, false]);
+    assert.deepEqual([await me(got.token), await me(again.token.token)], [401, 200]);
+  });
+
+  await t.test('a runner removed while its token is being made gets none', async () => {
+    // Asked a moment ago, so the ask below only reads the runner's row until it makes a token.
+    assert.equal((await ask(mine.credential, [mine.token.tokenId]))[0], 200);
+    const usable = () => prisma.appToken.count({ where: { runnerId: mine.runnerId, isRevoked: false } });
+    const before = await usable();
+    let pending;
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "AgentRunner" WHERE "id" = ${mine.runnerId} FOR UPDATE`;
+      // Holding nothing, so a token is made for the seat.
+      pending = ask(mine.credential);
+      const waiting = await waitsFor('AgentRunner');
+      await tx.agentRunner.update({ where: { id: mine.runnerId }, data: { removedAt: new Date() } });
+      assert.ok(waiting, 'the mint must wait for the runner row');
+    }, { timeout: 10000 });
+    assert.equal((await pending)[0], 401);
+    assert.equal(await usable(), before);
   });
 
   await t.test('a runner whose person left the workspace, or whose pairing ran out, is refused; and pairings are capped', async () => {

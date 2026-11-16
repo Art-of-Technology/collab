@@ -54,6 +54,18 @@ A seat run by hand keeps its hand-made token. A runner never gets it.
 - A runner whose person is no longer in the workspace gets nothing.
 - A fetched token lasts 30 days.
 - Nobody can make a token by hand for a seat that a runner runs.
+- A runner is admitted from Collab's own page only. A request from another site is refused.
+
+## Stop a seat that a runner runs
+
+| To stop | Do this | To start it again |
+| --- | --- | --- |
+| One seat | Under **Agent tokens**, revoke every token of the seat. Its agent is switched off, and the runner gets no new token. | Someone who manages the workspace creates the seat again: same name, project and role, with **Run by the owner's runner**. |
+| One seat, for good | Retire the seat. | Create a new seat. |
+| Every seat of a runner | Remove the runner under **Agents**, **Runners**. | Admit a runner again. |
+
+- A runner never switches an agent back on. When someone switched a seat's agent off or removed it from the workspace, the runner gets no token for it until a person creates the seat again.
+- A retired seat keeps the tokens its runner fetched until you revoke them. They can read but change nothing. Collab refuses to make the seat again by hand while one of them still works: revoke them first.
 
 ## Next
 

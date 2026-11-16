@@ -130,8 +130,10 @@ export async function runnerSeats(db: DB, projectId: string) {
  * What a runner asks with its credential: the seats that are its to run, which are the seats made for a runner, not
  * retired, in its workspace and owned by the person it was admitted for. `have` lists the ids of the tokens the runner
  * holds. A seat for which it holds a usable token is answered without one, and the runner's tokens for that seat from
- * before the one it holds end. A seat for which it holds none gets a new token: a first ask, a lost file, a lost
- * answer and a token revoked by a person all read the same. A token ends only when the runner shows it holds a newer
+ * before the one it holds end. A seat for which it holds none gets a new token: a first ask, a lost file and a lost
+ * answer all read the same. Not when the seat's agent is switched off or removed, which revoking its last usable token
+ * on the Agent tokens page also does: an ask never switches an agent back on, the seat is answered with the problem
+ * `paused`, and a person who manages agent tokens makes the seat again. A token ends only when the runner shows it holds a newer
  * one, or when a second newer one is made: answers can arrive late or out of order, so the token a new one replaces
  * keeps working until then, and a runner has at most two usable tokens for a seat. A stored token is never decrypted
  * to be sent again. The credential does nothing else.

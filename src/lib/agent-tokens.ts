@@ -104,7 +104,8 @@ export async function createAgentToken<S = undefined>(input: {
     const live = await tx.appToken.count({ where: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, isRevoked: false, tokenExpiresAt: { gte: new Date() } } });
     if (!membership?.status) {
       // Switched off or removed while tokens were still usable: minting must not make those work again.
-      if (live) return { error: 'paused' as const };
+      // A runner's ask never switches an agent back on, with or without tokens: that takes a person who manages them.
+      if (live || input.runnerId) return { error: 'paused' as const };
     }
     if (!live) {
       const others = await tx.workspaceMember.updateManyAndReturn({ where: { userId: account.id, status: true, workspaceId: { not: input.workspaceId } }, data: { status: false }, select: { workspaceId: true } });

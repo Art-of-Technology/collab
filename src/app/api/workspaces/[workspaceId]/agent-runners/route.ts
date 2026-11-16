@@ -24,6 +24,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function POST(request: NextRequest, { params }: { params: Promise<{ workspaceId: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: noStore });
+  // Whoever shows the code gets the person's seats, so only Collab's own page may send it: a page elsewhere can post
+  // a form or plain text with the person's session, but not JSON with this origin.
+  if (request.headers.get('origin') !== new URL(process.env.NEXTAUTH_URL || request.url).origin || !request.headers.get('content-type')?.startsWith('application/json')) {
+    return NextResponse.json({ error: 'A runner is admitted from Collab itself', code: 'same_origin' }, { status: 403, headers: noStore });
+  }
   const body = bodySchema.safeParse(await request.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400, headers: noStore });
   try {
