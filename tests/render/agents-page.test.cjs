@@ -66,9 +66,10 @@ test('sidebar highlights only the current workspace section and matching item', 
   const data = { views: [{ id: 'v', slug: 'report', name: 'Report', isFavorite: true }], apps: [{ id: 'a', app: { slug: 'tool', name: 'Tool' } }] };
   const render = (pathname, isCollapsed = false) => renderToStaticMarkup(React.createElement(sidebar(0, data), { pathname, isCollapsed }));
   const active = (html, href) => {
-    const link = html.match(new RegExp(`<a\\s[^>]*href="${href}"[^>]*>`));
+    const link = [...html.matchAll(new RegExp(`<a\\s[^>]*href="${href}"[^>]*class="[^"]*"[^>]*>`, 'g'))].at(-1);
     assert.ok(link, href);
-    return link[0].includes('bg-collab-800 text-white');
+    const classes = link[0].match(/class="([^"]*)"/)[1].split(/\s+/);
+    return classes.includes('bg-collab-800') && classes.includes('text-white');
   };
   for (const [path, selected] of [['projects/timeline', 'projects'], ['dashboard/detail', 'dashboard'], ['timeline/detail', 'timeline'], ['notes/detail', 'notes'], ['features/detail', 'features']]) {
     for (const collapsed of [false, true]) {
