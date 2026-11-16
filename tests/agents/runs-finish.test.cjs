@@ -195,6 +195,10 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     for (const outcome of ['in_review', 'blocked']) for (const empty of bare) assert.deepEqual(await missing({ outcome, askedUser: person, note: empty }), ['nextStep']);
     for (const outcome of ['in_review', 'blocked']) assert.deepEqual(await missing({ outcome, askedUser: person, note: `${bare[0]}\n\n###` }), ['nextStep']);
     assert.deepEqual(await missing({ outcome: 'blocked', askedUser: person, nextStep: 'First this.\nThen that.' }), ['nextStep']);
+    for (const separator of ['\u2028', '\u2029']) for (const outcome of ['done', 'in_review', 'blocked']) {
+      assert.deepEqual(await missing({ outcome, ...(outcome !== 'done' && { askedUser: person }), nextStep: `Review${separator}Deploy` }), ['nextStep']);
+      if (outcome !== 'done') assert.deepEqual(await missing({ outcome, askedUser: person, note: `${bare[0]}\n\nReview${separator}Deploy` }), ['nextStep']);
+    }
     assert.deepEqual(await missing({ outcome: 'in_review', askedUser: person, note: bare[0], pullRequest }), ['headCommit', 'nextStep']);
     for (const outcome of ['done', 'in_review', 'blocked']) for (const nextStep of ['', 'x'.repeat(301)])
       assert.deepEqual(await missing({ outcome, ...(outcome !== 'done' && { askedUser: person }), nextStep }), ['nextStep']);

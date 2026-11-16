@@ -310,7 +310,7 @@ function exitFacts(input: Finish) {
   const missing: string[] = [];
   if (input.pullRequest !== undefined ? !PULL_REQUEST.test(input.pullRequest) : input.headCommit !== undefined) missing.push('pullRequest');
   if (input.headCommit !== undefined ? !COMMIT.test(input.headCommit) : input.pullRequest !== undefined) missing.push('headCommit');
-  if (nextStep !== undefined ? !nextStep || nextStep.length > 300 || /[\r\n]/.test(nextStep) : input.outcome !== 'done') missing.push('nextStep');
+  if (nextStep !== undefined ? !nextStep || nextStep.length > 300 || /[\r\n\u2028\u2029]/.test(nextStep) : input.outcome !== 'done') missing.push('nextStep');
   if (missing.length) throw incomplete('exit_note_required', 'The exit note\'s fields are incomplete: pullRequest is owner/repository#number and comes with headCommit, '
     + `the full 40-character commit it was left at; a run that finishes ${input.outcome === 'done' ? 'in review or blocked' : input.outcome} gives nextStep, the first thing to do next, in one line`, missing);
   return { ...(input.pullRequest && { pullRequest: input.pullRequest, headCommit: input.headCommit }), ...(nextStep && { nextStep }) };
