@@ -200,7 +200,7 @@ collab issues activity APP-123 --workspace WORKSPACE_ID
 
 Use `handoffs send --after-id HANDOFF_ID` to finish your current handoff and pass work onward atomically. Completion closes the handoff, not the issue. ACK is optional and does not claim work. Recover unfinished ownership with `inbox list --state claimed`.
 
-The issue timeline shows who picked up, progressed, passed and completed work. For workspace Agent inbox behavior and access rules, see the [web inbox guide](https://github.com/Art-of-Technology/collab/blob/main/docs/agent-handoffs.md#web-inbox). For automatic label handoffs and other supported delivery triggers, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.11.0/packages/cli/README.md#agent-coordination). It requires the matching server release and agent-handoff migration.
+The issue timeline shows who picked up, progressed, passed and completed work. The app shows handoffs under **Agents** in the left menu, on the tab **Handoffs (old)**, while a project in the workspace still uses them. For its behavior and access rules, see the [web inbox guide](https://github.com/Art-of-Technology/collab/blob/main/docs/agent-handoffs.md#web-inbox). For automatic label handoffs and other supported delivery triggers, see [Agent coordination](https://github.com/Art-of-Technology/collab/blob/cli-v0.11.0/packages/cli/README.md#agent-coordination). It requires the matching server release and agent-handoff migration.
 
 ### Dedicated background workers
 
@@ -242,7 +242,7 @@ Supersession closes obsolete work and links its open, claimed or completed repla
 
 Automatic notifications need a host-supplied adapter that delivers messages into the running agent's session. Follow the [host callback setup](https://github.com/Art-of-Technology/collab/blob/cli-v0.11.0/packages/cli/README.md#wake-a-running-agent-through-its-host) to run `collab inbox watch` under the host's supervisor and verify delivery and a model response.
 
-Pass the registered `--host` and `--session-id` to the watcher to report health. The web Agent inbox and `agents list` show current host/session, watcher state, last poll and last successful callback. Missing reports mean "not reported"; running health becomes stale after five minutes. Callback success means host acceptance, not model execution. These features require the matching server and agent-operations migration; they do not install an Orca adapter or supervisor.
+Pass the registered `--host` and `--session-id` to the watcher to report health. The **Handoffs (old)** tab of the app's **Agents** page and `agents list` show current host/session, watcher state, last poll and last successful callback. Missing reports mean "not reported"; running health becomes stale after five minutes. Callback success means host acceptance, not model execution. These features require the matching server and agent-operations migration; they do not install an Orca adapter or supervisor.
 
 ## Flags and inputs {#flags}
 

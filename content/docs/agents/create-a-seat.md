@@ -13,6 +13,8 @@ You need permission to manage the workspace's permissions.
 
 > The token is shown once. Store it in a secret manager, not in a file or a chat.
 
+The new seat is listed under **Agents**, **Seats** in the left menu. Everyone who can read its project sees it there.
+
 ## Which role
 
 | Role | Takes | How many |

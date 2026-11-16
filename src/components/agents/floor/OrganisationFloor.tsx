@@ -170,15 +170,9 @@ export function OrganisationFloor({ initial }: { initial: FloorSnapshot }) {
     <main className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link
-            className="text-sm text-muted-foreground hover:underline"
-            href={`${base}/agent-inbox`}
-          >
-            ← Agent inbox
-          </Link>
-          <h1 className="mt-2 text-2xl font-semibold">
+          <h2 className="text-lg font-semibold">
             {snapshot.workspace.name} · Organisation floor
-          </h1>
+          </h2>
           <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
             Real agents, projects and recorded handoffs. Motion illustrates
             reports; it does not monitor execution or change tasks.

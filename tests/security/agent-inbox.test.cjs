@@ -15,7 +15,7 @@ const { AgentInboxView } = load('src/components/agents/AgentInboxView.tsx', {
 });
 class HandoffError extends Error { code = 'agent_not_found'; }
 const pagePath = 'src/app/(main)/[workspaceId]/agent-inbox/page.tsx';
-function fixture({ user = 'alice', member = true, agents = [{ name: 'worker-a' }] } = {}) {
+function fixture({ user = 'alice', member = true, agents = [{ name: 'worker-a' }], handoffs = true } = {}) {
   const calls = [];
   const workspace = { id: 'ws', slug: 'team', ownerId: 'bob', members: [{ userId: 'alice', status: member }] };
   const prisma = {
@@ -35,6 +35,8 @@ function fixture({ user = 'alice', member = true, agents = [{ name: 'worker-a' }
       return { agents, items: [], hasMore: false };
     } },
     '@/components/agents/AgentInboxView': { AgentInboxView },
+    '@/components/agents/AgentsTabs': load('src/components/agents/AgentsTabs.tsx', { 'react/jsx-runtime': require('react/jsx-runtime'), 'next/link': require('next/link') }),
+    '@/lib/agents-page': { usesHandoffs: async () => handoffs },
   }).default;
   return { calls, run: (query = {}) => page({ params: Promise.resolve({ workspaceId: 'team' }), searchParams: Promise.resolve(query) }) };
 }
@@ -135,4 +137,12 @@ test('inbox SVG data images remain static images in every agent and queue view',
       }
     }
   }
+});
+test('the old address opens the handoff inbox under the Agents tabs; "Handoffs (old)" is a tab only while a project uses handoffs', async () => {
+  const mixed = renderToStaticMarkup(await fixture().run());
+  assert.match(mixed, /<a aria-current="page"[^>]*href="\/team\/agent-inbox"[^>]*>Handoffs \(old\)<\/a>/);
+  assert.match(mixed, /<h1[^>]*>Agents<\/h1>.*href="\/team\/agents".*href="\/team\/agents\/inbox".*href="\/team\/agents\/floor".*worker-a/s);
+  const switched = renderToStaticMarkup(await fixture({ handoffs: false }).run());
+  assert.doesNotMatch(switched, /<a[^>]*>Handoffs \(old\)<\/a>/);
+  assert.match(switched, /href="\/team\/agents\/floor".*worker-a/s);
 });

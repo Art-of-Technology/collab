@@ -24,6 +24,7 @@ import {
   Users,
   Tag,
   Lightbulb,
+  Bot,
   FileText,
   Clock,
   Copy,
@@ -547,6 +548,19 @@ export function CommandMenu({
             "text-xs"
           )}
         >
+          <CommandItem
+            onSelect={() => navigateTo(getWorkspacePath("/agents"))}
+            className={cn(
+              "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
+              "hover:bg-white/10 hover:text-white",
+              "aria-selected:bg-white/10 data-[selected=true]:bg-white/10",
+              "px-3 py-1.5",
+              "mx-1"
+            )}
+          >
+            <Bot className="h-4 w-4 text-gray-400" />
+            <span className="text-sm">Go to Agents</span>
+          </CommandItem>
           <CommandItem
             onSelect={() => navigateTo(getWorkspacePath("/timeline"))}
             className={cn(

@@ -20,6 +20,7 @@ function sidebarSettings(currentWorkspace, isCollapsed) {
     '@/context/WorkspaceContext': { useWorkspace: () => ({ currentWorkspace }) },
     '@/hooks/queries/useProjects': { useProjects: () => ({ data: [] }) },
     '@/hooks/queries/useViews': { useViews: () => ({ data: [] }) },
+    '@/hooks/queries/useSeatsWaiting': { useSeatsWaiting: () => ({ data: 0 }) },
     '@/hooks/queries/useInstalledApps': { useInstalledApps: () => ({ data: [] }) },
     '@/hooks/useAI': { useAIWidget: () => ({}), useAIAgents: () => ({}) },
     '@/hooks/use-toast': { useToast: () => ({ toast() {} }) },

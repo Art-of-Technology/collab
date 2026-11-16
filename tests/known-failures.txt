@@ -1,4 +1,3 @@
-tests/render/cli-app-navigation.test.cjs > installed CLI opens public documentation while web apps retain their workspace routes
 tests/render/git-connections.test.cjs > tests/render/git-connections.test.cjs
 tests/render/homepage-showcase.test.cjs > homepage showcases the product and gives visitors working docs and sign-in destinations
 tests/render/project-notes.test.cjs > the board Project notes link renders its destination for a member

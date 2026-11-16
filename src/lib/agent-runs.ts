@@ -43,7 +43,6 @@ const statusSelect = { select: { category: true, isFinal: true } } as const;
  * has sat with a seat for `CHILD_IDLE_MS` without a run.
  */
 export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }> {
-  const me = context.user.id;
   await markLost(context.workspace.id);
   const seat = await seatFor(prisma, context);
   if (seat) {
@@ -51,9 +50,15 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
       where: { id: seat.id, OR: [{ lastSeenAt: null }, { lastSeenAt: { lt: new Date(Date.now() - 60_000) } }] }, data: { lastSeenAt: new Date() },
     });
   }
+  const inbox = await inboxOf(context.workspace.id, context.user.id, seat);
+  return { items: inbox.items.slice(0, INBOX_LIMIT) };
+}
+
+/** The read of `seatInbox` alone. It marks no run lost and records no sign of life, so a person's page can ask it for a seat. */
+export async function inboxOf(workspaceId: string, me: string, seat: { projectId: string; role: string } | null): Promise<{ items: InboxItem[] }> {
   const issues = await prisma.issue.findMany({
     where: {
-      workspaceId: context.workspace.id, assigneeId: me, ...(seat && { projectId: seat.projectId }), ...NOT_DONE,
+      workspaceId, assigneeId: me, ...(seat && { projectId: seat.projectId }), ...NOT_DONE,
     },
     select: {
       id: true, issueKey: true, projectId: true, title: true, priority: true, createdAt: true, projectStatus: statusSelect,
@@ -138,7 +143,6 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
     .flatMap(candidate => { const reason = reasonFor(candidate); return reason ? [{ ...candidate, reason }] : []; })
     .sort((a, b) => (ORDER[a.stands] ?? 3) - (ORDER[b.stands] ?? 3) || rank(a.issue.priority) - rank(b.issue.priority)
       || a.issue.createdAt.getTime() - b.issue.createdAt.getTime())
-    .slice(0, INBOX_LIMIT)
     .map(({ issue, last, category, reason }) => ({ issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
       category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null })) };
 }

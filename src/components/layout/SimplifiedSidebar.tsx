@@ -6,7 +6,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Home,
-  Inbox,
+  Bot,
   Eye,
   Plus,
   FileText,
@@ -38,6 +38,7 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 import { useProjects } from "@/hooks/queries/useProjects";
 import { useViews } from "@/hooks/queries/useViews";
 import { useInstalledApps } from "@/hooks/queries/useInstalledApps";
+import { useSeatsWaiting } from "@/hooks/queries/useSeatsWaiting";
 import { useAIWidget, useAIAgents } from "@/hooks/useAI";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -79,6 +80,8 @@ export default function SimplifiedSidebar({
   const [showCreateViewModal, setShowCreateViewModal] = useState(false);
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
 
+  const { data: seatsWaiting = 0 } = useSeatsWaiting(currentWorkspace?.id);
+  const [agentsExpanded, setAgentsExpanded] = useState(true);
   const [projectsExpanded, setProjectsExpanded] = useState(true);
   const [projectSearch, setProjectSearch] = useState("");
   const recentProjects = useMemo(() => {
@@ -106,12 +109,25 @@ export default function SimplifiedSidebar({
 
   const agentColor = currentAgent?.color || '#2563eb';
 
+  // The Agents page and its tabs; the old handoff inbox at /agent-inbox is one of them.
+  const [, , section, subsection] = pathname.split("/");
+  const agents = { name: "Agents", href: `${workspaceBase}/agents`, icon: Bot, current: section === "agents" || section === "agent-inbox", badge: seatsWaiting };
+  const agentsNav = [
+    { name: "Seats", href: agents.href, current: section === "agents" && !subsection, badge: 0 },
+    { name: "Seat inbox", href: `${agents.href}/inbox`, current: section === "agents" && subsection === "inbox", badge: seatsWaiting },
+    { name: "Floor", href: `${agents.href}/floor`, current: section === "agents" && subsection === "floor", badge: 0 },
+  ];
+  const badge = (count: number) => count > 0 && (
+    <span className="h-5 min-w-[20px] px-1 flex items-center justify-center text-[10px] font-semibold rounded-full bg-violet-500 text-white">
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+
   const mainNav = [
-    { name: "Agent inbox", href: `${workspaceBase}/agent-inbox`, icon: Inbox, current: pathname.includes("/agent-inbox"), badge: 0 },
-    { name: "Home", href: `${workspaceBase}/dashboard`, icon: Home, current: pathname.includes("/dashboard"), badge: 0 },
-    { name: "Timeline", href: `${workspaceBase}/timeline`, icon: MessageSquare, current: pathname.includes("/timeline"), badge: 0 },
-    { name: "Context", href: `${workspaceBase}/notes`, icon: FileText, current: pathname.includes("/notes"), badge: 0 },
-    { name: "Feature Requests", href: `${workspaceBase}/features`, icon: Lightbulb, current: pathname.includes("/features"), badge: 0 },
+    { name: "Home", href: `${workspaceBase}/dashboard`, icon: Home, current: section === "dashboard", badge: 0 },
+    { name: "Timeline", href: `${workspaceBase}/timeline`, icon: MessageSquare, current: section === "timeline", badge: 0 },
+    { name: "Context", href: `${workspaceBase}/notes`, icon: FileText, current: section === "notes", badge: 0 },
+    { name: "Feature Requests", href: `${workspaceBase}/features`, icon: Lightbulb, current: section === "features", badge: 0 },
     // The public documentation. It has its own layout, so it is never the current page of this menu.
     { name: "Docs", href: "/docs", icon: BookOpen, current: false, badge: 0 },
   ];
@@ -131,7 +147,7 @@ export default function SimplifiedSidebar({
 
         {/* Main Nav Icons */}
         <div className="px-2 space-y-1">
-          {mainNav.map((item) => (
+          {[agents, ...mainNav].map((item) => (
             <Link
               key={item.name}
               href={item.href}
@@ -226,6 +242,37 @@ export default function SimplifiedSidebar({
 
         {/* Main Navigation */}
         <nav className="space-y-0.5">
+          {/* Agents: opens and closes the way Projects does */}
+          <div>
+            <div className="flex items-center rounded-lg text-collab-400 hover:bg-collab-800">
+              <Link
+                href={agents.href}
+                className={cn("flex min-w-0 flex-1 items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium hover:text-white",
+                  agents.current && "bg-collab-800 text-white")}
+              >
+                <Bot className="h-4 w-4" />
+                <span className="flex-1">Agents</span>
+                {!agentsExpanded && badge(seatsWaiting)}
+              </Link>
+              <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Toggle agents menu"
+                aria-expanded={agentsExpanded} aria-controls="sidebar-agents"
+                onClick={() => setAgentsExpanded(!agentsExpanded)}>
+                <ChevronDown className={cn("h-4 w-4 transition-transform", !agentsExpanded && "-rotate-90")} />
+              </Button>
+            </div>
+            {agentsExpanded && (
+              <div id="sidebar-agents" className="mt-1 ml-6 space-y-1 border-l border-collab-700 pl-3">
+                {agentsNav.map(item => (
+                  <Link key={item.name} href={item.href} aria-current={item.current ? "page" : undefined}
+                    className={cn("flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors",
+                      item.current ? "text-white bg-collab-800" : "text-collab-400 hover:text-white hover:bg-collab-900")}>
+                    <span className="flex-1 truncate">{item.name}</span>
+                    {badge(item.badge)}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
           {mainNav.map((item) => (
             <Link
               key={item.name}
@@ -239,11 +286,7 @@ export default function SimplifiedSidebar({
             >
               <item.icon className={cn("h-4 w-4", item.current ? "text-white" : "text-collab-500")} />
               <span className="flex-1">{item.name}</span>
-              {item.badge > 0 && (
-                <span className="h-5 min-w-[20px] px-1 flex items-center justify-center text-[10px] font-semibold rounded-full bg-violet-500 text-white">
-                  {item.badge > 9 ? "9+" : item.badge}
-                </span>
-              )}
+              {badge(item.badge)}
             </Link>
           ))}
         </nav>
@@ -254,7 +297,7 @@ export default function SimplifiedSidebar({
             <Link
               href={`${workspaceBase}/projects`}
               className={cn("flex min-w-0 flex-1 items-center gap-4 rounded-lg px-2 py-2 text-sm font-medium hover:text-white",
-                pathname.startsWith(`${workspaceBase}/projects`) && "bg-collab-800 text-white")}
+                section === "projects" && "bg-collab-800 text-white")}
             >
               <FolderKanban className="h-4 w-4" />
               <span>Projects</span>
@@ -321,7 +364,7 @@ export default function SimplifiedSidebar({
                   href={`${workspaceBase}/views/${view.slug || view.id}`}
                   className={cn(
                     "flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-all duration-150",
-                    pathname.includes(`/views/${view.slug || view.id}`)
+                    section === "views" && subsection === (view.slug || view.id)
                       ? "text-white bg-collab-800"
                       : "text-collab-400 hover:text-white hover:bg-collab-900"
                   )}
@@ -347,7 +390,7 @@ export default function SimplifiedSidebar({
                   href={installation.app.slug === 'collab-cli' ? '/docs/cli' : `${workspaceBase}/apps/${installation.app.slug}`}
                   className={cn(
                     "flex items-center gap-4 rounded-lg px-2 py-2 text-sm transition-all duration-150",
-                    pathname.includes(`/apps/${installation.app.slug}`)
+                    section === "apps" && subsection === installation.app.slug
                       ? "bg-collab-800 text-white"
                       : "text-collab-400 hover:text-white hover:bg-collab-800"
                   )}

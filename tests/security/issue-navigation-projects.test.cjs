@@ -80,6 +80,7 @@ test('Projects expands, searches all projects, shows five most recently updated,
   await mounted('src/components/layout/SimplifiedSidebar.tsx', {
     '@/hooks/queries/useProjects': { useProjects: () => ({ data: projects }) },
     '@/hooks/queries/useViews': { useViews: () => ({ data: [] }) },
+    '@/hooks/queries/useSeatsWaiting': { useSeatsWaiting: () => ({ data: 0 }) },
     '@/hooks/queries/useInstalledApps': { useInstalledApps: () => ({ data: [] }) },
     '@/hooks/queries/useUser': { useCurrentUser: () => ({ data: {} }) },
     '@/hooks/useAI': { useAIWidget: () => ({}), useAIAgents: () => ({}) },
