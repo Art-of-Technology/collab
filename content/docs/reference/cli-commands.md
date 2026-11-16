@@ -653,7 +653,7 @@ The commit of Collab that the server runs. With --commit ID also contains: true,
 | Flag | Type | Details |
 | --- | --- | --- |
 | `--commit` | string |  |
-| `--wait-seconds` | integer | 1 to 60 seconds, without it the command reads once. A wait only reads; an empty wait returns `timedOut: true` |
+| `--wait-seconds` | integer | 1 to 3600 seconds, without it the command reads once. A wait only reads; an empty wait returns `timedOut: true` |
 
 ## whoami
 
@@ -1037,7 +1037,7 @@ ID is the issue ID or key (such as APP-123).
 | Flag | Type | Details |
 | --- | --- | --- |
 | `--since` | string | format: date-time |
-| `--wait-seconds` | integer | 1 to 60 seconds, default 30. A wait only reads; an empty wait returns `timedOut: true` |
+| `--wait-seconds` | integer | 1 to 3600 seconds, default 30. A wait only reads; an empty wait returns `timedOut: true` |
 
 ## relations
 
