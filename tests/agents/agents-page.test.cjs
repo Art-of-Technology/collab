@@ -28,8 +28,12 @@ test('the Agents page reads the seats a person may see, what each works on and w
   // The application's client, so Trash is hidden here as it is in production.
   const prisma = raw.$extends(load('src/lib/issue-visibility.ts').issueVisibilityExtension(Prisma.dmmf.datamodel.models));
   const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma } });
-  const seatFor = (_db, context) => raw.agentSeat.findFirst({ where: { userId: context.user.id, retiredAt: null } });
-  const runs = load('src/lib/agent-runs.ts', { zod: require('zod'), '@/lib/prisma': { prisma }, '@/lib/agent-seats': { seatFor }, '@/lib/issue-finder': finder,
+  // The real module: the inbox read takes the rule for "not done" and the lead's limits from it.
+  const handoffs = load('src/lib/agent-handoffs.ts', { 'node:crypto': require('node:crypto'), 'node:buffer': require('node:buffer'), zod: require('zod'),
+    '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts') }, { Date });
+  const seats = load('src/lib/agent-seats.ts', { '@/lib/prisma': { prisma }, '@/lib/agent-handoffs': handoffs, '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent' },
+    '@/lib/issue-assignee': load('src/lib/issue-assignee.ts', { './agent-handoffs': handoffs }) }, { Date });
+  const runs = load('src/lib/agent-runs.ts', { zod: require('zod'), '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats, '@/lib/issue-finder': finder,
     '@/lib/permissions': {}, '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent' } }, { Date });
   const page = load('src/lib/agents-page.ts', { '@/lib/prisma': { prisma }, '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/issue-finder': finder, '@/lib/agent-runs': runs }, { Date });
   let user = member;
@@ -111,5 +115,16 @@ test('the Agents page reads the seats a person may see, what each works on and w
     await raw.project.update({ where: { id: B }, data: { isArchived: false, agentMode: 'seats' } });
     assert.equal(await page.usesHandoffs('w'), false);
     assert.equal(await page.usesHandoffs('w2'), true);
+  });
+
+  await t.test('a lead seat\'s issue that waits for its children is shown when one of them is done', async () => {
+    await raw.user.create({ data: { id: 'cseatlead01', name: 'cseatlead01' } });
+    const lead = await seat('lead-a', 'cseatlead01', A, 'lead');
+    const epic = await issue(lead.userId);
+    await run(epic, { seatId: lead.id, userId: lead.userId, state: 'finished', outcome: 'blocked', endedAt: ago(60) });
+    const waits = async () => (await page.readSeats(member, 'team')).seats.find(row => row.id === 'lead-a').waiting.map(item => [item.issueKey, item.reason]);
+    assert.deepEqual(await waits(), []);
+    await issue(dev.userId, 'done', { parentId: epic.id });
+    assert.deepEqual(await waits(), [[epic.issueKey, 'child_done']]);
   });
 });
