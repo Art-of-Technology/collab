@@ -155,17 +155,21 @@ export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: 
 export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<AppAuthContext, 'user'>,
   issue: { id: string; workspaceId: string; projectId: string; agentRequestRole: string | null }, to: string): Promise<boolean> {
   const me = context.user.id;
+  // Both seats' rows, held to the end and read after that: neither is retired while this runs, retiring waits for it,
+  // and a retirement that got in first refuses this.
+  const rows = await tx.$queryRaw<{ id: string; name: string; userId: string }[]>`SELECT "id", "name", "userId" FROM "AgentSeat" WHERE "userId" IN (${me}, ${to}) ORDER BY "id" FOR SHARE`;
   const lead = await tx.agentSeat.findFirst({ where: { userId: me, role: 'lead', retiredAt: null }, select: { id: true, projectId: true } });
   if (!lead) return false;
   if (lead.projectId !== issue.projectId) throw new HandoffError('wrong_project', "A seat writes only to its own project's issues", 403);
-  // The seat's row, held to the end and read again: one retired in between takes nothing, and retiring waits for this.
-  const [seat] = await tx.$queryRaw<{ id: string; name: string }[]>`SELECT "id", "name" FROM "AgentSeat" WHERE "userId" = ${to} FOR SHARE`;
+  const seat = rows.find(row => row.userId === to);
   if (!seat || to === me) throw new HandoffError('seat_scope', 'A lead seat assigns issues only to the other seats of its project', 403);
   await assertAssignable(tx, issue, to);
   const current = await tx.issue.findUniqueOrThrow({ where: { id: issue.id }, select: { assigneeId: true, helpers: { where: { approvedBy: me }, select: { userId: true } } } });
   const free = current.assigneeId ? current.helpers.some(row => row.userId === current.assigneeId)
     : !await tx.issueActivity.count({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'LEAD_ASSIGNED' } });
   if (!free) throw new HandoffError('assign_by_person', 'Someone else decided who has this issue, or took it from the seat the lead gave it to: that stands, and a person assigns it', 403);
+  // shortcut: the limit is held where the lead assigns, on what is open then. A done issue that is reopened, or one
+  // restored from Trash, is not refused and counts from then on; hold those paths to it too if a lead ever uses them to get past it.
   if (await tx.issue.count({ where: fromLead(issue.projectId, me, to) }) >= LEAD_CAP) {
     throw new HandoffError('lead_cap', `${seat.name} already has ${LEAD_CAP} open issues from the lead; one of them has to be done first`, 429);
   }

@@ -215,19 +215,21 @@ What the lead may assign:
 - An issue of its own project, to another seat of that project. That seat's role must take the issue, as for any assignment.
 - Only an existing issue, and only through the call above. Creating an issue with an assignee, unassigning, and assigning to a person or to itself are refused with `seat_scope`. Another project's issue or seat is refused with `wrong_project`, a retired seat with `assignee_not_found`.
 - Only an issue with no assignee that no lead has placed before, or an issue whose current assignee the lead itself set. Anything else was decided by someone else and stands: `403 assign_by_person`. So an issue a person assigned is not moved, and an issue the lead placed that was then unassigned, by a person or because its seat was retired, waits for a person.
-- A seat holds at most 3 open issues from the lead. One more is refused with `429 lead_cap`, and the lead waits. Open means not in a done status. Issues a person gave the seat do not count. Two assignments at the same moment that would pass the limit together: one is refused with `409 issue_conflict`.
+- A seat holds at most 3 open issues from the lead. One more is refused with `429 lead_cap`, and the lead waits. Open means not in a done status. Issues a person gave the seat do not count. The limit is checked when the lead assigns: reopening a done issue or restoring one from Trash is not refused, and that issue counts from then on. Two assignments at the same moment that would pass the limit together: one is refused with `409 issue_conflict`.
 - Every assignment is on the issue's **Activity** tab under the lead's name, with the seat it went to.
 
 What brings the epic back, each as the `reason` in the lead's inbox:
 
-- `child_done`: a child issue reached a done status after the lead's last run ended.
-- `child_blocked`: a run on a child issue finished `blocked` after the lead's last run ended.
+- `child_done`: a child issue reached a done status after the lead's last run started.
+- `child_blocked`: a run on a child issue finished `blocked` after the lead's last run started.
 - `child_idle`: a seat has held a child issue for 2 hours and no run has started on it since it was assigned. Offered once per assignment, when the 2 hours are up.
+
+Children are measured from the start of the lead's last run, not its end: a child that finishes while the lead's session is running may be unseen by it, so the epic comes back once more.
 - `reply`, as for any blocked issue: someone else commented on the epic.
 
 The rules:
 
-- Only a lead seat is woken by its issue's children, and only for an issue its last run finished `blocked`. The children are the issues of the lead's project whose parent is that issue.
+- Only a lead seat is woken by its issue's children, and only for an issue its last run finished `blocked`. A blocked status without such a run wakes nobody. The children are the issues of the lead's project whose parent is that issue.
 - A lead's run may finish `blocked` without `blockedBy` or `askedUser` while the issue has a child that is not done. With every child done, that finish is refused with `422 exit_state_required`: finish `done`.
 - A child blocked on a question for a person: the lead does not answer for the person. It finishes `blocked` with `askedUser`. The child returns to its own seat when the person replies on it, and the epic returns to the lead when the child is done.
 - A lead may create child issues in its project, from the issue templates, like any seat, and then assign them.

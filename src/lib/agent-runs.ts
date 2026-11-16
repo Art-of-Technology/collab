@@ -38,8 +38,9 @@ const statusSelect = { select: { category: true, isFinal: true } } as const;
  * for an issue that never had a run or whose last run finished done. A run that ended before the issue was
  * last assigned to the caller says nothing: the assignment is new work. An issue in review or blocked is
  * offered only when something happened after its reference time: the end of that run, or without one the
- * time it was last assigned to the caller. For a lead seat, what happens to the children of a blocked issue counts
- * too: one reached done, one's run finished blocked, or one has sat with a seat for `CHILD_IDLE_MS` without a run.
+ * time it was last assigned to the caller. For a lead seat whose last run on an issue finished blocked, what happened
+ * to the issue's children since that run started counts too: one reached done, one's run finished blocked, or one
+ * has sat with a seat for `CHILD_IDLE_MS` without a run.
  */
 export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }> {
   const me = context.user.id;
@@ -58,7 +59,7 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
       id: true, issueKey: true, projectId: true, title: true, priority: true, createdAt: true, projectStatus: statusSelect,
       helpers: { where: { userId: me }, select: { assignedAt: true, approvedAt: true } },
       // One run at most is open per issue, and no run starts while it is, so an open run is always the latest.
-      agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, endedAt: true } },
+      agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, startedAt: true, endedAt: true } },
     },
   });
   // A run that finished done leaves the issue to its status, so a reopened issue is offered again. A project with no
@@ -75,7 +76,7 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
     const run = last?.endedAt && last.endedAt >= assigned ? last : undefined;
     if (run?.outcome === 'done' && !showsDone.has(issue.projectId)) return [];
     const stands = !run || run.outcome === 'done' ? category : run.outcome ?? 'resume';
-    return [{ issue, last, stands, category: stands === 'resume' ? category : stands, since: run?.endedAt ?? assigned }];
+    return [{ issue, last, stands, category: stands === 'resume' ? category : stands, since: run?.endedAt ?? assigned, ranBlocked: run?.outcome === 'blocked' ? run.startedAt : null }];
   });
 
   const waiting = candidates.filter(({ stands }) => stands === 'in_review' || stands === 'blocked').map(({ issue }) => issue.id);
@@ -95,7 +96,7 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
   } }) : [];
   const now = Date.now();
 
-  const reasonFor = ({ issue, stands, since }: typeof candidates[number]): InboxItem['reason'] | null => {
+  const reasonFor = ({ issue, stands, since, ranBlocked }: typeof candidates[number]): InboxItem['reason'] | null => {
     if (stands === 'resume') return 'resume';
     if (stands !== 'in_review' && stands !== 'blocked') return 'assigned';
     const detail = details.get(issue.id);
@@ -116,14 +117,17 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
     }
     const blockers = others.filter(other => other.blocksMe).map(other => other.issue);
     if (blockers.length && blockers.every(isDone) && blockers.some(doneAfter)) return 'blocker_resolved';
-    const own = children.filter(child => child.parentId === issue.id);
-    if (own.some(doneAfter)) return 'child_done';
-    if (own.some(child => !isDone(child) && child.agentRuns[0]?.outcome === 'blocked' && after(child.agentRuns[0].endedAt ?? undefined))) return 'child_blocked';
+    // Only after a run of the lead's that finished blocked: a blocked status alone says nothing about children. They are
+    // measured from when that run started, not from its end: what happened while the session ran, it may not have seen.
+    const own = ranBlocked ? children.filter(child => child.parentId === issue.id) : [];
+    const unseen = (date?: Date | null) => !!date && !!ranBlocked && date > ranBlocked;
+    if (own.some(child => isDone(child) && unseen(child.updatedAt))) return 'child_done';
+    if (own.some(child => !isDone(child) && child.agentRuns[0]?.outcome === 'blocked' && unseen(child.agentRuns[0].endedAt))) return 'child_blocked';
     // Once per assignment: the moment a child had sat too long is after the lead last looked, and has come.
     if (own.some(child => {
       const held = child.helpers.find(row => row.userId === child.assigneeId);
       const assigned = (held?.approvedAt ?? held?.assignedAt ?? child.createdAt).getTime(), due = assigned + CHILD_IDLE_MS;
-      return !isDone(child) && child.assignee?.agentSeat && (child.agentRuns[0]?.startedAt.getTime() ?? 0) < assigned && due > since.getTime() && due <= now;
+      return !isDone(child) && child.assignee?.agentSeat && (child.agentRuns[0]?.startedAt.getTime() ?? 0) < assigned && unseen(new Date(due)) && due <= now;
     })) return 'child_idle';
     return [detail, ...requests].some(other => after(other.comments[0]?.createdAt)) ? 'reply' : null;
   };
@@ -259,7 +263,7 @@ export async function actOnRun(context: Caller, runId: string, input: z.infer<ty
   const me = context.user.id;
   const own = { id: runId, workspaceId: context.workspace.id, userId: me };
   await markLost(context.workspace.id);
-  const run = await prisma.agentRun.findFirst({ where: own, select: { issueId: true, seatId: true, runner: true, leaseUntil: true, seat: { select: { role: true, projectId: true } } } });
+  const run = await prisma.agentRun.findFirst({ where: own, select: { issueId: true, seatId: true, runner: true, leaseUntil: true, seat: { select: { role: true } } } });
   if (!run) throw new HandoffError('not_found', 'Run not found', 404);
   const live = { ...own, generation: input.generation, endedAt: null };
   if (input.event === 'finish') {
@@ -293,7 +297,7 @@ const ISSUE = { id: true, issueKey: true, projectId: true, assigneeId: true, sta
  * or a pull request); the verdict is written to the request's timeline and to that of the issue it was filed for.
  * Returns whether the project had no status to move the issue to.
  */
-async function finish(context: Caller, run: { id: string; issueId: string; seatId: string | null; runner: string; seat: { role: string; projectId: string } | null }, input: Finish) {
+async function finish(context: Caller, run: { id: string; issueId: string; seatId: string | null; runner: string; seat: { role: string } | null }, input: Finish) {
   const me = context.user.id, workspaceId = context.workspace.id;
   const absent = NOTE_HEADINGS.filter(heading => !new RegExp(`^## ${heading}[ \\t]*$`, 'm').test(input.note));
   if (absent.length) throw incomplete('exit_note_required', `The exit note needs each of these as a heading on its own line: ${absent.map(heading => `## ${heading}`).join(', ')}`, absent);
@@ -302,9 +306,8 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
   const stray = given.filter(name => !waitsFor.includes(name));
   if (stray.length) throw new HandoffError('invalid_request', `A run that finishes ${input.outcome} does not take ${stray.join(' or ')}`);
   if (input.outcome !== 'done' && (input.verdict || input.reviewed)) throw new HandoffError('invalid_request', 'Only a security request that finishes done takes a verdict');
-  // A lead waits for the children of its issue: blocked with nothing named, while one of them, in its project as the inbox reads them, is not done.
-  const forChildren = input.outcome === 'blocked' && !given.length && run.seat?.role === 'lead'
-    && !!await prisma.issue.count({ where: { parentId: run.issueId, projectId: run.seat.projectId, ...NOT_DONE } });
+  // A lead waits for the children of its issue: blocked with nothing named. Whether one of them is open is decided with the finish, below.
+  const forChildren = input.outcome === 'blocked' && !given.length && run.seat?.role === 'lead';
   if (waitsFor.length && !given.length && !forChildren) throw incomplete('exit_state_required', `A run that finishes ${input.outcome} names ${waitsFor.join(' or ')}`, waitsFor);
   if (input.alsoFinish && run.seat?.role !== 'release') throw new HandoffError('role_mismatch', 'Only a release seat finishes other issues with its run', 422);
   if (input.alsoFinish && input.outcome !== 'done') throw incomplete('exit_state_required', 'Other issues are finished with a run only when it is done', ['alsoFinish']);
@@ -331,6 +334,13 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
       // Lost, stopped, or the issue went to someone else: the session did the work, so what it wrote is kept.
       if (await tx.agentRun.findFirst({ where: { ...holds, state: { not: 'finished' } }, select: { id: true } })) await entry(issue, 'AGENT_RUN_LATE', { runId: run.id });
       return null;
+    }
+    if (forChildren) {
+      // The children of the lead's project, as its inbox reads them. One that finishes right after this count still
+      // brings the issue back: the inbox measures children from when this run started, not from when it ends.
+      if (!await tx.issue.count({ where: { parentId: issue.id, projectId: issue.projectId, ...NOT_DONE } })) {
+        throw incomplete('exit_state_required', `A run that finishes ${input.outcome} names ${waitsFor.join(' or ')}; a lead names neither only while a child issue is not done`, waitsFor);
+      }
     }
 
     const waits: Record<string, string> = {};

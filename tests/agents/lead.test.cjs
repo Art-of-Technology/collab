@@ -252,11 +252,11 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     assert.deepEqual(await inbox(leadB), []);
 
     // The second child sits with its seat and no run starts: two hours after it was given, the epic comes back, once.
-    const leadRun = { where: { id: run } }, held = { where: { issueId_userId: { issueId: second.id, userId: devB.userId } } };
+    const held = { where: { issueId_userId: { issueId: second.id, userId: devB.userId } } };
     // The clock is turned back for everything the lead's last run is measured against.
     await raw.issueAssignee.update({ where: { issueId_userId: { issueId: epic.id, userId: leadB.userId } }, data: { approvedAt: ago(300) } });
     await raw.issue.update({ where: { id: first.id }, data: { updatedAt: ago(200) } });
-    await raw.agentRun.update({ ...leadRun, data: { endedAt: ago(100) } });
+    await raw.agentRun.updateMany({ where: { issueId: epic.id }, data: { startedAt: ago(101), endedAt: ago(100) } });
     await raw.issueAssignee.update({ ...held, data: { approvedAt: ago(119) } });
     assert.deepEqual(await inbox(leadB), []);
     await raw.issueAssignee.update({ ...held, data: { approvedAt: ago(121) } });
@@ -282,6 +282,31 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     assert.deepEqual(await finish(leadB, run, 'blocked'), [422, 'exit_state_required']);
     assert.deepEqual(await finish(leadB, run, 'done'), [200, undefined]);
     assert.equal((await raw.issue.findUniqueOrThrow({ where: { id: epic.id } })).statusId, `${B}-done`);
+    assert.deepEqual(await inbox(leadB), []);
+  });
+
+  await t.test('a child that finishes while the lead\'s session runs still brings the epic back; a blocked status alone does not', async () => {
+    const epic = await issue(B, { type: 'EPIC' });
+    const [first, second] = [await issue(B, { parentId: epic.id }), await issue(B, { parentId: epic.id })];
+    await personGives(epic, leadB.userId);
+    const run = await start(leadB, epic);
+    assert.deepEqual(await give(leadB.token, first, devB.userId), [200, undefined]);
+    // Done before the lead's session ends: the session may not have seen it.
+    await work(devB, first, 'done');
+    assert.deepEqual(await finish(leadB, run, 'blocked'), [200, undefined]);
+    assert.deepEqual(await inbox(leadB), [[epic.issueKey, 'child_done']]);
+    // The next session starts after it, so it is not news a second time.
+    await work(leadB, epic, 'blocked');
+    assert.deepEqual(await inbox(leadB), []);
+    await raw.issue.update({ where: { id: second.id }, data: { statusId: `${B}-done` } });
+    assert.deepEqual(await inbox(leadB), [[epic.issueKey, 'child_done']]);
+    await work(leadB, epic, 'done');
+
+    // An epic that sits in a blocked status and was never run: its children say nothing yet.
+    await raw.projectStatus.create({ data: { id: `${B}-blocked`, projectId: B, name: 'blocked', displayName: 'blocked', order: 5, category: 'blocked' } });
+    const parked = await issue(B, { type: 'EPIC', statusId: `${B}-blocked` });
+    await personGives(parked, leadB.userId);
+    await issue(B, { parentId: parked.id, statusId: `${B}-done` });
     assert.deepEqual(await inbox(leadB), []);
   });
 
