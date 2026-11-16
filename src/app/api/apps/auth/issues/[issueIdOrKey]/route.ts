@@ -428,6 +428,8 @@ export const PATCH = withAppAuth(
         if (placedByLead && !await tx.issue.count({ where: { id: existingIssue.id, ...NOT_DONE } })) {
           throw new HandoffError('seat_scope', 'A lead seat assigns only issues that are not done', 403);
         }
+        // shortcut: the limit is held where the lead assigns, on what is open then. An issue placed open, then done and
+        // reopened, or one restored from Trash, is not refused and counts from then on; hold those paths to it too if a lead ever uses them to get past it.
         if (leadTarget && updateData.assigneeId && await tx.issue.count({ where: { ...fromLead(currentAssignee!.projectId, context.user.id, updateData.assigneeId), id: { not: existingIssue.id } } }) >= LEAD_CAP) {
           throw new HandoffError('lead_cap', `${leadTarget.name} already has ${LEAD_CAP} open issues from the lead; one of them has to be done first`, 429);
         }

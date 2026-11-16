@@ -150,8 +150,10 @@ export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: 
  * issue, which must be serializable, so two placements that each fit the limit cannot both get in. It does nothing and
  * returns null for a caller that is not a lead seat. A lead gives an issue of its project to another seat of that
  * project, when the issue has no assignee and no lead has placed it before, or when the lead's own placement is still
- * the one in effect. Anything else was decided by someone else and stands (`assign_by_person`). A seat holds at most
- * `LEAD_CAP` open issues from the lead (`lead_cap`). The placement is on the issue's timeline under the lead's name.
+ * the one in effect. Anything else was decided by someone else and stands (`assign_by_person`). The placement is on
+ * the issue's timeline under the lead's name. It returns the seat for the caller's two checks after its update, where
+ * the status the request sets is known: the issue is not done (`seat_scope`), and the seat holds at most `LEAD_CAP`
+ * open issues from the lead (`lead_cap`).
  */
 export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<AppAuthContext, 'user'>,
   issue: { id: string; workspaceId: string; projectId: string; agentRequestRole: string | null }, to: string): Promise<{ name: string } | null> {
@@ -169,9 +171,6 @@ export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<App
   const free = current.assigneeId ? current.helpers.some(row => row.userId === current.assigneeId)
     : !await tx.issueActivity.count({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'LEAD_ASSIGNED' } });
   if (!free) throw new HandoffError('assign_by_person', 'Someone else decided who has this issue, or took it from the seat the lead gave it to: that stands, and a person assigns it', 403);
-  // shortcut: the limit is held where the lead assigns, on what is open then, and the route refuses a placement that
-  // leaves the issue done. An issue placed open, then done and reopened, or one restored from Trash, is not refused
-  // and counts from then on; hold those paths to it too if a lead ever uses them to get past it.
   await tx.issueActivity.create({ data: { action: 'LEAD_ASSIGNED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId: issue.workspaceId, projectId: issue.projectId,
     fieldName: 'assignee', oldValue: current.assigneeId ?? '', newValue: to, details: JSON.stringify({ seatId: lead.id, toSeatId: seat.id, to: seat.name }) } });
   return { name: seat.name };

@@ -121,6 +121,7 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
     // measured from when that run started, not from its end: what happened while the session ran, it may not have seen.
     const own = ranBlocked ? children.filter(child => child.parentId === issue.id) : [];
     const unseen = (date?: Date | null) => !!date && !!ranBlocked && date > ranBlocked;
+    // shortcut: as `doneAfter` above, a done child's last change stands for the time it reached done, so editing one wakes the lead once more.
     if (own.some(child => isDone(child) && unseen(child.updatedAt))) return 'child_done';
     if (own.some(child => !isDone(child) && child.agentRuns[0]?.outcome === 'blocked' && unseen(child.agentRuns[0].endedAt))) return 'child_blocked';
     // Once per assignment: the moment a child had sat too long is after the lead last looked, and has come.
