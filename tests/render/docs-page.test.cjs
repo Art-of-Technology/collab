@@ -43,7 +43,7 @@ function fixture() {
 }
 
 const docsIn = root => load('src/lib/docs.ts', {
-  'node:fs': fs, 'node:path': path, marked: require('marked'), 'isomorphic-dompurify': { default: require('isomorphic-dompurify') },
+  'node:fs': fs, 'node:path': path, marked: require('marked'), entities: require('entities'),
 }, { process: { cwd: () => root } });
 
 // The real renderer with its real Markdown libraries, which are ES modules.

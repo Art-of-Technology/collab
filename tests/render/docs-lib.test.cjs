@@ -5,7 +5,7 @@ const path = require('node:path');
 
 // The loader reads content/docs under the working directory, so a test points it at a folder of its own.
 function docsIn(root) {
-  return load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), 'isomorphic-dompurify': { default: require('isomorphic-dompurify') } }, { process: { cwd: () => root } });
+  return load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), entities: require('entities') }, { process: { cwd: () => root } });
 }
 
 // The loader runs in its own context, so its arrays are compared by value.
@@ -248,4 +248,20 @@ test('every page in the published navigation loads with a title and a summary', 
     assert.ok(page.title, page.slug);
     assert.ok(page.summary, page.slug);
   }
+});
+
+// A page is read on every request, by a server that runs for days. Decoding a heading through a DOM kept every
+// document it made: the first 2,000 headings took under a second, the next 2,000 took three, and it went on growing.
+test('reading a page again and again does not get slower', () => {
+  const headings = Array.from({ length: 60 }, (_, i) => `## Section ${i} &amp; more`);
+  const docs = docsIn(fixture({ 'content/docs/long.md': ['# Long', '', 'A page with many headings.', '', ...headings].join('\n\n') }));
+  const lap = () => { const start = process.hrtime.bigint(); for (let i = 0; i < 30; i++) docs.docPage('long'); return Number(process.hrtime.bigint() - start) / 1e6; };
+  const first = lap();
+  const second = lap();
+  const third = lap();
+  assert.equal(docs.docPage('long').headings[59].text, 'Section 59 & more');
+  // 5,400 headings in all. The leaking version took 973 ms, then 3,148 ms, then 4,914 ms: slow and growing.
+  // Fast enough passes whatever the laps look like, so a pause on a busy runner in a lap of some 20 ms does not fail it.
+  const growing = second > first * 2 && third > second * 1.25;
+  assert.ok(first + second + third < 1500 || !growing, `${Math.round(first)} ms, then ${Math.round(second)} ms, then ${Math.round(third)} ms`);
 });

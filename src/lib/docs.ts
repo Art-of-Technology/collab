@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { lexer, type Token, type Tokens } from 'marked';
-import DOMPurify from 'isomorphic-dompurify';
+import { decodeHTML } from 'entities';
 import type { DocsIndexEntry } from '@/lib/docs-search';
 
 // Published documentation: Markdown files in content/docs, listed in content/docs/nav.json.
@@ -23,7 +23,9 @@ export const docHref = (slug: string) => (slug === 'index' ? '/docs' : `/docs/${
 const words = (tokens: Token[] = []): string => tokens.map(token => {
   if (token.type === 'html') return '';
   if ('tokens' in token && token.tokens) return words(token.tokens);
-  if (token.type === 'text') return DOMPurify.sanitize(token.text.replace(/</g, '&lt;'), { RETURN_DOM: true }).textContent ?? '';
+  // Character references are decoded as text, without a DOM: a sanitizer that returns a DOM keeps every document it makes
+  // in a server process, so each page view was slower than the last.
+  if (token.type === 'text') return decodeHTML(token.text);
   return 'text' in token ? token.text : ' ';
 }).join('');
 const plain = (tokens?: Token[]) => words(tokens).replace(/\s+/g, ' ').trim();

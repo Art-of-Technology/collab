@@ -55,7 +55,7 @@ fs.writeFileSync(path.join(root, 'content/docs/draft.md'), '# Draft\n\nAn unlist
 
 // The real loader, search and routes, on the folder above. Only sign-in is a stand-in.
 const globals = { Response, URL, process: { cwd: () => root, env: {} } };
-const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), 'isomorphic-dompurify': { default: require('isomorphic-dompurify') } }, globals);
+const docs = load('src/lib/docs.ts', { 'node:fs': fs, 'node:path': path, marked: require('marked'), entities: require('entities') }, globals);
 const search = load('src/lib/docs-search.ts', { minisearch: { default: require('minisearch') } });
 const granted = [];
 const api = load('src/app/api/apps/auth/docs/route.ts', {
