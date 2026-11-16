@@ -95,6 +95,24 @@ test('live: a build that was not told its commit says so and asks nothing', asyn
   }
 });
 
+test('live: cached yes and no answers become the most recently answered', async () => {
+  const live = route(REVISION);
+  const commit = n => `f${n.toString(16).padStart(39, '0')}`;
+  await live.get(AHEAD);
+  await live.get(BEHIND);
+  for (let n = 0; n < 998; n++) await live.get(commit(n));
+  await live.get(AHEAD);
+  await live.get(BEHIND);
+  await live.get(commit(998));
+  await live.get(commit(999));
+  const count = live.asked.length;
+  assert.equal((await live.get(AHEAD)).body.contains, true);
+  assert.equal((await live.get(BEHIND)).body.contains, false);
+  assert.equal(live.asked.length, count);
+  await live.get(commit(0));
+  assert.equal(live.asked.length, count + 1);
+});
+
 test('live: definitive answers survive more than 1000 distinct queries', async () => {
   const live = route(REVISION);
   await live.get(AHEAD);

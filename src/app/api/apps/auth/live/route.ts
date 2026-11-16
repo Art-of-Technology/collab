@@ -20,7 +20,10 @@ function keep<Value>(map: Map<string, Value>, key: string, value: Value) {
 async function contains(revision: string, commit: string) {
   if (revision.startsWith(commit)) return true;
   const known = answers.get(commit);
-  if (known !== undefined) return known;
+  if (known !== undefined) {
+    keep(answers, commit, known);
+    return known;
+  }
   if ((unknownUntil.get(commit) ?? 0) > Date.now()) return null;
   let answer: boolean | null = null;
   try {
@@ -34,11 +37,12 @@ async function contains(revision: string, commit: string) {
       if (['ahead', 'identical', 'behind', 'diverged'].includes(status)) answer = status === 'ahead' || status === 'identical';
     }
   } catch { /* unknown */ }
+  answer = answers.get(commit) ?? answer;
   if (answer !== null) {
     keep(answers, commit, answer);
     unknownUntil.delete(commit);
   } else if (!answers.has(commit)) keep(unknownUntil, commit, Date.now() + UNKNOWN_MS);
-  return answers.get(commit) ?? answer;
+  return answer;
 }
 
 // GET /api/apps/auth/live[?commit=SHA] - the revision this server runs, and whether a commit is in it.
