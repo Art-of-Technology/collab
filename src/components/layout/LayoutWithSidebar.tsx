@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { usePathname } from "next/navigation";
 import SimplifiedSidebar from "@/components/layout/SimplifiedSidebar";
 import { useSidebar } from "@/components/providers/SidebarProvider";
 import { AIProvider } from "@/context/AIContext";
@@ -16,8 +17,10 @@ interface LayoutWithSidebarProps {
 
 export default function LayoutWithSidebar({
   children,
-  pathname,
+  pathname: layoutPathname,
 }: LayoutWithSidebarProps) {
+  // The layout knows only its own segment; the menu marks the page being read, so it needs the whole path.
+  const pathname = usePathname() ?? layoutPathname;
   const {
     isCollapsedDesktop,
     isMobileOpen,

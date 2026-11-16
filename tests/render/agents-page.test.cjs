@@ -162,3 +162,18 @@ test('Floor tab: the existing floor under the same tabs; its old address leads t
   const Old = load('src/app/(main)/[workspaceId]/agent-inbox/floor/page.tsx', { 'next/navigation': { redirect: path => { throw new Error(`redirect:${path}`); } } }).default;
   await assert.rejects(Old({ params: Promise.resolve({ workspaceId: 'team' }) }), { message: 'redirect:/team/agents/floor' });
 });
+
+test('the menu is told the page being read, not only the workspace the layout knows', () => {
+  const seen = [];
+  const Layout = load('src/components/layout/LayoutWithSidebar.tsx', {
+    react: React, 'react/jsx-runtime': jsx,
+    'next/navigation': { usePathname: () => '/weezboo/agents/inbox' },
+    '@/components/layout/SimplifiedSidebar': { default: ({ pathname }) => { seen.push(pathname); return null; } },
+    '@/components/providers/SidebarProvider': { useSidebar: () => ({ isMdUp: true }) },
+    '@/context/AIContext': { AIProvider: ({ children }) => children },
+    '@heroicons/react/24/outline': { ChevronLeftIcon: Empty, ChevronRightIcon: Empty },
+    '@/components/ui/button': { Button: Empty }, '@/components/layout/MobileBottomNav': { MobileBottomNav: Empty }, '@/components/ai/ChatBar': { ChatBar: Empty },
+  }).default;
+  renderToStaticMarkup(React.createElement(Layout, { pathname: '/weezboo' }, 'page'));
+  assert.deepEqual(seen, ['/weezboo/agents/inbox', '/weezboo/agents/inbox']);
+});
