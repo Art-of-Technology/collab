@@ -50,7 +50,8 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
       where: { id: seat.id, OR: [{ lastSeenAt: null }, { lastSeenAt: { lt: new Date(Date.now() - 60_000) } }] }, data: { lastSeenAt: new Date() },
     });
   }
-  return inboxOf(context.workspace.id, context.user.id, seat);
+  const inbox = await inboxOf(context.workspace.id, context.user.id, seat);
+  return { items: inbox.items.slice(0, INBOX_LIMIT) };
 }
 
 /** The read of `seatInbox` alone. It marks no run lost and records no sign of life, so a person's page can ask it for a seat. */
@@ -142,7 +143,6 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     .flatMap(candidate => { const reason = reasonFor(candidate); return reason ? [{ ...candidate, reason }] : []; })
     .sort((a, b) => (ORDER[a.stands] ?? 3) - (ORDER[b.stands] ?? 3) || rank(a.issue.priority) - rank(b.issue.priority)
       || a.issue.createdAt.getTime() - b.issue.createdAt.getTime())
-    .slice(0, INBOX_LIMIT)
     .map(({ issue, last, category, reason }) => ({ issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
       category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null })) };
 }

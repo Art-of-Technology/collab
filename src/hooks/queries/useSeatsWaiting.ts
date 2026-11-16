@@ -6,4 +6,5 @@ export const useSeatsWaiting = (workspaceId?: string) => useQuery({
   queryKey: ['agent-seats-waiting', workspaceId],
   queryFn: async () => (await axios.get(`/api/workspaces/${workspaceId}/agent-seats/waiting`)).data.waiting as number,
   enabled: !!workspaceId,
+  refetchInterval: 60_000,
 });

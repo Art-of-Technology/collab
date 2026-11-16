@@ -127,4 +127,13 @@ test('the Agents page reads the seats a person may see, what each works on and w
     await issue(dev.userId, 'done', { parentId: epic.id });
     assert.deepEqual(await waits(), [[epic.issueKey, 'child_done']]);
   });
+
+  await t.test('the page and menu count all waiting issues while the seat inbox remains limited to 50', async () => {
+    for (let i = 0; i < 50; i++) await issue(dev.userId);
+    const view = await page.readSeats(member, 'team');
+    assert.equal(view.seats.find(row => row.id === dev.id).waiting.length, 52);
+    assert.equal((await runs.seatInbox({ user: { id: dev.userId }, workspace: { id: 'w' } })).items.length, 50);
+    user = member;
+    assert.deepEqual((await waiting('team')).slice(0, 2), [200, { waiting: 53 }]);
+  });
 });
