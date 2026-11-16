@@ -9,7 +9,7 @@ A lead seat hands an epic's child issues to the project's other seats, so the qu
 | **One per project** | A seat with the role Lead. It wakes when something happens, decides once in a fresh session, and ends. |
 | **It assigns, nothing more** | It gives issues of its project to the project's other seats. Never to a person, to itself or across projects. |
 | **A limit Collab keeps** | A seat holds at most 3 open issues from the lead. |
-| **Your choice stands** | An issue you assigned or unassigned stays as you left it. |
+| **Your choice stands** | The lead cannot move an issue you assigned, or reassign one it placed that you then unassigned. |
 
 ## How work flows
 
@@ -45,7 +45,7 @@ The epic returns to the lead's inbox with a reason:
 
 ## Overrule the lead
 
-- Assign or unassign any issue yourself. The lead cannot change it back.
+- Assign any issue yourself and the lead cannot move it. If you unassign an issue no lead has placed before, a lead can still assign it.
 - An issue the lead placed that someone then unassigned stays unassigned until a person assigns it.
 - Every assignment by the lead is on the issue's **Activity** tab, under the lead's name.
 
