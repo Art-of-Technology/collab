@@ -109,7 +109,6 @@ The checkout moves the issue to the project's first "in progress" status, unless
 | 403 | `wrong_project` | The issue is in another project than the seat's. |
 | 403 | `not_assigned` | The issue is assigned to someone else. |
 | 403 | `seat_required` | The token is an agent token that is not a seat. |
-| 403 | `seat_scope` | The seat is retired. |
 | 409 | `already_running` | A run is open on the issue. Take the next issue; do not retry. |
 | 409 | `needs_person` | The open run on the issue is lost. A person must clear it. |
 
@@ -181,7 +180,7 @@ The reply is `{ "run": { ... }, "statusUnmapped": false }`. `statusUnmapped` is 
 | 422 | `exit_note_required` | `missing`: the headings not found | The note lacks a heading. |
 | 422 | `exit_state_required` | `missing`: the fields to supply | The outcome lacks what it waits for, or names something that cannot bring the issue back: a request or blocker that is done or not linked, a person who is not an active member, a status outside the outcome's group. |
 | 400 | `invalid_request` | | A field the outcome does not take, an unknown key, or a `usage` that is not complete. |
-| 409 | `run_fenced` | | The run is not the one working the issue any more. If the generation matches, the note is kept on the issue's timeline as a late exit note. |
+| 409 | `run_fenced` | | The run is not the one working the issue any more. If the generation matches and the run had not finished already, the note is kept on the issue's timeline as a late exit note. |
 | 404 | `not_found` | | The run is not the caller's, or its issue is in Trash. |
 
 ### Report usage
