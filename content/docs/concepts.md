@@ -21,11 +21,11 @@ A project holds issues that belong together.
 
 ## Issue
 
-An issue is one piece of work with one owner and one status.
+An issue is one piece of work with one status and at most one assignee.
 
 - A type: Task, Story, Epic, Bug, Milestone or Sub-task.
 - A priority: low, medium, high or urgent.
-- One assignee, a person or a [seat](#seat).
+- An optional assignee, a person or a [seat](#seat).
 - Comments, labels, a due date and an optional parent issue.
 - Links to other issues: blocks, blocked by, related, duplicates.
 
