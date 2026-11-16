@@ -7,7 +7,7 @@ const Empty = () => null;
 const link = { default: ({ children, ...props }) => React.createElement('a', props, children) };
 const text = html => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
-function sidebar(waiting) {
+function sidebar(waiting, { views = [], apps = [] } = {}) {
   return load('src/components/layout/SimplifiedSidebar.tsx', {
     react: React, 'react/jsx-runtime': jsx, 'next/link': link, 'next/image': require('next/image'),
     'next/navigation': { useRouter: () => ({}) }, 'lucide-react': require('lucide-react'),
@@ -19,8 +19,8 @@ function sidebar(waiting) {
     '@/hooks/queries/useUser': { useCurrentUser: () => ({ data: { name: 'Cem' } }) },
     '@/context/WorkspaceContext': { useWorkspace: () => ({ currentWorkspace: { id: 'workspace', slug: 'weezboo' } }) },
     '@/hooks/queries/useProjects': { useProjects: () => ({ data: [] }) },
-    '@/hooks/queries/useViews': { useViews: () => ({ data: [] }) },
-    '@/hooks/queries/useInstalledApps': { useInstalledApps: () => ({ data: [] }) },
+    '@/hooks/queries/useViews': { useViews: () => ({ data: views }) },
+    '@/hooks/queries/useInstalledApps': { useInstalledApps: () => ({ data: apps }) },
     '@/hooks/queries/useSeatsWaiting': { useSeatsWaiting: workspaceId => { assert.equal(workspaceId, 'workspace'); return { data: waiting }; } },
     '@/hooks/useAI': { useAIWidget: () => ({}), useAIAgents: () => ({}) },
     '@/lib/utils': { cn: (...args) => args.filter(Boolean).join(' ') },
@@ -60,6 +60,27 @@ test('the collapsed menu shows one Agents icon with the number', () => {
   assert.match(html, /<a[^>]*href="\/weezboo\/agents"[^>]*title="Agents"[^>]*>.*?<span[^>]*>4<\/span><\/a>/);
   assert.doesNotMatch(html, /Seat inbox|agent-inbox/);
   assert.doesNotMatch(menu(0, { isCollapsed: true }), /<a[^>]*title="Agents"[^>]*>.*?<span/);
+});
+
+test('sidebar highlights only the current workspace section and matching item', () => {
+  const data = { views: [{ id: 'v', slug: 'report', name: 'Report', isFavorite: true }], apps: [{ id: 'a', app: { slug: 'tool', name: 'Tool' } }] };
+  const render = (pathname, isCollapsed = false) => renderToStaticMarkup(React.createElement(sidebar(0, data), { pathname, isCollapsed }));
+  const active = (html, href) => {
+    const link = html.match(new RegExp(`<a\\s[^>]*href="${href}"[^>]*>`));
+    assert.ok(link, href);
+    return link[0].includes('bg-collab-800 text-white');
+  };
+  for (const [path, selected] of [['projects/timeline', 'projects'], ['dashboard/detail', 'dashboard'], ['timeline/detail', 'timeline'], ['notes/detail', 'notes'], ['features/detail', 'features']]) {
+    for (const collapsed of [false, true]) {
+      const html = render(`/weezboo/${path}`, collapsed);
+      for (const section of ['dashboard', 'timeline', 'notes', 'features']) assert.equal(active(html, `/weezboo/${section}`), section === selected, `${path}: ${section}`);
+      if (!collapsed) assert.equal(active(html, '/weezboo/projects'), selected === 'projects');
+    }
+  }
+  assert.equal(active(render('/weezboo/projects-extra'), '/weezboo/projects'), false);
+  for (const [path, href, expected] of [['views/report/detail', '/weezboo/views/report', true], ['views/reporting', '/weezboo/views/report', false], ['projects/views/report', '/weezboo/views/report', false], ['apps/tool/detail', '/weezboo/apps/tool', true], ['apps/toolbox', '/weezboo/apps/tool', false], ['projects/apps/tool', '/weezboo/apps/tool', false]]) {
+    assert.equal(active(render(`/weezboo/${path}`), href), expected, path);
+  }
 });
 
 test('the phone menu has the same Agents entry', () => {
