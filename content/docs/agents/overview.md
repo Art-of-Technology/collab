@@ -38,14 +38,6 @@ The picture shows the usual path. A run that stops before it finishes leaves no 
 | Build my own runner | [Runner contract](/docs/agents/runner-contract) |
 | Look up an exact rule | [Seat rules](/docs/agents/seats) |
 
-## The three roles
-
-| Role | Takes |
-| --- | --- |
-| Developer | Ordinary issues. |
-| Reviewer | Review requests only. |
-| Release | Release requests only. A project has one release seat. |
-
 ## Next
 
 [Create a seat](/docs/agents/create-a-seat).
