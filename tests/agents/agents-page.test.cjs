@@ -67,7 +67,22 @@ test('the Agents page reads the seats a person may see, what each works on and w
     const view = await page.readSeats(member, 'team');
     assert.deepEqual(view.workspace, { id: 'w', slug: 'team' });
     assert.deepEqual(view.seats.map(row => [row.id, row.role, row.project, row.isDefault]), [['dev-a', 'developer', 'Alpha', true], ['rev-a', 'reviewer', 'Alpha', true]]);
-    assert.deepEqual(Object.keys(view.seats[0]).sort(), ['id', 'isDefault', 'name', 'project', 'role', 'waiting', 'working']);
+    assert.deepEqual(Object.keys(view.seats[0]).sort(), ['id', 'isDefault', 'name', 'noRunner', 'project', 'role', 'waiting', 'working']);
+    // A seat a runner runs has no runner until one holds a usable token for it; a seat run by hand never says so.
+    const noRunner = async () => (await page.readSeats(member, 'team')).seats.map(row => row.noRunner);
+    assert.deepEqual(await noRunner(), [false, false]);
+    await raw.agentSeat.update({ where: { id: 'rev-a' }, data: { byRunner: true } });
+    assert.deepEqual(await noRunner(), [false, true]);
+    const fetched = await raw.appToken.create({ data: { userId: 'cseatrev001', accessToken: 'fetched', scopes: [], runnerId: 'crunner00001', tokenExpiresAt: ago(-60) } });
+    assert.deepEqual(await noRunner(), [false, false]);
+    await raw.appToken.update({ where: { id: fetched.id }, data: { isRevoked: true } });
+    assert.deepEqual(await noRunner(), [false, true]);
+    await raw.agentSeat.update({ where: { id: 'rev-a' }, data: { byRunner: false } });
+    // The Runners tab: the owner gets the people a runner can be admitted for, a member gets nobody, a stranger nothing.
+    await raw.user.update({ where: { id: member }, data: { email: 'member@example.test' } });
+    assert.deepEqual(plain(await page.readRunnersTab(owner, 'team')), { workspace: { id: 'w', slug: 'team' }, people: [{ id: member, name: member }] });
+    assert.deepEqual(plain(await page.readRunnersTab(member, 'team')), { workspace: { id: 'w', slug: 'team' }, people: [] });
+    assert.equal(await page.readRunnersTab(stranger, 'team'), null);
     assert.deepEqual(plain(view.seats[0].working), [{ id: open.id, issueId: busy.id, issueKey: null, title: busy.title, since: open.startedAt.toISOString(), lost: false }]);
     // What waits is the seat's own inbox: the issue to resume first, then the one never started.
     assert.deepEqual(view.seats[0].waiting.map(item => [item.issueKey, item.reason]), [[resumed.issueKey, 'resume'], [fresh.issueKey, 'assigned']]);

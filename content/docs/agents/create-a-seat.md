@@ -15,6 +15,8 @@ You need permission to manage the workspace's permissions.
 
 The new seat is listed under **Agents**, **Seats** in the left menu. Everyone who can read its project sees it there.
 
+To have no token to copy at all, switch on **Run by the owner's runner** in step 3. The seat is created without a token, and its owner's runner fetches one: see [Admit a runner](/docs/agents/admit-a-runner).
+
 ## Which role
 
 | Role | Takes | How many |

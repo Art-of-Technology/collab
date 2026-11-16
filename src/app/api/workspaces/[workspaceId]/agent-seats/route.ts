@@ -15,9 +15,11 @@ const bodySchema = z.object({
   ownerId: z.string().min(1).max(128).nullable().default(null),
   expiresInDays: z.number().int().min(1).max(365).default(90),
   isDefault: z.boolean().optional(),
+  byRunner: z.boolean().optional(),
 }).strict();
 
 // POST /api/workspaces/[workspaceId]/agent-seats - create a seat with its first token; the token is returned once.
+// With `byRunner` no token is made: the owner's runner fetches it, and `token` is null.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ workspaceId: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: noStore });
@@ -35,6 +37,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         not_found: [404, 'Workspace not found'],
         paused: [409, 'This agent was switched off or removed and still has usable tokens. Revoke them, or switch its member back on, before creating a seat.'],
         unavailable: [503, 'Agent tokens are not set up on this deployment'],
+        runner_seat: [409, 'This seat is run by a runner, which fetches its tokens itself. No token is made for it by hand.'],
       } as const)[result.error];
       return NextResponse.json({ error }, { status, headers: noStore });
     }

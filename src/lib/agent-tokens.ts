@@ -17,9 +17,11 @@ async function agentApp() {
   return app?.isSystemApp ? app : null;
 }
 
-async function serviceAccounts(db: Pick<typeof prisma, 'appToken' | 'user'>, appId: string, workspaceId: string) {
+async function serviceAccounts(db: Pick<typeof prisma, 'appToken' | 'user' | 'agentSeat'>, appId: string, workspaceId: string) {
   const tokens = await db.appToken.findMany({ where: { appId, workspaceId }, select: { userId: true } });
-  const ids = [...new Set(tokens.map(token => token.userId).filter((id): id is string => !!id))];
+  // A seat a runner runs has no token until the runner fetches one; its account is the app's all the same.
+  const seats = await db.agentSeat.findMany({ where: { workspaceId, byRunner: true }, select: { userId: true } });
+  const ids = [...new Set([...tokens, ...seats].map(row => row.userId).filter((id): id is string => !!id))];
   return ids.length ? db.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [];
 }
 
@@ -68,6 +70,10 @@ export async function createAgentToken<S = undefined>(input: {
   workspaceId: string; actorId: string; name: string; access: AgentTokenAccess; expiresInDays: number;
   /** Makes the account a seat in the minting transaction (src/lib/agent-seats.ts); when it throws, nothing is minted. */
   seat?: (tx: Prisma.TransactionClient, account: { id: string; name: string | null }) => Promise<S>;
+  /** False makes the account (and its seat) without a token: a runner fetches the first one. */
+  mint?: boolean;
+  /** The runner this token is fetched by (src/lib/agent-runners.ts). */
+  runnerId?: string;
 }) {
   const app = await agentApp();
   if (app?.status !== 'PUBLISHED') return { error: 'unavailable' as const };
@@ -77,7 +83,8 @@ export async function createAgentToken<S = undefined>(input: {
   const ceiling = app.scopes.map(row => row.scope);
   const scopes = input.access === 'write' ? ceiling : ceiling.filter(scope => scope.endsWith(':read'));
   const token = `collab_at_${Date.now().toString(36)}_${randomBytes(32).toString('base64url')}`;
-  const accessToken = Buffer.from(await encryptToken(token)).toString('base64');
+  // Encrypting derives a key, so an account made without a token does not pay for one.
+  const accessToken = input.mint === false ? '' : Buffer.from(await encryptToken(token)).toString('base64');
   const expiresAt = new Date(Date.now() + input.expiresInDays * 86_400_000);
   const wanted = input.name.trim();
 
@@ -88,6 +95,8 @@ export async function createAgentToken<S = undefined>(input: {
     const account = (await serviceAccounts(tx, app.id, input.workspaceId)).find(user => user.name?.trim().toLowerCase() === wanted.toLowerCase())
       ?? await tx.user.create({ data: { name: wanted }, select: { id: true, name: true } });
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${account.id} FOR UPDATE`;
+    // The token of a seat a runner runs goes to that runner only: nobody makes one by hand, under its name or as a seat.
+    if (input.mint !== false && !input.runnerId && await tx.agentSeat.count({ where: { userId: account.id, byRunner: true, retiredAt: null } })) return { error: 'runner_seat' as const };
     await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${account.id} AND "workspaceId" = ${input.workspaceId} FOR UPDATE`;
     const membership = await tx.workspaceMember.findUnique({
       where: { userId_workspaceId: { userId: account.id, workspaceId: input.workspaceId } }, select: { status: true },
@@ -110,19 +119,22 @@ export async function createAgentToken<S = undefined>(input: {
       create: { userId: account.id, workspaceId: input.workspaceId, role: 'MEMBER' },
     });
     const seat = await input.seat?.(tx, account);
+    if (input.mint === false) return { id: null, name: account.name ?? wanted, seat };
     const row = await tx.appToken.create({
-      data: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, installationId: null, accessToken, tokenHash: createHash('sha256').update(token).digest('hex'), tokenExpiresAt: expiresAt, scopes },
+      data: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, installationId: null, accessToken, tokenHash: createHash('sha256').update(token).digest('hex'), tokenExpiresAt: expiresAt, scopes,
+        runnerId: input.runnerId ?? null },
       select: { id: true },
     });
     // The audit row is the only record of who minted the token.
     await tx.appAuditLog.create({ data: {
       workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_token.created',
-      details: { tokenId: row.id, serviceUserId: account.id, name: account.name, scopes, expiresAt: expiresAt.toISOString() },
+      details: { tokenId: row.id, serviceUserId: account.id, name: account.name, scopes, expiresAt: expiresAt.toISOString(), ...(input.runnerId && { runnerId: input.runnerId }) },
     } });
     return { id: row.id, name: account.name ?? wanted, seat };
   });
   if (created.error) return { error: created.error };
-  return { id: created.id, name: created.name, seat: created.seat as S, scopes, expiresAt, token };
+  // Without a token there is none to hand back: `id` is null and `token` is absent.
+  return { id: created.id, name: created.name, seat: created.seat as S, scopes, expiresAt, ...(created.id && { token }) };
 }
 
 /** Revoke one agent token of this workspace. False when it is absent or already revoked. */

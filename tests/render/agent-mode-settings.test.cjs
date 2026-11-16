@@ -96,3 +96,15 @@ test('a person who may not manage agents is told so, and gets no switch', async 
     assert.equal(document.querySelectorAll('button').length, 0);
   } finally { await React.act(async () => root.unmount()); }
 });
+
+test('a seat a runner runs shows whether a runner fetched its token and when it was last used', async () => {
+  const root = await render([200, { ...handoffs, runnerSeats: [
+    { id: 'a', name: 'p-developer', role: 'developer', owner: 'Ada', runner: null, fetchedAt: null, lastSeenAt: null },
+    { id: 'b', name: 'p-reviewer', role: 'reviewer', owner: 'Ada', runner: 'mac', fetchedAt: '2026-11-16T10:00:00.000Z', lastSeenAt: null },
+  ] }]);
+  try {
+    const rows = [...document.querySelectorAll('div.rounded-xl')].map(row => row.textContent).filter(text => text.startsWith('p-'));
+    assert.equal(rows[0], 'p-developer developer, owned by AdaNo runner yet');
+    assert.match(rows[1], /^p-reviewer reviewer, owned by AdaFetched by mac on .+ · not used yet$/);
+  } finally { await React.act(async () => root.unmount()); }
+});

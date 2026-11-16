@@ -34,7 +34,8 @@ export function AgentSeatsView({ workspace, seats, tab, handoffs, canManage }: P
       <table className="w-full text-left text-sm">
         <thead><tr className="border-b"><th className="p-3">Seat</th><th className="p-3">Role</th><th className="p-3">Project</th><th className="p-3">Works on now</th><th className="p-3">Waiting</th></tr></thead>
         <tbody>{seats.map(seat => <tr key={seat.id} className="border-b last:border-0">
-          <th scope="row" className="p-3 font-medium">{seat.name}{seat.isDefault && <span className="block text-xs font-normal text-muted-foreground">Default for its role</span>}</th>
+          <th scope="row" className="p-3 font-medium">{seat.name}{seat.isDefault && <span className="block text-xs font-normal text-muted-foreground">Default for its role</span>}
+            {seat.noRunner && <span className="block text-xs font-normal text-amber-600 dark:text-amber-400">No runner yet: its work waits until its owner admits a <Link className="underline" href={`${base}/agents/runners`}>runner</Link></span>}</th>
           <td className="p-3 capitalize">{seat.role}</td>
           <td className="p-3">{seat.project}</td>
           <td className="space-y-2 p-3">{seat.working.length ? seat.working.map(run => <div key={run.id}>{issue(run.issueId, run.issueKey, run.title)}

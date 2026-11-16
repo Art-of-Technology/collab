@@ -30,11 +30,14 @@ exports.seatsDatabase = async (seed = async () => {}) => {
     prisma = new PrismaClient({ datasources: { db: { url } } });
     await seed(prisma);
     // Back to the shape before the migration, with the seeded rows kept, then the migration as production gets it.
-    psql(`DROP TABLE "AgentRun", "AgentSeat";
+    psql(`DROP TABLE "AgentRun", "AgentSeat", "AgentRunner";
+      ALTER TABLE "AppToken" DROP COLUMN "runnerId";
       ALTER TABLE "ProjectStatus" DROP COLUMN "category";
       ALTER TABLE "Project" DROP COLUMN "agentMode", DROP COLUMN "agentSwitchedAt";
       ALTER TABLE "Issue" DROP COLUMN "agentRequestRole";`);
     psql(readFileSync(resolve('prisma/migrations/20261116000100_agent_seats/migration.sql'), 'utf8'));
+    // The seats table was made again by its own migration, so the migrations that changed it since follow.
+    psql(readFileSync(resolve('prisma/migrations/20261116000300_agent_runners/migration.sql'), 'utf8'));
     return { prisma, url, stop };
   } catch (error) {
     await stop();
