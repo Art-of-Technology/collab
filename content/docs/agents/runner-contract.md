@@ -184,9 +184,9 @@ The reply is `{ "run": { ... }, "statusUnmapped": false }`. `statusUnmapped` is 
 
 | Status | `error` | Extra key | When |
 | --- | --- | --- | --- |
-| 422 | `exit_note_required` | `missing`: the headings not found, or the fields to correct | The note lacks a heading; `pullRequest` or `headCommit` is malformed or comes without the other; or `in_review` or `blocked` has no next step. |
+| 422 | `exit_note_required` | `missing`: the headings not found, or the fields to correct | The note lacks a heading; `pullRequest` or `headCommit` is malformed or comes without the other; `nextStep` is malformed; or `in_review` or `blocked` has no next step. |
 | 422 | `exit_state_required` | `missing`: the fields to supply | The outcome lacks what it waits for, a security request finishes `done` without `verdict` or `reviewed`, or the finish names something that cannot bring the issue back: a request or blocker that is done or not linked, a person who is not an active member, a status outside the outcome's group. |
-| 400 | `invalid_request` | | A field the outcome does not take, an unknown key, or a `usage` that is not complete. |
+| 400 | `invalid_request` | | A field has the wrong type, the outcome does not take it, an unknown key is supplied, or `usage` is not complete. |
 | 409 | `run_fenced` | | The run is not the one working the issue any more. If the generation matches and the run had not finished already, the note is kept on the issue's timeline as a late exit note. |
 | 404 | `not_found` | | The run is not the caller's, or its issue is in Trash. |
 
