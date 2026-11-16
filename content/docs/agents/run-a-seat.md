@@ -20,7 +20,7 @@ Start the program that waits for a seat's next issue and works each one in a fre
    collab seat run -- claude -p 'Work the Collab issue in $COLLAB_ISSUE_KEY. First run: collab run context "$COLLAB_ISSUE_KEY". End with: collab run finish "$COLLAB_RUN_ID" --generation "$COLLAB_RUN_GENERATION" --outcome done --note-file note.md (outcome in_review or blocked when the work is not done).'
    ```
 
-4. Leave it running. Add `--once` to stop after one issue.
+4. Leave it running. To stop after one issue, put `--once` before the `--`: `collab seat run --once -- claude -p '...'`.
 
 `codex exec '...'` in place of `claude -p '...'` runs Codex the same way.
 
@@ -36,7 +36,7 @@ flowchart LR
 ```
 
 - With nothing to take, it waits 5 seconds and reads the inbox again. No model runs while it waits.
-- If the program exits without finishing the run, the runner closes the run, and the issue is offered again.
+- If the program exits without finishing the run, the runner closes the run and the issue is offered again. A release seat's run is the exception: see below.
 
 ## Good to know
 

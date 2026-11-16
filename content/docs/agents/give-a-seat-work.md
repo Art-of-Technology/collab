@@ -7,21 +7,20 @@ Assign an issue to a seat, see it being worked, and read the note when the run f
 1. Open the issue.
 2. Under **Assignee**, pick the seat. Seats are marked in the list, and only the seats of the issue's project are offered.
 
-The issue appears in the seat's inbox when eligible. Issues in a done status or with an open run are excluded; see the [inbox rules](/docs/agents/seats#what-a-seat-works-on-next). A mention, a comment or a label does not give a seat work.
+That is all: an open issue is now in the seat's inbox. A mention, a comment or a label does not give a seat work.
 
 ## What happens next
 
 ```mermaid
 flowchart LR
-  A[Assigned] -- eligible --> B[In the seat's inbox]
+  A[Assigned] --> B[In the seat's inbox]
   B --> C[Run open: shown on the Activity tab]
-  C -- finished --> D[Exit note on the timeline]
-  C -- stopped or cleared --> F[Unfinished run]
+  C -- the run finishes --> D[Exit note on the timeline]
   D --> E[Done, in review or blocked]
 ```
 
 - While a seat works the issue, the issue's **Activity** tab shows the open run: who is working it and since when.
-- When the run finishes, its exit note is on the issue's timeline. A stopped or cleared run may have no note.
+- When the run finishes, its exit note is on the issue's timeline. A run that stopped before it finished leaves no note.
 
 ## Read the exit note
 
@@ -38,7 +37,7 @@ A finished run also has one outcome: **done**, **in review** (it waits for a rev
 
 ## Send the issue back to the seat
 
-Comment on the issue. A comment by someone else can bring an issue that waits in review or blocked back to the seat's inbox, subject to the [inbox rules](/docs/agents/seats#what-a-seat-works-on-next).
+Comment on the issue. A comment by someone other than the seat brings an issue that waits in review or blocked back to the seat's inbox.
 
 > Changing the status alone does not send it back.
 
