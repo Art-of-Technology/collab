@@ -64,11 +64,11 @@ test('the Agents page reads the seats a person may see, what each works on and w
     assert.deepEqual(view.workspace, { id: 'w', slug: 'team' });
     assert.deepEqual(view.seats.map(row => [row.id, row.role, row.project, row.isDefault]), [['dev-a', 'developer', 'Alpha', true], ['rev-a', 'reviewer', 'Alpha', true]]);
     assert.deepEqual(Object.keys(view.seats[0]).sort(), ['id', 'isDefault', 'name', 'project', 'role', 'waiting', 'working']);
-    assert.deepEqual(plain(view.seats[0].working), { issueKey: busy.issueKey, title: busy.title, since: open.startedAt.toISOString(), lost: false });
+    assert.deepEqual(plain(view.seats[0].working), [{ id: open.id, issueKey: busy.issueKey, title: busy.title, since: open.startedAt.toISOString(), lost: false }]);
     // What waits is the seat's own inbox: the issue to resume first, then the one never started.
     assert.deepEqual(view.seats[0].waiting.map(item => [item.issueKey, item.reason]), [[resumed.issueKey, 'resume'], [fresh.issueKey, 'assigned']]);
     assert.deepEqual(plain(view.seats[0].waiting), plain((await runs.seatInbox({ user: { id: dev.userId }, workspace: { id: 'w' } })).items));
-    assert.deepEqual(plain([view.seats[1].working, view.seats[1].waiting]), [null, []]);
+    assert.deepEqual(plain([view.seats[1].working, view.seats[1].waiting]), [[], []]);
     assert.deepEqual((await page.readSeats(owner, 'w')).seats.map(row => row.id), ['dev-a', 'rev-a']);
     assert.deepEqual((await page.readSeats(stranger, 'elsewhere')).seats.map(row => [row.id, row.waiting.length]), [['dev-c', 0]]);
   });
@@ -84,8 +84,10 @@ test('the Agents page reads the seats a person may see, what each works on and w
   await t.test('looking marks no run lost and gives no sign of life; a lapsed lease is shown as lost', async () => {
     await raw.agentSeat.update({ where: { id: dev.id }, data: { lastSeenAt: null } });
     await raw.agentRun.update({ where: { id: open.id }, data: { leaseUntil: ago(5) } });
+    // The seat's runner went on to the next issue: the lost run stays open beside the new one, and both are shown.
+    const next = await run(await issue(dev.userId), { state: 'running', leaseUntil: ago(-1), startedAt: ago(2) });
     const view = await page.readSeats(member, 'team');
-    assert.equal(view.seats[0].working.lost, true);
+    assert.deepEqual(view.seats[0].working.map(row => [row.id, row.lost]), [[next.id, false], [open.id, true]]);
     assert.equal(view.seats[0].waiting.length, 2);
     assert.equal((await raw.agentSeat.findUnique({ where: { id: dev.id } })).lastSeenAt, null);
     assert.equal((await raw.agentRun.findUnique({ where: { id: open.id } })).state, 'running');

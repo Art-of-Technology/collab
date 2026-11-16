@@ -12,7 +12,7 @@ export async function usesHandoffs(workspaceId: string): Promise<boolean> {
 }
 
 /**
- * The seats a person may see: those of the projects the person can read, each with the issue it works on now and
+ * The seats a person may see: those of the projects the person can read, each with the issues it has a run open on and
  * the issues that wait for it, which is the seat's own inbox as the seat reads it. Null when the workspace is not
  * the person's. It changes nothing.
  */
@@ -23,9 +23,9 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
     where: { workspaceId: workspace.id, retiredAt: null, project: { workspaceId: workspace.id, ...issueAccessWhere(userId) } },
     select: {
       id: true, userId: true, name: true, role: true, isDefault: true, projectId: true, project: { select: { name: true } },
-      // One run at most is open per issue; a seat's runner works one issue at a time.
-      runs: { where: { endedAt: null, issue: issueReadAccessWhere(userId) }, orderBy: { startedAt: 'desc' }, take: 1,
-        select: { state: true, leaseUntil: true, startedAt: true, issue: { select: { issueKey: true, title: true } } } },
+      // A runner works one issue at a time, but a lost run stays open until someone clears it, so a seat can have several.
+      runs: { where: { endedAt: null, issue: issueReadAccessWhere(userId) }, orderBy: { startedAt: 'desc' },
+        select: { id: true, state: true, leaseUntil: true, startedAt: true, issue: { select: { issueKey: true, title: true } } } },
     },
     orderBy: [{ project: { name: 'asc' } }, { role: 'asc' }, { name: 'asc' }],
   });
@@ -39,11 +39,11 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
   const now = new Date();
   return {
     workspace,
-    seats: rows.map(({ userId: _account, runs: [run], project, projectId: _project, ...seat }, index) => ({
+    seats: rows.map(({ userId: _account, runs, project, projectId: _project, ...seat }, index) => ({
       ...seat, project: project.name,
-      working: run ? { issueKey: run.issue.issueKey, title: run.issue.title, since: run.startedAt.toISOString(),
+      working: runs.map(run => ({ id: run.id, issueKey: run.issue.issueKey, title: run.issue.title, since: run.startedAt.toISOString(),
         // A lapsed lease is a lost run whether or not a seat has read its inbox since and marked it.
-        lost: run.state === 'lost' || (!!run.leaseUntil && run.leaseUntil < now) } : null,
+        lost: run.state === 'lost' || (!!run.leaseUntil && run.leaseUntil < now) })),
       waiting: inboxes[index].filter(item => readable.has(item.issueId)),
     })),
   };

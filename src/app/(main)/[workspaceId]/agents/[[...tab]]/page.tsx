@@ -14,8 +14,10 @@ export const dynamic = 'force-dynamic';
 export default async function AgentsPage({ params }: { params: Promise<{ workspaceId: string; tab?: string[] }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/login');
-  const { workspaceId, tab: [tab = 'seats', ...rest] = [] } = await params;
-  if (rest.length) notFound();
+  // No segment is the Seats tab; "seats" is not a second address for it.
+  const { workspaceId, tab: [segment, ...rest] = [] } = await params;
+  const tab = segment ?? 'seats';
+  if (rest.length || segment === 'seats') notFound();
   if (tab === 'floor') {
     const snapshot = await readAgentFloor(session.user.id, workspaceId);
     if (!snapshot) notFound();

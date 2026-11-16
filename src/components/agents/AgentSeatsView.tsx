@@ -37,8 +37,8 @@ export function AgentSeatsView({ workspace, seats, tab, handoffs, canManage }: P
           <th scope="row" className="p-3 font-medium">{seat.name}{seat.isDefault && <span className="block text-xs font-normal text-muted-foreground">Default for its role</span>}</th>
           <td className="p-3 capitalize">{seat.role}</td>
           <td className="p-3">{seat.project}</td>
-          <td className="p-3">{seat.working ? <>{issue(seat.working.issueKey, seat.working.title)}
-            {seat.working.lost && <span className="block text-xs text-muted-foreground">The run is lost: clear it on the issue&apos;s Activity tab.</span>}</> : <span className="text-muted-foreground">Nothing</span>}</td>
+          <td className="space-y-2 p-3">{seat.working.length ? seat.working.map(run => <div key={run.id}>{issue(run.issueKey, run.title)}
+            {run.lost && <span className="block text-xs text-muted-foreground">The run is lost: clear it on the issue&apos;s Activity tab.</span>}</div>) : <span className="text-muted-foreground">Nothing</span>}</td>
           <td className="p-3">{seat.waiting.length ? <Link className="text-primary hover:underline" href={`${base}/agents/inbox#seat-${seat.id}`}>{seat.waiting.length}</Link> : <span className="text-muted-foreground">0</span>}</td>
         </tr>)}</tbody>
       </table>

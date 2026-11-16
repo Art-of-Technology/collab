@@ -42,13 +42,7 @@ export async function proxy(req: NextRequest) {
       if (!await getGatewaySession(req.headers)) return new NextResponse('Account mapping required', { status: 403 });
     } catch { return new NextResponse('Authentication unavailable', { status: 503 }); }
   }
-  const segments = req.nextUrl.pathname.split('/').slice(1);
-  const invalidAgentsPath = segments[1] === 'agents' && (
-    segments.length > 3 || (segments[2] && !['seats', 'inbox', 'floor'].includes(segments[2]))
-  );
-  const res = invalidAgentsPath
-    ? NextResponse.rewrite(new URL('/404', req.url), { status: 404 })
-    : NextResponse.next();
+  const res = NextResponse.next();
   if (mode === 'gateway') res.headers.set('Cache-Control', 'private, no-store');
 
   // Build a strong, environment-aware CSP

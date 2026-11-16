@@ -118,9 +118,9 @@ test('"Handoffs (old)" is a tab only while a project still uses handoffs', () =>
 
 const seats = [
   { id: 'seat-dev', name: 'Collab Developer', role: 'developer', isDefault: true, project: 'Collab',
-    working: { issueKey: 'CLB-9', title: 'Being worked', since: '2026-11-16T10:00:00.000Z', lost: false },
+    working: [{ id: 'run-1', issueKey: 'CLB-9', title: 'Being worked', since: '2026-11-16T10:00:00.000Z', lost: false }],
     waiting: [{ issueId: 'i1', issueKey: 'CLB-1', title: '<b>First</b>', priority: 'high', category: 'todo', reason: 'resume', lastRunAt: null }] },
-  { id: 'seat-rel', name: 'Collab Release', role: 'release', isDefault: true, project: 'Collab', working: null, waiting: [] },
+  { id: 'seat-rel', name: 'Collab Release', role: 'release', isDefault: true, project: 'Collab', working: [], waiting: [] },
 ];
 function page({ user = 'alice', view = { workspace: { id: 'ws', slug: 'team' }, seats }, handoffs = false, manage = false } = {}) {
   const calls = [];
@@ -148,7 +148,7 @@ test('the Agents page reads nothing for a visitor, a stranger to the workspace o
   for (const [options, tab, error] of [[{ user: null }, [], /redirect:\/login/], [{ view: null }, [], /404/], [{ view: null }, ['inbox'], /404/], [{ view: null }, ['floor'], /404/]]) {
     await assert.rejects(page(options).open(...tab), error);
   }
-  for (const tab of [['handoffs'], ['seats', 'extra'], ['inbox', 'x'], ['floor', 'x']]) {
+  for (const tab of [['handoffs'], ['seats'], ['seats', 'extra'], ['inbox', 'x'], ['floor', 'x']]) {
     const f = page(); await assert.rejects(f.open(...tab), /404/); assert.deepEqual(f.calls, []);
   }
   const anonymous = page({ user: null }); await assert.rejects(anonymous.open('floor'), /redirect:\/login/); assert.deepEqual(anonymous.calls, []);
@@ -163,8 +163,9 @@ test('Seats tab: each seat with its role, project, what it works on now and how 
   // Creating and retiring stays under Settings, and only who may do it is led there.
   assert.doesNotMatch(html, /settings\/agent-tokens|Handoffs/);
   assert.match(await page({ manage: true, handoffs: true }).open(), /href="\/workspaces\/ws\/settings\/agent-tokens"[^>]*>Create or retire a seat<.*Handoffs \(old\)|Handoffs \(old\).*href="\/workspaces\/ws\/settings\/agent-tokens"/s);
-  const lost = await page({ view: { workspace: { id: 'ws', slug: null }, seats: [{ ...seats[0], working: { ...seats[0].working, lost: true } }] } }).open();
-  assert.match(lost, /The run is lost/); assert.match(lost, /href="\/ws\/issues\/CLB-9"/);
+  // A lost run stays open while the seat works the next issue: both are shown, the lost one with what to do.
+  const lost = await page({ view: { workspace: { id: 'ws', slug: null }, seats: [{ ...seats[0], working: [{ ...seats[0].working[0], id: 'run-2', issueKey: 'CLB-12', title: 'Next' }, { ...seats[0].working[0], lost: true }] }] } }).open();
+  assert.match(text(lost), /CLB-12 Next CLB-9 Being worked The run is lost: clear it on the issue&#x27;s Activity tab\. 1 /); assert.match(lost, /href="\/ws\/issues\/CLB-9"/);
   assert.match(await page({ view: { workspace: { id: 'ws', slug: 'team' }, seats: [] } }).open(), /No seats in the projects you can read/);
 });
 
