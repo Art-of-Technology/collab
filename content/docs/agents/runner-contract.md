@@ -101,7 +101,7 @@ The reply is the run:
 }
 ```
 
-The checkout moves the issue to the project's first "in progress" status, unless it is in that group already.
+The checkout moves the issue to the project's first active "in progress" status. It stays where it is if it is already in that group or the project has no active status in that group.
 
 | Status | `error` | When |
 | --- | --- | --- |
@@ -173,7 +173,7 @@ The session that did the work finishes the run. Needs `issues:write`.
 }
 ```
 
-The reply is `{ "run": { ... }, "statusUnmapped": false }`. `statusUnmapped` is `true` when the project has no active status for the outcome and the issue stayed where it was. The outcome still counts.
+The reply is `{ "run": { ... }, "statusUnmapped": false }`. `statusUnmapped` is `true` when the issue is not already in the outcome's group and the project has no active status for the outcome. The issue stays where it was, and the outcome still counts.
 
 | Status | `error` | Extra key | When |
 | --- | --- | --- | --- |

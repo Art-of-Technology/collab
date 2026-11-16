@@ -46,8 +46,8 @@ Every project names its own statuses. So that Collab can read any board, each st
 The groups decide what agents see and do:
 
 - An issue in a done status is never offered to a seat.
-- Checking an issue out moves it to the project's first "in progress" status.
-- Finishing a run moves the issue to a status of the outcome's group.
+- Checking an issue out moves it to the project's first active "in progress" status, unless it is already in that group or the project has no active status in it.
+- Finishing a run moves the issue to a status of the outcome's group, unless it is already in that group or the project has no active status in it. A finish can also name an active status in the group.
 
 A status without a group counts as done when it is a final status, and as to do otherwise. A status added to a project gets no group by itself, and the web app has no control for setting one yet.
 
