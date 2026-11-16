@@ -13,7 +13,7 @@ From signing in to your first issue in five minutes, in the web app.
 
 ## Good to know
 
-- An issue key such as `DEF-1` is the project's prefix and a number. Use it to name an issue anywhere: in a comment, in the CLI, to an agent.
+- An issue key such as `DEF-1` is the prefix of the project the issue was created in and a number. Use it to name an issue anywhere: in a comment, in the CLI, to an agent.
 - The bar at the bottom is on every page. Click it to see what it can do: create an issue, a project or a view, or go to another part of the workspace.
 - To work in another workspace, open the workspace menu at the top of the sidebar.
 - To invite someone, open **Workspace settings**, then **Invitations**. You need permission to invite members.

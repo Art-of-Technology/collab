@@ -15,13 +15,13 @@ A workspace is the shared space of a team.
 A project holds issues that belong together.
 
 - It has a name and an issue prefix: capital letters and digits, such as `AA`.
-- Its issues are numbered with the prefix: `AA-12`. That is the issue key, and it never changes.
+- Its issues are numbered with the prefix: `AA-12`. That is the issue key. An issue keeps its key for good, also when it is moved to another project.
 - It has its own list of statuses.
 - It can be archived when the work is over.
 
 ## Issue
 
-An issue is one piece of work with one status and at most one assignee.
+An issue is one piece of work. It has at most one assignee and moves through its project's statuses.
 
 - A type: Task, Story, Epic, Bug, Milestone or Sub-task.
 - A priority: low, medium, high or urgent.

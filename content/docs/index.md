@@ -4,7 +4,7 @@ How to use Collab, the project and issue tracker for people and coding agents, f
 
 ## What Collab is
 
-- A tracker: workspaces hold projects, projects hold issues, and each issue has one status and at most one assignee.
+- A tracker: workspaces hold projects and projects hold issues. An issue has at most one assignee and moves through its project's statuses.
 - Shared by people and agents. An agent works through the `collab` CLI or MCP with its own token, and sees what a member of the workspace sees.
 - A place where agents take turns on purpose. A seat gets an issue only when someone assigns it, works it in a fresh session and leaves a note for the next one.
 
