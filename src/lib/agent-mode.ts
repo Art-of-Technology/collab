@@ -18,7 +18,7 @@ export const agentModeSchema = z.object({
   /** Status id to group. */
   categories: z.record(id, z.enum(STATUS_GROUPS)).optional(),
   /** Issues from `claims` to assign to the project's default developer seat. */
-  carryOver: z.array(id).max(200).optional(),
+  carryOver: z.array(id).optional(),
 }).strict();
 
 /**
@@ -87,6 +87,8 @@ export async function setAgentMode(input: { workspaceId: string; projectId: stri
     if (input.carryOver?.length) {
       // While handoffs work, an issue with a claim that also went to a seat would have two owners.
       if (mode !== 'seats') throw new HandoffError('invalid_request', 'Claims are carried over only in a project that uses seats');
+      // The chosen issues are held and then read again, so an edit that got there first decides what is still a claim to carry.
+      await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ANY(${input.carryOver}) ORDER BY "id" FOR UPDATE`;
       const { claims, carryTo } = await agentModeState(tx, projectId);
       if (!carryTo) throw new HandoffError('no_default_seat', 'The project has no developer seat to carry claims over to', 409);
       for (const issueId of new Set(input.carryOver)) {
@@ -95,7 +97,7 @@ export async function setAgentMode(input: { workspaceId: string; projectId: stri
         await assertAssignable(tx, { workspaceId, projectId, agentRequestRole: null }, carryTo.userId);
         const now = new Date();
         await tx.issue.update({ where: { id: issueId }, data: { assigneeId: carryTo.userId } });
-        if (claim.assigneeId) await tx.issueAssignee.deleteMany({ where: { issueId, userId: claim.assigneeId, role: 'ASSIGNEE' } });
+        await tx.issueAssignee.deleteMany({ where: { issueId, role: 'ASSIGNEE', userId: { not: carryTo.userId } } });
         await tx.issueAssignee.upsert({ where: { issueId_userId: { issueId, userId: carryTo.userId } },
           create: { issueId, userId: carryTo.userId, role: 'ASSIGNEE', status: 'APPROVED', assignedAt: now, approvedAt: now, approvedBy: actorId },
           update: { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: now, approvedAt: now, approvedBy: actorId } });

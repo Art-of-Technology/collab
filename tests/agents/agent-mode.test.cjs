@@ -55,7 +55,7 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
   const send = (issue, data) => handoffs.sendHandoff(boss, handoffs.sendSchema.parse({ agent: 'lead', issue, content: 'Do this, then report.', toAgents: ['worker'], ...data }));
   const act = (handoff, action, agent = 'worker') => handoffs.actOnHandoff(boss, handoff.id,
     handoffs.actionSchema.parse({ agent, action, ...(['progress', 'complete', 'release'].includes(action) && { content: 'Where it stands.' }) }));
-  const offer = handoff => handoffs.createTransferOffer(boss, handoffs.transferOfferSchema.parse({ agent: 'worker', handoffId: handoff.id, toAgent: 'lead', requestId: randomUUID(), content: 'Take this over.' }));
+  const offer = (handoff, requestId = randomUUID()) => handoffs.createTransferOffer(boss, handoffs.transferOfferSchema.parse({ agent: 'worker', handoffId: handoff.id, toAgent: 'lead', requestId, content: 'Take this over.' }));
   const offerAct = (made, action, agent = 'lead') => handoffs.actOnTransferOffer(boss, made.id, handoffs.transferOfferActionSchema.parse({ agent, action }));
   const refused = (pending, code, status) => assert.rejects(pending, error => {
     assert.deepEqual([error.code, error.status], [code, status], error.message);
@@ -86,7 +86,7 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
     const work = await issue(S), other = await issue(H);
     const open = await send(work.id), held = await send(work.id), moving = await send(work.id), offered = await send(work.id);
     for (const handoff of [held, moving, offered]) await act(handoff, 'claim');
-    const pending = await offer(offered);
+    const sameRequest = randomUUID(), pending = await offer(offered, sameRequest);
     await label(person, work, ['backend']);
     assert.equal(await handoffCount(work), 5, 'before the switch a subscribed label hands the issue to its subscribers');
 
@@ -100,6 +100,7 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
     await refused(act(open, 'claim'), 'project_uses_seats', 409);
     await refused(act(held, 'claim'), 'project_uses_seats', 409);
     await refused(offer(moving), 'project_uses_seats', 409);
+    await refused(offer(offered, sameRequest), 'project_uses_seats', 409);
     await refused(offerAct(pending, 'accept'), 'project_uses_seats', 409);
     await label(person, work, []);
     await label(person, work, ['backend']);
@@ -235,6 +236,8 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
     await raw.issueAssignee.createMany({ data: [
       { issueId: recent.id, userId: person, role: 'ASSIGNEE', status: 'APPROVED', approvedBy: owner },
       { issueId: recent.id, userId: owner, role: 'HELPER', status: 'APPROVED', approvedBy: owner },
+      // An assignee row from before the last reassignment, which the issue editor leaves behind.
+      { issueId: recent.id, userId: devS.userId, role: 'ASSIGNEE', status: 'APPROVED', approvedBy: owner },
     ] });
     const seated = await issue(C, { assigneeId: devC.userId }), shared = await issue(C), request = await issue(C, { agentRequestRole: 'release' });
     const handoff = await claim(recent, 'solo', new Date(Date.now() - 6 * 86_400_000));
@@ -269,6 +272,26 @@ test('agent mode: a project gives agents work by handoffs or by seats', async t 
       [owner, C, person, devC.userId, { reason: 'seat_carry_over', agent: 'solo', handoffId: handoff.id }]);
     assert.equal((await raw.issue.findUniqueOrThrow({ where: { id: shared.id } })).assigneeId, null);
     assert.equal((await raw.agentHandoff.findUniqueOrThrow({ where: { id: handoff.id } })).status, 'claimed', 'the old claim is left for its agent to be retired');
+
+    // An edit under way when the carry-over starts is waited for, and decides: an issue it finished is no claim to carry.
+    const contested = await issue(C), solo = await raw.agentRegistration.findFirstOrThrow({ where: { name: 'solo' } });
+    await raw.agentHandoff.create({ data: { workspaceId: 'w', issueId: contested.id, sourceKey: 'contested', content: 'Claimed before the switch.', recipientNames: ['solo'],
+      status: 'claimed', claimedById: solo.id, claimedOnce: true } });
+    assert.deepEqual((await read(C)).claims.map(row => row.issueKey), [contested.issueKey, shared.issueKey]);
+    let reached, release;
+    const editing = new Promise(resolve => { reached = resolve; }), held = new Promise(resolve => { release = resolve; });
+    const edit = raw.$transaction(async tx => {
+      await tx.issue.update({ where: { id: contested.id }, data: { statusId: `${C}-done` } });
+      reached();
+      await held;
+    }, { timeout: 20_000 });
+    await editing;
+    const carry = set(C, { carryOver: [contested.id] }).then(() => 'carried', error => error.code);
+    assert.equal(await Promise.race([carry, new Promise(resolve => setTimeout(() => resolve('waiting'), 500))]), 'waiting');
+    release();
+    await edit;
+    assert.equal(await carry, 'invalid_request');
+    assert.equal((await raw.issue.findUniqueOrThrow({ where: { id: contested.id } })).assigneeId, null);
   });
 
   await t.test('only a person who manages the workspace reads or changes the mode', async () => {

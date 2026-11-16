@@ -401,6 +401,7 @@ export async function createTransferOffer(context: AppAuthContext, input: z.infe
   return prisma.$transaction(async db => {
     let sender = await ownedAgent(db, context, input.agent);
     const prior = await visibleHandoff(db, context, sender, input.handoffId);
+    await requireHandoffsMode(db, prior.issue.projectId);
     const retry = await db.agentTransferOffer.findUnique({ where: { workspaceId_senderId_requestId: {
       workspaceId: context.workspace.id, senderId: sender.id, requestId: input.requestId,
     } } });
@@ -410,7 +411,6 @@ export async function createTransferOffer(context: AppAuthContext, input: z.infe
       }
       return retry;
     }
-    await requireHandoffsMode(db, prior.issue.projectId);
     if (prior.status !== 'claimed' || prior.claimedById !== sender.id) throw new HandoffError('claim_required', 'Only the current owner can offer this work', 409);
     let recipient = await db.agentRegistration.findFirst({ where: { workspaceId: context.workspace.id, name: input.toAgent } });
     if (!recipient || recipient.id === sender.id || recipient.managedWorker) throw new HandoffError('recipient_not_found', 'A different registered manual agent is required', 404);
