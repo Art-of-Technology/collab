@@ -8,8 +8,8 @@ const { seatsDatabase } = require('./seats-db.cjs');
 const owner = 'cowner00001', person = 'cperson0001';
 // A: one repository from the GitHub sign-in. B: none. C: two. D: the same repository twice, once through the sign-in
 // and once as a connection. E: the same path at two servers, which is two repositories. F: one connection and nothing
-// else.
-const A = 'cprojecta001', B = 'cprojectb001', C = 'cprojectc001', D = 'cprojectd001', E = 'cprojecte001', F = 'cprojectf001';
+// else. G: three connections, one of which is connected a second time during the test.
+const A = 'cprojecta001', B = 'cprojectb001', C = 'cprojectc001', D = 'cprojectd001', E = 'cprojecte001', F = 'cprojectf001', G = 'cprojectg001';
 const scopes = ['issues:read', 'issues:write', 'user:read'];
 const ago = seconds => new Date(Date.now() - seconds * 1000);
 
@@ -21,7 +21,7 @@ test('the repository of the issue\'s project comes with the checkout and the run
     await prisma.user.createMany({ data: [owner, person].map(id => ({ id, name: id })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
     await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: person } });
-    for (const [id, prefix] of [[A, 'AA'], [B, 'BB'], [C, 'CC'], [D, 'DD'], [E, 'EE'], [F, 'FF']]) {
+    for (const [id, prefix] of [[A, 'AA'], [B, 'BB'], [C, 'CC'], [D, 'DD'], [E, 'EE'], [F, 'FF'], [G, 'GG']]) {
       await prisma.project.create({ data: { id, workspaceId: 'w', name: `Project ${prefix}`, slug: id, issuePrefix: prefix } });
       await prisma.projectStatus.createMany({ data: ['to_do', 'in_progress', 'done'].map((name, order) => ({ id: `${id}-${name}`, projectId: id, name, displayName: name,
         order, category: name, isFinal: name === 'done' })) });
@@ -44,6 +44,11 @@ test('the repository of the issue\'s project comes with the checkout and the run
       url: 'https://gitlab.acme.test/acme/five' });
     // F has nothing but a connection, at a server of its own and with the provider written as the client stores it.
     await connection(F, 'GitLab', 'acme/six', { baseUrl: 'https://gitlab.acme.test', url: 'https://gitlab.acme.test/acme/six.git' });
+    // G has three repositories, one of them at GitHub and written as the client stores it: the sign-in connects the
+    // same one during the test.
+    await connection(G, 'github', 'ACME/seven');
+    await connection(G, 'gitlab', 'acme/eight');
+    await connection(G, 'gitlab', 'acme/nine');
     for (const [id, slug] of [['agent-app', 'collab-agent'], ['person-app', 'collab-cli']]) {
       await prisma.app.create({ data: { id, name: slug, slug, publisherId: 'system', status: 'PUBLISHED', visibility: 'PRIVATE', isSystemApp: true,
         scopes: { create: scopes.map(scope => ({ scope })) } } });
@@ -88,7 +93,7 @@ test('the repository of the issue\'s project comes with the checkout and the run
     return { ...made.seat, token: made.token.token };
   };
   const devA = await seat('dev-a', A), devB = await seat('dev-b', B), leadB = await seat('lead-b', B, 'lead'), devC = await seat('dev-c', C), devD = await seat('dev-d', D);
-  const leadA = await seat('lead-a', A, 'lead'), devE = await seat('dev-e', E), devF = await seat('dev-f', F);
+  const leadA = await seat('lead-a', A, 'lead'), devE = await seat('dev-e', E), devF = await seat('dev-f', F), devG = await seat('dev-g', G);
   const personToken = 'collab_person_token';
   await raw.appToken.create({ data: { appId: 'person-app', workspaceId: 'w', userId: person, installationId: null,
     accessToken: Buffer.from(personToken).toString('base64'), scopes } });
@@ -239,6 +244,28 @@ test('the repository of the issue\'s project comes with the checkout and the run
     await raw.gitConnection.update({ where: { id: connection.id }, data: { isActive: true } });
     await raw.project.update({ where: { id: C }, data: { agentDefaultRepositoryId: foreign.id } });
     assert.equal((await checkout(devC, await issue(devC)))[0], 409);
+  });
+
+  await t.test('the default an administrator chose holds when another row comes to represent the same repository', async () => {
+    const seven = await raw.gitConnection.findFirstOrThrow({ where: { projectId: G, repositoryPath: 'ACME/seven' } });
+    await raw.project.update({ where: { id: G }, data: { agentDefaultRepositoryId: seven.id } });
+    assert.equal((await checkout(devG, await issue(devG)))[1].repository.id, seven.id);
+    // The same repository connected a second time, through the GitHub sign-in: that row answers for both from now on,
+    // and the project still has three. The choice was the repository, not the row, so the checkout keeps it.
+    const signIn = await raw.repository.create({ data: { projectId: G, githubRepoId: 'acme/seven', owner: 'acme', name: 'seven', fullName: 'acme/seven',
+      webhookSecret: 'secret', accessToken: 'token' } });
+    const [status, body] = await checkout(devG, await issue(devG));
+    assert.deepEqual([status, body.repository.id, body.repository.name], [200, signIn.id, 'acme/seven']);
+    // And the other way about: the sign-in's row disconnected while the connection of the same repository stays.
+    await raw.project.update({ where: { id: G }, data: { agentDefaultRepositoryId: signIn.id } });
+    await raw.repository.update({ where: { id: signIn.id }, data: { isActive: false } });
+    assert.equal((await checkout(devG, await issue(devG)))[1].repository.id, seven.id);
+    // Once the repository is connected no more, the default names nothing and the checkout refuses as before.
+    await raw.gitConnection.update({ where: { id: seven.id }, data: { isActive: false } });
+    const left = await issue(devG);
+    const [refused, told] = await checkout(devG, left);
+    assert.deepEqual([refused, told.error], [409, 'repository_required']);
+    assert.equal(await raw.agentRun.count({ where: { issueId: left.id } }), 0);
   });
 
   await t.test('a person takes an issue of a project with no repository, and gets none', async () => {

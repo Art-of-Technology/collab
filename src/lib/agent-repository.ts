@@ -27,11 +27,18 @@ export const NEEDS_REPOSITORY = ['developer', 'reviewer', 'release', 'security']
 /** Read in a checkout's transaction and outside one, as `agent-seats.ts` does. */
 type Database = Prisma.TransactionClient | typeof prisma;
 
+/** A connected row with what makes two rows the same repository, so a saved default survives the row it was saved as. */
+type Connected = { key: string; repository: SeatRepository };
+
+// The server is part of what makes it the same repository, as it is in `GitConnection`'s own key: the same path at two
+// servers is two repositories, and a project that has both picks between them rather than cloning the older row.
+const repositoryKey = (provider: string, server: string, path: string) => [provider, server, path].map(part => part.toLowerCase()).join(' ');
+
 /**
- * The project's repositories, the GitHub sign-in's first. A credential is never selected: `Repository.accessToken`
+ * Every active row of the project, the GitHub sign-in's first. A credential is never selected: `Repository.accessToken`
  * and `GitConnection.credentials` do not leave the server, and the runner clones with its owner's own sign-in.
  */
-export async function connectedRepositories(db: Database, projectId: string): Promise<SeatRepository[]> {
+async function connectedRows(db: Database, projectId: string): Promise<Connected[]> {
   // A project has at most one `Repository`: `Repository.projectId` is unique.
   const github = await db.repository.findFirst({ where: { projectId, isActive: true }, select: { id: true, fullName: true, defaultBranch: true } });
   const connections = await db.gitConnection.findMany({ where: { projectId, isActive: true }, orderBy: { createdAt: 'asc' },
@@ -42,20 +49,41 @@ export async function connectedRepositories(db: Database, projectId: string): Pr
     ...connections.map(connection => ({ server: connection.baseUrl,
       repository: { id: connection.id, provider: connection.provider.toLowerCase(), name: connection.repositoryPath, url: connection.url, defaultBranch: null } })),
   ];
-  // One repository connected twice, by the GitHub sign-in and as a connection, is one repository: the sign-in's row wins.
-  // The server is part of what makes it the same one, as it is in `GitConnection`'s own key: the same path at two
-  // servers is two repositories, and a project that has both picks between them rather than cloning the older row.
-  const key = (entry: typeof all[number]) => [entry.repository.provider, entry.server.toLowerCase(), entry.repository.name.toLowerCase()].join(' ');
-  return all.filter((entry, index) => all.findIndex(other => key(other) === key(entry)) === index).map(entry => entry.repository);
+  return all.map(entry => ({ key: repositoryKey(entry.repository.provider, entry.server, entry.repository.name), repository: entry.repository }));
 }
 
-/** An inactive or disconnected default never resolves, nor does an id belonging to another project. */
+/**
+ * The repository a saved default names, where no active row carries that id any more: the row it was saved as may have
+ * been switched off or disconnected while a second connection of the same repository stays. Read in that case only.
+ */
+async function savedRepositoryKey(db: Database, projectId: string, savedId: string): Promise<string | null> {
+  // Within the project, so an id belonging to another one names nothing here.
+  const github = await db.repository.findFirst({ where: { id: savedId, projectId }, select: { fullName: true } });
+  if (github) return repositoryKey('github', 'https://github.com', github.fullName);
+  const connection = await db.gitConnection.findFirst({ where: { id: savedId, projectId }, select: { provider: true, baseUrl: true, repositoryPath: true } });
+  return connection ? repositoryKey(connection.provider, connection.baseUrl, connection.repositoryPath) : null;
+}
+
+/** One repository connected twice, by the GitHub sign-in and as a connection, is one repository: the sign-in's row wins. */
+const distinct = (rows: Connected[]) => rows.filter((row, index) => rows.findIndex(other => other.key === row.key) === index);
+
+/** The project's repositories, the GitHub sign-in's first, one entry for a repository connected twice. */
+export async function connectedRepositories(db: Database, projectId: string): Promise<SeatRepository[]> {
+  return distinct(await connectedRows(db, projectId)).map(row => row.repository);
+}
+
+/** A default whose repository is connected no more never resolves, nor does an id belonging to another project. */
 export async function projectRepositoryState(db: Database, projectId: string) {
-  const repositories = await connectedRepositories(db, projectId);
-  const project = await db.project.findUnique({ where: { id: projectId }, select: { agentDefaultRepositoryId: true } });
-  const repository = repositories.length === 1 ? repositories[0]
-    : repositories.find(candidate => candidate.id === project?.agentDefaultRepositoryId) ?? null;
-  return { repositories, repository };
+  const rows = await connectedRows(db, projectId);
+  const chosen = distinct(rows);
+  const repositories = chosen.map(row => row.repository);
+  if (repositories.length === 1) return { repositories, repository: repositories[0] };
+  const { agentDefaultRepositoryId: savedId } = await db.project.findUnique({ where: { id: projectId }, select: { agentDefaultRepositoryId: true } }) ?? {};
+  // The default is saved as one row's id, and a repository connected twice has two of them. The repository it names
+  // answers while it is connected at all, whichever of its rows represents it now: connecting the same repository
+  // again, or switching off the row that won, changes which row that is but not the choice an administrator made.
+  const key = !savedId ? null : rows.find(row => row.repository.id === savedId)?.key ?? await savedRepositoryKey(db, projectId, savedId);
+  return { repositories, repository: (key && chosen.find(row => row.key === key)?.repository) || null };
 }
 
 /** The seat's pick will take precedence when seat repository selection is introduced. */
