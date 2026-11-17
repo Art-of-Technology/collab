@@ -257,6 +257,30 @@ const verifiedTokens = new Map<string, VerifiedToken>();
 // The stored AppToken.tokenHash. A hash only finds the row; the row's decrypted token decides.
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 
+// The tokens a runner fetched that this process has already seen used. Bounded like the one above.
+const adoptedTokens = new Set<string>();
+
+/**
+ * The first request made with a token a runner fetched ends the tokens that runner holds for the same seat from
+ * before it (rule 4, src/lib/agent-runners.ts): the renewal a runner is given a week before the old token runs out
+ * takes over when the runner starts using it, and a renewal it never uses leaves the old token working to its own
+ * expiry. Once per token per process; it is the same write every time, so a lost one costs only a later request.
+ */
+async function adoptRunnerToken(token: { id: string; runnerId: string; userId: string | null; createdAt: Date }) {
+  if (adoptedTokens.has(token.id)) return;
+  try {
+    await prisma.appToken.updateMany({
+      where: { runnerId: token.runnerId, userId: token.userId, isRevoked: false, createdAt: { lt: token.createdAt } },
+      data: { isRevoked: true, revokedAt: new Date() },
+    });
+  } catch {
+    // Authentication is not refused because a token it replaces could not be ended.
+    return;
+  }
+  if (adoptedTokens.size >= 1000) adoptedTokens.delete(adoptedTokens.keys().next().value!);
+  adoptedTokens.add(token.id);
+}
+
 async function findInstallationByAccessToken(token: string) {
   const fingerprint = tokenHash(token);
   const verified = verifiedTokens.get(fingerprint);
@@ -387,6 +411,8 @@ async function matchAccessToken(token: string, fingerprint: string, verified?: V
           console.warn('Non-system app token found without installation:', appToken.id);
           continue;
         }
+
+        if (appToken.runnerId) await adoptRunnerToken({ ...appToken, runnerId: appToken.runnerId });
 
         // Return virtual installation data for system app
         return {

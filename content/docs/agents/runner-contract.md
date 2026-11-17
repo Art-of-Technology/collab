@@ -304,6 +304,7 @@ Collab applies no rate limit of its own to these calls beyond `request_cap`.
 | JSON body | 64 KiB |
 | Pairing code | Works once, for 15 minutes |
 | Token fetched by a runner | 30 days |
+| Renewed from | 7 days before it runs out |
 
 `collab seat run` reads the inbox every 5 seconds when it is empty and renews every 15 seconds.
 
@@ -321,12 +322,15 @@ A runner can get its seats' tokens from Collab instead of having them entered by
 | Call | Carries | Does |
 | --- | --- | --- |
 | `POST /api/runner/pair` | Nothing | Starts a pairing: answers with the runner's credential and a code to show. |
-| `POST /api/runner/seats` | The runner credential | Lists the runner's seats, with a token for each seat whose token the runner does not hold. |
+| `POST /api/runner/seats` | The runner credential | Lists the runner's seats, with a token for each seat whose token the runner does not hold or whose token is in its last week. |
+| `POST /api/runner/goodbye` | The runner credential | Says the runner is going: its tokens are revoked at once and its credential stops working. |
 
 1. Call `pair` once. Keep the credential in a file only the runner's user can read. Show the code to the person.
 2. Call `seats` about once a minute, not more often. Until a person has typed the code into Collab it answers `403 runner_pending`.
 3. Keep each token you are given. Send the ids of the tokens you hold as `have` on every call: `{"have":[]}` only while you hold none, because every new token costs the server work.
-4. When a seat is no longer in the answer, stop running it and delete its token.
+4. When an answer carries a token for a seat you already have one for, that is a renewal: start using the new one. The token it replaces ends on your first request with the new one.
+5. When a seat is no longer in the answer, stop running it and delete its token.
+6. Before the machine is deleted on purpose, call `goodbye` as the last act.
 
 ```sh
 curl -X POST -H "Content-Type: application/json" -d '{"name":"seat-runner on build-1"}' https://collab.example.com/api/runner/pair
@@ -354,15 +358,43 @@ curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" -H "Content-Type: app
 | --- | --- |
 | `tokenId`, `expiresAt` | The token to use for the seat: the newest one you said you hold, or the new one. |
 | `token` | Present only when the token is new. It is sent once and never again. |
-| `problem` | Present instead of a token when none could be made this time. Ask again later. `paused` means the seat's agent is switched off or removed: asking never switches it on again, a person does. |
+| `problem` | Present when no token could be made this time, beside whatever token you already hold. Ask again later. `paused` means the seat's agent is switched off or removed: asking never switches it on again, a person does. |
 
-A seat for which you hold no usable token gets a new one. The token it replaces keeps working until you ask again holding the new one, or until a second newer token is made. With three overlapping asks, the first answer can arrive last with a revoked token. If a retained token is refused, ask again with what you hold to get a new one. If an answer or file is lost, ask again with what you hold.
+A seat for which you hold no usable token gets a new one. With three overlapping asks, the first answer can arrive last with a revoked token. If a retained token is refused, ask again with what you hold to get a new one. If an answer or file is lost, ask again with what you hold.
+
+### Renewal
+
+A fetched token lasts 30 days. Once it has a week or less left, your next ask carries a new token for that seat as well, and both work:
+
+- Start using the new token. Your first request with it ends the one before, so the seat is never without a valid token.
+- Until you use it, the old token keeps working to its own expiry. A renewal nobody picks up is shown to people as "Renewal not picked up"; it stops nothing.
+- A token also ends when a second newer one is made for the same seat: you hold at most two usable tokens for a seat.
+- A runner that is away for the whole week comes back to an expired token. Ask with what you hold: a seat whose token ran out gets a new one. While it is out, the seat's work waits and whoever files a request for it is told.
+
+Nothing is renewed for a seat run by hand. Those tokens keep the expiry they were made with.
 
 | Error | When |
 | --- | --- |
 | `403 runner_pending` | No person has admitted the runner yet. Ask again. |
-| `401 runner_refused` | The credential is unknown, the runner was removed or replaced, its person left the workspace, or the pairing ran out after 15 minutes. Stop every seat and pair again. |
+| `401 runner_refused` | The credential is unknown, the runner was removed, replaced or said goodbye, its person left the workspace, or the pairing ran out after 15 minutes. Stop every seat and pair again. |
 | `429 pairing_busy` | 50 pairings are waiting on this server. Try `pair` again in a few minutes. |
+
+## Say goodbye: POST /api/runner/goodbye
+
+Carries the runner credential and no body. Call it once, as the last thing the runner does, when its machine is being deleted on purpose.
+
+```sh
+curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" https://collab.example.com/api/runner/goodbye
+```
+
+```json
+{ "revokedTokens": 2 }
+```
+
+- Every token this runner fetched is revoked at once, and the credential is refused from then on: `401 runner_refused`. Its seats show no runner until a runner is admitted again.
+- Saying it twice, or with an unknown credential, is `401 runner_refused`.
+- A machine that is lost says nothing. Expiry is the backstop for that: its tokens stop within 30 days.
+- A runner that comes back pairs again and is admitted again.
 
 A runner credential does nothing else. It reads no issue and writes nothing, and every other call refuses it.
 

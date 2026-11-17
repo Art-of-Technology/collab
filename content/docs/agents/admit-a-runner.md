@@ -43,18 +43,34 @@ A seat run by hand keeps its hand-made token. A runner never gets it.
 
 ## See whether a seat has a runner
 
-- **Agents**, **Seats** marks a seat with **No runner yet** until a runner holds its token.
-- The project's **Settings**, **Agents** lists each of these seats with the runner that fetched its token, when, and when the seat last asked for work.
-- A request to a seat with no runner still succeeds, with the warning `seat_idle` and a comment that says so.
+- **Agents**, **Seats** marks a seat with **No runner yet** until a runner holds its token, and with **Token expired** when the last token a runner fetched for it has run out.
+- The project's **Settings**, **Agents** lists each of these seats with the runner that fetched its token, when, when the token runs out, and when the seat last asked for work. **Renewal not picked up** means a new token was handed over and the runner has not used it yet; the old one still works.
+- A request to a seat with no usable token still succeeds, with the warning `seat_idle` and a comment that says so.
+
+## Renewal and the end of a token
+
+A fetched token lasts 30 days, and nobody has to remember it:
+
+- In its last week, the runner's next ask is answered with a new token for that seat as well. The old one keeps working until the runner uses the new one, so the seat is never without a valid token.
+- If the runner never uses the new one, nothing stops: the old token works to its own expiry, and the seat shows **Renewal not picked up**.
+- A runner that is away for the whole week leaves a token that runs out. The seat shows it, its work waits, and the next ask gets it a new token.
+- A seat run by hand is not renewed by this. Its token keeps the expiry it was made with.
+
+**Renew tokens** under **Agents**, **Runners** revokes everything that runner fetched at once, for when a token may have leaked. The runner fetches new tokens on its next ask, about a minute later, and the seats' work waits until then. Nothing has to be made again by hand.
+
+A fetched token is also revoked at once when:
+
+- the seat is retired, or its project is archived (an archived project's seats are not fetched at all);
+- the runner is removed or replaced;
+- the runner says goodbye, which is what a runner does as its last act when its machine is deleted on purpose.
 
 ## Good to know
 
 - A person has one runner per workspace. Admitting another removes the one before and revokes the tokens it fetched. This is how a rebuilt machine replaces a lost one.
 - Removing a runner stops its credential and revokes every token it fetched, at once.
 - A runner whose person is no longer in the workspace gets nothing.
-- A fetched token lasts 30 days.
 - Nobody can make a token by hand for a seat that a runner runs.
-- A runner is admitted from Collab's own page only. A request from another site is refused.
+- A runner is admitted, renewed and removed from Collab's own page only. A request from another site is refused.
 
 ## Stop a seat that a runner runs
 
@@ -62,10 +78,11 @@ A seat run by hand keeps its hand-made token. A runner never gets it.
 | --- | --- | --- |
 | One seat | Under **Agent tokens**, revoke every token of the seat. Its agent is switched off, and the runner gets no new token. | Someone who manages the workspace creates the seat again: same name, project and role, with **Run by the owner's runner**. |
 | One seat, for good | Retire the seat. | Create a new seat. |
+| Every seat of a project | Archive the project. | Bring the project back; the runner fetches its seats again. |
 | Every seat of a runner | Remove the runner under **Agents**, **Runners**. | Admit a runner again. |
 
 - A runner never switches an agent back on. When someone switched a seat's agent off or removed it from the workspace, the runner gets no token for it until a person creates the seat again.
-- A retired seat keeps the tokens its runner fetched until you revoke them. They can read but change nothing. Collab refuses to make the seat again by hand while one of them still works: revoke them first.
+- Retiring a seat revokes the tokens its runner fetched for it. A token made by hand stays until you revoke it: it can read but change nothing.
 
 ## Next
 

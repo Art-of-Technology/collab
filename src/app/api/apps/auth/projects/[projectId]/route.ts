@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { revokeProjectRunnerTokens } from '@/lib/agent-runners';
 import { z } from 'zod';
 
 const UpdateProjectSchema = z.object({
@@ -160,14 +161,20 @@ export const PATCH = withAppAuth(
         }
       }
 
-      const updatedProject = await prisma.project.update({
-        where: { id: projectId },
-        data: {
-          ...(data.name && { name: data.name }),
-          ...(data.description !== undefined && { description: data.description }),
-          ...(data.color && { color: data.color }),
-          ...(data.isArchived !== undefined && { isArchived: data.isArchived }),
-        },
+      // An archived project's seats keep no token a runner fetched, and a runner's next ask no longer lists them:
+      // in the same transaction as the update, so neither happens without the other.
+      const updatedProject = await prisma.$transaction(async tx => {
+        const updated = await tx.project.update({
+          where: { id: projectId },
+          data: {
+            ...(data.name && { name: data.name }),
+            ...(data.description !== undefined && { description: data.description }),
+            ...(data.color && { color: data.color }),
+            ...(data.isArchived !== undefined && { isArchived: data.isArchived }),
+          },
+        });
+        if (data.isArchived) await revokeProjectRunnerTokens(tx, updated.workspaceId, context.user.id, updated.id);
+        return updated;
       });
 
       return NextResponse.json(updatedProject);

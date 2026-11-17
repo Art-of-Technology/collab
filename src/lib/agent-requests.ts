@@ -131,10 +131,15 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
     await tx.issueComment.create({ data: { issueId: issue.id, authorId: me, content: `${to.name}, this project's release seat, ${to.lastSeenAt
       ? `last read its inbox at ${to.lastSeenAt.toISOString()}` : 'has never read its inbox'}. This request waits until it does. If the release seat is not running, a person has to start it.` } });
   }
-  // A seat a runner runs works only once a runner holds its token.
-  const waits = to.byRunner && !await tx.appToken.count({ where: { userId: to.userId, runnerId: { not: null }, isRevoked: false, tokenExpiresAt: { gt: now } } });
+  // A seat a runner runs works only while a runner holds a usable token for it: before the first fetch, and again
+  // once the last token it fetched has run out, which is what a runner that stayed away through the renewal window leaves.
+  const fetched = to.byRunner ? await tx.appToken.findFirst({ where: { userId: to.userId, runnerId: { not: null }, isRevoked: false },
+    orderBy: { createdAt: 'desc' }, select: { tokenExpiresAt: true } }) : null;
+  const waits = to.byRunner && !(fetched?.tokenExpiresAt && fetched.tokenExpiresAt > now);
   if (waits) {
-    await tx.issueComment.create({ data: { issueId: issue.id, authorId: me, content: `${to.name} is run by a runner, and no runner has fetched its token yet. This request waits until one has: the seat's owner admits a runner under Agents, Runners.` } });
+    await tx.issueComment.create({ data: { issueId: issue.id, authorId: me, content: fetched?.tokenExpiresAt
+      ? `${to.name} is run by a runner, and the last token a runner fetched for it ran out at ${fetched.tokenExpiresAt.toISOString()}. A token is renewed when its runner asks, so this one has not asked for a week or more. This request waits until a runner fetches a token again.`
+      : `${to.name} is run by a runner, and no runner has fetched its token yet. This request waits until one has: the seat's owner admits a runner under Agents, Runners.` } });
   }
   return { issue, idle: idle || waits };
 }

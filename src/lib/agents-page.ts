@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { inboxOf, type InboxItem } from '@/lib/agent-runs';
+import { fetchedBy } from '@/lib/agent-runners';
 
 /**
  * True while a project of the workspace still works with handoffs: the Agents page lists "Handoffs (old)" until
@@ -52,14 +53,14 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
   const ids = inboxes.flat().map(item => item.issueId);
   const readable = new Set((ids.length ? await prisma.issue.findMany({ where: { id: { in: ids }, ...issueReadAccessWhere(userId) }, select: { id: true } }) : []).map(issue => issue.id));
   const now = new Date();
-  // A seat a runner runs works only once a runner holds a usable token for it.
-  const byRunner = rows.filter(seat => seat.byRunner).map(seat => seat.userId);
-  const fetched = new Set((byRunner.length ? await prisma.appToken.findMany({ where: { userId: { in: byRunner }, runnerId: { not: null }, isRevoked: false, tokenExpiresAt: { gt: now } },
-    select: { userId: true } }) : []).map(token => token.userId));
+  // A seat a runner runs works only while a runner holds a usable token for it: `expired` is a seat whose runner
+  // stayed away long enough for the last token it fetched to run out.
+  const fetched = await fetchedBy(prisma, rows.filter(seat => seat.byRunner).map(seat => seat.userId));
   return {
     workspace,
     seats: rows.map(({ userId: account, runs, project, projectId: _project, byRunner: runner, ...seat }, index) => ({
       ...seat, project: project.name, noRunner: runner && !fetched.has(account),
+      tokenExpired: runner && fetched.get(account)?.state === 'expired',
       working: runs.map(run => ({ id: run.id, issueId: run.issue.id, issueKey: run.issue.issueKey, title: run.issue.title, since: run.startedAt.toISOString(),
         // A lapsed lease is a lost run whether or not a seat has read its inbox since and marked it.
         lost: run.state === 'lost' || (!!run.leaseUntil && run.leaseUntil < now) })),

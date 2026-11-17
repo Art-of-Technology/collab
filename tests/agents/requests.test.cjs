@@ -258,10 +258,16 @@ test('requests: one seat asks another, in its own project or in another one', as
     assert.equal(waiting.reply.warning, 'seat_idle');
     assert.equal(waiting.row.assigneeId, made.seat.userId);
     assert.match(waiting.row.comments[0].content, /^rev-c is run by a runner, and no runner has fetched its token yet/);
-    await raw.appToken.create({ data: { appId: 'agent-app', workspaceId: 'w', userId: made.seat.userId, accessToken: 'fetched', scopes, runnerId: 'crunner00001', tokenExpiresAt: new Date(Date.now() + 60_000) } });
+    const token = await raw.appToken.create({ data: { appId: 'agent-app', workspaceId: 'w', userId: made.seat.userId, accessToken: 'fetched', scopes, runnerId: 'crunner00001', tokenExpiresAt: new Date(Date.now() + 60_000) } });
     const fetched = await filed(devA, await issue(devA), { project: 'CC', role: 'review' });
     assert.equal(fetched.reply.warning, undefined);
     assert.equal(fetched.row.comments.length, 0);
+    // The runner stayed away through the renewal window and the token ran out: the request warns again, and says which it is.
+    await raw.appToken.update({ where: { id: token.id }, data: { tokenExpiresAt: new Date(Date.now() - 60_000) } });
+    const ran = await filed(devA, await issue(devA), { project: 'CC', role: 'review' });
+    assert.equal(ran.reply.warning, 'seat_idle');
+    assert.match(ran.row.comments[0].content, /^rev-c is run by a runner, and the last token a runner fetched for it ran out at /);
+    await raw.appToken.update({ where: { id: token.id }, data: { tokenExpiresAt: new Date(Date.now() + 60_000) } });
     await settle(C);
   });
 

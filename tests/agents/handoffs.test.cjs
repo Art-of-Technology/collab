@@ -816,6 +816,8 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     const archive = load('src/app/api/projects/[projectId]/archive/route.ts', {
       'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma: publicPrisma },
       '@/lib/session': session, '@/lib/post-access': load('src/lib/post-access.ts'),
+      // Archiving revokes what a runner fetched for the project's seats; this project has none.
+      '@/lib/agent-runners': { revokeProjectRunnerTokens: async () => 0 },
     }, { console: { error() {} } });
     const archiveRequest = body => archive.PATCH(new Request('https://example.test', { method: 'PATCH', body }), { params: Promise.resolve({ projectId: 'p-w' }) });
     const beforeArchive = (await prisma.project.findUniqueOrThrow({ where: { id: 'p-w' } })).isArchived;
@@ -840,6 +842,8 @@ test('durable agent handoffs: fanout, atomic claim, context access and a complet
     const appProjects = load('src/app/api/apps/auth/projects/[projectId]/route.ts', {
       'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma: publicPrisma }, zod: require('zod'),
       '@/lib/apps/auth-middleware': { withAppAuth: (fn, options) => { assert.ok(options.requiredScopes.includes('projects:read') || options.requiredScopes.includes('projects:write')); return fn; } },
+      // Archiving revokes what a runner fetched for the project's seats; this project has none.
+      '@/lib/agent-runners': { revokeProjectRunnerTokens: async () => 0 },
     }, { console: { error() {} } });
     const appResponse = await appProjects.PATCH(new Request('https://example.test', { method: 'PATCH', body: JSON.stringify({ name: 'Updated project' }) }), alice, { params: Promise.resolve({ projectId: 'p-w' }) });
     assert.equal(appResponse.status, 200); const appProject = await appResponse.json();

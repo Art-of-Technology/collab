@@ -19,7 +19,8 @@ interface AgentMode {
   claims: { issueId: string; issueKey: string | null; title: string; agent: string | null; assignee: string | null }[];
   carryTo: { name: string } | null;
   retire: string[];
-  runnerSeats?: { id: string; name: string; role: string; owner: string | null; runner: string | null; fetchedAt: string | null; lastSeenAt: string | null }[];
+  runnerSeats?: { id: string; name: string; role: string; owner: string | null; runner: string | null; fetchedAt: string | null; lastSeenAt: string | null;
+    expiresAt: string | null; state: 'held' | 'renewing' | 'expired' | null }[];
 }
 
 /** How a project gives agents work: its status groups, and the switch between handoffs and seats. */
@@ -99,14 +100,17 @@ export function AgentModeSettings({ workspaceId, projectSlug }: { workspaceId: s
         )}
         {!!state.runnerSeats?.length && (
           <div className="space-y-2 pt-2">
-            <p className="text-xs text-collab-500">Seats run by a runner. A runner fetches a seat&apos;s token by itself; until one has, the seat&apos;s work waits.</p>
+            <p className="text-xs text-collab-500">Seats run by a runner. A runner fetches a seat&apos;s token by itself and is given a new one a week before it runs out; until a runner holds a usable token, the seat&apos;s work waits.</p>
             {state.runnerSeats.map(seat => (
               <div key={seat.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3 rounded-xl bg-collab-900 border border-collab-700 text-sm">
                 <span className="text-collab-50 flex-1">{seat.name} <span className="text-xs text-collab-500 capitalize">{seat.role}{seat.owner ? `, owned by ${seat.owner}` : ""}</span></span>
                 <span className="text-xs text-collab-500">
                   {seat.fetchedAt
-                    ? `Fetched by ${seat.runner ?? "a runner"} on ${new Date(seat.fetchedAt).toLocaleDateString()}`
-                    : <span className="text-amber-400">No runner yet</span>}
+                    ? `Fetched by ${seat.runner ?? "a runner"} on ${new Date(seat.fetchedAt).toLocaleDateString()}, runs out ${seat.expiresAt ? new Date(seat.expiresAt).toLocaleDateString() : "never"}`
+                    : seat.state === "expired"
+                      ? <span className="text-amber-400">Token expired{seat.expiresAt ? ` on ${new Date(seat.expiresAt).toLocaleDateString()}` : ""}</span>
+                      : <span className="text-amber-400">No runner yet</span>}
+                  {seat.state === "renewing" && <span className="text-amber-400">{" · "}Renewal not picked up</span>}
                   {" · "}{seat.lastSeenAt ? `last used ${new Date(seat.lastSeenAt).toLocaleString()}` : "not used yet"}
                 </span>
               </div>

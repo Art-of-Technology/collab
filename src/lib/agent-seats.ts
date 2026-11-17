@@ -221,7 +221,8 @@ export async function recordSeatHandoff(tx: Prisma.TransactionClient, context: C
 
 /**
  * Retire a seat. Refused while it has a run open. Its open issues are unassigned, each with an activity entry;
- * finished issues keep its name. Its tokens stay until revoked, but write nothing any more.
+ * finished issues keep its name. The tokens its runner fetched are revoked; a token made by hand stays until
+ * revoked, but writes nothing any more.
  */
 export async function retireSeat(input: { workspaceId: string; actorId: string; seatId: string }) {
   const where = { id: input.seatId, workspaceId: input.workspaceId, retiredAt: null };
@@ -238,6 +239,10 @@ export async function retireSeat(input: { workspaceId: string; actorId: string; 
     }
     const unassigned = await unassignOpen(tx, seat, input.actorId, 'seat_retired');
     await tx.agentSeat.update({ where: { id: seat.id }, data: { retiredAt: new Date(), isDefault: false } });
+    // Rule 4: a seat that goes leaves no token a runner fetched for it (CLB-517). A token made by hand is the
+    // person's to revoke on the Agent tokens page, as before.
+    const revoked = await tx.appToken.updateManyAndReturn({ where: { userId: seat.userId, runnerId: { not: null }, isRevoked: false },
+      data: { isRevoked: true, revokedAt: new Date() }, select: { id: true } });
     if (seat.isDefault) {
       // Requests for this role keep a seat to go to.
       const next = await tx.agentSeat.findFirst({ where: { projectId: seat.projectId, role: seat.role, retiredAt: null }, orderBy: { createdAt: 'asc' }, select: { id: true } });
@@ -245,8 +250,8 @@ export async function retireSeat(input: { workspaceId: string; actorId: string; 
     }
     await tx.appAuditLog.create({ data: {
       workspaceId: input.workspaceId, actorId: input.actorId, action: 'agent_seat.retired',
-      details: { seatId: seat.id, serviceUserId: seat.userId, projectId: seat.projectId, role: seat.role, unassigned },
+      details: { seatId: seat.id, serviceUserId: seat.userId, projectId: seat.projectId, role: seat.role, unassigned, revokedTokens: revoked.map(token => token.id) },
     } });
-    return { unassigned };
+    return { unassigned, revokedTokens: revoked.length };
   });
 }
