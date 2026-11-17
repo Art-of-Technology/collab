@@ -2609,3 +2609,17 @@ test('seat run: a program that ignores the request to stop is killed, so a fence
   assert.equal(s.log.at(-1), 'close run-1');
   assert.deepEqual(outcome(result), [{ issueKey: 'APP-1', runId: 'run-1', state: 'stopped', exitCode: null }]);
 });
+
+test('folder and file reads forward their ids and project through authenticated GETs', async t => {
+  const f = await fixture(t);
+  for (const [args, expected] of [
+    [['folders', 'list', '--project-id', 'p'], '/api/apps/auth/context/folders?projectId=p&workspaceId=w'],
+    [['folders', 'get', 'folder1'], '/api/apps/auth/context/folders/folder1?workspaceId=w'],
+    [['files', 'get', 'file1'], '/api/apps/auth/context/files/file1?workspaceId=w'],
+  ]) {
+    const result = await f.run([...args, '--workspace', 'w']);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(f.calls.at(-1).method, 'GET');
+    assert.equal(f.calls.at(-1).url, expected);
+  }
+});

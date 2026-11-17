@@ -258,9 +258,41 @@ Reads. Scope: `issues:read` or `context:read`.
 | `offset` | integer | minimum: 0 · maximum: 50000 |
 | `maxTokens` | integer | minimum: 1024 · maximum: 64000 |
 
+## folders_list
+
+List workspace folders and, with projectId, that project’s folders. Returns at most 500 folders with nextOffset for pagination.
+
+Reads. Scope: `context:read`.
+
+| Argument | Type | Details |
+| --- | --- | --- |
+| `projectId` | string | minimum length: 1 · maximum length: 128 |
+| `offset` | integer | minimum: 0 · maximum: 50000 |
+
+## folders_get
+
+Read a folder and up to 200 items of each type: child folders, shared Notes and files. Personal, encrypted and secret Notes are excluded. Follow nextOffset to read more items.
+
+Reads. Scope: `context:read`.
+
+| Argument | Type | Details |
+| --- | --- | --- |
+| `id` | string | required · minimum length: 1 · maximum length: 128 |
+| `offset` | integer | minimum: 0 · maximum: 50000 |
+
+## files_get
+
+Read file metadata and text: up to 256 KiB from text and CSV files, or embedded PDF text (PDF at most 8 MiB, first 100 pages, at most 256 KiB output). Other types, scans and unreadable PDFs return metadata and a reason. No OCR.
+
+Reads. Scope: `context:read`.
+
+| Argument | Type | Details |
+| --- | --- | --- |
+| `id` | string | required · minimum length: 1 · maximum length: 128 |
+
 ## context_get
 
-Project context for an agent: with a projectId, defaults to the pipeline (status counts, owners, blockers, recent changes, relevant Notes), which also needs issues:read and context:read. Set includePipeline=false for the prompt format; includeKnowledge=true also selects it when includePipeline is omitted. Without a projectId, returns workspace prompts.
+Project context for an agent: with a projectId, defaults to the pipeline (status counts, owners, blockers, recent changes, relevant Notes, workspace and project folders), which also needs issues:read and context:read. Set includePipeline=false for the prompt format; includeKnowledge=true also selects it when includePipeline is omitted. Without a projectId, returns workspace prompts.
 
 Reads. Scope: `prompts:read`.
 
