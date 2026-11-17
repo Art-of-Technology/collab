@@ -7,9 +7,10 @@ const { createRoot } = require('react-dom/client');
 
 const base = { react: React, 'react/jsx-runtime': require('react/jsx-runtime'), 'date-fns': { formatDistanceToNow: () => '5 minutes ago' },
   'next/navigation': { useParams: () => ({ workspaceId: 'acme' }) } };
+const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') });
 const helpers = load('src/components/issue/sections/activity/utils/activityHelpers.ts');
 const { ActivityItem } = load('src/components/issue/sections/activity/components/ActivityItem.tsx', { ...base,
-  '@/components/ui/custom-avatar': { CustomAvatar: () => null }, './ActivityIcon': { ActivityIcon: () => null },
+  '@/lib/comment-html': { commentHtml }, '@/components/ui/custom-avatar': { CustomAvatar: () => null }, './ActivityIcon': { ActivityIcon: () => null },
   './ActivityChangeDetails': { ActivityChangeDetails: () => null }, '../utils/activityHelpers': helpers });
 const { OpenRun } = load('src/components/issue/sections/activity/components/OpenRun.tsx', { ...base,
   '@/components/ui/button': { Button: ({ children, onClick }) => React.createElement('button', { onClick }, children) } }, { fetch: (...call) => global.fetch(...call) });
@@ -26,13 +27,13 @@ const entry = (action, details) => shown(React.createElement(ActivityItem, { act
 test('the timeline shows an exit note under the run that left it, as handoff notes are shown', async () => {
   const finished = await entry('AGENT_RUN_FINISHED', { runId: 'r1', outcome: 'in_review', content: note });
   assert.ok(finished.startsWith('dev-a finished a run on this issue: in review5 minutes ago'), finished);
-  assert.ok(finished.includes(`Exit note${note}`), finished);
+  assert.ok(finished.includes(`Exit noteDone\nThe fix is merged.\nDecisions\nNone.\nEvidence\nPR 1.\nNext\nDeploy.\n`), finished);
   const late = await entry('AGENT_RUN_LATE', { runId: 'r1', outcome: 'done', content: note });
   assert.ok(late.startsWith('dev-a sent an exit note after the run on this issue had ended; nothing else changed'), late);
-  assert.ok(late.includes(`Exit note${note}`), late);
+  assert.ok(late.includes(`Exit noteDone\nThe fix is merged.\nDecisions\nNone.\nEvidence\nPR 1.\nNext\nDeploy.\n`), late);
   // The checked facts of the note stand above it: the pull request with the commit it was left at, and the next step.
   const facts = await entry('AGENT_RUN_FINISHED', { runId: 'r1', outcome: 'in_review', content: note, pullRequest: 'acme/app#12', headCommit: 'a1'.repeat(20), nextStep: 'Merge when approved' });
-  assert.ok(facts.includes(`Pull request: acme/app#12 at ${'a1'.repeat(20)}Next: Merge when approvedExit note${note}`), facts);
+  assert.ok(facts.includes(`Pull request: acme/app#12 at ${'a1'.repeat(20)}Next: Merge when approvedExit noteDone\nThe fix is merged.\nDecisions\nNone.\nEvidence\nPR 1.\nNext\nDeploy.\n`), facts);
   assert.ok(!finished.includes('Pull request') && !finished.includes('Next:'), finished);
   // A handoff's note keeps its own label.
   assert.ok((await entry('AGENT_PROGRESS', { agent: { name: 'navy' }, content: 'Half way' })).includes('Handoff detailsHalf way'));

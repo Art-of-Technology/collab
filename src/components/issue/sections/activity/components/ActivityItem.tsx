@@ -1,5 +1,6 @@
 "use client";
 
+import { commentHtml } from "@/lib/comment-html";
 import { formatDistanceToNow } from "date-fns";
 import { useParams } from "next/navigation";
 import { CustomAvatar } from "@/components/ui/custom-avatar";
@@ -48,7 +49,7 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
         {activity.action.startsWith('AGENT_') && typeof activity.details?.content === 'string' && activity.details.content && (
           <details className="mt-1 text-xs text-collab-400">
             <summary className="cursor-pointer">{activity.action.startsWith('AGENT_RUN_') ? 'Exit note' : 'Handoff details'}</summary>
-            <p className="mt-2 whitespace-pre-wrap break-words">{activity.details.content}</p>
+            <div className="mt-2 prose-base break-words" dangerouslySetInnerHTML={{ __html: commentHtml(activity.details.content) }} />
             {activity.action === 'AGENT_SUPERSEDED' && typeof activity.details.replacementId === 'string' && <p className="mt-2 break-all">Replacement handoff: <code>{activity.details.replacementId}</code></p>}
           </details>
         )}
