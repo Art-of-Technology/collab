@@ -59,11 +59,11 @@ export async function projectRepositoryState(db: Database, projectId: string) {
 }
 
 /** The seat's pick will take precedence when seat repository selection is introduced. */
-export async function repositoryForSeat(db: Database, projectId: string, seat: { role: string } | null): Promise<SeatRepository | null> {
+export async function repositoryStateForSeat(db: Database, projectId: string, seat: { role: string } | null) {
   // The role first, so that a seat which works in none is answered null whatever its project has: a lead handed a
   // repository would be told to work in a copy it has no business in, and the run context answers null for it.
-  if (!seat || !NEEDS_REPOSITORY.includes(seat.role)) return null;
-  return (await projectRepositoryState(db, projectId)).repository;
+  if (!seat || !NEEDS_REPOSITORY.includes(seat.role)) return { repositories: [] as SeatRepository[], repository: null };
+  return projectRepositoryState(db, projectId);
 }
 
 /**
