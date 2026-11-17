@@ -19,27 +19,29 @@ export async function PATCH(
     }
     const { isArchived } = body as { isArchived: boolean };
 
-    // Update project archive status
-    const project = await prisma.project.update({
-      where: {
-        id: projectId,
-        workspace: postWorkspaceAccessWhere(actor.id),
-      },
-      data: {
-        isArchived: isArchived,
-        updatedAt: new Date(),
-      },
-      include: {
-        _count: {
-          select: {
-            issues: true,
+    // Update project archive status. An archived project's seats keep no token a runner fetched, and a runner's
+    // next ask no longer lists them: both in one transaction, so neither happens without the other.
+    const project = await prisma.$transaction(async tx => {
+      const updated = await tx.project.update({
+        where: {
+          id: projectId,
+          workspace: postWorkspaceAccessWhere(actor.id),
+        },
+        data: {
+          isArchived: isArchived,
+          updatedAt: new Date(),
+        },
+        include: {
+          _count: {
+            select: {
+              issues: true,
+            },
           },
         },
-      },
+      });
+      if (isArchived) await revokeProjectRunnerTokens(tx, updated.workspaceId, actor.id, updated.id);
+      return updated;
     });
-
-    // An archived project's seats keep no token a runner fetched, and a runner's next ask no longer lists them.
-    if (isArchived) await revokeProjectRunnerTokens(project.workspaceId, actor.id, project.id);
 
     return NextResponse.json({
       success: true,

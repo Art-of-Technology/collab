@@ -194,18 +194,18 @@ export async function runnerSeats(db: DB, projectId: string) {
 /**
  * Rule 4 for a project that is archived: its seats keep no token a runner fetched, and a runner's next ask no longer
  * lists them (an archived project's seats are not fetched). Tokens made by hand are left alone. Returns how many were
- * revoked. Unarchiving changes nothing: the runner fetches again.
+ * revoked. Unarchiving changes nothing: the runner fetches again. Call it in the transaction that archives the
+ * project, which holds the project's row: a token being made for one of its seats is waited for and revoked here too,
+ * and a failure leaves the project unarchived with its tokens as they were.
  */
-export async function revokeProjectRunnerTokens(workspaceId: string, actorId: string, projectId: string) {
-  return prisma.$transaction(async tx => {
-    const seats = await tx.agentSeat.findMany({ where: { projectId, workspaceId, byRunner: true }, select: { userId: true } });
-    if (!seats.length) return 0;
-    const revoked = await tx.appToken.updateManyAndReturn({ where: { userId: { in: seats.map(seat => seat.userId) }, runnerId: { not: null }, isRevoked: false },
-      data: { isRevoked: true, revokedAt: new Date() }, select: { id: true } });
-    if (revoked.length) await tx.appAuditLog.create({ data: { workspaceId, actorId, action: 'agent_runner.project_archived',
-      details: { projectId, revokedTokens: revoked.map(token => token.id) } } });
-    return revoked.length;
-  });
+export async function revokeProjectRunnerTokens(tx: Prisma.TransactionClient, workspaceId: string, actorId: string, projectId: string) {
+  const seats = await tx.agentSeat.findMany({ where: { projectId, workspaceId, byRunner: true }, select: { userId: true } });
+  if (!seats.length) return 0;
+  const revoked = await tx.appToken.updateManyAndReturn({ where: { userId: { in: seats.map(seat => seat.userId) }, runnerId: { not: null }, isRevoked: false },
+    data: { isRevoked: true, revokedAt: new Date() }, select: { id: true } });
+  if (revoked.length) await tx.appAuditLog.create({ data: { workspaceId, actorId, action: 'agent_runner.project_archived',
+    details: { projectId, revokedTokens: revoked.map(token => token.id) } } });
+  return revoked.length;
 }
 
 /**
@@ -261,6 +261,11 @@ export async function fetchSeats(credential: string, have: string[]) {
           if (!await tx.workspace.findFirst({ where: inWorkspace(workspaceId, ownerId), select: { id: true } })) throw refused();
           await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "id" = ${seat.id} FOR SHARE`;
           if (!await tx.agentSeat.count({ where: { id: seat.id, userId: account.id, workspaceId, ownerId, projectId: seat.project.id, name: seat.name, role: seat.role, byRunner: true, retiredAt: null } })) throw new HandoffError('seat_changed', 'The seat changed while its token was made');
+          // The project's row, held like the seat's: archiving it revokes what a runner fetched, so a token made
+          // while it is being archived would be the one token left behind. The archive waits for this one and revokes it.
+          if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "Project" WHERE "id" = ${seat.project.id} AND "isArchived" IS NOT TRUE FOR SHARE`).length) {
+            throw new HandoffError('seat_changed', "The seat's project was archived while its token was made");
+          }
           // The token the runner says it holds keeps working beside the new one, so a renewal never takes away the
           // token the seat is working with; when it holds none, the newest token so far keeps working, because its
           // answer may still be on its way to the runner. Everything else ends.

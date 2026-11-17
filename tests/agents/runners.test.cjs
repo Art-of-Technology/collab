@@ -391,6 +391,25 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     mine.token = back;
   });
 
+  await t.test('a project archived while a token is being made leaves none behind', async () => {
+    // Asked a moment ago, so the ask below only reads rows until it makes a token.
+    assert.equal((await ask(mine.credential, [mine.token.tokenId]))[0], 200);
+    let pending;
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${A} FOR UPDATE`;
+      // Holding nothing, so a token is made for the seat.
+      pending = ask(mine.credential);
+      const waiting = await waitsFor('Project');
+      await tx.project.update({ where: { id: A }, data: { isArchived: true } });
+      assert.ok(waiting, 'the mint must wait for the project row');
+    }, { timeout: 10000 });
+    const [status, answer] = await pending;
+    assert.equal(status, 200, JSON.stringify(answer));
+    assert.deepEqual(answer.seats.map(row => [row.problem, row.tokenId]), [['seat_changed', null]]);
+    assert.equal(await prisma.appToken.count({ where: { userId: mine.userId, isRevoked: false, tokenExpiresAt: { gt: new Date() } } }), 1, 'only the token the runner already held');
+    await prisma.project.update({ where: { id: A }, data: { isArchived: false } });
+  });
+
   await t.test('the owner asks for a renewal now: what the runner fetched is revoked at once and it gets a new token on its next ask', async () => {
     const renew = async (as, runnerId, headers) => {
       signedIn = as;
