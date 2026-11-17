@@ -17,7 +17,7 @@ import {
 
 type ReadPreview =
   | { kind: 'text'; text: string; truncated: boolean }
-  | { kind: 'csv'; rows: string[][]; rowLimit: number; hasMore: boolean };
+  | { kind: 'csv'; rows: string[][]; hasMore: boolean };
 
 export function ContextFilePreview({ file, className = '' }: { file: PreviewFile; className?: string }) {
   const kind = contextPreviewKind(file);
@@ -54,9 +54,15 @@ export function ContextFilePreview({ file, className = '' }: { file: PreviewFile
       {kind === 'image' &&
         // eslint-disable-next-line @next/next/no-img-element
         <img src={contextPreviewUrl(file.id)} alt={file.name} className="mx-auto max-h-[70vh] object-contain" />}
-      {/* The file's own origin, with nothing allowed out: the viewer runs, the document reaches nothing. */}
-      {kind === 'pdf' && <iframe src={contextPreviewUrl(file.id)} title={file.name} sandbox="allow-scripts"
-        className="h-[70vh] w-full border-0" />}
+      {/* The file's own origin, with nothing allowed out: the viewer runs, the document reaches nothing.
+          A browser that will not open a PDF under that seal is not given it unsealed; the file downloads. */}
+      {kind === 'pdf' && <>
+        <iframe src={contextPreviewUrl(file.id)} title={file.name} sandbox="allow-scripts"
+          className="h-[70vh] w-full border-0" />
+        <p className="border-t px-3 py-2 text-sm text-muted-foreground">
+          A PDF opens in the browser&apos;s own viewer. If it does not appear, download the file.
+        </p>
+      </>}
       {kind === 'none' && <p className="p-6 text-center text-sm text-muted-foreground">
         This kind of file is not shown here. Download it to open it.
       </p>}
@@ -90,8 +96,9 @@ function CsvTable({ csv }: { csv: Extract<ReadPreview, { kind: 'csv' }> }) {
         </tr>)}
       </tbody>
     </table>
+    {/* The rows that are here, not the stated limit: a file of wide rows runs out of bytes before rows. */}
     {csv.hasMore && <p className="border-t px-3 py-2 text-sm text-muted-foreground">
-      The first {csv.rowLimit} rows are shown. This file has more.
+      The first {csv.rows.length} rows are shown. This file has more.
     </p>}
   </>;
 }

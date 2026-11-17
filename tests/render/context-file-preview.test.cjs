@@ -32,12 +32,13 @@ test('a preview shows an image, a PDF, text and a table, and runs nothing inside
     assert.match(document.body.innerHTML, /&lt;script&gt;/);
     assert.match(document.body.textContent, /Only the start of this file is shown/);
 
-    // A CSV is a table, and it says when the file holds more rows than it shows.
+    // A CSV is a table, and it says how many rows are here when the file holds more. The count is the
+    // rows that are here, not the stated limit: a file of wide rows runs out of bytes before rows.
     await show({ id: 'f2', name: 'rows.csv', mimeType: 'text/plain', size: 90 },
       { kind: 'csv', rows: [['name', 'count'], ['a, b', '2']], rowLimit: 200, hasMore: true });
     assert.deepEqual([...document.querySelectorAll('th')].map(cell => cell.textContent), ['name', 'count']);
     assert.deepEqual([...document.querySelectorAll('td')].map(cell => cell.textContent), ['a, b', '2']);
-    assert.match(document.body.textContent, /The first 200 rows are shown\. This file has more\./);
+    assert.match(document.body.textContent, /The first 2 rows are shown\. This file has more\./);
 
     // An image and a PDF are drawn from the preview address itself, and nothing is read here.
     const reads = asked.length;
@@ -50,6 +51,8 @@ test('a preview shows an image, a PDF, text and a table, and runs nothing inside
     assert.equal(frame.getAttribute('src'), '/api/context/files/f4/preview');
     // An origin of its own: the browser's viewer runs, the file reaches neither Collab nor this page.
     assert.equal(frame.getAttribute('sandbox'), 'allow-scripts');
+    // A browser that will not open a PDF under that seal is not given it unsealed: the file downloads.
+    assert.match(document.body.textContent, /If it does not appear, download the file/);
     assert.match(document.body.textContent, /3\.0 MB/);
     assert.equal(asked.length, reads);
 
