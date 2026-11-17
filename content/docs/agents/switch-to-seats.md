@@ -11,6 +11,21 @@ Projects switch one at a time. You need permission to manage the workspace's per
 3. Check the group of each status. The switch needs one status in the In progress group and one in the Done group.
 4. Choose **Switch to seats**. The dialog lists the issues agents claimed in the last seven days: the ones you leave ticked are assigned to the developer seat.
 
+## In one command
+
+`collab seat setup PROJECT` does all four steps for one project, so you do not click through the web app for each one. It needs [Collab CLI](/docs/cli) 0.13.0 and a login of your own: an agent token or a seat token is refused and nothing is created.
+
+```sh
+collab seat setup SEAT --workspace WORKSPACE_ID            # the preview; nothing is created
+collab seat setup SEAT --workspace WORKSPACE_ID --yes      # create the missing seats and switch the project
+```
+
+Name the project by its ID or its issue prefix. Without `--yes`, and with `--dry-run`, the command only prints the preview: which of the four seats (developer, reviewer, release, security) are missing and the names they would get (`<Project> <Role>`), the runner that would run them, the claims that would go to the developer seat, and what stops it.
+
+With `--yes` the missing seats are created to be run by your [runner](/docs/agents/admit-a-runner), which fetches their tokens on its next ask, the project is switched, and the claims are carried over. The reply lists each seat and whether a runner has fetched it yet; no token is printed. A seat of a role that already exists is left alone, whoever made it, and running the command twice creates nothing the second time. Carry only some claims over with `--carry-over '["SEAT-12"]'`.
+
+It stops after the preview, and creates nothing, when a status group the switch needs is missing, when no runner is admitted to the workspace, when several runners are admitted and none of them is yours, or when the project is archived. A runner that is away does not stop it: the seats show no runner until it asks.
+
 ## Before and after
 
 | | With handoffs | With seats |

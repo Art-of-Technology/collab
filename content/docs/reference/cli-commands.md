@@ -527,6 +527,22 @@ Ask a seat for work on one of your issues: --role developer, review, release or 
 | `--from-issue` | string | required |
 | `--blocks` | boolean |  |
 
+### `collab seat setup`
+
+Writes.
+
+```sh
+collab seat setup ID
+```
+
+collab seat setup PROJECT [--yes]. Gives an existing project the four seats a run needs (developer, reviewer, release, security), each run by your runner, and switches the project to seats. PROJECT is its ID or issue prefix. Without --yes, and with --dry-run, it only prints the preview: which seats are missing and the names they would get ("<Project> <Role>"), the claims of the last seven days that would go to the developer seat, and what stops it. A seat of a role that exists is left alone, whoever made it. --carry-over takes a JSON array of issue keys to carry over instead of all of them. No token is printed: the runner fetches them on its next ask. A person only.
+
+ID is the resource ID.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--carry-over` | array |  |
+
 ### `collab seat run`
 
 Writes: it checks issues out and closes runs.
