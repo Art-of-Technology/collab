@@ -6,9 +6,10 @@ const { seatsDatabase } = require('./seats-db.cjs');
 
 // Token-facing routes accept only cuid-shaped ids.
 const owner = 'cowner00001', person = 'cperson0001';
-// A: one repository from the GitHub sign-in. B: none. C: two. D: one connection, and the same repository connected
-// twice. E: the same path at two servers, which is two repositories.
-const A = 'cprojecta001', B = 'cprojectb001', C = 'cprojectc001', D = 'cprojectd001', E = 'cprojecte001';
+// A: one repository from the GitHub sign-in. B: none. C: two. D: the same repository twice, once through the sign-in
+// and once as a connection. E: the same path at two servers, which is two repositories. F: one connection and nothing
+// else.
+const A = 'cprojecta001', B = 'cprojectb001', C = 'cprojectc001', D = 'cprojectd001', E = 'cprojecte001', F = 'cprojectf001';
 const scopes = ['issues:read', 'issues:write', 'user:read'];
 const ago = seconds => new Date(Date.now() - seconds * 1000);
 
@@ -20,7 +21,7 @@ test('the repository of the issue\'s project comes with the checkout and the run
     await prisma.user.createMany({ data: [owner, person].map(id => ({ id, name: id })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
     await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: person } });
-    for (const [id, prefix] of [[A, 'AA'], [B, 'BB'], [C, 'CC'], [D, 'DD'], [E, 'EE']]) {
+    for (const [id, prefix] of [[A, 'AA'], [B, 'BB'], [C, 'CC'], [D, 'DD'], [E, 'EE'], [F, 'FF']]) {
       await prisma.project.create({ data: { id, workspaceId: 'w', name: `Project ${prefix}`, slug: id, issuePrefix: prefix } });
       await prisma.projectStatus.createMany({ data: ['to_do', 'in_progress', 'done'].map((name, order) => ({ id: `${id}-${name}`, projectId: id, name, displayName: name,
         order, category: name, isFinal: name === 'done' })) });
@@ -41,6 +42,8 @@ test('the repository of the issue\'s project comes with the checkout and the run
     await connection(E, 'gitlab', 'acme/five');
     await connection(E, 'gitlab', 'acme/five', { baseUrl: 'https://gitlab.acme.test', externalId: `${E}-self-hosted`,
       url: 'https://gitlab.acme.test/acme/five' });
+    // F has nothing but a connection, at a server of its own and with the provider written as the client stores it.
+    await connection(F, 'GitLab', 'acme/six', { baseUrl: 'https://gitlab.acme.test', url: 'https://gitlab.acme.test/acme/six.git' });
     for (const [id, slug] of [['agent-app', 'collab-agent'], ['person-app', 'collab-cli']]) {
       await prisma.app.create({ data: { id, name: slug, slug, publisherId: 'system', status: 'PUBLISHED', visibility: 'PRIVATE', isSystemApp: true,
         scopes: { create: scopes.map(scope => ({ scope })) } } });
@@ -78,7 +81,7 @@ test('the repository of the issue\'s project comes with the checkout and the run
     return { ...made.seat, token: made.token.token };
   };
   const devA = await seat('dev-a', A), devB = await seat('dev-b', B), leadB = await seat('lead-b', B, 'lead'), devC = await seat('dev-c', C), devD = await seat('dev-d', D);
-  const leadA = await seat('lead-a', A, 'lead'), devE = await seat('dev-e', E);
+  const leadA = await seat('lead-a', A, 'lead'), devE = await seat('dev-e', E), devF = await seat('dev-f', F);
   const personToken = 'collab_person_token';
   await raw.appToken.create({ data: { appId: 'person-app', workspaceId: 'w', userId: person, installationId: null,
     accessToken: Buffer.from(personToken).toString('base64'), scopes } });
@@ -116,7 +119,18 @@ test('the repository of the issue\'s project comes with the checkout and the run
     }
   });
 
-  await t.test('a provider other than GitHub is named with its own address, and a repository connected twice is one', async () => {
+  await t.test('a project whose only repository is a connection: its own address, its provider lowercased, no branch', async () => {
+    const target = await issue(devF);
+    const [status, body] = await checkout(devF, target);
+    assert.equal(status, 200, JSON.stringify(body));
+    const connection = await raw.gitConnection.findFirstOrThrow({ where: { projectId: F } });
+    assert.deepEqual(body.repository, { id: connection.id, provider: 'gitlab', name: 'acme/six', url: 'https://gitlab.acme.test/acme/six.git', defaultBranch: null });
+    assert.deepEqual((await context(devF, target))[1].repository, body.repository);
+    // Collab stores a connection's credentials, and they leave the server no more than the sign-in's token does.
+    assert.ok(!JSON.stringify(body).includes(connection.credentials), 'the connection\'s credentials in the reply');
+  });
+
+  await t.test('a repository connected twice, through the sign-in and as a connection, is one', async () => {
     const [status, body] = await checkout(devD, await issue(devD));
     const connection = await raw.gitConnection.findFirstOrThrow({ where: { projectId: D } });
     assert.equal(status, 200, JSON.stringify(body));
