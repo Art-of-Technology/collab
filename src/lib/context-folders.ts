@@ -41,13 +41,13 @@ export function contextFolderAccessWhere(userId: string): Prisma.ContextFolderWh
 }
 
 /** A client-supplied id is a string or nothing; an object would reach Prisma as a query operator. */
-function optionalId(value: unknown, field: string): string | null {
+export function optionalId(value: unknown, field: string): string | null {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value !== 'string') throw new ContextFolderError(400, `${field} must be an id`);
   return value;
 }
 
-function requiredId(value: unknown, field: string): string {
+export function requiredId(value: unknown, field: string): string {
   const id = optionalId(value, field);
   if (!id) throw new ContextFolderError(400, `${field} is required`);
   return id;
@@ -106,10 +106,15 @@ async function loadFolder(db: Database, userId: string, id: unknown, trashed = f
   return folder as LoadedFolder;
 }
 
+/** The workspace's owner and its administrators, as selected for the caller alone. */
+export function isWorkspaceAdmin(workspace: { ownerId: string; members: { role: string }[] }, userId: string): boolean {
+  return workspace.ownerId === userId ||
+    workspace.members.some(member => ['ADMIN', 'OWNER'].includes(member.role.toUpperCase()));
+}
+
 /** Renaming, moving, deleting and restoring stay with the folder's author and the workspace's administrators. */
 function assertCanManage(folder: LoadedFolder, userId: string) {
-  const isAdmin = folder.workspace.ownerId === userId ||
-    folder.workspace.members.some(member => ['ADMIN', 'OWNER'].includes(member.role.toUpperCase()));
+  const isAdmin = isWorkspaceAdmin(folder.workspace, userId);
   if (folder.createdById !== userId && !isAdmin) {
     throw new ContextFolderError(403, 'Only the folder\'s author or a workspace administrator can change it');
   }
@@ -156,7 +161,7 @@ async function contentCounts(db: Database, folderIds: string[], rootId: string):
 }
 
 /** One transaction for every rule that reads the folder tree before writing to it. */
-function inTransaction<T>(work: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+export function inTransaction<T>(work: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   return prisma.$transaction(work, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
