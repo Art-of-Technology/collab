@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
-import { createContextFolder, listContextFolders } from '@/lib/context-folders';
+import { createContextFolder, listContextFolders, readFolderBody } from '@/lib/context-folders';
 import { contextFolderErrorResponse } from '@/lib/context-folders-response';
 
 // GET /api/context/folders?workspace=&project=&trashed= - folders of one level, or its Trash
@@ -23,11 +23,11 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
-    const body = await request.json();
+    const body = await readFolderBody(request);
     const folder = await createContextFolder(session.user.id, {
-      workspaceId: body.workspaceId ?? null,
-      projectId: body.projectId ?? null,
-      parentId: body.parentId ?? null,
+      workspaceId: body.workspaceId,
+      projectId: body.projectId,
+      parentId: body.parentId,
       name: body.name,
     });
     return NextResponse.json(folder, { status: 201 });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth-options';
-import { previewContextFolderTrash, trashContextFolder, updateContextFolder } from '@/lib/context-folders';
+import { previewContextFolderTrash, readFolderBody, trashContextFolder, updateContextFolder } from '@/lib/context-folders';
 import { contextFolderErrorResponse } from '@/lib/context-folders-response';
 
 type Context = { params: Promise<{ id: string }> };
@@ -22,7 +22,7 @@ export async function PATCH(request: NextRequest, { params }: Context) {
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const { id } = await params;
-    const body = await request.json();
+    const body = await readFolderBody(request);
     return NextResponse.json(await updateContextFolder(session.user.id, id, {
       ...('name' in body && { name: body.name }),
       ...('parentId' in body && { parentId: body.parentId ?? null }),

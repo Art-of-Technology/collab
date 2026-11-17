@@ -40,13 +40,14 @@ CREATE INDEX "ContextFolder_deletedAt_idx" ON "ContextFolder"("deletedAt");
 CREATE INDEX "ContextFile_folderId_idx" ON "ContextFile"("folderId");
 CREATE INDEX "ContextFile_deletedAt_idx" ON "ContextFile"("deletedAt");
 
--- A folder keeps its parent and its files until Trash is emptied, which this change does not do.
+-- Trash never deletes a row, so the parent and folder keys only act when the workspace or the
+-- project itself is deleted, and then its folders and their files go with it.
 ALTER TABLE "ContextFolder" ADD CONSTRAINT "ContextFolder_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "ContextFolder" ADD CONSTRAINT "ContextFolder_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "ContextFolder" ADD CONSTRAINT "ContextFolder_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "ContextFolder"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "ContextFolder" ADD CONSTRAINT "ContextFolder_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "ContextFolder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "ContextFolder" ADD CONSTRAINT "ContextFolder_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "ContextFolder" ADD CONSTRAINT "ContextFolder_deletedById_fkey" FOREIGN KEY ("deletedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "ContextFile" ADD CONSTRAINT "ContextFile_folderId_fkey" FOREIGN KEY ("folderId") REFERENCES "ContextFolder"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "ContextFile" ADD CONSTRAINT "ContextFile_folderId_fkey" FOREIGN KEY ("folderId") REFERENCES "ContextFolder"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "ContextFile" ADD CONSTRAINT "ContextFile_uploadedById_fkey" FOREIGN KEY ("uploadedById") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "ContextFile" ADD CONSTRAINT "ContextFile_deletedById_fkey" FOREIGN KEY ("deletedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 

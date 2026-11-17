@@ -12,7 +12,7 @@ function fixture(userId = 'alice') {
     { id: 'project', workspaceId: 'joined', workspace },
     { id: 'other-workspace-project', workspaceId: 'foreign', workspace: ws[1] },
   ];
-  const state = { writes: 0, created: 0 };
+  const state = { writes: 0, created: 0, transactions: 0 };
   const folders = [];
   function addFolder(id, fields = {}) {
     const row = {
@@ -45,6 +45,8 @@ function fixture(userId = 'alice') {
   }
   const files = [];
   const db = {
+    // Every rule that reads the tree before writing to it does both in one transaction.
+    $transaction: async (work) => { state.transactions++; return work(db); },
     workspace: { findFirst: async ({ where }) => ws.find(item => matches(item, where)) ?? null },
     user: { findUnique: async () => ({ id: userId }) },
     project: {
@@ -76,6 +78,7 @@ function fixture(userId = 'alice') {
         const { folder, tags, project, ...scalars } = data;
         Object.assign(row, scalars);
         if (folder) row.folderId = folder.connect ? folder.connect.id : null;
+        if (project) row.projectId = project.connect ? project.connect.id : null;
         return row;
       },
     },
@@ -95,9 +98,9 @@ function fixture(userId = 'alice') {
     if (!routes.has(file)) routes.set(file, load(file, dependencies, { URL, console }));
     return routes.get(file);
   }
-  const call = (file, method, { id, body, query = '' } = {}) => route(file)[method](
+  const call = (file, method, { id, body, raw, query = '' } = {}) => route(file)[method](
     new Request('https://example.test/api/context/folders' + query, {
-      method, ...(body !== undefined && { body: JSON.stringify(body) }),
+      method, ...(raw !== undefined ? { body: raw } : body !== undefined && { body: JSON.stringify(body) }),
     }),
     { params: Promise.resolve({ id }) },
   );
@@ -137,6 +140,28 @@ test('a folder belongs to one workspace or one of its projects, and only its mem
   for (const name of ['', '   ', 'a/b', 'x'.repeat(121)]) {
     assert.equal((await f.call(LIST, 'POST', { body: { workspaceId: 'joined', name } })).status, 400);
   }
+});
+
+test('a malformed body and an id that is not a string are refused before the database', async () => {
+  const f = fixture();
+  const root = f.addFolder('root');
+  const writes = f.state.writes;
+  // An object would otherwise reach Prisma as a query operator.
+  for (const body of [
+    { workspaceId: { not: '' }, name: 'New' },
+    { workspaceId: 'joined', projectId: { not: '' }, name: 'New' },
+    { workspaceId: 'joined', parentId: { not: '' }, name: 'New' },
+    { workspaceId: 'joined', name: { toString: 'New' } },
+  ]) {
+    assert.equal((await f.call(LIST, 'POST', { body })).status, 400, JSON.stringify(body));
+  }
+  for (const raw of ['not json', 'null', '[]', '"text"']) {
+    assert.equal((await f.call(LIST, 'POST', { raw })).status, 400, raw);
+    assert.equal((await f.call(ONE, 'PATCH', { id: root.id, raw })).status, 400, raw);
+  }
+  assert.equal((await f.call(ONE, 'PATCH', { id: root.id, body: { parentId: { not: '' } } })).status, 400);
+  assert.equal((await f.call(ONE, 'PATCH', { id: root.id, body: {} })).status, 400);
+  assert.equal(f.state.writes, writes);
 });
 
 test('a folder is renamed and moved, but never into itself or into one of its own folders', async () => {
@@ -253,4 +278,31 @@ test('a note goes only in a folder at its own level, and personal notes have non
   assert.equal(projectNote.folderId, projectFolder.id);
   assert.equal((await f.call(one, 'PATCH', { id: projectNote.id, body: { folderId: null } })).status, 200);
   assert.equal(projectNote.folderId, null);
+});
+
+test('a note in a folder cannot be carried to another level without its folder', async () => {
+  const f = fixture();
+  const workspaceFolder = f.addFolder('ideation');
+  const projectFolder = f.addFolder('project-ideation', { projectId: 'project' });
+  const note = f.addNote('note', { folderId: workspaceFolder.id });
+  const one = 'src/app/api/notes/[id]/route.ts';
+
+  // Changing the scope or the project is refused while the note sits in a folder of the old level.
+  for (const body of [{ projectId: 'project', scope: 'PROJECT' }, { scope: 'PERSONAL' }]) {
+    const response = await f.call(one, 'PATCH', { id: note.id, body });
+    assert.equal(response.status, 400, JSON.stringify(body));
+    assert.equal(note.folderId, workspaceFolder.id);
+    assert.equal(note.scope, 'WORKSPACE');
+  }
+
+  // Naming the folder of the new level in the same edit moves both together.
+  const moved = await f.call(one, 'PATCH', { id: note.id, body: { scope: 'PROJECT', projectId: 'project', folderId: projectFolder.id } });
+  assert.equal(moved.status, 200);
+  assert.equal(note.folderId, projectFolder.id);
+  assert.equal(note.projectId, 'project');
+
+  // A note outside every folder changes level as it always did.
+  const loose = f.addNote('loose');
+  assert.equal((await f.call(one, 'PATCH', { id: loose.id, body: { scope: 'PERSONAL' } })).status, 200);
+  assert.equal(loose.scope, 'PERSONAL');
 });

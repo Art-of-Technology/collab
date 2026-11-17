@@ -1035,7 +1035,8 @@ model ContextFolder {
 
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent    ContextFolder?  @relation("ContextFolderTree", fields: [parentId], references: [id], onDelete: Restrict)
+  // Trash never deletes a row, so these only act when the workspace or project itself is deleted.
+  parent    ContextFolder?  @relation("ContextFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children  ContextFolder[] @relation("ContextFolderTree")
   createdBy User            @relation("ContextFolderCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
   deletedBy User?           @relation("ContextFolderDeletedBy", fields: [deletedById], references: [id])
@@ -1061,7 +1062,7 @@ model ContextFile {
   deletedAt    DateTime?
   deletedById  String?
 
-  folder     ContextFolder @relation(fields: [folderId], references: [id], onDelete: Restrict)
+  folder     ContextFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
   uploadedBy User          @relation("ContextFileUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
   deletedBy  User?         @relation("ContextFileDeletedBy", fields: [deletedById], references: [id])
 

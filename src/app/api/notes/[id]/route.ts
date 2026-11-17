@@ -265,11 +265,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Tag access required" }, { status: 403 });
     }
 
-    // A note and its folder stay at the same level, so moving it never changes who can read it.
+    // A note and its folder stay at the same level, so moving it never changes who can read it. The
+    // folder is asked again when the note's own level changes, so a scope or project change cannot
+    // carry the note out from under the folder it sits in.
+    const levelChanged = finalScope !== existingNote.scope || finalProjectId !== existingNote.projectId;
     let resolvedFolderId: string | null | undefined;
-    if (folderId !== undefined) {
+    if (folderId !== undefined || (levelChanged && existingNote.folderId)) {
       try {
-        resolvedFolderId = await resolveNoteFolder(session.user.id, folderId,
+        resolvedFolderId = await resolveNoteFolder(session.user.id,
+          folderId !== undefined ? folderId : existingNote.folderId,
           { scope: finalScope, workspaceId: existingNote.workspaceId, projectId: finalProjectId });
       } catch (error) {
         return contextFolderErrorResponse(error);

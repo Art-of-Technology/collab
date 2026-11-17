@@ -10,6 +10,9 @@ import { prisma } from '@/lib/prisma';
  * Deleting a folder sets `deletedAt` on it and on everything below it, so its notes and files travel
  * with it into Trash and nothing is lost without a second, explicit step. A delete that would take
  * contents with it is refused with 409 and the counts until the caller confirms it.
+ *
+ * Every rule that reads the folder tree and then writes to it does both in one serializable
+ * transaction, so a concurrent move cannot slip between the check and the write.
  */
 
 export class ContextFolderError extends Error {
@@ -19,6 +22,8 @@ export class ContextFolderError extends Error {
 export type ContextFolderCounts = { folders: number; notes: number; files: number };
 
 export const MAX_FOLDER_NAME = 120;
+
+type Database = Prisma.TransactionClient | typeof prisma;
 
 const FOLDER_FIELDS = {
   id: true, name: true, workspaceId: true, projectId: true, parentId: true,
@@ -35,6 +40,33 @@ export function contextFolderAccessWhere(userId: string): Prisma.ContextFolderWh
   return { workspace: membership(userId) };
 }
 
+/** A client-supplied id is a string or nothing; an object would reach Prisma as a query operator. */
+function optionalId(value: unknown, field: string): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string') throw new ContextFolderError(400, `${field} must be an id`);
+  return value;
+}
+
+function requiredId(value: unknown, field: string): string {
+  const id = optionalId(value, field);
+  if (!id) throw new ContextFolderError(400, `${field} is required`);
+  return id;
+}
+
+/** A body that is not a JSON object is a bad request, not a server failure. */
+export async function readFolderBody(request: { json(): Promise<unknown> }): Promise<Record<string, unknown>> {
+  let parsed: unknown;
+  try {
+    parsed = await request.json();
+  } catch {
+    throw new ContextFolderError(400, 'A JSON object body is required');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new ContextFolderError(400, 'A JSON object body is required');
+  }
+  return parsed as Record<string, unknown>;
+}
+
 function folderName(name: unknown): string {
   const trimmed = typeof name === 'string' ? name.trim() : '';
   if (!trimmed) throw new ContextFolderError(400, 'A folder name is required');
@@ -46,26 +78,28 @@ function folderName(name: unknown): string {
 type Level = { workspaceId: string; projectId: string | null };
 
 /** The workspace, or the one project inside it, that a folder belongs to. */
-async function resolveLevel(userId: string, workspaceId: string | null, projectId: string | null): Promise<Level> {
-  if (!workspaceId) throw new ContextFolderError(400, 'A workspace is required');
-  const workspace = await prisma.workspace.findFirst({
-    where: { AND: [{ OR: [{ id: workspaceId }, { slug: workspaceId }] }, membership(userId)] },
+async function resolveLevel(db: Database, userId: string, workspaceId: unknown, projectId: unknown): Promise<Level> {
+  const workspaceKey = requiredId(workspaceId, 'A workspace');
+  const projectKey = optionalId(projectId, 'A project');
+  const workspace = await db.workspace.findFirst({
+    where: { AND: [{ OR: [{ id: workspaceKey }, { slug: workspaceKey }] }, membership(userId)] },
     select: { id: true },
   });
   if (!workspace) throw new ContextFolderError(404, 'Workspace not found');
-  if (projectId && !await prisma.project.findFirst({ where: { id: projectId, workspaceId: workspace.id }, select: { id: true } })) {
+  if (projectKey && !await db.project.findFirst({ where: { id: projectKey, workspaceId: workspace.id }, select: { id: true } })) {
     throw new ContextFolderError(404, 'Project not found in this workspace');
   }
-  return { workspaceId: workspace.id, projectId: projectId || null };
+  return { workspaceId: workspace.id, projectId: projectKey };
 }
 
 type LoadedFolder = Prisma.ContextFolderGetPayload<{ select: typeof FOLDER_FIELDS }> & {
   workspace: { ownerId: string; members: { role: string }[] };
 };
 
-async function loadFolder(userId: string, id: string, trashed = false): Promise<LoadedFolder> {
-  const folder = await prisma.contextFolder.findFirst({
-    where: { AND: [{ id, deletedAt: trashed ? { not: null } : null }, contextFolderAccessWhere(userId)] },
+async function loadFolder(db: Database, userId: string, id: unknown, trashed = false): Promise<LoadedFolder> {
+  const folderId = requiredId(id, 'A folder');
+  const folder = await db.contextFolder.findFirst({
+    where: { AND: [{ id: folderId, deletedAt: trashed ? { not: null } : null }, contextFolderAccessWhere(userId)] },
     select: { ...FOLDER_FIELDS, workspace: { select: { ownerId: true, members: { where: { userId, status: true }, select: { role: true } } } } },
   });
   if (!folder) throw new ContextFolderError(404, 'Folder not found');
@@ -85,14 +119,14 @@ function assertCanManage(folder: LoadedFolder, userId: string) {
  * Walk up from `parentId` to the top. Every folder on the way must be live and at the same level, which
  * also refuses moving a folder into its own descendant: the folder itself would be on that path.
  */
-async function assertParentAtLevel(level: Level, parentId: string | null, movingId: string | null) {
+async function assertParentAtLevel(db: Database, level: Level, parentId: string | null, movingId: string | null) {
   let current = parentId;
   const seen = new Set<string>();
   while (current) {
     if (current === movingId) throw new ContextFolderError(400, 'A folder cannot be moved into itself or into one of its own folders');
     if (seen.has(current)) throw new ContextFolderError(409, 'The folder tree changed; reload and retry');
     seen.add(current);
-    const row: { id: string; parentId: string | null } | null = await prisma.contextFolder.findFirst({
+    const row: { id: string; parentId: string | null } | null = await db.contextFolder.findFirst({
       where: { id: current, deletedAt: null, workspaceId: level.workspaceId, projectId: level.projectId },
       select: { id: true, parentId: true },
     });
@@ -102,11 +136,11 @@ async function assertParentAtLevel(level: Level, parentId: string | null, moving
 }
 
 /** The folder and everything below it that `where` still selects. */
-async function subtreeIds(rootId: string, where: Prisma.ContextFolderWhereInput): Promise<string[]> {
+async function subtreeIds(db: Database, rootId: string, where: Prisma.ContextFolderWhereInput): Promise<string[]> {
   const ids = [rootId];
   let frontier = [rootId];
   while (frontier.length) {
-    const children: { id: string }[] = await prisma.contextFolder.findMany({
+    const children: { id: string }[] = await db.contextFolder.findMany({
       where: { AND: [{ parentId: { in: frontier } }, where] }, select: { id: true },
     });
     frontier = children.map(child => child.id).filter(id => !ids.includes(id));
@@ -115,16 +149,19 @@ async function subtreeIds(rootId: string, where: Prisma.ContextFolderWhereInput)
   return ids;
 }
 
-async function contentCounts(folderIds: string[], rootId: string): Promise<ContextFolderCounts> {
-  const [notes, files] = await Promise.all([
-    prisma.note.count({ where: { folderId: { in: folderIds } } }),
-    prisma.contextFile.count({ where: { folderId: { in: folderIds }, deletedAt: null } }),
-  ]);
+async function contentCounts(db: Database, folderIds: string[], rootId: string): Promise<ContextFolderCounts> {
+  const notes = await db.note.count({ where: { folderId: { in: folderIds } } });
+  const files = await db.contextFile.count({ where: { folderId: { in: folderIds }, deletedAt: null } });
   return { folders: folderIds.filter(id => id !== rootId).length, notes, files };
 }
 
-export async function listContextFolders(userId: string, input: { workspaceId: string | null; projectId: string | null; trashed?: boolean }) {
-  const level = await resolveLevel(userId, input.workspaceId, input.projectId);
+/** One transaction for every rule that reads the folder tree before writing to it. */
+function inTransaction<T>(work: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return prisma.$transaction(work, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function listContextFolders(userId: string, input: { workspaceId: unknown; projectId: unknown; trashed?: boolean }) {
+  const level = await resolveLevel(prisma, userId, input.workspaceId, input.projectId);
   const folders = await prisma.contextFolder.findMany({
     where: { workspaceId: level.workspaceId, projectId: level.projectId, deletedAt: input.trashed ? { not: null } : null },
     select: FOLDER_FIELDS,
@@ -136,78 +173,92 @@ export async function listContextFolders(userId: string, input: { workspaceId: s
   return { folders: folders.filter(folder => !folder.parentId || !trashedIds.has(folder.parentId)) };
 }
 
-export async function createContextFolder(userId: string, input: { workspaceId: string | null; projectId?: string | null; parentId?: string | null; name: unknown }) {
+export async function createContextFolder(userId: string, input: { workspaceId: unknown; projectId?: unknown; parentId?: unknown; name: unknown }) {
   const name = folderName(input.name);
-  const level = await resolveLevel(userId, input.workspaceId, input.projectId || null);
-  const parentId = input.parentId || null;
-  await assertParentAtLevel(level, parentId, null);
-  return prisma.contextFolder.create({
-    data: { name, workspaceId: level.workspaceId, projectId: level.projectId, parentId, createdById: userId },
-    select: FOLDER_FIELDS,
+  const parentId = optionalId(input.parentId, 'A parent folder');
+  return inTransaction(async db => {
+    const level = await resolveLevel(db, userId, input.workspaceId, input.projectId);
+    await assertParentAtLevel(db, level, parentId, null);
+    return db.contextFolder.create({
+      data: { name, workspaceId: level.workspaceId, projectId: level.projectId, parentId, createdById: userId },
+      select: FOLDER_FIELDS,
+    });
   });
 }
 
-export async function updateContextFolder(userId: string, id: string, input: { name?: unknown; parentId?: string | null }) {
-  const folder = await loadFolder(userId, id);
-  assertCanManage(folder, userId);
-  const data: Prisma.ContextFolderUncheckedUpdateInput = {};
-  if (input.name !== undefined) data.name = folderName(input.name);
-  if (input.parentId !== undefined) {
-    const parentId = input.parentId || null;
-    await assertParentAtLevel({ workspaceId: folder.workspaceId, projectId: folder.projectId }, parentId, folder.id);
-    data.parentId = parentId;
+export async function updateContextFolder(userId: string, id: unknown, input: { name?: unknown; parentId?: unknown }) {
+  const name = input.name !== undefined ? folderName(input.name) : undefined;
+  const parentId = input.parentId !== undefined ? optionalId(input.parentId, 'A parent folder') : undefined;
+  if (name === undefined && parentId === undefined) {
+    throw new ContextFolderError(400, 'A new name or a new parent folder is required');
   }
-  if (!Object.keys(data).length) throw new ContextFolderError(400, 'A new name or a new parent folder is required');
-  return prisma.contextFolder.update({ where: { id: folder.id }, data, select: FOLDER_FIELDS });
+  return inTransaction(async db => {
+    const folder = await loadFolder(db, userId, id);
+    assertCanManage(folder, userId);
+    const data: Prisma.ContextFolderUncheckedUpdateInput = {};
+    if (name !== undefined) data.name = name;
+    if (parentId !== undefined) {
+      await assertParentAtLevel(db, { workspaceId: folder.workspaceId, projectId: folder.projectId }, parentId, folder.id);
+      data.parentId = parentId;
+    }
+    return db.contextFolder.update({ where: { id: folder.id }, data, select: FOLDER_FIELDS });
+  });
 }
 
 /** What a delete would take with the folder, so the caller can ask first. */
-export async function previewContextFolderTrash(userId: string, id: string) {
-  const folder = await loadFolder(userId, id);
-  const ids = await subtreeIds(folder.id, { deletedAt: null });
-  return { id: folder.id, name: folder.name, counts: await contentCounts(ids, folder.id) };
+export async function previewContextFolderTrash(userId: string, id: unknown) {
+  const folder = await loadFolder(prisma, userId, id);
+  const ids = await subtreeIds(prisma, folder.id, { deletedAt: null });
+  return { id: folder.id, name: folder.name, counts: await contentCounts(prisma, ids, folder.id) };
 }
 
-export async function trashContextFolder(userId: string, id: string, confirm: boolean) {
-  const folder = await loadFolder(userId, id);
-  assertCanManage(folder, userId);
-  const ids = await subtreeIds(folder.id, { deletedAt: null });
-  const counts = await contentCounts(ids, folder.id);
-  if (!confirm && (counts.folders || counts.notes || counts.files)) {
-    throw new ContextFolderError(409, 'This folder is not empty. Confirm to move it and everything in it to Trash.', counts);
-  }
-  // One timestamp for the whole delete, so restoring takes back exactly what this delete put in Trash.
-  const deletedAt = new Date();
-  await prisma.contextFolder.updateMany({ where: { id: { in: ids }, deletedAt: null }, data: { deletedAt, deletedById: userId } });
-  return { id: folder.id, name: folder.name, deletedAt, counts };
+export async function trashContextFolder(userId: string, id: unknown, confirm: boolean) {
+  return inTransaction(async db => {
+    const folder = await loadFolder(db, userId, id);
+    assertCanManage(folder, userId);
+    const ids = await subtreeIds(db, folder.id, { deletedAt: null });
+    const counts = await contentCounts(db, ids, folder.id);
+    if (!confirm && (counts.folders || counts.notes || counts.files)) {
+      throw new ContextFolderError(409, 'This folder is not empty. Confirm to move it and everything in it to Trash.', counts);
+    }
+    // One timestamp for the whole delete, so restoring takes back exactly what this delete put in Trash.
+    const deletedAt = new Date();
+    await db.contextFolder.updateMany({ where: { id: { in: ids }, deletedAt: null }, data: { deletedAt, deletedById: userId } });
+    return { id: folder.id, name: folder.name, deletedAt, counts };
+  });
 }
 
-export async function restoreContextFolder(userId: string, id: string) {
-  const folder = await loadFolder(userId, id, true);
-  assertCanManage(folder, userId);
-  if (folder.parentId) {
-    const parent = await prisma.contextFolder.findFirst({ where: { id: folder.parentId }, select: { deletedAt: true } });
-    if (!parent || parent.deletedAt) throw new ContextFolderError(409, 'Restore the folder this one is in first');
-  }
-  const ids = await subtreeIds(folder.id, { deletedAt: folder.deletedAt });
-  await prisma.contextFolder.updateMany({ where: { id: { in: ids }, deletedAt: folder.deletedAt }, data: { deletedAt: null, deletedById: null } });
-  return { id: folder.id, name: folder.name, folders: ids.length };
+export async function restoreContextFolder(userId: string, id: unknown) {
+  return inTransaction(async db => {
+    const folder = await loadFolder(db, userId, id, true);
+    assertCanManage(folder, userId);
+    if (folder.parentId) {
+      const parent = await db.contextFolder.findFirst({ where: { id: folder.parentId }, select: { deletedAt: true } });
+      if (!parent || parent.deletedAt) throw new ContextFolderError(409, 'Restore the folder this one is in first');
+    }
+    const ids = await subtreeIds(db, folder.id, { deletedAt: folder.deletedAt });
+    await db.contextFolder.updateMany({ where: { id: { in: ids }, deletedAt: folder.deletedAt }, data: { deletedAt: null, deletedById: null } });
+    return { id: folder.id, name: folder.name, folders: ids.length };
+  });
 }
 
 /**
  * The folder a note is being written into. A note and its folder must be at the same level, so who can
  * read the note and who can read the folder stay the same. Personal notes have no folders.
+ *
+ * This is asked again whenever a note's scope or project changes, not only when a folder is named, so a
+ * note cannot be carried into another level while it sits in a folder of the old one.
  */
 export async function resolveNoteFolder(
   userId: string,
   folderId: unknown,
   note: { scope: string; workspaceId: string | null; projectId: string | null },
 ): Promise<string | null> {
-  if (folderId === null || folderId === undefined || folderId === '') return null;
-  if (typeof folderId !== 'string') throw new ContextFolderError(400, 'A folder id is required');
+  const id = optionalId(folderId, 'A folder');
+  if (!id) return null;
   if (note.scope === 'PERSONAL') throw new ContextFolderError(400, 'Personal notes are not kept in folders');
   const folder = await prisma.contextFolder.findFirst({
-    where: { AND: [{ id: folderId, deletedAt: null }, contextFolderAccessWhere(userId)] },
+    where: { AND: [{ id, deletedAt: null }, contextFolderAccessWhere(userId)] },
     select: { id: true, workspaceId: true, projectId: true },
   });
   if (!folder) throw new ContextFolderError(404, 'Folder not found');
