@@ -32,13 +32,15 @@ export function AgentSeatsView({ workspace, seats, tab, handoffs, canManage }: P
       <p className="text-sm text-muted-foreground">A seat is created under Settings, Agent tokens, by someone who may manage the workspace. <Link className="text-primary hover:underline" href="/docs/agents/create-a-seat">Create a seat</Link> shows how.</p>
     </div> : tab === 'seats' ? <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-left text-sm">
-        <thead><tr className="border-b"><th className="p-3">Seat</th><th className="p-3">Role</th><th className="p-3">Project</th><th className="p-3">Works on now</th><th className="p-3">Waiting</th></tr></thead>
+        <thead><tr className="border-b"><th className="p-3">Seat</th><th className="p-3">Role</th><th className="p-3">Project</th><th className="p-3">Owner</th><th className="p-3">Works on now</th><th className="p-3">Waiting</th></tr></thead>
         <tbody>{seats.map(seat => <tr key={seat.id} className="border-b last:border-0">
           <th scope="row" className="p-3 font-medium">{seat.name}{seat.isDefault && <span className="block text-xs font-normal text-muted-foreground">Default for its role</span>}
             {seat.noRunner && <span className="block text-xs font-normal text-amber-600 dark:text-amber-400">No runner yet: its work waits until its owner admits a <Link className="underline" href={`${base}/agents/runners`}>runner</Link></span>}
             {seat.tokenExpired && <span className="block text-xs font-normal text-amber-600 dark:text-amber-400">Token expired: its <Link className="underline" href={`${base}/agents/runners`}>runner</Link> has not asked since, so its work waits</span>}</th>
           <td className="p-3 capitalize">{seat.role}</td>
           <td className="p-3">{seat.project}</td>
+          {/* Who pays for the seat's sessions: its owner's own sign-in, or an API key the runner holds. */}
+          <td className="p-3">{seat.owner ?? <span className="text-muted-foreground">No owner (API key)</span>}</td>
           <td className="space-y-2 p-3">{seat.working.length ? seat.working.map(run => <div key={run.id}>{issue(run.issueId, run.issueKey, run.title)}
             {run.lost && <span className="block text-xs text-muted-foreground">The run is lost: clear it on the issue&apos;s Activity tab.</span>}</div>) : <span className="text-muted-foreground">Nothing</span>}</td>
           <td className="p-3">{seat.waiting.length ? <Link className="text-primary hover:underline" href={`${base}/agents/inbox#seat-${seat.id}`}>{seat.waiting.length}</Link> : <span className="text-muted-foreground">0</span>}</td>

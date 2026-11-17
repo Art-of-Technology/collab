@@ -112,7 +112,7 @@ test('seat changes refresh visible picker choices across workspace keys', async 
     '@/lib/utils': { cn: (...names) => names.filter(Boolean).join(' ') },
   });
   queryClient.clear();
-  const seat = { id: 's1', role: 'developer', project: 'Collab', isDefault: true, retired: false };
+  const seat = { id: 's1', role: 'developer', project: 'Collab', isDefault: true, retired: false, owner: null };
   const root = createRoot(document.getElementById('root'));
   await React.act(async () => root.render(React.createElement(QueryClientProvider, { client: queryClient },
     React.createElement(Manager, { workspaceId: 'w1', workspaces: [], projects: [{ id: 'p1', name: 'Collab' }], people: [], tokens: [{ ...token('t1', 'Agent', []), seat }] }),
@@ -188,12 +188,32 @@ test('a token created with a project is a seat: project, role and owner go to th
   } finally { await React.act(async () => root.unmount()); }
 });
 
+test('the Owner choice says who pays for the seat and that it is fixed once the seat is made', async () => {
+  const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }], people: [{ id: 'u1', name: 'Cem' }] });
+  try {
+    await React.act(async () => buttons('New token')[0].click());
+    assert.doesNotMatch(document.body.textContent, /subscription/, 'a plain token has no owner to explain');
+    await choose(0, 'p1');
+    // "No owner" is where the form starts: nobody's subscription pays, and the runners that exist today may refuse it.
+    assert.match(document.body.textContent, /No person's subscription pays for this seat\./);
+    assert.match(document.body.textContent, /runner that uses your organisation's API key/);
+    assert.match(document.body.textContent, /may refuse the seat\./);
+    assert.match(document.body.textContent, /The owner cannot be changed afterwards/);
+
+    await choose(2, 'u1');
+    assert.match(document.body.textContent, /Runs on this person's own Claude Code or Codex sign-in/);
+    assert.doesNotMatch(document.body.textContent, /No person's subscription pays/);
+    assert.match(document.body.textContent, /The owner cannot be changed afterwards/);
+  } finally { await React.act(async () => root.unmount()); }
+});
+
 test('a seat is named on its token and can be retired; a retired seat and a plain token cannot', async () => {
-  const seat = (id, retired) => ({ id, role: 'release', project: 'Collab', isDefault: !retired, retired });
+  const seat = (id, retired) => ({ id, role: 'release', project: 'Collab', isDefault: !retired, retired, owner: retired ? null : 'Cem' });
   const root = await render({ workspaces: [], tokens: [{ ...token('t1', 'rel', []), seat: seat('s1', false) }, { ...token('t2', 'old', []), seat: seat('s2', true) }, token('t3', 'Claude', [])] });
   try {
-    assert.match(document.body.textContent, /Release seat of Collab, default for its role/);
-    assert.match(document.body.textContent, /Retired seat of Collab/);
+    // Whose sign-in runs each seat, so a seat nobody pays for is not taken for one that someone does.
+    assert.match(document.body.textContent, /Release seat of Collab, default for its role · Owner: Cem/);
+    assert.match(document.body.textContent, /Retired seat of Collab · No owner \(API key\)/);
     assert.equal(buttons('Retire seat').length, 1);
     assert.equal(buttons('Revoke').length, 3);
 
@@ -278,9 +298,9 @@ test('Connect an agent shows the endpoint of this deployment and copies each com
 });
 
 test('an active seat without tokens can still be retired', async () => {
-  const root = await render({ workspaces: [], tokens: [], seats: [{ id: 's1', name: 'Agent', role: 'release', project: 'Collab', isDefault: true }] });
+  const root = await render({ workspaces: [], tokens: [], seats: [{ id: 's1', name: 'Agent', role: 'release', project: 'Collab', isDefault: true, owner: 'Cem' }] });
   try {
-    assert.match(document.body.textContent, /Agent.*Release seat of Collab/);
+    assert.match(document.body.textContent, /Agent.*Release seat of Collab, default for its role · Owner: Cem/);
     await React.act(async () => buttons('Retire seat')[0].click());
     answer = { ok: true, json: async () => ({ unassigned: [] }) };
     await React.act(async () => buttons('Confirm: Retire seat')[0].click());

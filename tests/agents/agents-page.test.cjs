@@ -70,7 +70,11 @@ test('the Agents page reads the seats a person may see, what each works on and w
     const view = await page.readSeats(member, 'team');
     assert.deepEqual(view.workspace, { id: 'w', slug: 'team' });
     assert.deepEqual(view.seats.map(row => [row.id, row.role, row.project, row.isDefault]), [['dev-a', 'developer', 'Alpha', true], ['rev-a', 'reviewer', 'Alpha', true]]);
-    assert.deepEqual(Object.keys(view.seats[0]).sort(), ['id', 'isDefault', 'name', 'noRunner', 'project', 'role', 'tokenExpired', 'waiting', 'working']);
+    assert.deepEqual(Object.keys(view.seats[0]).sort(), ['id', 'isDefault', 'name', 'noRunner', 'owner', 'project', 'role', 'tokenExpired', 'waiting', 'working']);
+    // Who pays for the seat: the owner's own sign-in, or nobody's when the seat has no owner.
+    assert.deepEqual(view.seats.map(row => row.owner), [null, null]);
+    await raw.agentSeat.update({ where: { id: 'dev-a' }, data: { ownerId: member } });
+    assert.deepEqual((await page.readSeats(member, 'team')).seats.map(row => row.owner), [member, null]);
     // A seat a runner runs has no runner until one holds a usable token for it; a seat run by hand never says so.
     const states = async () => (await page.readSeats(member, 'team')).seats.map(row => [row.noRunner, row.tokenExpired]);
     assert.deepEqual(await states(), [[false, false], [false, false]]);
