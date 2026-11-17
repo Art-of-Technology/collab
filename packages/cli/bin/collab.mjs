@@ -435,9 +435,10 @@ async function main() {
     let last, lastError;
     for (;;) {
       const window = deadline - Date.now();
-      if (window <= 0 && !last) throw lastError;
-      if (last && window < 1000) {
+      // A request gets a second of its own, so under that there is no room for one: the wait ends on its last answer, or its last error.
+      if ((last || lastError) && window < 1000) {
         await delay(Math.max(0, window));
+        if (!last) throw lastError;
         return { ...last, timedOut: true };
       }
       let result;
