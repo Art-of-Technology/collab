@@ -359,3 +359,103 @@ test('what a file is comes from its content, not from its name', async () => {
     assert.equal(detectFileType(new Uint8Array(bytes)), expected, bytes.subarray(0, 12).toString('hex'));
   }
 });
+
+const PREVIEW = 'src/app/api/context/files/[id]/preview/route.ts';
+const ZIP = Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from('photos.jpg')]);
+
+test('a file is previewed as what it is, and never as something a browser runs', async () => {
+  const f = fixture();
+  f.addFolder('ideation');
+  const put = async (bytes, name) => (await f.upload({ folderId: 'ideation', file: { bytes, name } })).json();
+  const png = await put(PNG, 'sketch.png');
+  const pdf = await put(PDF, 'plan.pdf');
+  const page = await put(HTML, 'report.html');
+  const rows = await put(Buffer.from('name,count\n"a, b",2\nlast,3\n'), 'rows.csv');
+  const archive = await put(ZIP, 'photos.zip');
+
+  // An image leaves with its own type, shown in the page rather than downloaded, and sealed.
+  const image = await f.call(PREVIEW, 'GET', { id: png.id });
+  assert.equal(image.status, 200);
+  assert.equal(image.headers.get('content-type'), 'image/png');
+  assert.match(image.headers.get('content-disposition'), /^inline; filename="sketch\.png"/);
+  assert.equal(image.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(image.headers.get('content-security-policy'), "default-src 'none'; sandbox");
+  assert.equal(Buffer.from(await image.arrayBuffer()).toString('hex'), PNG.toString('hex'));
+
+  // The PDF viewer is the browser's own program and needs its scripts; the document still gets an
+  // origin of its own and may fetch nothing, so what the file carries reaches neither Collab nor the page.
+  const viewer = await f.call(PREVIEW, 'GET', { id: pdf.id });
+  assert.equal(viewer.headers.get('content-type'), 'application/pdf');
+  assert.equal(viewer.headers.get('content-security-policy'), "default-src 'none'; sandbox allow-scripts");
+  assert.match(viewer.headers.get('content-disposition'), /^inline;/);
+
+  // A file that says it is HTML is read, not run: its bytes leave as JSON, never with a type a browser runs.
+  const read = await f.call(PREVIEW, 'GET', { id: page.id });
+  assert.match(read.headers.get('content-type'), /^application\/json/);
+  const text = await read.json();
+  assert.equal(text.kind, 'text');
+  assert.equal(text.text, HTML.toString());
+  assert.equal(text.truncated, false);
+
+  // A CSV is a table, quotes and all.
+  const table = await (await f.call(PREVIEW, 'GET', { id: rows.id })).json();
+  assert.equal(table.kind, 'csv');
+  assert.deepEqual(table.rows, [['name', 'count'], ['a, b', '2'], ['last', '3']]);
+  assert.equal(table.hasMore, false);
+
+  // Any other type is named, not shown, and its bytes are never fetched for a preview.
+  const fetches = f.fetched.length;
+  const named = await (await f.call(PREVIEW, 'GET', { id: archive.id })).json();
+  assert.deepEqual(named, { id: archive.id, name: 'photos.zip', mimeType: 'application/zip', size: ZIP.length, kind: 'none' });
+  assert.equal(f.fetched.length, fetches);
+
+  // Only someone who reads the folder, as everywhere else: a stranger gets no preview and no bytes.
+  const stranger = fixture('mallory');
+  stranger.addFolder('ideation');
+  stranger.addFile(png.id, { folderId: 'ideation', mimeType: 'image/png', name: 'sketch.png' });
+  stranger.ws[0].members = [];
+  assert.equal((await stranger.call(PREVIEW, 'GET', { id: png.id })).status, 404);
+  assert.equal(stranger.fetched.length, 0);
+});
+
+test('a preview of a large file reads only its start and says there is more', async () => {
+  const f = fixture();
+  f.addFolder('ideation');
+  const put = async (bytes, name) => (await f.upload({ folderId: 'ideation', file: { bytes, name } })).json();
+  const { csvPreview, contextPreviewKind, MAX_CONTEXT_PREVIEW_BYTES, CONTEXT_PREVIEW_ROWS } =
+    load('src/lib/context-file-preview.ts', {}, { TextDecoder });
+
+  const lines = ['name,count', ...Array.from({ length: 500 }, (_, index) => `row ${index},${index}`)];
+  const rows = await put(Buffer.from(`${lines.join('\n')}\n`), 'big.csv');
+  const table = await (await f.call(PREVIEW, 'GET', { id: rows.id })).json();
+  assert.equal(table.rows.length, CONTEXT_PREVIEW_ROWS);
+  assert.equal(table.rowLimit, CONTEXT_PREVIEW_ROWS);
+  assert.equal(table.hasMore, true);
+  assert.deepEqual(table.rows.at(-1), ['row 198', '198']);
+
+  // A megabyte of text is answered from its first bytes alone, and the reply says so.
+  const long = await put(Buffer.from('x'.repeat(1024 * 1024)), 'long.txt');
+  const read = await (await f.call(PREVIEW, 'GET', { id: long.id })).json();
+  assert.equal(read.text.length, MAX_CONTEXT_PREVIEW_BYTES);
+  assert.equal(read.truncated, true);
+
+  // Bytes that stop in the middle of a row lose it: half a row is not a row.
+  const parsed = (text, truncated) => JSON.stringify(csvPreview(text, truncated).rows);
+  assert.equal(parsed('a,b\n1,2\n3,', true), '[["a","b"],["1","2"]]');
+  assert.equal(parsed('a,b\n1,2\n3,', false), '[["a","b"],["1","2"],["3",""]]');
+  // A quoted field holds commas and line breaks, and a doubled quote is one quote.
+  assert.equal(parsed('a,b\n"one, two","a ""quote""\nover two lines"\n', false),
+    '[["a","b"],["one, two","a \\"quote\\"\\nover two lines"]]');
+
+  // The type decides what a preview is; a name only ever chooses between two readings of text.
+  const kinds = [
+    [{ name: 'notes.txt', mimeType: 'text/plain' }, 'text'],
+    [{ name: 'rows.csv', mimeType: 'text/plain' }, 'csv'],
+    [{ name: 'report.html', mimeType: 'text/html' }, 'text'],
+    [{ name: 'sketch.svg', mimeType: 'image/svg+xml' }, 'image'],
+    [{ name: 'scan.tiff', mimeType: 'image/tiff' }, 'none'],
+    [{ name: 'rows.csv', mimeType: 'application/zip' }, 'none'],
+    [{ name: 'plan.pdf', mimeType: 'application/pdf' }, 'pdf'],
+  ];
+  for (const [file, expected] of kinds) assert.equal(contextPreviewKind(file), expected, file.name);
+});

@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { cloudinary } from '@/utils/cloudinary-server';
 import { detectFileType } from '@/lib/context-file-type';
 import {
+  contextPreviewKind, csvPreview, decodePreviewText, isInlinePreview, MAX_CONTEXT_PREVIEW_BYTES, PreviewFile,
+} from '@/lib/context-file-preview';
+import {
   ContextFolderError, contextFolderAccessWhere, inTransaction, isWorkspaceAdmin, requiredId,
 } from '@/lib/context-folders';
 
@@ -208,11 +211,10 @@ export async function restoreContextFile(userId: string, id: unknown) {
 }
 
 /**
- * The bytes, for whoever may read the folder. The signed address is made here and used here; it never
- * reaches the caller, so nothing that outlives this request can be passed on.
+ * The stored bytes. The signed address is made here and used here; it never reaches the caller, so
+ * nothing that outlives this request can be passed on.
  */
-export async function readContextFileBytes(userId: string, id: unknown) {
-  const file = await loadFile(prisma, userId, id);
+async function openStorage(file: { storageUrl: string }): Promise<ReadableStream<Uint8Array>> {
   if (!storageConfigured()) throw new ContextFolderError(503, 'File storage is not configured');
   const signed = cloudinary.url(storagePublicId(file.storageUrl), {
     resource_type: 'raw', type: 'authenticated', sign_url: true, secure: true,
@@ -222,7 +224,69 @@ export async function readContextFileBytes(userId: string, id: unknown) {
     console.error('context_file_storage_read_failed', { status: response.status });
     throw new ContextFolderError(502, 'This file could not be read from storage');
   }
-  return { file, body: response.body };
+  return response.body;
+}
+
+/** The bytes, for whoever may read the folder. */
+export async function readContextFileBytes(userId: string, id: unknown) {
+  const file = await loadFile(prisma, userId, id);
+  return { file, body: await openStorage(file) };
+}
+
+/** Only the start of a file is read, and the rest is let go: a preview never buffers a whole upload. */
+async function readPrefix(body: ReadableStream<Uint8Array>, limit: number): Promise<Uint8Array> {
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let read = 0;
+  try {
+    while (read < limit) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      read += value.byteLength;
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  const bytes = new Uint8Array(Math.min(read, limit));
+  let at = 0;
+  for (const chunk of chunks) {
+    if (at >= bytes.length) break;
+    const part = chunk.subarray(0, bytes.length - at);
+    bytes.set(part, at);
+    at += part.byteLength;
+  }
+  return bytes;
+}
+
+export type ContextFilePreview =
+  | { kind: 'image' | 'pdf'; file: PreviewFile; body: ReadableStream<Uint8Array> }
+  | { kind: 'text' | 'csv' | 'none'; file: PreviewFile; preview: Record<string, unknown> };
+
+/**
+ * What it takes to show a file without downloading it, for whoever may read the folder it is in.
+ *
+ * An image and a PDF are the bytes themselves, served the one way a browser draws them and nothing
+ * else (`previewHeaders`). Text and a CSV are read here, at most `MAX_CONTEXT_PREVIEW_BYTES` of them,
+ * and leave as JSON, so what the file holds is drawn as text and never as a page. Every other type is
+ * named and not shown.
+ */
+export async function readContextFilePreview(userId: string, id: unknown): Promise<ContextFilePreview> {
+  const loaded = await loadFile(prisma, userId, id);
+  const file = { id: loaded.id, name: loaded.name, mimeType: loaded.mimeType, size: loaded.size };
+  const kind = contextPreviewKind(file);
+  if (isInlinePreview(kind)) return { kind, file, body: await openStorage(loaded) };
+  if (kind === 'none') return { kind, file, preview: { ...file, kind } };
+  const bytes = await readPrefix(await openStorage(loaded), MAX_CONTEXT_PREVIEW_BYTES);
+  const truncated = file.size > bytes.byteLength;
+  const text = decodePreviewText(bytes);
+  return {
+    kind,
+    file,
+    preview: kind === 'csv'
+      ? { ...file, kind, ...csvPreview(text, truncated) }
+      : { ...file, kind, text, truncated },
+  };
 }
 
 /**
