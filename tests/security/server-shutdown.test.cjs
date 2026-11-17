@@ -66,11 +66,13 @@ test('a held-open connection no longer keeps the process running until Docker ki
   assert.equal(await stop(dir, 'off'), null, 'the fixture no longer reproduces the stop that never ends');
 });
 
-test('only a number configures the grace period; anything else leaves it at two seconds', t => {
+test('only a number configures the grace period, and never one that stops bounding the stop', t => {
   const { shutdownGraceMs } = require(path.join(fixture(t), 'watchdog.cjs'));
   const before = process.env.COLLAB_SHUTDOWN_GRACE_MS;
   t.after(() => { if (before === undefined) delete process.env.COLLAB_SHUTDOWN_GRACE_MS; else process.env.COLLAB_SHUTDOWN_GRACE_MS = before; });
-  for (const [configured, expected] of [[undefined, 2000], ['', 2000], ['  ', 2000], ['soon', 2000], ['-1', 2000], ['0', 0], ['500', 500]]) {
+  // A value past the cap would overflow Node's timer and fire at once, cutting off every request in flight.
+  for (const [configured, expected] of [[undefined, 2000], ['', 2000], ['  ', 2000], ['soon', 2000], ['-1', 2000],
+    ['0', 0], ['500', 500], ['60001', 60000], ['2147483648', 60000]]) {
     if (configured === undefined) delete process.env.COLLAB_SHUTDOWN_GRACE_MS;
     else process.env.COLLAB_SHUTDOWN_GRACE_MS = configured;
     assert.equal(shutdownGraceMs(), expected, `COLLAB_SHUTDOWN_GRACE_MS=${JSON.stringify(configured)}`);

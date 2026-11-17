@@ -11,12 +11,15 @@
  */
 const EXIT_CODES = { SIGTERM: 143, SIGINT: 130 } as const;
 
+/** The longest grace that still bounds a stop; past it the kill comes first and a timer this long overflows anyway. */
+const MAX_GRACE_MS = 60_000;
+
 /** How long a stop waits for the graceful close before the process ends itself. */
 export function shutdownGraceMs(): number {
   // An empty or unreadable value is no setting: deployments pass every variable through, set or not.
   const configured = process.env.COLLAB_SHUTDOWN_GRACE_MS?.trim();
   const ms = configured ? Number(configured) : NaN;
-  return Number.isFinite(ms) && ms >= 0 ? ms : 2000;
+  return Number.isFinite(ms) && ms >= 0 ? Math.min(ms, MAX_GRACE_MS) : 2000;
 }
 
 /** Arm the watchdog for this process. Called once, from `register()` in src/instrumentation.ts. */
