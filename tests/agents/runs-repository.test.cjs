@@ -156,10 +156,10 @@ test('the repository of the issue\'s project comes with the checkout and the run
     assert.deepEqual((await context(personToken, mine))[1].repository, null);
   });
 
-  await t.test('the same path at two servers is two repositories, not one', async () => {
+  await t.test('the same path at two servers is two repositories, not one: nothing picks between them, so none is named', async () => {
     const [status, body] = await checkout(devE, await issue(devE));
-    assert.deepEqual([status, body.error], [409, 'repository_required']);
-    assert.match(body.error_description, /"Project EE" has 2 repositories/);
+    // Were the two rows taken for one repository, the project would have one and the checkout would name it.
+    assert.deepEqual([status, body.repository, body.run.state], [200, null, 'running']);
   });
 
   await t.test('a run that was lost is still reported as such, ahead of the repository a project does not have', async () => {
@@ -170,21 +170,21 @@ test('the repository of the issue\'s project comes with the checkout and the run
     assert.deepEqual([status, body.error], [409, 'needs_person']);
   });
 
-  await t.test('a role that needs one is refused, by name of the project, and nothing is started', async () => {
+  await t.test('a role that needs one and a project that gives none: the checkout stands with null, and the run starts', async () => {
+    // No checkout is refused over a repository: the runner works in the copy it is configured with, as it did before
+    // Collab sent the field at all. Refusing would stop seats that are working today in projects with none connected.
     const empty = await issue(devB);
     const [status, body] = await checkout(devB, empty);
-    assert.deepEqual([status, body.error], [409, 'repository_required']);
-    assert.match(body.error_description, /"Project BB" has no repository connected/);
-    assert.equal(await raw.agentRun.count({ where: { issueId: empty.id } }), 0);
-    assert.equal((await raw.issue.findUniqueOrThrow({ where: { id: empty.id } })).statusId, `${B}-to_do`);
+    assert.deepEqual([status, body.repository, body.run.state], [200, null, 'running']);
+    assert.equal(await raw.agentRun.count({ where: { issueId: empty.id } }), 1);
+    assert.equal((await raw.issue.findUniqueOrThrow({ where: { id: empty.id } })).statusId, `${B}-in_progress`);
+    assert.deepEqual((await context(devB, empty))[1].repository, null);
 
-    // Several, and nothing picks between them yet: the same refusal, saying how many there are.
+    // Several, and nothing picks between them yet: the same answer, and the same run.
     const several = await issue(devC);
-    const [got, refusal] = await checkout(devC, several);
-    assert.deepEqual([got, refusal.error], [409, 'repository_required']);
-    assert.match(refusal.error_description, /"Project CC" has 2 repositories/);
-    assert.equal(await raw.agentRun.count({ where: { issueId: several.id } }), 0);
-    // The read refuses nothing: it says there is none to work out.
+    const [got, started] = await checkout(devC, several);
+    assert.deepEqual([got, started.repository, started.run.state], [200, null, 'running']);
+    assert.equal(await raw.agentRun.count({ where: { issueId: several.id } }), 1);
     assert.deepEqual((await context(devC, several))[1].repository, null);
   });
 
