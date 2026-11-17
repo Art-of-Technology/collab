@@ -52,12 +52,14 @@ function load(file, dependencies = {}, globals = {}) {
       }
       // Context folders and files, and the responses that report their errors, share one error class.
       if (!(name in dependencies) && ['@/lib/context-folders', '@/lib/context-folders-response',
-        '@/lib/context-files', '@/lib/context-files-response', '@/lib/context-file-type'].includes(name)) {
+        '@/lib/context-files', '@/lib/context-files-response', '@/lib/context-file-type',
+        '@/lib/context-file-preview'].includes(name)) {
         dependencies['@/lib/context-folders'] ||= load('src/lib/context-folders.ts', dependencies, globals);
         const shared = { ...dependencies, '@/lib/context-folders': dependencies['@/lib/context-folders'] };
         if (name === '@/lib/context-files') {
-          // Reading the first bytes of a file needs nothing but the bytes.
+          // Reading the first bytes of a file, and saying what a preview of it is, need nothing but the bytes.
           shared['@/lib/context-file-type'] = dependencies['@/lib/context-file-type'] ||= load('src/lib/context-file-type.ts', {}, globals);
+          shared['@/lib/context-file-preview'] = dependencies['@/lib/context-file-preview'] ||= load('src/lib/context-file-preview.ts', {}, globals);
         }
         if (name !== '@/lib/context-folders') dependencies[name] ||= load(`src/${name.slice(2)}.ts`, shared, globals);
         return dependencies[name];
