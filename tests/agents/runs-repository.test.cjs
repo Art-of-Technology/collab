@@ -6,8 +6,9 @@ const { seatsDatabase } = require('./seats-db.cjs');
 
 // Token-facing routes accept only cuid-shaped ids.
 const owner = 'cowner00001', person = 'cperson0001';
-// A: one repository from the GitHub sign-in. B: none. C: two. D: one connection, and the same repository connected twice.
-const A = 'cprojecta001', B = 'cprojectb001', C = 'cprojectc001', D = 'cprojectd001';
+// A: one repository from the GitHub sign-in. B: none. C: two. D: one connection, and the same repository connected
+// twice. E: the same path at two servers, which is two repositories.
+const A = 'cprojecta001', B = 'cprojectb001', C = 'cprojectc001', D = 'cprojectd001', E = 'cprojecte001';
 const scopes = ['issues:read', 'issues:write', 'user:read'];
 const ago = seconds => new Date(Date.now() - seconds * 1000);
 
@@ -19,7 +20,7 @@ test('the repository of the issue\'s project comes with the checkout and the run
     await prisma.user.createMany({ data: [owner, person].map(id => ({ id, name: id })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
     await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: person } });
-    for (const [id, prefix] of [[A, 'AA'], [B, 'BB'], [C, 'CC'], [D, 'DD']]) {
+    for (const [id, prefix] of [[A, 'AA'], [B, 'BB'], [C, 'CC'], [D, 'DD'], [E, 'EE']]) {
       await prisma.project.create({ data: { id, workspaceId: 'w', name: `Project ${prefix}`, slug: id, issuePrefix: prefix } });
       await prisma.projectStatus.createMany({ data: ['to_do', 'in_progress', 'done'].map((name, order) => ({ id: `${id}-${name}`, projectId: id, name, displayName: name,
         order, category: name, isFinal: name === 'done' })) });
@@ -36,6 +37,10 @@ test('the repository of the issue\'s project comes with the checkout and the run
     await connection(D, 'github', 'ACME/four');
     // Switched off, so it is not one of the project's repositories: B still has none.
     await connection(B, 'gitlab', 'acme/off', { isActive: false });
+    // The same provider and the same path at two servers: two repositories, as `GitConnection`'s own key has it.
+    await connection(E, 'gitlab', 'acme/five');
+    await connection(E, 'gitlab', 'acme/five', { baseUrl: 'https://gitlab.acme.test', externalId: `${E}-self-hosted`,
+      url: 'https://gitlab.acme.test/acme/five' });
     for (const [id, slug] of [['agent-app', 'collab-agent'], ['person-app', 'collab-cli']]) {
       await prisma.app.create({ data: { id, name: slug, slug, publisherId: 'system', status: 'PUBLISHED', visibility: 'PRIVATE', isSystemApp: true,
         scopes: { create: scopes.map(scope => ({ scope })) } } });
@@ -73,6 +78,7 @@ test('the repository of the issue\'s project comes with the checkout and the run
     return { ...made.seat, token: made.token.token };
   };
   const devA = await seat('dev-a', A), devB = await seat('dev-b', B), leadB = await seat('lead-b', B, 'lead'), devC = await seat('dev-c', C), devD = await seat('dev-d', D);
+  const leadA = await seat('lead-a', A, 'lead'), devE = await seat('dev-e', E);
   const personToken = 'collab_person_token';
   await raw.appToken.create({ data: { appId: 'person-app', workspaceId: 'w', userId: person, installationId: null,
     accessToken: Buffer.from(personToken).toString('base64'), scopes } });
@@ -122,6 +128,32 @@ test('the repository of the issue\'s project comes with the checkout and the run
   await t.test('a role that needs no repository takes its issue with none worked out', async () => {
     const [status, body] = await checkout(leadB, await issue(leadB));
     assert.deepEqual([status, body.repository, body.run.state], [200, null, 'running']);
+  });
+
+  await t.test('the role is read before the project: a lead gets none even where the project has one, and the read agrees', async () => {
+    const target = await issue(leadA);
+    const [status, body] = await checkout(leadA, target);
+    assert.deepEqual([status, body.repository, body.run.state], [200, null, 'running']);
+    assert.deepEqual((await context(leadA, target))[1].repository, null);
+    // A person's own run is the same rule: they work in the copy they already have.
+    const mine = await issue(person, A);
+    const [got, started] = await checkout(personToken, mine);
+    assert.deepEqual([got, started.repository], [200, null]);
+    assert.deepEqual((await context(personToken, mine))[1].repository, null);
+  });
+
+  await t.test('the same path at two servers is two repositories, not one', async () => {
+    const [status, body] = await checkout(devE, await issue(devE));
+    assert.deepEqual([status, body.error], [409, 'repository_required']);
+    assert.match(body.error_description, /"Project EE" has 2 repositories/);
+  });
+
+  await t.test('a run that was lost is still reported as such, ahead of the repository a project does not have', async () => {
+    const target = await issue(devB);
+    await raw.agentRun.create({ data: { workspaceId: 'w', issueId: target.id, seatId: devB.id, userId: devB.userId, runner: 'test', generation: 'g0',
+      leaseUntil: ago(120) } });
+    const [status, body] = await checkout(devB, target, 'g2');
+    assert.deepEqual([status, body.error], [409, 'needs_person']);
   });
 
   await t.test('a role that needs one is refused, by name of the project, and nothing is started', async () => {
