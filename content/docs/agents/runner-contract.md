@@ -112,7 +112,6 @@ The checkout moves the issue to the project's first active "in progress" status.
 | 403 | `seat_required` | The token is an agent token that is not a seat. |
 | 409 | `already_running` | A run is open on the issue. Take the next issue; do not retry. |
 | 409 | `needs_person` | The open run on the issue is lost. The runner that holds it closes it, or a person clears it. |
-| 409 | `repository_required` | The seat's role works in a repository and the issue's project has none to give. The message names the project. Nothing is started: tell a person, and take the next issue. |
 
 A project connected to Forge takes no runs: `409 forge_connected_project`.
 
@@ -130,7 +129,7 @@ Collab sends the repository with each checked-out issue, so no address is typed 
 
 - The role is read first: `repository` is `null` when the seat's role works in none, whatever its project has. A lead seat hands work out and gets `null`; so does a person's own run. The checkout and the run context answer the same for an issue.
 - For a role that works in one, Collab works out one repository: the seat's own pick, else the project's default for agents, else the project's only repository. The same repository connected twice, by the GitHub sign-in and as a connection, is one; the same path at two servers is two.
-- A role that works in one and a project that gives none is `409 repository_required`, and no run is started. A run that is already open on the issue is answered first: `already_running` and `needs_person` come before this.
+- A checkout is never refused over a repository. A role that works in one whose project gives none — none connected, or several and nothing picking between them — is `null` as well, and the run starts: the runner works in the copy it is configured with, as it did before Collab sent the field. Tell a person what is missing; do not stop taking the issue.
 - No token, secret or credential is ever in the reply. The runner clones with its owner's own sign-in.
 
 ## The run object
@@ -252,7 +251,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | Key | What it is |
 | --- | --- |
 | `issue` | `id`, `issueKey`, `title`, `description`, `type`, `priority`, `projectId`, `status`, `category`, `assigneeId` and `agentRequestRole`. |
-| `repository` | The repository of the issue's project, as [above](#the-repository), or `null`: the read answers what that issue's checkout answers. The read refuses nothing, though: a project that works none out is `null` here, and `repository_required` belongs to the checkout. |
+| `repository` | The repository of the issue's project, as [above](#the-repository), or `null`: the read answers what that issue's checkout answers, and a project that works none out is `null` in both. |
 | `lastExitNote` | The note of the last run that finished, or `null`. |
 | `lastExitFacts` | `null` if no run finished; otherwise `pullRequest`, `headCommit` and `nextStep`, each `null` when the last finished run supplied none. |
 | `commentsSince` | The comments made after that run ended, oldest first: `id`, `content`, `createdAt`, `parentId` and `author` with `id` and `name`. All comments when no run has finished. |
