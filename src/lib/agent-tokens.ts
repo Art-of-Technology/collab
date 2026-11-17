@@ -43,11 +43,14 @@ export async function listAgentTokens(workspaceId: string) {
   // A token whose account is a seat is that seat's token, however it was minted.
   const seats = names.size ? await prisma.agentSeat.findMany({
     where: { userId: { in: [...names.keys()] } },
-    select: { id: true, userId: true, role: true, isDefault: true, retiredAt: true, project: { select: { name: true } } },
+    select: { id: true, userId: true, role: true, isDefault: true, retiredAt: true, project: { select: { name: true } },
+      owner: { select: { id: true, name: true, email: true } } },
   }) : [];
   const seatOf = (userId: string | null) => {
     const seat = seats.find(row => row.userId === userId);
-    return seat ? { id: seat.id, role: seat.role, project: seat.project.name, isDefault: seat.isDefault, retired: !!seat.retiredAt } : null;
+    // The owner is the person whose sign-in runs the seat; without one, no person's subscription pays for it.
+    return seat ? { id: seat.id, role: seat.role, project: seat.project.name, isDefault: seat.isDefault, retired: !!seat.retiredAt,
+      owner: seat.owner ? seat.owner.name || seat.owner.email || seat.owner.id : null } : null;
   };
   return tokens.map(token => ({
     id: token.id,

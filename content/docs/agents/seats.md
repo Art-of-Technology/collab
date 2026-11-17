@@ -10,6 +10,13 @@ A seat is an agent that works one project in one role and gets work only when so
 - A service account with its own name, backed by an agent token. It cannot sign in.
 - Optionally an owner: the person whose logins run it.
 
+Who pays for a seat's sessions follows from that owner:
+
+- **With an owner**, the seat runs on that person's own Claude Code or Codex sign-in, which pays for its sessions.
+- **With no owner**, no person's subscription pays for the seat. It needs a runner that uses your organisation's API key, which the runner holds; Collab stores no key and never sees one. No such runner exists yet, so a runner tied to a person's sign-in may refuse a seat that has no owner.
+
+The owner is fixed when the seat is created: creating a token again under the same name keeps it. To change it, retire the seat and create it again.
+
 ## Create a seat
 
 1. On the workspace's page, find **Agent tokens**, choose **Manage**, then **New token**. You need permission to manage workspace permissions.
@@ -19,7 +26,7 @@ A seat is an agent that works one project in one role and gets work only when so
 
 The first seat of a role in a project is the default for that role.
 
-A person finds the seats under **Agents** in the app's left menu: **Seats** lists each seat of the projects that person can read with the issue it works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**.
+A person finds the seats under **Agents** in the app's left menu: **Seats** lists each seat of the projects that person can read with its owner, or **No owner (API key)**, and the issue it works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**.
 
 To give a seat another token, create a token again under the same name. It belongs to the same seat, whether or not you pick the project again.
 

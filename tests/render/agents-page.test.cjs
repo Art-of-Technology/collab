@@ -117,10 +117,10 @@ test('"Handoffs (old)" is a tab only while a project still uses handoffs', () =>
 });
 
 const seats = [
-  { id: 'seat-dev', name: 'Collab Developer', role: 'developer', isDefault: true, project: 'Collab',
+  { id: 'seat-dev', name: 'Collab Developer', role: 'developer', isDefault: true, project: 'Collab', owner: 'Cem',
     working: [{ id: 'run-1', issueId: 'i9', issueKey: 'CLB-9', title: 'Being worked', since: '2026-11-16T10:00:00.000Z', lost: false }],
     waiting: [{ issueId: 'i1', issueKey: 'CLB-1', title: '<b>First</b>', priority: 'high', category: 'todo', reason: 'resume', lastRunAt: null }] },
-  { id: 'seat-rel', name: 'Collab Release', role: 'release', isDefault: true, project: 'Collab', working: [], waiting: [] },
+  { id: 'seat-rel', name: 'Collab Release', role: 'release', isDefault: true, project: 'Collab', owner: null, working: [], waiting: [] },
 ];
 function page({ user = 'alice', view = { workspace: { id: 'ws', slug: 'team' }, seats }, handoffs = false, manage = false } = {}) {
   const calls = [];
@@ -156,10 +156,12 @@ test('the Agents page reads nothing for a visitor, a stranger to the workspace o
   const anonymous = page({ user: null }); await assert.rejects(anonymous.open('floor'), /redirect:\/login/); assert.deepEqual(anonymous.calls, []);
 });
 
-test('Seats tab: each seat with its role, project, what it works on now and how many issues wait', async () => {
+test('Seats tab: each seat with its role, project, owner, what it works on now and how many issues wait', async () => {
   const html = await page().open();
   assert.match(html, /<a[^>]*aria-current="page"[^>]*>Seats<\/a>/);
-  assert.match(text(html), /Collab Developer Default for its role developer Collab CLB-9 Being worked 1 Collab Release Default for its role release Collab Nothing 0/);
+  // A seat with an owner runs on that person's sign-in; one without says so, so nobody takes it for a seat someone pays for.
+  assert.match(text(html), /Seat Role Project Owner Works on now Waiting/);
+  assert.match(text(html), /Collab Developer Default for its role developer Collab Cem CLB-9 Being worked 1 Collab Release Default for its role release Collab No owner \(API key\) Nothing 0/);
   assert.match(html, /href="\/team\/issues\/CLB-9"/);
   assert.match(html, /<a[^>]*href="\/team\/agents\/inbox#seat-seat-dev"[^>]*>1<\/a>/);
   // Creating and retiring stays under Settings, and only who may do it is led there.

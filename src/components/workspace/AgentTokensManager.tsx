@@ -25,8 +25,8 @@ export interface WorkspaceRef {
 export interface AgentTokenRow {
   id: string;
   name: string;
-  /** Set when the token's account is a seat: one project, one role. */
-  seat: { id: string; role: string; project: string; isDefault: boolean; retired: boolean } | null;
+  /** Set when the token's account is a seat: one project, one role, and the owner whose sign-in runs it. */
+  seat: { id: string; role: string; project: string; isDefault: boolean; retired: boolean; owner: string | null } | null;
   /** Other workspaces the token's agent was let into. */
   workspaces: WorkspaceRef[];
   access: 'read' | 'write';
@@ -44,13 +44,15 @@ interface AgentTokensManagerProps {
   people: { id: string; name: string }[];
   /** null while agent tokens are not set up on this deployment. */
   tokens: AgentTokenRow[] | null;
-  seats?: { id: string; name: string; role: string; project: string; isDefault: boolean }[];
+  seats?: { id: string; name: string; role: string; project: string; isDefault: boolean; owner: string | null }[];
 }
 
 const accessLabel = { read: 'Read only', write: 'Read and write' } as const;
 const roleLabel: Record<string, string> = { developer: 'Developer', reviewer: 'Reviewer', release: 'Release', security: 'Security', lead: 'Lead' };
 // The select cannot hold an empty value.
 const NONE = 'none';
+// Who pays for the seat's session, which the seat list says next to each seat.
+const ownerLabel = (owner: string | null) => owner ? `Owner: ${owner}` : 'No owner (API key)';
 
 export default function AgentTokensManager({ workspaceId, workspaces, projects, people, tokens, seats = [] }: AgentTokensManagerProps) {
   const router = useRouter();
@@ -213,7 +215,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
         <CardContent className="px-4 pb-4">
           {orphanSeats.map(seat => (
             <div key={seat.id} className="flex items-center justify-between gap-3 py-2">
-              <span>{seat.name} <span className="text-xs text-muted-foreground">{roleLabel[seat.role] ?? seat.role} seat of {seat.project}{seat.isDefault && ', default for its role'}</span></span>
+              <span>{seat.name} <span className="text-xs text-muted-foreground">{roleLabel[seat.role] ?? seat.role} seat of {seat.project}{seat.isDefault && ', default for its role'} · {ownerLabel(seat.owner)}</span></span>
               <Button variant="outline" size="sm" onClick={() => setRetiring({ name: seat.name, seat: { ...seat, retired: false } })}>Retire seat</Button>
             </div>
           ))}
@@ -238,7 +240,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                       {token.seat && (
                         <div className="text-xs font-normal text-muted-foreground">
                           {token.seat.retired ? 'Retired seat' : `${roleLabel[token.seat.role] ?? token.seat.role} seat`} of {token.seat.project}
-                          {token.seat.isDefault && ', default for its role'}
+                          {token.seat.isDefault && ', default for its role'} · {ownerLabel(token.seat.owner)}
                         </div>
                       )}
                       {token.workspaces.length > 0 && (
@@ -319,6 +321,12 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                       {people.map(person => <SelectItem key={person.id} value={person.id}>{person.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {ownerId === NONE
+                      ? "No person's subscription pays for this seat. It needs a runner that uses your organisation's API key, which the runner holds and Collab never sees. No such runner exists yet, so a runner tied to a person's sign-in may refuse the seat."
+                      : "Runs on this person's own Claude Code or Codex sign-in, which pays for its sessions."}
+                    {' '}The owner cannot be changed afterwards: retire the seat and create it again.
+                  </p>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <Label htmlFor="agent-token-by-runner">Run by the owner&apos;s runner
