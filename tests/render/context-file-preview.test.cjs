@@ -7,17 +7,22 @@ const { createRoot } = require('react-dom/client');
 
 // Showing a file: what each of the four kinds draws, and that nothing a file carries is ever run.
 const asked = [];
-let answer = {};
+let reply = { ok: true, json: async () => ({}) };
 const Component = load('src/components/context/ContextFilePreview.tsx', {
   react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
   '@/lib/context-file-preview': load('src/lib/context-file-preview.ts', {}, { TextDecoder }),
 }, {
-  fetch: async url => { asked.push(url); return { ok: true, json: async () => answer }; },
+  fetch: async url => { asked.push(url); return reply; },
 }).ContextFilePreview;
 
 const root = createRoot(document.getElementById('root'));
-const show = async (file, reply) => {
-  answer = reply ?? {};
+const show = async (file, answer) => {
+  reply = { ok: true, json: async () => answer ?? {} };
+  await React.act(async () => root.render(React.createElement(Component, { file })));
+};
+/** A reply that did not come back as a preview: a failure, or a body no parser could read. */
+const showFailed = async (file, failed) => {
+  reply = failed;
   await React.act(async () => root.render(React.createElement(Component, { file })));
 };
 
@@ -65,5 +70,25 @@ test('a preview shows an image, a PDF, text and a table, and runs nothing inside
     assert.match(document.body.textContent, /not shown here/);
     assert.equal(document.querySelector('a[download]').getAttribute('href'), '/api/context/files/f5/download');
     assert.equal(asked.length, reads);
+
+    // A CSV whose first row is longer than the bytes that were read has no rows to show, but it is not
+    // an empty file, and it is not told it is one.
+    await show({ id: 'f6', name: 'wide.csv', mimeType: 'text/plain', size: 4 * 1024 * 1024 },
+      { kind: 'csv', rows: [], rowLimit: 200, hasMore: true });
+    assert.match(document.body.textContent, /The first row of this file is too long to show/);
+    await show({ id: 'f7', name: 'nothing.csv', mimeType: 'text/plain', size: 0 },
+      { kind: 'csv', rows: [], rowLimit: 200, hasMore: false });
+    assert.match(document.body.textContent, /This file is empty\./);
+
+    // A reply that is not a preview says so in Collab's words: what a parser calls a body is not for
+    // a member to read.
+    await showFailed({ id: 'f8', name: 'notes.txt', mimeType: 'text/plain', size: 12 },
+      { ok: false, json: async () => { throw new SyntaxError('Unexpected token < in JSON at position 0'); } });
+    assert.equal(document.body.textContent.includes('JSON'), false);
+    assert.match(document.body.textContent, /This file could not be read/);
+    // The server's own words are kept when it sent any.
+    await showFailed({ id: 'f9', name: 'notes.txt', mimeType: 'text/plain', size: 12 },
+      { ok: false, json: async () => ({ error: 'File not found' }) });
+    assert.match(document.body.textContent, /File not found/);
   } finally { await React.act(async () => root.unmount()); dom.window.close(); }
 });

@@ -30,8 +30,11 @@ export function ContextFilePreview({ file, className = '' }: { file: PreviewFile
     let current = true;
     fetch(contextPreviewUrl(file.id))
       .then(async response => {
-        const body = await response.json();
-        if (!response.ok) throw new Error(typeof body?.error === 'string' ? body.error : 'This file could not be read');
+        // A reply that is not JSON is a reply that failed: what a parser calls it is not for a member to read.
+        const body = await response.json().catch(() => null);
+        if (!response.ok || !body) {
+          throw new Error(typeof body?.error === 'string' ? body.error : 'This file could not be read');
+        }
         return body as ReadPreview;
       })
       .then(body => { if (current) setState({ id: file.id, read: body }); })
@@ -84,7 +87,10 @@ export function ContextFilePreview({ file, className = '' }: { file: PreviewFile
 /** The first row names the columns: a CSV preview is read, so what a cell holds stays a string. */
 function CsvTable({ csv }: { csv: Extract<ReadPreview, { kind: 'csv' }> }) {
   const [head, ...rest] = csv.rows;
-  if (!head) return <p className="p-6 text-center text-sm text-muted-foreground">This file is empty.</p>;
+  // No rows and more to come is not an empty file: its first row is longer than the bytes that were read.
+  if (!head) return <p className="p-6 text-center text-sm text-muted-foreground">
+    {csv.hasMore ? 'The first row of this file is too long to show. Download it to read it.' : 'This file is empty.'}
+  </p>;
   return <>
     <table className="w-full border-collapse text-left text-sm">
       <thead className="sticky top-0 bg-muted">
