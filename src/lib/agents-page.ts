@@ -14,7 +14,7 @@ export async function usesHandoffs(workspaceId: string): Promise<boolean> {
 
 /**
  * What the Runners tab needs before it asks for the runners themselves: the workspace, and for its owner the people a
- * runner can be admitted for. Only the owner admits a runner for someone else, so nobody else gets the list. Null when
+ * runner can be connected for. Only the owner connects a runner for someone else, so nobody else gets the list. Null when
  * the workspace is not the person's.
  */
 export async function readRunnersTab(userId: string, workspaceIdOrSlug: string) {

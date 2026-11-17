@@ -24,7 +24,7 @@ Name the project by its ID or its issue prefix. Without `--yes`, and with `--dry
 
 With `--yes` the missing seats are created to be run by your [runner](/docs/agents/admit-a-runner), which fetches their tokens on its next ask, the project is switched, and the claims are carried over. The reply lists each seat and whether a runner has fetched it yet; no token is printed. A seat of a role that already exists is left alone, whoever made it, and running the command twice creates nothing the second time. Carry only some claims over with `--carry-over '["SEAT-12"]'`.
 
-It stops after the preview, and creates nothing, when a status group the switch needs is missing, when no runner is admitted to the workspace, when several runners are admitted and none of them is yours, or when the project is archived. A runner that is away does not stop it: the seats show no runner until it asks.
+It stops after the preview, and creates nothing, when a status group the switch needs is missing, when no runner is connected to the workspace, when several runners are connected and none of them is yours, or when the project is archived. A runner that is away does not stop it: the seats show no runner until it asks.
 
 ## Before and after
 

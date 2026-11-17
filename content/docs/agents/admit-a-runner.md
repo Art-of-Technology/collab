@@ -1,8 +1,8 @@
-# Admit a runner
+# Connect a runner
 
 Let a runner fetch the tokens of your seats by itself, so nobody copies a token.
 
-A runner is the program that works seats on one machine, under one person's logins. You admit it once. After that it asks Collab which seats are its to run and gets a token for each.
+A runner is the program that works seats on one machine, under one person's logins. You connect it once. After that it asks Collab which seats are its to run and gets a token for each. Collab never calls a runner: any runner that speaks the [runner contract](/docs/agents/runner-contract) can be connected, Stech's among them.
 
 | Step | Who | Where |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ A runner is the program that works seats on one machine, under one person's logi
 
 1. Create the seat as on [Create a seat](/docs/agents/create-a-seat), pick its owner, and switch on **Run by the owner's runner**. No token is made, and none is shown.
 2. Start the pairing on the runner's machine. The runner shows a code such as `K7QF-M2XD`.
-3. In the left menu, open **Agents**, then the **Runners** tab. Type the code and choose **Admit**.
+3. In the left menu, open **Agents**, then the **Runners** tab. Type the code and choose **Connect**.
 
 > Only type a code your own runner shows you. Whoever shows the code gets the tokens of your seats.
 
@@ -24,20 +24,20 @@ The runner gets its seats the next time it asks. A code works once, for 15 minut
 
 | Action | A member | The workspace's owner |
 | --- | --- | --- |
-| Admit a runner for yourself | Yes | Yes |
-| Admit a runner for someone else | No | Yes |
+| Connect a runner for yourself | Yes | Yes |
+| Connect a runner for someone else | No | Yes |
 | Remove your own runner | Yes | Yes |
 | Remove anyone's runner | No | Yes |
 
-An agent token cannot admit or remove a runner. It takes a signed-in person.
+An agent token cannot connect or remove a runner. It takes a signed-in person.
 
 ## Which seats a runner gets
 
 A runner gets a seat when all of this is true:
 
 - The seat was created with **Run by the owner's runner**.
-- The seat's owner is the person the runner was admitted for.
-- The seat is in the workspace the runner was admitted to, and is not retired.
+- The seat's owner is the person the runner was connected for.
+- The seat is in the workspace the runner was connected to, and is not retired.
 
 A seat run by hand keeps its hand-made token. A runner never gets it.
 
@@ -66,11 +66,11 @@ A fetched token is also revoked at once when:
 
 ## Good to know
 
-- A person has one runner per workspace. Admitting another removes the one before and revokes the tokens it fetched. This is how a rebuilt machine replaces a lost one.
+- A person has one runner per workspace. Connecting another removes the one before and revokes the tokens it fetched. This is how a rebuilt machine replaces a lost one.
 - Removing a runner stops its credential and revokes every token it fetched, at once.
 - A runner whose person is no longer in the workspace gets nothing.
 - Nobody can make a token by hand for a seat that a runner runs.
-- A runner is admitted, renewed and removed from Collab's own page only. A request from another site is refused.
+- A runner is connected, renewed and removed from Collab's own page only. A request from another site is refused.
 
 ## Stop a seat that a runner runs
 
@@ -79,7 +79,7 @@ A fetched token is also revoked at once when:
 | One seat | Under **Agent tokens**, revoke every token of the seat. Its agent is switched off, and the runner gets no new token. | Someone who manages the workspace creates the seat again: same name, project and role, with **Run by the owner's runner**. |
 | One seat, for good | Retire the seat. | Create a new seat. |
 | Every seat of a project | Archive the project. | Bring the project back; the runner fetches its seats again. |
-| Every seat of a runner | Remove the runner under **Agents**, **Runners**. | Admit a runner again. |
+| Every seat of a runner | Remove the runner under **Agents**, **Runners**. | Connect a runner again. |
 
 - A runner never switches an agent back on. When someone switched a seat's agent off or removed it from the workspace, the runner gets no token for it until a person creates the seat again.
 - Retiring a seat revokes the tokens its runner fetched for it. A token made by hand stays until you revoke it: it can read but change nothing.
