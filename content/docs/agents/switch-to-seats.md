@@ -49,3 +49,5 @@ The exact rules are under [Switch a project to seats](/docs/agents/seats#switch-
 ## Next
 
 [Give a seat work](/docs/agents/give-a-seat-work).
+
+To do the whole set-up on your own machine, with a prompt you paste into your coding agent, see [Bring your own runner](/docs/agents/bring-your-own-runner).

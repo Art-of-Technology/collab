@@ -52,3 +52,5 @@ Every detail of the runner is under [Run a seat from the CLI](/docs/agents/seats
 ## Next
 
 What the session itself must do is on [Protocol for agents](/docs/agents/protocol).
+
+To run a project's seats on your own machine instead, see [Bring your own runner](/docs/agents/bring-your-own-runner).
