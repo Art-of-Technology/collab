@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { noteAccessWhere } from '@/lib/secrets/access';
+import { noteAccessWhere, noteWorkspaceWhere } from '@/lib/secrets/access';
 import { stripHtmlToPlainText } from '@/lib/html-sanitizer';
 import { ContextFolderError, contextFolderAccessWhere, requiredId } from '@/lib/context-folders';
 import { readContextFilePrefix } from '@/lib/context-files';
@@ -37,9 +37,13 @@ const FOLDER_FIELDS = {
 } satisfies Prisma.ContextFolderSelect;
 type FolderRow = Prisma.ContextFolderGetPayload<{ select: typeof FOLDER_FIELDS }>;
 
-/** A Note reaches an agent only when it is shared, readable, unencrypted and not a secret document. */
-const agentNoteWhere = (userId: string): Prisma.NoteWhereInput => ({
-  AND: [noteAccessWhere(userId)],
+/**
+ * A Note reaches an agent only when it is shared, readable, unencrypted and not a secret document,
+ * and when it belongs to the token's workspace — directly, or through the project it was written
+ * for, which is how a project Note carries no workspace of its own.
+ */
+const agentNoteWhere = (userId: string, workspaceId: string): Prisma.NoteWhereInput => ({
+  AND: [noteAccessWhere(userId), noteWorkspaceWhere(workspaceId)],
   scope: { in: ['WORKSPACE', 'PROJECT', 'PUBLIC'] },
   type: { notIn: ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'] },
   isEncrypted: false,
@@ -136,7 +140,7 @@ export async function readAgentFolder(userId: string, workspaceId: string, works
       select: FOLDER_FIELDS, orderBy: [{ name: 'asc' }, { id: 'asc' }], take: MAX_AGENT_FOLDER_ITEMS + 1, skip: offset,
     }),
     prisma.note.findMany({
-      where: { AND: [agentNoteWhere(userId)], folderId: folder.id, workspaceId },
+      where: { AND: [agentNoteWhere(userId, workspaceId)], folderId: folder.id },
       select: { id: true, title: true, type: true, updatedAt: true },
       orderBy: [{ title: 'asc' }, { id: 'asc' }], take: MAX_AGENT_FOLDER_ITEMS + 1, skip: offset,
     }),

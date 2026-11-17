@@ -282,6 +282,20 @@ test('an agent reads only its own workspace, and only with the scope that allows
   assert.equal((await unscoped.call(FOLDERS, { token: false })).status, 401);
 });
 
+test('a project Note kept in a folder is listed even when it carries no workspace of its own', async () => {
+  const f = fixture();
+  f.addFolder('ideation');
+  // A PROJECT Note may hold no workspaceId: its workspace is the one of the project it was written for.
+  f.addNote('brief', { scope: 'PROJECT', workspaceId: null, projectId: 'project' });
+  f.addNote('stranger', { scope: 'PROJECT', workspaceId: null, projectId: null });
+  const folder = await f.call(FOLDER, { id: 'ideation' });
+  assert.equal(folder.status, 200);
+  assert.deepEqual(folder.body.items.map(item => item.id), ['brief']);
+  // A project of another workspace carries its Notes no further than its own workspace.
+  f.project.workspaceId = 'other';
+  assert.deepEqual((await f.call(FOLDER, { id: 'ideation' })).body.items, []);
+});
+
 test('folder children are read even beyond the workspace folder summary limit', async () => {
   const f = fixture();
   f.addFolder('ideation');

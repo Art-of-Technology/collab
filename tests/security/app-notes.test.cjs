@@ -188,6 +188,18 @@ test('app-notes: collections and counts exclude restricted, private and expired 
   assert.equal(h.state.counts, 4);
 });
 
+test('app-notes: a project Note without a workspace of its own is read through its project', async () => {
+  const h = appNotesHarness();
+  const brief = h.add('brief', { type: 'GUIDE', scope: 'PROJECT', workspaceId: null, workspace: null,
+    projectId: h.project.id, project: h.project });
+  const read = await h.call('context/[id]', 'GET', 'brief');
+  assert.equal(read.status, 200);
+  assert.equal((await read.json()).content, brief.content);
+  // The project decides which workspace it belongs to: in another one, the Note is not found.
+  h.project.workspaceId = 'foreign';
+  assert.equal((await h.call('context/[id]', 'GET', 'brief')).status, 404);
+});
+
 test('app-notes: anonymous and revoked tokens stop all sibling reads and writes', async () => {
   const h = appNotesHarness();
   h.add('note', { authorId: 'alice', scope: 'PUBLIC' });
