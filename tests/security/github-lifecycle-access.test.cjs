@@ -35,6 +35,8 @@ function fixture(options = {}) {
     project: { findUnique: async () => ({ agentDefaultRepositoryId: null }) },
   };
   db.$transaction = async run => run(db);
+  // The hold the delete takes on the project while it reads and writes that choice.
+  db.$queryRaw = async () => { effects.push('hold'); return []; };
   const globals = { URL, Error, console: Object.fromEntries(['log', 'warn', 'error'].map(k => [k, (...args) => logs.push([k, ...args])])), fetch: async (url, init) => {
     effects.push(['provider', url, init]); if (options.providerThrow) throw new Error('stored-secret private-detail');
     if (init?.method === 'DELETE') return { ok: !options.webhookFailure, status: options.webhook404 ? 404 : 500, json: async () => ({ message: 'stored-secret private-detail' }) };

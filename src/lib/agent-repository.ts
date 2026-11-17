@@ -69,19 +69,31 @@ async function savedRepositoryKey(db: Database, projectId: string, savedId: stri
 }
 
 /**
+ * The project's row, held until the transaction ends. Choosing the default and disconnecting the row it is saved as
+ * both read which repositories the project has and then write the choice, so without this one would write over what
+ * the other decided, or save a row the other has just deleted. Both take it before they read, so they take turns.
+ */
+export async function holdProjectDefault(db: Database, projectId: string) {
+  await db.$queryRaw`SELECT id FROM "Project" WHERE id = ${projectId} FOR UPDATE`;
+}
+
+/**
  * A row about to be deleted outright, as the GitHub sign-in's disconnect deletes its `Repository`, takes no choice with
  * it: where it was the project's default and another row represents the same repository, that row holds the choice from
  * now on, and where none does the choice is cleared rather than left naming a row that is gone. Called before the
- * delete, while the row can still say which repository it was.
+ * delete, in its transaction, while the row can still say which repository it was.
  */
 export async function transferDefaultRepository(db: Database, projectId: string | null, rowId: string) {
   if (!projectId) return;
+  await holdProjectDefault(db, projectId);
   const project = await db.project.findUnique({ where: { id: projectId }, select: { agentDefaultRepositoryId: true } });
   if (project?.agentDefaultRepositoryId !== rowId) return;
   const key = await savedRepositoryKey(db, projectId, rowId);
   // Not `distinct`, which answers with the sign-in's row: the row that stays is wanted, and that is the other one.
   const successor = key ? (await connectedRows(db, projectId)).find(row => row.key === key && row.repository.id !== rowId) : undefined;
-  await db.project.update({ where: { id: projectId }, data: { agentDefaultRepositoryId: successor?.repository.id ?? null } });
+  // Written only while the choice is still this row, so nothing else's choice is written over even without the hold.
+  await db.project.updateMany({ where: { id: projectId, agentDefaultRepositoryId: rowId },
+    data: { agentDefaultRepositoryId: successor?.repository.id ?? null } });
 }
 
 /** One repository connected twice, by the GitHub sign-in and as a connection, is one repository: the sign-in's row wins. */

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { Permission, checkUserPermission } from '@/lib/permissions';
-import { projectRepositoryState } from '@/lib/agent-repository';
+import { holdProjectDefault, projectRepositoryState } from '@/lib/agent-repository';
 
 type Context = { params: Promise<{ projectId: string }> };
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -30,6 +30,9 @@ export async function PATCH(request: NextRequest, context: Context) {
   const body = z.object({ repositoryId: z.string().min(1).max(128) }).strict().safeParse(await request.json().catch(() => null));
   if (!body.success) return reply({ error: 'Invalid request' }, 400);
   return prisma.$transaction(async tx => {
+    // Before the project's repositories are read: a disconnect running at the same time takes the same hold, so the
+    // choice saved here is never a row that disconnect has removed, and it is never written over by its hand-over.
+    await holdProjectDefault(tx, scope.project.id);
     const state = await projectRepositoryState(tx, scope.project.id);
     if (!state.repositories.some(repository => repository.id === body.data.repositoryId)) {
       return reply({ error: 'Choose an active repository connected to this project.' }, 400);
