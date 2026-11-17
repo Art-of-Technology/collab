@@ -16,11 +16,11 @@ interface Runner { id: string; name: string; ownerId: string; ownerName: string 
 interface Props {
   workspaceId: string;
   me: string;
-  /** The people a runner can be admitted for: filled only for the workspace's owner. */
+  /** The people a runner can be connected for: filled only for the workspace's owner. */
   people: { id: string; name: string }[];
 }
 
-/** The Runners tab of the Agents page: admit the runner that shows a code, see the admitted ones, remove one. */
+/** The Runners tab of the Agents page: connect the runner that shows a code, see the connected ones, remove one. */
 export function AgentRunnersView({ workspaceId, me, people }: Props) {
   const { toast } = useToast();
   const url = `/api/workspaces/${workspaceId}/agent-runners`;
@@ -56,13 +56,13 @@ export function AgentRunnersView({ workspaceId, me, people }: Props) {
     }
   };
 
-  const admit = async (event: React.FormEvent) => {
+  const connect = async (event: React.FormEvent) => {
     event.preventDefault();
     const body = await call(fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, ...(ownerId !== me && { ownerId }) }) }), 'The runner could not be admitted.');
+      body: JSON.stringify({ code, ...(ownerId !== me && { ownerId }) }) }), 'The runner could not be connected.');
     if (!body) return;
     setCode('');
-    toast({ title: `${body.runner.name} is admitted`, description: body.replaced.length
+    toast({ title: `${body.runner.name} is connected`, description: body.replaced.length
       ? `It replaces ${body.replaced.join(', ')}, whose tokens were revoked.` : 'It fetches its seats the next time it asks.' });
   };
 
@@ -88,8 +88,8 @@ export function AgentRunnersView({ workspaceId, me, people }: Props) {
       <Button asChild variant="outline"><Link href="/docs/agents/runner-contract#a-runner-fetches-its-seats">How a runner pairs</Link></Button>
     </div>
 
-    <form onSubmit={admit} className="space-y-3 rounded-lg border p-4">
-      <h2 className="font-medium">Admit a runner</h2>
+    <form onSubmit={connect} className="space-y-3 rounded-lg border p-4">
+      <h2 className="font-medium">Connect a runner</h2>
       <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
         <li>Start the pairing on the runner&apos;s machine. It shows a code such as <code>K7QF-M2XD</code>.</li>
         <li>Type the code here within 15 minutes. Only type a code your own runner shows you.</li>
@@ -106,16 +106,16 @@ export function AgentRunnersView({ workspaceId, me, people }: Props) {
             <SelectContent>{people.map(person => <SelectItem key={person.id} value={person.id}>{person.id === me ? `${person.name} (me)` : person.name}</SelectItem>)}</SelectContent>
           </Select>
         </div>}
-        <Button type="submit" disabled={busy || code.replace(/[^a-z0-9]/gi, '').length < 8}>Admit</Button>
+        <Button type="submit" disabled={busy || code.replace(/[^a-z0-9]/gi, '').length < 8}>Connect</Button>
       </div>
-      <p className="text-xs text-muted-foreground">A person has one runner per workspace. Admitting another removes the one before and revokes the tokens it fetched.</p>
+      <p className="text-xs text-muted-foreground">A person has one runner per workspace. Connecting another removes the one before and revokes the tokens it fetched.</p>
     </form>
 
     {runners === null ? <p className="text-sm text-muted-foreground">Loading...</p> : runners.length === 0
-      ? <p className="rounded-lg border p-6 text-sm text-muted-foreground">No runner is admitted yet.</p>
+      ? <p className="rounded-lg border p-6 text-sm text-muted-foreground">No runner is connected yet.</p>
       : <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-left text-sm">
-          <thead><tr className="border-b"><th className="p-3">Runner</th><th className="p-3">Runs under</th><th className="p-3">Seats</th><th className="p-3">Admitted</th><th className="p-3">Last asked</th><th className="p-3"><span className="sr-only">Actions</span></th></tr></thead>
+          <thead><tr className="border-b"><th className="p-3">Runner</th><th className="p-3">Runs under</th><th className="p-3">Seats</th><th className="p-3">Connected</th><th className="p-3">Last asked</th><th className="p-3"><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>{runners.map(runner => <tr key={runner.id} className="border-b last:border-0">
             <th scope="row" className="p-3 font-medium">{runner.name}</th>
             <td className="p-3">{runner.ownerName ?? 'Unknown'}{runner.ownerId === me && ' (me)'}</td>
@@ -150,7 +150,7 @@ export function AgentRunnersView({ workspaceId, me, people }: Props) {
         <AlertDialogHeader>
           <AlertDialogTitle>Remove {removing?.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Its credential stops working and every token it fetched is revoked at once. Its seats show &quot;No runner yet&quot; until another runner is admitted for the same person.
+            Its credential stops working and every token it fetched is revoked at once. Its seats show &quot;No runner yet&quot; until another runner is connected for the same person.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

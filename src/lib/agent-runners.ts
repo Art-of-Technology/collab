@@ -25,7 +25,7 @@ const inWorkspace = (workspaceId: string, userId: string) =>
   ({ id: workspaceId, OR: [{ ownerId: userId }, { members: { some: { userId, status: true } } }] });
 
 /**
- * A runner asks to be admitted. It gets its credential now and a short code to show; the credential fetches nothing
+ * A runner asks to be connected. It gets its credential now and a short code to show; the credential fetches nothing
  * until a person has typed the code into Collab, so nothing secret is ever typed or shown to a person.
  */
 export async function startPairing(name: string) {
@@ -35,7 +35,7 @@ export async function startPairing(name: string) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('agent-runner-pairing'))`;
     await tx.agentRunner.deleteMany({ where: { workspaceId: null, pairingExpiresAt: { lt: now } } });
     if (await tx.agentRunner.count({ where: { workspaceId: null } }) >= PAIRING_CAP) {
-      throw new HandoffError('pairing_busy', 'Too many runners are waiting to be admitted; try again in a few minutes', 429);
+      throw new HandoffError('pairing_busy', 'Too many runners are waiting to be connected; try again in a few minutes', 429);
     }
     const credential = `collab_rc_${randomBytes(32).toString('base64url')}`;
     const code = Array.from({ length: 8 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
@@ -68,7 +68,7 @@ export async function admitRunner(input: { workspaceId: string; actorId: string;
     const workspace = await tx.workspace.findFirst({ where: inWorkspace(workspaceId, actorId), select: { ownerId: true } });
     if (!workspace) throw new HandoffError('not_found', 'Workspace not found', 404);
     if (ownerId !== actorId) {
-      if (workspace.ownerId !== actorId) throw new HandoffError('owner_only', "Only the workspace's owner admits a runner for someone else", 403);
+      if (workspace.ownerId !== actorId) throw new HandoffError('owner_only', "Only the workspace's owner connects a runner for someone else", 403);
       // A person: an agent's service account has no email and no logins a runner could run under.
       if (!await tx.user.findFirst({ where: { id: ownerId, email: { not: null }, OR: [{ ownedWorkspaces: { some: { id: workspaceId } } },
         { workspaceMemberships: { some: { workspaceId, status: true } } }] }, select: { id: true } })) {

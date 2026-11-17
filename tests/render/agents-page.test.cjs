@@ -180,7 +180,7 @@ test('Runners tab: any member of the workspace opens it, and a seat with no runn
   assert.match(text(html), /Runners of ws for alice, people: Alice/);
   const waiting = await page({ view: { workspace: { id: 'ws', slug: 'team' }, seats: [{ ...seats[0], noRunner: true }, seats[1]] } }).open();
   assert.equal(text(waiting).match(/No runner yet/g).length, 1);
-  assert.match(waiting, /No runner yet: its work waits until its owner admits a <a[^>]*href="\/team\/agents\/runners"[^>]*>runner<\/a>/);
+  assert.match(waiting, /No runner yet: its work waits until its owner connects a <a[^>]*href="\/team\/agents\/runners"[^>]*>runner<\/a>/);
   assert.doesNotMatch(await page().open(), /No runner yet/);
 });
 

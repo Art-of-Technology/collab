@@ -42,32 +42,32 @@ async function render(people, first) {
   return root;
 }
 
-test('a member types the code their runner shows and admits it for themselves; the list shows what was admitted', async () => {
+test('a member types the code their runner shows and connects it for themselves; the list shows what was connected', async () => {
   const root = await render([], [200, { owner: false, runners: [] }]);
   try {
     assert.deepEqual(calls, [['/api/workspaces/w/agent-runners', 'GET', undefined]]);
-    assert.match(document.body.textContent, /No runner is admitted yet/);
+    assert.match(document.body.textContent, /No runner is connected yet/);
     assert.equal(document.querySelector('select'), null, 'a member cannot choose whose runner it is');
-    assert.equal(button('Admit').disabled, true, 'no code yet');
+    assert.equal(button('Connect').disabled, true, 'no code yet');
     await type(document.querySelector('#runner-code'), 'k7qf-m2xd');
-    assert.equal(button('Admit').disabled, false);
+    assert.equal(button('Connect').disabled, false);
     answers = [[201, { runner: { id: 'r1', name: 'mac', ownerId: 'me' }, replaced: ['old-mac'] }], [200, { owner: false, runners: [mac] }]];
-    await click(button('Admit'));
+    await click(button('Connect'));
     assert.deepEqual(calls.slice(1), [['/api/workspaces/w/agent-runners', 'POST', { code: 'k7qf-m2xd' }], ['/api/workspaces/w/agent-runners', 'GET', undefined]]);
-    assert.deepEqual([notices.at(-1).title, notices.at(-1).description], ['mac is admitted', 'It replaces old-mac, whose tokens were revoked.']);
+    assert.deepEqual([notices.at(-1).title, notices.at(-1).description], ['mac is connected', 'It replaces old-mac, whose tokens were revoked.']);
     assert.equal(document.querySelector('#runner-code').value, '');
     assert.deepEqual([...document.querySelectorAll('tbody tr')].map(row => [...row.children].slice(0, 3).map(cell => cell.textContent)), [['mac', 'Ada (me)', '2']]);
     assert.match(document.querySelector('tbody tr').textContent, /Never/);
   } finally { await React.act(async () => root.unmount()); }
 });
 
-test('the owner admits a runner for someone else, a refusal is shown as it was given, and removing asks first', async () => {
+test('the owner connects a runner for someone else, a refusal is shown as it was given, and removing asks first', async () => {
   const root = await render([{ id: 'me', name: 'Ada' }, { id: 'u2', name: 'Grace' }], [200, { owner: true, runners: [mac] }]);
   try {
     await choose(document.querySelector('select'), 'u2');
     await type(document.querySelector('#runner-code'), 'AAAA-BBBB');
     answers = [[404, { error: 'No runner is waiting with this code.', code: 'code_not_found' }]];
-    await click(button('Admit'));
+    await click(button('Connect'));
     assert.deepEqual(calls.at(-1), ['/api/workspaces/w/agent-runners', 'POST', { code: 'AAAA-BBBB', ownerId: 'u2' }]);
     assert.deepEqual([notices.at(-1).variant, notices.at(-1).description], ['destructive', 'No runner is waiting with this code.']);
 
@@ -78,6 +78,6 @@ test('the owner admits a runner for someone else, a refusal is shown as it was g
     await click(button('Remove runner'));
     assert.deepEqual(calls.slice(-2), [['/api/workspaces/w/agent-runners/r1', 'DELETE', undefined], ['/api/workspaces/w/agent-runners', 'GET', undefined]]);
     assert.deepEqual([notices.at(-1).title, notices.at(-1).description], ['mac is removed', '2 tokens it fetched were revoked.']);
-    assert.match(document.body.textContent, /No runner is admitted yet/);
+    assert.match(document.body.textContent, /No runner is connected yet/);
   } finally { await React.act(async () => root.unmount()); }
 });

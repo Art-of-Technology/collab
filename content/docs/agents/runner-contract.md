@@ -317,7 +317,7 @@ Collab applies no rate limit of its own to these calls beyond `request_cap`.
 
 ## A runner fetches its seats
 
-A runner can get its seats' tokens from Collab instead of having them entered by hand. These two calls are under `/api/runner`, not `/api/apps/auth`, and neither takes a seat's token. People's steps are on [Admit a runner](/docs/agents/admit-a-runner).
+A runner can get its seats' tokens from Collab instead of having them entered by hand. These two calls are under `/api/runner`, not `/api/apps/auth`, and neither takes a seat's token. People's steps are on [Connect a runner](/docs/agents/admit-a-runner).
 
 | Call | Carries | Does |
 | --- | --- | --- |
@@ -375,7 +375,7 @@ Nothing is renewed for a seat run by hand. Those tokens keep the expiry they wer
 
 | Error | When |
 | --- | --- |
-| `403 runner_pending` | No person has admitted the runner yet. Ask again. |
+| `403 runner_pending` | No person has connected the runner yet. Ask again. |
 | `401 runner_refused` | The credential is unknown, the runner was removed, replaced or said goodbye, its person left the workspace, or the pairing ran out after 15 minutes. Stop every seat and pair again. |
 | `429 pairing_busy` | 50 pairings are waiting on this server. Try `pair` again in a few minutes. |
 
@@ -391,10 +391,10 @@ curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" https://collab.exampl
 { "revokedTokens": 2 }
 ```
 
-- Every token this runner fetched is revoked at once, and the credential is refused from then on: `401 runner_refused`. Its seats show no runner until a runner is admitted again.
+- Every token this runner fetched is revoked at once, and the credential is refused from then on: `401 runner_refused`. Its seats show no runner until a runner is connected again.
 - Saying it twice, or with an unknown credential, is `401 runner_refused`.
 - A machine that is lost says nothing. Expiry is the backstop for that: its tokens stop within 30 days.
-- A runner that comes back pairs again and is admitted again.
+- A runner that comes back pairs again and is connected again.
 
 A runner credential does nothing else. It reads no issue and writes nothing, and every other call refuses it.
 

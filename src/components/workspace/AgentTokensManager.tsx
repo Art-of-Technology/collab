@@ -330,7 +330,7 @@ export default function AgentTokensManager({ workspaceId, workspaces, projects, 
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <Label htmlFor="agent-token-by-runner">Run by the owner&apos;s runner
-                    <span className="block text-xs font-normal text-muted-foreground">No token is made or shown. The runner admitted for the owner fetches it. The seat needs an owner.</span>
+                    <span className="block text-xs font-normal text-muted-foreground">No token is made or shown. The runner connected for the owner fetches it. The seat needs an owner.</span>
                   </Label>
                   <Switch id="agent-token-by-runner" checked={byRunner} onCheckedChange={setByRunner} />
                 </div>

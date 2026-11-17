@@ -345,11 +345,11 @@ With `--yes` the missing seats are created, each owned by the runner's person an
 The command stops after the preview, and creates nothing, when:
 
 - a status the switch needs is missing a group (`status_groups`, with `missingGroups`);
-- no runner is admitted to the workspace (`no_runner`), because nothing would fetch the seats' tokens;
-- several runners are admitted and none of them is yours (`runner_choice`);
+- no runner is connected to the workspace (`no_runner`), because nothing would fetch the seats' tokens;
+- several runners are connected and none of them is yours (`runner_choice`);
 - the project is archived (`project_archived`), whose seats keep no fetched token.
 
-The apply answers `setup_blocked` in each of those cases. A runner that is admitted but away does not stop it: the seats are created and show no runner until it asks. A run that is open in the project does not stop it either; the switch to seats does not need runs to be closed. Running the command twice creates nothing the second time: the seats are there, the project is already on seats, and an issue that belongs to a seat is no longer a claim to carry.
+The apply answers `setup_blocked` in each of those cases. A runner that is connected but away does not stop it: the seats are created and show no runner until it asks. A run that is open in the project does not stop it either; the switch to seats does not need runs to be closed. Running the command twice creates nothing the second time: the seats are there, the project is already on seats, and an issue that belongs to a seat is no longer a claim to carry.
 
 ## Next
 
