@@ -8,8 +8,10 @@ const { seatsDatabase } = require('./seats-db.cjs');
 const owner = 'cowner00001', person = 'cperson0001';
 // A: one repository from the GitHub sign-in. B: none. C: two. D: the same repository twice, once through the sign-in
 // and once as a connection. E: the same path at two servers, which is two repositories. F: one connection and nothing
-// else. G: three connections, one of which is connected a second time during the test.
-const A = 'cprojecta001', B = 'cprojectb001', C = 'cprojectc001', D = 'cprojectd001', E = 'cprojecte001', F = 'cprojectf001', G = 'cprojectg001';
+// else. G: three connections, one of which is connected a second time during the test. H: two servers an administrator
+// configured which differ only in the case of their path.
+const A = 'cprojecta001', B = 'cprojectb001', C = 'cprojectc001', D = 'cprojectd001', E = 'cprojecte001', F = 'cprojectf001', G = 'cprojectg001',
+  H = 'cprojecth001';
 const scopes = ['issues:read', 'issues:write', 'user:read'];
 const ago = seconds => new Date(Date.now() - seconds * 1000);
 
@@ -21,7 +23,7 @@ test('the repository of the issue\'s project comes with the checkout and the run
     await prisma.user.createMany({ data: [owner, person].map(id => ({ id, name: id })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
     await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: person } });
-    for (const [id, prefix] of [[A, 'AA'], [B, 'BB'], [C, 'CC'], [D, 'DD'], [E, 'EE'], [F, 'FF'], [G, 'GG']]) {
+    for (const [id, prefix] of [[A, 'AA'], [B, 'BB'], [C, 'CC'], [D, 'DD'], [E, 'EE'], [F, 'FF'], [G, 'GG'], [H, 'HH']]) {
       await prisma.project.create({ data: { id, workspaceId: 'w', name: `Project ${prefix}`, slug: id, issuePrefix: prefix } });
       await prisma.projectStatus.createMany({ data: ['to_do', 'in_progress', 'done'].map((name, order) => ({ id: `${id}-${name}`, projectId: id, name, displayName: name,
         order, category: name, isFinal: name === 'done' })) });
@@ -49,6 +51,12 @@ test('the repository of the issue\'s project comes with the checkout and the run
     await connection(G, 'github', 'ACME/seven');
     await connection(G, 'gitlab', 'acme/eight');
     await connection(G, 'gitlab', 'acme/nine');
+    // H is at two servers of one host whose addresses differ only in the case of their path: an administrator
+    // configures each as its own instance, and the same path at each is two repositories. The third is connected at
+    // the second server and switched on during the test.
+    await connection(H, 'gitlab', 'acme/ten', { baseUrl: 'https://git.acme.test/Team', url: 'https://git.acme.test/Team/acme/ten' });
+    await connection(H, 'gitlab', 'acme/ten', { baseUrl: 'https://git.acme.test/team', externalId: `${H}-lower`, url: 'https://git.acme.test/team/acme/ten' });
+    await connection(H, 'gitlab', 'acme/eleven', { baseUrl: 'https://git.acme.test/team', url: 'https://git.acme.test/team/acme/eleven', isActive: false });
     for (const [id, slug] of [['agent-app', 'collab-agent'], ['person-app', 'collab-cli']]) {
       await prisma.app.create({ data: { id, name: slug, slug, publisherId: 'system', status: 'PUBLISHED', visibility: 'PRIVATE', isSystemApp: true,
         scopes: { create: scopes.map(scope => ({ scope })) } } });
@@ -94,6 +102,7 @@ test('the repository of the issue\'s project comes with the checkout and the run
   };
   const devA = await seat('dev-a', A), devB = await seat('dev-b', B), leadB = await seat('lead-b', B, 'lead'), devC = await seat('dev-c', C), devD = await seat('dev-d', D);
   const leadA = await seat('lead-a', A, 'lead'), devE = await seat('dev-e', E), devF = await seat('dev-f', F), devG = await seat('dev-g', G);
+  const devH = await seat('dev-h', H);
   const personToken = 'collab_person_token';
   await raw.appToken.create({ data: { appId: 'person-app', workspaceId: 'w', userId: person, installationId: null,
     accessToken: Buffer.from(personToken).toString('base64'), scopes } });
@@ -265,6 +274,27 @@ test('the repository of the issue\'s project comes with the checkout and the run
     const left = await issue(devG);
     const [refused, told] = await checkout(devG, left);
     assert.deepEqual([refused, told.error], [409, 'repository_required']);
+    assert.equal(await raw.agentRun.count({ where: { issueId: left.id } }), 0);
+  });
+
+  await t.test('two servers whose addresses differ only in the case of their path are two servers, saved default and all', async () => {
+    const upper = await raw.gitConnection.findFirstOrThrow({ where: { projectId: H, baseUrl: 'https://git.acme.test/Team' } });
+    const lower = await raw.gitConnection.findFirstOrThrow({ where: { projectId: H, baseUrl: 'https://git.acme.test/team', repositoryPath: 'acme/ten' } });
+    // Taken for one repository, the project would have one and the checkout would name it with nobody choosing.
+    const first = await issue(devH);
+    const [status, body] = await checkout(devH, first);
+    assert.deepEqual([status, body.error], [409, 'repository_required']);
+    assert.equal(await raw.agentRun.count({ where: { issueId: first.id } }), 0);
+    // And a default saved as a row of one server never resolves to the same path at the other: the administrator chose
+    // a repository at the server they configured, and switching that row off leaves the choice naming nothing.
+    await raw.gitConnection.updateMany({ where: { projectId: H, repositoryPath: 'acme/eleven' }, data: { isActive: true } });
+    await raw.project.update({ where: { id: H }, data: { agentDefaultRepositoryId: upper.id } });
+    assert.equal((await checkout(devH, await issue(devH)))[1].repository.id, upper.id);
+    await raw.gitConnection.update({ where: { id: upper.id }, data: { isActive: false } });
+    const left = await issue(devH);
+    const [refused, told] = await checkout(devH, left);
+    assert.deepEqual([refused, told.error, told.repository], [409, 'repository_required', undefined]);
+    assert.notEqual(told.repository?.id, lower.id);
     assert.equal(await raw.agentRun.count({ where: { issueId: left.id } }), 0);
   });
 

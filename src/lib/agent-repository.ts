@@ -31,8 +31,12 @@ type Database = Prisma.TransactionClient | typeof prisma;
 type Connected = { key: string; repository: SeatRepository };
 
 // The server is part of what makes it the same repository, as it is in `GitConnection`'s own key: the same path at two
-// servers is two repositories, and a project that has both picks between them rather than cloning the older row.
-const repositoryKey = (provider: string, server: string, path: string) => [provider, server, path].map(part => part.toLowerCase()).join(' ');
+// servers is two repositories, and a project that has both picks between them rather than cloning the older row. It is
+// compared letter for letter, as `resolveInstance` and that key both compare it, because a URL's path is case-sensitive:
+// two configured instances that differ only in the case of theirs are two servers here as they are everywhere else. The
+// path at the provider is compared without case, as every provider Collab connects to reads it that way, so the same
+// repository connected twice is one; the provider is stored in either case by the client and is folded with it.
+const repositoryKey = (provider: string, server: string, path: string) => [provider.toLowerCase(), server, path.toLowerCase()].join(' ');
 
 /**
  * Every active row of the project, the GitHub sign-in's first. A credential is never selected: `Repository.accessToken`
