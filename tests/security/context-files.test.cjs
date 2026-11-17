@@ -129,14 +129,19 @@ function fixture(userId = 'alice', environment = CLOUD) {
     }),
     { params: Promise.resolve({ id }) },
   );
-  const upload = (fields) => {
+  // A browser says how long an upload is before it sends it, so these requests do too.
+  async function upload(fields, { length = true, declared } = {}) {
     const form = new FormData();
     for (const [key, value] of Object.entries(fields)) {
       if (key === 'file') form.append('file', new Blob([value.bytes], { type: value.type ?? '' }), value.name);
       else form.append(key, value);
     }
-    return call(FILES, 'POST', { body: form });
-  };
+    const serialized = new Request('https://example.test', { method: 'POST', body: form });
+    const raw = Buffer.from(await serialized.arrayBuffer());
+    const headers = { 'content-type': serialized.headers.get('content-type') };
+    if (length) headers['content-length'] = String(declared ?? raw.length);
+    return call(FILES, 'POST', { raw, headers });
+  }
   return { ws, folders, files, state, addFolder, addFile, call, upload, stored, destroyed, uploads, signed, fetched };
 }
 
@@ -179,7 +184,7 @@ test('a file goes into a folder its workspace reads, with the type worked out fr
   assert.equal((await f.upload({ file: { bytes: PDF, name: 'plan.pdf' } })).status, 400);
   assert.equal((await f.upload({ folderId: 'ideation', name: 'plan.pdf' })).status, 400);
   assert.equal((await f.upload({ folderId: 'ideation', file: { bytes: Buffer.alloc(0), name: 'empty.txt' } })).status, 400);
-  assert.equal((await f.call(FILES, 'POST', { raw: 'not a form' })).status, 400);
+  assert.equal((await f.call(FILES, 'POST', { raw: 'not a form', headers: { 'content-type': 'text/plain', 'content-length': '10' } })).status, 400);
   assert.equal(f.stored.size, 1);
 });
 
@@ -251,6 +256,15 @@ test('a file over the stated limit is turned away before it is stored', async ()
   const refused = await f.upload({ folderId: 'ideation', file: { bytes: oversize, name: 'huge.pdf' } });
   assert.equal(refused.status, 413);
   assert.match((await refused.json()).error, /at most 25 MB/);
+
+  // A request that understates its length is weighed again on the bytes that arrived.
+  const lying = await f.upload({ folderId: 'ideation', file: { bytes: oversize, name: 'huge.pdf' } }, { declared: 100 });
+  assert.equal(lying.status, 413);
+
+  // A body that does not say how long it is is never read, so nothing unbounded is buffered.
+  const silent = await f.upload({ folderId: 'ideation', file: { bytes: PDF, name: 'plan.pdf' } }, { length: false });
+  assert.equal(silent.status, 411);
+
   assert.equal(f.stored.size, 0);
   assert.equal(f.files.length, 0);
 });

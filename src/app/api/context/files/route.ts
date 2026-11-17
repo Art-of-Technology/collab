@@ -27,8 +27,14 @@ export const POST = withRateLimit(async function (request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
-    const declared = Number(request.headers.get('content-length'));
-    if (Number.isFinite(declared) && declared > MAX_CONTEXT_FILE_BYTES + ENVELOPE_ALLOWANCE) {
+    // The size is told before the body is read, so nothing unbounded is ever buffered. A body that
+    // does not say how long it is cannot be weighed before it arrives, so it is not read at all.
+    const length = request.headers.get('content-length');
+    const declared = length === null ? NaN : Number(length);
+    if (!Number.isFinite(declared) || declared <= 0) {
+      return NextResponse.json({ error: 'An upload must say how long it is' }, { status: 411 });
+    }
+    if (declared > MAX_CONTEXT_FILE_BYTES + ENVELOPE_ALLOWANCE) {
       return NextResponse.json(
         { error: `A file is at most ${Math.round(MAX_CONTEXT_FILE_BYTES / (1024 * 1024))} MB` },
         { status: 413 },
