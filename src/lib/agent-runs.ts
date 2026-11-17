@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { HandoffError, LEAD_CAP, NOT_DONE, fromLead, seatFor, seatWriteGuard } from '@/lib/agent-seats';
+import { repositoryForSeat, repositoryOfIssue } from '@/lib/agent-repository';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
@@ -199,7 +200,8 @@ async function markLost(workspaceId: string) {
 /**
  * Rule 4: take an issue. One run is open per issue, and only its assignee starts one: a seat on an issue of its
  * project, with a 60 second lease, or a person, with none. An agent token that is not a seat starts none. The issue
- * moves to its project's first "in progress" status unless it is in one or the project has none.
+ * moves to its project's first "in progress" status unless it is in one or the project has none. The reply names the
+ * repository of the issue's project, so the runner needs none of its own; `repositoryForSeat` says when it is refused.
  */
 export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, input: z.infer<typeof checkoutSchema>) {
   const me = context.user.id;
@@ -222,10 +224,13 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
       const seat = await seatFor(tx, context);
       // Runs are for seats and people; an agent without a seat would hold a run without a lease.
       if (!seat && context.app.slug === AGENT_APP_SLUG) throw new HandoffError('seat_required', 'An agent token takes an issue only as a seat', 403);
+      // Before any run is opened: a seat whose role needs a repository and whose project works none out is refused here,
+      // so no session starts with nowhere to work.
+      const repository = await repositoryForSeat(tx, issue.projectId, seat);
       const open = await tx.agentRun.findFirst({ where: { issueId: issue.id, endedAt: null }, select: { ...RUN, userId: true } });
       if (open) {
         // A person has no lease to lose: starting again gives the run that is open, and changes nothing.
-        if (open.userId === me && !open.leaseUntil) { const { userId: _, ...run } = open; return { run }; }
+        if (open.userId === me && !open.leaseUntil) { const { userId: _, ...run } = open; return { run, repository }; }
         if (open.state === 'lost') {
           throw new HandoffError('needs_person', 'The last run on this issue was lost: its runner confirms it stopped, or a person clears it', 409);
         }
@@ -243,7 +248,7 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
         await tx.issueActivity.create({ data: { action: 'STATUS_CHANGED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId: context.workspace.id,
           projectId: issue.projectId, fieldName: 'statusId', oldValue: issue.projectStatus?.name, newValue: status.name, oldStatusId: issue.statusId, newStatusId: status.id } });
       }
-      return { run };
+      return { run, repository };
     });
   } catch (error) {
     // The index that allows one open run per issue is the rule itself; any insert it refuses is this answer.
@@ -468,7 +473,8 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
   category: categoryOf(issue.projectStatus), ...(issue.agentRequestRole && { requestRole: issue.agentRequestRole }) });
 
 /**
- * What a fresh session needs to work an issue, in one read: the issue, the exit note of the last run that finished and
+ * What a fresh session needs to work an issue, in one read: the issue, the repository of its project (null when none is
+ * worked out or the assignee's role needs none), the exit note of the last run that finished and
  * its checked facts (the pull request, the commit it was left at, the next step; null where it gave none), the
  * comments made after that run ended (all of them when no run has finished), the issues linked as blocking it, the
  * requests linked to it (a security request with its verdict, once it has one), and for a request the issues it was
@@ -515,6 +521,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   return {
     issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, description: issue.description, type: issue.type, priority: issue.priority, projectId: issue.projectId,
       status: issue.projectStatus?.name ?? null, category: categoryOf(issue.projectStatus), assigneeId: issue.assigneeId, agentRequestRole: issue.agentRequestRole },
+    repository: await repositoryOfIssue(prisma, issue.projectId, issue.assigneeId),
     lastExitNote: last?.note ?? null,
     lastExitFacts: last ? Object.fromEntries(FACTS.map(name => [name, facts.runId === last.id && typeof facts[name] === 'string' ? facts[name] : null])) : null,
     commentsSince,
