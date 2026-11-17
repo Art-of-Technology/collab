@@ -65,3 +65,14 @@ test('a held-open connection no longer keeps the process running until Docker ki
   // Without it, the graceful close waits for that connection and Docker's kill is what ends the container.
   assert.equal(await stop(dir, 'off'), null, 'the fixture no longer reproduces the stop that never ends');
 });
+
+test('only a number configures the grace period; anything else leaves it at two seconds', t => {
+  const { shutdownGraceMs } = require(path.join(fixture(t), 'watchdog.cjs'));
+  const before = process.env.COLLAB_SHUTDOWN_GRACE_MS;
+  t.after(() => { if (before === undefined) delete process.env.COLLAB_SHUTDOWN_GRACE_MS; else process.env.COLLAB_SHUTDOWN_GRACE_MS = before; });
+  for (const [configured, expected] of [[undefined, 2000], ['', 2000], ['  ', 2000], ['soon', 2000], ['-1', 2000], ['0', 0], ['500', 500]]) {
+    if (configured === undefined) delete process.env.COLLAB_SHUTDOWN_GRACE_MS;
+    else process.env.COLLAB_SHUTDOWN_GRACE_MS = configured;
+    assert.equal(shutdownGraceMs(), expected, `COLLAB_SHUTDOWN_GRACE_MS=${JSON.stringify(configured)}`);
+  }
+});

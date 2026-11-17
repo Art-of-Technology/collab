@@ -13,8 +13,10 @@ const EXIT_CODES = { SIGTERM: 143, SIGINT: 130 } as const;
 
 /** How long a stop waits for the graceful close before the process ends itself. */
 export function shutdownGraceMs(): number {
-  const configured = Number(process.env.COLLAB_SHUTDOWN_GRACE_MS);
-  return Number.isFinite(configured) && configured >= 0 ? configured : 2000;
+  // An empty or unreadable value is no setting: deployments pass every variable through, set or not.
+  const configured = process.env.COLLAB_SHUTDOWN_GRACE_MS?.trim();
+  const ms = configured ? Number(configured) : NaN;
+  return Number.isFinite(ms) && ms >= 0 ? ms : 2000;
 }
 
 /** Arm the watchdog for this process. Called once, from `register()` in src/instrumentation.ts. */
