@@ -35,6 +35,8 @@ test('runs: checkout, the lease, lost runs and who may clear them', async t => {
       await prisma.project.create({ data: { id, workspaceId: 'w', name: id, slug: id, issuePrefix: id === A ? 'AA' : 'BB' } });
       await prisma.projectStatus.createMany({ data: Object.entries(statuses).map(([name, order]) => ({ id: `${id}-${name}`, projectId: id, name, displayName: name,
         order, isFinal: name === 'done', isActive: name !== 'old_progress' })) });
+      // Both projects have their repository connected, as a project whose seats take issues does. It is `tests/agents/runs-repository.test.cjs` that works it out.
+      await prisma.repository.create({ data: { projectId: id, githubRepoId: id, owner: 'acme', name: id, fullName: `acme/${id}`, webhookSecret: 'secret' } });
     }
     for (const [id, slug] of [['agent-app', 'collab-agent'], ['person-app', 'collab-cli']]) {
       await prisma.app.create({ data: { id, name: slug, slug, publisherId: 'system', status: 'PUBLISHED', visibility: 'PRIVATE', isSystemApp: true,

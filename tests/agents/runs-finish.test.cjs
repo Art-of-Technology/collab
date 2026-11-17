@@ -30,6 +30,8 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
       await prisma.project.create({ data: { id, workspaceId: 'w', name: id, slug: id, issuePrefix: id.slice(8, 9).repeat(2).toUpperCase() } });
       await prisma.projectStatus.createMany({ data: Object.entries(statuses).map(([name, order]) => ({ id: `${id}-${name}`, projectId: id, name, displayName: name,
         order, isFinal: name === 'done', isActive: !name.startsWith('old_') })) });
+      // Every project has its repository connected, as a project whose seats take issues does. It is `tests/agents/runs-repository.test.cjs` that works it out.
+      await prisma.repository.create({ data: { projectId: id, githubRepoId: id, owner: 'acme', name: id, fullName: `acme/${id}`, webhookSecret: 'secret' } });
     }
     for (const [id, slug] of [['agent-app', 'collab-agent'], ['person-app', 'collab-cli']]) {
       await prisma.app.create({ data: { id, name: slug, slug, publisherId: 'system', status: 'PUBLISHED', visibility: 'PRIVATE', isSystemApp: true,
@@ -139,6 +141,8 @@ test('runs: finishing, the exit note and where the issue goes', async t => {
     assert.deepEqual(Object.fromEntries(project.statuses.map(status => [status.name, status.category])),
       { backlog: 'todo', todo: 'todo', in_progress: 'in_progress', in_review: 'in_review', done: 'done', cancelled: 'done' });
     const statusId = name => project.statuses.find(status => status.name === name).id;
+    // A project made through the API has no repository: its seat gets one connected, as a person would before the seat runs.
+    await raw.repository.create({ data: { projectId: project.id, githubRepoId: 'df', owner: 'acme', name: 'data-flow', fullName: 'acme/data-flow', webhookSecret: 'secret' } });
     const dev = await seat('dev-df', project.id);
     const target = await issue(dev, { statusId: statusId('backlog') });
     const run = await checkout(dev, target);

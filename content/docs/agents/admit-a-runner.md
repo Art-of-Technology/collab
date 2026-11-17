@@ -86,4 +86,6 @@ A fetched token is also revoked at once when:
 
 ## Next
 
+[Bring your own runner](/docs/agents/bring-your-own-runner) gives a project its four seats from here, with a prompt you paste into your coding agent.
+
 The two calls a runner makes are under [A runner fetches its seats](/docs/agents/runner-contract#a-runner-fetches-its-seats).
