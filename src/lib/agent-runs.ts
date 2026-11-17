@@ -224,18 +224,19 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
       const seat = await seatFor(tx, context);
       // Runs are for seats and people; an agent without a seat would hold a run without a lease.
       if (!seat && context.app.slug === AGENT_APP_SLUG) throw new HandoffError('seat_required', 'An agent token takes an issue only as a seat', 403);
-      // Before any run is opened: a seat whose role needs a repository and whose project works none out is refused here,
-      // so no session starts with nowhere to work.
-      const repository = await repositoryForSeat(tx, issue.projectId, seat);
       const open = await tx.agentRun.findFirst({ where: { issueId: issue.id, endedAt: null }, select: { ...RUN, userId: true } });
-      if (open) {
-        // A person has no lease to lose: starting again gives the run that is open, and changes nothing.
-        if (open.userId === me && !open.leaseUntil) { const { userId: _, ...run } = open; return { run, repository }; }
+      // A person has no lease to lose: starting again gives the run that is open, and changes nothing.
+      const again = !!open && open.userId === me && !open.leaseUntil;
+      if (open && !again) {
         if (open.state === 'lost') {
           throw new HandoffError('needs_person', 'The last run on this issue was lost: its runner confirms it stopped, or a person clears it', 409);
         }
         throw new HandoffError('already_running', 'A run is already open on this issue', 409);
       }
+      // Before any run is opened, and after the run that is open has been answered for: a seat whose role needs a
+      // repository and whose project works none out is refused here, so no session starts with nowhere to work.
+      const repository = await repositoryForSeat(tx, issue.projectId, seat);
+      if (open) { const { userId: _, ...run } = open; return { run, repository }; }
       const now = new Date();
       const run = await tx.agentRun.create({ data: { workspaceId: context.workspace.id, issueId: issue.id, seatId: seat?.id, userId: me,
         runner: input.runner, generation: input.generation, leaseUntil: seat ? new Date(now.getTime() + LEASE_MS) : null }, select: RUN });
