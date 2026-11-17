@@ -53,6 +53,7 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([rootKey(initialProjectId)]));
   const [folders, setFolders] = useState<TreeFolder[]>([]);
   const [notes, setNotes] = useState<NoteItem[]>([]);
+  const [moreNotes, setMoreNotes] = useState(false);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,10 +71,11 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
     return (await readJson(await fetch(`/api/context/folders?${query}`))).folders;
   }, [workspaceId]);
 
-  const readItems = useCallback(async (projectId: string | null, folderId: string | null): Promise<{ notes: NoteItem[]; files: FileItem[] }> => {
+  const readItems = useCallback(async (projectId: string | null, folderId: string | null, offset = 0): Promise<{ notes: NoteItem[]; files: FileItem[] }> => {
     const query = new URLSearchParams(folderId
       ? { folder: folderId }
       : { workspace: workspaceId, ...(projectId && { project: projectId }) });
+    if (offset) query.set('offset', String(offset));
     return readJson(await fetch(`/api/context/items?${query}`));
   }, [workspaceId]);
 
@@ -88,6 +90,7 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
     // What was read for another folder is not this one's: nothing is listed until this read answers,
     // and another level's folders are not drawn under this one.
     setNotes([]);
+    setMoreNotes(false);
     setFiles([]);
     if (levelRead.current !== next.projectId) setFolders([]);
     levelRead.current = next.projectId;
@@ -107,6 +110,7 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
         setExpanded(current => new Set([...current, rootKey(next.projectId), ...above.map(folderKey)]));
       }
       setNotes(items.notes);
+      setMoreNotes(items.notes.length === 500);
       setFiles(items.files);
     } catch (failure) {
       if (mine !== reading.current) return;
@@ -265,13 +269,22 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
         onOpen={openRow}
         className="max-h-56 shrink-0 border-b p-2 md:max-h-none md:w-64 md:border-b-0 md:border-r"
       />
+      <div className="flex min-h-0 flex-col md:w-80 md:border-r">
       <ContextItemList
         items={items}
         selectedId={selectedFile?.id ?? null}
         onOpen={openItem}
         emptyText={openFolderId ? 'This folder is empty.' : 'Nothing here yet. Use New to make a folder.'}
-        className="shrink-0 border-b md:w-80 md:border-b-0 md:border-r"
+        className="min-h-0 flex-1 border-b"
       />
+      {moreNotes && <Button variant="ghost" disabled={busy} onClick={() => void write(async () => {
+        const mine = reading.current;
+        const next = await readItems(level.projectId, openFolderId, notes.length);
+        if (mine !== reading.current) return;
+        setNotes(current => [...current, ...next.notes]);
+        setMoreNotes(next.notes.length === 500);
+      })}>Load more notes</Button>}
+      </div>
       <section className={`min-h-0 flex-1 flex-col p-3 ${selectedFile ? 'flex' : 'hidden md:flex'}`}>
         {selectedFile
           ? <ContextFilePreview file={selectedFile} className="min-h-0 flex-1" />

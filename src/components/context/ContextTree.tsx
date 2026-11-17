@@ -132,6 +132,7 @@ export function ContextTree({ roots, folders, levelProjectId, openFolderId, expa
         aria-selected={selected}
         {...(row.hasChildren && { 'aria-expanded': row.expanded })}
         tabIndex={row.key === current ? 0 : -1}
+        onFocus={() => setFocusKey(row.key)}
         onKeyDown={event => onKeyDown(event, row)}
         onClick={() => onOpen(row)}
         className={`flex w-full items-center gap-1 rounded-md py-1.5 pr-2 text-left text-sm hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? 'bg-accent font-medium' : ''}`}

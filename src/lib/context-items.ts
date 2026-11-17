@@ -22,21 +22,23 @@ const NOTE_FIELDS = {
 } satisfies Prisma.NoteSelect;
 
 /** A Note's title is written in the editor, so it is given back as the text a reader sees. */
-async function notes(userId: string, where: Prisma.NoteWhereInput) {
+async function notes(userId: string, where: Prisma.NoteWhereInput, offset: number) {
   const rows = await prisma.note.findMany({
     where: { AND: [noteAccessWhere(userId), where] },
     select: NOTE_FIELDS,
     orderBy: [{ title: 'asc' }, { id: 'asc' }],
     take: MAX_CONTEXT_ITEMS,
+    skip: offset,
   });
   return rows.map(row => ({ ...row, title: stripHtmlToPlainText(row.title).slice(0, 300) }));
 }
 
-export async function listContextItems(userId: string, input: { workspaceId: unknown; projectId: unknown; folderId: unknown }) {
+export async function listContextItems(userId: string, input: { workspaceId: unknown; projectId: unknown; folderId: unknown; offset?: number }) {
   const folderId = optionalId(input.folderId, 'A folder');
+  const offset = input.offset ?? 0;
   if (folderId) {
     const { files } = await listContextFiles(userId, { folderId });
-    return { folderId, notes: await notes(userId, { folderId }), files };
+    return { folderId, notes: await notes(userId, { folderId }, offset), files };
   }
   const level = await resolveContextLevel(userId, input.workspaceId, input.projectId);
   // A file always lives in a folder, so the top of a level holds Notes alone. A personal Note is not
@@ -47,7 +49,7 @@ export async function listContextItems(userId: string, input: { workspaceId: unk
       folderId: null,
       scope: { in: ['WORKSPACE', 'PROJECT', 'PUBLIC'] },
       ...(level.projectId ? { projectId: level.projectId } : { workspaceId: level.workspaceId, projectId: null }),
-    }),
+    }, offset),
     files: [],
   };
 }

@@ -53,6 +53,9 @@ test('the folder tree is walked, opened and closed with the keyboard', async () 
   rows()[0].focus();
   await press('ArrowDown');
   assert.equal(focused(), 'Ideas');
+  await React.act(async () => rows()[0].focus());
+  await press('ArrowDown');
+  assert.equal(focused(), 'Ideas');
   // Right shows the folders under it, and right again steps into them.
   await press('ArrowRight');
   assert.deepEqual(rows().map(row => row.textContent), ['Workspace', 'Ideas', 'Drafts', 'Specs', 'Website']);
@@ -89,6 +92,9 @@ test('the list of a folder is walked and opened with the keyboard', async () => 
   options[0].focus();
   await press('End');
   assert.match(focused(), /^sketch\.png/);
+  await press('ArrowUp');
+  assert.match(focused(), /^Plan/);
+  await React.act(async () => options[2].focus());
   await press('ArrowUp');
   assert.match(focused(), /^Plan/);
   await press('Enter');

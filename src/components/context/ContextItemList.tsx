@@ -71,6 +71,7 @@ export function ContextItemList({ items, selectedId, onOpen, emptyText, classNam
         role="option"
         aria-selected={selected}
         tabIndex={item.id === current ? 0 : -1}
+        onFocus={() => setFocusId(item.id)}
         onKeyDown={event => onKeyDown(event, item)}
         onClick={() => onOpen(item)}
         className={`flex w-full items-center gap-3 border-b px-3 py-2 text-left hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? 'bg-accent' : ''}`}

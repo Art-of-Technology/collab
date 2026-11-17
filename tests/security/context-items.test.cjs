@@ -150,3 +150,13 @@ test('a Note in a folder that is in Trash went there with it', async () => {
   assert.equal((await f.call('?folder=binned')).status, 404);
   assert.deepEqual((await f.call('?workspace=joined')).body.notes.map(note => note.id), []);
 });
+
+test('notes beyond the first page are reachable', async () => {
+  const f = fixture();
+  for (let i = 0; i < 501; i++) f.addNote(`note-${i}`);
+  const first = await f.call('?workspace=joined');
+  const next = await f.call('?workspace=joined&offset=500');
+  assert.equal(first.body.notes.length, 500);
+  assert.deepEqual(next.body.notes.map(note => note.id), ['note-500']);
+  assert.equal((await f.call('?workspace=joined&offset=-1')).status, 400);
+});

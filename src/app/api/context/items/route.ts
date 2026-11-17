@@ -11,10 +11,13 @@ export async function GET(request: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const query = new URL(request.url).searchParams;
+    const offset = Number(query.get('offset') ?? 0);
+    if (!Number.isSafeInteger(offset) || offset < 0) return NextResponse.json({ error: 'Invalid offset' }, { status: 400 });
     return NextResponse.json(await listContextItems(session.user.id, {
       workspaceId: query.get('workspace'),
       projectId: query.get('project'),
       folderId: query.get('folder'),
+      offset,
     }));
   } catch (error) { return contextFolderErrorResponse(error); }
 }
