@@ -269,6 +269,23 @@ test('the repository of the issue\'s project comes with the checkout and the run
     await raw.project.update({ where: { id: G }, data: { agentDefaultRepositoryId: signIn.id } });
     await raw.repository.update({ where: { id: signIn.id }, data: { isActive: false } });
     assert.equal((await checkout(devG, await issue(devG)))[1].repository.id, seven.id);
+    // The sign-in's disconnect deletes its row outright, so the choice is handed to the connection of the same
+    // repository rather than lost with the row. The actual delete route does it, under its own access rules.
+    const disconnect = load('src/app/api/github/repositories/[repositoryId]/route.ts', {
+      'next/server': response, '@/lib/prisma': { prisma }, '@/lib/session': { getCurrentUser: async () => ({ id: owner }) },
+      '@/lib/encryption': { EncryptionService: { decrypt: () => '' } },
+      '@/lib/github/access': load('src/lib/github/access.ts', { '@/lib/post-access': load('src/lib/post-access.ts') }),
+      '@/lib/github/version-access': { versionAccessWhere: () => ({}) },
+      '@/lib/agent-repository': deps['@/lib/agent-repository'],
+    }, globals);
+    await raw.repository.update({ where: { id: signIn.id }, data: { isActive: true } });
+    await raw.project.update({ where: { id: G }, data: { agentDefaultRepositoryId: signIn.id } });
+    const gone = await disconnect.DELETE(new Request('https://collab.test/api', { method: 'DELETE' }),
+      { params: Promise.resolve({ repositoryId: signIn.id }) });
+    assert.equal(gone.status, 200);
+    assert.equal(await raw.repository.count({ where: { id: signIn.id } }), 0);
+    assert.equal((await raw.project.findUniqueOrThrow({ where: { id: G } })).agentDefaultRepositoryId, seven.id);
+    assert.equal((await checkout(devG, await issue(devG)))[1].repository.id, seven.id);
     // Once the repository is connected no more, the default names nothing and the checkout refuses as before.
     await raw.gitConnection.update({ where: { id: seven.id }, data: { isActive: false } });
     const left = await issue(devG);

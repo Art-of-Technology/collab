@@ -68,6 +68,22 @@ async function savedRepositoryKey(db: Database, projectId: string, savedId: stri
   return connection ? repositoryKey(connection.provider, connection.baseUrl, connection.repositoryPath) : null;
 }
 
+/**
+ * A row about to be deleted outright, as the GitHub sign-in's disconnect deletes its `Repository`, takes no choice with
+ * it: where it was the project's default and another row represents the same repository, that row holds the choice from
+ * now on, and where none does the choice is cleared rather than left naming a row that is gone. Called before the
+ * delete, while the row can still say which repository it was.
+ */
+export async function transferDefaultRepository(db: Database, projectId: string | null, rowId: string) {
+  if (!projectId) return;
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { agentDefaultRepositoryId: true } });
+  if (project?.agentDefaultRepositoryId !== rowId) return;
+  const key = await savedRepositoryKey(db, projectId, rowId);
+  // Not `distinct`, which answers with the sign-in's row: the row that stays is wanted, and that is the other one.
+  const successor = key ? (await connectedRows(db, projectId)).find(row => row.key === key && row.repository.id !== rowId) : undefined;
+  await db.project.update({ where: { id: projectId }, data: { agentDefaultRepositoryId: successor?.repository.id ?? null } });
+}
+
 /** One repository connected twice, by the GitHub sign-in and as a connection, is one repository: the sign-in's row wins. */
 const distinct = (rows: Connected[]) => rows.filter((row, index) => rows.findIndex(other => other.key === row.key) === index);
 
