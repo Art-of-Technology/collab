@@ -14,6 +14,8 @@ import {
   SecretVariable
 } from "@/lib/secrets/crypto";
 import { canWriteNoteDestination, logNoteAccess, canAccessNote } from "@/lib/secrets/access";
+import { resolveNoteFolder } from "@/lib/context-folders";
+import { contextFolderErrorResponse } from "@/lib/context-folders-response";
 import { createVersion, hasSignificantChange, detectChangeType } from "@/lib/versioning";
 import { emitContextUpdated, emitContextDeleted } from "@/lib/event-bus";
 
@@ -180,6 +182,8 @@ export async function PATCH(
       projectId,
       isAiContext,
       aiContextPriority,
+      // Context folder the note is moved into; null takes it out of every folder
+      folderId,
       category,
       // Legacy support
       isPublic,
@@ -259,6 +263,21 @@ export async function PATCH(
     const tagConnections = await noteTagConnections(session.user.id, tagIds, existingNote.workspaceId, finalProjectId);
     if (tagConnections === null) {
       return NextResponse.json({ error: "Tag access required" }, { status: 403 });
+    }
+
+    // A note and its folder stay at the same level, so moving it never changes who can read it. The
+    // folder is asked again when the note's own level changes, so a scope or project change cannot
+    // carry the note out from under the folder it sits in.
+    const levelChanged = finalScope !== existingNote.scope || finalProjectId !== existingNote.projectId;
+    let resolvedFolderId: string | null | undefined;
+    if (folderId !== undefined || (levelChanged && existingNote.folderId)) {
+      try {
+        resolvedFolderId = await resolveNoteFolder(session.user.id,
+          folderId !== undefined ? folderId : existingNote.folderId,
+          { scope: finalScope, workspaceId: existingNote.workspaceId, projectId: finalProjectId });
+      } catch (error) {
+        return contextFolderErrorResponse(error);
+      }
     }
 
     // Handle secrets encryption for secret note types
@@ -362,6 +381,9 @@ export async function PATCH(
         ...(isOwner && (scope !== undefined || isPublic !== undefined) && { scope: finalScope }),
         ...(isOwner && projectId !== undefined && {
           project: projectId ? { connect: { id: projectId } } : { disconnect: true }
+        }),
+        ...(resolvedFolderId !== undefined && {
+          folder: resolvedFolderId ? { connect: { id: resolvedFolderId } } : { disconnect: true }
         }),
         ...(isOwner && isAiContext !== undefined && { isAiContext }),
         ...(isOwner && aiContextPriority !== undefined && { aiContextPriority }),

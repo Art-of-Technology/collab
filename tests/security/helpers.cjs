@@ -50,6 +50,13 @@ function load(file, dependencies = {}, globals = {}) {
         if (!(name in dependencies)) dependencies[name] = load(`src/${name.slice(2)}.ts`, dependencies, globals);
         return dependencies[name];
       }
+      // Context folders and the response that reports their errors share one error class.
+      if (!(name in dependencies) && ['@/lib/context-folders', '@/lib/context-folders-response'].includes(name)) {
+        dependencies['@/lib/context-folders'] ||= load('src/lib/context-folders.ts', dependencies, globals);
+        dependencies['@/lib/context-folders-response'] ||= load('src/lib/context-folders-response.ts',
+          { ...dependencies, '@/lib/context-folders': dependencies['@/lib/context-folders'] }, globals);
+        return dependencies[name];
+      }
       if (!(name in dependencies) && name === '@/lib/forge/legacy-write-guard') {
         return load('src/lib/forge/legacy-write-guard.ts', {
           'server-only': {}, './reader': { readForgeBindings: async () => [] },
