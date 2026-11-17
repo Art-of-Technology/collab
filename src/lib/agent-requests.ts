@@ -139,7 +139,7 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
   if (waits) {
     await tx.issueComment.create({ data: { issueId: issue.id, authorId: me, content: fetched?.tokenExpiresAt
       ? `${to.name} is run by a runner, and the last token a runner fetched for it ran out at ${fetched.tokenExpiresAt.toISOString()}. A token is renewed when its runner asks, so this one has not asked for a week or more. This request waits until a runner fetches a token again.`
-      : `${to.name} is run by a runner, and no runner has fetched its token yet. This request waits until one has: the seat's owner admits a runner under Agents, Runners.` } });
+      : `${to.name} is run by a runner, and no runner has fetched its token yet. This request waits until one has: the seat's owner connects a runner under Agents, Runners.` } });
   }
   return { issue, idle: idle || waits };
 }

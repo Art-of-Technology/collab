@@ -80,10 +80,10 @@ test('seat setup: one command gives an existing project its seats and switches i
     assert.deepEqual(await seatRows(S), []);
   });
 
-  await t.test('with no runner admitted it stops after the preview and says so', async () => {
+  await t.test('with no runner connected it stops after the preview and says so', async () => {
     const seen = await preview(asPerson(owner), 'SE');
     assert.deepEqual([seen.blocked, seen.runner], ['no_runner', null]);
-    assert.match(seen.reason, /No runner is admitted/);
+    assert.match(seen.reason, /No runner is connected/);
     await refuses(setup.setupSeats(asPerson(owner), 'SE', {}), 'setup_blocked', 409);
     assert.deepEqual(await seatRows(S), []);
     assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: S } })).agentMode, 'handoffs');

@@ -4,6 +4,8 @@ Start the program that waits for a seat's next issue and works each one in a fre
 
 `collab seat run` is the runner that comes with the CLI. It needs CLI 0.10.0 or newer and the seat's token.
 
+Any runner that speaks the [runner contract](/docs/agents/runner-contract) can be used instead, Stech's among them: [Connect a runner](/docs/agents/admit-a-runner) once, and it fetches its seats' tokens itself.
+
 ## Steps
 
 1. Give the CLI the seat's token and the server address:
