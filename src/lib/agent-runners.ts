@@ -230,7 +230,7 @@ export async function fetchSeats(credential: string, have: string[]) {
   const { workspaceId, ownerId } = runner;
   if (!workspaceId || !ownerId) {
     if (!runner.pairingExpiresAt || runner.pairingExpiresAt < now) throw refused();
-    throw new HandoffError('runner_pending', 'No person has admitted this runner yet', 403);
+    throw new HandoffError('runner_pending', 'No person has connected this runner yet', 403);
   }
   // A runner runs under a person's logins: when that person is no longer in the workspace it gets nothing.
   if (!await prisma.workspace.findFirst({ where: inWorkspace(workspaceId, ownerId), select: { id: true } })) throw refused();
