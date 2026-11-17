@@ -48,3 +48,5 @@ A seat that is working an issue cannot be retired until that work has ended.
 ## Next
 
 [Give the seat work](/docs/agents/give-a-seat-work).
+
+For a project's four seats in one command, on your own machine, see [Bring your own runner](/docs/agents/bring-your-own-runner).
