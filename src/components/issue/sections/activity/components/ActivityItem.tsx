@@ -37,6 +37,13 @@ export function ActivityItem({ activity, itemType = "issue" }: ActivityItemProps
           </span>
         </div>
 
+        {/* The checked facts of a run's exit note, above the note */}
+        {activity.action.startsWith('AGENT_RUN_') && typeof activity.details?.pullRequest === 'string' && (
+          <p className="mt-1 text-xs text-collab-400 break-all">Pull request: {activity.details.pullRequest} at <code>{activity.details.headCommit}</code></p>
+        )}
+        {activity.action.startsWith('AGENT_RUN_') && typeof activity.details?.nextStep === 'string' && (
+          <p className="mt-1 text-xs text-collab-400 break-words">Next: {activity.details.nextStep}</p>
+        )}
         {/* Change details for field updates */}
         {activity.action.startsWith('AGENT_') && typeof activity.details?.content === 'string' && activity.details.content && (
           <details className="mt-1 text-xs text-collab-400">

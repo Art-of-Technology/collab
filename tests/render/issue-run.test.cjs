@@ -30,6 +30,10 @@ test('the timeline shows an exit note under the run that left it, as handoff not
   const late = await entry('AGENT_RUN_LATE', { runId: 'r1', outcome: 'done', content: note });
   assert.ok(late.startsWith('dev-a sent an exit note after the run on this issue had ended; nothing else changed'), late);
   assert.ok(late.includes(`Exit note${note}`), late);
+  // The checked facts of the note stand above it: the pull request with the commit it was left at, and the next step.
+  const facts = await entry('AGENT_RUN_FINISHED', { runId: 'r1', outcome: 'in_review', content: note, pullRequest: 'acme/app#12', headCommit: 'a1'.repeat(20), nextStep: 'Merge when approved' });
+  assert.ok(facts.includes(`Pull request: acme/app#12 at ${'a1'.repeat(20)}Next: Merge when approvedExit note${note}`), facts);
+  assert.ok(!finished.includes('Pull request') && !finished.includes('Next:'), finished);
   // A handoff's note keeps its own label.
   assert.ok((await entry('AGENT_PROGRESS', { agent: { name: 'navy' }, content: 'Half way' })).includes('Handoff detailsHalf way'));
 });

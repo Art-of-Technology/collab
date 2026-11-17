@@ -158,6 +158,8 @@ const finishSchema = z.object({
   event: z.literal('finish'), generation: text(128), outcome: z.enum(['done', 'in_review', 'blocked']), note: text(16_000),
   status: text(64).optional(), reviewRequest: text(128).optional(), askedUser: text(128).optional(), blockedBy: text(128).optional(),
   verdict: z.enum(['passed', 'failed']).optional(), reviewed: text(200).optional(),
+  // Checked in `exitFacts`, so a wrong one is refused like a missing heading, with its name.
+  pullRequest: z.string().trim().optional(), headCommit: z.string().trim().optional(), nextStep: z.string().trim().optional(),
   // The shape a managed worker reports (`workerSchema` in src/lib/agent-handoffs.ts), so one reader serves both.
   usage: z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), chargedUSD: amount, reservedUSD: amount, estimatedUSD: amount, unknownUSD: amount,
     restarts: z.number().int().min(0).max(100), starts: tally, totalStarts: tally,
@@ -291,12 +293,36 @@ export async function actOnRun(context: Caller, runId: string, input: z.infer<ty
 }
 
 type Finish = z.infer<typeof finishSchema>;
+const PULL_REQUEST = /^[\w.-]{1,100}\/[\w.-]{1,100}#[1-9]\d{0,9}$/, COMMIT = /^[0-9a-f]{40}$/;
+const FACTS = ['pullRequest', 'headCommit', 'nextStep'] as const;
+
+/**
+ * Rule 6, the checked part of the note: the facts the next session reads as fields, not out of its text. A pull request
+ * (`owner/repository#number`) comes with the full commit it was left at, and neither without the other. A run that
+ * finishes in review or blocked says the first thing to do next, in one line; done may leave it out. Anything else is
+ * refused like a missing heading, with the fields to correct. The state of the pull request is not taken: it changes
+ * after the session ends.
+ */
+function exitFacts(input: Finish) {
+  // A CLI before 0.12.0 cannot send the field: for it the first line under `## Next` is the next step, so its finish is not stranded.
+  // A list mark is taken off before a line counts, so an empty list item is not a next step.
+  const written = input.outcome === 'done' ? undefined : input.note.split(/^## Next[ \t]*$/m)[1]?.split('\n')
+    .map(line => line.trim().replace(/^(?:[-*+]|\d+[.)])(?:\s+|$)/, '')).find(Boolean);
+  const nextStep = input.nextStep ?? (written && !/^#+(?:\s|$)/.test(written) ? written.slice(0, 300) : undefined);
+  const missing: string[] = [];
+  if (input.pullRequest !== undefined ? !PULL_REQUEST.test(input.pullRequest) : input.headCommit !== undefined) missing.push('pullRequest');
+  if (input.headCommit !== undefined ? !COMMIT.test(input.headCommit) : input.pullRequest !== undefined) missing.push('headCommit');
+  if (nextStep !== undefined ? !nextStep || nextStep.length > 300 || /[\r\n\u2028\u2029]/.test(nextStep) : input.outcome !== 'done') missing.push('nextStep');
+  if (missing.length) throw incomplete('exit_note_required', 'The exit note\'s fields are incomplete: pullRequest is owner/repository#number and comes with headCommit, '
+    + `the full 40-character commit it was left at; a run that finishes ${input.outcome === 'done' ? 'in review or blocked' : input.outcome} gives nextStep, the first thing to do next, in one line`, missing);
+  return { ...(input.pullRequest && { pullRequest: input.pullRequest, headCommit: input.headCommit }), ...(nextStep && { nextStep }) };
+}
 const ISSUE = { id: true, issueKey: true, projectId: true, assigneeId: true, statusId: true, agentRequestRole: true, projectStatus: { select: { name: true, ...statusSelect.select } } } as const;
 
 /**
- * Rule 6: a run finishes `done`, `in_review` or `blocked` with an exit note that has all four headings, and says what
- * an issue in review or blocked waits for. It is accepted from the session that holds the run (its account and
- * generation) while the run is not lost and the issue is still the caller's. Anything else is fenced and changes
+ * Rule 6: a run finishes `done`, `in_review` or `blocked` with an exit note that has all four headings and the facts
+ * `exitFacts` checks, and says what an issue in review or blocked waits for. It is accepted from the session that
+ * holds the run (its account and generation) while the run is not lost and the issue is still the caller's. Anything else is fenced and changes
  * neither the run nor the issue; the note of a run that had not finished is kept on the timeline, so the work is
  * not lost. A security request finishes done only with its verdict, passed or failed, and what was reviewed (a commit
  * or a pull request); the verdict is written to the request's timeline and to that of the issue it was filed for.
@@ -306,6 +332,7 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
   const me = context.user.id, workspaceId = context.workspace.id;
   const absent = NOTE_HEADINGS.filter(heading => !new RegExp(`^## ${heading}[ \\t]*$`, 'm').test(input.note));
   if (absent.length) throw incomplete('exit_note_required', `The exit note needs each of these as a heading on its own line: ${absent.map(heading => `## ${heading}`).join(', ')}`, absent);
+  const facts = exitFacts(input);
   const waitsFor: readonly string[] = WAITS_FOR[input.outcome];
   const given = (['reviewRequest', 'askedUser', 'blockedBy'] as const).filter(name => input[name]);
   const stray = given.filter(name => !waitsFor.includes(name));
@@ -334,7 +361,7 @@ async function finish(context: Caller, run: { id: string; issueId: string; seatI
     const ended = issue.assigneeId !== me ? 0 : (await tx.agentRun.updateMany({ where: { ...holds, state: { in: LIVE } },
       data: { state: 'finished', outcome: input.outcome, note: input.note, usage: input.usage, endedAt: now } })).count;
     const entry = (target: { id: string; projectId: string }, action: string, details: object) => tx.issueActivity.create({ data: { action, itemType: 'ISSUE', itemId: target.id,
-      userId: me, workspaceId, projectId: target.projectId, details: JSON.stringify({ seatId: run.seatId, outcome: input.outcome, content: input.note, ...details }) } });
+      userId: me, workspaceId, projectId: target.projectId, details: JSON.stringify({ seatId: run.seatId, outcome: input.outcome, content: input.note, ...facts, ...details }) } });
     if (!ended) {
       // Lost, stopped, or the issue went to someone else: the session did the work, so what it wrote is kept.
       if (await tx.agentRun.findFirst({ where: { ...holds, state: { not: 'finished' } }, select: { id: true } })) await entry(issue, 'AGENT_RUN_LATE', { runId: run.id });
@@ -441,7 +468,8 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
   category: categoryOf(issue.projectStatus), ...(issue.agentRequestRole && { requestRole: issue.agentRequestRole }) });
 
 /**
- * What a fresh session needs to work an issue, in one read: the issue, the exit note of the last run that finished, the
+ * What a fresh session needs to work an issue, in one read: the issue, the exit note of the last run that finished and
+ * its checked facts (the pull request, the commit it was left at, the next step; null where it gave none), the
  * comments made after that run ended (all of them when no run has finished), the issues linked as blocking it, the
  * requests linked to it (a security request with its verdict, once it has one), and for a request the issues it was
  * filed for (the ones it blocks or relates to from its own side, which is how filing links it). An issue with child issues
@@ -453,7 +481,7 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
 export async function runContext(context: Caller, issueIdOrKey: string) {
   const issue = await prisma.issue.findFirst({ where: { workspaceId: context.workspace.id, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] }, select: {
     ...REF, description: true, type: true, priority: true, assigneeId: true,
-    agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { note: true, endedAt: true } },
+    agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { id: true, note: true, endedAt: true } },
     sourceRelations: { where: { targetIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, targetIssue: { select: REF } } },
     targetRelations: { where: { sourceIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, sourceIssue: { select: REF } } },
     // shortcut: the first 100 children, oldest first; page them when an epic outgrows that.
@@ -465,6 +493,9 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   const seats = lead ? await prisma.agentSeat.findMany({ where: { projectId: issue.projectId, retiredAt: null, userId: { not: lead.userId } }, orderBy: { createdAt: 'asc' },
     select: { userId: true, name: true, role: true } }) : [];
   const last = issue.agentRuns[0];
+  // The checked facts of that run's note are where finishing wrote them: in its entry on the timeline.
+  const entry = last && await prisma.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
+  const facts = JSON.parse(entry?.details ?? '{}');
   const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: { gt: last.endedAt } }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
   const others = [
@@ -485,6 +516,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     issue: { id: issue.id, issueKey: issue.issueKey, title: issue.title, description: issue.description, type: issue.type, priority: issue.priority, projectId: issue.projectId,
       status: issue.projectStatus?.name ?? null, category: categoryOf(issue.projectStatus), assigneeId: issue.assigneeId, agentRequestRole: issue.agentRequestRole },
     lastExitNote: last?.note ?? null,
+    lastExitFacts: last ? Object.fromEntries(FACTS.map(name => [name, facts.runId === last.id && typeof facts[name] === 'string' ? facts[name] : null])) : null,
     commentsSince,
     blockers: others.filter(other => other.blocksMe).map(other => toRef(other.issue)),
     requests: others.filter(other => other.issue.agentRequestRole).map(other => {
@@ -501,7 +533,7 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     commands: [`collab context get --project-id ${issue.projectId}`, `collab comments list ${key}`, `collab issues activity ${key}`,
       `collab seat request --from-issue ${key} --role review|release|security|developer --title TITLE --body-file FILE`,
       ...(lead ? ['collab issues update CHILD_KEY --assignee-id SEAT_USER_ID'] : []),
-      `collab run finish RUN_ID --generation GENERATION --outcome done|in_review|blocked --note-file FILE${security ? ' --verdict passed|failed --reviewed COMMIT_OR_PULL_REQUEST' : ''}`],
+      `collab run finish RUN_ID --generation GENERATION --outcome done|in_review|blocked --note-file FILE --next-step 'ONE LINE' [--pull-request OWNER/REPO#NUMBER --head-commit FULL_HASH]${security ? ' --verdict passed|failed --reviewed COMMIT_OR_PULL_REQUEST' : ''}`],
   };
 }
 

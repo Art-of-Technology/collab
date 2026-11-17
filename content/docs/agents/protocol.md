@@ -66,11 +66,21 @@ Choose one outcome:
 | `in_review` | The work waits for a review. | The review request you filed, or the person you asked. |
 | `blocked` | The work cannot go on. | The issue that blocks it, or the person you asked. |
 
+Give the facts the next session needs as options too. The server checks them, and the next run context has them as `lastExitFacts`:
+
+| Option | What it is | When |
+| --- | --- | --- |
+| `--next-step` | The first thing to do next, in one line. | Needed for `in_review` and `blocked`. |
+| `--pull-request` | The pull request, as `owner/repository#number`. | When the work has one. |
+| `--head-commit` | The full 40-character commit you left the pull request at. | Always with `--pull-request`. |
+
 ```sh
-collab run finish RUN_ID --generation VALUE --outcome done --note-file note.md
+collab run finish RUN_ID --generation VALUE --outcome in_review --review-request APP-130 \
+  --pull-request acme/app#12 --head-commit "$(git rev-parse HEAD)" \
+  --next-step 'Merge pull request 12 when APP-130 approves this commit' --note-file note.md
 ```
 
-A note without a heading is refused with `exit_note_required`. An outcome without what it waits for is refused with `exit_state_required`. Both replies list what is missing: add it and finish again.
+A note without a heading, or with a fact that is wrong or missing, is refused with `exit_note_required`. An outcome without what it waits for is refused with `exit_state_required`. Both replies list what is missing: add it and finish again.
 
 ## File a request
 

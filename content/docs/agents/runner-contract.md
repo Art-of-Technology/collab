@@ -155,6 +155,8 @@ The session that did the work finishes the run. Needs `issues:write`.
 | `outcome` | yes | `done`, `in_review` or `blocked`. |
 | `note` | yes | The exit note, up to 16,000 characters, with the headings `## Done`, `## Decisions`, `## Evidence` and `## Next`, each on a line of its own. |
 | `reviewRequest`, `blockedBy`, `askedUser` | see below | What the issue waits for. |
+| `nextStep` | for `in_review` and `blocked` | The first thing to do next, in one line of at most 300 characters. If absent for those outcomes, the first non-empty line under `## Next` is used, with a leading list mark removed and truncated to 300 characters; a heading is not a next step. `done` does not use this fallback. |
+| `pullRequest`, `headCommit` | no, but together | The pull request as `owner/repository#number`, and the full lowercase 40-character commit it was left at. Neither is taken without the other. |
 | `verdict`, `reviewed` | see below | For a security request that finishes `done`: `passed` or `failed`, and the commit or pull request that was read, up to 200 characters. |
 | `status` | no | The name of the status to move the issue to. It must be an active status of the outcome's group. |
 | `usage` | no | What the run cost. See below. |
@@ -171,6 +173,9 @@ The session that did the work finishes the run. Needs `issues:write`.
   "generation": "5b1f0c1e-6f0a-4a57-9a43-2f1f6f1f0a11",
   "outcome": "in_review",
   "reviewRequest": "AA-19",
+  "pullRequest": "acme/app#12",
+  "headCommit": "5d2c1f0a9b8e7d6c5b4a39281706f5e4d3c2b1a0",
+  "nextStep": "Merge pull request 12 when AA-19 approves this commit",
   "note": "## Done\n...\n\n## Decisions\n...\n\n## Evidence\n...\n\n## Next\n..."
 }
 ```
@@ -179,9 +184,9 @@ The reply is `{ "run": { ... }, "statusUnmapped": false }`. `statusUnmapped` is 
 
 | Status | `error` | Extra key | When |
 | --- | --- | --- | --- |
-| 422 | `exit_note_required` | `missing`: the headings not found | The note lacks a heading. |
+| 422 | `exit_note_required` | `missing`: the headings not found, or the fields to correct | The note lacks a heading; `pullRequest` or `headCommit` is malformed or comes without the other; `nextStep` is malformed; or `in_review` or `blocked` has no next step. |
 | 422 | `exit_state_required` | `missing`: the fields to supply | The outcome lacks what it waits for, a security request finishes `done` without `verdict` or `reviewed`, or the finish names something that cannot bring the issue back: a request or blocker that is done or not linked, a person who is not an active member, a status outside the outcome's group. |
-| 400 | `invalid_request` | | A field the outcome does not take, an unknown key, or a `usage` that is not complete. |
+| 400 | `invalid_request` | | A field has the wrong type, the outcome does not take it, an unknown key is supplied, or `usage` is not complete. |
 | 409 | `run_fenced` | | The run is not the one working the issue any more. If the generation matches and the run had not finished already, the note is kept on the issue's timeline as a late exit note. |
 | 404 | `not_found` | | The run is not the caller's, or its issue is in Trash. |
 
@@ -229,6 +234,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | --- | --- |
 | `issue` | `id`, `issueKey`, `title`, `description`, `type`, `priority`, `projectId`, `status`, `category`, `assigneeId` and `agentRequestRole`. |
 | `lastExitNote` | The note of the last run that finished, or `null`. |
+| `lastExitFacts` | `null` if no run finished; otherwise `pullRequest`, `headCommit` and `nextStep`, each `null` when the last finished run supplied none. |
 | `commentsSince` | The comments made after that run ended, oldest first: `id`, `content`, `createdAt`, `parentId` and `author` with `id` and `name`. All comments when no run has finished. |
 | `blockers` | The issues linked as blocking this one. |
 | `requests` | The requests linked to this issue. |

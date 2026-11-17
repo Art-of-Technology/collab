@@ -79,17 +79,19 @@ test('run context: what a fresh session needs to work an issue, in one read', as
     const fresh = await context(target);
     assert.deepEqual(fresh.issue, { id: target.id, issueKey: target.issueKey, title: target.title, description: 'What to do', type: 'TASK', priority: 'high',
       projectId: A, status: 'to_do', category: 'todo', assigneeId: devA.userId, agentRequestRole: null });
-    assert.equal(fresh.lastExitNote, null);
+    assert.deepEqual([fresh.lastExitNote, fresh.lastExitFacts], [null, null]);
     assert.deepEqual(said(fresh), ['first', 'second', 'third']);
     assert.deepEqual(fresh.commentsSince[2], { id: fresh.commentsSince[2].id, content: 'third', createdAt: fresh.commentsSince[2].createdAt, parentId: null, author: { id: person, name: person } });
     assert.deepEqual(fresh.commands, [`collab context get --project-id ${A}`, `collab comments list ${target.issueKey}`, `collab issues activity ${target.issueKey}`,
       `collab seat request --from-issue ${target.issueKey} --role review|release|security|developer --title TITLE --body-file FILE`,
-      'collab run finish RUN_ID --generation GENERATION --outcome done|in_review|blocked --note-file FILE']);
+      "collab run finish RUN_ID --generation GENERATION --outcome done|in_review|blocked --note-file FILE --next-step 'ONE LINE' [--pull-request OWNER/REPO#NUMBER --head-commit FULL_HASH]"]);
     assert.deepEqual([fresh.blockers, fresh.requests, fresh.requestFor], [[], [], []]);
 
     await run(target, 60, { note: 'The first note' });
     const second = await context(target);
     assert.equal(second.lastExitNote, 'The first note');
+    // A run that finished before the facts were fields has none.
+    assert.deepEqual(second.lastExitFacts, { pullRequest: null, headCommit: null, nextStep: null });
     assert.deepEqual(said(second), ['second', 'third']);
 
     // A later run that stopped without a note changes neither: the comments since the note are still what the next session lacks.
