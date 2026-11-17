@@ -1,5 +1,7 @@
 import { noteTagAccessWhere, noteTagConnections } from '@/lib/note-tag-access';
 import { canWriteNoteDestination, noteAccessWhere } from '@/lib/secrets/access';
+import { resolveNoteFolder } from '@/lib/context-folders';
+import { contextFolderErrorResponse } from '@/lib/context-folders-response';
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/request-session";
 import { authOptions } from "@/lib/auth-options";
@@ -282,6 +284,8 @@ export async function POST(request: NextRequest) {
       projectId,
       isAiContext,
       aiContextPriority,
+      // Context folder the note is created in; absent or null keeps it outside any folder
+      folderId,
       // Legacy support
       isPublic,
       // Secrets Vault Phase 3 fields
@@ -336,6 +340,14 @@ export async function POST(request: NextRequest) {
     const tagConnections = await noteTagConnections(session.user.id, tagIds, workspaceId || null, projectId || null);
     if (tagConnections === null) {
       return NextResponse.json({ error: "Tag access required" }, { status: 403 });
+    }
+
+    let resolvedFolderId: string | null;
+    try {
+      resolvedFolderId = await resolveNoteFolder(session.user.id, folderId,
+        { scope: finalScope, workspaceId: workspaceId || null, projectId: projectId || null });
+    } catch (error) {
+      return contextFolderErrorResponse(error);
     }
 
     // Handle secrets encryption for secret note types
@@ -393,6 +405,7 @@ export async function POST(request: NextRequest) {
         projectId: projectId || null,
         isAiContext: isAiContext || false,
         aiContextPriority: aiContextPriority || 0,
+        folderId: resolvedFolderId,
         // Secrets Vault Phase 3 fields
         isEncrypted: encryptedData.isEncrypted,
         encryptedContent: encryptedData.encryptedContent,

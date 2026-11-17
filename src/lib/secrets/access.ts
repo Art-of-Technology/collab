@@ -225,6 +225,8 @@ export function noteAccessWhere(userId: string): Prisma.NoteWhereInput {
   });
   return {
     AND: [
+      // A note in a folder that is in Trash went there with it.
+      { NOT: { folder: { deletedAt: { not: null } } } },
       { OR: [
         inWorkspace(membership),
         { scope: { notIn: [NoteScope.PROJECT, NoteScope.WORKSPACE] }, OR: [
@@ -267,6 +269,7 @@ export async function canAccessNote(
       workspaceId: true,
       projectId: true,
       project: { select: { workspaceId: true } },
+      folder: { select: { deletedAt: true } },
       sharedWith: {
         select: {
           userId: true,
@@ -275,6 +278,14 @@ export async function canAccessNote(
       }
     }
   });
+
+  // A note in a folder that is in Trash is out of reach until the folder is restored.
+  if (note?.folder?.deletedAt) {
+    return {
+      canAccess: false, canEdit: false, canShare: false, canDelete: false,
+      isOwner: note.authorId === userId, isExpired: false, reason: 'This note is in Trash'
+    };
+  }
 
   if (!note) {
     return {
