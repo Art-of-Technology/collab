@@ -50,11 +50,16 @@ function load(file, dependencies = {}, globals = {}) {
         if (!(name in dependencies)) dependencies[name] = load(`src/${name.slice(2)}.ts`, dependencies, globals);
         return dependencies[name];
       }
-      // Context folders and the response that reports their errors share one error class.
-      if (!(name in dependencies) && ['@/lib/context-folders', '@/lib/context-folders-response'].includes(name)) {
+      // Context folders and files, and the responses that report their errors, share one error class.
+      if (!(name in dependencies) && ['@/lib/context-folders', '@/lib/context-folders-response',
+        '@/lib/context-files', '@/lib/context-files-response', '@/lib/context-file-type'].includes(name)) {
         dependencies['@/lib/context-folders'] ||= load('src/lib/context-folders.ts', dependencies, globals);
-        dependencies['@/lib/context-folders-response'] ||= load('src/lib/context-folders-response.ts',
-          { ...dependencies, '@/lib/context-folders': dependencies['@/lib/context-folders'] }, globals);
+        const shared = { ...dependencies, '@/lib/context-folders': dependencies['@/lib/context-folders'] };
+        if (name === '@/lib/context-files') {
+          // Reading the first bytes of a file needs nothing but the bytes.
+          shared['@/lib/context-file-type'] = dependencies['@/lib/context-file-type'] ||= load('src/lib/context-file-type.ts', {}, globals);
+        }
+        if (name !== '@/lib/context-folders') dependencies[name] ||= load(`src/${name.slice(2)}.ts`, shared, globals);
         return dependencies[name];
       }
       if (!(name in dependencies) && name === '@/lib/forge/legacy-write-guard') {
