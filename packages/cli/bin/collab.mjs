@@ -197,7 +197,7 @@ async function main() {
   if (args.length !== parameters.length || args.some(a => !/^[a-zA-Z0-9_-]+$/.test(a))) throw new CliError('invalid_identifier', `Expected ${parameters.length} ID/key argument(s); only letters, digits, underscores and hyphens allowed.`);
   const textFiles = ['content', 'description', 'body', 'note'].filter(key => Object.hasOwn(spec.fields, key));
   // --project is declared only by a command that reads a project; elsewhere it used to be dropped without a word.
-  allowed(options, [...globals.filter(key => key !== 'project' || spec.query.projectId || spec.defaultProject), ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...Object.keys(spec.localOptions || {}).map(flagName), ...(Object.keys(spec.fields).length ? ['input'] : []), ...textFiles.map(key => `${key}-file`), ...(spec.method === 'DELETE' ? ['yes'] : []), ...(spec.seatRun ? [] : ['dry-run']), ...(spec.pagination ? ['all'] : [])]);
+  allowed(options, [...globals.filter(key => key !== 'project' || spec.query.projectId || spec.defaultProject), ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...Object.keys(spec.localOptions || {}).map(flagName), ...(Object.keys(spec.fields).length ? ['input'] : []), ...textFiles.map(key => `${key}-file`), ...(spec.method === 'DELETE' || spec.setupPreview ? ['yes'] : []), ...(spec.seatRun ? [] : ['dry-run']), ...(spec.pagination ? ['all'] : [])]);
   if (spec.method === 'DELETE' && !options.yes && !(spec.deletePreview && options['dry-run'])) throw new CliError('confirmation_required', 'Deletion requires --yes.');
   if (spec.requiredQuery?.includes('projectId') && options.project && options['project-id'] && options.project !== options['project-id']) {
     throw new CliError('conflicting_project', '--project and --project-id must identify the same project.');
@@ -357,6 +357,12 @@ async function main() {
     }
     if (options['dry-run']) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), preview };
     await new Promise((resolve, reject) => process.stderr.write(JSON.stringify({ deletePreview: preview }) + '\n', error => error ? reject(error) : resolve()));
+  }
+  if (spec.setupPreview) {
+    // The preview is the server's own, read before anything is sent: without --yes it is the whole command.
+    const preview = await request(selected.base, apiPath(), { token: selected.token, timeout });
+    if (options['dry-run'] || !options.yes) return { dryRun: Boolean(options['dry-run']), applied: false, preview };
+    await new Promise((resolve, reject) => process.stderr.write(JSON.stringify({ setupPreview: preview }) + '\n', error => error ? reject(error) : resolve()));
   }
   if (options['dry-run']) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), body: payload };
   if (spec.seatRun) {
