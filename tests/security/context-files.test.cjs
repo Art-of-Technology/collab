@@ -362,6 +362,7 @@ test('what a file is comes from its content, not from its name', async () => {
 
 const PREVIEW = 'src/app/api/context/files/[id]/preview/route.ts';
 const ZIP = Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from('photos.jpg')]);
+const SVG = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
 
 test('a file is previewed as what it is, and never as something a browser runs', async () => {
   const f = fixture();
@@ -372,6 +373,7 @@ test('a file is previewed as what it is, and never as something a browser runs',
   const page = await put(HTML, 'report.html');
   const rows = await put(Buffer.from('name,count\n"a, b",2\nlast,3\n'), 'rows.csv');
   const archive = await put(ZIP, 'photos.zip');
+  const drawing = await put(SVG, 'logo.svg');
 
   // An image leaves with its own type, shown in the page rather than downloaded, and sealed.
   const image = await f.call(PREVIEW, 'GET', { id: png.id });
@@ -407,6 +409,14 @@ test('a file is previewed as what it is, and never as something a browser runs',
   const fetches = f.fetched.length;
   const named = await (await f.call(PREVIEW, 'GET', { id: archive.id })).json();
   assert.deepEqual(named, { id: archive.id, name: 'photos.zip', mimeType: 'application/zip', size: ZIP.length, kind: 'none' });
+  assert.equal(f.fetched.length, fetches);
+
+  // An SVG is drawn by an `<img>` but is a document when it is opened on its own, so it is named like
+  // any other type a browser would run: its bytes never leave inline, whatever header is on them.
+  const vector = await f.call(PREVIEW, 'GET', { id: drawing.id });
+  assert.match(vector.headers.get('content-type'), /^application\/json/);
+  assert.deepEqual(await vector.json(),
+    { id: drawing.id, name: 'logo.svg', mimeType: 'image/svg+xml', size: SVG.length, kind: 'none' });
   assert.equal(f.fetched.length, fetches);
 
   // Only someone who reads the folder, as everywhere else: a stranger gets no preview and no bytes.
@@ -452,10 +462,37 @@ test('a preview of a large file reads only its start and says there is more', as
     [{ name: 'notes.txt', mimeType: 'text/plain' }, 'text'],
     [{ name: 'rows.csv', mimeType: 'text/plain' }, 'csv'],
     [{ name: 'report.html', mimeType: 'text/html' }, 'text'],
-    [{ name: 'sketch.svg', mimeType: 'image/svg+xml' }, 'image'],
+    [{ name: 'sketch.svg', mimeType: 'image/svg+xml' }, 'none'],
     [{ name: 'scan.tiff', mimeType: 'image/tiff' }, 'none'],
     [{ name: 'rows.csv', mimeType: 'application/zip' }, 'none'],
     [{ name: 'plan.pdf', mimeType: 'application/pdf' }, 'pdf'],
   ];
   for (const [file, expected] of kinds) assert.equal(contextPreviewKind(file), expected, file.name);
+});
+
+// The seal on inline preview bytes is a header of the route, and Next keeps a header the proxy set
+// over a route's own one. So the policy of Collab's pages must never be put on an API address: the
+// preview would go on returning a seal that never reaches the browser.
+test('the policy of Collab pages never replaces the seal a preview puts on its bytes', async () => {
+  const { NextRequest, NextResponse } = require('next/server');
+  const { proxy } = load('src/proxy.ts', {
+    'next/server': { NextRequest, NextResponse },
+    '@/lib/gateway-identity': { authMode: () => 'nextauth', gatewayMutationAllowed: () => true, readGatewayIdentity: () => null },
+    '@/lib/request-session': { getGatewaySession: async () => null },
+  }, { process: { env: { NODE_ENV: 'production' } }, URL, Buffer, console });
+  // What a browser sends on a navigation, and on a frame it is told to open.
+  const headers = { accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,*/*;q=0.8' };
+  const ask = path => proxy(new NextRequest('https://example.test' + path, { method: 'GET', headers }));
+
+  for (const path of ['/api', '/api/context/files/file/preview', '/api/context/files/file/download', '/api/issues']) {
+    const sent = await ask(path);
+    assert.equal(sent.headers.get('content-security-policy'), null, path);
+    assert.equal(sent.headers.get('content-security-policy-report-only'), null, path);
+    // The headers that are not a page's own are still put on every reply.
+    assert.equal(sent.headers.get('x-content-type-options'), 'nosniff', path);
+  }
+  // A page still gets the policy, and a path that merely begins with the same letters is a page.
+  for (const path of ['/space', '/apifolder', '/login']) {
+    assert.match((await ask(path)).headers.get('content-security-policy') ?? '', /default-src 'self'/, path);
+  }
 });

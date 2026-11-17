@@ -15,8 +15,9 @@
  *  - Text, whatever its type, leaves as JSON and is drawn as escaped text, so a file that says it is
  *    HTML is read, not run.
  *  - Images leave with their own type under `default-src 'none'; sandbox`, which blocks every script
- *    and every fetch even when the address is opened on its own. An SVG is an image here because an
- *    `<img>` never runs one, and that header stops the rest.
+ *    and every fetch even when the address is opened on its own. Only types a browser draws and never
+ *    runs are in that list: an SVG is a document when it is opened on its own, so it is named here,
+ *    not drawn.
  *  - A PDF is drawn by the browser's own viewer, which is a program of the browser and needs its
  *    scripts, so its sandbox allows them. The sandbox still puts the document in an origin of its
  *    own, with nothing allowed out: anything inside the file is sealed away from Collab's site, the
@@ -33,9 +34,14 @@ export const MAX_CONTEXT_PREVIEW_BYTES = 256 * 1024;
 /** The stated number of rows a CSV preview shows; past it the preview says there are more. */
 export const CONTEXT_PREVIEW_ROWS = 200;
 
-/** Types a browser draws by itself. TIFF is left out: browsers do not draw it, and a broken image is worse than a name. */
+/**
+ * Types a browser draws by itself, and only ever draws. TIFF is left out: browsers do not draw it, and
+ * a broken image is worse than a name. SVG is left out because it is not only drawn — opened on its
+ * own it is a document the browser runs, so it would be one header away from running what a member
+ * uploaded. It is named instead.
+ */
 const INLINE_IMAGE_TYPES = new Set([
-  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml',
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp',
 ]);
 
 /** Text that does not say `text/`, but is text all the same. */

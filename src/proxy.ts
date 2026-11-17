@@ -18,6 +18,11 @@ export const config = {
 };
 
 function isHtmlRequest(req: NextRequest) {
+  // Never an API route, whatever it says it accepts. Next applies these headers before the route runs
+  // and keeps them over the route's own, so a route that seals the bytes it serves — a file preview —
+  // would have its seal silently replaced by the policy of Collab's own pages. No API route renders a
+  // page, so there is nothing here for that policy to protect.
+  if (req.nextUrl.pathname === "/api" || req.nextUrl.pathname.startsWith("/api/")) return false;
   const accept = req.headers.get("accept") || "";
   // Only attach CSP to HTML navigations / SSR responses
   return accept.includes("text/html");
