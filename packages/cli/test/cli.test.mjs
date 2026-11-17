@@ -1117,12 +1117,14 @@ async function fixture(t, handler) {
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const url = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); rmSync(temporary, { recursive: true, force: true }); });
-  function run(args, { input, env = {}, stderrCallback, childCallback } = {}) {
+  function run(args, { input, env = {}, stderrCallback, childCallback, source = false } = {}) {
     const childEnv = { ...process.env };
     for (const key of Object.keys(childEnv)) if (key.toUpperCase().startsWith('COLLAB_')) delete childEnv[key];
     Object.assign(childEnv, { COLLAB_CONFIG_DIR: dir, COLLAB_URL: url, COLLAB_TOKEN: 'synthetic-token', ...env });
     for (const key of Object.keys(childEnv)) if (childEnv[key] === undefined) delete childEnv[key];
-    const child = spawn(executable || process.execPath, [...(executable ? [] : [bin]), ...args], { cwd: dir, env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
+    // `source` runs the CLI's own code under Node even where the installed executable is tested, for a test that needs Node's options.
+    const native = executable && !source;
+    const child = spawn(native ? executable : process.execPath, [...(native ? [] : [bin]), ...args], { cwd: dir, env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     child.stdout.on('data', data => { stdout += data; });
     child.stderr.on('data', data => { stderr += data; stderrCallback?.(stderr); });
@@ -2341,7 +2343,7 @@ test('new waits return the last outage error without requesting after the deadli
   }
 });
 
-test('a wait that sleeps out an outage to its deadline asks no more, though its clock reads short of it', { skip: Boolean(executable) }, async t => {
+test('a wait that sleeps out an outage to its deadline asks no more, though its clock reads short of it', async t => {
   const f = await fixture(t, (_req, res, _body, calls) => {
     if (calls.length === 1) { res.writeHead(503); return res.end('{}'); }
     res.end(JSON.stringify({ contains: true }));
@@ -2350,7 +2352,7 @@ test('a wait that sleeps out an outage to its deadline asks no more, though its 
   const slowClock = path.join(f.dir, 'slow-clock.mjs');
   writeFileSync(slowClock, 'const now = Date.now, start = now(); Date.now = () => start + Math.floor((now() - start) * 0.98);\n');
   const result = await f.run(['live', '--commit', 'a'.repeat(40), '--wait-seconds', '1'],
-    { env: { NODE_OPTIONS: `--import=${pathToFileURL(slowClock).href}` } });
+    { env: { NODE_OPTIONS: `--import=${pathToFileURL(slowClock).href}` }, source: true });
   assert.equal(result.error?.error, 'server_error', result.stdout);
   assert.equal(f.calls.length, 1);
 });
