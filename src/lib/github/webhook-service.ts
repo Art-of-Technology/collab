@@ -183,6 +183,12 @@ export class GitHubWebhookService {
         data: updates,
       });
     } catch (error) {
+      // A pull request Collab never stored (opened before the repository was connected, or its
+      // opened event was missed) has no row to update; a repository sync brings it in.
+      if ((error as { code?: string }).code === 'P2025') {
+        console.log(`Pull request ${githubPrId} not found`);
+        return null;
+      }
       console.error('Error updating pull request:', error);
       throw error;
     }
