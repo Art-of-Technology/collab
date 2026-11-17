@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { postWorkspaceAccessWhere } from '@/lib/post-access';
+import { revokeProjectRunnerTokens } from '@/lib/agent-runners';
 
 export async function PATCH(
   request: NextRequest,
@@ -36,6 +37,9 @@ export async function PATCH(
         },
       },
     });
+
+    // An archived project's seats keep no token a runner fetched, and a runner's next ask no longer lists them.
+    if (isArchived) await revokeProjectRunnerTokens(project.workspaceId, actor.id, project.id);
 
     return NextResponse.json({
       success: true,

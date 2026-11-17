@@ -29,6 +29,7 @@ export function AgentRunnersView({ workspaceId, me, people }: Props) {
   const [ownerId, setOwnerId] = useState(me);
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<Runner | null>(null);
+  const [renewing, setRenewing] = useState<Runner | null>(null);
   const failed = (description: string) => toast({ title: 'Error', description, variant: 'destructive' });
 
   const load = useCallback(async () => {
@@ -70,6 +71,13 @@ export function AgentRunnersView({ workspaceId, me, people }: Props) {
     const body = await call(fetch(`${url}/${removing.id}`, { method: 'DELETE' }), 'The runner could not be removed.');
     setRemoving(null);
     if (body) toast({ title: `${removing.name} is removed`, description: `${body.revokedTokens === 1 ? '1 token it fetched was' : `${body.revokedTokens} tokens it fetched were`} revoked.` });
+  };
+
+  const renew = async () => {
+    if (!renewing) return;
+    const body = await call(fetch(`${url}/${renewing.id}/renew`, { method: 'POST', headers: { 'Content-Type': 'application/json' } }), 'The tokens could not be renewed.');
+    setRenewing(null);
+    if (body) toast({ title: `${renewing.name} renews its tokens`, description: `${body.revokedTokens === 1 ? '1 token it fetched was' : `${body.revokedTokens} tokens it fetched were`} revoked. It fetches new ones the next time it asks.` });
   };
 
   return <>
@@ -114,10 +122,28 @@ export function AgentRunnersView({ workspaceId, me, people }: Props) {
             <td className="p-3">{runner.seats}</td>
             <td className="p-3">{runner.admittedAt ? new Date(runner.admittedAt).toLocaleDateString() : ''}</td>
             <td className="p-3">{runner.lastSeenAt ? new Date(runner.lastSeenAt).toLocaleString() : <span className="text-muted-foreground">Never</span>}</td>
-            <td className="p-3 text-right"><Button variant="outline" size="sm" disabled={busy} onClick={() => setRemoving(runner)}>Remove</Button></td>
+            <td className="p-3 text-right"><div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => setRenewing(runner)}>Renew tokens</Button>
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => setRemoving(runner)}>Remove</Button>
+            </div></td>
           </tr>)}</tbody>
         </table>
       </div>}
+
+    <AlertDialog open={!!renewing} onOpenChange={open => !open && setRenewing(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Renew the tokens of {renewing?.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Every token it fetched is revoked at once, as when one may have leaked. It fetches a new token for each of its seats the next time it asks, about a minute later. Until then their work waits.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={renew}>Renew tokens</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     <AlertDialog open={!!removing} onOpenChange={open => !open && setRemoving(null)}>
       <AlertDialogContent>

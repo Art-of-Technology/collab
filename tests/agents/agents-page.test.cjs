@@ -35,7 +35,10 @@ test('the Agents page reads the seats a person may see, what each works on and w
     '@/lib/issue-assignee': load('src/lib/issue-assignee.ts', { './agent-handoffs': handoffs }) }, { Date });
   const runs = load('src/lib/agent-runs.ts', { zod: require('zod'), '@/lib/prisma': { prisma }, '@/lib/agent-seats': seats, '@/lib/issue-finder': finder,
     '@/lib/permissions': {}, '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent' } }, { Date });
-  const page = load('src/lib/agents-page.ts', { '@/lib/prisma': { prisma }, '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/issue-finder': finder, '@/lib/agent-runs': runs }, { Date });
+  const runners = load('src/lib/agent-runners.ts', { crypto: require('node:crypto'), '@/lib/prisma': { prisma }, '@/lib/agent-handoffs': handoffs,
+    '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent' } }, { Date });
+  const page = load('src/lib/agents-page.ts', { '@/lib/prisma': { prisma }, '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/issue-finder': finder,
+    '@/lib/agent-runs': runs, '@/lib/agent-runners': runners }, { Date });
   let user = member;
   const route = load('src/app/api/workspaces/[workspaceId]/agent-seats/waiting/route.ts', { 'next/server': { NextResponse: Response },
     '@/lib/request-session': { getServerSession: async () => user ? { user: { id: user } } : null }, '@/lib/auth-options': { authOptions: {} }, '@/lib/agents-page': page });
@@ -67,16 +70,20 @@ test('the Agents page reads the seats a person may see, what each works on and w
     const view = await page.readSeats(member, 'team');
     assert.deepEqual(view.workspace, { id: 'w', slug: 'team' });
     assert.deepEqual(view.seats.map(row => [row.id, row.role, row.project, row.isDefault]), [['dev-a', 'developer', 'Alpha', true], ['rev-a', 'reviewer', 'Alpha', true]]);
-    assert.deepEqual(Object.keys(view.seats[0]).sort(), ['id', 'isDefault', 'name', 'noRunner', 'project', 'role', 'waiting', 'working']);
+    assert.deepEqual(Object.keys(view.seats[0]).sort(), ['id', 'isDefault', 'name', 'noRunner', 'project', 'role', 'tokenExpired', 'waiting', 'working']);
     // A seat a runner runs has no runner until one holds a usable token for it; a seat run by hand never says so.
-    const noRunner = async () => (await page.readSeats(member, 'team')).seats.map(row => row.noRunner);
-    assert.deepEqual(await noRunner(), [false, false]);
+    const states = async () => (await page.readSeats(member, 'team')).seats.map(row => [row.noRunner, row.tokenExpired]);
+    assert.deepEqual(await states(), [[false, false], [false, false]]);
     await raw.agentSeat.update({ where: { id: 'rev-a' }, data: { byRunner: true } });
-    assert.deepEqual(await noRunner(), [false, true]);
+    assert.deepEqual(await states(), [[false, false], [true, false]]);
     const fetched = await raw.appToken.create({ data: { userId: 'cseatrev001', accessToken: 'fetched', scopes: [], runnerId: 'crunner00001', tokenExpiresAt: ago(-60) } });
-    assert.deepEqual(await noRunner(), [false, false]);
+    assert.deepEqual(await states(), [[false, false], [false, false]]);
+    // A runner that stayed away through the renewal window leaves a token that ran out: the seat says so, and no
+    // longer says that no runner has fetched one.
+    await raw.appToken.update({ where: { id: fetched.id }, data: { tokenExpiresAt: ago(60) } });
+    assert.deepEqual(await states(), [[false, false], [false, true]]);
     await raw.appToken.update({ where: { id: fetched.id }, data: { isRevoked: true } });
-    assert.deepEqual(await noRunner(), [false, true]);
+    assert.deepEqual(await states(), [[false, false], [true, false]]);
     await raw.agentSeat.update({ where: { id: 'rev-a' }, data: { byRunner: false } });
     // The Runners tab: the owner gets the people a runner can be admitted for, a member gets nobody, a stranger nothing.
     await raw.user.update({ where: { id: member }, data: { email: 'member@example.test' } });

@@ -42,11 +42,16 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     '@/lib/agent-handoff-http': http, '@/lib/agent-runners': runners, '@/lib/auth-options': { authOptions: {} } };
   const seatsMe = load('src/app/api/apps/auth/seats/me/route.ts', deps, globals);
   const pairRoute = load('src/app/api/runner/pair/route.ts', deps, globals), fetchRoute = load('src/app/api/runner/seats/route.ts', deps, globals);
+  const goodbyeRoute = load('src/app/api/runner/goodbye/route.ts', deps, globals);
   // The routes a signed-in person calls, as `signedIn`.
   let signedIn = null;
   const session = { '@/lib/request-session': { getServerSession: async () => signedIn && { user: { id: signedIn } } } };
   const admitRoute = load('src/app/api/workspaces/[workspaceId]/agent-runners/route.ts', { ...deps, ...session }, globals);
   const removeRoute = load('src/app/api/workspaces/[workspaceId]/agent-runners/[runnerId]/route.ts', { ...deps, ...session }, globals);
+  const renewRoute = load('src/app/api/workspaces/[workspaceId]/agent-runners/[runnerId]/renew/route.ts', { ...deps, ...session }, globals);
+  // Archiving a project is a person's own route, which reads its own session.
+  const archiveRoute = load('src/app/api/projects/[projectId]/archive/route.ts', { ...deps, '@/lib/post-access': load('src/lib/post-access.ts'),
+    '@/lib/session': { getCurrentUser: async () => signedIn && { id: signedIn } } }, globals);
 
   // As Collab's own page sends it, unless a test says otherwise.
   const post = async (handler, bearer, sent, params = {}, headers = { 'Content-Type': 'application/json', Origin: 'https://collab.test' }) => {
@@ -173,7 +178,7 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     assert.equal(await prisma.appToken.count({ where: { userId: changing.userId } }), 0);
   });
 
-  await t.test('a token the runner holds is not sent again; a token ends only when the runner shows it holds a newer one', async () => {
+  await t.test('a token the runner holds is not sent again; a token ends when the runner uses the one that replaces it', async () => {
     const [, holding] = await ask(first.credential, [mine.token.tokenId, 'something-else']);
     assert.deepEqual(holding.seats.map(row => [row.tokenId, row.token]), [[mine.token.tokenId, undefined]]);
     assert.equal(await prisma.appToken.count({ where: { userId: mine.userId } }), 1);
@@ -183,24 +188,70 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     const made = (await prisma.appToken.findMany({ where: { id: { in: [one.seats[0].tokenId, two.seats[0].tokenId] } }, orderBy: { createdAt: 'asc' }, select: { id: true } })).map(row => row.id);
     const [older, newer] = made.map(id => [one.seats[0], two.seats[0]].find(row => row.tokenId === id));
     assert.notEqual(older.tokenId, newer.tokenId);
-    assert.deepEqual([await me(older.token), await me(newer.token)], [200, 200]);
     assert.equal(await me(mine.token.token), 401, 'two newer tokens were made since: the first one ended');
     // Holding the older of the two changes nothing: the newer answer may still arrive.
     assert.equal((await ask(first.credential, [older.tokenId]))[1].seats[0].tokenId, older.tokenId);
-    assert.deepEqual([await me(older.token), await me(newer.token)], [200, 200]);
-    // Holding the newer one ends the older.
+    // Saying it holds the newer one ends nothing either: a token the runner never uses must leave the one it
+    // replaces working, so the seat is not left without one.
     assert.deepEqual((await ask(first.credential, [older.tokenId, newer.tokenId]))[1].seats.map(row => [row.tokenId, row.token]), [[newer.tokenId, undefined]]);
-    assert.deepEqual([await me(older.token), await me(newer.token)], [401, 200]);
-    // A runner that lost its file gets a new token; the lost one works until the runner asks holding the new one.
+    assert.equal(await me(older.token), 200);
+    // The first request made with the newer one ends it.
+    assert.equal(await me(newer.token), 200);
+    assert.equal(await me(older.token), 401);
+    // A runner that lost its file gets a new token; the lost one works until the new one is used.
     const [, again] = await ask(first.credential);
     assert.deepEqual([await me(newer.token), await me(again.seats[0].token)], [200, 200]);
-    await ask(first.credential, [again.seats[0].tokenId]);
-    assert.deepEqual([await me(newer.token), await me(again.seats[0].token)], [401, 200]);
+    assert.equal(await me(newer.token), 401);
     // A token that ended while the seat's agent stayed on (as when another of its tokens still works) reads as one the runner does not hold.
     await prisma.appToken.update({ where: { id: again.seats[0].tokenId }, data: { isRevoked: true } });
     const [, renewed] = await ask(first.credential, [again.seats[0].tokenId]);
     assert.equal(await me(renewed.seats[0].token), 200);
     mine.token = renewed.seats[0];
+  });
+
+  await t.test('a token near its end is renewed on the next ask: the seat holds a working new token before the old one ends', async () => {
+    const left = async days => {
+      await prisma.appToken.update({ where: { id: mine.token.tokenId }, data: { tokenExpiresAt: new Date(Date.now() + days * 86_400_000) } });
+      return (await ask(first.credential, [mine.token.tokenId]))[1].seats[0];
+    };
+    // Outside the window the ask is answered with the token the runner already holds.
+    const kept = await left(8);
+    assert.deepEqual([kept.tokenId, kept.token], [mine.token.tokenId, undefined]);
+    // Inside it the ask carries a new token as well, and both work: the seat is never without a valid token.
+    const renewed = await left(6);
+    assert.notEqual(renewed.tokenId, mine.token.tokenId);
+    assert.match(renewed.token, /^collab_at_/);
+    const days = (new Date(renewed.expiresAt) - Date.now()) / 86_400_000;
+    assert.ok(days > 29.9 && days <= 30, 'the new token lasts 30 days of its own');
+    assert.equal(await prisma.appToken.count({ where: { userId: mine.userId, isRevoked: false } }), 2);
+    // A renewal the runner does not pick up leaves the old token working, and the seat says so.
+    const waiting = (await runners.runnerSeats(prisma, A)).find(row => row.name === 'dev');
+    assert.equal(waiting.state, 'renewing');
+    assert.equal(await me(mine.token.token), 200);
+    assert.equal((await ask(first.credential, [mine.token.tokenId, renewed.tokenId]))[1].seats[0].tokenId, renewed.tokenId, 'the newest token it holds, with no third one made');
+    assert.equal(await prisma.appToken.count({ where: { userId: mine.userId, isRevoked: false } }), 2);
+    // Asking again while it still works with the old one renews again, and the one it is working with is kept.
+    const third = (await ask(first.credential, [mine.token.tokenId]))[1].seats[0];
+    assert.notEqual(third.tokenId, renewed.tokenId);
+    assert.deepEqual([await me(mine.token.token), await me(renewed.token)], [200, 401], 'the runner keeps the token it holds; the renewal it never took ends');
+    // The first request with the new token ends the old one, and the seat reads as held again.
+    assert.equal(await me(third.token), 200);
+    assert.equal(await me(mine.token.token), 401);
+    assert.equal((await runners.runnerSeats(prisma, A)).find(row => row.name === 'dev').state, 'held');
+    mine.token = third;
+  });
+
+  await t.test('a seat whose token ran out while its runner was away shows it, and its runner gets a new one when it comes back', async () => {
+    await prisma.appToken.update({ where: { id: mine.token.tokenId }, data: { tokenExpiresAt: new Date(Date.now() - 1000) } });
+    const row = (await runners.runnerSeats(prisma, A)).find(seat => seat.name === 'dev');
+    assert.deepEqual([row.state, row.runner, row.fetchedAt], ['expired', null, null]);
+    assert.equal(await me(mine.token.token), 401);
+    // The runner comes back after the token ran out: it holds nothing usable, so it is given a new one.
+    const back = (await ask(first.credential, [mine.token.tokenId]))[1].seats[0];
+    assert.match(back.token, /^collab_at_/);
+    assert.equal(await me(back.token), 200);
+    assert.equal((await runners.runnerSeats(prisma, A)).find(seat => seat.name === 'dev').state, 'held');
+    mine.token = back;
   });
 
   await t.test('a person sees per seat whether a runner fetched its token, and a runner is listed for its person and the owner', async () => {
@@ -306,21 +357,86 @@ test('runners: a runner is admitted by its code and fetches the tokens of its pe
     mine.runnerId = admitted.runner.id;
   });
 
-  await t.test('a retired seat is not made again by hand while a token a runner fetched for it still works', async () => {
+  await t.test('retiring a seat leaves no token a runner fetched for it, and the runner is not given it again', async () => {
     const made = (await seat('again', 'security', person, { byRunner: true })).seat;
     const [, answer] = await ask(mine.credential, [mine.token.tokenId]);
     const got = answer.seats.find(row => row.id === made.id);
     assert.equal(await me(got.token), 200);
-    await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: made.id });
-    assert.equal(await me(got.token), 403, 'a retired seat');
-    // For another owner, by hand: the first owner's runner would hold a token of the new seat.
-    await refuses(seat('again', 'security', other), 'tokens_exist', 409);
-    assert.equal(await prisma.appToken.count({ where: { userId: made.userId } }), 1, 'no token was made for the refused seat');
-    assert.equal((await prisma.agentSeat.findUniqueOrThrow({ where: { id: made.id } })).ownerId, person);
-    assert.equal(await tokens.revokeAgentToken({ workspaceId: 'w', actorId: owner, tokenId: got.tokenId }), true);
+    const retired = await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: made.id });
+    assert.equal(retired.revokedTokens, 1);
+    assert.equal(await me(got.token), 401, 'revoked, not only refused as a retired seat');
+    assert.deepEqual((await ask(mine.credential, [mine.token.tokenId]))[1].seats.map(row => row.id), [mine.id], 'the retired seat is not listed any more');
+    // Nothing is left to refuse the name to a seat made again by hand, for another owner.
     const again = await seat('again', 'security', other);
     assert.deepEqual([again.seat.id, again.seat.ownerId, again.seat.byRunner], [made.id, other, false]);
     assert.deepEqual([await me(got.token), await me(again.token.token)], [401, 200]);
+  });
+
+  await t.test('archiving a project leaves its runner seats no token, and they are not fetched again until it is back', async () => {
+    const [, before] = await ask(mine.credential, [mine.token.tokenId]);
+    assert.deepEqual(before.seats.map(row => row.id), [mine.id]);
+    assert.equal(await me(mine.token.token), 200);
+    const archive = async isArchived => {
+      signedIn = owner;
+      const reply = await archiveRoute.PATCH(new Request('https://collab.test/api', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isArchived }) }),
+        { params: Promise.resolve({ projectId: A }) });
+      assert.equal(reply.status, 200, JSON.stringify(await reply.json()));
+    };
+    await archive(true);
+    assert.equal(await me(mine.token.token), 401);
+    assert.deepEqual((await ask(mine.credential))[1].seats, [], 'an archived project\'s seats are not the runner\'s to run');
+    await archive(false);
+    const back = (await ask(mine.credential))[1].seats[0];
+    assert.equal(await me(back.token), 200);
+    mine.token = back;
+  });
+
+  await t.test('the owner asks for a renewal now: what the runner fetched is revoked at once and it gets a new token on its next ask', async () => {
+    const renew = async (as, runnerId, headers) => {
+      signedIn = as;
+      const reply = await renewRoute.POST(new Request('https://collab.test/api', { method: 'POST', headers: headers ?? { 'Content-Type': 'application/json', Origin: 'https://collab.test' } }),
+        { params: Promise.resolve({ workspaceId: 'w', runnerId }) });
+      return [reply.status, await reply.json()];
+    };
+    assert.equal((await renew(null, mine.runnerId))[0], 401);
+    assert.equal((await renew(person, mine.runnerId, { 'Content-Type': 'application/json' }))[1].code, 'same_origin');
+    assert.equal((await renew(other, mine.runnerId))[0], 404, 'not this person\'s runner');
+    assert.equal(await me(mine.token.token), 200);
+    assert.deepEqual(await renew(owner, mine.runnerId), [200, { revokedTokens: 1 }]);
+    assert.equal(await me(mine.token.token), 401, 'the token that may have leaked stops at once');
+    const row = (await runners.runnerSeats(prisma, A)).find(seat => seat.name === 'dev');
+    assert.deepEqual([row.state, row.runner], [null, null], 'the seat waits for a runner to fetch again, as before the first fetch');
+    // The runner itself is not ended by this: it asks on, and the seat is working again a minute later.
+    const fresh = (await ask(mine.credential, [mine.token.tokenId]))[1].seats[0];
+    assert.equal(await me(fresh.token), 200);
+    assert.deepEqual(await renew(person, mine.runnerId), [200, { revokedTokens: 1 }], 'a person renews their own runner');
+    mine.token = (await ask(mine.credential))[1].seats[0];
+    assert.equal(await me(mine.token.token), 200);
+  });
+
+  await t.test('a runner says goodbye: its tokens are revoked at once and its credential is refused from then on', async () => {
+    assert.equal((await post(goodbyeRoute.POST, 'collab_rc_unknown', {}))[0], 401);
+    assert.equal((await post(goodbyeRoute.POST, null, {}))[0], 401);
+    // A pairing nobody admitted is simply dropped, so its code cannot be typed afterwards.
+    const waiting = await pair('going');
+    assert.deepEqual((await post(goodbyeRoute.POST, waiting.credential, {})).slice(0, 2), [200, { revokedTokens: 0 }]);
+    assert.equal((await admit(person, { code: waiting.code }))[1].code, 'code_not_found');
+    assert.equal(await me(mine.token.token), 200);
+    const [status, said, cache] = await post(goodbyeRoute.POST, mine.credential, {});
+    assert.deepEqual([status, said, cache], [200, { revokedTokens: 1 }, 'no-store']);
+    assert.equal(await me(mine.token.token), 401, 'the machine is deleted with the token on it: it stops now, not in 30 days');
+    assert.equal((await ask(mine.credential))[0], 401);
+    assert.equal((await post(goodbyeRoute.POST, mine.credential, {}))[0], 401, 'said once');
+    assert.equal((await runners.runnerSeats(prisma, A)).find(seat => seat.name === 'dev').runner, null, 'its seats show no runner');
+    const audit = await prisma.appAuditLog.findFirst({ where: { action: 'agent_runner.removed' }, orderBy: { createdAt: 'desc' } });
+    assert.equal(audit.details.reason, 'goodbye');
+    // The machine that comes back pairs again.
+    const back = await pair('back');
+    assert.equal((await admit(person, { code: back.code }))[0], 201);
+    mine.credential = back.credential;
+    mine.token = (await ask(back.credential))[1].seats[0];
+    assert.equal(await me(mine.token.token), 200);
+    mine.runnerId = (await prisma.agentRunner.findFirstOrThrow({ where: { name: 'back' } })).id;
   });
 
   await t.test('a runner removed while its token is being made gets none', async () => {

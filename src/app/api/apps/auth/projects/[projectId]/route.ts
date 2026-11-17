@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
+import { revokeProjectRunnerTokens } from '@/lib/agent-runners';
 import { z } from 'zod';
 
 const UpdateProjectSchema = z.object({
@@ -169,6 +170,9 @@ export const PATCH = withAppAuth(
           ...(data.isArchived !== undefined && { isArchived: data.isArchived }),
         },
       });
+
+      // An archived project's seats keep no token a runner fetched, and a runner's next ask no longer lists them.
+      if (data.isArchived) await revokeProjectRunnerTokens(updatedProject.workspaceId, context.user.id, updatedProject.id);
 
       return NextResponse.json(updatedProject);
     } catch (error) {

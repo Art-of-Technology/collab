@@ -607,6 +607,6 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     allowed = true; session = { user: { id: owner } };
     const removed = await remove();
     assert.equal(removed.status, 200);
-    assert.deepEqual(await removed.json(), { unassigned: [] });
+    assert.deepEqual(await removed.json(), { unassigned: [], revokedTokens: 0 });
   });
 });
