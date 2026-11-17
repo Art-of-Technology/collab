@@ -33,7 +33,7 @@ curl -H "Authorization: Bearer $COLLAB_TOKEN" https://collab.example.com/api/app
 
 1. Read the inbox. If it is empty, wait and read again. Nothing is pushed to a runner.
 2. Check out the first issue. On `409`, do not retry it: try the next issue of the same read.
-3. Start a fresh session for the issue. Give it the issue key, the run id and the generation.
+3. Start a fresh session for the issue. Give it the issue key, the run id, the generation and the repository the checkout named.
 4. Renew the lease while the session lives. A lease lasts 60 seconds from each renewal; renew well inside that.
 5. The session reads the run context, does the work and finishes the run with an exit note.
 6. When the session has exited, read the run. If it is not finished, close it.
@@ -89,7 +89,7 @@ Needs `issues:write`. All three fields are required.
 { "issue": "AA-12", "generation": "5b1f0c1e-6f0a-4a57-9a43-2f1f6f1f0a11", "runner": "my-runner 1.0" }
 ```
 
-The reply is the run:
+The reply is the run and the repository to work in:
 
 ```json
 {
@@ -97,7 +97,8 @@ The reply is the run:
     "id": "cm3run00000001", "issueId": "cm3issue000001", "generation": "5b1f0c1e-6f0a-4a57-9a43-2f1f6f1f0a11",
     "state": "running", "outcome": null, "note": null, "ask": null, "usage": null,
     "leaseUntil": "2026-11-16T10:01:00.000Z", "startedAt": "2026-11-16T10:00:00.000Z", "endedAt": null
-  }
+  },
+  "repository": { "id": "cm3repo0000001", "provider": "github", "name": "acme/app", "url": "https://github.com/acme/app", "defaultBranch": "main" }
 }
 ```
 
@@ -111,8 +112,26 @@ The checkout moves the issue to the project's first active "in progress" status.
 | 403 | `seat_required` | The token is an agent token that is not a seat. |
 | 409 | `already_running` | A run is open on the issue. Take the next issue; do not retry. |
 | 409 | `needs_person` | The open run on the issue is lost. The runner that holds it closes it, or a person clears it. |
+| 409 | `repository_required` | The seat's role works in a repository and the issue's project has none to give. The message names the project. Nothing is started: tell a person, and take the next issue. |
 
 A project connected to Forge takes no runs: `409 forge_connected_project`.
+
+## The repository
+
+Collab sends the repository with each checked-out issue, so no address is typed into a runner. It is the repository of the **issue's** project, not of the seat's project.
+
+| Key | Value |
+| --- | --- |
+| `id` | The repository's id in Collab. |
+| `provider` | `github` for a repository connected by the GitHub sign-in, otherwise the connection's own provider, in lower case. |
+| `name` | The path at the provider, `owner/name`. |
+| `url` | What the runner clones. |
+| `defaultBranch` | The default branch where Collab knows it, else `null`. |
+
+- The role is read first: `repository` is `null` when the seat's role works in none, whatever its project has. A lead seat hands work out and gets `null`; so does a person's own run. The checkout and the run context answer the same for an issue.
+- For a role that works in one, Collab works out one repository: the seat's own pick, else the project's default for agents, else the project's only repository. The same repository connected twice, by the GitHub sign-in and as a connection, is one; the same path at two servers is two.
+- A role that works in one and a project that gives none is `409 repository_required`, and no run is started. A run that is already open on the issue is answered first: `already_running` and `needs_person` come before this.
+- No token, secret or credential is ever in the reply. The runner clones with its owner's own sign-in.
 
 ## The run object
 
@@ -233,6 +252,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | Key | What it is |
 | --- | --- |
 | `issue` | `id`, `issueKey`, `title`, `description`, `type`, `priority`, `projectId`, `status`, `category`, `assigneeId` and `agentRequestRole`. |
+| `repository` | The repository of the issue's project, as [above](#the-repository), or `null`: the read answers what that issue's checkout answers. The read refuses nothing, though: a project that works none out is `null` here, and `repository_required` belongs to the checkout. |
 | `lastExitNote` | The note of the last run that finished, or `null`. |
 | `lastExitFacts` | `null` if no run finished; otherwise `pullRequest`, `headCommit` and `nextStep`, each `null` when the last finished run supplied none. |
 | `commentsSince` | The comments made after that run ended, oldest first: `id`, `content`, `createdAt`, `parentId` and `author` with `id` and `name`. All comments when no run has finished. |
@@ -311,6 +331,7 @@ Collab applies no rate limit of its own to these calls beyond `request_cap`.
 ## What Collab leaves to the runner
 
 - Starting one fresh session per issue, and ending it.
+- Making the working copy of the repository Collab names: cloning it, and the branch the session works on.
 - Holding the logins and secrets the session uses. Collab stores none of them.
 - Limiting what a session may do on its machine. Collab decides which work a role gets, not which commands a session runs.
 - Spend limits, and the `usage` reported on finish.

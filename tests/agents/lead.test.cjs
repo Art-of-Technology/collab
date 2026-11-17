@@ -22,6 +22,8 @@ test('lead seat: assigns its project\'s issues to seats, within a limit, and is 
     for (const id of [A, B]) {
       await prisma.project.create({ data: { id, workspaceId: 'w', name: id, slug: id, issuePrefix: id === A ? 'AA' : 'BB' } });
       await prisma.projectStatus.createMany({ data: ['to_do', 'in_progress', 'done'].map((name, order) => ({ id: `${id}-${name}`, projectId: id, name, displayName: name, order, isDefault: !order, isFinal: name === 'done' })) });
+      // Both projects have their repository connected, as a project whose seats take issues does. It is `tests/agents/runs-repository.test.cjs` that works it out.
+      await prisma.repository.create({ data: { projectId: id, githubRepoId: id, owner: 'acme', name: id, fullName: `acme/${id}`, webhookSecret: 'secret' } });
     }
     for (const [id, slug] of [['agent-app', 'collab-agent'], ['person-app', 'collab-cli']]) {
       await prisma.app.create({ data: { id, name: slug, slug, publisherId: 'system', status: 'PUBLISHED', visibility: 'PRIVATE', isSystemApp: true,
