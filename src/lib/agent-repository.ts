@@ -33,16 +33,21 @@ type Database = Prisma.TransactionClient | typeof prisma;
  * and `GitConnection.credentials` do not leave the server, and the runner clones with its owner's own sign-in.
  */
 async function connected(db: Database, projectId: string): Promise<SeatRepository[]> {
+  // A project has at most one `Repository`: `Repository.projectId` is unique.
   const github = await db.repository.findFirst({ where: { projectId, isActive: true }, select: { id: true, fullName: true, defaultBranch: true } });
   const connections = await db.gitConnection.findMany({ where: { projectId, isActive: true }, orderBy: { createdAt: 'asc' },
-    select: { id: true, provider: true, repositoryPath: true, url: true } });
+    select: { id: true, provider: true, baseUrl: true, repositoryPath: true, url: true } });
   const all = [
-    ...(github ? [{ id: github.id, provider: 'github', name: github.fullName, url: `https://github.com/${github.fullName}`, defaultBranch: github.defaultBranch }] : []),
-    ...connections.map(connection => ({ id: connection.id, provider: connection.provider.toLowerCase(), name: connection.repositoryPath, url: connection.url, defaultBranch: null })),
+    ...(github ? [{ server: 'https://github.com',
+      repository: { id: github.id, provider: 'github', name: github.fullName, url: `https://github.com/${github.fullName}`, defaultBranch: github.defaultBranch } }] : []),
+    ...connections.map(connection => ({ server: connection.baseUrl,
+      repository: { id: connection.id, provider: connection.provider.toLowerCase(), name: connection.repositoryPath, url: connection.url, defaultBranch: null } })),
   ];
   // One repository connected twice, by the GitHub sign-in and as a connection, is one repository: the sign-in's row wins.
-  return all.filter((repository, index) => all.findIndex(other => other.provider === repository.provider
-    && other.name.toLowerCase() === repository.name.toLowerCase()) === index);
+  // The server is part of what makes it the same one, as it is in `GitConnection`'s own key: the same path at two
+  // servers is two repositories, and a project that has both picks between them rather than cloning the older row.
+  const key = (entry: typeof all[number]) => [entry.repository.provider, entry.server.toLowerCase(), entry.repository.name.toLowerCase()].join(' ');
+  return all.filter((entry, index) => all.findIndex(other => key(other) === key(entry)) === index).map(entry => entry.repository);
 }
 
 /** The one repository of a project, or null while there is none or the project has several and nothing picks between them. */
@@ -61,9 +66,11 @@ async function only(db: Database, projectId: string) {
  * not a seat's asks for no repository and is never refused: a person works in whatever copy they already have.
  */
 export async function repositoryForSeat(db: Database, projectId: string, seat: { role: string } | null): Promise<SeatRepository | null> {
+  // The role first, so that a seat which works in none is answered null whatever its project has: a lead handed a
+  // repository would be told to work in a copy it has no business in, and the run context answers null for it.
+  if (!seat || !NEEDS_REPOSITORY.includes(seat.role)) return null;
   const repositories = await connected(db, projectId);
   if (repositories.length === 1) return repositories[0];
-  if (!seat || !NEEDS_REPOSITORY.includes(seat.role)) return null;
   const project = await db.project.findUnique({ where: { id: projectId }, select: { name: true } });
   const named = project?.name ?? projectId;
   throw new HandoffError('repository_required', repositories.length
@@ -74,10 +81,11 @@ export async function repositoryForSeat(db: Database, projectId: string, seat: {
 /**
  * The same repository for a session reading its run context. It is a read, so it refuses nothing: a project that
  * works none out answers null, and the checkout is where a seat that needs one is told. The role is the one of the
- * seat the issue is assigned to; an issue held by a person reports what its project has.
+ * seat the issue is assigned to, so the read answers what that issue's checkout answers: an issue held by a person,
+ * or by a seat that works in no repository, is null here as it is there.
  */
 export async function repositoryOfIssue(db: Database, projectId: string, assigneeId: string | null): Promise<SeatRepository | null> {
   const seat = assigneeId ? await db.agentSeat.findUnique({ where: { userId: assigneeId }, select: { role: true, retiredAt: true } }) : null;
-  if (seat && !seat.retiredAt && !NEEDS_REPOSITORY.includes(seat.role)) return null;
+  if (!seat || seat.retiredAt || !NEEDS_REPOSITORY.includes(seat.role)) return null;
   return only(db, projectId);
 }
