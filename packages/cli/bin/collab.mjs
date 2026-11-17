@@ -445,7 +445,10 @@ async function main() {
         // A long wait outlives a deploy: while the server restarts it asks again, until its own time is up.
         if (!spec.waitMax || !serverAway(error)) throw error;
         lastError = error;
-        await delay(Math.max(0, Math.min(spec.pollMs ?? 1000, deadline - Date.now())));
+        const pause = deadline - Date.now();
+        await delay(Math.max(0, Math.min(spec.pollMs ?? 1000, pause)));
+        // A pause cut to the deadline has reached it, even when the timer wakes a moment before the clock reads it.
+        if (pause <= (spec.pollMs ?? 1000)) { if (last) return { ...last, timedOut: true }; throw error; }
         continue;
       }
       const found = ready(result);

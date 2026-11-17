@@ -8,7 +8,7 @@ import { once } from 'node:events';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, symlinkSync, statSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { aclFailureKind, windowsAcl } from '../src/windows-acl.mjs';
 import { commands } from '../src/commands.mjs';
@@ -2339,6 +2339,20 @@ test('new waits return the last outage error without requesting after the deadli
     assert.equal(result.error.error, 'server_error');
     assert.equal(f.calls.length, 1);
   }
+});
+
+test('a wait that sleeps out an outage to its deadline asks no more, though its clock reads short of it', { skip: Boolean(executable) }, async t => {
+  const f = await fixture(t, (_req, res, _body, calls) => {
+    if (calls.length === 1) { res.writeHead(503); return res.end('{}'); }
+    res.end(JSON.stringify({ contains: true }));
+  });
+  // The clock runs a little slow, so when the pause to the deadline ends it still reads a few milliseconds before it.
+  const slowClock = path.join(f.dir, 'slow-clock.mjs');
+  writeFileSync(slowClock, 'const now = Date.now, start = now(); Date.now = () => start + Math.floor((now() - start) * 0.98);\n');
+  const result = await f.run(['live', '--commit', 'a'.repeat(40), '--wait-seconds', '1'],
+    { env: { NODE_OPTIONS: `--import=${pathToFileURL(slowClock).href}` } });
+  assert.equal(result.error?.error, 'server_error', result.stdout);
+  assert.equal(f.calls.length, 1);
 });
 
 test('every wait refuses an answer that is not what it waits for, after one request', async t => {
