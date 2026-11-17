@@ -17,7 +17,7 @@ export const SETUP_ROLES = ['developer', 'reviewer', 'release', 'security'] as c
 const STOPS = {
   project_archived: 'This project is archived: an archived project keeps no seat token a runner fetched. Unarchive it first',
   status_groups: 'Before this project uses seats, put a status in the in progress group and one in the done group: a run moves its issue there when it starts and when it is done',
-  no_runner: 'No runner is admitted to this workspace, so nothing would fetch the seats\' tokens. Admit one with collab worker-style pairing on the machine that runs the seats',
+  no_runner: "No runner is admitted to this workspace, so nothing would fetch the seats' tokens. Start the pairing on the machine that runs the seats and admit its code under Agents, Runners",
   runner_choice: 'Several runners are admitted here and none of them is yours. Admit a runner for yourself, or create the seats in the web app',
 } as const;
 
