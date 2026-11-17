@@ -76,7 +76,7 @@ function fixture({ userId = 'alice', scopes = SCOPES } = {}) {
       return [key, project_(nested, value.select)];
     }));
   }
-  const read = rows => async ({ where, select, orderBy = [], take }) => rows
+  const read = rows => async ({ where, select, orderBy = [], take, skip = 0 }) => rows
     .filter(row => matches(row, where))
     .sort((first, second) => {
       for (const rule of [].concat(orderBy)) {
@@ -87,7 +87,7 @@ function fixture({ userId = 'alice', scopes = SCOPES } = {}) {
       }
       return 0;
     })
-    .slice(0, take)
+    .slice(skip, take === undefined ? undefined : skip + take)
     .map(row => project_(row, select));
   const db = {
     workspace: { findFirst: async ({ where, select }) => {
@@ -173,7 +173,7 @@ test('an agent lists the folders of its workspace and its project, and reads wha
   // Without a project, the workspace's own folders; with one, that project's as well.
   const workspaceLevel = await f.call(FOLDERS);
   assert.equal(workspaceLevel.status, 200);
-  assert.deepEqual(workspaceLevel.body.folders.map(row => row.path), ['ideation', 'ideation/sketches']);
+  assert.deepEqual(workspaceLevel.body.folders.map(row => row.name), ['ideation', 'sketches']);
   assert.equal(workspaceLevel.body.folders[1].level, 'WORKSPACE');
   assert.equal(workspaceLevel.body.hasMore, false);
   const withProject = await f.call(FOLDERS, { query: '?projectId=project' });
@@ -184,7 +184,7 @@ test('an agent lists the folders of its workspace and its project, and reads wha
 
   const folder = await f.call(FOLDER, { id: 'ideation' });
   assert.equal(folder.status, 200);
-  assert.equal(folder.body.folder.path, 'ideation');
+  assert.equal(folder.body.folder.name, 'ideation');
   // Everything in the folder, each with what it is, where it is read and when it changed.
   assert.deepEqual(folder.body.items.map(item => [item.type, item.id]), [
     ['folder', 'sketches'], ['note', 'plan'], ['file', 'photo.png'], ['file', 'plan.pdf'],
@@ -305,4 +305,35 @@ test('revoked membership and deleted files or folders cannot be read', async () 
     assert.equal((await f.call(path, { id: 'ideation' })).status, 403);
   }
   assert.equal(f.state.fetched.length, 0);
+});
+
+test('folder reads page each item type without losing children or notes', async () => {
+  const f = fixture();
+  f.addFolder('ideation');
+  for (let i = 0; i < 201; i++) {
+    f.addFolder(`child-${String(i).padStart(3, '0')}`, { parentId: 'ideation' });
+    f.addNote(`note-${String(i).padStart(3, '0')}`);
+  }
+  const first = await f.call(FOLDER, { id: 'ideation' });
+  assert.equal(first.body.items.length, 400);
+  assert.equal(first.body.nextOffset, 200);
+  const next = await f.call(FOLDER, { id: 'ideation', query: '?offset=200' });
+  assert.deepEqual(next.body.items.map(item => item.id), ['child-200', 'note-200']);
+  assert.equal(next.body.nextOffset, null);
+  assert.equal((await f.call(FOLDERS, { query: '?offset=-1' })).status, 400);
+});
+
+test('PDF text is bounded and malformed PDFs still return metadata', async () => {
+  const f = fixture();
+  f.addFolder('ideation');
+  f.addFile('long.pdf', { mimeType: 'application/pdf', bytes: pdf(['x'.repeat(270000)], { compress: true }) });
+  const result = await f.call(FILE, { id: 'long.pdf' });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.truncated, true);
+  assert.ok(Buffer.byteLength(result.body.text) <= result.body.limits.textBytes);
+  f.addFile('broken.pdf', { mimeType: 'application/pdf', bytes: Buffer.from('%PDF-1.4 broken') });
+  const broken = await f.call(FILE, { id: 'broken.pdf' });
+  assert.equal(broken.status, 200);
+  assert.equal(broken.body.text, null);
+  assert.ok(broken.body.reason);
 });

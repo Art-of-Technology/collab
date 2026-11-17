@@ -44,31 +44,27 @@ const agentNoteWhere = (userId: string): Prisma.NoteWhereInput => ({
 });
 
 export type FolderCard = {
-  id: string; type: 'folder'; name: string; path: string; parentId: string | null;
+  id: string; type: 'folder'; name: string; parentId: string | null;
   projectId: string | null; level: 'WORKSPACE' | 'PROJECT'; updatedAt: string; url: string;
 };
 
-/** The folders of one level, named by the path a person sees: `Ideation/Sketches`. */
+/** Cards use parentId to preserve the tree across independently paged reads. */
 function cards(rows: FolderRow[]): FolderCard[] {
-  const byId = new Map(rows.map(row => [row.id, row]));
-  const path = (row: FolderRow) => {
-    const names = [row.name];
-    let parent = row.parentId ? byId.get(row.parentId) : undefined;
-    for (let depth = 0; parent && depth < 64; depth++) {
-      names.unshift(parent.name);
-      parent = parent.parentId ? byId.get(parent.parentId) : undefined;
-    }
-    return names.join('/');
-  };
   return rows.map(row => ({
-    id: row.id, type: 'folder' as const, name: row.name, path: path(row), parentId: row.parentId,
+    id: row.id, type: 'folder' as const, name: row.name, parentId: row.parentId,
     projectId: row.projectId, level: row.projectId ? 'PROJECT' as const : 'WORKSPACE' as const,
     updatedAt: row.updatedAt.toISOString(), url: `/api/apps/auth/context/folders/${encodeURIComponent(row.id)}`,
-  })).sort((first, second) => first.path.localeCompare(second.path) || first.id.localeCompare(second.id));
+  }));
+}
+
+export function folderOffset(value: string | null): number {
+  if (value === null) return 0;
+  if (!/^\d+$/.test(value) || Number(value) > 50000) throw new ContextFolderError(400, 'offset must be between 0 and 50000');
+  return Number(value);
 }
 
 /** The live folders of a workspace, and of one project inside it, that this account reads. */
-async function levelRows(userId: string, workspaceId: string, projectId: string | null, take: number): Promise<FolderRow[]> {
+async function levelRows(userId: string, workspaceId: string, projectId: string | null, take: number, skip = 0): Promise<FolderRow[]> {
   return prisma.contextFolder.findMany({
     where: {
       AND: [contextFolderAccessWhere(userId)],
@@ -77,7 +73,7 @@ async function levelRows(userId: string, workspaceId: string, projectId: string 
     },
     select: FOLDER_FIELDS,
     orderBy: [{ name: 'asc' }, { id: 'asc' }],
-    take,
+    take, skip,
   });
 }
 
@@ -89,14 +85,14 @@ export async function agentFolderCards(userId: string, workspaceId: string, proj
   return cards(await levelRows(userId, workspaceId, projectId, take));
 }
 
-export async function listAgentFolders(userId: string, workspaceId: string, projectId: string | null) {
-  const folders = await agentFolderCards(userId, workspaceId, projectId, MAX_AGENT_FOLDERS + 1);
+export async function listAgentFolders(userId: string, workspaceId: string, projectId: string | null, offset = 0) {
+  const folders = cards(await levelRows(userId, workspaceId, projectId, MAX_AGENT_FOLDERS + 1, offset));
   return {
     workspaceId,
     projectId,
     folders: folders.slice(0, MAX_AGENT_FOLDERS),
     hasMore: folders.length > MAX_AGENT_FOLDERS,
-    limit: MAX_AGENT_FOLDERS,
+    limit: MAX_AGENT_FOLDERS, offset, nextOffset: folders.length > MAX_AGENT_FOLDERS ? offset + MAX_AGENT_FOLDERS : null,
   };
 }
 
@@ -109,33 +105,30 @@ export type FolderItem =
  * One folder and what is in it: the folders under it, the Notes kept in it and the files uploaded to
  * it, each with its id, its name, what it is, where it is read and when it last changed.
  */
-export async function readAgentFolder(userId: string, workspaceId: string, workspacePath: string, id: unknown) {
+export async function readAgentFolder(userId: string, workspaceId: string, workspacePath: string, id: unknown, offset = 0) {
   const folderId = requiredId(id, 'A folder');
   const folder = await prisma.contextFolder.findFirst({
     where: { AND: [{ id: folderId, workspaceId, deletedAt: null }, contextFolderAccessWhere(userId)] },
     select: FOLDER_FIELDS,
   });
   if (!folder) throw new ContextFolderError(404, 'Folder not found');
-  const siblings = await levelRows(userId, workspaceId, folder.projectId, MAX_AGENT_FOLDERS + 1);
-  const level = cards(siblings.some(row => row.id === folder.id) ? siblings : [...siblings, folder]);
   const [childRows, notes, files] = await Promise.all([
     prisma.contextFolder.findMany({
       where: { AND: [contextFolderAccessWhere(userId)], workspaceId, parentId: folder.id, deletedAt: null },
-      select: FOLDER_FIELDS, orderBy: [{ name: 'asc' }, { id: 'asc' }], take: MAX_AGENT_FOLDER_ITEMS + 1,
+      select: FOLDER_FIELDS, orderBy: [{ name: 'asc' }, { id: 'asc' }], take: MAX_AGENT_FOLDER_ITEMS + 1, skip: offset,
     }),
     prisma.note.findMany({
       where: { AND: [agentNoteWhere(userId)], folderId: folder.id, workspaceId },
       select: { id: true, title: true, type: true, updatedAt: true },
-      orderBy: [{ title: 'asc' }, { id: 'asc' }], take: MAX_AGENT_FOLDER_ITEMS + 1,
+      orderBy: [{ title: 'asc' }, { id: 'asc' }], take: MAX_AGENT_FOLDER_ITEMS + 1, skip: offset,
     }),
     prisma.contextFile.findMany({
       where: { folderId: folder.id, deletedAt: null },
       select: { id: true, name: true, mimeType: true, size: true, updatedAt: true },
-      orderBy: [{ name: 'asc' }, { id: 'asc' }], take: MAX_AGENT_FOLDER_ITEMS + 1,
+      orderBy: [{ name: 'asc' }, { id: 'asc' }], take: MAX_AGENT_FOLDER_ITEMS + 1, skip: offset,
     }),
   ]);
-  const children = cards([...siblings.filter(row => !childRows.some(child => child.id === row.id)), ...childRows])
-    .filter(row => row.parentId === folder.id);
+  const children = cards(childRows);
   const items: FolderItem[] = [
     ...children.slice(0, MAX_AGENT_FOLDER_ITEMS),
     ...notes.slice(0, MAX_AGENT_FOLDER_ITEMS).map(note => ({
@@ -149,10 +142,12 @@ export async function readAgentFolder(userId: string, workspaceId: string, works
     })),
   ];
   return {
-    folder: level.find(row => row.id === folder.id)!,
+    folder: cards([folder])[0],
     items,
     hasMore: children.length > MAX_AGENT_FOLDER_ITEMS || notes.length > MAX_AGENT_FOLDER_ITEMS || files.length > MAX_AGENT_FOLDER_ITEMS,
-    limit: MAX_AGENT_FOLDER_ITEMS,
+    limit: MAX_AGENT_FOLDER_ITEMS, offset,
+    nextOffset: children.length > MAX_AGENT_FOLDER_ITEMS || notes.length > MAX_AGENT_FOLDER_ITEMS || files.length > MAX_AGENT_FOLDER_ITEMS
+      ? offset + MAX_AGENT_FOLDER_ITEMS : null,
   };
 }
 

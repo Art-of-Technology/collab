@@ -8,10 +8,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
-import { agentContextFailure, readAgentFolder } from '@/lib/agent-context-folders';
+import { agentContextFailure, folderOffset, readAgentFolder } from '@/lib/agent-context-folders';
 
 export const GET = withAppAuth(
-  async (_request: NextRequest, context: AppAuthContext, routeParams: { params: Promise<{ id: string }> }) => {
+  async (request: NextRequest, context: AppAuthContext, routeParams: { params: Promise<{ id: string }> }) => {
     if (!await userHasWorkspaceAccess(context.user.id, context.workspace.id)) {
       return NextResponse.json(
         { error: 'workspace_access_denied', error_description: 'Active workspace access required' },
@@ -21,7 +21,7 @@ export const GET = withAppAuth(
     try {
       const { id } = await routeParams.params;
       const path = `/${encodeURIComponent(context.workspace.slug || context.workspace.id)}`;
-      return NextResponse.json(await readAgentFolder(context.user.id, context.workspace.id, path, id));
+      return NextResponse.json(await readAgentFolder(context.user.id, context.workspace.id, path, id, folderOffset(new URL(request.url).searchParams.get('offset'))));
     } catch (error) {
       const failure = agentContextFailure(error);
       return NextResponse.json(failure.body, { status: failure.status });

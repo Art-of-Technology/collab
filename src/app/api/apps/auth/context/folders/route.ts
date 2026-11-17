@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
-import { agentContextFailure, listAgentFolders } from '@/lib/agent-context-folders';
+import { agentContextFailure, folderOffset, listAgentFolders } from '@/lib/agent-context-folders';
 
 export const GET = withAppAuth(
   async (request: NextRequest, context: AppAuthContext) => {
@@ -20,7 +20,7 @@ export const GET = withAppAuth(
     }
     try {
       const projectId = new URL(request.url).searchParams.get('projectId');
-      return NextResponse.json(await listAgentFolders(context.user.id, context.workspace.id, projectId || null));
+      return NextResponse.json(await listAgentFolders(context.user.id, context.workspace.id, projectId || null, folderOffset(new URL(request.url).searchParams.get('offset'))));
     } catch (error) {
       const failure = agentContextFailure(error);
       return NextResponse.json(failure.body, { status: failure.status });
