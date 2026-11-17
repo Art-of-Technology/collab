@@ -31,7 +31,7 @@ type Database = Prisma.TransactionClient | typeof prisma;
  * The project's repositories, the GitHub sign-in's first. A credential is never selected: `Repository.accessToken`
  * and `GitConnection.credentials` do not leave the server, and the runner clones with its owner's own sign-in.
  */
-async function connected(db: Database, projectId: string): Promise<SeatRepository[]> {
+export async function connectedRepositories(db: Database, projectId: string): Promise<SeatRepository[]> {
   // A project has at most one `Repository`: `Repository.projectId` is unique.
   const github = await db.repository.findFirst({ where: { projectId, isActive: true }, select: { id: true, fullName: true, defaultBranch: true } });
   const connections = await db.gitConnection.findMany({ where: { projectId, isActive: true }, orderBy: { createdAt: 'asc' },
@@ -49,37 +49,29 @@ async function connected(db: Database, projectId: string): Promise<SeatRepositor
   return all.filter((entry, index) => all.findIndex(other => key(other) === key(entry)) === index).map(entry => entry.repository);
 }
 
-/** The one repository of a project, or null while there is none or the project has several and nothing picks between them. */
-async function only(db: Database, projectId: string) {
-  const repositories = await connected(db, projectId);
-  return repositories.length === 1 ? repositories[0] : null;
+/** An inactive or disconnected default never resolves, nor does an id belonging to another project. */
+export async function projectRepositoryState(db: Database, projectId: string) {
+  const repositories = await connectedRepositories(db, projectId);
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { agentDefaultRepositoryId: true } });
+  const repository = repositories.length === 1 ? repositories[0]
+    : repositories.find(candidate => candidate.id === project?.agentDefaultRepositoryId) ?? null;
+  return { repositories, repository };
 }
 
-/**
- * What a checkout answers with: the seat's own pick, else the project's default for agents, else the project's only
- * repository. Neither the pick nor the default is in the database yet (CLB-603 and CLB-601 add them, and slot in
- * ahead of the line below), so today a project with several repositories works none out.
- *
- * No checkout is refused over a repository. A role that needs none gets null; so does a role that needs one whose
- * project works none out, and that checkout stands: the runner falls back to the copy it is configured with, as it
- * did before Collab sent the field at all. Refusing instead would stop seats that are working today, and the field
- * is there to save a runner the configuration, not to gate its work; the refusal belongs to the day runners carry
- * no repository of their own. A run that is not a seat's asks for none either: a person works in the copy they have.
- */
+/** The seat's pick will take precedence when seat repository selection is introduced. */
 export async function repositoryForSeat(db: Database, projectId: string, seat: { role: string } | null): Promise<SeatRepository | null> {
   // The role first, so that a seat which works in none is answered null whatever its project has: a lead handed a
   // repository would be told to work in a copy it has no business in, and the run context answers null for it.
   if (!seat || !NEEDS_REPOSITORY.includes(seat.role)) return null;
-  return only(db, projectId);
+  return (await projectRepositoryState(db, projectId)).repository;
 }
 
 /**
- * The same repository for a session reading its run context: a project that works none out answers null here as it
- * does at the checkout. The role is the one of the seat the issue is assigned to, so the read answers what that
+ * The same repository for a session reading its run context: a project that works none out answers null here. The role is the one of the seat the issue is assigned to, so the read answers what that
  * issue's checkout answers: an issue held by a person, or by a seat that works in no repository, is null here too.
  */
 export async function repositoryOfIssue(db: Database, projectId: string, assigneeId: string | null): Promise<SeatRepository | null> {
   const seat = assigneeId ? await db.agentSeat.findUnique({ where: { userId: assigneeId }, select: { role: true, retiredAt: true } }) : null;
   if (!seat || seat.retiredAt || !NEEDS_REPOSITORY.includes(seat.role)) return null;
-  return only(db, projectId);
+  return (await projectRepositoryState(db, projectId)).repository;
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { AgentRepositoryDefault } from './AgentRepositoryDefault';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -89,6 +90,7 @@ export function GitConnections({ projectId }: { projectId: string }) {
       <h2 className="text-base font-medium text-collab-50">Git provider connections</h2>
       <p className="text-sm text-collab-400">Connect GitHub Enterprise, Forgejo, GitLab or Bitbucket. Activity refreshes when you connect or select Refresh. Existing GitHub automation stays available above.</p>
     </div>
+    <AgentRepositoryDefault projectId={projectId} />
     {loading && <p role="status">Loading Git connections…</p>}
     {loadError && <div role="alert" className="text-red-400">{loadError} <Button variant="outline" onClick={() => read().catch(error => setLoadError(error.message))}>Retry</Button></div>}
     {!loading && !loadError && <>

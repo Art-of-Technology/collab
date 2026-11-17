@@ -51,6 +51,13 @@ test('the repository of the issue\'s project comes with the checkout and the run
   });
   // The application's client, so Trash is hidden here as it is in production.
   const raw = db.prisma;
+  await t.test('the additive migration preserves existing projects with no explicit default', async () => {
+    await raw.$executeRawUnsafe('ALTER TABLE "Project" DROP COLUMN "agentDefaultRepositoryId"');
+    await raw.$executeRawUnsafe(require('node:fs').readFileSync('prisma/migrations/20261117000200_agent_default_repository/migration.sql', 'utf8'));
+    const project = await raw.project.findUniqueOrThrow({ where: { id: A } });
+    assert.equal(project.agentDefaultRepositoryId, null);
+    assert.equal(project.issuePrefix, 'AA');
+  });
   const prisma = raw.$extends(load('src/lib/issue-visibility.ts').issueVisibilityExtension(Prisma.dmmf.datamodel.models));
 
   const crypto = { encryptToken: async value => Buffer.from(value), decryptToken: async data => Buffer.from(data).toString(), getEncryptionKey: () => {} };
@@ -156,10 +163,10 @@ test('the repository of the issue\'s project comes with the checkout and the run
     assert.deepEqual((await context(personToken, mine))[1].repository, null);
   });
 
-  await t.test('the same path at two servers is two repositories, not one: nothing picks between them, so none is named', async () => {
+  await t.test('the same path at two servers is two repositories, not one: nothing picks between them, checkout refuses clearly', async () => {
     const [status, body] = await checkout(devE, await issue(devE));
     // Were the two rows taken for one repository, the project would have one and the checkout would name it.
-    assert.deepEqual([status, body.repository, body.run.state], [200, null, 'running']);
+    assert.deepEqual([status, body.error], [409, 'repository_required']);
   });
 
   await t.test('a run that was lost is still reported as such, ahead of the repository a project does not have', async () => {
@@ -180,12 +187,58 @@ test('the repository of the issue\'s project comes with the checkout and the run
     assert.equal((await raw.issue.findUniqueOrThrow({ where: { id: empty.id } })).statusId, `${B}-in_progress`);
     assert.deepEqual((await context(devB, empty))[1].repository, null);
 
-    // Several, and nothing picks between them yet: the same answer, and the same run.
+    // Several without a default refuses before creating a run or moving the issue.
     const several = await issue(devC);
     const [got, started] = await checkout(devC, several);
-    assert.deepEqual([got, started.repository, started.run.state], [200, null, 'running']);
-    assert.equal(await raw.agentRun.count({ where: { issueId: several.id } }), 1);
+    assert.deepEqual([got, started.error], [409, 'repository_required']);
+    assert.match(started.error_description, /default repository/);
+    assert.equal(await raw.agentRun.count({ where: { issueId: several.id } }), 0);
+    assert.equal((await raw.issue.findUniqueOrThrow({ where: { id: several.id } })).statusId, `${C}-to_do`);
     assert.deepEqual((await context(devC, several))[1].repository, null);
+  });
+
+  await t.test('administrators choose an active project default; checkout and context use it', async () => {
+    let actor = owner;
+    const route = load('src/app/api/projects/[projectId]/agent-repository/route.ts', {
+      ...deps, '@/lib/session': { getCurrentUser: async () => actor ? { id: actor } : null },
+      '@/lib/post-access': load('src/lib/post-access.ts'),
+    }, globals);
+    const selectDefault = async (repositoryId, origin = 'https://collab.test') => {
+      const response = await route.PATCH(new Request('https://collab.test/api', { method: 'PATCH', headers: { origin }, body: JSON.stringify({ repositoryId }) }),
+        { params: Promise.resolve({ projectId: C }) });
+      return [response.status, await response.json()];
+    };
+    const connection = await raw.gitConnection.findFirstOrThrow({ where: { projectId: C } });
+    const foreign = await raw.repository.findFirstOrThrow({ where: { projectId: A } });
+    actor = null;
+    assert.equal((await selectDefault(connection.id))[0], 401);
+    actor = person;
+    assert.equal((await selectDefault(connection.id))[0], 403);
+    actor = owner;
+    assert.equal((await selectDefault(connection.id, 'https://other.test'))[0], 403);
+    assert.equal((await selectDefault(foreign.id))[0], 400);
+    const [saved, state] = await selectDefault(connection.id);
+    assert.equal(saved, 200);
+    assert.equal(state.repository.id, connection.id);
+    const read = await route.GET(new Request('https://collab.test/api'), { params: Promise.resolve({ projectId: C }) });
+    assert.equal(read.status, 200);
+    const settings = await read.json();
+    assert.equal(settings.repository.id, connection.id);
+    assert.equal(settings.repositories.length, 2);
+    assert.equal(settings.canManage, true);
+    for (const secret of ['accessToken', 'webhookSecret', 'credentials']) assert.ok(!JSON.stringify(settings).includes(secret));
+    const target = await issue(devC);
+    const [status, body] = await checkout(devC, target);
+    assert.equal(status, 200, JSON.stringify(body));
+    assert.equal(body.repository.id, connection.id);
+    assert.deepEqual((await context(devC, target))[1].repository, body.repository);
+    // A stale default never sends a checkout to an inactive repository. With one remaining it is automatic.
+    await raw.gitConnection.update({ where: { id: connection.id }, data: { isActive: false } });
+    assert.equal((await selectDefault(connection.id))[0], 400);
+    assert.equal((await checkout(devC, await issue(devC)))[1].repository.name, 'acme/one');
+    await raw.gitConnection.update({ where: { id: connection.id }, data: { isActive: true } });
+    await raw.project.update({ where: { id: C }, data: { agentDefaultRepositoryId: foreign.id } });
+    assert.equal((await checkout(devC, await issue(devC)))[0], 409);
   });
 
   await t.test('a person takes an issue of a project with no repository, and gets none', async () => {

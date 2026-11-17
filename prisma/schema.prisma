@@ -503,6 +503,7 @@ model Project {
   nextIssueNumbers Json     @default("{\"EPIC\": 1, \"STORY\": 1, \"TASK\": 1, \"BUG\": 1, \"MILESTONE\": 1, \"SUBTASK\": 1}")
   coordinator      Json?
   agentMode        String   @default("handoffs") // handoffs | seats
+  agentDefaultRepositoryId String? // Active Repository or GitConnection id, validated within this project
   agentSwitchedAt  DateTime?
   agentSeats       AgentSeat[]
 

@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { HandoffError, LEAD_CAP, NOT_DONE, fromLead, seatFor, seatWriteGuard } from '@/lib/agent-seats';
-import { repositoryForSeat, repositoryOfIssue } from '@/lib/agent-repository';
+import { repositoryForSeat, repositoryOfIssue, connectedRepositories, NEEDS_REPOSITORY } from '@/lib/agent-repository';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
@@ -235,6 +235,9 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
       }
       // The repository the session works in, answered for the run that is open as well as for the one started below.
       const repository = await repositoryForSeat(tx, issue.projectId, seat);
+      if (seat && NEEDS_REPOSITORY.includes(seat.role) && !repository && (await connectedRepositories(tx, issue.projectId)).length > 1) {
+        throw new HandoffError('repository_required', 'Choose a default repository for agents in Project settings before starting this run.', 409);
+      }
       if (open) { const { userId: _, ...run } = open; return { run, repository }; }
       const now = new Date();
       const run = await tx.agentRun.create({ data: { workspaceId: context.workspace.id, issueId: issue.id, seatId: seat?.id, userId: me,
