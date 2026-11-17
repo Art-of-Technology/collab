@@ -61,6 +61,7 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   const [asking, setAsking] = useState<'folder' | 'note' | null>(null);
   const upload = useRef<HTMLInputElement | null>(null);
   // The folder open now, for a write that finishes after the page has moved on.
+  const navigation = useRef(0);
   const openNow = useRef(openFolderId);
   openNow.current = openFolderId;
 
@@ -137,12 +138,14 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   });
 
   const openRow = (row: TreeRow) => {
+    navigation.current++;
     if (row.projectId !== level.projectId) setLevel({ projectId: row.projectId });
     setOpenFolderId(row.folderId);
     expand(row.folderId ? folderKey(row.folderId) : rootKey(row.projectId), true);
   };
 
   const openFolder = (folderId: string | null) => {
+    navigation.current++;
     setOpenFolderId(folderId);
     if (folderId) expand(folderKey(folderId), true);
   };
@@ -184,12 +187,16 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   };
 
   const createFolder = (name: string) => write(async () => {
+    const location = navigation.current;
     const created = await readJson(await fetch('/api/context/folders', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workspaceId, projectId: level.projectId, parentId: openFolderId, name }),
     }));
     setAsking(null);
-    setFolders(await readFolders(level.projectId));
+    if (location !== navigation.current) return;
+    const fresh = await readFolders(level.projectId);
+    if (location !== navigation.current) return;
+    setFolders(fresh);
     openFolder(created.id as string);
   });
 

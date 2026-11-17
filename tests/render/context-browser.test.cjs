@@ -31,7 +31,7 @@ const { ContextBrowser } = load('src/components/context/ContextBrowser.tsx', {
     DropdownMenu: pass, DropdownMenuTrigger: pass, DropdownMenuContent: pass,
     DropdownMenuItem: ({ children, onSelect, disabled }) => h('button', { type: 'button', disabled, onClick: onSelect, 'data-menu': true }, children),
   },
-  '@/components/ui/input-dialog': { InputDialog: () => null },
+  '@/components/ui/input-dialog': { InputDialog: ({ open, onConfirm }) => open ? h('button', { onClick: () => onConfirm('New folder') }, 'Confirm') : null },
   '@/components/context/ContextFilePreview': { ContextFilePreview: () => null },
   '@/components/context/ContextItemList': load('src/components/context/ContextItemList.tsx', { ...jsx, '@/lib/context-file-preview': preview }),
   '@/components/context/ContextTree': load('src/components/context/ContextTree.tsx', jsx),
@@ -115,5 +115,27 @@ test('a folder that cannot be read lists nothing of the folder open before it', 
   await settle();
   assert.equal(document.querySelector('[role="alert"]').textContent, 'This folder could not be read');
   assert.deepEqual(list(), []);
+  await React.act(async () => root.render(null));
+});
+
+
+test('creating a folder does not take over a location opened while the request is pending', async () => {
+  let finishCreation;
+  routes = {
+    'GET /api/context/folders': query => ({ folders: query.get('project') ? [{ id: 'project-folder', name: 'Project folder', parentId: null }] : folders }),
+    'GET /api/context/items': () => ({ notes: [], files: [] }),
+    'POST /api/context/folders': () => new Promise(resolve => { finishCreation = resolve; }),
+  };
+  await React.act(async () => root.render(h(ContextBrowser, { workspaceId: 'w', workspaceSlug: 'weezboo', projects: [{ id: 'p', name: 'Project' }] })));
+  await settle();
+  await React.act(async () => { [...document.querySelectorAll('[data-menu]')].find(row => row.textContent === 'Folder').click(); });
+  await React.act(async () => { [...document.querySelectorAll('button')].find(row => row.textContent === 'Confirm').click(); });
+  await React.act(async () => { [...document.querySelectorAll('[role="treeitem"]')].find(row => row.textContent === 'Project').click(); });
+  await settle();
+  await React.act(async () => { finishCreation({ id: 'created' }); });
+  await settle();
+  assert.equal(document.querySelector('[role="treeitem"][aria-selected="true"]').textContent, 'Project');
+  assert.ok(tree().includes('Project folder'));
+  assert.ok(!tree().includes('Ideas'));
   await React.act(async () => root.render(null));
 });
