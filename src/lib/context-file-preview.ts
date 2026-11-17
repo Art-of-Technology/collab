@@ -79,7 +79,7 @@ export function decodePreviewText(bytes: Uint8Array): string {
  * The rows of a CSV, the way the file writes them: a field may be quoted, and a quoted field may hold
  * commas, line breaks and doubled quotes. Nothing in a field is ever read as anything but a string.
  */
-function parseCsv(text: string): { rows: string[][]; lastRowEnded: boolean } {
+function parseCsv(text: string, stopAfter: number): { rows: string[][]; lastRowEnded: boolean } {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
@@ -104,6 +104,8 @@ function parseCsv(text: string): { rows: string[][]; lastRowEnded: boolean } {
       field = '';
       row = [];
       pending = false;
+      // One row past the limit is enough to know the file holds more; the rest is not read.
+      if (rows.length >= stopAfter) break;
       continue;
     }
     field += character;
@@ -120,7 +122,7 @@ function parseCsv(text: string): { rows: string[][]; lastRowEnded: boolean } {
  * short lose their last row: it is half a row, not a row.
  */
 export function csvPreview(text: string, truncated: boolean, limit = CONTEXT_PREVIEW_ROWS) {
-  const { rows, lastRowEnded } = parseCsv(text);
+  const { rows, lastRowEnded } = parseCsv(text, limit + 1);
   if (truncated && !lastRowEnded) rows.pop();
   return { rows: rows.slice(0, limit), rowLimit: limit, hasMore: truncated || rows.length > limit };
 }
