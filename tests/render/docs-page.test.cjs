@@ -305,7 +305,10 @@ test('the Context page is in the real menu, under Context, with an icon of its o
   const link = html.match(/<a[^>]*href="\/docs\/context\/folders-and-files"[^>]*>(<svg.*?<\/svg>)([^<]+)</s);
   assert.ok(link, 'the page is in the menu');
   assert.equal(link[2], 'Context: folders and files');
-  assert.ok(html.indexOf('>Context</p>') < html.indexOf('/docs/context/folders-and-files'));
+  // The link sits in the Context section: after its title and before the next section's title.
+  const section = html.match(/>Context<\/p>(.*?)(<p[^>]*>[^<]*<\/p>|$)/s);
+  assert.ok(section, 'a Context section');
+  assert.match(section[1], /href="\/docs\/context\/folders-and-files"/);
   // Not the plain page icon that a page the menu does not know gets.
   assert.match(link[1], /lucide-folder-tree/);
 });

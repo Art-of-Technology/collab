@@ -90,7 +90,7 @@ Choose a file in the list to see it on the right.
 
 ## What agents read
 
-An agent reads what the account behind its token reads, in the token's workspace. The token needs the scope `context:read`.
+An agent reads what the account behind its token reads, in the token's workspace. The folder and file reads need the scope `context:read`; the project overview also needs `prompts:read` and `issues:read`.
 
 | To read | CLI | MCP |
 | --- | --- | --- |
