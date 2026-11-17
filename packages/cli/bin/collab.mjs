@@ -435,9 +435,10 @@ async function main() {
     let last, lastError;
     for (;;) {
       const window = deadline - Date.now();
-      if (window <= 0 && !last) throw lastError;
-      if (last && window < 1000) {
+      // A request gets a second of its own, so under that there is no room for one: the wait ends on its last answer, or its last error.
+      if ((last || lastError) && window < 1000) {
         await delay(Math.max(0, window));
+        if (!last) throw lastError;
         return { ...last, timedOut: true };
       }
       let result;
@@ -445,10 +446,7 @@ async function main() {
         // A long wait outlives a deploy: while the server restarts it asks again, until its own time is up.
         if (!spec.waitMax || !serverAway(error)) throw error;
         lastError = error;
-        const pause = deadline - Date.now();
-        await delay(Math.max(0, Math.min(spec.pollMs ?? 1000, pause)));
-        // A pause cut to the deadline has reached it, even when the timer wakes a moment before the clock reads it.
-        if (pause <= (spec.pollMs ?? 1000)) { if (last) return { ...last, timedOut: true }; throw error; }
+        await delay(Math.max(0, Math.min(spec.pollMs ?? 1000, deadline - Date.now())));
         continue;
       }
       const found = ready(result);

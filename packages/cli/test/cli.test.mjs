@@ -8,7 +8,7 @@ import { once } from 'node:events';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, symlinkSync, statSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { aclFailureKind, windowsAcl } from '../src/windows-acl.mjs';
 import { commands } from '../src/commands.mjs';
@@ -1117,14 +1117,12 @@ async function fixture(t, handler) {
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const url = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); rmSync(temporary, { recursive: true, force: true }); });
-  function run(args, { input, env = {}, stderrCallback, childCallback, source = false } = {}) {
+  function run(args, { input, env = {}, stderrCallback, childCallback } = {}) {
     const childEnv = { ...process.env };
     for (const key of Object.keys(childEnv)) if (key.toUpperCase().startsWith('COLLAB_')) delete childEnv[key];
     Object.assign(childEnv, { COLLAB_CONFIG_DIR: dir, COLLAB_URL: url, COLLAB_TOKEN: 'synthetic-token', ...env });
     for (const key of Object.keys(childEnv)) if (childEnv[key] === undefined) delete childEnv[key];
-    // `source` runs the CLI's own code under Node even where the installed executable is tested, for a test that needs Node's options.
-    const native = executable && !source;
-    const child = spawn(native ? executable : process.execPath, [...(native ? [] : [bin]), ...args], { cwd: dir, env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(executable || process.execPath, [...(executable ? [] : [bin]), ...args], { cwd: dir, env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     child.stdout.on('data', data => { stdout += data; });
     child.stderr.on('data', data => { stderr += data; stderrCallback?.(stderr); });
@@ -2338,23 +2336,22 @@ test('new waits return the last outage error without requesting after the deadli
   ]) {
     f.calls.length = 0;
     const result = await f.run([...args, '--wait-seconds', '1']);
-    assert.equal(result.error.error, 'server_error');
+    assert.equal(result.error.error, 'server_error', result.stderr);
     assert.equal(f.calls.length, 1);
   }
 });
 
-test('a wait that sleeps out an outage to its deadline asks no more, though its clock reads short of it', async t => {
+test('an outage leaves no room for a request that cannot finish before the deadline', async t => {
   const f = await fixture(t, (_req, res, _body, calls) => {
-    if (calls.length === 1) { res.writeHead(503); return res.end('{}'); }
-    res.end(JSON.stringify({ contains: true }));
+    if (calls.length === 1) return setTimeout(() => { res.writeHead(503); res.end('{}'); }, 500);
+    res.end(JSON.stringify({ contains: true, comments: [{ id: 'late' }] }));
   });
-  // The clock runs a little slow, so when the pause to the deadline ends it still reads a few milliseconds before it.
-  const slowClock = path.join(f.dir, 'slow-clock.mjs');
-  writeFileSync(slowClock, 'const now = Date.now, start = now(); Date.now = () => start + Math.floor((now() - start) * 0.98);\n');
-  const result = await f.run(['live', '--commit', 'a'.repeat(40), '--wait-seconds', '1'],
-    { env: { NODE_OPTIONS: `--import=${pathToFileURL(slowClock).href}` }, source: true });
-  assert.equal(result.error?.error, 'server_error', result.stdout);
+  // The outage answers after 0.5 s and the next try is 5 s later: half a second of the wait is left, less than a request takes.
+  const started = Date.now();
+  const result = await f.run(['live', '--commit', 'a'.repeat(40), '--wait-seconds', '6']);
+  assert.equal(result.error?.error, 'server_error', result.stderr);
   assert.equal(f.calls.length, 1);
+  assert.ok(Date.now() - started >= 5900, `waited ${Date.now() - started} ms of 6 s`);
 });
 
 test('every wait refuses an answer that is not what it waits for, after one request', async t => {
