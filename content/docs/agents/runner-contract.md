@@ -32,7 +32,7 @@ curl -H "Authorization: Bearer $COLLAB_TOKEN" https://collab.example.com/api/app
 ## The loop
 
 1. Read the inbox. If it is empty, wait and read again. Nothing is pushed to a runner.
-2. Check out the first issue. On `409`, do not retry it: try the next issue of the same read.
+2. Check out the first issue. On `409`, do not retry it: try the next issue of the same read. The exception is `repository_required`, which an administrator's choice alone clears: keep that issue and try it again at the next read of the inbox.
 3. Start a fresh session for the issue. Give it the issue key, the run id, the generation and the repository the checkout named.
 4. Renew the lease while the session lives. A lease lasts 60 seconds from each renewal; renew well inside that.
 5. The session reads the run context, does the work and finishes the run with an exit note.
@@ -110,7 +110,7 @@ The checkout moves the issue to the project's first active "in progress" status.
 | 403 | `wrong_project` | The issue is in another project than the seat's. |
 | 403 | `not_assigned` | The issue is assigned to someone else. |
 | 403 | `seat_required` | The token is an agent token that is not a seat. |
-| 409 | `repository_required` | Several repositories are connected and no valid default is selected. Ask an administrator to choose the default in Project settings. Nothing else has to happen: the checkout can be repeated once one is chosen, and `collab seat run` 0.13.1 and later waits for the issue rather than leaving it alone. |
+| 409 | `repository_required` | Several repositories are connected and no valid default is selected. Ask an administrator to choose the default in Project settings. Nothing else has to happen: the checkout can be repeated once one is chosen, and `collab seat run` 0.14.1 and later waits for the issue rather than leaving it alone. |
 | 409 | `already_running` | A run is open on the issue. Take the next issue; do not retry. |
 | 409 | `needs_person` | The open run on the issue is lost. The runner that holds it closes it, or a person clears it. |
 
