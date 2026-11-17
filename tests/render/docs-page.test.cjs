@@ -293,6 +293,26 @@ test('the layout lists every section and page of the navigation and marks the pa
   assert.match(renderToStaticMarkup(Layout({ children: 'The page' })), /<a[^>]*aria-current="page"[^>]*><svg.*?<\/svg>Collab docs</s);
 });
 
+test('the Context page is in the real menu, under Context, with an icon of its own', () => {
+  const sidebar = component('src/components/docs/DocsSidebar.tsx', {
+    'next/link': require('next/link'), 'next/navigation': { usePathname: () => '/docs' }, 'lucide-react': require('lucide-react'),
+  });
+  const docs = docsIn(repo);
+  const sections = docs.docsNav().map(section => ({
+    title: section.title, pages: section.pages.map(page => ({ href: docs.docHref(page.slug), title: page.title })),
+  }));
+  const html = renderToStaticMarkup(sidebar.DocsSidebar({ sections }));
+  const link = html.match(/<a[^>]*href="\/docs\/context\/folders-and-files"[^>]*>(<svg.*?<\/svg>)([^<]+)</s);
+  assert.ok(link, 'the page is in the menu');
+  assert.equal(link[2], 'Context: folders and files');
+  // The link sits in the Context section: after its title and before the next section's title.
+  const section = html.match(/>Context<\/p>(.*?)(<p[^>]*>[^<]*<\/p>|$)/s);
+  assert.ok(section, 'a Context section');
+  assert.match(section[1], /href="\/docs\/context\/folders-and-files"/);
+  // Not the plain page icon that a page the menu does not know gets.
+  assert.match(link[1], /lucide-folder-tree/);
+});
+
 test('diagrams are drawn in the page\'s own element after it is on screen', () => {
   const container = { name: 'the page element' };
   const drawn = [];
