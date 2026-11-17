@@ -201,7 +201,7 @@ async function markLost(workspaceId: string) {
  * Rule 4: take an issue. One run is open per issue, and only its assignee starts one: a seat on an issue of its
  * project, with a 60 second lease, or a person, with none. An agent token that is not a seat starts none. The issue
  * moves to its project's first "in progress" status unless it is in one or the project has none. The reply names the
- * repository of the issue's project, so the runner needs none of its own; `repositoryForSeat` says when it is refused.
+ * repository of the issue's project, so the runner needs none of its own, or null where Collab works none out.
  */
 export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, input: z.infer<typeof checkoutSchema>) {
   const me = context.user.id;
@@ -233,8 +233,7 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
         }
         throw new HandoffError('already_running', 'A run is already open on this issue', 409);
       }
-      // Before any run is opened, and after the run that is open has been answered for: a seat whose role needs a
-      // repository and whose project works none out is refused here, so no session starts with nowhere to work.
+      // The repository the session works in, answered for the run that is open as well as for the one started below.
       const repository = await repositoryForSeat(tx, issue.projectId, seat);
       if (open) { const { userId: _, ...run } = open; return { run, repository }; }
       const now = new Date();
