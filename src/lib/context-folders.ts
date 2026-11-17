@@ -92,6 +92,11 @@ async function resolveLevel(db: Database, userId: string, workspaceId: unknown, 
   return { workspaceId: workspace.id, projectId: projectKey };
 }
 
+/** The level a read is asking about, for callers outside this file that hold no transaction. */
+export function resolveContextLevel(userId: string, workspaceId: unknown, projectId: unknown): Promise<Level> {
+  return resolveLevel(prisma, userId, workspaceId, projectId);
+}
+
 type LoadedFolder = Prisma.ContextFolderGetPayload<{ select: typeof FOLDER_FIELDS }> & {
   workspace: { ownerId: string; members: { role: string }[] };
 };
