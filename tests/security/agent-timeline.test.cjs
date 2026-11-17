@@ -3,10 +3,11 @@ const assert = require('node:assert/strict');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const { load } = require('./helpers.cjs');
+const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') });
 const helpers = load('src/components/issue/sections/activity/utils/activityHelpers.ts');
 const { ActivityItem } = load('src/components/issue/sections/activity/components/ActivityItem.tsx', {
   'react/jsx-runtime': require('react/jsx-runtime'), 'date-fns': require('date-fns'), 'next/navigation': { useParams: () => ({}) },
-  '@/components/ui/custom-avatar': { CustomAvatar: () => null },
+  '@/lib/comment-html': { commentHtml }, '@/components/ui/custom-avatar': { CustomAvatar: () => null },
   './ActivityIcon': { ActivityIcon: () => null }, './ActivityChangeDetails': { ActivityChangeDetails: () => null },
   '../utils/activityHelpers': helpers,
 });
@@ -24,8 +25,20 @@ test('agent timeline identifies each agent and the work transition', () => {
     activity.details.content = `<${tag}>unsafe</script>\nEvidence retained`;
     const html = renderToStaticMarkup(React.createElement(ActivityItem, { activity }));
     assert.match(html, /Handoff details/);
-    assert.match(html, /&lt;script\b/i);
+    assert.doesNotMatch(html, /unsafe/);
     assert.doesNotMatch(html, /<script\b/i);
   }
   assert.equal(helpers.getActionText({ action: 'CREATED', user: { name: 'Cem' } }), 'Cem created this issue');
+});
+
+
+test('run notes and handoffs render sanitized Markdown', () => {
+  for (const action of ['AGENT_RUN_FINISHED', 'AGENT_PROGRESS']) {
+    const activity = { action, details: { content: '## Done\n\n- **Fixed**\n\n[Link](https://example.com)\n\n<script>alert(1)</script>' }, user: { name: 'Agent' }, createdAt: new Date() };
+    const html = renderToStaticMarkup(React.createElement(ActivityItem, { activity }));
+    assert.match(html, /<h2[^>]*>Done<\/h2>/);
+    assert.match(html, /<li><strong>Fixed<\/strong><\/li>/);
+    assert.match(html, /href="https:\/\/example.com"/);
+    assert.doesNotMatch(html, /<script|alert\(1\)/);
+  }
 });
