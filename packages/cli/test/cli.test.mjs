@@ -2336,9 +2336,22 @@ test('new waits return the last outage error without requesting after the deadli
   ]) {
     f.calls.length = 0;
     const result = await f.run([...args, '--wait-seconds', '1']);
-    assert.equal(result.error.error, 'server_error');
+    assert.equal(result.error.error, 'server_error', result.stderr);
     assert.equal(f.calls.length, 1);
   }
+});
+
+test('an outage leaves no room for a request that cannot finish before the deadline', async t => {
+  const f = await fixture(t, (_req, res, _body, calls) => {
+    if (calls.length === 1) return setTimeout(() => { res.writeHead(503); res.end('{}'); }, 500);
+    res.end(JSON.stringify({ contains: true, comments: [{ id: 'late' }] }));
+  });
+  // The outage answers after 0.5 s and the next try is 5 s later: half a second of the wait is left, less than a request takes.
+  const started = Date.now();
+  const result = await f.run(['live', '--commit', 'a'.repeat(40), '--wait-seconds', '6']);
+  assert.equal(result.error?.error, 'server_error', result.stderr);
+  assert.equal(f.calls.length, 1);
+  assert.ok(Date.now() - started >= 5900, `waited ${Date.now() - started} ms of 6 s`);
 });
 
 test('every wait refuses an answer that is not what it waits for, after one request', async t => {
