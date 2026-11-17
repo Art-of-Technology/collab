@@ -72,6 +72,9 @@ function appNotesHarness() {
   };
   const searchQuery = load('src/lib/agent-search-query.ts', { zod: require('zod') }, { Buffer });
   deps['@/lib/agent-search-query'] = searchQuery;
+  deps['@/lib/agent-context-folders'] = load('src/lib/agent-context-folders.ts', {
+    ...deps, '@/lib/pdf-text': {}, '@/lib/context-files': {},
+  }, { Buffer });
   deps['@/lib/agent-project-context'] = load('src/lib/agent-project-context.ts', {
     ...deps, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), './agent-search-query': searchQuery,
   }, { Buffer });

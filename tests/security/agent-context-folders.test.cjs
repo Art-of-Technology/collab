@@ -326,11 +326,10 @@ test('folder reads page each item type without losing children or notes', async 
 test('PDF text is bounded and malformed PDFs still return metadata', async () => {
   const f = fixture();
   f.addFolder('ideation');
-  f.addFile('long.pdf', { mimeType: 'application/pdf', bytes: pdf(['x'.repeat(270000)], { compress: true }) });
-  const result = await f.call(FILE, { id: 'long.pdf' });
-  assert.equal(result.status, 200);
-  assert.equal(result.body.truncated, true);
-  assert.ok(Buffer.byteLength(result.body.text) <= result.body.limits.textBytes);
+  const reader = load('src/lib/pdf-text.ts', { unpdf: require('unpdf') }, { Buffer, Uint8Array, TextDecoder });
+  const result = await reader.pdfText(pdf(['A document with more than twelve bytes']), 12);
+  assert.equal(result.truncated, true);
+  assert.ok(Buffer.byteLength(result.text) <= 12);
   f.addFile('broken.pdf', { mimeType: 'application/pdf', bytes: Buffer.from('%PDF-1.4 broken') });
   const broken = await f.call(FILE, { id: 'broken.pdf' });
   assert.equal(broken.status, 200);

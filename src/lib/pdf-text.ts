@@ -14,27 +14,21 @@ export async function pdfText(bytes: Uint8Array, limit: number): Promise<{ text:
     const pages = Math.min(document.numPages, 100);
     for (let number = 1; number <= pages; number++) {
       const page = await document.getPage(number);
-      const stream = page.streamTextContent();
-      const reader = stream.getReader();
       try {
-        while (true) {
-          const chunk = await reader.read();
-          if (chunk.done) break;
-          for (const item of chunk.value.items) {
-            if (!('str' in item)) continue;
-            const piece = item.str + (item.hasEOL ? '\n' : ' ');
-            const encoded = Buffer.from(piece);
-            if (encoded.length > remaining) {
-              // Decode only complete UTF-8 characters at the byte boundary.
-              text += new TextDecoder().decode(encoded.subarray(0, remaining), { stream: true });
-              return { text: text.trim(), truncated: true };
-            }
-            text += piece;
-            remaining -= encoded.length;
+        const content = await page.getTextContent();
+        for (const item of content.items) {
+          if (!('str' in item)) continue;
+          const piece = item.str + (item.hasEOL ? '\n' : ' ');
+          const encoded = Buffer.from(piece);
+          if (encoded.length > remaining) {
+            // Decode only complete UTF-8 characters at the byte boundary.
+            text += new TextDecoder().decode(encoded.subarray(0, remaining), { stream: true });
+            return { text: text.trim(), truncated: true };
           }
+          text += piece;
+          remaining -= encoded.length;
         }
       } finally {
-        await reader.cancel();
         page.cleanup();
       }
       if (number < pages && remaining >= 2) { text += '\n\n'; remaining -= 2; }

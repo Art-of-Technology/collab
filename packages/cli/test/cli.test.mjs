@@ -2613,7 +2613,7 @@ test('seat run: a program that ignores the request to stop is killed, so a fence
 test('folder and file reads forward their ids and project through authenticated GETs', async t => {
   const f = await fixture(t);
   for (const [args, expected] of [
-    [['folders', 'list', '--project-id', 'p'], '/api/apps/auth/context/folders?projectId=p&workspaceId=w'],
+    [['folders', 'list', '--project-id', 'p'], '/api/apps/auth/context/folders?workspaceId=w&projectId=p'],
     [['folders', 'get', 'folder1'], '/api/apps/auth/context/folders/folder1?workspaceId=w'],
     [['files', 'get', 'file1'], '/api/apps/auth/context/files/file1?workspaceId=w'],
   ]) {
