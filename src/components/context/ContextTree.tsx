@@ -21,7 +21,10 @@ export type TreeRoot = { projectId: string | null; name: string };
 
 export type TreeTarget = { projectId: string | null; folderId: string | null };
 
-export type TreeRow = TreeTarget & { key: string; name: string; depth: number; hasChildren: boolean; expanded: boolean };
+/** `position` and `siblings` count the rows that share this row's parent, as a screen reader announces them. */
+export type TreeRow = TreeTarget & {
+  key: string; name: string; depth: number; hasChildren: boolean; expanded: boolean; position: number; siblings: number;
+};
 
 export const rootKey = (projectId: string | null) => `root:${projectId ?? ''}`;
 export const folderKey = (id: string) => `folder:${id}`;
@@ -36,20 +39,27 @@ export function treeRows(
   const children = (parentId: string | null) => folders.filter(folder => folder.parentId === parentId);
   const rows: TreeRow[] = [];
   const walk = (projectId: string | null, parentId: string | null, depth: number) => {
-    for (const folder of children(parentId)) {
+    const siblings = children(parentId);
+    siblings.forEach((folder, index) => {
       const hasChildren = children(folder.id).length > 0;
       const open = expanded.has(folderKey(folder.id));
-      rows.push({ key: folderKey(folder.id), name: folder.name, depth, projectId, folderId: folder.id, hasChildren, expanded: open && hasChildren });
+      rows.push({
+        key: folderKey(folder.id), name: folder.name, depth, projectId, folderId: folder.id, hasChildren,
+        expanded: open && hasChildren, position: index + 1, siblings: siblings.length,
+      });
       if (open && hasChildren) walk(projectId, folder.id, depth + 1);
-    }
+    });
   };
-  for (const root of roots) {
+  roots.forEach((root, index) => {
     const isLevel = root.projectId === levelProjectId;
     const hasChildren = isLevel ? children(null).length > 0 : true;
     const open = expanded.has(rootKey(root.projectId)) && isLevel;
-    rows.push({ key: rootKey(root.projectId), name: root.name, depth: 0, projectId: root.projectId, folderId: null, hasChildren, expanded: open && hasChildren });
+    rows.push({
+      key: rootKey(root.projectId), name: root.name, depth: 0, projectId: root.projectId, folderId: null, hasChildren,
+      expanded: open && hasChildren, position: index + 1, siblings: roots.length,
+    });
     if (open) walk(root.projectId, null, 1);
-  }
+  });
   return rows;
 }
 
@@ -108,7 +118,7 @@ export function ContextTree({ roots, folders, levelProjectId, openFolderId, expa
   };
 
   return <div role="tree" aria-label="Context folders" className={`min-h-0 overflow-auto ${className}`}>
-    {rows.map((row, index) => {
+    {rows.map(row => {
       const selected = row.key === openKey;
       const Icon = row.depth === 0 ? (row.projectId ? Layers : Building2) : selected ? FolderOpen : Folder;
       return <button
@@ -117,8 +127,8 @@ export function ContextTree({ roots, folders, levelProjectId, openFolderId, expa
         type="button"
         role="treeitem"
         aria-level={row.depth + 1}
-        aria-posinset={index + 1}
-        aria-setsize={rows.length}
+        aria-posinset={row.position}
+        aria-setsize={row.siblings}
         aria-selected={selected}
         {...(row.hasChildren && { 'aria-expanded': row.expanded })}
         tabIndex={row.key === current ? 0 : -1}

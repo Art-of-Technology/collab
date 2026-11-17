@@ -56,6 +56,9 @@ test('the folder tree is walked, opened and closed with the keyboard', async () 
   // Right shows the folders under it, and right again steps into them.
   await press('ArrowRight');
   assert.deepEqual(rows().map(row => row.textContent), ['Workspace', 'Ideas', 'Drafts', 'Specs', 'Website']);
+  // A row is announced by where it stands among the rows of the same parent, not in the whole tree.
+  assert.deepEqual(rows().map(row => [row.getAttribute('aria-level'), row.getAttribute('aria-posinset'), row.getAttribute('aria-setsize')]),
+    [['1', '1', '2'], ['2', '1', '2'], ['3', '1', '1'], ['2', '2', '2'], ['1', '2', '2']]);
   assert.equal(document.activeElement.getAttribute('aria-expanded'), 'true');
   await press('ArrowRight');
   assert.equal(focused(), 'Drafts');

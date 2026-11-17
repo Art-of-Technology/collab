@@ -18,6 +18,8 @@ const asked = [];
 const fetch = async (url, init = {}) => {
   asked.push(`${init.method ?? 'GET'} ${url}`);
   const answer = await routes[`${init.method ?? 'GET'} ${url.split('?')[0]}`](new URL(url, 'https://collab.test').searchParams);
+  // A route that answers with an Error is a read that failed.
+  if (answer instanceof Error) return { ok: false, json: async () => ({ error: answer.message }) };
   return { ok: true, json: async () => answer };
 };
 
@@ -94,5 +96,24 @@ test('an upload that ends after another folder was opened leaves that folder\'s 
   assert.equal(readsOfIdeas(), before + 1);
   assert.ok(list().some(row => row.startsWith('spec.txt')));
   assert.ok(!list().some(row => row.startsWith('new.txt') || row.startsWith('old.txt')));
+  await React.act(async () => root.render(null));
+});
+
+test('a folder that cannot be read lists nothing of the folder open before it', async () => {
+  routes = {
+    'GET /api/context/folders': () => ({ folders }),
+    'GET /api/context/items': query => (query.get('folder') === 'specs'
+      ? new Error('This folder could not be read')
+      : { notes: [{ id: 'plan', title: 'Plan', type: 'GENERAL', updatedAt: '2026-11-17T09:00:00Z' }], files: [file('old.txt')] }),
+  };
+  await React.act(async () => root.render(h(ContextBrowser, {
+    workspaceId: 'w', workspaceSlug: 'weezboo', projects: [], initialFolderId: 'ideas',
+  })));
+  await settle();
+  assert.ok(list().some(row => row.startsWith('old.txt')));
+  [...document.querySelectorAll('[role="treeitem"]')].find(row => row.textContent === 'Specs').click();
+  await settle();
+  assert.equal(document.querySelector('[role="alert"]').textContent, 'This folder could not be read');
+  assert.deepEqual(list(), []);
   await React.act(async () => root.render(null));
 });

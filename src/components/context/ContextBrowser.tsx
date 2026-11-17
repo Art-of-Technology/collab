@@ -80,10 +80,17 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   // What the page is showing. Only the newest read is drawn, so opening one folder while another is
   // still being read never leaves the slower answer on the page. A failed read says so.
   const reading = useRef(0);
+  const levelRead = useRef<string | null | undefined>(undefined);
   const show = useCallback(async (next: { projectId: string | null; folderId: string | null }) => {
     const mine = ++reading.current;
     setError(null);
     setSelectedFile(null);
+    // What was read for another folder is not this one's: nothing is listed until this read answers,
+    // and another level's folders are not drawn under this one.
+    setNotes([]);
+    setFiles([]);
+    if (levelRead.current !== next.projectId) setFolders([]);
+    levelRead.current = next.projectId;
     try {
       const [folderRows, items] = await Promise.all([
         readFolders(next.projectId), readItems(next.projectId, next.folderId),
