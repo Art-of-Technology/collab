@@ -259,6 +259,30 @@ async function readPrefix(body: ReadableStream<Uint8Array>, limit: number): Prom
   return bytes;
 }
 
+/** What a file is, without saying where its bytes are kept. */
+export type ContextFileFacts = PreviewFile & { folderId: string; createdAt: Date; updatedAt: Date };
+
+/**
+ * The first bytes of a file, for whoever may read the folder it is in, with a workspace the file must
+ * be in: a token issued for one workspace reads no other, however the id was come by.
+ *
+ * How much to read is asked of `limit` once the file is known, so a type that is not read as text
+ * never opens storage at all.
+ */
+export async function readContextFilePrefix(
+  userId: string, id: unknown, workspaceId: string, limit: (file: ContextFileFacts) => number,
+): Promise<{ file: ContextFileFacts; projectId: string | null; bytes: Uint8Array }> {
+  const loaded = await loadFile(prisma, userId, id);
+  if (loaded.folder.workspaceId !== workspaceId) throw new ContextFolderError(404, 'File not found');
+  const file: ContextFileFacts = {
+    id: loaded.id, name: loaded.name, mimeType: loaded.mimeType, size: loaded.size,
+    folderId: loaded.folderId, createdAt: loaded.createdAt, updatedAt: loaded.updatedAt,
+  };
+  const wanted = limit(file);
+  const bytes = wanted > 0 ? await readPrefix(await openStorage(loaded), wanted) : new Uint8Array(0);
+  return { file, projectId: loaded.folder.projectId, bytes };
+}
+
 export type ContextFilePreview =
   | { kind: 'image' | 'pdf'; file: PreviewFile; body: ReadableStream<Uint8Array> }
   | { kind: 'text' | 'csv' | 'none'; file: PreviewFile; preview: Record<string, unknown> };

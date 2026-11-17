@@ -51,7 +51,11 @@ test('project context uses the real schema and PostgreSQL above the bind limit w
   const finder = load('src/lib/issue-finder.ts', { '@/lib/prisma': { prisma }, '@/lib/shared-issue-key-utils': load('src/lib/shared-issue-key-utils.ts') });
   const access = load('src/lib/secrets/access.ts', { '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder });
   const query = load('src/lib/agent-search-query.ts', { zod: require('zod') }, { Buffer });
-  const service = load('src/lib/agent-project-context.ts', { '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder,
+  const folders = load('src/lib/agent-context-folders.ts', { '@/lib/prisma': { prisma },
+    '@/lib/secrets/access': access, '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts'),
+    '@/lib/pdf-text': {}, '@/lib/context-files': {},
+  }, { Buffer });
+  const service = load('src/lib/agent-project-context.ts', { '@/lib/agent-context-folders': folders, '@/lib/prisma': { prisma }, '@/lib/issue-finder': finder,
     '@/lib/secrets/access': access, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), zod: require('zod'),
     '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts'), './agent-search-query': query }, { Buffer });
   const context = { user: { id: 'reader' }, workspace: { id: 'w', slug: 'workspace' }, token: { scopes: ['issues:read', 'context:read'] } };

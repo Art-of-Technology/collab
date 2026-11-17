@@ -72,6 +72,9 @@ function appNotesHarness() {
   };
   const searchQuery = load('src/lib/agent-search-query.ts', { zod: require('zod') }, { Buffer });
   deps['@/lib/agent-search-query'] = searchQuery;
+  deps['@/lib/agent-context-folders'] = load('src/lib/agent-context-folders.ts', {
+    ...deps, '@/lib/pdf-text': {}, '@/lib/context-files': {},
+  }, { Buffer });
   deps['@/lib/agent-project-context'] = load('src/lib/agent-project-context.ts', {
     ...deps, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), './agent-search-query': searchQuery,
   }, { Buffer });
@@ -183,6 +186,18 @@ test('app-notes: collections and counts exclude restricted, private and expired 
   const knowledge = await (await h.call('ai-context', 'GET', '', undefined, 'includeKnowledge=true')).json();
   assert.deepEqual(knowledge.knowledge.map(row => row.id), ['GUIDE-visible', 'GUIDE-shared']);
   assert.equal(h.state.counts, 4);
+});
+
+test('app-notes: a project Note without a workspace of its own is read through its project', async () => {
+  const h = appNotesHarness();
+  const brief = h.add('brief', { type: 'GUIDE', scope: 'PROJECT', workspaceId: null, workspace: null,
+    projectId: h.project.id, project: h.project });
+  const read = await h.call('context/[id]', 'GET', 'brief');
+  assert.equal(read.status, 200);
+  assert.equal((await read.json()).content, brief.content);
+  // The project decides which workspace it belongs to: in another one, the Note is not found.
+  h.project.workspaceId = 'foreign';
+  assert.equal((await h.call('context/[id]', 'GET', 'brief')).status, 404);
 });
 
 test('app-notes: anonymous and revoked tokens stop all sibling reads and writes', async () => {

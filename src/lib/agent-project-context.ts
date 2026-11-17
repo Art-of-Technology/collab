@@ -6,6 +6,7 @@ import { issueReadAccessWhere, userHasWorkspaceAccess } from '@/lib/issue-finder
 import { noteAccessWhere } from '@/lib/secrets/access';
 import { hasScope } from '@/lib/oauth-scopes';
 import { stripHtmlToPlainText } from '@/lib/html-sanitizer';
+import { agentFolderCards } from '@/lib/agent-context-folders';
 import { responseBytes, SearchError } from './agent-search-query';
 
 const MAX_SCOPE = 50000;
@@ -111,6 +112,10 @@ export async function getProjectContext(context: AppAuthContext, options: Option
     { OR: [{ projectId: project.id }, { projectId: null }] }],
     scope: { in: ['WORKSPACE', 'PROJECT', 'PUBLIC'] }, type: { notIn: ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'] }, isEncrypted: false,
   });
+  // The drive beside the issues: the workspace's folders and this project's, so an agent knows what
+  // a person put there. What is in each one is read with its own tool.
+  const folders = await agentFolderCards(context.user.id, context.workspace.id, project.id, MAX_SCOPE + 1);
+  if (folders.length > MAX_SCOPE) throw new SearchError('scope_too_large', 'Project context supports up to 50,000 visible folders', 422);
   const notes = await prisma.note.findMany({ where: noteWhere(), select: { id: true },
   orderBy: [{ isAiContext: 'desc' }, { aiContextPriority: 'desc' }, { isPinned: 'desc' }, { updatedAt: 'desc' }, { id: 'asc' }], take: MAX_SCOPE + 1 });
   if (notes.length > MAX_SCOPE) throw new SearchError('scope_too_large', 'Project context supports up to 50,000 visible Notes', 422);
@@ -155,6 +160,7 @@ export async function getProjectContext(context: AppAuthContext, options: Option
     statuses: page([...byStatus.values()].sort((a, b) => b.count - a.count || (a.name || '').localeCompare(b.name || ''))),
     owners: page([...owners.values()].sort((a, b) => b.issueCount - a.issueCount || a.id.localeCompare(b.id))),
     blockers: page(blockers), dependencies: page(dependencies), parents: page([...hierarchy.values()]),
+    folders: page(folders),
     recentChanges: { ...changePage, items: changePage.items.map(c => {
       if (c.type === 'issue') {
         const issue = pageIssueMap.get(c.id);
@@ -177,7 +183,7 @@ export async function getProjectContext(context: AppAuthContext, options: Option
       freshness: 'canonical_database', dependencyDepth: 1, legacyCompletion: 'unknown',
       budget: { maxTokens: options.maxTokens, tokenUpperBound: 0, estimator: 'utf8_bytes', truncated: false, truncatedSections: [] as string[] } },
   };
-  const sections = ['recentChanges', 'notes', 'owners', 'statuses', 'dependencies', 'parents', 'blockers'] as const;
+  const sections = ['recentChanges', 'notes', 'folders', 'owners', 'statuses', 'dependencies', 'parents', 'blockers'] as const;
   response.metadata.budget.tokenUpperBound = responseBytes(response) + 8;
   while (response.metadata.budget.tokenUpperBound > options.maxTokens) {
     const name = sections.find(section => response[section].items.length > 1);

@@ -1,6 +1,6 @@
 {
   "name": "@art-of-technology/collab-cli",
-  "version": "0.13.1",
+  "version": "0.14.1",
   "description": "Collab projects, issues and Notes for people and AI agents",
   "type": "module",
   "bin": { "collab": "bin/collab.mjs" },

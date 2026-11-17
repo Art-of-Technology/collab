@@ -1362,6 +1362,55 @@ ID is the resource ID.
 
 No flags of its own.
 
+## folders
+
+### `collab folders list`
+
+Reads.
+
+```sh
+collab folders list
+```
+
+List workspace folders and optionally project folders, up to 500; Follow nextOffset with --offset to read more folders.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--project-id` | string |  |
+| `--offset` | integer |  |
+
+### `collab folders get`
+
+Reads.
+
+```sh
+collab folders get ID
+```
+
+Read a folder and up to 200 child folders, shared Notes and files per type; Follow nextOffset with --offset to read more items. Personal, encrypted and secret Notes are excluded.
+
+ID is the resource ID.
+
+| Flag | Type | Details |
+| --- | --- | --- |
+| `--offset` | integer |  |
+
+## files
+
+### `collab files get`
+
+Reads.
+
+```sh
+collab files get ID
+```
+
+Read metadata and up to 256 KiB of text/CSV or embedded PDF text (8 MiB input, first 100 pages, 256 KiB output). Other types and unreadable PDFs return metadata and a reason; no OCR.
+
+ID is the resource ID.
+
+No flags of its own.
+
 ## context
 
 ### `collab context get`
@@ -1372,7 +1421,7 @@ Reads.
 collab context get
 ```
 
-With a project, return pipeline context. includePipeline=false or includeKnowledge=true selects the legacy prompt format.
+With a project, return pipeline context including workspace and project folders. includePipeline=false or includeKnowledge=true selects the legacy prompt format.
 
 | Flag | Type | Details |
 | --- | --- | --- |
