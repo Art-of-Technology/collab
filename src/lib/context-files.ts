@@ -291,7 +291,8 @@ export async function readContextFilePreview(userId: string, id: unknown): Promi
 
 /**
  * A file leaves as an attachment of one opaque type, never as a page of Collab's site: no sniffing, no
- * script, nothing kept by a shared cache.
+ * script, nothing kept by a shared cache, and no page may frame it — `frame-ancestors` is not covered
+ * by `default-src`, and an API reply carries no policy of Collab's pages, so it is said here.
  */
 export function downloadHeaders(file: { name: string }): Record<string, string> {
   const plain = file.name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
@@ -299,7 +300,7 @@ export function downloadHeaders(file: { name: string }): Record<string, string> 
     'Content-Type': 'application/octet-stream',
     'Content-Disposition': `attachment; filename="${plain}"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
     'X-Content-Type-Options': 'nosniff',
-    'Content-Security-Policy': "default-src 'none'; sandbox",
+    'Content-Security-Policy': "default-src 'none'; sandbox; frame-ancestors 'none'",
     'Cache-Control': 'private, no-store',
   };
 }

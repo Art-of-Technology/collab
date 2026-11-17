@@ -156,14 +156,19 @@ export function contextDownloadUrl(id: string): string {
  * Bytes that are drawn in the page: their own type, shown rather than downloaded, and sealed. The
  * PDF viewer is the browser's own program and needs its scripts; the sandbox still gives the document
  * an origin of its own, so nothing in the file reaches Collab's site or the session.
+ *
+ * The seal says who may frame these bytes as well: `frame-ancestors` is not covered by `default-src`,
+ * and an API reply inherits no policy from Collab's pages, so it has to be said here. It is `'self'`
+ * rather than `'none'` because Collab's own preview frames the PDF.
  */
 export function previewHeaders(file: { name: string; mimeType: string }, kind: 'image' | 'pdf'): Record<string, string> {
   const plain = file.name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  const sandbox = kind === 'pdf' ? 'sandbox allow-scripts' : 'sandbox';
   return {
     'Content-Type': file.mimeType,
     'Content-Disposition': `inline; filename="${plain}"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
     'X-Content-Type-Options': 'nosniff',
-    'Content-Security-Policy': kind === 'pdf' ? "default-src 'none'; sandbox allow-scripts" : "default-src 'none'; sandbox",
+    'Content-Security-Policy': `default-src 'none'; ${sandbox}; frame-ancestors 'self'`,
     'Cache-Control': 'private, no-store',
   };
 }

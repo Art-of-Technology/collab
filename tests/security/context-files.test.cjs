@@ -381,14 +381,14 @@ test('a file is previewed as what it is, and never as something a browser runs',
   assert.equal(image.headers.get('content-type'), 'image/png');
   assert.match(image.headers.get('content-disposition'), /^inline; filename="sketch\.png"/);
   assert.equal(image.headers.get('x-content-type-options'), 'nosniff');
-  assert.equal(image.headers.get('content-security-policy'), "default-src 'none'; sandbox");
+  assert.equal(image.headers.get('content-security-policy'), "default-src 'none'; sandbox; frame-ancestors 'self'");
   assert.equal(Buffer.from(await image.arrayBuffer()).toString('hex'), PNG.toString('hex'));
 
   // The PDF viewer is the browser's own program and needs its scripts; the document still gets an
   // origin of its own and may fetch nothing, so what the file carries reaches neither Collab nor the page.
   const viewer = await f.call(PREVIEW, 'GET', { id: pdf.id });
   assert.equal(viewer.headers.get('content-type'), 'application/pdf');
-  assert.equal(viewer.headers.get('content-security-policy'), "default-src 'none'; sandbox allow-scripts");
+  assert.equal(viewer.headers.get('content-security-policy'), "default-src 'none'; sandbox allow-scripts; frame-ancestors 'self'");
   assert.match(viewer.headers.get('content-disposition'), /^inline;/);
 
   // A file that says it is HTML is read, not run: its bytes leave as JSON, never with a type a browser runs.
@@ -472,7 +472,9 @@ test('a preview of a large file reads only its start and says there is more', as
 
 // The seal on inline preview bytes is a header of the route, and Next keeps a header the proxy set
 // over a route's own one. So the policy of Collab's pages must never be put on an API address: the
-// preview would go on returning a seal that never reaches the browser.
+// preview would go on returning a seal that never reaches the browser. The two halves only work as a
+// pair, so both are asked here: the proxy stays out of the way, and the route says the whole seal
+// itself — including who may frame the bytes, which it no longer inherits from a page.
 test('the policy of Collab pages never replaces the seal a preview puts on its bytes', async () => {
   const { NextRequest, NextResponse } = require('next/server');
   const { proxy } = load('src/proxy.ts', {
@@ -495,4 +497,20 @@ test('the policy of Collab pages never replaces the seal a preview puts on its b
   for (const path of ['/space', '/apifolder', '/login']) {
     assert.match((await ask(path)).headers.get('content-security-policy') ?? '', /default-src 'self'/, path);
   }
+
+  // The other half: with no page policy to inherit, the route states who may frame its bytes. Collab's
+  // own preview frames the PDF, so inline bytes allow the site itself and nobody else; a download is
+  // framed by no one at all.
+  const { previewHeaders } = load('src/lib/context-file-preview.ts', {}, { TextDecoder });
+  const { downloadHeaders } = load('src/lib/context-files.ts', {
+    '@prisma/client': { Prisma: {} },
+    '@/lib/prisma': { prisma: {} },
+    '@/utils/cloudinary-server': { cloudinary: {} },
+  }, { URL, console, TextDecoder, Buffer, Response, process: { env: {} } });
+  const seal = headers => headers['Content-Security-Policy'];
+  assert.equal(seal(previewHeaders({ name: 'sketch.png', mimeType: 'image/png' }, 'image')),
+    "default-src 'none'; sandbox; frame-ancestors 'self'");
+  assert.equal(seal(previewHeaders({ name: 'plan.pdf', mimeType: 'application/pdf' }, 'pdf')),
+    "default-src 'none'; sandbox allow-scripts; frame-ancestors 'self'");
+  assert.equal(seal(downloadHeaders({ name: 'report.html' })), "default-src 'none'; sandbox; frame-ancestors 'none'");
 });
