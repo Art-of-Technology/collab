@@ -323,6 +323,34 @@ test('folder reads page each item type without losing children or notes', async 
   assert.equal((await f.call(FOLDERS, { query: '?offset=-1' })).status, 400);
 });
 
+test('paging ends at the last offset a read accepts rather than offering one it refuses', async () => {
+  const f = fixture();
+  f.addFolder('ideation');
+  // One more than the deepest page: the row after the last supported offset has nowhere to be read.
+  for (let i = 0; i < 50501; i++) f.addFolder(`a-${String(i).padStart(6, '0')}`, { parentId: 'ideation' });
+
+  const reachable = await f.call(FOLDERS, { query: '?offset=49500' });
+  assert.equal(reachable.body.nextOffset, 50000);
+  assert.equal(reachable.body.limitReached, false);
+  const last = await f.call(FOLDERS, { query: '?offset=50000' });
+  assert.equal(last.body.folders.length, 500);
+  // Rows are left, and the offset that would reach them is refused, so none is handed out.
+  assert.equal(last.body.hasMore, true);
+  assert.equal(last.body.nextOffset, null);
+  assert.equal(last.body.limitReached, true);
+  assert.equal((await f.call(FOLDERS, { query: '?offset=50500' })).status, 400);
+
+  const items = await f.call(FOLDER, { id: 'ideation', query: '?offset=49800' });
+  assert.equal(items.body.nextOffset, 50000);
+  assert.equal(items.body.limitReached, false);
+  const lastItems = await f.call(FOLDER, { id: 'ideation', query: '?offset=50000' });
+  assert.equal(lastItems.body.items.length, 200);
+  assert.equal(lastItems.body.hasMore, true);
+  assert.equal(lastItems.body.nextOffset, null);
+  assert.equal(lastItems.body.limitReached, true);
+  assert.equal((await f.call(FOLDER, { id: 'ideation', query: '?offset=50200' })).status, 400);
+});
+
 test('PDF text is bounded and malformed PDFs still return metadata', async () => {
   const f = fixture();
   f.addFolder('ideation');

@@ -29,6 +29,8 @@ export const MAX_AGENT_PDF_BYTES = 8 * 1024 * 1024;
 /** Folders of one level, and items of one folder, are answered up to these counts. */
 export const MAX_AGENT_FOLDERS = 500;
 export const MAX_AGENT_FOLDER_ITEMS = 200;
+/** Paging ends here: an offset past this is refused, and a page is never offered one it cannot use. */
+export const MAX_AGENT_FOLDER_OFFSET = 50000;
 
 const FOLDER_FIELDS = {
   id: true, name: true, parentId: true, projectId: true, updatedAt: true,
@@ -59,8 +61,25 @@ function cards(rows: FolderRow[]): FolderCard[] {
 
 export function folderOffset(value: string | null): number {
   if (value === null) return 0;
-  if (!/^\d+$/.test(value) || Number(value) > 50000) throw new ContextFolderError(400, 'offset must be between 0 and 50000');
+  if (!/^\d+$/.test(value) || Number(value) > MAX_AGENT_FOLDER_OFFSET) {
+    throw new ContextFolderError(400, `offset must be between 0 and ${MAX_AGENT_FOLDER_OFFSET}`);
+  }
   return Number(value);
+}
+
+/**
+ * Where the next page is read, and whether anything was left behind. A continuation is only given
+ * when the read accepts it, so following `nextOffset` always ends: at the last supported offset a
+ * page says `limitReached` instead, which is paging stopping before the rows do rather than a
+ * continuation that comes back as a 400.
+ */
+function continuation(offset: number, limit: number, more: boolean) {
+  const next = offset + limit;
+  return {
+    hasMore: more, limit, offset,
+    nextOffset: more && next <= MAX_AGENT_FOLDER_OFFSET ? next : null,
+    limitReached: more && next > MAX_AGENT_FOLDER_OFFSET,
+  };
 }
 
 /** The live folders of a workspace, and of one project inside it, that this account reads. */
@@ -91,8 +110,7 @@ export async function listAgentFolders(userId: string, workspaceId: string, proj
     workspaceId,
     projectId,
     folders: folders.slice(0, MAX_AGENT_FOLDERS),
-    hasMore: folders.length > MAX_AGENT_FOLDERS,
-    limit: MAX_AGENT_FOLDERS, offset, nextOffset: folders.length > MAX_AGENT_FOLDERS ? offset + MAX_AGENT_FOLDERS : null,
+    ...continuation(offset, MAX_AGENT_FOLDERS, folders.length > MAX_AGENT_FOLDERS),
   };
 }
 
@@ -144,10 +162,8 @@ export async function readAgentFolder(userId: string, workspaceId: string, works
   return {
     folder: cards([folder])[0],
     items,
-    hasMore: children.length > MAX_AGENT_FOLDER_ITEMS || notes.length > MAX_AGENT_FOLDER_ITEMS || files.length > MAX_AGENT_FOLDER_ITEMS,
-    limit: MAX_AGENT_FOLDER_ITEMS, offset,
-    nextOffset: children.length > MAX_AGENT_FOLDER_ITEMS || notes.length > MAX_AGENT_FOLDER_ITEMS || files.length > MAX_AGENT_FOLDER_ITEMS
-      ? offset + MAX_AGENT_FOLDER_ITEMS : null,
+    ...continuation(offset, MAX_AGENT_FOLDER_ITEMS,
+      children.length > MAX_AGENT_FOLDER_ITEMS || notes.length > MAX_AGENT_FOLDER_ITEMS || files.length > MAX_AGENT_FOLDER_ITEMS),
   };
 }
 
