@@ -167,6 +167,7 @@ export async function getUserRepositories(
 
   if (!response.ok) {
     console.error('GitHub API error:', response.status, response.statusText);
+    if (response.status === 401) throw new Error('Bad credentials');
     throw new Error('Failed to fetch repositories');
   }
 
