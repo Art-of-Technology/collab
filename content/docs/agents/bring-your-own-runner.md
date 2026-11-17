@@ -20,8 +20,8 @@ Setting the machine up — its image, enrolling it, signing your coding agent in
 1. Install [Collab CLI](/docs/cli) 0.13.0 or newer on that machine and sign in as yourself: `collab auth login --url https://collab.example.com`. The setup command needs a person's login; an agent token or a seat token is refused with `person_required`.
 2. Start the pairing on the same machine. The runner shows a code such as `K7QF-M2XD`.
 3. In the left menu, open **Agents**, then the **Runners** tab. Type the code and choose **Connect**. Only type a code your own runner shows you: see [Connect a runner](/docs/agents/admit-a-runner).
-4. Read the preview for the project, named by its issue prefix: `collab seat setup MCN`. Nothing is created. It says which of the four seats are missing and the names they would get, the runner that would run them, the claims that would go to the developer seat, and what stops it.
-5. Create them: `collab seat setup MCN --yes`. The missing seats are made to be run by your runner, which fetches their tokens on its next ask, so no token is made here and none is shown. The project is switched to seats and the claims are carried over.
+4. Read the preview for the project, named by its issue prefix: `collab seat setup MCN`. Nothing is created. It says which of the four seats are missing and the names they would get, the runner that would run them, the claims that would go to the developer seat, and what stops it. Check the runner it names: it is yours, unless you have none of your own and exactly one runner is connected to the workspace, when that one is named instead.
+5. Create them: `collab seat setup MCN --yes`. The missing seats are made to be run by that runner, which fetches their tokens on its next ask, so no token is made here and none is shown. The project is switched to seats and the claims are carried over. The reply lists each seat with whether a runner has fetched its token yet.
 6. Assign the first issue to the developer seat, as on [Give a seat work](/docs/agents/give-a-seat-work). Your runner picks it up on its next ask.
 
 ## The prompt
@@ -52,20 +52,24 @@ Rules for the whole task:
    Show me all of it: which of the four seats (developer, reviewer, release,
    security) are missing and the names they would get, the runner that would run
    them, and the claims that would be carried over to the developer seat.
-4. If the preview is blocked, stop and tell me the reason. Each one is mine:
+4. Look at the runner the preview names. If it is not mine, stop and tell me
+   whose it is: the new seats would be run by that runner and not by mine.
+   Connecting my own runner is mine.
+5. If the preview is blocked, stop and tell me the reason. Each one is mine:
    - no_runner, runner_choice: I start the pairing on this machine and type the
      code it shows under Agents, Runners.
    - status_groups: I give the project a status in the In progress group and one
      in the Done group.
    - project_archived: I bring the project back.
    Wait until I say it is fixed, then go back to step 3.
-5. Ask me whether to create what the preview listed, and wait for my answer.
+6. Ask me whether to create what the preview listed, and wait for my answer.
    Only if I say yes, run `collab seat setup <PREFIX> --yes`. Show me the seats
-   it created and the issues it carried over.
-6. Run `collab seat setup <PREFIX>` once more and show it to me. All four seats
-   must now exist and the project must be on seats. Name the seats whose token
-   the runner has not fetched yet; that is normal until its next ask.
-7. Stop there. Giving a seat its first issue is mine, under Assignee on the
+   it created, the issues it carried over, and which seats the runner has not
+   fetched a token for yet; that is normal until its next ask.
+7. Run `collab seat setup <PREFIX>` once more and show it to me. All four seats
+   must now exist and the project must be on seats. The preview does not carry
+   the token state; the reply in step 6 is where that was.
+8. Stop there. Giving a seat its first issue is mine, under Assignee on the
    issue.
 ```
 
