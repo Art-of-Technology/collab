@@ -321,6 +321,29 @@ From then on, in that project:
 
 **Switch back to handoffs** on the same tab undoes the switch. It is refused with `run_open` while a run is open in the project.
 
+## Set a project up in one command
+
+`collab seat setup PROJECT` (CLI 0.13.0) does the four steps above for one project: it gives the project the seats it is missing and switches it. It is for a person signed in with `collab auth login` who may manage the workspace's permissions. An agent token or a seat token is refused with `person_required` and nothing is created. The project is named by its ID or its issue prefix. Setting several projects up in one call, and creating a seat run by hand, are not part of it.
+
+Without `--yes`, and with `--dry-run`, the command only reads the preview and changes nothing:
+
+- Which of the four seats (`developer`, `reviewer`, `release`, `security`) are missing, and the name each one would get: `<Project> <Role>`, so `Seatlense Developer`. A seat of a role that already exists is listed as it is and left alone, whoever made it and however it is run.
+- The runner that would run the new seats: yours, or the workspace's single runner when you have none of your own.
+- Every status with its group, and the groups the switch still needs.
+- The claims of the last seven days that would go to the developer seat, each with its issue and the agent that holds it.
+- `blocked` and `reason` when something stops it.
+
+With `--yes` the missing seats are created, each owned by the runner's person and run by that runner (`byRunner`), so no token is made here and none is shown to anyone: the runner fetches them on its next ask. Then the project is switched to seats and the claims are carried over to its developer seat. `--carry-over '["SEAT-12"]'` carries only the claims named instead of every claim in the preview. The reply names the seats created, the issues carried over, and each of the project's seats with whether a runner has fetched its token yet.
+
+The command stops after the preview, and creates nothing, when:
+
+- a status the switch needs is missing a group (`status_groups`, with `missingGroups`);
+- no runner is admitted to the workspace (`no_runner`), because nothing would fetch the seats' tokens;
+- several runners are admitted and none of them is yours (`runner_choice`);
+- the project is archived (`project_archived`), whose seats keep no fetched token.
+
+The apply answers `setup_blocked` in each of those cases. A runner that is admitted but away does not stop it: the seats are created and show no runner until it asks. A run that is open in the project does not stop it either; the switch to seats does not need runs to be closed. Running the command twice creates nothing the second time: the seats are there, the project is already on seats, and an issue that belongs to a seat is no longer a claim to carry.
+
 ## Next
 
 Back to the [documentation home](/docs).

@@ -186,8 +186,11 @@ export async function request(base, endpoint, { token, method = 'GET', body, tim
         exit_state_required: [422, 'The finish is incomplete: in_review names --review-request or --asked-user, blocked names --blocked-by or --asked-user, and --status must belong to the outcome. Add one of what is missing and send it again.'],
         no_default_seat: [409, 'The project has no seat for that role, so nobody would take the request. Tell a person.'],
         request_cap: [429, 'Your project already has 5 open requests in that project. One of them has to be done first.'],
+        person_required: [403, 'A person with permission to manage the workspace sets a project up; an agent token or a seat token cannot. Nothing was created.'],
+        project_not_found: [404, 'No project of this workspace has that ID or issue prefix.'],
+        setup_blocked: [409, 'Nothing was created. Run the command again without --yes and read blocked and reason in the preview.'],
       };
-      if (/^\/api\/apps\/auth\/(?:seats\/me|runs|issues\/[^/?]+\/run-context)(?:[/?]|$)/.test(endpoint) && Object.hasOwn(seatRefusals, remoteCode) &&
+      if (/^\/api\/apps\/auth\/(?:seats\/(?:me|setup)|runs|issues\/[^/?]+\/run-context)(?:[/?]|$)/.test(endpoint) && Object.hasOwn(seatRefusals, remoteCode) &&
           seatRefusals[remoteCode][0] === response.status && /^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
         code = remoteCode; retrievalMessage = seatRefusals[remoteCode][1];
         if (response.status === 422 && Array.isArray(remote.missing)) template = { missing: names(remote.missing) };

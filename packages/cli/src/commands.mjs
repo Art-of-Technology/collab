@@ -79,6 +79,10 @@ export const commands = {
     required: ['role', 'title', 'body', 'fromIssue'],
     description: 'Ask a seat for work on one of your issues: --role developer, review, release or security, --from-issue the issue it is for, --body or --body-file filled in from the Task template. --project names another project by ID or issue prefix; without it the request stays in your project. --blocks true makes your issue wait for it; a security request always does.',
   }),
+  'seat setup': command('POST', 'seats/setup/:project', { carryOver: array }, {}, {
+    setupPreview: true,
+    description: 'collab seat setup PROJECT [--yes]. Gives an existing project the four seats a run needs (developer, reviewer, release, security), each run by your runner, and switches the project to seats. PROJECT is its ID or issue prefix. Without --yes, and with --dry-run, it only prints the preview: which seats are missing and the names they would get ("<Project> <Role>"), the claims of the last seven days that would go to the developer seat, and what stops it. A seat of a role that exists is left alone, whoever made it. --carry-over takes a JSON array of issue keys to carry over instead of all of them. No token is printed: the runner fetches them on its next ask. A person only.',
+  }),
   'seat run': command('GET', 'seats/me/inbox', {}, {}, {
     seatRun: true, localOptions: { once: boolean },
     description: 'collab seat run [--once] -- PROGRAM [ARGS...]. Waits for the next issue in the inbox, checks it out and starts PROGRAM with ARGS as given, no shell, with COLLAB_RUN_ID, COLLAB_RUN_GENERATION and COLLAB_ISSUE_KEY in its environment. Renews the lease while PROGRAM lives; when it exits without having finished the run, closes it. One issue at a time; --once stops after one.',

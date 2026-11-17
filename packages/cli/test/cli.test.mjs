@@ -2223,6 +2223,34 @@ test('seat and run commands send the seat contract and nothing else', async t =>
   assert.equal(f.calls.length, before);
 });
 
+test('seat setup reads the preview, creates nothing without --yes, and never prints a token', async t => {
+  const preview = { project: { id: 'project-one', name: 'Seatlense', issuePrefix: 'SE', mode: 'handoffs' },
+    seats: [{ role: 'developer', name: 'Seatlense Developer', exists: false }], missing: ['developer'],
+    runner: { id: 'runner-one', name: 'mac', yours: true }, claims: [], blocked: null, reason: null };
+  const applied = { ...preview, created: ['Seatlense Developer'], carriedOver: [], seats: [{ role: 'developer', name: 'Seatlense Developer', runner: null, state: null }] };
+  const f = await fixture(t, (req, res) => res.end(JSON.stringify(req.method === 'POST' ? applied : preview)));
+  const url = '/api/apps/auth/seats/setup/SE?workspaceId=workspace-one';
+  // Without --yes the preview is the whole command: it is read and nothing is sent.
+  const seen = await f.run(['seat', 'setup', 'SE', '--workspace', 'workspace-one']);
+  assert.equal(seen.code, 0, seen.stderr);
+  assert.deepEqual(seen.data, { dryRun: false, applied: false, preview });
+  assert.deepEqual(f.calls.map(({ method, url: at }) => ({ method, url: at })), [{ method: 'GET', url }]);
+  const dry = await f.run(['seat', 'setup', 'SE', '--workspace', 'workspace-one', '--dry-run']);
+  assert.deepEqual(dry.data, { dryRun: true, applied: false, preview });
+  assert.ok(f.calls.every(call => call.method === 'GET'));
+  // With --yes the preview is shown on stderr and the setup is sent, with the claims to carry over as a JSON array.
+  const done = await f.run(['seat', 'setup', 'SE', '--workspace', 'workspace-one', '--yes', '--carry-over', '["SE-1"]']);
+  assert.equal(done.code, 0, done.stderr);
+  assert.deepEqual(done.data, applied);
+  assert.deepEqual(done.diagnostics, [{ setupPreview: preview }]);
+  assert.ok(!JSON.stringify(done.data).includes('collab_at_'));
+  assert.deepEqual(f.calls.at(-1), { ...f.calls.at(-1), method: 'POST', url, body: JSON.stringify({ carryOver: ['SE-1'] }) });
+  // It names one project, as an ID or an issue prefix, and takes no --project.
+  assert.equal((await f.run(['seat', 'setup', '--workspace', 'workspace-one', '--yes'])).error.error, 'invalid_identifier');
+  assert.equal((await f.run(['seat', 'setup', 'SE', 'EL', '--workspace', 'workspace-one'])).error.error, 'invalid_identifier');
+  assert.equal((await f.run(['seat', 'setup', 'SE', '--project', 'other'])).error.error, 'unknown_flag');
+});
+
 test('seat inbox reads once, and with --wait-seconds waits for work without changing anything', async t => {
   const f = await fixture(t, (_req, res, _body, calls) => res.end(JSON.stringify({ items: calls.length < 3 ? [] : [{ issueId: 'issue-one', issueKey: 'APP-1' }] })));
   const once = await f.run(['seat', 'inbox']);

@@ -20,7 +20,9 @@ Run `collab --help` immediately in the same terminal. The installer selects the 
 
 Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32-bit), or Windows 11+ ARM64 with PowerShell 5.1+. Alpine/musl is not supported. Installs to `~/.local/bin` on macOS/Linux or `%LOCALAPPDATA%\Collab\bin` on Windows. The Unix installer adds its environment file to Bash/Zsh startup files without replacing existing contents.
 
-The [release process](#validation-and-release) publishes [CLI 0.12.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.12.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+The [release process](#validation-and-release) publishes [CLI 0.13.0 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.13.0) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
+
+Version 0.13.0 adds `collab seat setup PROJECT`, one command that gives an existing project the four seats a run needs (developer, reviewer, release, security), each run by your runner, and switches the project to seats. Without `--yes`, and with `--dry-run`, it only prints the server's preview: which seats are missing and the names they would get (`<Project> <Role>`), the runner that would run them, the claims of the last seven days that would go to the developer seat, and what stops it (`blocked` and `reason`). A seat of a role that already exists is left alone, whoever made it; running the command twice creates nothing the second time. No token is printed: the runner fetches them on its next ask. It is for a person signed in with `collab auth login` and permission to manage the workspace's permissions; an agent token or a seat token is refused with `person_required` and nothing is created. It needs the matching server, which answers `GET /api/apps/auth/seats/setup/:project` with the preview and takes the setup on `POST /api/apps/auth/seats/setup/:project` (scopes `workspace:read` and `workspace:write`); an older server answers both with `not_found`.
 
 Version 0.12.0 adds three options to `run finish` for the facts the next session needs as fields, not only inside the note's text: `--pull-request OWNER/REPO#NUMBER` with `--head-commit`, the full 40-character commit the pull request was left at (neither is taken without the other), and `--next-step`, the first thing to do next in one line. The server checks them, shows them above the exit note on the issue's timeline and returns them from `run context` as `lastExitFacts`. A run that finishes `in_review` or `blocked` needs a next step; a wrong or missing field is refused with `exit_note_required` and listed in `missing`. The options need the matching server: an older one refuses them with `invalid_request`. For older clients, the server can take a next step from `## Next`; see the [runner contract](https://collab.weez.boo/docs/agents/runner-contract).
 
@@ -464,6 +466,15 @@ Mark other agents' claimed/completed entries seen as appropriate.
 ## Seats and the interim runner (CLI 0.10.0)
 
 In a project that uses seats, an agent is a seat (one project, one role) and work reaches it only as an issue assigned to it. The rules are in the [seats guide](../../content/docs/agents/seats.md); the [agent skill](skills/collab-agents/SKILL.md#seats) is what a session follows. These commands need the matching server.
+
+`collab seat setup PROJECT` (CLI 0.13.0) is how a person gives an existing project its seats and switches it, instead of clicking through the web app for each one:
+
+```sh
+collab seat setup SEAT --workspace WORKSPACE_ID            # the preview; nothing is created
+collab seat setup SEAT --workspace WORKSPACE_ID --yes      # create the missing seats and switch the project
+```
+
+It is for a person signed in with `collab auth login`, with permission to manage the workspace's permissions; an agent token or a seat token is refused with `person_required`. The preview comes from the server (`GET /api/apps/auth/seats/setup/:project`) and the setup from `POST` on the same path. It stops after the preview with `blocked` set when the project has no status in the In progress group or none in the Done group (`status_groups`), when no runner is admitted to the workspace (`no_runner`), when several runners are admitted and none of them is yours (`runner_choice`), or when the project is archived (`project_archived`); the apply then answers `setup_blocked` and creates nothing. `--carry-over '["SEAT-12"]'` carries only those claims over instead of every claim in the preview.
 
 `collab seat run` is the interim runner: it waits for the seat's next issue without a model, checks it out and starts the program you name as a fresh session. Put the seat's token in `COLLAB_TOKEN` (with `COLLAB_URL`) and run it in the repository the seat works in:
 
