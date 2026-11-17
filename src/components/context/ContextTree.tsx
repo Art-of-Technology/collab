@@ -138,7 +138,7 @@ export function ContextTree({ roots, folders, levelProjectId, openFolderId, expa
         className={`flex w-full items-center gap-1 rounded-md py-1.5 pr-2 text-left text-sm hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? 'bg-accent font-medium' : ''}`}
         style={{ paddingLeft: `${row.depth * 12 + 4}px` }}
       >
-        <span aria-hidden className={`flex h-4 w-4 shrink-0 items-center justify-center ${row.hasChildren ? '' : 'invisible'}`}>
+        <span aria-hidden onClick={event => { event.stopPropagation(); if (row.hasChildren) onExpand(row, !row.expanded); }} className={`flex h-7 w-7 shrink-0 items-center justify-center ${row.hasChildren ? '' : 'invisible'}`}>
           <ChevronRight className={`h-3.5 w-3.5 transition-transform ${row.expanded ? 'rotate-90' : ''}`} />
         </span>
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />

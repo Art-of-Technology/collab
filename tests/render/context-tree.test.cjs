@@ -70,6 +70,14 @@ test('the folder tree is walked, opened and closed with the keyboard', async () 
   assert.equal(focused(), 'Ideas');
   await press('ArrowLeft');
   assert.deepEqual(rows().map(row => row.textContent), ['Workspace', 'Ideas', 'Specs', 'Website']);
+  // The disclosure also opens and closes a branch by pointer or touch without opening the folder.
+  await React.act(async () => rows()[1].querySelector('span').click());
+  if (redraw) { const again = redraw; redraw = null; await again(); }
+  assert.deepEqual(rows().map(row => row.textContent), ['Workspace', 'Ideas', 'Drafts', 'Specs', 'Website']);
+  await React.act(async () => rows()[1].querySelector('span').click());
+  if (redraw) { const again = redraw; redraw = null; await again(); }
+  assert.deepEqual(rows().map(row => row.textContent), ['Workspace', 'Ideas', 'Specs', 'Website']);
+  assert.deepEqual(opened, []);
   await press('ArrowDown');
   await press('Enter');
   assert.deepEqual(opened, ['specs']);
