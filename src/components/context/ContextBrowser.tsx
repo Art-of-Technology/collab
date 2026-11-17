@@ -59,6 +59,9 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   const [busy, setBusy] = useState(false);
   const [asking, setAsking] = useState<'folder' | 'note' | null>(null);
   const upload = useRef<HTMLInputElement | null>(null);
+  // The folder open now, for a write that finishes after the page has moved on.
+  const openNow = useRef(openFolderId);
+  openNow.current = openFolderId;
 
   const roots = [{ projectId: null, name: 'Workspace' }, ...projects.map(project => ({ projectId: project.id, name: project.name }))];
 
@@ -87,6 +90,15 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
       ]);
       if (mine !== reading.current) return;
       setFolders(folderRows);
+      // A folder opened from a link is shown in the tree too, so every folder above it is opened.
+      const above: string[] = [];
+      for (let step = folderRows.find(row => row.id === next.folderId); step?.parentId && !above.includes(step.parentId);) {
+        above.push(step.parentId);
+        step = folderRows.find(row => row.id === step?.parentId);
+      }
+      if (next.folderId) {
+        setExpanded(current => new Set([...current, rootKey(next.projectId), ...above.map(folderKey)]));
+      }
       setNotes(items.notes);
       setFiles(items.files);
     } catch (failure) {
@@ -97,7 +109,8 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
 
   useEffect(() => { void show({ projectId: level.projectId, folderId: openFolderId }); }, [show, level.projectId, openFolderId]);
 
-  // The open folder is part of the address, so a folder can be linked to and the back button works.
+  // The open folder is part of the address, so a folder can be linked to and opened again on reload.
+  // The address is replaced rather than added to, so the back button leaves the page.
   useEffect(() => {
     const query = new URLSearchParams({
       ...(level.projectId && { project: level.projectId }),
@@ -184,13 +197,16 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   });
 
   const uploadFile = (chosen: File | null) => {
-    if (!chosen || !openFolderId) return;
+    const folderId = openFolderId;
+    if (!chosen || !folderId) return;
     void write(async () => {
       const form = new FormData();
       form.append('file', chosen);
-      form.append('folderId', openFolderId);
+      form.append('folderId', folderId);
       await readJson(await fetch('/api/context/files', { method: 'POST', body: form }));
-      setFiles((await readItems(level.projectId, openFolderId)).files);
+      const fresh = await readItems(level.projectId, folderId);
+      // Another folder may have been opened while the file went up: its list is not this one's.
+      if (openNow.current === folderId) setFiles(fresh.files);
     });
   };
 
