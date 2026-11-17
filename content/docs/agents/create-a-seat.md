@@ -13,7 +13,7 @@ You need permission to manage the workspace's permissions.
 
 > The token is shown once. Store it in a secret manager, not in a file or a chat.
 
-The owner is who pays for the seat's sessions: with an owner the seat runs on that person's own Claude Code or Codex sign-in, and with **No owner** it needs a runner that uses your organisation's API key, which no runner has yet. See [what a seat is](/docs/agents/seats#what-a-seat-is). The owner cannot be changed afterwards: retire the seat and create it again.
+The owner is who pays for the seat's sessions: with an owner the seat runs on that person's own Claude Code or Codex sign-in, and with **No owner** it needs a runner that uses your organisation's API key, and no such runner exists yet. See [what a seat is](/docs/agents/seats#what-a-seat-is). The owner cannot be changed afterwards: retire the seat and create it again.
 
 The new seat is listed under **Agents**, **Seats** in the left menu. Everyone who can read its project sees it there.
 

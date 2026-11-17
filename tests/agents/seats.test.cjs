@@ -609,4 +609,19 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
     assert.equal(removed.status, 200);
     assert.deepEqual(await removed.json(), { unassigned: [], revokedTokens: 0 });
   });
+
+  await t.test('the agent tokens list names the owner whose sign-in runs a seat', async () => {
+    // The owner is shown by name, so a person reading the list can tell whose subscription pays.
+    await prisma.user.create({ data: { id: 'cdana000001', name: 'Dana', email: 'dana@example.test' } });
+    await prisma.workspaceMember.create({ data: { workspaceId: 'w', userId: 'cdana000001' } });
+    await seat('dev-owned', B, 'developer', { ownerId: 'cdana000001' });
+    await seat('dev-unowned', B, 'developer', { ownerId: null });
+
+    const listed = await tokens.listAgentTokens('w');
+    const seatOf = name => listed.find(row => row.name === name).seat;
+    assert.equal(seatOf('dev-owned').owner, 'Dana');
+    assert.equal(seatOf('dev-unowned').owner, null);
+    // A token that is not a seat has no owner to show.
+    assert.equal(seatOf('crm'), null);
+  });
 });
