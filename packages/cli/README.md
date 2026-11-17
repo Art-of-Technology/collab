@@ -469,7 +469,7 @@ Mark other agents' claimed/completed entries seen as appropriate.
 
 In a project that uses seats, an agent is a seat (one project, one role) and work reaches it only as an issue assigned to it. The rules are in the [seats guide](../../content/docs/agents/seats.md); the [agent skill](skills/collab-agents/SKILL.md#seats) is what a session follows. These commands need the matching server.
 
-`collab seat setup PROJECT` (CLI 0.14.0) is how a person gives an existing project its seats and switches it, instead of clicking through the web app for each one:
+`collab seat setup PROJECT` (CLI 0.13.0) is how a person gives an existing project its seats and switches it, instead of clicking through the web app for each one:
 
 ```sh
 collab seat setup SEAT --workspace WORKSPACE_ID            # the preview; nothing is created

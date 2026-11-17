@@ -135,7 +135,7 @@ function fixture({ userId = 'alice', scopes = SCOPES } = {}) {
     'next/server': { NextResponse: Response }, '@prisma/client': client, '@/lib/prisma': { prisma: db },
     '@/lib/issue-finder': finder, '@/lib/secrets/access': access, '@/lib/apps/auth-middleware': auth,
     '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts'), '@/utils/cloudinary-server': { cloudinary },
-    '@/lib/pdf-text': load('src/lib/pdf-text.ts', { unpdf: require('unpdf') }, { Buffer, Uint8Array, TextDecoder, console }),
+    '@/lib/pdf-text': load('src/lib/pdf-text.ts', { unpdf: require('unpdf') }, { Buffer, Error, Uint8Array, TextDecoder, console }),
   };
   dependencies['@/lib/agent-context-folders'] = load('src/lib/agent-context-folders.ts', dependencies, globals);
   const routes = new Map();
@@ -326,7 +326,7 @@ test('folder reads page each item type without losing children or notes', async 
 test('PDF text is bounded and malformed PDFs still return metadata', async () => {
   const f = fixture();
   f.addFolder('ideation');
-  const reader = load('src/lib/pdf-text.ts', { unpdf: require('unpdf') }, { Buffer, Uint8Array, TextDecoder });
+  const reader = load('src/lib/pdf-text.ts', { unpdf: require('unpdf') }, { Buffer, Error, Uint8Array, TextDecoder });
   const result = await reader.pdfText(pdf(['A document with more than twelve bytes']), 12);
   assert.equal(result.truncated, true);
   assert.ok(Buffer.byteLength(result.text) <= 12);
@@ -335,4 +335,26 @@ test('PDF text is bounded and malformed PDFs still return metadata', async () =>
   assert.equal(broken.status, 200);
   assert.equal(broken.body.text, null);
   assert.ok(broken.body.reason);
+});
+
+test('PDF reads stop consuming a page as soon as the text budget is reached', async () => {
+  let reads = 0, cancelled = false, destroyed = false;
+  const reader = load('src/lib/pdf-text.ts', { unpdf: { getDocumentProxy: async () => ({
+    numPages: 1,
+    getPage: async () => ({
+      streamTextContent: () => ({ getReader: () => ({
+        read: async () => {
+          assert.equal(++reads, 1, 'the rest of the page must not be extracted');
+          return { done: false, value: { items: [{ str: 'More than the budget', hasEOL: true }] } };
+        },
+        cancel: async reason => { assert.ok(reason instanceof Error); cancelled = true; },
+      }) }),
+      cleanup() {},
+    }),
+    loadingTask: { destroy: async () => { destroyed = true; } },
+  }) } }, { Buffer, Error, Uint8Array, TextDecoder });
+  const result = await reader.pdfText(Buffer.from('%PDF-'), 4);
+  assert.equal(result.text, 'More');
+  assert.equal(result.truncated, true);
+  assert.ok(cancelled && destroyed);
 });
