@@ -25,6 +25,8 @@ test('requests: one seat asks another, in its own project or in another one', as
       await prisma.project.create({ data: { id, workspaceId: 'w', name: id, slug: id, issuePrefix } });
       await prisma.projectStatus.createMany({ data: ['to_do', 'in_progress', 'blocked', 'done'].map((name, order) => ({ id: `${id}-${name}`, projectId: id, name, displayName: name,
         order, isDefault: name === 'to_do', isFinal: name === 'done' })) });
+      // Every project has its repository connected, as a project whose seats take issues does. It is `tests/agents/runs-repository.test.cjs` that works it out.
+      await prisma.repository.create({ data: { projectId: id, githubRepoId: id, owner: 'acme', name: id, fullName: `acme/${id}`, webhookSecret: 'secret' } });
     }
     for (const [id, slug] of [['agent-app', 'collab-agent'], ['person-app', 'collab-cli']]) {
       await prisma.app.create({ data: { id, name: slug, slug, publisherId: 'system', status: 'PUBLISHED', visibility: 'PRIVATE', isSystemApp: true,
