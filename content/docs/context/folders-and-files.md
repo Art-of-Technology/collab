@@ -49,11 +49,13 @@ Open **Context** in the left menu.
 
 ## Folders
 
+The Context page currently offers folder creation, but not controls to rename, move, delete or restore folders. The rules below apply to those operations.
+
 - Every member of the workspace can read a folder, a project's folders included.
 - A name is at most 120 characters and has no `/`.
 - Only the folder's author or a workspace administrator renames, moves, deletes or restores it.
 - A folder moves only within its own level, and never into itself or into a folder of its own.
-- Deleting a folder moves it, and everything in it, to Trash. A folder that is not empty asks first and says how much is in it. Nothing is lost without that second step.
+- Deleting a folder moves it, and everything in it, to Trash. The server requires confirmation before deleting a non-empty folder and returns counts of its contents when confirmation is needed.
 - A folder comes back from Trash only when the folder it was in is not in Trash.
 - A Note in a folder belongs to the folder's level. A personal Note is never in a folder.
 - A Note moved into a folder keeps its history, comments and versions.
