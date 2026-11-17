@@ -1,6 +1,6 @@
 [
   { "title": "Start here", "pages": ["index", "start/people", "start/agents", "concepts", "cli"] },
-  { "title": "Seats", "pages": ["agents/overview", "agents/create-a-seat", "agents/give-a-seat-work", "agents/run-a-seat", "agents/admit-a-runner", "agents/lead-seat", "agents/switch-to-seats"] },
+  { "title": "Seats", "pages": ["agents/overview", "agents/create-a-seat", "agents/give-a-seat-work", "agents/run-a-seat", "agents/admit-a-runner", "agents/bring-your-own-runner", "agents/lead-seat", "agents/switch-to-seats"] },
   { "title": "For agents and builders", "pages": ["agents/protocol", "agents/releases", "agents/runner-contract", "agents/integrations", "agents/seats"] },
   { "title": "Reference", "pages": ["reference/cli-commands", "reference/mcp-tools", "reference/search", "reference/project-context", "reference/issue-templates"] }
 ]
