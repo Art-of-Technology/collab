@@ -2414,7 +2414,7 @@ test('seat and run refusals keep their code and what is missing, and pass on not
 });
 
 // A stand-in for the seat routes that keeps state: an inbox, and runs that are checked out, renewed, finished and closed.
-async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [], fenceRenew = false, awayPolls = 0, throttled = 0 } = {}) {
+async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [], noDefaultRepository = [], fenceRenew = false, awayPolls = 0, throttled = 0 } = {}) {
   const runs = new Map(), log = []; let polls = 0;
   const f = await fixture(t, (req, res, body) => {
     const route = `${req.method} ${req.url.split('?')[0].replace('/api/apps/auth/', '')}`;
@@ -2428,6 +2428,8 @@ async function seatServer(t, { inbox = () => [], conflicts = [], forbidden = [],
     if (route === 'POST runs') {
       log.push(`checkout ${input.issue}`);
       if (conflicts.includes(input.issue)) return refuse(409, 'already_running');
+      // The project has several repositories and no default: an administrator chooses one and the issue is taken.
+      if (noDefaultRepository.includes(input.issue)) return refuse(409, 'repository_required');
       if (forbidden.includes(input.issue)) return refuse(403, 'seat_required');
       if (throttled-- > 0) return refuse(429, 'rate_limited');
       const run = { id: `run-${runs.size + 1}`, issueId: input.issue, generation: input.generation, runner: input.runner, state: 'running' };
@@ -2499,6 +2501,20 @@ test('seat run: a 409 on checkout is not retried; the next item is taken in the 
   assert.deepEqual(s.log, ['inbox 1', 'checkout id-APP-1', 'checkout id-APP-2', 'finish run-1', 'inbox 2', 'inbox 3', 'inbox 4', 'checkout id-APP-1', 'inbox 5']);
   assert.deepEqual(outcome(result), [{ issueKey: 'APP-2', runId: 'run-1', state: 'finished', exitCode: 0 }]);
   assert.equal(result.stopped, true);
+});
+
+test('seat run: a checkout refused for want of a default repository waits and is taken once one is chosen', async t => {
+  const controller = new AbortController(), events = [], waitingFor = ['id-APP-1'];
+  // An administrator chooses the project's default before the third read of the inbox; the issue stays listed throughout.
+  const s = await seatServer(t, { noDefaultRepository: waitingFor,
+    inbox: poll => { if (poll === 3) waitingFor.length = 0; if (poll === 4) controller.abort(); return poll >= 4 ? [] : ['APP-1']; } });
+  const result = await seatRun({ ...fast, log: event => events.push(event), api: s.api, program: process.execPath,
+    args: ['-e', finishes, s.url], signal: controller.signal });
+  // Tried again at every read of the inbox rather than left alone, and said once while it waits.
+  assert.equal(s.log.filter(line => line === 'checkout id-APP-1').length, 3);
+  assert.deepEqual(events.filter(event => event.event === 'waiting').map(event => event.issueKey), ['APP-1']);
+  assert.deepEqual(events.filter(event => ['skipped', 'left_alone'].includes(event.event)), []);
+  assert.deepEqual(outcome(result), [{ issueKey: 'APP-1', runId: 'run-1', state: 'finished', exitCode: 0 }]);
 });
 
 test('seat run: a fenced renew stops the program and closes the run', async t => {

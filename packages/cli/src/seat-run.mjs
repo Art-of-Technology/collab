@@ -8,8 +8,9 @@ import { serverAway } from './inbox-watch.mjs';
 // Only the program named on the command line is run, with the arguments given and no shell. Remote content is never code.
 export async function seatRun({ api, program, args, once, runner, signal, pollMs = 5000, renewMs = 15000, killMs = 10000,
   log = event => process.stderr.write(JSON.stringify(event) + '\n') }) {
-  // Issues this runner leaves alone while the inbox keeps listing them, and how often each ended unfinished in a row.
-  const skip = new Set(), unfinished = new Map(), runs = [];
+  // Issues this runner leaves alone while the inbox keeps listing them, how often each ended unfinished in a row, and
+  // the ones whose project waits for a default repository, which are tried again rather than left alone.
+  const skip = new Set(), unfinished = new Map(), waiting = new Set(), runs = [];
   const sleep = ms => delay(ms, undefined, { signal }).catch(() => {});
   // A read, a renew or a close can be repeated, so each is tried again while the server is away, as it is on every deploy.
   const patient = async call => {
@@ -68,7 +69,7 @@ export async function seatRun({ api, program, args, once, runner, signal, pollMs
     try { items = (await api('GET', 'seats/me/inbox'))?.items; }
     catch (error) { if (!serverAway(error)) throw error; await sleep(pollMs); continue; }
     if (!Array.isArray(items) || items.some(item => typeof item?.issueId !== 'string')) throw new CliError('invalid_response', 'Expected inbox items.', 5);
-    for (const id of new Set([...skip, ...unfinished.keys()])) if (!items.some(item => item.issueId === id)) { skip.delete(id); unfinished.delete(id); }
+    for (const id of new Set([...skip, ...unfinished.keys(), ...waiting])) if (!items.some(item => item.issueId === id)) { skip.delete(id); unfinished.delete(id); waiting.delete(id); }
     let ran = false;
     for (const item of items) {
       if (signal?.aborted) break;
@@ -77,6 +78,16 @@ export async function seatRun({ api, program, args, once, runner, signal, pollMs
       let run;
       try { run = (await api('POST', 'runs', { issue: item.issueId, generation, runner })).run; }
       catch (error) {
+        // Refused over the repository: an administrator chooses a default in Project settings and nothing else has to
+        // happen, so this one is waited for and tried again at the next read of the inbox, and said once while it waits.
+        if (error.code === 'repository_required' && error.details?.status === 409) {
+          if (!waiting.has(item.issueId)) {
+            waiting.add(item.issueId);
+            log({ event: 'waiting', issueKey: item.issueKey, reason: error.code,
+              message: 'The project has several repositories and no default for agents. This runner tries the issue again once an administrator chooses one in Project settings.' });
+          }
+          continue;
+        }
         // Refused: someone holds it, or it waits for a person. Not tried again while it stays listed; the next item is.
         if (error.details?.status === 409) { skip.add(item.issueId); log({ event: 'skipped', issueKey: item.issueKey, reason: error.code }); continue; }
         // No answer, a server error or a 429: not tried again at once. The inbox is read again after the wait. If the run
@@ -85,6 +96,8 @@ export async function seatRun({ api, program, args, once, runner, signal, pollMs
         throw error;
       }
       if (typeof run?.id !== 'string') throw new CliError('invalid_response', 'Expected a run.', 5);
+      // It waits no more: a refusal after this one is a new wait and is said again.
+      waiting.delete(item.issueId);
       await work(item, run, generation);
       ran = true;
       break; // One issue at a time: the inbox is read again for the next.

@@ -27,11 +27,22 @@ export const NEEDS_REPOSITORY = ['developer', 'reviewer', 'release', 'security']
 /** Read in a checkout's transaction and outside one, as `agent-seats.ts` does. */
 type Database = Prisma.TransactionClient | typeof prisma;
 
+/** A connected row with what makes two rows the same repository, so a saved default survives the row it was saved as. */
+type Connected = { key: string; repository: SeatRepository };
+
+// The server is part of what makes it the same repository, as it is in `GitConnection`'s own key: the same path at two
+// servers is two repositories, and a project that has both picks between them rather than cloning the older row. It is
+// compared letter for letter, as `resolveInstance` and that key both compare it, because a URL's path is case-sensitive:
+// two configured instances that differ only in the case of theirs are two servers here as they are everywhere else. The
+// path at the provider is compared without case, as every provider Collab connects to reads it that way, so the same
+// repository connected twice is one; the provider is stored in either case by the client and is folded with it.
+const repositoryKey = (provider: string, server: string, path: string) => [provider.toLowerCase(), server, path.toLowerCase()].join(' ');
+
 /**
- * The project's repositories, the GitHub sign-in's first. A credential is never selected: `Repository.accessToken`
+ * Every active row of the project, the GitHub sign-in's first. A credential is never selected: `Repository.accessToken`
  * and `GitConnection.credentials` do not leave the server, and the runner clones with its owner's own sign-in.
  */
-async function connected(db: Database, projectId: string): Promise<SeatRepository[]> {
+async function connectedRows(db: Database, projectId: string): Promise<Connected[]> {
   // A project has at most one `Repository`: `Repository.projectId` is unique.
   const github = await db.repository.findFirst({ where: { projectId, isActive: true }, select: { id: true, fullName: true, defaultBranch: true } });
   const connections = await db.gitConnection.findMany({ where: { projectId, isActive: true }, orderBy: { createdAt: 'asc' },
@@ -42,44 +53,85 @@ async function connected(db: Database, projectId: string): Promise<SeatRepositor
     ...connections.map(connection => ({ server: connection.baseUrl,
       repository: { id: connection.id, provider: connection.provider.toLowerCase(), name: connection.repositoryPath, url: connection.url, defaultBranch: null } })),
   ];
-  // One repository connected twice, by the GitHub sign-in and as a connection, is one repository: the sign-in's row wins.
-  // The server is part of what makes it the same one, as it is in `GitConnection`'s own key: the same path at two
-  // servers is two repositories, and a project that has both picks between them rather than cloning the older row.
-  const key = (entry: typeof all[number]) => [entry.repository.provider, entry.server.toLowerCase(), entry.repository.name.toLowerCase()].join(' ');
-  return all.filter((entry, index) => all.findIndex(other => key(other) === key(entry)) === index).map(entry => entry.repository);
-}
-
-/** The one repository of a project, or null while there is none or the project has several and nothing picks between them. */
-async function only(db: Database, projectId: string) {
-  const repositories = await connected(db, projectId);
-  return repositories.length === 1 ? repositories[0] : null;
+  return all.map(entry => ({ key: repositoryKey(entry.repository.provider, entry.server, entry.repository.name), repository: entry.repository }));
 }
 
 /**
- * What a checkout answers with: the seat's own pick, else the project's default for agents, else the project's only
- * repository. Neither the pick nor the default is in the database yet (CLB-603 and CLB-601 add them, and slot in
- * ahead of the line below), so today a project with several repositories works none out.
- *
- * No checkout is refused over a repository. A role that needs none gets null; so does a role that needs one whose
- * project works none out, and that checkout stands: the runner falls back to the copy it is configured with, as it
- * did before Collab sent the field at all. Refusing instead would stop seats that are working today, and the field
- * is there to save a runner the configuration, not to gate its work; the refusal belongs to the day runners carry
- * no repository of their own. A run that is not a seat's asks for none either: a person works in the copy they have.
+ * The repository a saved default names, where no active row carries that id any more: the row it was saved as may have
+ * been switched off or disconnected while a second connection of the same repository stays. Read in that case only.
  */
-export async function repositoryForSeat(db: Database, projectId: string, seat: { role: string } | null): Promise<SeatRepository | null> {
+async function savedRepositoryKey(db: Database, projectId: string, savedId: string): Promise<string | null> {
+  // Within the project, so an id belonging to another one names nothing here.
+  const github = await db.repository.findFirst({ where: { id: savedId, projectId }, select: { fullName: true } });
+  if (github) return repositoryKey('github', 'https://github.com', github.fullName);
+  const connection = await db.gitConnection.findFirst({ where: { id: savedId, projectId }, select: { provider: true, baseUrl: true, repositoryPath: true } });
+  return connection ? repositoryKey(connection.provider, connection.baseUrl, connection.repositoryPath) : null;
+}
+
+/**
+ * The project's row, held until the transaction ends. Choosing the default and disconnecting the row it is saved as
+ * both read which repositories the project has and then write the choice, so without this one would write over what
+ * the other decided, or save a row the other has just deleted. Both take it before they read, so they take turns.
+ */
+export async function holdProjectDefault(db: Database, projectId: string) {
+  await db.$queryRaw`SELECT id FROM "Project" WHERE id = ${projectId} FOR UPDATE`;
+}
+
+/**
+ * A row about to be deleted outright, as the GitHub sign-in's disconnect deletes its `Repository`, takes no choice with
+ * it: where it was the project's default and another row represents the same repository, that row holds the choice from
+ * now on, and where none does the choice is cleared rather than left naming a row that is gone. Called before the
+ * delete, in its transaction, while the row can still say which repository it was.
+ */
+export async function transferDefaultRepository(db: Database, projectId: string | null, rowId: string) {
+  if (!projectId) return;
+  await holdProjectDefault(db, projectId);
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { agentDefaultRepositoryId: true } });
+  if (project?.agentDefaultRepositoryId !== rowId) return;
+  const key = await savedRepositoryKey(db, projectId, rowId);
+  // Not `distinct`, which answers with the sign-in's row: the row that stays is wanted, and that is the other one.
+  const successor = key ? (await connectedRows(db, projectId)).find(row => row.key === key && row.repository.id !== rowId) : undefined;
+  // Written only while the choice is still this row, so nothing else's choice is written over even without the hold.
+  await db.project.updateMany({ where: { id: projectId, agentDefaultRepositoryId: rowId },
+    data: { agentDefaultRepositoryId: successor?.repository.id ?? null } });
+}
+
+/** One repository connected twice, by the GitHub sign-in and as a connection, is one repository: the sign-in's row wins. */
+const distinct = (rows: Connected[]) => rows.filter((row, index) => rows.findIndex(other => other.key === row.key) === index);
+
+/** The project's repositories, the GitHub sign-in's first, one entry for a repository connected twice. */
+export async function connectedRepositories(db: Database, projectId: string): Promise<SeatRepository[]> {
+  return distinct(await connectedRows(db, projectId)).map(row => row.repository);
+}
+
+/** A default whose repository is connected no more never resolves, nor does an id belonging to another project. */
+export async function projectRepositoryState(db: Database, projectId: string) {
+  const rows = await connectedRows(db, projectId);
+  const chosen = distinct(rows);
+  const repositories = chosen.map(row => row.repository);
+  if (repositories.length === 1) return { repositories, repository: repositories[0] };
+  const { agentDefaultRepositoryId: savedId } = await db.project.findUnique({ where: { id: projectId }, select: { agentDefaultRepositoryId: true } }) ?? {};
+  // The default is saved as one row's id, and a repository connected twice has two of them. The repository it names
+  // answers while it is connected at all, whichever of its rows represents it now: connecting the same repository
+  // again, or switching off the row that won, changes which row that is but not the choice an administrator made.
+  const key = !savedId ? null : rows.find(row => row.repository.id === savedId)?.key ?? await savedRepositoryKey(db, projectId, savedId);
+  return { repositories, repository: (key && chosen.find(row => row.key === key)?.repository) || null };
+}
+
+/** The seat's pick will take precedence when seat repository selection is introduced. */
+export async function repositoryStateForSeat(db: Database, projectId: string, seat: { role: string } | null) {
   // The role first, so that a seat which works in none is answered null whatever its project has: a lead handed a
   // repository would be told to work in a copy it has no business in, and the run context answers null for it.
-  if (!seat || !NEEDS_REPOSITORY.includes(seat.role)) return null;
-  return only(db, projectId);
+  if (!seat || !NEEDS_REPOSITORY.includes(seat.role)) return { repositories: [] as SeatRepository[], repository: null };
+  return projectRepositoryState(db, projectId);
 }
 
 /**
- * The same repository for a session reading its run context: a project that works none out answers null here as it
- * does at the checkout. The role is the one of the seat the issue is assigned to, so the read answers what that
+ * The same repository for a session reading its run context: a project that works none out answers null here. The role is the one of the seat the issue is assigned to, so the read answers what that
  * issue's checkout answers: an issue held by a person, or by a seat that works in no repository, is null here too.
  */
 export async function repositoryOfIssue(db: Database, projectId: string, assigneeId: string | null): Promise<SeatRepository | null> {
   const seat = assigneeId ? await db.agentSeat.findUnique({ where: { userId: assigneeId }, select: { role: true, retiredAt: true } }) : null;
   if (!seat || seat.retiredAt || !NEEDS_REPOSITORY.includes(seat.role)) return null;
-  return only(db, projectId);
+  return (await projectRepositoryState(db, projectId)).repository;
 }

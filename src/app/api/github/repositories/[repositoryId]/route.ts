@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { versionAccessWhere } from "@/lib/github/version-access";
 import { repositoryAccessWhere } from "@/lib/github/access";
 import { EncryptionService } from "@/lib/encryption";
+import { transferDefaultRepository } from "@/lib/agent-repository";
 
 // GET /api/github/repositories/[repositoryId] - Get repository details
 export async function GET(
@@ -119,9 +120,13 @@ export async function DELETE(
       }
     }
 
-    // Delete repository and all related data (cascades)
-    await prisma.repository.delete({
-      where: { id: repositoryId, AND: [repositoryAccessWhere(actor.id)] },
+    // Delete repository and all related data (cascades). The project's default for agents is the repository and not
+    // this row, so a connection of the same one takes it over in the same transaction rather than losing it.
+    await prisma.$transaction(async tx => {
+      await transferDefaultRepository(tx, repository.projectId, repositoryId);
+      await tx.repository.delete({
+        where: { id: repositoryId, AND: [repositoryAccessWhere(actor.id)] },
+      });
     });
 
     console.log(`[GITHUB_REPOSITORY_DELETE] Repository disconnected successfully: ${repository.id}`);

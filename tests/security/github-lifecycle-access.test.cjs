@@ -31,7 +31,12 @@ function fixture(options = {}) {
       update: async ({ where, data, select: shape }) => { const row = current(where); if (!row) throw new Error('no matching record'); if (options.dbError) throw new Error('stored-secret private-detail'); Object.assign(row, data); writes.push(['update', plain(data)]); return select(row, shape); },
       delete: async ({ where }) => { const row = current(where); if (!row) throw new Error('no matching record'); if (options.dbError) throw new Error('stored-secret private-detail'); repositories.splice(repositories.indexOf(row), 1); writes.push(['delete', row.id]); return row; },
     },
+    // Read before a delete, to hand on a default repository for agents that is saved as the row: none is here.
+    project: { findUnique: async () => ({ agentDefaultRepositoryId: null }) },
   };
+  db.$transaction = async run => run(db);
+  // The hold the delete takes on the project while it reads and writes that choice.
+  db.$queryRaw = async () => { effects.push('hold'); return []; };
   const globals = { URL, Error, console: Object.fromEntries(['log', 'warn', 'error'].map(k => [k, (...args) => logs.push([k, ...args])])), fetch: async (url, init) => {
     effects.push(['provider', url, init]); if (options.providerThrow) throw new Error('stored-secret private-detail');
     if (init?.method === 'DELETE') return { ok: !options.webhookFailure, status: options.webhook404 ? 404 : 500, json: async () => ({ message: 'stored-secret private-detail' }) };
@@ -48,6 +53,7 @@ function fixture(options = {}) {
   deps['@/lib/session'] = load('src/lib/session.ts', deps, globals);
   deps['@/lib/github/access'] = load('src/lib/github/access.ts', deps);
   deps['@/lib/github/version-access'] = load('src/lib/github/version-access.ts', { ...deps, './access': deps['@/lib/github/access'] });
+  deps['@/lib/agent-repository'] = load('src/lib/agent-repository.ts', deps);
   const repo = load('src/app/api/github/repositories/[repositoryId]/route.ts', deps, globals);
   const config = load('src/app/api/github/repositories/[repositoryId]/configuration/route.ts', deps, globals);
   const disconnect = load('src/app/api/github/oauth/disconnect/route.ts', deps, globals);
