@@ -9,7 +9,7 @@ function harness() {
     { id: 'p2', name: 'Dependency', slug: 'dependency', workspaceId: 'w', workspace, updatedAt: now },
     { id: 'foreign', name: 'Private', slug: 'private', workspaceId: 'foreign', workspace: foreign, updatedAt: now },
   ];
-  const rows = { issue: [], issueRelation: [], issueActivity: [], note: [] };
+  const rows = { issue: [], issueRelation: [], issueActivity: [], note: [], contextFolder: [] };
   const state = { scopes: ['prompts:read', 'issues:read', 'context:read'], afterNotes: null, beforeRead: null, time: Date.now() };
   class Clock extends Date {
     constructor(...args) { super(...(args.length ? args : [state.time])); }
@@ -45,6 +45,9 @@ function harness() {
   const queryModule = load('src/lib/agent-search-query.ts', { zod: require('zod') }, { Buffer });
   const dependencies = { '@/lib/prisma': { prisma: db }, '@/lib/issue-finder': finder, '@/lib/secrets/access': access,
     '@/lib/oauth-scopes': scopes, '@/lib/html-sanitizer': load('src/lib/html-sanitizer.ts') };
+  dependencies['@/lib/agent-context-folders'] = load('src/lib/agent-context-folders.ts', { ...dependencies,
+    '@/lib/pdf-text': {}, '@/lib/context-files': {},
+  }, { Buffer });
   const service = load('src/lib/agent-project-context.ts', { ...dependencies, zod: require('zod'), './agent-search-query': queryModule }, { Buffer, Date: Clock });
   const auth = load('src/lib/apps/auth-middleware.ts', { 'next/server': { NextResponse: Response }, '@/lib/prisma': { prisma: db },
     '@/lib/oauth-scopes': scopes, '@/lib/apps/crypto': { getEncryptionKey: () => 'fixture-key', decryptToken: async () => 'test-token' } }, { Buffer, URL, console });
@@ -337,4 +340,24 @@ test('budget cursors retain candidate positions when hydration removes Note and 
     assert.equal(page.pagination.nextOffset, Number(candidates[page.items.length]));
     assert.equal((await h.call({ offset: String(page.pagination.nextOffset), maxTokens: '64000' })).status, 200);
   }
+});
+
+test('project context includes workspace and project folders within its response budget', async () => {
+  const h = harness();
+  for (let index = 0; index < 30; index++) h.rows.contextFolder.push({
+    id: `folder-${index}`, name: 'Folder '.repeat(15) + index, parentId: null,
+    projectId: index % 2 ? 'p' : null, workspaceId: 'w', workspace: h.workspace,
+    deletedAt: null, updatedAt: new Date('2026-11-17T00:00:00Z'),
+  });
+  h.rows.contextFolder.push({ id: 'hidden', name: 'Hidden', projectId: 'p2', workspaceId: 'w',
+    workspace: h.workspace, deletedAt: null });
+  const full = await h.call({ maxTokens: '64000', limit: '30' });
+  assert.equal(full.status, 200);
+  assert.equal(full.body.folders.items.length, 30);
+  assert.ok(full.body.folders.items.every(item => item.url && item.updatedAt));
+  const bounded = await h.call({ maxTokens: '4000', limit: '30' });
+  assert.equal(bounded.status, 200);
+  assert.ok(bounded.body.folders.items.length < 30);
+  assert.ok(bounded.body.folders.pagination.hasMore);
+  assert.ok(Buffer.byteLength(JSON.stringify(bounded.body)) <= 4000);
 });

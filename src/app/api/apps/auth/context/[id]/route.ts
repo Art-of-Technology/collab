@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { userHasWorkspaceAccess } from '@/lib/issue-finder';
-import { noteAccessWhere, canAccessNote, canWriteNoteDestination } from '@/lib/secrets/access';
+import { noteAccessWhere, noteWorkspaceWhere, canAccessNote, canWriteNoteDestination } from '@/lib/secrets/access';
 import { noteTagAccessWhere, noteTagConnections } from '@/lib/note-tag-access';
 import { prisma } from '@/lib/prisma';
 import { withAppAuth, AppAuthContext } from '@/lib/apps/auth-middleware';
@@ -39,9 +39,10 @@ export const GET = withAppAuth(
       // Find the context document
       const note = await prisma.note.findFirst({
         where: {
-          AND: [noteAccessWhere(context.user.id)],
+          // A project Note of this workspace may carry no workspace of its own, so it is scoped
+          // through its project; without this it would be listed in a folder and then unreadable.
+          AND: [noteAccessWhere(context.user.id), noteWorkspaceWhere(context.workspace.id)],
           id,
-          workspaceId: context.workspace.id,
           // Only allow access to non-personal notes via MCP
           scope: { in: [NoteScope.WORKSPACE, NoteScope.PUBLIC, NoteScope.PROJECT] },
         },

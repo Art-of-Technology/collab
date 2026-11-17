@@ -12,6 +12,9 @@ import * as comments from '@/app/api/apps/auth/issues/[issueIdOrKey]/comments/ro
 import * as relations from '@/app/api/apps/auth/issues/[issueIdOrKey]/relations/route';
 import * as workLogs from '@/app/api/apps/auth/issues/[issueIdOrKey]/work-logs/route';
 import * as notes from '@/app/api/apps/auth/context/route';
+import * as contextFolders from '@/app/api/apps/auth/context/folders/route';
+import * as contextFolder from '@/app/api/apps/auth/context/folders/[id]/route';
+import * as contextFile from '@/app/api/apps/auth/context/files/[id]/route';
 import * as note from '@/app/api/apps/auth/context/[id]/route';
 import * as search from '@/app/api/apps/auth/search/route';
 import * as aiContext from '@/app/api/apps/auth/ai-context/route';
@@ -133,7 +136,10 @@ export const tools: McpTool[] = [
     projectId: id, status: { type: 'string', minLength: 1, maxLength: 128 }, assigneeId: id, after: dateTime, before: dateTime,
     limit: integer(1, 50), offset: integer(0, 50000), maxTokens: integer(1024, 64000),
   }, ['query'], { anyScope: true }),
-  tool('context_get', 'Project context for an agent: with a projectId, defaults to the pipeline (status counts, owners, blockers, recent changes, relevant Notes), which also needs issues:read and context:read. Set includePipeline=false for the prompt format; includeKnowledge=true also selects it when includePipeline is omitted. Without a projectId, returns workspace prompts.', ['prompts:read'], 'GET', 'ai-context', aiContext.GET, {
+  tool('folders_list', 'List workspace folders and, with projectId, that project’s folders. Returns at most 500 folders with nextOffset for pagination.', ['context:read'], 'GET', 'context/folders', contextFolders.GET, { projectId: id, offset: integer(0, 50000) }),
+  tool('folders_get', 'Read a folder and up to 200 items of each type: child folders, shared Notes and files. Personal, encrypted and secret Notes are excluded. Follow nextOffset to read more items.', ['context:read'], 'GET', 'context/folders/:id', contextFolder.GET, { id, offset: integer(0, 50000) }, ['id']),
+  tool('files_get', 'Read file metadata and text: up to 256 KiB from text and CSV files, or embedded PDF text (PDF at most 8 MiB, first 100 pages, at most 256 KiB output). Other types, scans and unreadable PDFs return metadata and a reason. No OCR.', ['context:read'], 'GET', 'context/files/:id', contextFile.GET, { id }, ['id']),
+  tool('context_get', 'Project context for an agent: with a projectId, defaults to the pipeline (status counts, owners, blockers, recent changes, relevant Notes, workspace and project folders), which also needs issues:read and context:read. Set includePipeline=false for the prompt format; includeKnowledge=true also selects it when includePipeline is omitted. Without a projectId, returns workspace prompts.', ['prompts:read'], 'GET', 'ai-context', aiContext.GET, {
     projectId: id, includeKnowledge: flag, includePipeline: flag, limit: integer(1, 50), offset: integer(0, 50000), since: dateTime, maxTokens: integer(2048, 64000),
   }, [], {
     prepare: args => {

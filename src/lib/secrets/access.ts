@@ -211,6 +211,14 @@ export async function checkNoteAccess(
 }
 
 /** Apply the same read boundary to collections before content or counts are fetched. */
+/**
+ * The workspace a Note belongs to: its own, or the workspace of the project it was written for,
+ * which is how a project Note that carries no workspace of its own is still scoped to one.
+ */
+export const noteWorkspaceWhere = (workspaceId: string): Prisma.NoteWhereInput => ({
+  OR: [{ workspaceId }, { workspaceId: null, project: { workspaceId } }],
+});
+
 export function noteAccessWhere(userId: string): Prisma.NoteWhereInput {
   if (!userId) return { id: { in: [] } };
   const membership: Prisma.WorkspaceWhereInput = {

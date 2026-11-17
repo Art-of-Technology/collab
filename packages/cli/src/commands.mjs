@@ -168,6 +168,9 @@ export const commands = {
     deletePreview: true,
     description: 'Permanently delete one Note you authored, after reading its identity. Notes have no trash. Requires --yes; --dry-run reads only the preview without --yes.',
   }),
+  'folders list': command('GET', 'context/folders', {}, { ...projectQuery, offset: integer }, { description: 'List workspace folders and optionally project folders, up to 500; Follow nextOffset with --offset to read more folders.' }),
+  'folders get': command('GET', 'context/folders/:id', {}, { offset: integer }, { description: 'Read a folder and up to 200 child folders, shared Notes and files per type; Follow nextOffset with --offset to read more items. Personal, encrypted and secret Notes are excluded.' }),
+  'files get': command('GET', 'context/files/:id', {}, {}, { description: 'Read metadata and up to 256 KiB of text/CSV or embedded PDF text (8 MiB input, first 100 pages, 256 KiB output). Other types and unreadable PDFs return metadata and a reason; no OCR.' }),
   'context get': command('GET', 'ai-context', {}, { ...projectQuery, includeKnowledge: boolean, includePipeline: boolean,
     ...offset, maxTokens: integer, since: string }, {
     defaults: { maxTokens: 8000 },
@@ -178,7 +181,7 @@ export const commands = {
       since: '7 days before the server request time (server default; includePipeline=true only)',
     },
     constraints: { ...retrievalBounds, projectId: retrievalIdentifier, maxTokens: { minimum: 2048, maximum: 64000 }, since: { format: 'date-time' } },
-    description: 'With a project, return pipeline context. includePipeline=false or includeKnowledge=true selects the legacy prompt format.',
+    description: 'With a project, return pipeline context including workspace and project folders. includePipeline=false or includeKnowledge=true selects the legacy prompt format.',
   }),
   'knowledge list': command('GET', 'context/knowledge', {}, { ...offset, ...projectQuery, q: string, type: string }),
   'knowledge get': command('GET', 'context/knowledge/:id'),
