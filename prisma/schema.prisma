@@ -125,6 +125,12 @@ model User {
   // Knowledge Base Phase 5 relations - Templates
   noteTemplates NoteTemplate[] @relation("NoteTemplateAuthor")
 
+  // Context folders and files
+  createdContextFolders  ContextFolder[] @relation("ContextFolderCreatedBy")
+  deletedContextFolders  ContextFolder[] @relation("ContextFolderDeletedBy")
+  uploadedContextFiles   ContextFile[]   @relation("ContextFileUploadedBy")
+  deletedContextFiles    ContextFile[]   @relation("ContextFileDeletedBy")
+
   // Time Tracking relations
   workLogs               WorkLog[]               @relation("UserWorkLogs")
 
@@ -399,6 +405,7 @@ model Workspace {
   timeTrackingEnabled Boolean               @default(true)
   // Whether agents are refused when an issue lacks what its template requires
   issueTemplatesEnforced Boolean            @default(false)
+  contextFolders      ContextFolder[]
   customRoles         CustomRole[]
   featureRequests     FeatureRequest[]
   leavePolicies       LeavePolicy[]
@@ -506,6 +513,7 @@ model Project {
   followers       ProjectFollower[]
   featureRequests FeatureRequest[] // Feature requests linked to this project
   notes           Note[] // Knowledge System: project-level notes
+  contextFolders  ContextFolder[] // Context: project-level folders
   forgeAttempts   ForgeExecutionAttempt[]
 
   // GitHub Integration - One-to-one relationship with Repository
@@ -978,6 +986,9 @@ model Note {
   // Knowledge Base Phase 5 fields - Templates
   templateId String? // Template this note was created from
 
+  // Context folders - null keeps the note outside any folder
+  folderId String?
+
   // Relations
   author            User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
   workspace         Workspace?        @relation(fields: [workspaceId], references: [id])
@@ -990,6 +1001,7 @@ model Note {
   versions          NoteVersion[]     @relation("NoteVersions")
   lastVersionByUser User?             @relation("NoteLastVersionBy", fields: [lastVersionBy], references: [id])
   template          NoteTemplate?     @relation("NoteFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+  folder            ContextFolder?    @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   @@index([authorId])
   @@index([workspaceId])
@@ -1004,6 +1016,57 @@ model Note {
   @@index([isRestricted])
   @@index([version])
   @@index([templateId])
+  @@index([folderId])
+}
+
+// Context folders - a folder belongs to a workspace, or to one project inside it.
+// Trash keeps a deleted folder and everything in it until a second, explicit step.
+model ContextFolder {
+  id          String    @id @default(cuid())
+  name        String
+  workspaceId String
+  projectId   String? // null for a workspace-level folder
+  parentId    String? // null at the top of its level
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  deletedById String?
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent    ContextFolder?  @relation("ContextFolderTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children  ContextFolder[] @relation("ContextFolderTree")
+  createdBy User            @relation("ContextFolderCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  deletedBy User?           @relation("ContextFolderDeletedBy", fields: [deletedById], references: [id])
+  notes     Note[]
+  files     ContextFile[]
+
+  @@index([workspaceId, projectId])
+  @@index([parentId])
+  @@index([deletedAt])
+}
+
+// An uploaded file in a Context folder. Who can read it follows its folder.
+model ContextFile {
+  id           String    @id @default(cuid())
+  name         String
+  mimeType     String
+  size         Int
+  storageUrl   String // where the bytes are
+  folderId     String
+  uploadedById String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  deletedById  String?
+
+  folder     ContextFolder @relation(fields: [folderId], references: [id], onDelete: Restrict)
+  uploadedBy User          @relation("ContextFileUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+  deletedBy  User?         @relation("ContextFileDeletedBy", fields: [deletedById], references: [id])
+
+  @@index([folderId])
+  @@index([deletedAt])
 }
 
 model NoteTag {
