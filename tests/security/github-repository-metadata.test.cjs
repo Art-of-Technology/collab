@@ -35,6 +35,7 @@ function fixture(options = {}) {
     },
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status || 200, headers: new Headers(init.headers) }) } },
   };
+  if (options.providerStatus) deps['@/lib/github/oauth-config'].getUserRepositories = load('src/lib/github/oauth-config.ts', {}, { URLSearchParams, process: { env: {} }, Error, console: { log() {}, error() {} }, fetch: async () => ({ ok: false, status: options.providerStatus, statusText: 'Provider error' }) }).getUserRepositories;
   deps['@/lib/github/access'] = load('src/lib/github/access.ts', deps);
   const globals = { URL, Error, crypto, process: { env: { NEXTAUTH_URL: options.local ? 'http://localhost:3000' : 'https://collab.example' } }, console: { log() {}, warn() {}, error: (...args) => logs.push(args) }, fetch: async url => { effects.push(['fetch']); return { ok: true, json: async () => url.includes('/branches') ? [{ name: 'main', commit: { sha: 'sha' }, protected: true }] : url.includes('/commits') ? [{ sha: 'sha', commit: { message: 'initial', author: { name: 'A', email: 'a@example.test', date: '2026-01-01' } } }] : [] }; } };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, globals);
@@ -77,4 +78,11 @@ test('known provider error statuses and localhost webhook fallback remain', asyn
 test('touched route errors do not echo raw provider/database payloads or log raw errors', async () => {
   for (const options of [{ webhookError: 'private-project encrypted-secret' }, { dbError: true }]) { const f = fixture(options); const r = await f.connect(); assert.equal(r.status, 500); assert.equal(JSON.stringify(r.body).includes('private-project'), false); assert.ok(f.logs.every(args => args.length === 1 && typeof args[0] === 'string' && !args[0].includes('private-project'))); }
   const f = fixture({ listError: 'private-project encrypted-secret' }); assert.equal((await f.list()).status, 500); assert.ok(f.logs.every(args => args.length === 1));
+});
+
+test('rejected GitHub token prompts reconnection while other provider errors remain failures', async () => {
+  const rejected = await fixture({ providerStatus: 401 }).list();
+  assert.equal(rejected.status, 401);
+  assert.match(rejected.body.error, /reconnect/i);
+  assert.equal((await fixture({ providerStatus: 500 }).list()).status, 500);
 });
