@@ -22,7 +22,7 @@ Requires macOS 13+ or Linux with glibc (ARM64 or x64), Windows 10+ x64 / x86 (32
 
 The [release process](#validation-and-release) publishes [CLI 0.14.3 assets and installer source](https://github.com/Art-of-Technology/collab/releases/tag/cli-v0.14.3) after qualification. These include `install.sh`, `install.ps1`, archives and SHA-256 sidecars for inspection or manual downloads; a source version bump alone does not make the downloads available.
 
-Version 0.14.3 waits instead of giving up when a project has several repositories and no default for agents. The server refuses that checkout with `repository_required`; `collab seat run` now says so once (`waiting`) and tries the issue again at every read of the inbox, so an administrator choosing the default in Project settings is enough for the runner to take it, with no restart. Other refusals are unchanged: the issue is left alone while the inbox keeps listing it.
+Version 0.14.2 waits instead of giving up when a project has several repositories and no default for agents. The server refuses that checkout with `repository_required`; `collab seat run` now says so once (`waiting`) and tries the issue again at every read of the inbox, so an administrator choosing the default in Project settings is enough for the runner to take it, with no restart. Other refusals are unchanged: the issue is left alone while the inbox keeps listing it.
 
 Version 0.14.1 fixes the end of a wait that sat out a server outage. `live` and `comments wait` keep asking while the server is away; when less than a second of the wait is left they now stop on the error they last saw, instead of sending one more request that cannot finish before the deadline and answering with whatever came back after it.
 
