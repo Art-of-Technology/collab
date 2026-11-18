@@ -263,9 +263,10 @@ export async function checkout(context: Caller & Pick<AppAuthContext, 'app'>, in
 /** A run, read by the account that holds it. */
 export async function getRun(context: Caller, runId: string) {
   await markLost(context.workspace.id);
-  const run = await prisma.agentRun.findFirst({ where: { id: runId, workspaceId: context.workspace.id, userId: context.user.id }, select: RUN });
+  const run = await prisma.agentRun.findFirst({ where: { id: runId, workspaceId: context.workspace.id, userId: context.user.id }, select: { ...RUN, issue: { select: { issueKey: true } } } });
   if (!run) throw new HandoffError('not_found', 'Run not found', 404);
-  return { run };
+  const { issue, ...rest } = run;
+  return { run: { ...rest, issueKey: issue.issueKey }, now: new Date() };
 }
 
 /**
@@ -296,6 +297,10 @@ export async function actOnRun(context: Caller, runId: string, input: z.infer<ty
     if (run.seat?.role === 'release') throw new HandoffError('needs_person', "A release seat's unfinished run is cleared by a person", 409);
     const closed = await prisma.agentRun.updateMany({ where: live, data: { state: 'stopped', endedAt: new Date() } });
     if (!closed.count) throw fenced();
+  }
+  if (input.event === 'renew') {
+    const { issue, ...renewed } = await prisma.agentRun.findFirstOrThrow({ where: own, select: { ...RUN, issue: { select: { issueKey: true } } } });
+    return { run: { ...renewed, issueKey: issue.issueKey }, now: new Date() };
   }
   return { run: await prisma.agentRun.findFirstOrThrow({ where: own, select: RUN }) };
 }

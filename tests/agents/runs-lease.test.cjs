@@ -230,6 +230,12 @@ test('runs: checkout, the lease, lost runs and who may clear them', async t => {
     const [status, renewed] = await act(devA.token, run.id, 'renew');
     assert.equal(status, 200);
     assert.ok(Date.parse(renewed.run.leaseUntil) - Date.now() > 55_000);
+    const [readStatus, current] = await read(devA.token, run.id);
+    assert.equal(readStatus, 200);
+    for (const reply of [renewed, current]) {
+      assert.equal(reply.run.issueKey, target.issueKey);
+      assert.ok(Math.abs(Date.parse(reply.now) - Date.now()) < 5000);
+    }
     await refused(act(devA.token, run.id, 'renew', 'g2'), 409, 'run_fenced');
     assert.equal((await act(devA.token, run.id, 'close'))[0], 200);
     await refused(act(devA.token, run.id, 'renew'), 409, 'run_fenced');
