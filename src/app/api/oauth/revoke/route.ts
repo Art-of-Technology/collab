@@ -151,9 +151,10 @@ async function revokeTokenFromInstallations(
       where: {
         isRevoked: false,
         [tokenField]: { not: null },
-        installation: {
-          appId: appId
-        }
+        OR: [
+          { installation: { appId } },
+          { installationId: null, appId, app: { isSystemApp: true } }
+        ]
       },
       include: {
         installation: {
@@ -168,7 +169,7 @@ async function revokeTokenFromInstallations(
     for (const appToken of tokens) {
       try {
         const storedToken = appToken[tokenField as keyof typeof appToken] as string | null;
-        if (!storedToken || !appToken.installation) continue;
+        if (!storedToken) continue;
 
         // Decrypt the stored token
         const storedTokenData = Buffer.from(storedToken, 'base64');
@@ -188,7 +189,7 @@ async function revokeTokenFromInstallations(
 
           return {
             success: true,
-            installationId: appToken.installation.id
+            installationId: appToken.installation?.id
           };
         }
       } catch (error) {

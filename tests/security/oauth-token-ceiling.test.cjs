@@ -105,3 +105,21 @@ for (const installed of [false, true]) {
     });
   }
 }
+
+test('revoking a system grant by refresh token disables the grant for its owning client', async () => {
+  const row = { id: 'system-token', accessToken: Buffer.from('access').toString('base64'), refreshToken: Buffer.from('refresh').toString('base64'), installation: null, isRevoked: false };
+  class Response { constructor(_body, init) { this.status = init.status; } static json(body, init) { return { body, status: init?.status ?? 200 }; } }
+  const handler = load('src/app/api/oauth/revoke/route.ts', {
+    'next/server': { NextResponse: Response },
+    '@/lib/apps/crypto': { decryptToken: async value => String(value) },
+    '@/lib/oauth-client-auth': { authenticateOAuthClient: async () => ({ valid: true, oauthClient: { app: { id: 'app' } } }) },
+    '@/lib/prisma': { prisma: { appToken: {
+      findMany: async ({ where }) => where.OR?.some(x => x.installationId === null && x.appId === 'app' && x.app.isSystemApp) && !row.isRevoked ? [row] : [],
+      update: async ({ data }) => Object.assign(row, data),
+    } } },
+  }, globals);
+  const response = await handler.POST({ headers: new Headers({ 'content-type': 'application/x-www-form-urlencoded' }),
+    formData: async () => new Map(Object.entries({ client_id: 'client', token: 'refresh', token_type_hint: 'refresh_token' })) });
+  assert.equal(response.status, 200);
+  assert.equal(row.isRevoked, true);
+});
