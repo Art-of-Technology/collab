@@ -840,6 +840,8 @@ The `buildwake-mcp` public system client is defined in `scripts/setup-agent-apps
 
 To disconnect, POST an access or refresh token and `client_id=buildwake-mcp` as form fields to `/api/oauth/revoke`. A matching grant is revoked as a whole, disabling both credentials. A 200 response also covers an unknown token; a server error does not confirm revocation. Access tokens have a one-year lifetime. Refresh tokens are not rotated; refresh is rejected after 90 days since the token row was last updated, and successful refresh updates that row. There is no separate absolute refresh expiry in this implementation.
 
+The 90-day inactivity limit applies to all system clients on both token endpoints. An existing grant beyond that limit requires a new authorization.
+
 For workspace and project discovery and issue reading, request `user:read workspace:read projects:read issues:read`. Add `issues:write` to create issues; that scope also permits updates. Request additional scopes only for the corresponding tools.
 
 Member grants inherit the member's access and do not enforce a selected-project allowlist or create-only issue writes. Workspace selection can be overridden. `issues:write` permits issue updates as well as creation. Clients requiring stronger isolation need provider changes or a security decision about those boundaries.
