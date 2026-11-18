@@ -13,7 +13,7 @@ function fixture(kind, overrides = {}) {
     clientId: client.clientId, userId: 'alice', workspaceId: 'workspace', redirectUri: 'http://127.0.0.1:56789/callback',
     scope: 'issues:read', code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', ...overrides };
   const token = { id: 'token-id', userId: 'alice', workspaceId: 'workspace', workspace, appId: 'app', installationId: null,
-    refreshToken: Buffer.from('collab_rt_refresh').toString('base64'), scopes: ['issues:read', 'secrets:read'], updatedAt: new Date() };
+    accessToken: Buffer.from('bearer').toString('base64'), refreshToken: Buffer.from('collab_rt_refresh').toString('base64'), isRevoked: false, app, scopes: ['issues:read', 'secrets:read'], updatedAt: new Date() };
   let consumed = false;
   const db = {
     appOAuthClient: { findUnique: async () => client },
@@ -24,8 +24,8 @@ function fixture(kind, overrides = {}) {
       delete: async () => { consumed = true; } },
     workspace: { findUnique: async () => workspace, findFirst: async () => overrides.revoked ? null : workspace },
     appToken: { findFirst: async () => { throw Error('CLI login must not overwrite another device grant'); },
-      findMany: async () => [token], create: async ({ data }) => { grants.push(data); return data; },
-      update: async ({ data, where }) => { updates.push({ data, where }); return data; } },
+      findMany: async ({ where } = {}) => token.isRevoked || (where?.appId && where.appId !== token.appId) || (where?.OR?.some(x => typeof x.appId === 'string') && !where.OR.some(x => x.appId === token.appId)) ? [] : [token], create: async ({ data }) => { grants.push(data); return data; },
+      update: async ({ data, where }) => { updates.push({ data, where }); Object.assign(token, data); return data; } },
   };
   const deps = { 'next/server': next, crypto, '@/lib/prisma': { prisma: db }, '@/lib/oauth-scopes': scopes,
     '@/lib/post-access': load('src/lib/post-access.ts'),
@@ -37,7 +37,7 @@ function fixture(kind, overrides = {}) {
     return handler.POST({ headers: new Headers({ 'content-type': kind === 'mcp' ? 'application/json' : 'application/x-www-form-urlencoded' }),
       json: async () => data, formData: async () => new Map(Object.entries(data)) });
   };
-  return { invoke, grants, updates, code };
+  return { invoke, grants, updates, code, db, token, app, workspace };
 }
 for (const kind of ['mcp', 'regular']) {
   test(`${kind}: approved S256 grant succeeds and replay cannot create another token`, async () => {
@@ -58,6 +58,12 @@ for (const kind of ['mcp', 'regular']) {
     assert.equal(response.status, 200); assert.equal(response.body.scope, 'issues:read'); assert.equal(f.grants.length, 0);
     assert.equal(f.updates.length, 1); assert.equal(f.updates[0].where.id, 'token-id');
     assert.deepEqual(Array.from(f.updates[0].data.scopes), ['issues:read']);
+  });
+  test(`${kind}: an inactive Buildwake grant cannot be refreshed after 90 days`, async () => {
+    const f = fixture(kind); f.app.slug = 'buildwake-mcp'; f.token.updatedAt = new Date(0);
+    const response = await f.invoke({ grant_type: 'refresh_token', refresh_token: 'collab_rt_refresh' });
+    assert.equal(response.status, 400); assert.equal(response.body.error, 'invalid_grant');
+    assert.equal(f.updates.length, 0);
   });
 }
 test('scope ceiling is enforced on already-issued tokens through actual authentication middleware', async () => {
@@ -104,4 +110,76 @@ for (const installed of [false, true]) {
       }
     });
   }
+}
+
+test('revoking a system grant by refresh token disables the grant for its owning client', async () => {
+  const row = { id: 'system-token', accessToken: Buffer.from('access').toString('base64'), refreshToken: Buffer.from('refresh').toString('base64'), installation: null, isRevoked: false };
+  class Response { constructor(_body, init) { this.status = init.status; } static json(body, init) { return { body, status: init?.status ?? 200 }; } }
+  const handler = load('src/app/api/oauth/revoke/route.ts', {
+    'next/server': { NextResponse: Response },
+    '@/lib/apps/crypto': { decryptToken: async value => String(value) },
+    '@/lib/oauth-client-auth': { authenticateOAuthClient: async () => ({ valid: true, oauthClient: { app: { id: 'app' } } }) },
+    '@/lib/prisma': { prisma: { appToken: {
+      findMany: async ({ where }) => where.OR?.some(x => x.installationId === null && x.appId === 'app' && x.app.isSystemApp) && !row.isRevoked ? [row] : [],
+      update: async ({ data }) => Object.assign(row, data),
+    } } },
+  }, globals);
+  const response = await handler.POST({ headers: new Headers({ 'content-type': 'application/x-www-form-urlencoded' }),
+    formData: async () => new Map(Object.entries({ client_id: 'client', token: 'refresh', token_type_hint: 'refresh_token' })) });
+  assert.equal(response.status, 200);
+  assert.equal(row.isRevoked, true);
+});
+
+test('revocation reports storage failure instead of claiming success', async () => {
+  class Response { constructor(_body, init) { this.status = init.status; } static json(body, init) { return { body, status: init?.status ?? 200 }; } }
+  const handler = load('src/app/api/oauth/revoke/route.ts', {
+    'next/server': { NextResponse: Response },
+    '@/lib/apps/crypto': { decryptToken: async value => String(value) },
+    '@/lib/oauth-client-auth': { authenticateOAuthClient: async () => ({ valid: true, oauthClient: { app: { id: 'app' } } }) },
+    '@/lib/prisma': { prisma: { appToken: { findMany: async () => { throw new Error('unavailable'); } } } },
+  }, globals);
+  const response = await handler.POST({ headers: new Headers({ 'content-type': 'application/x-www-form-urlencoded' }),
+    formData: async () => new Map(Object.entries({ client_id: 'client', token: 'refresh' })) });
+  assert.equal(response.status, 500);
+});
+
+test('unreadable rows do not block a matching grant in either token search', async () => {
+  class Response { constructor(_body, init) { this.status = init.status; } static json(body, init) { return { body, status: init?.status ?? 200 }; } }
+  for (const hint of ['access_token', 'refresh_token']) {
+    const row = { id: 'good', accessToken: Buffer.from('access').toString('base64'), refreshToken: Buffer.from('refresh').toString('base64'), installation: null };
+    const bad = { id: 'bad', accessToken: Buffer.from('bad').toString('base64'), refreshToken: Buffer.from('bad').toString('base64') };
+    const handler = load('src/app/api/oauth/revoke/route.ts', {
+      'next/server': { NextResponse: Response },
+      '@/lib/apps/crypto': { decryptToken: async value => { if (String(value) === 'bad') throw Error('unreadable'); return String(value); } },
+      '@/lib/oauth-client-auth': { authenticateOAuthClient: async () => ({ valid: true, oauthClient: { app: { id: 'app' } } }) },
+      '@/lib/prisma': { prisma: { appToken: { findMany: async () => [bad, row], update: async ({ data }) => Object.assign(row, data) } } },
+    }, globals);
+    const response = await handler.POST({ headers: new Headers({ 'content-type': 'application/x-www-form-urlencoded' }),
+      formData: async () => new Map(Object.entries({ client_id: 'client', token: hint === 'access_token' ? 'refresh' : 'access', token_type_hint: hint })) });
+    assert.equal(response.status, 200); assert.equal(row.isRevoked, true);
+  }
+});
+
+for (const presented of ['bearer', 'collab_rt_refresh']) {
+  test(`revoking ${presented} rejects both access and refresh and isolates clients`, async () => {
+    const f = fixture('mcp');
+    class Response { constructor(_body, init) { this.status = init.status; } static json(body, init) { return { body, status: init?.status ?? 200 }; } }
+    const cryptoDeps = { getEncryptionKey: () => 'fixture-key', decryptToken: async v => String(v), encryptToken: async v => Buffer.from(v) };
+    let clientApp = 'other';
+    const revoke = load('src/app/api/oauth/revoke/route.ts', { 'next/server': { NextResponse: Response },
+      '@/lib/apps/crypto': cryptoDeps, '@/lib/prisma': { prisma: f.db },
+      '@/lib/oauth-client-auth': { authenticateOAuthClient: async () => ({ valid: true, oauthClient: { app: { id: clientApp } } }) } }, globals);
+    const auth = load('src/lib/apps/auth-middleware.ts', { 'next/server': next, '@/lib/oauth-scopes': scopes,
+      '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/apps/crypto': cryptoDeps, '@/lib/prisma': { prisma: f.db } }, globals);
+    const request = { headers: new Headers({ Authorization: 'Bearer bearer' }) };
+    const revokeRequest = { headers: new Headers({ 'content-type': 'application/x-www-form-urlencoded' }),
+      formData: async () => new Map(Object.entries({ client_id: 'client', token: presented })) };
+    assert.equal((await auth.authenticateAppRequest(request, { requiredScopes: ['issues:read'] })).success, true);
+    assert.equal((await revoke.POST(revokeRequest)).status, 200);
+    assert.equal(f.token.isRevoked, false);
+    clientApp = 'app';
+    assert.equal((await revoke.POST(revokeRequest)).status, 200);
+    assert.equal((await auth.authenticateAppRequest(request, { requiredScopes: ['issues:read'] })).success, false);
+    assert.equal((await f.invoke({ grant_type: 'refresh_token', refresh_token: 'collab_rt_refresh' })).status, 400);
+  });
 }

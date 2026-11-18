@@ -12,6 +12,9 @@ export const definitions = [
   // Personal sign-in from Claude connectors. Loopback callbacks (Claude Code) are already allowed for system apps.
   { ...system, name: 'Collab MCP', slug: 'collab-connector', scopes: mcpScopes,
     oauthClient: { clientId: 'collab-connector', clientType: 'public', tokenEndpointAuthMethod: 'none', redirectUris: ['https://claude.ai/api/mcp/auth_callback'], postLogoutRedirectUris: [], responseTypes: ['code'], grantTypes: ['authorization_code', 'refresh_token'] } },
+  // Dedicated public browser client for Buildwake.
+  { ...system, name: 'Buildwake MCP', slug: 'buildwake-mcp', scopes: mcpScopes,
+    oauthClient: { clientId: 'buildwake-mcp', clientType: 'public', tokenEndpointAuthMethod: 'none', redirectUris: ['https://app.buildwake.io/api/connections/collab/callback'], postLogoutRedirectUris: [], responseTypes: ['code'], grantTypes: ['authorization_code', 'refresh_token'] } },
   // Tokens the in-app assistant mints for the signed-in user.
   { ...system, name: 'Collab assistant', slug: 'collab-assistant', scopes: mcpScopes },
 ];

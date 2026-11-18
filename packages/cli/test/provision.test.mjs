@@ -42,33 +42,38 @@ function agentFixture(records = {}) {
   return { prisma, writes, transactions: () => transactions };
 }
 
-test('agent app setup dry run lists the three apps without a database', () => {
+test('agent app setup dry run lists the four apps without a database', () => {
   const result = spawnSync(process.execPath, [agentScript], { encoding: 'utf8', env: { ...process.env, DATABASE_URL: '' } });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stderr, '');
   assert.deepEqual(JSON.parse(result.stdout), { dryRun: true, apps: [
     { app: 'collab-agent', scopes: definition.scopes },
     { app: 'collab-connector', scopes: mcpScopes, clientId: 'collab-connector', redirectUris: ['https://claude.ai/api/mcp/auth_callback'] },
+    { app: 'buildwake-mcp', scopes: mcpScopes, clientId: 'buildwake-mcp', redirectUris: ['https://app.buildwake.io/api/connections/collab/callback'] },
     { app: 'collab-assistant', scopes: mcpScopes },
   ] });
 });
 
-test('agent app setup creates the three system apps in one transaction, with an OAuth client only for the connector', async () => {
+test('agent app setup creates four system apps in one transaction with dedicated OAuth clients', async () => {
   const { provisionAll } = await import('../../../scripts/setup-agent-apps.mjs');
   const f = agentFixture();
   assert.deepEqual(await provisionAll(f.prisma), [
     { app: 'collab-agent', created: true, appId: 'new-collab-agent', clientId: undefined },
     { app: 'collab-connector', created: true, appId: 'new-collab-connector', clientId: 'collab-connector' },
+    { app: 'buildwake-mcp', created: true, appId: 'new-buildwake-mcp', clientId: 'buildwake-mcp' },
     { app: 'collab-assistant', created: true, appId: 'new-collab-assistant', clientId: undefined },
   ]);
-  assert.equal(f.transactions(), 1, 'all three are created or none');
-  const [agent, connector, assistant] = f.writes;
+  assert.equal(f.transactions(), 1, 'all four are created or none');
+  const [agent, connector, buildwake, assistant] = f.writes;
   for (const app of f.writes) assert.deepEqual([app.isSystemApp, app.status, app.publisherId], [true, 'PUBLISHED', 'system']);
   assert.equal('oauthClient' in agent, false, 'nothing can sign in as the agent token app');
   assert.equal('oauthClient' in assistant, false);
   assert.deepEqual(agent.scopes.create.map(s => s.scope), definition.scopes);
   assert.deepEqual(connector.scopes.create.map(s => s.scope), mcpScopes);
   assert.deepEqual(assistant.scopes.create.map(s => s.scope), mcpScopes);
+  assert.deepEqual(buildwake.scopes.create.map(s => s.scope), mcpScopes);
+  assert.deepEqual([buildwake.oauthClient.create.clientType, buildwake.oauthClient.create.tokenEndpointAuthMethod, buildwake.oauthClient.create.redirectUris],
+    ['public', 'none', ['https://app.buildwake.io/api/connections/collab/callback']]);
   assert.deepEqual([connector.oauthClient.create.clientType, connector.oauthClient.create.tokenEndpointAuthMethod, connector.oauthClient.create.redirectUris],
     ['public', 'none', ['https://claude.ai/api/mcp/auth_callback']]);
 });
@@ -77,7 +82,7 @@ test('agent app setup reuses matching registrations and refuses differing ones w
   const { definitions, provisionAll } = await import('../../../scripts/setup-agent-apps.mjs');
   const existing = () => Object.fromEntries(definitions.map(def => [def.slug, { ...def, id: `existing-${def.slug}`, oauthClient: def.oauthClient ?? null, scopes: def.scopes.map(scope => ({ scope })) }]));
   const same = agentFixture(existing());
-  assert.deepEqual((await provisionAll(same.prisma)).map(row => row.created), [false, false, false]);
+  assert.deepEqual((await provisionAll(same.prisma)).map(row => row.created), [false, false, false, false]);
   assert.equal(same.writes.length, 0);
   const client = definitions.find(def => def.slug === 'collab-connector').oauthClient;
   for (const [slug, change] of [

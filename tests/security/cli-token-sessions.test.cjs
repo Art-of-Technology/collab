@@ -19,7 +19,7 @@ function fixture(clientId = 'collab-cli') {
     appToken: {
       findFirst: async ({ where }) => rows.find(row => matches(row, where)),
       findMany: async ({ where }) => rows.filter(row => matches(row, where)),
-      create: async ({ data }) => { const row = { id: `token-${rows.length}`, ...data, app, workspace }; rows.push(row); return row; },
+      create: async ({ data }) => { const row = { id: `token-${rows.length}`, updatedAt: new Date(), ...data, app, workspace }; rows.push(row); return row; },
       update: async ({ where, data }) => { const row = rows.find(row => row.id === where.id); assert.ok(row); Object.assign(row, data); return row; },
     },
   };

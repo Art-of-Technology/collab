@@ -110,7 +110,7 @@ The checkout moves the issue to the project's first active "in progress" status.
 | 403 | `wrong_project` | The issue is in another project than the seat's. |
 | 403 | `not_assigned` | The issue is assigned to someone else. |
 | 403 | `seat_required` | The token is an agent token that is not a seat. |
-| 409 | `repository_required` | Several repositories are connected and no valid default is selected. Ask an administrator to choose the default in Project settings. Nothing else has to happen: the checkout can be repeated once one is chosen, and `collab seat run` 0.14.2 and later waits for the issue rather than leaving it alone. |
+| 409 | `repository_required` | Several repositories are connected and no valid default is selected. Ask an administrator to choose the default in Project settings. Nothing else has to happen: the checkout can be repeated once one is chosen, and `collab seat run` 0.14.3 and later waits for the issue rather than leaving it alone. |
 | 409 | `already_running` | A run is open on the issue. Take the next issue; do not retry. |
 | 409 | `needs_person` | The open run on the issue is lost. The runner that holds it closes it, or a person clears it. |
 
