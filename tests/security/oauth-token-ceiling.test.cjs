@@ -59,6 +59,12 @@ for (const kind of ['mcp', 'regular']) {
     assert.equal(f.updates.length, 1); assert.equal(f.updates[0].where.id, 'token-id');
     assert.deepEqual(Array.from(f.updates[0].data.scopes), ['issues:read']);
   });
+  test(`${kind}: an inactive Buildwake grant cannot be refreshed after 90 days`, async () => {
+    const f = fixture(kind); f.app.slug = 'buildwake-mcp'; f.token.updatedAt = new Date(0);
+    const response = await f.invoke({ grant_type: 'refresh_token', refresh_token: 'collab_rt_refresh' });
+    assert.equal(response.status, 400); assert.equal(response.body.error, 'invalid_grant');
+    assert.equal(f.updates.length, 0);
+  });
 }
 test('scope ceiling is enforced on already-issued tokens through actual authentication middleware', async () => {
   const workspace = { id: 'workspace', slug: 'workspace' };
