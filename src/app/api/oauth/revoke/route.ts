@@ -104,12 +104,16 @@ async function revokeToken(
     // A hint changes search order, but does not restrict the search.
     const types: ('access' | 'refresh')[] = tokenTypeHint === 'refresh_token'
       ? ['refresh', 'access'] : ['access', 'refresh'];
+    let decryptFailure: unknown;
     for (const type of types) {
       const result = await revokeTokenFromInstallations(token, type, appId);
+      decryptFailure ??= result.decryptFailure;
       if (result.success) {
         return { success: true, tokenType: type === 'access' ? 'access_token' : 'refresh_token', installationId: result.installationId };
       }
     }
+
+    if (decryptFailure) throw decryptFailure;
 
     // Token not found - still return success as per RFC 7009
     return { success: false };
@@ -128,6 +132,7 @@ async function revokeTokenFromInstallations(
 ): Promise<{
   success: boolean;
   installationId?: string;
+  decryptFailure?: unknown;
 }> {
   try {
     const tokenField = tokenType === 'access' ? 'accessToken' : 'refreshToken';
@@ -152,6 +157,7 @@ async function revokeTokenFromInstallations(
     });
 
     // Check each token
+    let decryptFailure: unknown;
     for (const appToken of tokens) {
       let decryptedToken: string;
       try {
@@ -163,7 +169,8 @@ async function revokeTokenFromInstallations(
         decryptedToken = await decryptToken(storedTokenData);
       } catch (error) {
         console.error(`Failed to decrypt ${tokenType} token for appToken:`, appToken.id, error);
-        throw error;
+        decryptFailure ??= error;
+        continue;
       }
 
       // Compare with provided token
@@ -186,7 +193,7 @@ async function revokeTokenFromInstallations(
 
     }
 
-    return { success: false };
+    return { success: false, decryptFailure };
 
   } catch (error) {
     console.error(`Error revoking ${tokenType} token:`, error);
