@@ -833,3 +833,11 @@ if (tokenInfo.active) {
 - Token revocation is immediate and affects database storage
 - Revoking a refresh token also revokes associated access tokens
 - Proper audit logging is in place for security monitoring
+
+### Buildwake browser client
+
+The `buildwake-mcp` public system client is defined in `scripts/setup-agent-apps.mjs` with callback `https://app.buildwake.io/api/connections/collab/callback`. A Collab operator provisions system clients using that script; discovery does not provide dynamic registration. The client uses authorization code with S256 PKCE and the MCP resource `<origin>/api/mcp`. This definition must be deployed and provisioned before it can be used.
+
+To disconnect, POST an access or refresh token and `client_id=buildwake-mcp` as form fields to `/api/oauth/revoke`. A matching grant is revoked as a whole, disabling both credentials. A 200 response also covers an unknown token; a server error does not confirm revocation. Access tokens have a one-year lifetime. Refresh tokens are not rotated; refresh is rejected after 90 days since the token row was last updated, and successful refresh updates that row. There is no separate absolute refresh expiry in this implementation.
+
+Member grants inherit the member's access and do not enforce a selected-project allowlist or create-only issue writes. Workspace selection can be overridden. `issues:write` permits issue updates as well as creation. Clients requiring stronger isolation need provider changes or a security decision about those boundaries.
