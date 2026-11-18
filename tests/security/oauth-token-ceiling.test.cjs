@@ -123,3 +123,16 @@ test('revoking a system grant by refresh token disables the grant for its owning
   assert.equal(response.status, 200);
   assert.equal(row.isRevoked, true);
 });
+
+test('revocation reports storage failure instead of claiming success', async () => {
+  class Response { constructor(_body, init) { this.status = init.status; } static json(body, init) { return { body, status: init?.status ?? 200 }; } }
+  const handler = load('src/app/api/oauth/revoke/route.ts', {
+    'next/server': { NextResponse: Response },
+    '@/lib/apps/crypto': { decryptToken: async value => String(value) },
+    '@/lib/oauth-client-auth': { authenticateOAuthClient: async () => ({ valid: true, oauthClient: { app: { id: 'app' } } }) },
+    '@/lib/prisma': { prisma: { appToken: { findMany: async () => { throw new Error('unavailable'); } } } },
+  }, globals);
+  const response = await handler.POST({ headers: new Headers({ 'content-type': 'application/x-www-form-urlencoded' }),
+    formData: async () => new Map(Object.entries({ client_id: 'client', token: 'refresh' })) });
+  assert.equal(response.status, 500);
+});
