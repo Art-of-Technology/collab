@@ -139,6 +139,9 @@ export async function addMySeats({ workspaceId, userId, projectId }: Own) {
       else created.push(made.seat.name);
     } catch (error) {
       if (!(error instanceof HandoffError)) throw error;
+      // The switch went off, or the project was archived or removed, after the check above. With nothing made that is
+      // the answer to the whole request, as it is when the check finds it; once a seat exists the reply has to name it.
+      if (['members_add_off', 'project_archived', 'project_not_found'].includes(error.code) && !created.length) throw error;
       // The person got a seat of this role while this ran, so the role is not missing after all.
       if (error.code !== 'own_seat_exists') refused.push({ name, code: error.code, reason: error.message });
     }

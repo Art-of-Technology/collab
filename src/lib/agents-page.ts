@@ -62,7 +62,7 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
   // A project that stopped using seats or was archived stays listed while the person has such a seat, to remove it.
   const own = { ownerId: userId, retiredAt: null, role: { in: [...MEMBER_ROLES] } };
   const projects = await prisma.project.findMany({
-    where: { workspaceId: workspace.id, OR: [{ agentMode: 'seats', OR: [{ isArchived: null }, { isArchived: false }] }, { agentSeats: { some: own } }] }, orderBy: { name: 'asc' },
+    where: { workspaceId: workspace.id, ...issueAccessWhere(userId), OR: [{ agentMode: 'seats', OR: [{ isArchived: null }, { isArchived: false }] }, { agentSeats: { some: own } }] }, orderBy: { name: 'asc' },
     select: { id: true, slug: true, name: true, membersMayAddSeats: true, agentMode: true, isArchived: true, agentSeats: { where: own, orderBy: { role: 'asc' }, select: { role: true } } },
   });
   return {

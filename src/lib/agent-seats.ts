@@ -65,13 +65,14 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
   }
   const existing = await tx.agentSeat.findUnique({ where: { userId: account.id } });
   if (input.own) {
+    // A seat of this role the member was given in the meantime, under any name, is enough, whoever holds the derived
+    // name: decided here first, on settled rows.
+    if (await tx.agentSeat.count({ where: { projectId: input.projectId, role: input.role, ownerId: input.ownerId, retiredAt: null } })) {
+      throw new HandoffError('own_seat_exists', `You already have a ${input.role} seat in this project`, 409);
+    }
     // The name is derived, not chosen, so it can meet an agent that is not this member's. Only a seat the member owned comes back.
     if (existing ? existing.ownerId !== input.ownerId : await tx.appToken.count({ where: { userId: account.id } })) {
       throw new HandoffError('name_taken', `An agent named ${account.name ?? input.name} already exists in this workspace. Ask someone who manages the workspace to create this seat`, 409);
-    }
-    // A seat of this role the member was given in the meantime, under any name, is enough: decided here, on settled rows.
-    if (await tx.agentSeat.count({ where: { projectId: input.projectId, role: input.role, ownerId: input.ownerId, retiredAt: null } })) {
-      throw new HandoffError('own_seat_exists', `You already have a ${input.role} seat in this project`, 409);
     }
   }
   const same = !!existing && !existing.retiredAt && existing.projectId === input.projectId && existing.role === input.role;
