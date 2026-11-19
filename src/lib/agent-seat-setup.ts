@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { HandoffError } from '@/lib/agent-handoffs';
 import { agentModeState, setAgentMode } from '@/lib/agent-mode';
 import { RUNNER_TOKEN_DAYS, runnerSeats } from '@/lib/agent-runners';
-import { createSeat } from '@/lib/agent-seats';
+import { MEMBER_ROLES, createSeat, lockMemberSeatProject, retireSeat } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
+import { issueAccessWhere } from '@/lib/issue-finder';
 import { Permission, checkUserPermission } from '@/lib/permissions';
 
 export { HandoffError };
@@ -110,4 +111,61 @@ export async function setupSeats(context: Caller, projectRef: string, input: z.i
     // Each seat with whether a runner has fetched its token yet. The token itself is never part of this.
     seats: await runnerSeats(prisma, projectId),
   };
+}
+
+type Own = { workspaceId: string; userId: string; projectId: string };
+
+/**
+ * A person adds their own seats to a project they can see, in one step: a developer, a reviewer and a security seat
+ * that they own, run by their own runner, named "<Project> <Role> (<first name>)". Refused as a whole unless the
+ * project's owner switched it on (`members_add_off`). Only the roles the person has no seat of are made, and none
+ * takes a role's default from a seat that has it. There is no owner to name here: the seats are the caller's.
+ * Each seat is made on its own, as `setupSeats` makes them: a role that cannot be made is named in `refused` with the
+ * reason, and the others stay.
+ */
+export async function addMySeats({ workspaceId, userId, projectId }: Own) {
+  const project = await prisma.project.findFirst({ where: { id: projectId, workspaceId, ...issueAccessWhere(userId) }, select: { name: true } });
+  if (!project) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
+  await prisma.$transaction(tx => lockMemberSeatProject(tx, workspaceId, projectId));
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true, email: true } });
+  const first = me.name?.trim().split(/\s/)[0] || (me.email || userId).split('@')[0];
+  const mine = await prisma.agentSeat.findMany({ where: { projectId, ownerId: userId, retiredAt: null }, select: { role: true } });
+  const created: string[] = [], refused: { name: string; code: string; reason: string }[] = [];
+  for (const role of MEMBER_ROLES.filter(role => !mine.some(seat => seat.role === role))) {
+    const name = `${seatName(project.name, role)} (${first})`;
+    try {
+      const made = await createSeat({ workspaceId, actorId: userId, projectId, role, ownerId: userId, name, expiresInDays: RUNNER_TOKEN_DAYS, byRunner: true, own: true });
+      if (made.error) refused.push({ name, code: made.error, reason: `The seat could not be created (${made.error})` });
+      else created.push(made.seat.name);
+    } catch (error) {
+      if (!(error instanceof HandoffError)) throw error;
+      // The switch went off, or the project was archived or removed, after the check above. With nothing made that is
+      // the answer to the whole request, as it is when the check finds it; once a seat exists the reply has to name it.
+      if (['members_add_off', 'project_archived', 'project_not_found'].includes(error.code) && !created.length) throw error;
+      // The person got a seat of this role while this ran, so the role is not missing after all.
+      if (error.code !== 'own_seat_exists') refused.push({ name, code: error.code, reason: error.message });
+    }
+  }
+  return { created, refused };
+}
+
+/**
+ * A person removes their own developer, reviewer and security seats of a project, whether or not adding is switched
+ * on. Each is retired as any seat is: its open issues are unassigned, and a seat with a run open stays and is named
+ * in `kept` with the reason.
+ */
+export async function removeMySeats({ workspaceId, userId, projectId }: Own) {
+  const only = { projectId, ownerId: userId, role: { in: [...MEMBER_ROLES] } };
+  const seats = await prisma.agentSeat.findMany({ where: { ...only, workspaceId, retiredAt: null }, orderBy: [{ role: 'asc' }, { name: 'asc' }], select: { id: true, name: true } });
+  const removed: string[] = [], kept: { name: string; reason: string }[] = [];
+  for (const seat of seats) {
+    try {
+      await retireSeat({ workspaceId, actorId: userId, seatId: seat.id, only });
+      removed.push(seat.name);
+    } catch (error) {
+      if (!(error instanceof HandoffError)) throw error;
+      kept.push({ name: seat.name, reason: error.message });
+    }
+  }
+  return { removed, kept };
 }

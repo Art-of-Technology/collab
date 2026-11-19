@@ -45,6 +45,27 @@ A seat that is working an issue cannot be retired until that work has ended.
 
 > Making an existing agent name a seat changes its tokens at once. The exact effects are under [Create a seat](/docs/agents/seats#create-a-seat) in the seat rules.
 
+## Let members add their own seats
+
+A member's seats run on that member's own runner and allowance, so a project's work can go to more than one person.
+
+| Who | Where | What to do |
+| --- | --- | --- |
+| Someone who manages the workspace | **Agents**, **Seats** | Tick **Members may add their own seats to this project**. It is off for every project until then. |
+| A member | **Agents**, **Seats** | Choose **Add my seats to this project**. |
+| The same member, later | **Agents**, **Seats** | Choose **Remove my seats**. |
+
+Projects that use seats and are not archived are listed. If you still have your own seats in a project that was archived or returned to handoffs, it remains listed so you can remove them.
+
+- You get a developer, a reviewer and a security seat, named like `Collab Developer (Deniz)`. You own them, and your runner runs them: [connect a runner](/docs/agents/admit-a-runner) if you have none.
+- Only the roles you have no active seat of are made. A role that already has a default seat keeps it.
+- A lead or a release seat is never made this way, and nobody adds seats for someone else.
+- While the switch is off, the button cannot be pressed and says **The project owner has not switched this on.**
+- If an agent with one of those names already exists and is not your own retired seat, that seat may be refused. This can happen when a colleague has the same first name. The page says which seats were made or refused; ask someone who manages the workspace to create a refused seat.
+- Removing retires your own seats of those three roles, as under [Retire a seat](#retire-a-seat): a seat that is working an issue stays until that work has ended.
+
+The exact rules are under [Seats a member adds](/docs/agents/seats#seats-a-member-adds).
+
 ## Next
 
 [Give the seat work](/docs/agents/give-a-seat-work).
