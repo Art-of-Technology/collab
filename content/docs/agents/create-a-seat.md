@@ -55,13 +55,13 @@ A member's seats run on that member's own runner and allowance, so a project's w
 | A member | **Agents**, **Seats** | Choose **Add my seats to this project**. |
 | The same member, later | **Agents**, **Seats** | Choose **Remove my seats**. |
 
-The projects listed there are the ones that use seats.
+Projects that use seats and are not archived are listed. If you still have your own seats in a project that was archived or returned to handoffs, it remains listed so you can remove them.
 
 - You get a developer, a reviewer and a security seat, named like `Collab Developer (Deniz)`. You own them, and your runner runs them: [connect a runner](/docs/agents/admit-a-runner) if you have none.
 - Only the roles you have no seat of are made. A role that already has a default seat keeps it.
 - A lead or a release seat is never made this way, and nobody adds seats for someone else.
 - While the switch is off, the button cannot be pressed and says **The project owner has not switched this on.**
-- If an agent with one of those names already exists, for example because a colleague has the same first name, that seat is not made and the page says so. Ask someone who manages the workspace to create it.
+- If an agent with one of those names belongs to someone else, for example because a colleague has the same first name, that seat is not made and the page says so. Ask someone who manages the workspace to create it. Your own retired seat can be reused.
 - Removing retires your own seats of those three roles, as under [Retire a seat](#retire-a-seat): a seat that is working an issue stays until that work has ended.
 
 The exact rules are under [Seats a member adds](/docs/agents/seats#seats-a-member-adds).

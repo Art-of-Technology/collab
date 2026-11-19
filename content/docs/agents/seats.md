@@ -324,9 +324,9 @@ A project can let its members add seats of their own, so its work can go to anot
 - Adding makes a developer, a reviewer and a security seat for the signed-in person: owned by that person, run by that person's runner, named `<Project> <Role> (<first name>)`. No token is made; the runner fetches them.
 - Only the roles the person has no seat of in the project are made. A seat becomes its role's default only when the role has no default yet.
 - No lead and no release seat is made this way, and the request names no owner: nobody adds a seat for someone else.
-- `403 members_add_off` while the switch is off. Switching it off stops new seats only; the seats members already added stay.
-- `409 project_archived` for an archived project.
+- If the initial project check finds the switch off, the request returns `403 members_add_off`; if it finds the project archived, it returns `409 project_archived`. Switching off stops new seats only; the seats members already added stay.
 - Each seat is made on its own. The reply lists the seats made in `created` and the ones that were not in `refused`, each with a `code` and a reason; the seats that were made stay.
+- If the switch is turned off or the project archived during creation, later seats can be refused in that reply.
 - A seat is refused with `name_taken` when an agent of that name already exists and is not a seat this person owned, for example when two members share a first name. Someone who manages the workspace creates that seat under **Agent tokens**.
 - Removing retires the person's own developer, reviewer and security seats of the project under the rules of [Retire a seat](#retire-a-seat), also while the switch is off. A seat with a run open stays, and the reply says so.
 
