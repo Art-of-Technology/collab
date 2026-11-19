@@ -117,9 +117,11 @@ type Own = { workspaceId: string; userId: string; projectId: string };
 
 /**
  * A person adds their own seats to a project they can see, in one step: a developer, a reviewer and a security seat
- * that they own, run by their own runner, named "<Project> <Role> (<first name>)". Refused as a whole unless the
- * project's owner switched it on (`members_add_off`). Only the roles the person has no seat of are made, and none
- * takes a role's default from a seat that has it. There is no owner to name here: the seats are the caller's.
+ * that they own, run by their own runner, named "<Project> <Role> (<first name>)"; when someone else's agent has
+ * one of those names, all are named with the last initial, "(<First> <L>.)", and after that with the full name.
+ * Refused as a whole unless the project's owner switched it on (`members_add_off`). Only the roles the person has no
+ * seat of are made, and none takes a role's default from a seat that has it. There is no owner to name here: the
+ * seats are the caller's.
  * Each seat is made on its own, as `setupSeats` makes them: a role that cannot be made is named in `refused` with the
  * reason, and the others stay.
  */
@@ -128,22 +130,37 @@ export async function addMySeats({ workspaceId, userId, projectId }: Own) {
   if (!project) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
   await prisma.$transaction(tx => lockMemberSeatProject(tx, workspaceId, projectId));
   const me = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true, email: true } });
-  const first = me.name?.trim().split(/\s/)[0] || (me.email || userId).split('@')[0];
+  const words = me.name?.trim().split(/\s+/) ?? [];
+  const first = words[0] || (me.email || userId).split('@')[0];
+  // What goes in the brackets, in the order it is tried: the first name, then with the last initial, then the full name.
+  const forms = words.length > 1 ? [first, `${first} ${Array.from(words[words.length - 1])[0].toUpperCase()}.`, words.join(' ')] : [first];
   const mine = await prisma.agentSeat.findMany({ where: { projectId, ownerId: userId, retiredAt: null }, select: { role: true } });
+  const roles = MEMBER_ROLES.filter(role => !mine.some(seat => seat.role === role));
+  const named = (role: string, form: number) => `${seatName(project.name, role)} (${forms[form]})`;
   const created: string[] = [], refused: { name: string; code: string; reason: string }[] = [];
-  for (const role of MEMBER_ROLES.filter(role => !mine.some(seat => seat.role === role))) {
-    const name = `${seatName(project.name, role)} (${first})`;
-    try {
-      const made = await createSeat({ workspaceId, actorId: userId, projectId, role, ownerId: userId, name, expiresInDays: RUNNER_TOKEN_DAYS, byRunner: true, own: true });
-      if (made.error) refused.push({ name, code: made.error, reason: `The seat could not be created (${made.error})` });
-      else created.push(made.seat.name);
-    } catch (error) {
-      if (!(error instanceof HandoffError)) throw error;
-      // The switch went off, or the project was archived or removed, after the check above. With nothing made that is
-      // the answer to the whole request, as it is when the check finds it; once a seat exists the reply has to name it.
-      if (['members_add_off', 'project_archived', 'project_not_found'].includes(error.code) && !created.length) throw error;
-      // The person got a seat of this role while this ran, so the role is not missing after all.
-      if (error.code !== 'own_seat_exists') refused.push({ name, code: error.code, reason: error.message });
+  // One form for the whole request, so a person is not "(Deniz)" on one seat and "(Deniz K.)" on another.
+  let form = 0;
+  for (const role of roles) {
+    for (;;) {
+      const name = named(role, form), last = form === forms.length - 1;
+      try {
+        // Before the last form a seat is made only if every name of its form is free, which is decided where it is
+        // written, under the project's lock. In the last form each seat stands for itself.
+        const made = await createSeat({ workspaceId, actorId: userId, projectId, role, ownerId: userId, name, expiresInDays: RUNNER_TOKEN_DAYS, byRunner: true, own: true,
+          ...(!last && { together: roles.map(other => named(other, form)) }) });
+        if (made.error) refused.push({ name, code: made.error, reason: `The seat could not be created (${made.error})` });
+        else created.push(made.seat.name);
+      } catch (error) {
+        if (!(error instanceof HandoffError)) throw error;
+        // A name of this form is someone else's: this seat again in the next form, and the seats after it too.
+        if (error.code === 'name_taken' && !last) { form++; continue; }
+        // The switch went off, or the project was archived or removed, after the check above. With nothing made that is
+        // the answer to the whole request, as it is when the check finds it; once a seat exists the reply has to name it.
+        if (['members_add_off', 'project_archived', 'project_not_found'].includes(error.code) && !created.length) throw error;
+        // The person got a seat of this role while this ran, so the role is not missing after all.
+        if (error.code !== 'own_seat_exists') refused.push({ name, code: error.code, reason: error.message });
+      }
+      break;
     }
   }
   return { created, refused };

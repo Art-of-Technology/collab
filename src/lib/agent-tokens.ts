@@ -71,8 +71,8 @@ export async function listAgentTokens(workspaceId: string) {
  */
 export async function createAgentToken<S = undefined>(input: {
   workspaceId: string; actorId: string; name: string; access: AgentTokenAccess; expiresInDays: number;
-  /** Makes the account a seat in the minting transaction (src/lib/agent-seats.ts); when it throws, nothing is minted. */
-  seat?: (tx: Prisma.TransactionClient, account: { id: string; name: string | null }) => Promise<S>;
+  /** Makes the account a seat in the minting transaction (src/lib/agent-seats.ts); when it throws, nothing is minted. `agents` reads the accounts a name is looked up in here, as they are when it is called. */
+  seat?: (tx: Prisma.TransactionClient, account: { id: string; name: string | null }, agents: () => Promise<{ id: string; name: string | null }[]>) => Promise<S>;
   /** False makes the account (and its seat) without a token: a runner fetches the first one. */
   mint?: boolean;
   /** The runner this token is fetched by (src/lib/agent-runners.ts). */
@@ -122,7 +122,7 @@ export async function createAgentToken<S = undefined>(input: {
       update: membership?.status ? {} : { status: true, role: 'MEMBER' },
       create: { userId: account.id, workspaceId: input.workspaceId, role: 'MEMBER' },
     });
-    const seat = await input.seat?.(tx, account);
+    const seat = await input.seat?.(tx, account, () => serviceAccounts(tx, app.id, input.workspaceId));
     if (input.mint === false) return { id: null, name: account.name ?? wanted, seat };
     const row = await tx.appToken.create({
       data: { appId: app.id, workspaceId: input.workspaceId, userId: account.id, installationId: null, accessToken, tokenHash: createHash('sha256').update(token).digest('hex'), tokenExpiresAt: expiresAt, scopes,

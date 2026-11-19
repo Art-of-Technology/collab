@@ -321,14 +321,26 @@ A project can let its members add seats of their own, so its work can go to anot
 | 3 | The same member | Chooses **Remove my seats** to retire them. |
 
 - The projects listed are those that use seats and are not archived. A project that went back to handoffs or was archived stays listed for a person who still has such a seat there, to remove it.
-- Adding makes a developer, a reviewer and a security seat for the signed-in person: owned by that person, run by that person's runner, named `<Project> <Role> (<first name>)`. No token is made; the runner fetches them.
+- Adding makes a developer, a reviewer and a security seat for the signed-in person: owned by that person, run by that person's runner, named as in the table below. No token is made; the runner fetches them.
 - Only the roles the person has no active seat of in the project are made. A seat becomes its role's default only when the role has no default yet.
 - No lead and no release seat is made this way, and the request names no owner: nobody adds a seat for someone else.
 - If the initial project check finds the switch off, the request returns `403 members_add_off`; if it finds the project archived, it returns `409 project_archived`. Switching off stops new seats only; the seats members already added stay.
 - Each seat is made on its own. The reply lists the seats made in `created` and the ones that were not in `refused`, each with a `code` and a reason; the seats that were made stay.
 - If the switch is turned off or the project archived while the seats are being made: with no seat made yet the request gets that same refusal, and once a seat is made the reply names the others in `refused`.
-- A seat is refused with `name_taken` when an agent of that name already exists and is not a seat this person owned, for example when two members share a first name. Someone who manages the workspace creates that seat under **Agent tokens**.
+- A name is taken when an agent of that name already exists and is not a seat this person owned, for example when two members share a first name. The seats of one request share one form of name: the first form in which no name of a seat being made is taken.
+- In the last form each seat is decided on its own: a seat whose name is taken is refused with `name_taken`, and someone who manages the workspace creates it under **Agent tokens**. A person whose name has no last name has only the first form.
+- Nobody's existing seat is renamed, and only the seats being made are looked at: a seat the person already has keeps the name it has.
 - Removing retires the person's own developer, reviewer and security seats of the project under the rules of [Retire a seat](#retire-a-seat), also while the switch is off. A seat with a run open stays, and the reply says so.
+
+The names, in the order they are tried:
+
+| Tried | Name | Example |
+| --- | --- | --- |
+| First | `<Project> <Role> (<first name>)` | `Collab Developer (Deniz)` |
+| Then | `<Project> <Role> (<first name> <last initial>.)` | `Collab Developer (Deniz K.)` |
+| Last | `<Project> <Role> (<full name>)` | `Collab Developer (Deniz Kaya)` |
+
+The last name is the last word of the person's name.
 
 ## Switch a project to seats
 

@@ -32,6 +32,8 @@ interface SeatInput {
   byRunner?: boolean;
   /** A member adding their own seat: only while the project's switch is on, and never under a name that was someone else's agent. */
   own?: boolean;
+  /** With `own`: the names of the seats this request makes in the same form. One that is someone else's agent refuses this seat too. */
+  together?: string[];
 }
 
 /**
@@ -44,7 +46,7 @@ export async function createSeat(input: SeatInput) {
   if (input.byRunner && !input.ownerId) throw new HandoffError('owner_required', 'A seat run by a runner needs an owner: it goes to the runner admitted for that person');
   const minted = await createAgentToken({
     workspaceId: input.workspaceId, actorId: input.actorId, name: input.name, access: 'write', expiresInDays: input.expiresInDays,
-    seat: (tx, account) => writeSeat(tx, input, account), mint: !input.byRunner,
+    seat: (tx, account, agents) => writeSeat(tx, input, account, agents), mint: !input.byRunner,
   });
   if (minted.error) return { error: minted.error };
   const { seat, token: secret, ...token } = minted;
@@ -60,7 +62,7 @@ export async function lockMemberSeatProject(tx: Prisma.TransactionClient, worksp
   if (!project.membersMayAddSeats) throw new HandoffError('members_add_off', 'The project owner has not switched this on.', 403);
 }
 
-async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account: { id: string; name: string | null }) {
+async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account: { id: string; name: string | null }, agents: () => Promise<{ id: string; name: string | null }[]>) {
   // One seat change at a time per project, so "the first of its role is the default" and "one release seat" are decided on settled rows.
   if (input.own) await lockMemberSeatProject(tx, input.workspaceId, input.projectId);
   else {
@@ -77,6 +79,16 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
     // The name is derived, not chosen, so it can meet an agent that is not this member's. Only a seat the member owned comes back.
     if (existing ? existing.ownerId !== input.ownerId : await tx.appToken.count({ where: { userId: account.id } })) {
       throw new HandoffError('name_taken', `An agent named ${account.name ?? input.name} already exists in this workspace. Ask someone who manages the workspace to create this seat`, 409);
+    }
+    // A member's seats share one form of name, so the form is free only when every name in it is: decided here, on settled
+    // rows, among the accounts the mint finds a name in and by the rule above.
+    const wanted = (input.together ?? []).map(name => name.trim().toLowerCase());
+    for (const other of wanted.length ? await agents() : []) {
+      if (other.id === account.id || !wanted.includes(other.name?.trim().toLowerCase() ?? '')) continue;
+      const seat = await tx.agentSeat.findUnique({ where: { userId: other.id }, select: { ownerId: true } });
+      if (seat ? seat.ownerId !== input.ownerId : await tx.appToken.count({ where: { userId: other.id } })) {
+        throw new HandoffError('name_taken', `An agent named ${other.name} already exists in this workspace. Ask someone who manages the workspace to create this seat`, 409);
+      }
     }
   }
   const same = !!existing && !existing.retiredAt && existing.projectId === input.projectId && existing.role === input.role;
