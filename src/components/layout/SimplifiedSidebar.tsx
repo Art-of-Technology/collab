@@ -75,7 +75,9 @@ export default function SimplifiedSidebar({
     includeStats: true,
   });
 
-  const { data: installedApps = [] } = useInstalledApps(currentWorkspace?.id);
+  const { data: allInstalledApps = [] } = useInstalledApps(currentWorkspace?.id);
+  // Sign-in and token registrations are installed too, but have no page to open.
+  const installedApps = allInstalledApps.filter(installation => installation.app.hasPage);
 
   const [showCreateViewModal, setShowCreateViewModal] = useState(false);
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
@@ -388,7 +390,7 @@ export default function SimplifiedSidebar({
               {installedApps.map((installation: any) => (
                 <Link
                   key={installation.id}
-                  href={installation.app.slug === 'collab-cli' ? '/docs/cli' : `${workspaceBase}/apps/${installation.app.slug}`}
+                  href={`${workspaceBase}/apps/${installation.app.slug}`}
                   className={cn(
                     "flex items-center gap-4 rounded-lg px-2 py-2 text-sm transition-all duration-150",
                     section === "apps" && subsection === installation.app.slug
