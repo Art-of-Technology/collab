@@ -38,7 +38,7 @@ const { ContextBrowser } = load('src/components/context/ContextBrowser.tsx', {
   },
   '@/components/ui/input-dialog': { InputDialog: ({ open, onConfirm }) => open ? h('button', { onClick: () => onConfirm('New folder') }, 'Confirm') : null },
   '@/components/context/ContextFilePreview': { ContextFilePreview: () => null },
-  '@/components/context/ContextNotePane': { ContextNotePane: ({ noteId, pinned, onClose }) => h('button', { 'data-note-pane': noteId, 'data-pinned': String(pinned), onClick: onClose }, 'Close') },
+  '@/components/context/ContextNotePane': { ContextNotePane: ({ noteId, pinned, onClose, onDelete }) => h('div', null, h('button', { 'data-note-pane': noteId, 'data-pinned': String(pinned), onClick: onClose }, 'Close'), h('button', { onClick: onDelete }, 'Delete')) },
   '@/components/notes/TemplatePickerDialog': { TemplatePickerDialog: ({ open, onSelectTemplate }) => open ? h('button', { onClick: () => onSelectTemplate({ id: 'decision' }, 'Use Postgres') }, 'Use template') : null },
   '@/components/ui/select': {
     Select: ({ value, onValueChange, children }) => h('select', { 'aria-label': 'Note type', value, onChange: event => onValueChange(event.target.value) }, children),
@@ -223,5 +223,47 @@ test('a Note from a template is filled in by the server and made where the page 
   assert.deepEqual([sent.title, sent.content, sent.type, sent.folderId, sent.scope], ['ADR 7: Use Postgres', '<p>Why</p>', 'DECISION', 'ideas', 'WORKSPACE']);
   assert.equal(document.querySelector('[data-note-pane]').dataset.notePane, 'adr');
   assert.ok(list().some(row => row.startsWith('ADR 7: Use Postgres')));
+  await React.act(async () => root.render(null));
+});
+
+test('late note writes do not replace a later selection', async () => {
+  let finishCreate, finishDelete;
+  routes = {
+    'GET /api/context/folders': () => ({ folders }),
+    'GET /api/context/items': () => ({ notes: [note('First'), note('Second')], files: [] }),
+    'POST /api/notes': () => new Promise(resolve => { finishCreate = resolve; }),
+    'DELETE /api/notes/First': () => new Promise(resolve => { finishDelete = resolve; }),
+  };
+  await React.act(async () => root.render(h(ContextBrowser, { workspaceId: 'w', workspaceSlug: 'weezboo', projects: [] })));
+  await settle();
+  await click('First');
+  await click('Delete');
+  await click('Second');
+  await React.act(async () => { finishDelete({ ok: true }); });
+  assert.equal(document.querySelector('[data-note-pane]').dataset.notePane, 'Second');
+  await React.act(async () => { [...document.querySelectorAll('[data-menu]')].find(row => row.textContent === 'Note').click(); });
+  await click('Confirm');
+  await click('First');
+  await React.act(async () => { finishCreate({ id: 'created', type: 'GENERAL', updatedAt: '' }); });
+  assert.equal(document.querySelector('[data-note-pane]').dataset.notePane, 'First');
+  await React.act(async () => root.render(null));
+});
+
+test('a vanished note type does not hide the remaining notes', async () => {
+  let rows = [note('First'), note('Second', { type: 'DECISION' })];
+  routes = {
+    'GET /api/context/folders': () => ({ folders }),
+    'GET /api/context/items': () => ({ notes: rows, files: [] }),
+  };
+  await React.act(async () => root.render(h(ContextBrowser, { workspaceId: 'w', workspaceSlug: 'weezboo', projects: [] })));
+  await settle();
+  const kind = document.querySelector('select[aria-label="Note type"]');
+  await React.act(async () => { kind.value = 'DECISION'; kind.dispatchEvent(new dom.window.Event('change', { bubbles: true })); });
+  await click('Second');
+  rows = [note('First')];
+  await click('Close');
+  await settle();
+  assert.equal(document.querySelector('select[aria-label="Note type"]'), null);
+  assert.ok(list().some(row => row.startsWith('First')));
   await React.act(async () => root.render(null));
 });

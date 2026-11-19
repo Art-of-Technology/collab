@@ -196,16 +196,22 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
 
   // The kinds of Note that are listed here, to choose one of: with a single kind there is nothing to choose.
   const noteTypes = [...new Set(notes.map(note => note.type))].sort();
+  const activeNoteType = noteTypes.length > 1 && noteType && noteTypes.includes(noteType) ? noteType : null;
+
+  useEffect(() => {
+    if (noteType && !activeNoteType) setNoteType(null);
+  }, [noteType, activeNoteType]);
 
   const items: ContextItem[] = [
     ...folders.filter(row => row.parentId === openFolderId).map(row => ({ kind: 'folder' as const, id: row.id, name: row.name })),
-    ...notes.filter(note => !noteType || note.type === noteType)
+    ...notes.filter(note => !activeNoteType || note.type === activeNoteType)
       .map(note => ({ kind: 'note' as const, id: note.id, name: note.title || 'Untitled', noteType: note.type, pinned: note.isPinned, updatedAt: note.updatedAt })),
     ...files.map(file => ({ kind: 'file' as const, id: file.id, name: file.name, mimeType: file.mimeType, size: file.size, updatedAt: file.updatedAt })),
   ];
 
   const openItem = (item: ContextItem) => {
     if (item.kind === 'folder') return openFolder(item.id);
+    navigation.current++;
     // A Note opens here, beside the list, and a file's preview takes the same place.
     setSelectedNoteId(item.kind === 'note' ? item.id : null);
     setSelectedFile(item.kind === 'file' ? files.find(file => file.id === item.id) ?? null : null);
@@ -239,8 +245,7 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   });
 
   // A Note is created where the page is standing and then opened beside the list, in its editor.
-  const postNote = async (fields: { title: string; content?: string; type?: string; templateId?: string | null }) => {
-    const location = navigation.current;
+  const postNote = async (fields: { title: string; content?: string; type?: string; templateId?: string | null }, location: number) => {
     const created = await readJson(await fetch('/api/notes', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -253,23 +258,25 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
     // Another place may have been opened while the Note was made: its list is not this one's.
     if (location === navigation.current) {
       setNotes(current => [...current, { id: created.id, title: fields.title, type: created.type, updatedAt: created.updatedAt }]);
+      setSelectedFile(null);
+      setSelectedNoteId(created.id as string);
     }
-    setSelectedFile(null);
-    setSelectedNoteId(created.id as string);
   };
 
-  const createNote = (title: string) => write(() => postNote({ title }));
+  const createNote = (title: string) => write(() => postNote({ title }, navigation.current));
 
   // A template is filled in by the server, which knows its numbering and its placeholders.
   const createFromTemplate = (templateId: string, title?: string) => write(async () => {
+    const location = navigation.current;
     const filled = await readJson(await fetch(`/api/notes/templates/${templateId}/use`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workspaceId, projectId: level.projectId, title }),
     }));
-    await postNote({ title: filled.title, content: filled.content, type: filled.defaultType, templateId: filled.templateId });
+    await postNote({ title: filled.title, content: filled.content, type: filled.defaultType, templateId: filled.templateId }, location);
   });
 
   const closeNote = () => {
+    navigation.current++;
     setSelectedNoteId(null);
     // The editor may have renamed the Note, so the list is read again, without emptying it first.
     const mine = reading.current;
@@ -288,9 +295,12 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   });
 
   const deleteNote = (id: string) => write(async () => {
+    const location = navigation.current;
     await readJson(await fetch(`/api/notes/${id}`, { method: 'DELETE' }));
-    setNotes(current => current.filter(note => note.id !== id));
-    setSelectedNoteId(null);
+    if (location === navigation.current) {
+      setNotes(current => current.filter(note => note.id !== id));
+      setSelectedNoteId(null);
+    }
   });
 
   const uploadFile = (chosen: File | null) => {

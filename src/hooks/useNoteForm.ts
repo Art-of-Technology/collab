@@ -181,6 +181,7 @@ export function useNoteForm({
 
   // Refs for tracking
   const latestValuesRef = useRef<NoteFormValues | null>(null);
+  const pendingAutosaveRef = useRef<(() => void) | null>(null);
   const createdNoteIdRef = useRef<string | null>(noteId || null);
   const autosaveErrorToastShownRef = useRef(false);
   const isInitializedRef = useRef(false);
@@ -434,6 +435,8 @@ export function useNoteForm({
     return () => subscription.unsubscribe();
   }, [form]);
 
+  useEffect(() => () => { pendingAutosaveRef.current?.(); }, []);
+
   // Debounced autosave - proper pattern matching issue detail modal
   useEffect(() => {
     // Skip if not initialized or values haven't changed
@@ -447,13 +450,19 @@ export function useNoteForm({
     }
 
     // Set up debounced autosave (800ms after last change)
-    const handle = setTimeout(() => {
+    const savePending = () => {
+      pendingAutosaveRef.current = null;
       if (latestValuesRef.current) {
-        autosave(latestValuesRef.current);
+        void autosave(latestValuesRef.current);
       }
-    }, 800);
+    };
+    pendingAutosaveRef.current = savePending;
+    const handle = setTimeout(savePending, 800);
 
-    return () => clearTimeout(handle);
+    return () => {
+      clearTimeout(handle);
+      pendingAutosaveRef.current = null;
+    };
   }, [currentFormValues, lastSavedValues, autosave]);
 
   // Flush autosave on tab hide or before unload for reliability
