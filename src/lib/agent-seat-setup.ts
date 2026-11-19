@@ -128,7 +128,7 @@ export async function addMySeats({ workspaceId, userId, projectId }: Own) {
   if (!project) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
   await prisma.$transaction(tx => lockMemberSeatProject(tx, workspaceId, projectId));
   const me = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true, email: true } });
-  const first = (me.name?.trim() || me.email || userId).split(/[\s@]/)[0];
+  const first = me.name?.trim().split(/\s/)[0] || (me.email || userId).split('@')[0];
   const mine = await prisma.agentSeat.findMany({ where: { projectId, ownerId: userId, retiredAt: null }, select: { role: true } });
   const created: string[] = [], refused: { name: string; code: string; reason: string }[] = [];
   for (const role of MEMBER_ROLES.filter(role => !mine.some(seat => seat.role === role))) {

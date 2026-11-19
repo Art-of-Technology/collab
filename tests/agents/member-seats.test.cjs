@@ -4,7 +4,7 @@ const { load } = require('../security/helpers.cjs');
 const { seatsDatabase } = require('./seats-db.cjs');
 
 // Two members share the first name Bob; the stranger is in no workspace.
-const owner = 'cowner00001', deniz = 'cdeniz00001', bob = 'cbob0000001', bobToo = 'cbob0000002', uma = 'cuma0000001', lale = 'clale000001', stranger = 'cstranger01';
+const owner = 'cowner00001', deniz = 'cdeniz00001', bob = 'cbob0000001', bobToo = 'cbob0000002', uma = 'cuma0000001', lale = 'clale000001', named = 'cnamed00001', stranger = 'cstranger01';
 const P = 'cprojectp001', OLD = 'cprojecto001';
 const scopes = ['issues:read', 'issues:write', 'user:read'];
 
@@ -13,10 +13,10 @@ after(() => db?.stop());
 
 test('a member adds their own seats to a project, once its owner has switched that on', async t => {
   db = await seatsDatabase(async prisma => {
-    await prisma.user.createMany({ data: [[owner, 'Cem Owner'], [deniz, 'Deniz Kaya'], [bob, 'Bob Stone'], [bobToo, 'Bob Other'], [uma, 'Uma Late'], [lale, 'Lale Race'], [stranger, 'Sam Stranger']]
+    await prisma.user.createMany({ data: [[owner, 'Cem Owner'], [deniz, 'Deniz Kaya'], [bob, 'Bob Stone'], [bobToo, 'Bob Other'], [uma, 'Uma Late'], [lale, 'Lale Race'], [named, '@deniz kaya'], [stranger, 'Sam Stranger']]
       .map(([id, name]) => ({ id, name, email: `${id}@example.test` })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
-    await prisma.workspaceMember.createMany({ data: [deniz, bob, bobToo, uma, lale].map(userId => ({ workspaceId: 'w', userId })) });
+    await prisma.workspaceMember.createMany({ data: [deniz, bob, bobToo, uma, lale, named].map(userId => ({ workspaceId: 'w', userId })) });
     for (const [id, name, issuePrefix, isArchived] of [[P, 'Collab', 'CLB', false], [OLD, 'Old', 'OLD', true]]) {
       await prisma.project.create({ data: { id, workspaceId: 'w', name, slug: issuePrefix.toLowerCase(), issuePrefix, isArchived } });
       await prisma.projectStatus.createMany({ data: ['to_do', 'in_progress', 'done'].map((status, order) => ({ id: `${id}-${status}`, projectId: id, name: status,
@@ -117,6 +117,14 @@ test('a member adds their own seats to a project, once its owner has switched th
     assert.equal(await prisma.agentSeat.count({ where: { ownerId: deniz } }), 3);
     await refuses(seats.createSeat({ workspaceId: 'w', actorId: deniz, projectId: P, role: 'developer', ownerId: deniz,
       name: 'Collab Developer (Deniz)', expiresInDays: 30, byRunner: true, own: true }), 'own_seat_exists', 409);
+  });
+
+  await t.test('seat names preserve the first word of a name and use the email local part as fallback', async () => {
+    assert.deepEqual((await add(named))[1].created, ['Collab Developer (@deniz)', 'Collab Reviewer (@deniz)', 'Collab Security (@deniz)']);
+    await remove(named);
+    await prisma.user.update({ where: { id: named }, data: { name: null, email: 'fallback@example.test' } });
+    assert.deepEqual((await add(named))[1].created, ['Collab Developer (fallback)', 'Collab Reviewer (fallback)', 'Collab Security (fallback)']);
+    await remove(named);
   });
 
   await t.test('a member cannot add seats for someone else', async () => {
