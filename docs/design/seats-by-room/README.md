@@ -2,7 +2,7 @@
 
 The screens the owner approved on 19 November 2026 for the epic CLB-773, "Seats by room: work goes to the seat with allowance left". Build to these. Where a story and a screen disagree, ask before building.
 
-All names and numbers in the pictures are sample data. `mockup.html` in this folder is the clickable page the pictures were taken from; open it in a browser to try each control.
+All names and numbers in the pictures are sample data. `mockup.html` in this folder is the clickable page the pictures were taken from; open it in a browser to try each control. Its layout switches, its "Your pick" forms and its last tab ("Open points") are left from the review; what was picked is written on this page.
 
 ## What "room" is
 
@@ -48,7 +48,7 @@ The "Try it" box belongs to the mockup, not to the product.
 
 ## Requests (CLB-778)
 
-Collab places a request on the seat of the role with the most room and says which seat got it and why. Without a fresh figure it goes to the default seat, as before.
+Collab places a request on the seat of the role with the most room and says which seat got it and why. When no seat of the role has a fresh figure with room, it goes to the default seat, as before, unless Collab knows the default seat cannot start (its runner is offline, paused or full): then it goes to the next seat whose figure is unknown. When every seat of the role is known to have no room, it waits at the default seat.
 
 ![Requests placed by room](06-requests.png)
 

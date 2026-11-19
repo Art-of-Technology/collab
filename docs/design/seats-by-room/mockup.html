@@ -265,7 +265,7 @@ ACT['t-reset']=()=>{T=T0();P.cem.open=3;P.bob.open=0;render()};
 let Q=[];
 function placeReq(role){const r=rank(role),top=r[0],k=key(top),def=r.find(s=>s.def)||top;
   if(k>0)return{s:top,why:r.length>1&&key(r[1])===k?`equal room (${k}%), ${P[top.owner].open===P[r[1].owner].open?'equal open runs'+(top.def?', default seat first':''):'fewer open runs'}`:`most room (${k}%)`};
-  if(r.some(s=>key(s)===-0.5))return{s:def,why:'no fresh number: the default seat, as today'};
+  if(r.some(s=>key(s)===-0.5)){const u=key(def)===-1?r.find(s=>key(s)===-0.5):def;return{s:u,why:u===def?'no fresh number: the default seat, as today':'no fresh number and the default seat cannot start: the next seat with an unknown figure'}}
   return{s:def,why:'no seat can start now: it waits at the default seat'}}
 R.req=d=>{const list=r=>rank(r).map((s,i)=>`<div class="lrow" style="cursor:default"><span class="num">${i+1}</span><span style="flex:1;min-width:0">${esc(s.name)}${s.def?' <span class="chip">default</span>':''}<br>${bar(s.owner)}</span></div>`).join('');
   return frame(d,tryBox()+`<div class="split">
