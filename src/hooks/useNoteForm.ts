@@ -188,6 +188,7 @@ export function useNoteForm({
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
   const pendingAutosaveRef = useRef<(() => void) | null>(null);
+  const autosaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const createdNoteIdRef = useRef<string | null>(noteId || null);
   const autosaveErrorToastShownRef = useRef(false);
   const isInitializedRef = useRef(false);
@@ -318,7 +319,7 @@ export function useNoteForm({
   }, [mode, noteId, fetchNote]);
 
   // Autosave function (direct API call similar to issue detail)
-  const autosave = useCallback(async (values: NoteFormValues) => {
+  const saveNote = useCallback(async (values: NoteFormValues) => {
     // Don't save if title is empty
     if (!values.title?.trim()) {
       return;
@@ -426,6 +427,11 @@ export function useNoteForm({
       setIsSaving(false);
     }
   }, [mode, noteId, toast, onSuccess]);
+
+  const autosave = useCallback((values: NoteFormValues) => {
+    autosaveQueueRef.current = autosaveQueueRef.current.then(() => saveNote(values));
+    return autosaveQueueRef.current;
+  }, [saveNote]);
 
   // Watch form changes and update state (single subscription)
   useEffect(() => {
