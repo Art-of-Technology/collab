@@ -1,6 +1,5 @@
 tests/render/git-connections.test.cjs > tests/render/git-connections.test.cjs
 tests/render/homepage-showcase.test.cjs > homepage showcases the product and gives visitors working docs and sign-in destinations
-tests/render/project-notes.test.cjs > the board Project notes link renders its destination for a member
 tests/security/gateway-client-session.test.cjs > MCP gateway/invalid signin reports error and never invokes legacy signin
 tests/security/gateway-client-session.test.cjs > MCP legacy signin retains provider selection and exact callback
 tests/security/gateway-client-session.test.cjs > Navbar failed mode fetch or failed signout result stays signed in

@@ -675,7 +675,7 @@ export function ProjectDashboard({
           subtitle={`${summary?.notes?.length || 0} notes`}
           icon={<StickyNote className="h-4 w-4 text-blue-400" />}
           iconBg="bg-blue-500/10"
-          viewAllHref={`/${workspaceSlug}/notes`}
+          viewAllHref={`/${workspaceSlug}/context?project=${projectId}`}
           className="p-0"
         >
           <div className="p-3">

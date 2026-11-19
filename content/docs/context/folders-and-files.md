@@ -28,15 +28,36 @@ Open **Context** in the left menu.
 
 | Part of the page | Shows |
 | --- | --- |
-| **Left** | The tree. Open the workspace, a project or a folder. |
+| **Left** | The tree. Open a list, the workspace, a project or a folder. |
 | **Middle** | What the open folder holds: its folders, Notes and files. |
-| **Right** | The preview of the file you chose. |
+| **Right** | The Note you chose, in its editor, or the preview of the file you chose. |
 | **Top** | The path to the open folder. Each part of it leads back there. |
 
-- On a phone the three parts sit above each other, and the preview appears once you choose a file.
+- On a phone the three parts sit above each other, and the preview appears once you choose a file. An open Note takes the whole page; **Close** brings the list back.
 - The tree and the list work with the keyboard.
-- The page's address names the open level and folder, so you can send a link to a folder.
-- **All notes** opens the list of every Note you can read.
+- The page's address names the open level, folder and Note, so you can send a link to any of them.
+
+## Notes
+
+A Note opens beside the list, on the same page. There is no separate notes page.
+
+| To | Do this |
+| --- | --- |
+| **Read or edit a Note** | Choose it in the list. Changes save as you type. |
+| **Go back to the folder** | Choose **Close**. |
+| **Pin or unpin it** | Choose **Pin** or **Unpin** above the Note. Its author or a workspace administrator can. |
+| **Delete it** | Choose **Delete** above the Note and confirm. |
+| **See one kind of Note** | Pick the kind above the list. The picker shows when the list holds more than one kind. |
+
+Three lists sit at the top of the tree. They hold Notes, not folders.
+
+| List | Holds |
+| --- | --- |
+| **Pinned** | Every pinned Note you can read, wherever it is kept. |
+| **Personal** | Your own personal Notes. |
+| **Shared** | Notes shared with you by name, and the ones you shared that way. |
+
+A link to a Note made before this page existed still works: it opens the Note here, in its folder.
 
 ## Add a folder, a Note or a file
 
@@ -44,8 +65,11 @@ Open **Context** in the left menu.
 2. Choose **New**.
 3. Choose one:
    - **Folder**: type a name and choose **Create**. The new folder opens.
-   - **Note**: type a title and choose **Create**. The Note opens in its editor.
+   - **Note**: type a title and choose **Create**. The Note opens beside the list, in its editor.
+   - **Note from template**: pick a template, or **Start blank**. The Note is made from it and opens the same way.
    - **Upload file**: pick a file. It appears in the folder with its name, type and size. **Upload file** is offered only inside a folder.
+
+In **Personal**, **New** makes a personal Note. Nothing is made in **Pinned** or **Shared**: pin or share a Note from where it is.
 
 ## Folders
 

@@ -5,7 +5,8 @@ import { listContextItems } from '@/lib/context-items';
 import { contextFolderErrorResponse } from '@/lib/context-folders-response';
 
 // GET /api/context/items?folder= - the Notes and files of one folder. Without a folder it answers for
-// the top of a level, ?workspace=&project=, where there are Notes but no files.
+// the top of a level, ?workspace=&project=, where there are Notes but no files. ?workspace=&view= answers
+// for one of the workspace's lists: pinned, personal or shared.
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest) {
       workspaceId: query.get('workspace'),
       projectId: query.get('project'),
       folderId: query.get('folder'),
+      view: query.get('view'),
       offset,
     }));
   } catch (error) { return contextFolderErrorResponse(error); }

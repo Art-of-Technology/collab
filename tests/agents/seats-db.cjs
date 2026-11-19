@@ -33,11 +33,12 @@ exports.seatsDatabase = async (seed = async () => {}) => {
     psql(`DROP TABLE "AgentRun", "AgentSeat", "AgentRunner";
       ALTER TABLE "AppToken" DROP COLUMN "runnerId";
       ALTER TABLE "ProjectStatus" DROP COLUMN "category";
-      ALTER TABLE "Project" DROP COLUMN "agentMode", DROP COLUMN "agentSwitchedAt";
+      ALTER TABLE "Project" DROP COLUMN "agentMode", DROP COLUMN "agentSwitchedAt", DROP COLUMN "agentRepositoryUrl", DROP COLUMN "membersMayAddSeats";
       ALTER TABLE "Issue" DROP COLUMN "agentRequestRole";`);
     psql(readFileSync(resolve('prisma/migrations/20261116000100_agent_seats/migration.sql'), 'utf8'));
     // The seats table was made again by its own migration, so the migrations that changed it since follow.
     psql(readFileSync(resolve('prisma/migrations/20261116000400_agent_runners/migration.sql'), 'utf8'));
+    psql(readFileSync(resolve('prisma/migrations/20261119000100_seat_room_and_repository/migration.sql'), 'utf8'));
     return { prisma, url, stop };
   } catch (error) {
     await stop();

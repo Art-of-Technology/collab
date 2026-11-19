@@ -34,6 +34,7 @@ test('the board Project notes link renders its destination for a member', { time
     config.resolve.alias = {
       'next-auth$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/auth$': ${JSON.stringify(join(fixture, 'data.js'))},
+      '@/lib/session$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/prisma$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/slug-resolvers$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/forge/board$': ${JSON.stringify(join(fixture, 'data.js'))},
@@ -45,6 +46,8 @@ test('the board Project notes link renders its destination for a member', { time
   write('data.js', `
     export const authConfig = {};
     export const getServerSession = async () => ({ user: { id: 'member', email: 'member@example.test' } });
+    export const getAuthSession = getServerSession;
+    export const getCurrentUser = async () => ({ id: 'member', email: 'member@example.test' });
     export const resolveWorkspaceSlug = async () => 'workspace';
     export const prisma = {
       workspace: { findFirst: async () => ({ id: 'workspace', slug: 'test' }) },
@@ -84,12 +87,8 @@ test('the board Project notes link renders its destination for a member', { time
   const board = await (await fetch(`${url}/test/projects/demo/board`).catch(error => { throw new Error(`${url}: ${error.cause}`, { cause: error }); })).text();
   const href = board.match(/href="([^"]+)"[^>]*>Project notes<\/a>/)?.[1];
   assert.equal(href, '/test/projects/demo/notes', logs);
-  const response = await fetch(new URL(href, url));
-  const html = await response.text();
-  assert.equal(response.status, 200, logs);
-  assert.doesNotMatch(html, /Functions cannot be passed directly to Client Components|"digest"\s*:/, logs);
-  assert.match(html, /<h1[^>]*>Project Context<\/h1>/);
-  assert.match(html, /Documentation and context for Test project/);
-  assert.match(html, /href="\/test\/notes\/new\?projectId=project"/);
-  assert.match(html, /lucide-file-text/);
+  // A project's Notes are its level in Context, so the link ends there.
+  const response = await fetch(new URL(href, url), { redirect: 'manual' });
+  assert.equal(response.status, 307, logs);
+  assert.equal(new URL(response.headers.get('location'), url).pathname + new URL(response.headers.get('location'), url).search, '/test/context?project=project', logs);
 });

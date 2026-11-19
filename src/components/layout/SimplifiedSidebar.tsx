@@ -128,8 +128,8 @@ export default function SimplifiedSidebar({
   const mainNav = [
     { name: "Home", href: `${workspaceBase}/dashboard`, icon: Home, current: section === "dashboard", badge: 0 },
     { name: "Timeline", href: `${workspaceBase}/timeline`, icon: MessageSquare, current: section === "timeline", badge: 0 },
-    // Context is the folder tree, the Notes and the files; a Note's own page lives under /notes.
-    { name: "Context", href: `${workspaceBase}/context`, icon: FileText, current: section === "context" || section === "notes", badge: 0 },
+    // Context is the folder tree, the Notes and the files; a Note opens inside it.
+    { name: "Context", href: `${workspaceBase}/context`, icon: FileText, current: section === "context", badge: 0 },
     { name: "Feature Requests", href: `${workspaceBase}/features`, icon: Lightbulb, current: section === "features", badge: 0 },
     // The public documentation. It has its own layout, so it is never the current page of this menu.
     { name: "Docs", href: "/docs", icon: BookOpen, current: false, badge: 0 },

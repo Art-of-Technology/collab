@@ -80,8 +80,8 @@ export function MobileBottomNav({ className }: MobileBottomNavProps) {
       id: 'context',
       icon: <FileText className="h-4 w-4" />,
       title: 'Context',
-      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/notes` : "#",
-      isActive: pathname.includes('/notes'),
+      href: currentWorkspace ? `/${currentWorkspace.slug || currentWorkspace.id}/context` : "#",
+      isActive: pathname.includes('/context'),
     },
     {
       id: 'search',
