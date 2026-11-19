@@ -406,7 +406,7 @@ Room is the percent of allowance a seat has left on the program it would run nex
 | Field | Type | What it is |
 | --- | --- | --- |
 | `state` | `working`, `paused` or `disk_full` | How the runner itself is. Collab keeps it until you send another, so send it with every call. |
-| `rooms` | list, up to 1000 entries | One entry per seat you report for. A seat appears at most once. |
+| `rooms` | list, up to 1000 entries | One entry per seat you report for. A seat appears at most once. The body as a whole stays within 64 KiB, which long names reach before 1000 entries. |
 | `seat` | text, 1 to 128 characters | The seat's `id`, as the answer of this call lists it. |
 | `room` | whole number, 0 to 100 | Percent of allowance left, after your own hold-back. `0` means used up. |
 | `program` | text, 1 to 64 printable ASCII characters after trimming | The name of the program the seat would run next, such as `Claude Code`. Collab stores the trimmed name. |
@@ -415,8 +415,8 @@ Both `state` and `rooms` are optional. In an entry of `rooms`, all three fields 
 
 - **Only percentages and program names are sent.** No login, account, plan or billing detail is ever sent, and any other key is refused.
 - Collab stores a figure with the time it arrived, by its own clock. Send the figures with every call: a figure at least 15 minutes old counts as unknown.
-- A call without `state` and `rooms` makes no extra report writes and is answered exactly as before.
-- A value outside the table is `400 invalid_request`. Nothing of that call is stored and no seats are answered.
+- A call without `state` and `rooms` stores no state and no figure, and is answered exactly as before.
+- A value outside the table is `400 invalid_request`, and a body over 64 KiB is `413 body_too_large`. Nothing of that call is stored and no seats are answered.
 - A figure for a seat that this call's answer does not list is not stored. The call is still answered, and the answer names those seats' ids under `refused`. That happens when a seat was retired since your last call: stop running it, as in step 5.
 
 What Collab makes of it:
@@ -424,8 +424,8 @@ What Collab makes of it:
 | A seat reads as | When |
 | --- | --- |
 | A number | Its figure is newer than 15 minutes and above 0, and its runner called within the last 10 minutes and did not say `paused` or `disk_full`. |
-| No room | A runner-managed seat has no connected runner, or its runner is offline, paused or has a full disk, or its fresh figure is `0`. |
-| Unknown | The seat is run by hand, or its runner can work but no figure was sent or it is at least 15 minutes old. |
+| No room | No runner is connected for the seat's person, or the runner has not called for 10 minutes (offline), or it said `paused` or `disk_full`, or the seat's fresh figure is `0`. |
+| Unknown | The seat is run by hand, or its runner is there and working but no figure was sent, or the figure is at least 15 minutes old. |
 
 A runner that never sent a `state` counts as working. What a runner says about itself comes before the figure: the seat of a paused runner has no room, however new its figure is.
 
@@ -447,6 +447,8 @@ Nothing is renewed for a seat run by hand. Those tokens keep the expiry they wer
 | `403 runner_pending` | No person has connected the runner yet. Ask again. |
 | `401 runner_refused` | The credential is unknown, the runner was removed, replaced or said goodbye, its person left the workspace, or the pairing ran out after 15 minutes. Stop every seat and pair again. |
 | `429 pairing_busy` | 50 pairings are waiting on this server. Try `pair` again in a few minutes. |
+| `400 invalid_request` | A field is missing or wrong, or the body has a key the call does not know. |
+| `413 body_too_large` | The body is over 64 KiB. |
 
 ## Say goodbye: POST /api/runner/goodbye
 
@@ -465,7 +467,7 @@ curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" https://collab.exampl
 - A machine that is lost says nothing. Expiry is the backstop for that: its tokens stop within 30 days.
 - A runner that comes back pairs again and is connected again.
 
-A runner credential reads no issue and cannot be used for other calls. These calls also maintain the runner's connection and seat tokens.
+A runner credential does nothing else. It reads no issue, every other call refuses it, and all it writes is its own state and its seats' room.
 
 ## A person's own sessions
 

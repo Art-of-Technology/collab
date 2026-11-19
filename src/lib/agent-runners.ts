@@ -245,16 +245,20 @@ export async function fetchSeats(credential: string, have: string[],
   if (!await prisma.workspace.findFirst({ where: inWorkspace(workspaceId, ownerId), select: { id: true } })) throw refused();
   if (!runner.lastSeenAt || runner.lastSeenAt.getTime() < now.getTime() - 60_000) await prisma.agentRunner.updateMany({ where: { id: runner.id }, data: { lastSeenAt: now } });
 
-  const seats = await prisma.agentSeat.findMany({ where: { workspaceId, ownerId, byRunner: true, retiredAt: null, project: { OR: [{ isArchived: null }, { isArchived: false }] } }, orderBy: { createdAt: 'asc' },
+  // The seats that are this runner's to run. A figure is stored under the same conditions, stated again on the seat's row.
+  const mine = { workspaceId, ownerId, byRunner: true, retiredAt: null, project: { OR: [{ isArchived: null }, { isArchived: false }] } };
+  const seats = await prisma.agentSeat.findMany({ where: mine, orderBy: { createdAt: 'asc' },
     select: { id: true, userId: true, name: true, role: true, project: { select: { id: true, name: true, issuePrefix: true } } } });
   const notStored: string[] = [];
+  // The runner and its person are asked again on their rows, as for a token: a runner removed or replaced, or a
+  // person switched off, since this ask began stores nothing.
   if (report.state || report.rooms?.length) await prisma.$transaction(async tx => {
     if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentRunner" WHERE "id" = ${runner.id} AND "removedAt" IS NULL FOR UPDATE`).length) throw refused();
     await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${ownerId} AND "workspaceId" = ${workspaceId} FOR SHARE`;
     if (!await tx.workspace.findFirst({ where: inWorkspace(workspaceId, ownerId), select: { id: true } })) throw refused();
     if (report.state) await tx.agentRunner.update({ where: { id: runner.id }, data: { state: report.state } });
     for (const { seat: id, room, program } of report.rooms ?? []) {
-      if (!seats.some(seat => seat.id === id) || !(await tx.agentSeat.updateMany({ where: { id, workspaceId, ownerId, byRunner: true, retiredAt: null },
+      if (!seats.some(seat => seat.id === id) || !(await tx.agentSeat.updateMany({ where: { id, ...mine },
         data: { room, roomProgram: program, roomAt: now } })).count) notStored.push(id);
     }
   });

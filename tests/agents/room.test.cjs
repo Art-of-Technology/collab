@@ -214,6 +214,30 @@ test('room: a runner reports room for its seats, and a read gives a number, no r
     assert.deepEqual(await row(leaving.id), stored);
   });
 
+  await t.test('a seat whose project is archived takes no figure, also when it is archived while the call runs', async () => {
+    const stored = await row(dev.id);
+    const sent = { have, rooms: [{ seat: dev.id, room: 3, program: 'Codex' }] };
+    // Archived between the ask's read of the runner's seats and the storing of the figure.
+    const find = prisma.agentSeat.findMany;
+    prisma.agentSeat.findMany = async (...args) => {
+      const found = await find.apply(prisma.agentSeat, args);
+      if (args[0]?.where?.ownerId === person) await prisma.project.update({ where: { id: A }, data: { isArchived: true } });
+      return found;
+    };
+    let racing;
+    try { racing = await ask(mac, sent); } finally { prisma.agentSeat.findMany = find; }
+    assert.deepEqual([racing[0], racing[1].refused], [200, [dev.id]]);
+    assert.deepEqual(await row(dev.id), stored);
+    // Archived before the call: the seat is not listed, and its figure is refused the same way.
+    const [status, answer] = await ask(mac, sent);
+    assert.deepEqual([status, answer.refused, answer.seats], [200, [dev.id], []]);
+    assert.deepEqual(await row(dev.id), stored);
+    await prisma.project.update({ where: { id: A }, data: { isArchived: false } });
+    assert.equal((await ask(mac, sent))[1].refused, undefined);
+    assert.equal((await row(dev.id)).room, 3);
+    await ask(mac, { have, rooms: [{ seat: dev.id, room: 77, program: 'Claude Code' }] });
+  });
+
   await t.test('a value outside the contract is refused as invalid_request, and nothing of the call is stored', async () => {
     const stored = await row(dev.id), state = (await runnerOf(person)).state;
     const figure = extra => ({ have, state: 'paused', rooms: [{ seat: dev.id, room: 5, program: 'Claude Code', ...extra }] });
