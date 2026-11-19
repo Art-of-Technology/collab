@@ -246,7 +246,7 @@ let T=T0();
 function leadPick(){const devs=rank('developer');
   for(const s of devs){if((T.held[s.id]||0)>=2)continue;const k=key(s);if(k===-1)continue;
     const others=devs.filter(x=>x!==s&&(T.held[x.id]||0)<2&&key(x)===k&&x.owner!==s.owner);
-    return{s,why:k===-0.5?'room unknown, as today':others.length?`equal room (${k}%), ${P[s.owner].name} has fewer open runs`:`most room (${k}%)`}}
+    return{s,why:k===-0.5?'room unknown, as today':others.length?`equal room (${k}%), ${others.some(x=>P[x.owner].open===P[s.owner].open)?'equal open runs'+(s.def?', default seat first':''):P[s.owner].name+' has fewer open runs'}`:`most room (${k}%)`}}
   return null}
 R.lead=d=>{const devs=rank('developer'),next=T.stories.find(s=>!s.to);
   return frame(d,tryBox()+`<div class="split">
@@ -264,7 +264,7 @@ ACT['t-reset']=()=>{T=T0();P.cem.open=3;P.bob.open=0;render()};
 /* ---------- screen 4: requests ---------- */
 let Q=[];
 function placeReq(role){const r=rank(role),top=r[0],k=key(top),def=r.find(s=>s.def)||top;
-  if(k>0)return{s:top,why:r.length>1&&key(r[1])===k?`equal room (${k}%), fewer open runs`:`most room (${k}%)`};
+  if(k>0)return{s:top,why:r.length>1&&key(r[1])===k?`equal room (${k}%), ${P[top.owner].open===P[r[1].owner].open?'equal open runs'+(top.def?', default seat first':''):'fewer open runs'}`:`most room (${k}%)`};
   if(r.some(s=>key(s)===-0.5))return{s:def,why:'no fresh number: the default seat, as today'};
   return{s:def,why:'no seat can start now: it waits at the default seat'}}
 R.req=d=>{const list=r=>rank(r).map((s,i)=>`<div class="lrow" style="cursor:default"><span class="num">${i+1}</span><span style="flex:1;min-width:0">${esc(s.name)}${s.def?' <span class="chip">default</span>':''}<br>${bar(s.owner)}</span></div>`).join('');
