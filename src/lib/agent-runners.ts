@@ -247,13 +247,17 @@ export async function fetchSeats(credential: string, have: string[],
 
   const seats = await prisma.agentSeat.findMany({ where: { workspaceId, ownerId, byRunner: true, retiredAt: null, project: { OR: [{ isArchived: null }, { isArchived: false }] } }, orderBy: { createdAt: 'asc' },
     select: { id: true, userId: true, name: true, role: true, project: { select: { id: true, name: true, issuePrefix: true } } } });
-  if (report.state && report.state !== runner.state) await prisma.agentRunner.updateMany({ where: { id: runner.id }, data: { state: report.state } });
   const notStored: string[] = [];
-  for (const { seat: id, room, program } of report.rooms ?? []) {
-    // The seat's own row decides again, so a seat retired or given away since the list was read takes no figure.
-    if (!seats.some(seat => seat.id === id) || !(await prisma.agentSeat.updateMany({ where: { id, workspaceId, ownerId, byRunner: true, retiredAt: null },
-      data: { room, roomProgram: program, roomAt: now } })).count) notStored.push(id);
-  }
+  if (report.state || report.rooms?.length) await prisma.$transaction(async tx => {
+    if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentRunner" WHERE "id" = ${runner.id} AND "removedAt" IS NULL FOR UPDATE`).length) throw refused();
+    await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${ownerId} AND "workspaceId" = ${workspaceId} FOR SHARE`;
+    if (!await tx.workspace.findFirst({ where: inWorkspace(workspaceId, ownerId), select: { id: true } })) throw refused();
+    if (report.state) await tx.agentRunner.update({ where: { id: runner.id }, data: { state: report.state } });
+    for (const { seat: id, room, program } of report.rooms ?? []) {
+      if (!seats.some(seat => seat.id === id) || !(await tx.agentSeat.updateMany({ where: { id, workspaceId, ownerId, byRunner: true, retiredAt: null },
+        data: { room, roomProgram: program, roomAt: now } })).count) notStored.push(id);
+    }
+  });
   const held = seats.length ? await prisma.appToken.findMany({ where: { runnerId: runner.id, userId: { in: seats.map(seat => seat.userId) }, isRevoked: false, tokenExpiresAt: { gt: now } },
     orderBy: { createdAt: 'desc' }, select: { id: true, userId: true, tokenExpiresAt: true, createdAt: true } }) : [];
   const renewFrom = new Date(now.getTime() + RUNNER_RENEW_DAYS * 86_400_000);

@@ -236,4 +236,32 @@ test('room: a runner reports room for its seats, and a read gives a number, no r
     assert.equal((await ask('collab_rc_unknown', { have: [], state: 'paused', rooms: [{ seat: dev.id, room: 5, program: 'Claude Code' }] }))[0], 401);
     assert.deepEqual(await row(dev.id), stored);
   });
+
+  await t.test('reports recheck authorization and write the supplied state after a stale read', async () => {
+    const find = prisma.agentSeat.findMany;
+    const duringRead = async (change, sent) => {
+      prisma.agentSeat.findMany = async (...args) => {
+        const found = await find.apply(prisma.agentSeat, args);
+        await change();
+        return found;
+      };
+      try { return await ask(mac, sent); } finally { prisma.agentSeat.findMany = find; }
+    };
+    const current = await runnerOf(person);
+    const sent = { have, state: 'working', rooms: [{ seat: dev.id, room: 12, program: 'Codex' }] };
+    assert.equal((await duringRead(() => prisma.agentRunner.update({ where: { id: current.id }, data: { state: 'paused' } }), sent))[0], 200);
+    assert.equal((await runnerOf(person)).state, 'working');
+
+    const stored = await row(dev.id);
+    const member = await prisma.workspaceMember.findFirstOrThrow({ where: { workspaceId: 'w', userId: person } });
+    const denied = { ...sent, state: 'paused' };
+    assert.equal((await duringRead(() => prisma.workspaceMember.update({ where: { id: member.id }, data: { status: false } }), denied))[0], 401);
+    assert.deepEqual(await row(dev.id), stored);
+    assert.equal((await runnerOf(person)).state, 'working');
+    await prisma.workspaceMember.update({ where: { id: member.id }, data: { status: true } });
+
+    assert.equal((await duringRead(() => runners.removeRunner({ workspaceId: 'w', actorId: person, runnerId: current.id }), denied))[0], 401);
+    assert.deepEqual(await row(dev.id), stored);
+    assert.equal((await prisma.agentRunner.findUniqueOrThrow({ where: { id: current.id } })).state, 'working');
+  });
 });
