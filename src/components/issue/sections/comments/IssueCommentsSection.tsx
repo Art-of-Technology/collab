@@ -8,6 +8,7 @@ import { organizeCommentsIntoTree } from "./utils/commentHelpers";
 import { CommentItem } from "./components/CommentItem";
 import { CommentForm } from "./components/CommentForm";
 import { EmptyCommentsState } from "./components/EmptyCommentsState";
+import { useCommentArrivalFeedback } from "./hooks/useCommentArrivalFeedback";
 import { CommentsSkeleton } from "./components/CommentsSkeleton";
 
 export function IssueCommentsSection({
@@ -18,8 +19,11 @@ export function IssueCommentsSection({
   autofocus = false
 }: IssueCommentsSectionProps) {
   const { data: currentUser } = useCurrentUser();
-  const { data: comments = [], isLoading, isError, refetch, isFetching } = useIssueComments(issueId, initialComments, workspaceId);
+  const { data: comments = [], isLoading, isError, refetch, isFetching, isFetchedAfterMount, isSuccess } = useIssueComments(issueId, initialComments, workspaceId);
   const addCommentMutation = useAddIssueComment();
+  const { containerRef, highlightedIds } = useCommentArrivalFeedback(
+    issueId, comments, isFetchedAfterMount && isSuccess && !isFetching, currentUserId || currentUser?.id
+  );
 
   const organizedComments = useMemo(() => {
     return organizeCommentsIntoTree(comments);
@@ -41,7 +45,7 @@ export function IssueCommentsSection({
   }
 
   return (
-    <div className="space-y-3">
+    <div ref={containerRef} className="space-y-3">
       {isError && (
         <div role="alert" className="text-sm text-muted-foreground">
           Could not load the latest comments.{' '}
@@ -62,6 +66,7 @@ export function IssueCommentsSection({
               issueId={issueId}
               currentUserId={currentUserId || currentUser?.id}
               onReply={handleReply}
+              highlightedIds={highlightedIds}
             />
           ))}
         </div>

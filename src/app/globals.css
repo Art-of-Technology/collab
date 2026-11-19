@@ -753,3 +753,18 @@ textarea::selection {
 .mermaid-preview:not([data-state="error"]) + pre.mermaid-source-collapsed {
   display: none;
 }
+
+/* One soft arrival cue; no repeating flashes. */
+@keyframes comment-arrival {
+  0%, 15% { background-color: rgb(34 197 94 / 0.14); }
+  100% { background-color: transparent; }
+}
+.comment-arrival-highlight {
+  animation: comment-arrival 650ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .comment-arrival-highlight {
+    animation: none;
+    background-color: rgb(34 197 94 / 0.10);
+  }
+}

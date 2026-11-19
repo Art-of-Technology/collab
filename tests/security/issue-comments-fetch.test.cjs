@@ -126,6 +126,7 @@ test('comment section renders loading, authoritative empty results, and retryabl
     react: { useMemo: fn => fn(), useCallback: fn => fn },
     '@/hooks/queries/useUser': { useCurrentUser: () => ({ data: { id: 'user' } }) },
     '@/hooks/queries/useIssueComment': { useIssueComments: () => state, useAddIssueComment: () => ({}) },
+    './hooks/useCommentArrivalFeedback': { useCommentArrivalFeedback: () => ({ containerRef: { current: null }, highlightedIds: new Set() }) },
     './utils/commentHelpers': { organizeCommentsIntoTree: comments => comments },
     './components/CommentItem': { CommentItem: ({ comment }) => React.createElement('p', {}, comment.content) },
     './components/CommentForm': { CommentForm: () => React.createElement('textarea', { 'aria-label': 'New comment' }) },

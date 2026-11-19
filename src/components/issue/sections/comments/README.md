@@ -29,6 +29,7 @@ comments/
 - **Rich Text**: Full rich text editing with AI improvements
 - **Reactions**: Like/unlike comments (expandable for more reaction types)
 - **Real-time Updates**: Workspace SSE refreshes open threads after comment changes and reconnects; a 30-second foreground polling fallback covers missed events. Opening or returning to a thread verifies comments over HTTP even without SSE; supplied comments render immediately during refresh. Failed reads expose a retry action and retain any cached comments. Local writes also use optimistic React Query updates.
+- **Incoming Comment Feedback**: New comments/replies from other users scroll into view when offscreen, briefly highlight, and play `/sounds/new-comment.mp3` once per incoming batch. Initial HTTP loads, own comments, edits and repeat fetches stay silent. Collapsed reply ancestors open for incoming replies. Reduced motion disables smooth scrolling and animation; browser autoplay restrictions are handled without interrupting reads.
 - **Responsive Design**: Compact layout optimized for various screen sizes
 - **Accessibility**: Keyboard navigation and screen reader support
 
