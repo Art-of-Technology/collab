@@ -40,10 +40,10 @@ export function AgentOwnSeats({ workspaceId, projects, canManage }: Props) {
       setBusy(false);
     }
   };
-  const allow = (project: Project, membersAddSeats: boolean) => call(`${api}/projects/${encodeURIComponent(project.slug)}/agent-mode`,
-    { method: 'PATCH', body: JSON.stringify({ membersAddSeats }) },
-    () => ({ title: membersAddSeats ? `Members may add their own seats to ${project.name}` : `Members can no longer add seats to ${project.name}`,
-      ...(!membersAddSeats && { description: 'The seats they already added stay.' }) }));
+  const allow = (project: Project, membersMayAddSeats: boolean) => call(`${api}/projects/${encodeURIComponent(project.slug)}/agent-mode`,
+    { method: 'PATCH', body: JSON.stringify({ membersMayAddSeats }) },
+    () => ({ title: membersMayAddSeats ? `Members may add their own seats to ${project.name}` : `Members can no longer add seats to ${project.name}`,
+      ...(!membersMayAddSeats && { description: 'The seats they already added stay.' }) }));
   const add = (project: Project) => call(`${api}/agent-seats/mine`, { method: 'POST', body: JSON.stringify({ projectId: project.id }) },
     (body: { created?: string[] }) => ({ title: 'Your seats were added', description: `${body.created?.join(', ')}. They work once your runner is connected.` }));
   const remove = (project: Project) => call(`${api}/agent-seats/mine?projectId=${encodeURIComponent(project.id)}`, { method: 'DELETE' },
@@ -62,13 +62,13 @@ export function AgentOwnSeats({ workspaceId, projects, canManage }: Props) {
           {!canManage && <p className="text-muted-foreground">{project.mine.length
             ? <>Your seats in this project: <span className="capitalize">{project.mine.join(', ')}</span>.</>
             : 'You have no seats in this project. Your seats run on your own runner and your own allowance.'}</p>}
-          {!canManage && missing && !project.membersAddSeats && <p className="text-xs text-destructive">The project owner has not switched this on.</p>}
+          {!canManage && missing && !project.membersMayAddSeats && <p className="text-xs text-destructive">The project owner has not switched this on.</p>}
         </div>
         {canManage ? <div className="flex items-center gap-2">
-          <Checkbox id={id} checked={project.membersAddSeats} disabled={busy} onCheckedChange={checked => allow(project, checked === true)} />
+          <Checkbox id={id} checked={project.membersMayAddSeats} disabled={busy} onCheckedChange={checked => allow(project, checked === true)} />
           <label htmlFor={id}>Members may add their own seats to this project</label>
         </div> : <div className="flex flex-wrap gap-2">
-          {missing && <Button disabled={busy || !project.membersAddSeats} onClick={() => add(project)}>Add my seats to this project</Button>}
+          {missing && <Button disabled={busy || !project.membersMayAddSeats} onClick={() => add(project)}>Add my seats to this project</Button>}
           {project.mine.length > 0 && <Button variant="outline" disabled={busy} onClick={() => setRemoving(project)}>Remove my seats</Button>}
         </div>}
       </div>;

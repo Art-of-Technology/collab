@@ -180,14 +180,14 @@ test('Seats tab: each seat with its role, project, owner, what it works on now a
 });
 
 test('Seats tab: a member adds and removes their own seats per project, and who manages the workspace has the switch instead', async () => {
-  const project = { id: 'p1', slug: 'collab', name: 'Collab', membersAddSeats: false, mine: [] };
+  const project = { id: 'p1', slug: 'collab', name: 'Collab', membersMayAddSeats: false, mine: [] };
   const open = (projects, manage = false, ...tab) => page({ manage, view: { workspace: { id: 'ws', slug: 'team' }, seats, projects } }).open(...tab);
   // Switched off: the button is there, cannot be pressed, and says why.
   const off = await open([project]);
   assert.match(text(off), /Collab You have no seats in this project\. Your seats run on your own runner and your own allowance\. The project owner has not switched this on\. Add my seats to this project/);
   assert.match(off, /<button disabled="">Add my seats to this project<\/button>/);
   assert.doesNotMatch(off, /Remove my seats|Members may add/);
-  const on = await open([{ ...project, membersAddSeats: true }]);
+  const on = await open([{ ...project, membersMayAddSeats: true }]);
   assert.match(on, /<button>Add my seats to this project<\/button>/);
   assert.doesNotMatch(on, /not switched this on|Remove my seats/);
   // With a seat of some roles the missing ones can still be added, and what is there can be removed even while adding is off.
@@ -198,7 +198,7 @@ test('Seats tab: a member adds and removes their own seats per project, and who 
   assert.match(text(all), /Your seats in this project: developer, reviewer, security \. Remove my seats/);
   assert.doesNotMatch(all, /Add my seats|not switched this on/);
   // Who manages the workspace gets the switch per project, as it stands, and none of a member's buttons.
-  const managed = await open([{ ...project, membersAddSeats: true }, { ...project, id: 'p2', name: 'Other' }], true);
+  const managed = await open([{ ...project, membersMayAddSeats: true }, { ...project, id: 'p2', name: 'Other' }], true);
   assert.match(managed, /Collab<\/p><\/div><div[^>]*><input type="checkbox"[^>]*id="members-add-seats-p1"[^>]*checked=""[^>]*\/><label for="members-add-seats-p1">Members may add their own seats to this project<\/label>/);
   assert.doesNotMatch(managed.match(/<input[^>]*id="members-add-seats-p2"[^>]*>/)[0], /checked/);
   assert.doesNotMatch(managed, /Add my seats|Remove my seats|You have no seats/);

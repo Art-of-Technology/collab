@@ -61,7 +61,7 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
   // The projects that use seats, each with its owner's switch and the roles the person already has a seat of there.
   const projects = await prisma.project.findMany({
     where: { workspaceId: workspace.id, agentMode: 'seats', OR: [{ isArchived: null }, { isArchived: false }] }, orderBy: { name: 'asc' },
-    select: { id: true, slug: true, name: true, membersAddSeats: true,
+    select: { id: true, slug: true, name: true, membersMayAddSeats: true,
       agentSeats: { where: { ownerId: userId, retiredAt: null, role: { in: [...MEMBER_ROLES] } }, orderBy: { role: 'asc' }, select: { role: true } } },
   });
   return {

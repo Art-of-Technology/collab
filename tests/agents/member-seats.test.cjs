@@ -61,7 +61,7 @@ test('a member adds their own seats to a project, once its owner has switched th
   };
   const add = (as, projectId = P, extra = {}) => call(as, mine.POST, {}, { body: { projectId, ...extra } });
   const remove = (as, projectId = P) => call(as, mine.DELETE, {}, { query: `?projectId=${projectId}` });
-  const allow = (as, membersAddSeats) => call(as, mode.PATCH, { projectSlug: 'clb' }, { body: { membersAddSeats } });
+  const allow = (as, membersMayAddSeats) => call(as, mode.PATCH, { projectSlug: 'clb' }, { body: { membersMayAddSeats } });
   const rows = (where = {}) => prisma.agentSeat.findMany({ where: { projectId: P, retiredAt: null, ...where }, orderBy: [{ role: 'asc' }, { name: 'asc' }],
     select: { name: true, role: true, ownerId: true, byRunner: true, isDefault: true } });
   const names = async where => (await rows(where)).map(seat => seat.name);
@@ -75,7 +75,7 @@ test('a member adds their own seats to a project, once its owner has switched th
   const accounts = await prisma.user.count();
 
   await t.test('the switch is off for every project, and while it is off nothing is made', async () => {
-    assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: P } })).membersAddSeats, false);
+    assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: P } })).membersMayAddSeats, false);
     const [status, body] = await add(deniz);
     assert.deepEqual([status, body.code, body.error], [403, 'members_add_off', 'The project owner has not switched this on.']);
     assert.deepEqual(await rows(), before);
@@ -84,9 +84,9 @@ test('a member adds their own seats to a project, once its owner has switched th
 
   await t.test('only someone who manages the workspace changes the switch', async () => {
     assert.equal((await allow(deniz, true))[0], 403);
-    assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: P } })).membersAddSeats, false);
+    assert.equal((await prisma.project.findUniqueOrThrow({ where: { id: P } })).membersMayAddSeats, false);
     const [status, body] = await allow(owner, true);
-    assert.deepEqual([status, body.membersAddSeats, body.mode], [200, true, 'seats']);
+    assert.deepEqual([status, body.membersMayAddSeats, body.mode], [200, true, 'seats']);
     assert.equal(await prisma.appAuditLog.count({ where: { actorId: owner, action: 'project.members_add_seats' } }), 1);
     // Saying the same again is no change, and is not logged as one.
     await allow(owner, true);
@@ -138,7 +138,7 @@ test('a member adds their own seats to a project, once its owner has switched th
 
   await t.test('someone outside the workspace, and an archived project, get nothing', async () => {
     assert.deepEqual((await add(stranger)).map(part => part.code ?? part), [404, 'project_not_found']);
-    await prisma.project.update({ where: { id: OLD }, data: { membersAddSeats: true } });
+    await prisma.project.update({ where: { id: OLD }, data: { membersMayAddSeats: true } });
     assert.deepEqual((await add(deniz, OLD)).map(part => part.code ?? part), [409, 'project_archived']);
     assert.equal(await prisma.agentSeat.count({ where: { OR: [{ ownerId: stranger }, { projectId: OLD }] } }), 0);
   });
@@ -180,7 +180,7 @@ test('a member adds their own seats to a project, once its owner has switched th
     // Bob's seats are retired, so the other Bob now meets a name that was someone else's: still refused.
     assert.equal((await add(bobToo))[1].code, 'name_taken');
 
-    assert.deepEqual((await allow(owner, false))[1].membersAddSeats, false);
+    assert.deepEqual((await allow(owner, false))[1].membersMayAddSeats, false);
     assert.equal((await add(bob))[1].code, 'members_add_off');
     assert.deepEqual(await names({ ownerId: deniz }), ['Collab Developer (Deniz)', 'Collab Reviewer (Deniz)', 'Collab Security (Deniz)'], 'the seats already added stay');
     assert.equal((await remove(deniz))[1].removed.length, 3);

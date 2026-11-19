@@ -74,12 +74,12 @@ test('the Agents page reads the seats a person may see, what each works on and w
     // Who pays for the seat: the owner's own sign-in, or nobody's when the seat has no owner.
     assert.deepEqual(view.seats.map(row => row.owner), [null, null]);
     // The projects that use seats, each with its owner's switch and the roles this person has a seat of there.
-    assert.deepEqual(plain(view.projects), [{ id: A, slug: A, name: 'Alpha', membersAddSeats: false, mine: [] }]);
+    assert.deepEqual(plain(view.projects), [{ id: A, slug: A, name: 'Alpha', membersMayAddSeats: false, mine: [] }]);
     await raw.agentSeat.update({ where: { id: 'dev-a' }, data: { ownerId: member } });
-    await raw.project.update({ where: { id: A }, data: { membersAddSeats: true } });
+    await raw.project.update({ where: { id: A }, data: { membersMayAddSeats: true } });
     assert.deepEqual((await page.readSeats(member, 'team')).seats.map(row => row.owner), [member, null]);
-    assert.deepEqual(plain((await page.readSeats(member, 'team')).projects), [{ id: A, slug: A, name: 'Alpha', membersAddSeats: true, mine: ['developer'] }]);
-    assert.deepEqual(plain((await page.readSeats(owner, 'w')).projects), [{ id: A, slug: A, name: 'Alpha', membersAddSeats: true, mine: [] }]);
+    assert.deepEqual(plain((await page.readSeats(member, 'team')).projects), [{ id: A, slug: A, name: 'Alpha', membersMayAddSeats: true, mine: ['developer'] }]);
+    assert.deepEqual(plain((await page.readSeats(owner, 'w')).projects), [{ id: A, slug: A, name: 'Alpha', membersMayAddSeats: true, mine: [] }]);
     // A seat a runner runs has no runner until one holds a usable token for it; a seat run by hand never says so.
     const states = async () => (await page.readSeats(member, 'team')).seats.map(row => [row.noRunner, row.tokenExpired]);
     assert.deepEqual(await states(), [[false, false], [false, false]]);

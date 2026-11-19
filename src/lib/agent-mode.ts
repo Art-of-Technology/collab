@@ -20,7 +20,7 @@ export const agentModeSchema = z.object({
   /** Issues from `claims` to assign to the project's default developer seat. */
   carryOver: z.array(id).optional(),
   /** The owner's switch: members may add their own developer, reviewer and security seat to this project. */
-  membersAddSeats: z.boolean().optional(),
+  membersMayAddSeats: z.boolean().optional(),
 }).strict();
 
 /**
@@ -30,7 +30,7 @@ export const agentModeSchema = z.object({
  * this project.
  */
 export async function agentModeState(db: DB, projectId: string) {
-  const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, select: { workspaceId: true, agentMode: true, agentSwitchedAt: true, membersAddSeats: true,
+  const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, select: { workspaceId: true, agentMode: true, agentSwitchedAt: true, membersMayAddSeats: true,
     statuses: { where: { isActive: true }, orderBy: { order: 'asc' }, select: { id: true, displayName: true, category: true, isFinal: true } } } });
   const claimed = await db.agentHandoff.findMany({
     where: { workspaceId: project.workspaceId, status: 'claimed', updatedAt: { gte: new Date(Date.now() - CARRY_DAYS * 86_400_000) },
@@ -47,7 +47,7 @@ export async function agentModeState(db: DB, projectId: string) {
   const retire = await db.agentRegistration.findMany({ where: { workspaceId: project.workspaceId,
     claimed: { some: { status: 'claimed' }, every: { OR: [{ status: { not: 'claimed' } }, { issue: { projectId } }] } } }, orderBy: { name: 'asc' }, select: { name: true } });
   return {
-    mode: project.agentMode, switchedAt: project.agentSwitchedAt, membersAddSeats: project.membersAddSeats,
+    mode: project.agentMode, switchedAt: project.agentSwitchedAt, membersMayAddSeats: project.membersMayAddSeats,
     // A status nobody grouped counts as the runs read it: done when it is final, else to do.
     statuses: project.statuses.map(status => ({ id: status.id, name: status.displayName, category: status.category ?? (status.isFinal ? 'done' : 'todo') })),
     claims, carryTo: seat, retire: retire.map(agent => agent.name),
@@ -66,12 +66,12 @@ export async function setAgentMode(input: { workspaceId: string; projectId: stri
   return prisma.$transaction(async tx => {
     // The lock that creating and retiring a seat take, so two switches, or a switch and a seat change, go one at a time.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${projectId}`}))`;
-    const project = await tx.project.findFirst({ where: { id: projectId, workspaceId }, select: { agentMode: true, membersAddSeats: true } });
+    const project = await tx.project.findFirst({ where: { id: projectId, workspaceId }, select: { agentMode: true, membersMayAddSeats: true } });
     if (!project) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
-    if (input.membersAddSeats !== undefined && input.membersAddSeats !== project.membersAddSeats) {
+    if (input.membersMayAddSeats !== undefined && input.membersMayAddSeats !== project.membersMayAddSeats) {
       // Switching off stops new seats only: the seats members already added stay until someone retires them.
-      await tx.project.update({ where: { id: projectId }, data: { membersAddSeats: input.membersAddSeats } });
-      await tx.appAuditLog.create({ data: { workspaceId, actorId, action: 'project.members_add_seats', details: { projectId, to: input.membersAddSeats } } });
+      await tx.project.update({ where: { id: projectId }, data: { membersMayAddSeats: input.membersMayAddSeats } });
+      await tx.appAuditLog.create({ data: { workspaceId, actorId, action: 'project.members_add_seats', details: { projectId, to: input.membersMayAddSeats } } });
     }
     for (const [statusId, category] of Object.entries(input.categories ?? {})) {
       const changed = await tx.projectStatus.updateMany({ where: { id: statusId, projectId }, data: { category } });

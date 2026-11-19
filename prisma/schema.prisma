@@ -505,7 +505,7 @@ model Project {
   agentMode        String   @default("handoffs") // handoffs | seats
   agentDefaultRepositoryId String? // Active Repository or GitConnection id, validated within this project
   agentSwitchedAt  DateTime?
-  membersAddSeats  Boolean  @default(false) // the owner's switch: a member may add their own developer, reviewer and security seat
+  membersMayAddSeats Boolean @default(false)
   agentSeats       AgentSeat[]
 
   // Relationships
