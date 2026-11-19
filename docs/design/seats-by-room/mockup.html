@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en" data-lavish-annotate="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seats by headroom</title>
+<style>
+/* Collab's own tokens (src/app/globals.css, dark theme). */
+:root{--bg:#101011;--bg-deep:#070708;--card:#171719;--hover:#1f1f22;--dim:#9c9ca1;--ink:#fafafa;
+  --accent:#3b82f6;--accent-soft:rgba(59,130,246,.16);--ok:#34d399;--ok-soft:rgba(52,211,153,.14);--warn:#fbbf24;--warn-soft:rgba(251,191,36,.13);--bad:#f87171;
+  --glass:rgba(255,255,255,.03);--line:rgba(255,255,255,.09);--r:10px;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+h1,h2,h3,p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px 80px}
+.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.top .in{max-width:1180px;margin:0 auto;padding:12px 20px 10px}
+.top h1{font-size:17px;font-weight:600}.top .note{font-size:13px;color:var(--dim)}
+.nav{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.nav button{background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;color:var(--dim)}
+.nav button[aria-selected="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.nav .n{opacity:.6;margin-right:5px}
+.screen[hidden]{display:none}
+.lead{padding:26px 0 14px}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.lead h2{font-size:26px;font-weight:600;margin:2px 0 4px}.lead .sub{color:var(--dim);max-width:70ch}
+.terms{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.term{border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:13px;background:var(--glass)}.term span{color:var(--dim)}
+.optbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 6px}
+.optbar .lbl{font-size:13px;color:var(--dim)}
+.optbar button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px 12px;font-size:14px}
+.optbar button[aria-selected="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.rec{font-size:11px;background:var(--ok-soft);color:var(--ok);border-radius:999px;padding:1px 8px;margin-left:6px;white-space:nowrap}
+.why{font-size:14px;color:var(--dim);margin-bottom:12px}.why b{color:var(--ok)}
+.frame{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
+.fbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-deep);border-bottom:1px solid var(--line);font-size:12px;color:var(--dim)}
+.fbar i{width:9px;height:9px;border-radius:50%;background:var(--hover);display:inline-block}
+.fbar .url{margin-left:8px;background:var(--card);border-radius:6px;padding:2px 10px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app{display:grid;grid-template-columns:150px minmax(0,1fr);min-height:360px}
+.side{background:var(--bg-deep);border-right:1px solid var(--line);padding:12px 8px;font-size:13px}
+.side .it{padding:6px 8px;border-radius:7px;color:var(--dim)}.side .it.on{background:var(--hover);color:var(--ink)}
+.main{padding:16px;min-width:0;font-size:14px}.main h3{font-size:16px;font-weight:600}
+.muted{color:var(--dim)}.small{font-size:13px}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 12px;font-size:13px}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}.btn.ghost{background:transparent}.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{display:inline-block;font-size:11px;border-radius:999px;padding:1px 8px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.chip.ok{color:var(--ok);border-color:var(--ok-soft);background:var(--ok-soft)}.chip.warn{color:var(--warn);border-color:var(--warn-soft);background:var(--warn-soft)}
+.card{border:1px solid var(--line);background:var(--card);border-radius:var(--r);padding:12px;min-width:0}
+.banner{border-radius:8px;padding:8px 12px;font-size:13px;margin:8px 0;background:var(--accent-soft)}
+.banner.warn{background:var(--warn-soft)}
+input[type=text],select,textarea{background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:14px;width:100%;max-width:100%}
+.f{display:grid;gap:4px;font-size:13px;color:var(--dim);margin-bottom:10px}
+.seg{display:inline-flex;justify-self:start;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{background:transparent;border:0;padding:7px 14px;font-size:13px;color:var(--dim)}.seg button[aria-checked="true"]{background:var(--accent);color:#fff}
+.fig{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px}.fig svg{width:100%;height:auto;display:block}
+.fig text{font-size:13px;fill:var(--ink)}.fig text.s{fill:var(--dim);font-size:12px}.fig .box{fill:var(--bg);stroke:var(--line)}.fig .edge line{stroke:var(--dim);stroke-width:1.5}.fig .edge polygon{fill:var(--dim)}.fig .edge text{fill:var(--dim);font-size:12px}
+.fig .on .box{stroke:var(--accent);fill:var(--accent-soft);stroke-width:2}.fig .edge.on line{stroke:var(--accent);stroke-width:2.5}.fig .edge.on polygon{fill:var(--accent)}.fig .edge.on text{fill:var(--ink)}
+.fig .dimmed{opacity:.45}
+.stepper{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;margin-top:12px}.stepper .txt{font-size:16px}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.lrow{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);padding:9px 8px;font-size:13px}
+.lrow.sel{background:var(--accent-soft)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.err{color:var(--bad);font-size:13px}
+.pick{margin-top:18px;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--card)}
+.pick h3{font-size:15px;margin-bottom:8px}.pick label.o{display:flex;gap:8px;padding:5px 0;font-size:14px}.pick .st{font-size:13px;color:var(--ok);margin-left:8px}
+.next{display:flex;justify-content:flex-end;margin-top:18px}
+table.props,table.t{width:100%;border-collapse:collapse;font-size:14px}table.props td{border-top:1px solid var(--line);padding:9px 8px;vertical-align:top}
+table.t th{text-align:left;font-weight:500;color:var(--dim);font-size:12px;padding:6px 8px}table.t td{border-top:1px solid var(--line);padding:8px;vertical-align:middle}table.t td:first-child{white-space:nowrap}
+.tw{overflow-x:auto}
+/* headroom bar */
+.hr{display:flex;align-items:center;gap:8px;min-width:0}
+.bar{flex:0 0 90px;height:8px;border-radius:999px;background:var(--hover);overflow:hidden}.bar i{display:block;height:100%;border-radius:999px;background:var(--ok)}
+.bar.warn i{background:var(--warn)}.bar.bad i{background:var(--bad)}
+.hr .v{font-size:13px;white-space:nowrap}.hr .w{font-size:12px;color:var(--dim)}
+.try{border:1px dashed var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;background:var(--glass)}
+.try .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 16px;margin-top:6px}
+.try label{display:grid;gap:2px;font-size:12px;color:var(--dim)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--hover);font-size:11px;flex:0 0 auto}
+.note{font-size:13px;border-left:2px solid var(--accent);padding:4px 10px;margin-top:10px;color:var(--ink);background:var(--glass)}
+@media (max-width:860px){.app,.split,.stepper{grid-template-columns:minmax(0,1fr)}.side{display:none}}
+</style>
+</head>
+<body>
+<header class="top"><div class="in">
+  <h1>Seats by headroom: click-through mockup</h1>
+  <p class="note" style="border:0;background:none;padding:0;margin:0;color:var(--dim)">Sample data. Nothing here is saved or sent anywhere. Click everything; pick an option where one is offered; then press <b>Send to Agent</b>.</p>
+  <div class="nav" role="tablist" id="nav"></div>
+</div></header>
+<div class="wrap" id="screens"></div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const SCREENS=[
+ {id:'how',part:'Overview',title:'How it works',sub:'Two people, two runners, one project. Work goes to the seat that still has allowance.',
+  terms:[['Seat','one project and one role, owned by one person'],['Runner','the machine that works a person\'s seats on that person\'s Claude and ChatGPT logins'],['Room','how much allowance a seat has left before its runner stops taking work']]},
+ {id:'agents',part:'Part 1 · Setup',title:'Agents page',sub:'Every seat shows its owner and how much room it has. A member adds their own seats with one press.',
+  terms:[['Room','percent left before the runner holds back'],['Next run on','the program this seat would use now']],
+  opts:[['A','Grouped by person'],['B','Grouped by role']],rec:'A',why:'All seats of one person share one runner and one allowance, so one bar per person reads at a glance. B repeats the same bar on every seat, but shows who can take a review next.',
+  side:'Agents',url:'collab.weez.boo/weezboo/projects/collab/agents',ask:'How should the Agents page group seats?'},
+ {id:'lead',part:'Part 2 · Placing work',title:'The lead\'s turn',sub:'The lead stays the only assigner. Collab hands it the developer seats, most room first.',
+  terms:[['Ready story','a story whose dependencies are done'],['Tie','equal room: the person with the fewest open runs wins']],side:'Issues',url:'collab.weez.boo/weezboo/issues/CLB-800'},
+ {id:'req',part:'Part 2 · Placing work',title:'Requests',sub:'A review or security request has no lead in its path, so Collab places it by room.',
+  terms:[['Default seat','today\'s single target of a role; now the tie-break and the fallback'],['Unknown','no number newer than 15 minutes']],side:'Issues',url:'collab.weez.boo/weezboo/issues/CLB-801'},
+ {id:'run',part:'Part 3 · Seeing it',title:'Whose allowance',sub:'Each run says whose runner worked it and on which program.',
+  opts:[['A','On the issue, beside each run'],['B','A column in the project\'s Runs list']],rec:'A',why:'The question "why did Bob get this?" is asked on the issue. B is better for adding up a week, and could come later as well.',
+  side:'Issues',url:'collab.weez.boo/weezboo/issues/CLB-801',ask:'Where should a run show whose allowance it used?'},
+ {id:'full',part:'Part 4 · When a runner is full',title:'Work that waits',sub:'Work that has not started moves to another person. Work that has started stays where it is.',
+  terms:[['Started','a run exists, so there is a branch and a working copy on that seat']],side:'Agents',url:'collab.weez.boo/weezboo/projects/collab/agents'},
+ {id:'open',part:'Before anything is filed',title:'Open points',sub:'Things I assumed that you have not ruled on. Say OK or what to change, then send.',once:true}
+];
+const MENU=['Issues','Board','Agents','Runs','Settings'];
+const S={scr:0,lay:Object.fromEntries(SCREENS.filter(d=>d.opts).map(d=>[d.id,d.rec]))};
+
+/* ---------- shell ---------- */
+function shell(){
+  $('#nav').innerHTML=SCREENS.map((d,i)=>`<button role="tab" data-act="go" data-i="${i}" aria-selected="${i===S.scr}"><span class="n">${i+1}</span>${d.title}</button>`).join('');
+  $('#screens').innerHTML=SCREENS.map((d,i)=>`<section class="screen" id="scr-${d.id}" ${i===S.scr?'':'hidden'}>
+    <div class="lead"><p class="kicker">${d.part} · screen ${i+1} of ${SCREENS.length}</p><h2>${d.title}</h2><p class="sub">${d.sub}</p>
+      ${d.terms?`<div class="terms">${d.terms.map(t=>`<span class="term"><b>${t[0]}</b> <span>= ${t[1]}</span></span>`).join('')}</div>`:''}</div>
+    <div data-opt="${d.id}"></div><div data-dyn="${d.id}"></div>${d.opts?pickForm(d):''}
+    <div class="next">${i<SCREENS.length-1?`<button class="btn pri" data-act="go" data-i="${i+1}">Next: ${SCREENS[i+1].title} →</button>`:''}</div></section>`).join('');
+}
+function pickForm(d){return `<form class="pick" data-lavish-question="layout-${d.id}" data-pick="${d.id}"><h3>Your pick: ${d.ask}</h3>
+  ${d.opts.map(o=>`<label class="o"><input type="radio" name="pick-${d.id}" value="${o[0]}: ${esc(o[1])}"> <span><b>${o[0]}</b> ${o[1]}${o[0]===d.rec?'<span class="rec">my pick</span>':''}</span></label>`).join('')}
+  <label class="f" style="margin-top:8px">Anything to change on this screen? (optional)<input type="text" name="note"></label>
+  <div class="row"><button class="btn pri" type="submit">Queue this answer</button><span class="st" role="status" data-st="${d.id}"></span></div></form>`}
+function frame(d,inner){return `<div class="frame"><div class="fbar"><i></i><i></i><i></i><span class="url">${d.url}</span></div><div class="app"><nav class="side" aria-label="App menu (mock)">${MENU.map(n=>`<div class="it ${n===d.side?'on':''}">${n}</div>`).join('')}</nav><div class="main">${inner}</div></div></div>`}
+function render(){const d=SCREENS[S.scr];
+  document.querySelectorAll('.screen').forEach((el,i)=>el.hidden=i!==S.scr);
+  document.querySelectorAll('#nav button').forEach((b,i)=>b.setAttribute('aria-selected',i===S.scr));
+  $(`[data-opt="${d.id}"]`).innerHTML=d.opts?`<div class="optbar" role="tablist" aria-label="Layout options"><span class="lbl">Layout:</span>${d.opts.map(x=>`<button role="tab" data-act="lay" data-k="${d.id}" data-v="${x[0]}" aria-selected="${S.lay[d.id]===x[0]}"><b>${x[0]}</b> ${x[1]}${x[0]===d.rec?'<span class="rec">my pick</span>':''}</button>`).join('')}</div><p class="why"><b>Why ${d.rec}:</b> ${d.why}</p>`:'';
+  const dyn=$(`[data-dyn="${d.id}"]`);
+  if(!d.once||!dyn.innerHTML)dyn.innerHTML=R[d.id](d);
+  if(AFTER[d.id])AFTER[d.id]();
+}
+const R={},ACT={},AFTER={},CHG={};
+ACT.go=b=>{S.scr=+b.dataset.i;render();window.scrollTo(0,0)};
+ACT.lay=b=>{S.lay[b.dataset.k]=b.dataset.v;render()};
+
+/* ---------- shared sample state: people, runners, seats ---------- */
+const STATE={on:'',offline:'runner offline',paused:'runner paused',disk:'runner disk full',none:'no runner connected'};
+const P={cem:{name:'Cem',room:6,next:'Codex',state:'on',open:3,runner:"Cem's space"},
+         bob:{name:'Bob',room:60,next:'Claude Code',state:'on',open:0,runner:"Bob's space"},
+         deniz:{name:'Deniz',room:85,next:'Claude Code',state:'none',open:0,runner:"Deniz's Mac"}};
+const G={fresh:true,viewer:'cem',membersMayAdd:true};
+let SEATS=[
+ {id:'lead',name:'Collab Lead',role:'lead',owner:'cem'},
+ {id:'d1',name:'Collab Developer',role:'developer',owner:'cem',def:true},
+ {id:'d2',name:'Collab Developer 2',role:'developer',owner:'cem'},
+ {id:'r1',name:'Collab Reviewer',role:'reviewer',owner:'cem',def:true},
+ {id:'s1',name:'Collab Security',role:'security',owner:'cem',def:true},
+ {id:'d3',name:'Collab Developer (Bob)',role:'developer',owner:'bob'},
+ {id:'r2',name:'Collab Reviewer (Bob)',role:'reviewer',owner:'bob'},
+ {id:'s2',name:'Collab Security (Bob)',role:'security',owner:'bob'}];
+const ROLES=['lead','developer','reviewer','security'];
+/* The one figure of a seat: null = unknown, 0 = cannot start now. */
+function eff(owner){const p=P[owner];
+  if(p.state==='none')return{v:null,why:STATE.none};
+  if(p.state!=='on')return{v:0,why:STATE[p.state]};
+  if(!G.fresh)return{v:null,why:'no number newer than 15 minutes'};
+  if(p.room<=0)return{v:0,why:'allowance used up'};
+  return{v:p.room,why:'next run on '+p.next}}
+const key=s=>{const e=eff(s.owner);return e.v===null?-0.5:e.v===0?-1:e.v};
+const rank=role=>SEATS.filter(s=>s.role===role).sort((a,b)=>key(b)-key(a)||P[a.owner].open-P[b.owner].open||(b.def?1:0)-(a.def?1:0));
+function bar(owner){const e=eff(owner);
+  if(e.v===null)return `<span class="hr"><span class="chip">unknown</span><span class="w">${e.why}</span></span>`;
+  const cls=e.v>=30?'':e.v>=10?'warn':'bad';
+  return `<span class="hr" role="img" aria-label="${e.v} percent room, ${e.why}"><span class="bar ${cls}"><i style="width:${Math.round(e.v/90*100)}%"></i></span><span class="v">${e.v?e.v+'% room':'no room'}</span><span class="w">${e.why}</span></span>`}
+const roleChip=r=>`<span class="chip">${r}</span>`;
+
+/* ---------- screen 1: the system ---------- */
+const H={mode:'after',step:0};
+const STEPS=[
+ [['n-cem','n-bob','e-r1','e-r2'],'Each runner tells Collab how much room its seats have left.'],
+ [['n-collab','e-lead','n-lead'],'Collab hands the lead the developer seats, most room first.'],
+ [['n-lead','e-assign','n-bob'],'The lead gives the next story to Bob\'s seat: 60% room against 6%.'],
+ [['n-collab','e-req','n-bob'],'A review request goes the same way, placed by Collab itself.'],
+ [['n-cem','e-move','n-bob'],'Cem\'s runner is full: work it had not started moves to Bob. Started work waits.']];
+R.how=()=>{const today=H.mode==='today',st=STEPS[H.step];
+  const edge=(id,label,lx,ly,lines,tip)=>`<g id="${id}" class="edge"><title>${label}</title><text x="${lx}" y="${ly}" text-anchor="middle">${label}</text>${lines.map(l=>`<line x1="${l[0]}" y1="${l[1]}" x2="${l[2]}" y2="${l[3]}"/>`).join('')}<polygon points="${tip}"/></g>`;
+  return `<div class="row" style="margin-bottom:10px"><div class="seg" role="radiogroup" aria-label="Today or after"><button role="radio" data-act="h-mode" data-v="today" aria-checked="${today}">Today</button><button role="radio" data-act="h-mode" data-v="after" aria-checked="${!today}">After</button></div></div>
+  <div class="fig"><svg viewBox="0 0 920 320" role="img" aria-label="${today?'Today all work goes to one named seat':'After: work goes to the runner with the most room'}">
+    <g id="n-lead"><title>Lead seat</title><rect class="box" x="20" y="110" width="190" height="70" rx="10"/><text x="38" y="140">Lead seat</text><text class="s" x="38" y="160">the only assigner</text></g>
+    <g id="n-collab"><title>Collab</title><rect class="box" x="330" y="110" width="220" height="70" rx="10"/><text x="348" y="140">Collab</text><text class="s" x="348" y="160">${today?'a seat is picked by name':'orders seats by room'}</text></g>
+    <g id="n-cem"><title>Cem's runner</title><rect class="box" x="690" y="24" width="210" height="84" rx="10"/><text x="708" y="52">Cem's runner</text><text class="s" x="708" y="72">Developer, Reviewer, Security</text><text class="s" x="708" y="92">${today?'allowance used up':'room 6%'}</text></g>
+    <g id="n-bob" class="${today?'dimmed':''}"><title>Bob's runner</title><rect class="box" x="690" y="200" width="210" height="96" rx="10"/><text x="708" y="228">Bob's runner</text><text class="s" x="708" y="248">Developer, Reviewer, Security</text><text class="s" x="708" y="268">${today?'room 60%, gets nothing':'room 60%'}</text></g>
+    ${today
+     ?edge('e-t1','assigns by name',270,138,[[210,145,316,145]],'330,145 316,139 316,151')+edge('e-t2','all work',612,96,[[550,128,678,80]],'690,76 675,76 680,87')
+     :edge('e-r1','reports room',590,84,[[690,70,564,124]],'552,129 567,129 562,118')
+      +edge('e-r2','reports room',596,206,[[690,215,564,162]],'552,157 562,167 567,156')
+      +edge('e-lead','seats, most room first',270,98,[[330,135,224,135]],'210,135 224,129 224,141')
+      +edge('e-req','review request',575,238,[[480,180,480,245],[480,245,676,245]],'690,245 676,239 676,251')
+      +edge('e-assign','assigns the story',380,296,[[110,180,110,280],[110,280,676,280]],'690,280 676,274 676,286')
+      +edge('e-move','unstarted work moves',842,158,[[760,108,760,186]],'760,200 754,186 766,186')}
+  </svg></div>
+  ${today?'<div class="banner warn"><b>Today:</b> every story goes to a seat picked by name. When Cem\'s allowance is used up the work waits, although Bob\'s runner has room.</div>':`<div class="stepper"><p class="txt"><b>Step ${H.step+1} of ${STEPS.length}.</b> ${st[1]}</p><div class="row"><button class="btn" data-act="h-step" data-v="-1" ${H.step===0?'disabled':''}>← Back</button><button class="btn pri" data-act="h-step" data-v="1">${H.step===STEPS.length-1?'Start again':'Next step →'}</button></div></div>`}`};
+AFTER.how=()=>{if(H.mode==='after')STEPS[H.step][0].forEach(id=>document.getElementById(id).classList.add('on'))};
+ACT['h-mode']=b=>{H.mode=b.dataset.v;H.step=0;render()};
+ACT['h-step']=b=>{H.step=+b.dataset.v>0?(H.step+1)%STEPS.length:Math.max(0,H.step-1);render()};
+
+/* ---------- screen 2: Agents page ---------- */
+const mine=()=>SEATS.filter(s=>s.owner===G.viewer);
+function personCard(o){const p=P[o],seats=SEATS.filter(s=>s.owner===o);if(!seats.length)return'';
+  return `<div class="card"><div class="row" style="justify-content:space-between"><b>${p.name}</b><span class="muted small">${p.state==='none'?'no runner':p.runner}</span></div>
+   <div style="margin:8px 0">${bar(o)}</div>
+   <div class="row">${seats.map(s=>`<span class="chip" title="${esc(s.name)}">${s.role}${s.def?' · default':''}</span>`).join('')}</div>
+   ${o===G.viewer&&p.state==='none'?`<div class="row" style="margin-top:10px"><button class="btn pri" data-act="a-connect">Connect my runner (sample)</button></div>`:''}
+   ${o===G.viewer&&o!=='cem'?`<div class="row" style="margin-top:8px"><button class="btn ghost" data-act="a-remove">Remove my seats</button></div>`:''}</div>`}
+R.agents=d=>{const isOwner=G.viewer==='cem',has=mine().length>0;
+  const head=`<div class="row" style="justify-content:space-between;margin-bottom:10px"><h3>Agents · Collab Project</h3>
+    <div class="row"><span class="muted small">Viewing as</span><div class="seg" role="radiogroup" aria-label="Viewing as"><button role="radio" data-act="a-view" data-v="cem" aria-checked="${isOwner}">Cem (owner)</button><button role="radio" data-act="a-view" data-v="deniz" aria-checked="${!isOwner}">Deniz (member)</button></div></div></div>`;
+  const ownerRow=isOwner?`<label class="row small" style="margin-bottom:10px"><input type="checkbox" data-chg="mayadd" ${G.membersMayAdd?'checked':''}> Members may add their own seats to this project</label>`:'';
+  const add=!isOwner&&!has?`<div class="banner"><div class="row" style="justify-content:space-between"><span>You have no seats in this project. Your seats run on your own runner and your own allowance.</span><button class="btn pri" data-act="a-add" ${G.membersMayAdd?'':'disabled'}>Add my seats to this project</button></div>${G.membersMayAdd?'':'<p class="err" style="margin-top:6px">The project owner has not switched this on.</p>'}</div>`:'';
+  const body=S.lay.agents==='A'
+   ?`<div class="cards">${['cem','bob','deniz'].map(personCard).join('')}</div>`
+   :`<div class="tw"><table class="t"><thead><tr><th>Role</th><th>Seat</th><th>Owner</th><th>Room</th></tr></thead><tbody>${ROLES.map(r=>rank(r).map((s,i)=>`<tr><td>${i===0?roleChip(r):''}</td><td>${esc(s.name)}${s.def?' <span class="chip">default</span>':''}</td><td>${P[s.owner].name}</td><td>${bar(s.owner)}</td></tr>`).join('')).join('')}</tbody></table></div>`;
+  return frame(d,head+ownerRow+add+body+`<p class="muted small" style="margin-top:12px">Room is reported by each runner. Only the owner and the lead see other people's numbers; Deniz sees her own.</p>`)};
+ACT['a-view']=b=>{G.viewer=b.dataset.v;render()};
+ACT['a-add']=()=>{['developer','reviewer','security'].forEach((r,i)=>SEATS.push({id:'z'+i,name:`Collab ${r[0].toUpperCase()+r.slice(1)} (Deniz)`,role:r,owner:'deniz',sample:true}));render()};
+ACT['a-remove']=()=>{SEATS=SEATS.filter(s=>s.owner!==G.viewer);P[G.viewer].state='none';render()};
+ACT['a-connect']=()=>{P[G.viewer].state='on';render()};
+CHG.mayadd=el=>{G.membersMayAdd=el.checked;render()};
+
+/* ---------- shared "try it" controls ---------- */
+function tryBox(extra){return `<div class="try"><b class="small">Try it</b> <span class="muted small">Change the numbers and watch the order.</span><div class="g">
+  ${['cem','bob'].map(o=>`<label>${P[o].name}'s room: ${P[o].room}%<input type="range" min="0" max="90" step="5" value="${P[o].room}" data-chg="room" data-p="${o}" aria-label="${P[o].name}'s room"></label>`).join('')}
+  <label>Cem's runner<select data-chg="state" data-p="cem" aria-label="State of Cem's runner">${[['on','working'],['offline','offline'],['paused','paused'],['disk','disk full']].map(x=>`<option value="${x[0]}" ${P.cem.state===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select></label>
+  <label style="display:flex;gap:8px;align-items:center;align-self:end;color:var(--ink);font-size:13px"><input type="checkbox" data-chg="stale" ${G.fresh?'':'checked'}> Numbers are older than 15 minutes</label>
+  </div>${extra||''}</div>`}
+CHG.room=el=>{P[el.dataset.p].room=+el.value;render()};
+CHG.state=el=>{P[el.dataset.p].state=el.value;render()};
+CHG.stale=el=>{G.fresh=!el.checked;render()};
+
+/* ---------- screen 3: the lead ---------- */
+const T0=()=>({stories:[['CLB-801','Runner reports its room'],['CLB-802','Store and show room on the Agents page'],['CLB-803','Order seats for the lead'],['CLB-804','Place requests by room'],['CLB-805','Move work that has not started']].map(x=>({k:x[0],t:x[1],to:null})),held:{},note:''});
+let T=T0();
+function leadPick(){const devs=rank('developer');
+  for(const s of devs){if((T.held[s.id]||0)>=2)continue;const k=key(s);if(k===-1)continue;
+    const others=devs.filter(x=>x!==s&&(T.held[x.id]||0)<2&&key(x)===k&&x.owner!==s.owner);
+    return{s,why:k===-0.5?'room unknown, as today':others.length?`equal room (${k}%), ${P[s.owner].name} has fewer open runs`:`most room (${k}%)`}}
+  return null}
+R.lead=d=>{const devs=rank('developer'),next=T.stories.find(s=>!s.to);
+  return frame(d,tryBox()+`<div class="split">
+   <div class="card"><b>What the lead is given</b><p class="muted small" style="margin-bottom:6px">Developer seats, most room first. One seat holds at most two stories from the lead.</p>
+    ${devs.map((s,i)=>`<div class="lrow" style="cursor:default"><span class="num">${i+1}</span><span style="flex:1;min-width:0">${esc(s.name)}<br>${bar(s.owner)}</span><span class="chip">${T.held[s.id]||0} of 2 held</span></div>`).join('')}
+    <p class="muted small" style="margin-top:8px">Open runs right now: Cem ${P.cem.open}, Bob ${P.bob.open}.</p></div>
+   <div class="card"><div class="row" style="justify-content:space-between"><b>Epic CLB-800 · ready stories</b><span class="row"><button class="btn pri" data-act="t-assign" ${next?'':'disabled'}>Lead assigns the next story</button><button class="btn ghost" data-act="t-reset">Start again</button></span></div>
+    ${T.stories.map(s=>`<div class="lrow" style="cursor:default"><span class="muted">${s.k}</span><span style="flex:1;min-width:0">${esc(s.t)}</span>${s.to?`<span class="chip ok">${esc(s.to)}</span>`:'<span class="chip">not assigned</span>'}</div>`).join('')}
+    ${T.note?`<p class="note"><b>The lead's comment:</b> ${esc(T.note)}</p>`:''}</div></div>`)};
+ACT['t-assign']=()=>{const st=T.stories.find(s=>!s.to);if(!st)return;const p=leadPick();
+  if(!p){T.note=`${st.k} waits: no developer seat can start work now.`;render();return}
+  st.to=p.s.name;T.held[p.s.id]=(T.held[p.s.id]||0)+1;P[p.s.owner].open++;T.note=`${st.k} to ${p.s.name}: ${p.why}.`;render()};
+ACT['t-reset']=()=>{T=T0();P.cem.open=3;P.bob.open=0;render()};
+
+/* ---------- screen 4: requests ---------- */
+let Q=[];
+function placeReq(role){const r=rank(role),top=r[0],k=key(top),def=r.find(s=>s.def)||top;
+  if(k>0)return{s:top,why:r.length>1&&key(r[1])===k?`equal room (${k}%), fewer open runs`:`most room (${k}%)`};
+  if(r.some(s=>key(s)===-0.5))return{s:def,why:'no fresh number: the default seat, as today'};
+  return{s:def,why:'no seat can start now: it waits at the default seat'}}
+R.req=d=>{const list=r=>rank(r).map((s,i)=>`<div class="lrow" style="cursor:default"><span class="num">${i+1}</span><span style="flex:1;min-width:0">${esc(s.name)}${s.def?' <span class="chip">default</span>':''}<br>${bar(s.owner)}</span></div>`).join('');
+  return frame(d,tryBox()+`<div class="split">
+   <div class="card"><b>Reviewer seats</b>${list('reviewer')}<b style="display:block;margin-top:12px">Security seats</b>${list('security')}</div>
+   <div class="card"><b>CLB-801 · the developer asks</b><div class="row" style="margin:8px 0"><button class="btn pri" data-act="q-ask" data-v="reviewer">Ask for a review</button><button class="btn" data-act="q-ask" data-v="security">Ask for a security check</button><button class="btn ghost" data-act="q-reset">Clear</button></div>
+    ${Q.length?Q.map(q=>`<div class="lrow" style="cursor:default"><span class="muted">${q.k}</span><span style="flex:1;min-width:0">${q.what} for CLB-801<br><span class="muted small">Collab sent it to <b style="color:var(--ink)">${esc(q.to)}</b>: ${esc(q.why)}</span></span><span class="chip">sample</span></div>`).join(''):'<p class="muted small">No request yet. Press a button.</p>'}</div></div>`)};
+ACT['q-ask']=b=>{const role=b.dataset.v,p=placeReq(role);Q.push({k:'CLB-'+(820+Q.length),what:role==='reviewer'?'Review':'Security check',to:p.s.name,why:p.why});P[p.s.owner].open++;render()};
+ACT['q-reset']=()=>{Q=[];P.cem.open=3;P.bob.open=T.stories.filter(s=>s.to&&/Bob/.test(s.to)).length;render()};
+
+/* ---------- screen 5: a run shows whose allowance ---------- */
+const RUNS=[{id:1,k:'CLB-801',seat:'Collab Developer (Bob)',o:'bob',prog:'Claude Code',out:'in review',at:'14:02',min:38,done:'Runner reports room per seat with its heartbeat.'},
+ {id:2,k:'CLB-801',seat:'Collab Reviewer',o:'cem',prog:'Codex',out:'done',at:'14:51',min:9,done:'Review: approved, one note on naming.'},
+ {id:3,k:'CLB-801',seat:'Collab Developer (Bob)',o:'bob',prog:'Claude Code',out:'done',at:'15:20',min:12,done:'Merged after the review.'},
+ {id:4,k:'CLB-799',seat:'Collab Developer 2',o:'cem',prog:'Codex',out:'blocked',at:'13:10',min:21,done:'Waits for CLB-801.'}];
+const U={sel:null};
+const allow=r=>`<span class="chip ok">${P[r.o].name}'s allowance · ${r.prog}</span>`;
+const runDetail=()=>{const r=RUNS.find(x=>x.id===U.sel);return r?`<div class="card" style="margin-top:12px"><b>Run of ${esc(r.seat)} on ${r.k}</b> <span class="chip">sample</span><p class="muted small" style="margin-top:6px">Ran on ${P[r.o].runner} with ${r.prog}, ${r.min} minutes, counted against ${P[r.o].name}'s allowance.</p><p class="small" style="margin-top:6px"><b>## Done</b> ${esc(r.done)}</p></div>`:'<p class="muted small" style="margin-top:12px">Press a run to open it.</p>'};
+R.run=d=>frame(d,S.lay.run==='A'
+ ?`<h3>CLB-801 · Runner reports its room</h3><p class="muted small" style="margin:2px 0 10px">Timeline</p>${RUNS.filter(r=>r.k==='CLB-801').map(r=>`<button class="lrow ${U.sel===r.id?'sel':''}" data-act="u-sel" data-id="${r.id}"><span class="muted">${r.at}</span><span style="flex:1;min-width:0">${esc(r.seat)} finished <b>${r.out}</b> · ${r.min} min</span>${allow(r)}</button>`).join('')}${runDetail()}`
+ :`<h3>Runs · Collab Project</h3><div class="tw" style="margin-top:8px"><table class="t"><thead><tr><th>Time</th><th>Issue</th><th>Seat</th><th>Outcome</th><th>Minutes</th><th>Allowance</th></tr></thead><tbody>${RUNS.map(r=>`<tr><td>${r.at}</td><td>${r.k}</td><td><button class="btn ghost" data-act="u-sel" data-id="${r.id}">${esc(r.seat)}</button></td><td>${r.out}</td><td>${r.min}</td><td>${allow(r)}</td></tr>`).join('')}</tbody></table></div><p class="muted small" style="margin-top:8px">Today: Bob 50 minutes, Cem 30 minutes.</p>${runDetail()}`);
+ACT['u-sel']=b=>{U.sel=+b.dataset.id;render()};
+
+/* ---------- screen 6: a runner is full ---------- */
+const F={stage:0};
+const FSTEP=['Cem\'s runner reaches its cap','The lead takes its turn','Cem\'s allowance resets','Start again'];
+R.full=d=>{const st=F.stage,cem=st===1||st===2?0:st===3?80:6;
+  const fb=(v,why)=>`<span class="hr"><span class="bar ${v>=30?'':v>=10?'warn':'bad'}"><i style="width:${Math.round(v/90*100)}%"></i></span><span class="v">${v?v+'% room':'no room'}</span><span class="w">${why}</span></span>`;
+  const rows=[
+   ['CLB-811','Story · Headroom bar on the Agents page','no run started',
+     st===0?['Collab Developer','waits its turn','']:st===1?['Collab Developer','the lead is woken: its seat is full','warn']:['Collab Developer (Bob)','moved by the lead'+(st===3?'; it is not moved back':''),'ok']],
+   ['CLB-813','Review request for CLB-799','no run started',
+     st===0?['Collab Reviewer','waits its turn','']:['Collab Reviewer (Bob)','moved by Collab'+(st===3?'; it is not moved back':''),'ok']],
+   ['CLB-812','Story · Order seats for the lead','run started, branch seat/CLB-812',
+     st===0?['Collab Developer 2','in progress','']:st===3?['Collab Developer 2','resumes on the same seat','ok']:['Collab Developer 2','stays and waits for the reset at 19:00','warn']]];
+  return frame(d,`<div class="row" style="justify-content:space-between;margin-bottom:10px"><h3>Agents · Collab Project</h3><button class="btn pri" data-act="f-next">${FSTEP[st]}</button></div>
+   <div class="split" style="margin-bottom:12px"><div class="card"><b>Cem</b><div style="margin-top:6px">${fb(cem,cem?'next run on '+(st===3?'Claude Code':'Codex'):'allowance used up')}</div></div><div class="card"><b>Bob</b><div style="margin-top:6px">${fb(60,'next run on Claude Code')}</div></div></div>
+   <div class="tw"><table class="t"><thead><tr><th>Issue</th><th>What it is</th><th>Started?</th><th>Seat now</th><th>What happens</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="muted">${r[2]}</td><td>${esc(r[3][0])}</td><td><span class="chip ${r[3][2]}">${r[3][1]}</span></td></tr>`).join('')}</tbody></table></div>
+   ${st===2?'<p class="note"><b>The lead\'s comment on CLB-811:</b> moved from Collab Developer to Collab Developer (Bob): Cem\'s runner is at its cap and no run had started.</p>':''}
+   <p class="muted small" style="margin-top:10px">Step ${st+1} of 4. ${['Everything runs; Cem has little room left.','Cem\'s seats count as zero. Collab re-places the request by itself and wakes the lead for the story.','The lead reassigned the story that had not started. The started one keeps its branch and waits.','Cem\'s runner takes work again. Moved work stays with Bob.'][st]}</p>`)};
+ACT['f-next']=()=>{F.stage=(F.stage+1)%4;render()};
+
+/* ---------- last screen: open points ---------- */
+const PROPS=[
+ ['P1','Show room left, not percent used','The bar and the number say "60% room". stech\'s page says "96% used" today; Collab would show the opposite direction.'],
+ ['P2','Names of a member\'s seats','"Collab Developer (Bob)": project, role, then the owner\'s first name in brackets.'],
+ ['P3','"Add my seats" creates three seats','Developer, reviewer and security at once. The member can remove their own seats; the lead seat is never added this way.'],
+ ['P4','The owner\'s switch is off by default','"Members may add their own seats" starts off for every project and the owner turns it on.'],
+ ['P5','The lead explains a move','When the lead moves a story that had not started, it writes one comment saying from which seat and why.'],
+ ['P6','Wait 10 minutes before moving','Work that has not started moves only after its seat has had no room for 10 minutes, so a short blip moves nothing.'],
+ ['P7','Moved work is not moved back','When the first runner has room again, work that was moved stays where it went.'],
+ ['P8','Everyone in the project sees whose allowance a run used','The name and the program on a run are visible to all members. The percentages stay with the owner and the lead.'],
+ ['P9','Two epics','One in stech (the runner reports room) and one in Collab (store, show, lead order, requests, moving). Collab\'s first story works without stech: seats simply show "unknown".']];
+R.open=()=>`<form class="pick" style="margin-top:0" data-lavish-question="open-points" data-props="1"><table class="props">${PROPS.map(p=>`<tr><td><b>${p[0]}</b></td><td><b>${p[1]}</b><br><span class="muted">${p[2]}</span></td><td style="min-width:150px"><select name="${p[0]}" aria-label="${p[0]} decision"><option value="OK">OK as proposed</option><option value="Change">Change it</option></select><input type="text" name="${p[0]}-note" placeholder="What to change" aria-label="${p[0]} what to change" style="margin-top:6px"></td></tr>`).join('')}</table>
+  <div class="row" style="margin-top:12px"><button class="btn pri" type="submit">Queue these answers</button><span class="st" role="status" data-st="open"></span></div></form>
+  <div class="banner" style="margin-top:16px"><b>When you are done:</b> press <b>Send to Agent</b> in the Lavish bar. Nothing is filed or built before that.</div>`;
+
+/* ---------- events and sending answers back ---------- */
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||b.disabled)return;const fn=ACT[b.dataset.act];if(fn)fn(b)});
+document.addEventListener('change',e=>{const el=e.target.closest('[data-chg]');if(el&&CHG[el.dataset.chg])CHG[el.dataset.chg](el)});
+function queue(prompt,opts,st){const ok=!!(window.lavish&&window.lavish.queuePrompt);if(ok)window.lavish.queuePrompt(prompt,opts);st.textContent=ok?'Queued. Press “Send to Agent” when you are done.':'Selected. Open this page through Lavish to send it.'}
+document.addEventListener('submit',e=>{const f=e.target;e.preventDefault();
+  if(f.dataset.pick){const id=f.dataset.pick,d=SCREENS.find(s=>s.id===id),fd=new FormData(f),v=fd.get('pick-'+id),note=(fd.get('note')||'').trim(),st=$(`[data-st="${id}"]`);
+    if(!v&&!note){st.textContent='Pick an option first.';return}
+    queue(`${d.title}: ${v?'use layout '+v:'no layout picked'}${note?'. Change: '+note:''}`,{tag:'choice',text:`${d.title}: ${v||'note only'}`,element:f,queueKey:'layout-'+id,data:{screen:id,answer:v,note}},st)}
+  if(f.dataset.props){const fd=new FormData(f),items=PROPS.map(p=>({id:p[0],label:p[1],decision:fd.get(p[0]),note:(fd.get(p[0]+'-note')||'').trim()}));
+    queue('Open points: '+items.map(i=>`${i.id} ${i.decision}${i.note?' ('+i.note+')':''}`).join('; ')+'. Account for every one of them.',{tag:'tracked-batch',text:'Open points',element:f,queueKey:'open-points',data:{items}},$('[data-st="open"]'))}});
+shell();render();
+</script>
+</body>
+</html>
