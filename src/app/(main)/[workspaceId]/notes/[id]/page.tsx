@@ -18,9 +18,10 @@ export default async function NotePage({ params }: { params: Promise<{ workspace
     where: { AND: [{ id }, noteAccessWhere(user.id)] },
     select: { scope: true, authorId: true, projectId: true, folderId: true },
   });
-  // A personal or shared Note is in no level's list: it is in the reader's own list of them.
+  // A personal or shared Note is in no level's list: it is in the reader's own list of them. Someone
+  // else's personal Note is read because it was shared, so it is in the shared list.
   const view = note?.folderId ? null
-    : note?.scope === "PERSONAL" && note.authorId === user.id ? "personal"
+    : note?.scope === "PERSONAL" ? (note.authorId === user.id ? "personal" : "shared")
     : note?.scope === "SHARED" ? "shared" : null;
   const query = new URLSearchParams({
     ...(view && { view }),

@@ -120,6 +120,8 @@ interface UseNoteFormOptions {
   projectId?: string;
   mode: "create" | "edit";
   onSuccess?: (noteId: string) => void;
+  /** Told what an edit saved, each time one is saved: the page around the editor may list the Note. */
+  onSaved?: (saved: { title: string; type: string }) => void;
   defaultType?: NoteType;
   defaultScope?: NoteScope;
   // Template-related props
@@ -157,6 +159,7 @@ export function useNoteForm({
   projectId,
   mode,
   onSuccess,
+  onSaved,
   defaultType = NoteType.GENERAL,
   defaultScope = NoteScope.PERSONAL,
   initialTitle,
@@ -181,6 +184,9 @@ export function useNoteForm({
 
   // Refs for tracking
   const latestValuesRef = useRef<NoteFormValues | null>(null);
+  // Kept in a ref so that a new callback on each render does not restart the autosave timer.
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
   const pendingAutosaveRef = useRef<(() => void) | null>(null);
   const createdNoteIdRef = useRef<string | null>(noteId || null);
   const autosaveErrorToastShownRef = useRef(false);
@@ -393,6 +399,7 @@ export function useNoteForm({
         throw new Error(errorData.error || "Failed to save note");
       }
 
+      onSavedRef.current?.({ title: values.title, type: values.type });
       const serialized = serializeValues(values);
       setLastSavedValues(serialized);
       setLastSaved(new Date());

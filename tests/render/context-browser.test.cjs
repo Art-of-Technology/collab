@@ -38,7 +38,11 @@ const { ContextBrowser } = load('src/components/context/ContextBrowser.tsx', {
   },
   '@/components/ui/input-dialog': { InputDialog: ({ open, onConfirm }) => open ? h('button', { onClick: () => onConfirm('New folder') }, 'Confirm') : null },
   '@/components/context/ContextFilePreview': { ContextFilePreview: () => null },
-  '@/components/context/ContextNotePane': { ContextNotePane: ({ noteId, pinned, onClose, onDelete }) => h('div', null, h('button', { 'data-note-pane': noteId, 'data-pinned': String(pinned), onClick: onClose }, 'Close'), h('button', { onClick: onDelete }, 'Delete')) },
+  '@/components/context/ContextNotePane': { ContextNotePane: ({ noteId, pinned, onClose, onDelete, onPin, onSaved }) => h('div', null,
+    h('button', { 'data-note-pane': noteId, 'data-pinned': String(pinned), onClick: onClose }, 'Close'),
+    h('button', { onClick: onDelete }, 'Delete'),
+    h('button', { onClick: () => onPin(!pinned) }, pinned ? 'Unpin' : 'Pin'),
+    h('button', { onClick: () => onSaved({ title: 'Renamed', type: 'DECISION' }) }, 'Save as Renamed')) },
   '@/components/notes/TemplatePickerDialog': { TemplatePickerDialog: ({ open, onSelectTemplate, onStartBlank, onOpenChange }) => open ? h(React.Fragment, null, h('button', { onClick: () => onSelectTemplate({ id: 'decision' }, 'Use Postgres') }, 'Use template'), h('button', { onClick: () => { onStartBlank(); onOpenChange(false); } }, 'Start blank')) : null },
   '@/components/ui/select': {
     Select: ({ value, onValueChange, children }) => h('select', { 'aria-label': 'Note type', value, onChange: event => onValueChange(event.target.value) }, children),
@@ -208,10 +212,12 @@ test('a Note opened from a link is open on arrival, and a list is read as that l
 test('a Note from a template is filled in by the server and made where the page stands', async () => {
   routes = {
     'GET /api/context/folders': () => ({ folders }),
-    'GET /api/context/items': () => ({ notes: [], files: [] }),
+    // The list is read again once the Note is made, so it holds what the server then lists.
+    'GET /api/context/items': () => ({ notes: posted['POST /api/notes'] ? [note('adr', { title: 'ADR 7: Use Postgres', type: 'DECISION' })] : [], files: [] }),
     'POST /api/notes/templates/decision/use': () => ({ title: 'ADR 7: Use Postgres', content: '<p>Why</p>', defaultType: 'DECISION', templateId: null }),
     'POST /api/notes': () => ({ id: 'adr', type: 'DECISION', updatedAt: '2026-11-17T09:00:00Z' }),
   };
+  delete posted['POST /api/notes'];
   await React.act(async () => root.render(h(ContextBrowser, {
     workspaceId: 'w', workspaceSlug: 'weezboo', projects: [], initialFolderId: 'ideas',
   })));
@@ -242,11 +248,12 @@ test('starting blank from the template picker opens the new note dialog', async 
   await React.act(async () => root.render(null));
 });
 
-test('late note writes do not replace a later selection', async () => {
+test('a late note write changes the list it belongs to and leaves a later choice open', async () => {
   let finishCreate, finishDelete;
+  let rows = [note('First'), note('Second')];
   routes = {
     'GET /api/context/folders': () => ({ folders }),
-    'GET /api/context/items': () => ({ notes: [note('First'), note('Second')], files: [] }),
+    'GET /api/context/items': () => ({ notes: rows, files: [] }),
     'POST /api/notes': () => new Promise(resolve => { finishCreate = resolve; }),
     'DELETE /api/notes/First': () => new Promise(resolve => { finishDelete = resolve; }),
   };
@@ -256,30 +263,58 @@ test('late note writes do not replace a later selection', async () => {
   await click('Delete');
   await click('Second');
   await React.act(async () => { finishDelete({ ok: true }); });
+  // The deleted Note leaves the list, and the Note chosen meanwhile stays open.
   assert.equal(document.querySelector('[data-note-pane]').dataset.notePane, 'Second');
+  assert.ok(!list().some(row => row.startsWith('First')));
+  await click('Close');
   await React.act(async () => { [...document.querySelectorAll('[data-menu]')].find(row => row.textContent === 'Note').click(); });
   await click('Confirm');
-  await click('First');
-  await React.act(async () => { finishCreate({ id: 'created', type: 'GENERAL', updatedAt: '' }); });
-  assert.equal(document.querySelector('[data-note-pane]').dataset.notePane, 'First');
+  await click('Second');
+  rows = [note('Made'), note('Second')];
+  await React.act(async () => { finishCreate({ id: 'Made', type: 'GENERAL', updatedAt: '' }); });
+  await settle();
+  // The new Note is listed where the server lists it, and does not take the place of what was chosen.
+  assert.equal(document.querySelector('[data-note-pane]').dataset.notePane, 'Second');
+  assert.deepEqual(list().map(row => row.replace(/Note.*/, '')), ['IdeasFolder', 'SpecsFolder', 'Made', 'Second']);
   await React.act(async () => root.render(null));
 });
 
 test('a vanished note type does not hide the remaining notes', async () => {
-  let rows = [note('First'), note('Second', { type: 'DECISION' })];
   routes = {
     'GET /api/context/folders': () => ({ folders }),
-    'GET /api/context/items': () => ({ notes: rows, files: [] }),
+    'GET /api/context/items': () => ({ notes: [note('First'), note('Second', { type: 'DECISION' })], files: [] }),
+    'DELETE /api/notes/Second': () => ({ ok: true }),
   };
   await React.act(async () => root.render(h(ContextBrowser, { workspaceId: 'w', workspaceSlug: 'weezboo', projects: [] })));
   await settle();
   const kind = document.querySelector('select[aria-label="Note type"]');
   await React.act(async () => { kind.value = 'DECISION'; kind.dispatchEvent(new dom.window.Event('change', { bubbles: true })); });
   await click('Second');
-  rows = [note('First')];
-  await click('Close');
+  await click('Delete');
   await settle();
   assert.equal(document.querySelector('select[aria-label="Note type"]'), null);
   assert.ok(list().some(row => row.startsWith('First')));
+  await React.act(async () => root.render(null));
+});
+
+test('what the editor saves is what the list says, and an unpinned Note leaves the pinned list', async () => {
+  let reads = 0;
+  routes = {
+    'GET /api/context/folders': () => ({ folders }),
+    'GET /api/context/items': () => { reads++; return { notes: [note('Plan', { isPinned: true }), note('Other', { isPinned: true })], files: [] }; },
+    'POST /api/notes/Plan/pin': () => ({ success: true, isPinned: false }),
+  };
+  await React.act(async () => root.render(h(ContextBrowser, { workspaceId: 'w', workspaceSlug: 'weezboo', projects: [], initialView: 'pinned' })));
+  await settle();
+  await click('Plan');
+  // A save renames the row at once: the list is not read again for it, on Close either.
+  await click('Save as Renamed');
+  assert.ok(list().includes('RenamedNote · decision · pinned'));
+  await click('Unpin');
+  await settle();
+  assert.deepEqual(list(), ['OtherNote · general · pinned']);
+  await click('Close');
+  await settle();
+  assert.equal(reads, 1);
   await React.act(async () => root.render(null));
 });

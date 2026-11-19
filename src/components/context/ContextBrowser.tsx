@@ -245,7 +245,7 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   });
 
   // A Note is created where the page is standing and then opened beside the list, in its editor.
-  const postNote = async (fields: { title: string; content?: string; type?: string; templateId?: string | null }, location: number) => {
+  const postNote = async (fields: { title: string; content?: string; type?: string; templateId?: string | null }, at: { location: number; place: number }) => {
     const created = await readJson(await fetch('/api/notes', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -255,52 +255,63 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
       }),
     }));
     setAsking(null);
-    // Another place may have been opened while the Note was made: its list is not this one's.
-    if (location === navigation.current) {
-      setNotes(current => [...current, { id: created.id, title: fields.title, type: created.type, updatedAt: created.updatedAt }]);
+    // Another place may have been opened while the Note was made: its list is not this one's. Here the
+    // list is read again rather than added to, so it stays in the order "Load more" counts from.
+    if (at.place === reading.current) {
+      const fresh = await readItems(level, openFolderId);
+      if (at.place === reading.current) {
+        setNotes(fresh.notes);
+        setMoreNotes(fresh.notes.length === 500);
+      }
+    }
+    // Something else may have been chosen meanwhile: the new Note does not take its place.
+    if (at.location === navigation.current) {
       setSelectedFile(null);
       setSelectedNoteId(created.id as string);
     }
   };
 
-  const createNote = (title: string) => write(() => postNote({ title }, navigation.current));
+  /** Where the page stands when a write starts: which place is listed, and what was last chosen. */
+  const standing = () => ({ location: navigation.current, place: reading.current });
+
+  const createNote = (title: string) => write(() => postNote({ title }, standing()));
 
   // A template is filled in by the server, which knows its numbering and its placeholders.
   const createFromTemplate = (templateId: string, title?: string) => write(async () => {
-    const location = navigation.current;
+    const at = standing();
     const filled = await readJson(await fetch(`/api/notes/templates/${templateId}/use`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workspaceId, projectId: level.projectId, title }),
     }));
-    await postNote({ title: filled.title, content: filled.content, type: filled.defaultType, templateId: filled.templateId }, location);
+    await postNote({ title: filled.title, content: filled.content, type: filled.defaultType, templateId: filled.templateId }, at);
   });
 
   const closeNote = () => {
     navigation.current++;
     setSelectedNoteId(null);
-    // The editor may have renamed the Note, so the list is read again, without emptying it first.
-    const mine = reading.current;
-    void readItems(level, openFolderId).then(fresh => {
-      if (mine !== reading.current) return;
-      setNotes(fresh.notes);
-      setMoreNotes(fresh.notes.length === 500);
-    }).catch(() => {});
   };
+
+  // The editor says what it saved, a save it starts as it closes included, so a renamed Note is
+  // renamed in the list without the list being read again.
+  const noteSaved = (id: string, saved: { title: string; type: string }) =>
+    setNotes(current => current.map(note => (note.id === id ? { ...note, ...saved } : note)));
 
   const pinNote = (id: string, pin: boolean) => write(async () => {
     await readJson(await fetch(`/api/notes/${id}/pin`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }),
     }));
-    setNotes(current => current.map(note => (note.id === id ? { ...note, isPinned: pin } : note)));
+    // The pinned list holds pinned Notes alone, so one that is unpinned there leaves it.
+    setNotes(current => (level.view === 'pinned' && !pin
+      ? current.filter(note => note.id !== id)
+      : current.map(note => (note.id === id ? { ...note, isPinned: pin } : note))));
   });
 
   const deleteNote = (id: string) => write(async () => {
-    const location = navigation.current;
+    const place = reading.current;
     await readJson(await fetch(`/api/notes/${id}`, { method: 'DELETE' }));
-    if (location === navigation.current) {
-      setNotes(current => current.filter(note => note.id !== id));
-      setSelectedNoteId(null);
-    }
+    // The Note leaves the list it was deleted from, and its pane closes only if it is still the one open.
+    if (place === reading.current) setNotes(current => current.filter(note => note.id !== id));
+    setSelectedNoteId(current => (current === id ? null : current));
   });
 
   const uploadFile = (chosen: File | null) => {
@@ -399,6 +410,7 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
             // shortcut: a Note opened from a link that is past the 500 listed here reads as not pinned; read the Note itself if that is ever seen.
             pinned={notes.find(note => note.id === selectedNoteId)?.isPinned ?? false}
             onClose={closeNote}
+            onSaved={saved => noteSaved(selectedNoteId, saved)}
             onPin={pin => void pinNote(selectedNoteId, pin)}
             onDelete={() => void deleteNote(selectedNoteId)}
           />

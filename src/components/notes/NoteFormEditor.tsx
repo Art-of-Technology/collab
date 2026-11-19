@@ -55,6 +55,8 @@ interface NoteFormEditorProps {
     projectId?: string;
     mode: "create" | "edit";
     onSuccess?: (noteId: string) => void;
+    /** Told what an edit saved, each time one is saved. */
+    onSaved?: (saved: { title: string; type: string }) => void;
     onCancel?: () => void;
     showCancelButton?: boolean;
     defaultType?: NoteType;
@@ -102,6 +104,7 @@ export function NoteFormEditor({
     projectId: initialProjectId,
     mode,
     onSuccess,
+    onSaved,
     onCancel,
     defaultType = NoteType.GENERAL,
     defaultScope = NoteScope.PERSONAL,
@@ -120,6 +123,7 @@ export function NoteFormEditor({
         projectId: initialProjectId,
         mode,
         onSuccess,
+        onSaved,
         defaultType,
         defaultScope,
         initialTitle,
