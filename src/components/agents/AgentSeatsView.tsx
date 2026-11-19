@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { AgentsTabs } from '@/components/agents/AgentsTabs';
+import { AgentOwnSeats } from '@/components/agents/AgentOwnSeats';
 import type { SeatsView } from '@/lib/agents-page';
 
 type Props = SeatsView & { tab: 'seats' | 'inbox'; handoffs: boolean; canManage: boolean };
@@ -11,7 +12,7 @@ const REASONS: Record<string, string> = {
 };
 
 /** The Seats and the Inbox tab of the Agents page: the same seats, once as a table and once with what waits for each. */
-export function AgentSeatsView({ workspace, seats, tab, handoffs, canManage }: Props) {
+export function AgentSeatsView({ workspace, seats, projects, tab, handoffs, canManage }: Props) {
   const base = `/${encodeURIComponent(workspace.slug || workspace.id)}`;
   const issue = (id: string, key: string | null, title: string) =>
     <Link className="text-primary underline-offset-4 hover:underline" href={`${base}/issues/${encodeURIComponent(key || id)}`}>{key && `${key} `}{title}</Link>;
@@ -27,6 +28,7 @@ export function AgentSeatsView({ workspace, seats, tab, handoffs, canManage }: P
         {canManage && <Button asChild variant="outline"><Link href={`/workspaces/${encodeURIComponent(workspace.id)}/settings/agent-tokens`}>Create or retire a seat</Link></Button>}
       </div>
     </div>
+    {tab === 'seats' && <AgentOwnSeats workspaceId={workspace.id} projects={projects} canManage={canManage} />}
     {seats.length === 0 ? <div className="space-y-2 rounded-lg border p-6">
       <h2 className="font-medium">No seats in the projects you can read</h2>
       <p className="text-sm text-muted-foreground">A seat is created under Settings, Agent tokens, by someone who may manage the workspace. <Link className="text-primary hover:underline" href="/docs/agents/create-a-seat">Create a seat</Link> shows how.</p>

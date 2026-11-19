@@ -38,7 +38,7 @@ test('the Agents page reads the seats a person may see, what each works on and w
   const runners = load('src/lib/agent-runners.ts', { crypto: require('node:crypto'), '@/lib/prisma': { prisma }, '@/lib/agent-handoffs': handoffs,
     '@/lib/agent-tokens': { AGENT_APP_SLUG: 'collab-agent' } }, { Date });
   const page = load('src/lib/agents-page.ts', { '@/lib/prisma': { prisma }, '@/lib/post-access': load('src/lib/post-access.ts'), '@/lib/issue-finder': finder,
-    '@/lib/agent-runs': runs, '@/lib/agent-runners': runners }, { Date });
+    '@/lib/agent-runs': runs, '@/lib/agent-runners': runners, '@/lib/agent-seats': seats }, { Date });
   let user = member;
   const route = load('src/app/api/workspaces/[workspaceId]/agent-seats/waiting/route.ts', { 'next/server': { NextResponse: Response },
     '@/lib/request-session': { getServerSession: async () => user ? { user: { id: user } } : null }, '@/lib/auth-options': { authOptions: {} }, '@/lib/agents-page': page });
@@ -73,8 +73,20 @@ test('the Agents page reads the seats a person may see, what each works on and w
     assert.deepEqual(Object.keys(view.seats[0]).sort(), ['id', 'isDefault', 'name', 'noRunner', 'owner', 'project', 'role', 'tokenExpired', 'waiting', 'working']);
     // Who pays for the seat: the owner's own sign-in, or nobody's when the seat has no owner.
     assert.deepEqual(view.seats.map(row => row.owner), [null, null]);
+    // The projects that use seats, each with its owner's switch and the roles this person has a seat of there.
+    assert.deepEqual(plain(view.projects), [{ id: A, slug: A, name: 'Alpha', membersMayAddSeats: false, mine: [], addable: true }]);
     await raw.agentSeat.update({ where: { id: 'dev-a' }, data: { ownerId: member } });
+    await raw.project.update({ where: { id: A }, data: { membersMayAddSeats: true } });
     assert.deepEqual((await page.readSeats(member, 'team')).seats.map(row => row.owner), [member, null]);
+    assert.deepEqual(plain((await page.readSeats(member, 'team')).projects), [{ id: A, slug: A, name: 'Alpha', membersMayAddSeats: true, mine: ['developer'], addable: true }]);
+    assert.deepEqual(plain((await page.readSeats(owner, 'w')).projects), [{ id: A, slug: A, name: 'Alpha', membersMayAddSeats: true, mine: [], addable: true }]);
+    // A project that went back to handoffs is listed for the person who still has a seat to remove there, and for nobody else.
+    await raw.user.create({ data: { id: 'cseatbeta01', name: 'cseatbeta01' } });
+    await seat('sec-b', 'cseatbeta01', B, 'security', { ownerId: member });
+    assert.deepEqual(plain((await page.readSeats(member, 'team')).projects.map(row => [row.name, row.mine, row.addable])), [['Alpha', ['developer'], true], ['Beta', ['security'], false]]);
+    assert.deepEqual((await page.readSeats(owner, 'w')).projects.map(row => row.name), ['Alpha']);
+    await raw.user.delete({ where: { id: 'cseatbeta01' } });
+    assert.deepEqual((await page.readSeats(member, 'team')).projects.map(row => row.name), ['Alpha']);
     // A seat a runner runs has no runner until one holds a usable token for it; a seat run by hand never says so.
     const states = async () => (await page.readSeats(member, 'team')).seats.map(row => [row.noRunner, row.tokenExpired]);
     assert.deepEqual(await states(), [[false, false], [false, false]]);

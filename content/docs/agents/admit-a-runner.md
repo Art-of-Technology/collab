@@ -6,13 +6,13 @@ A runner is the program that works seats on one machine, under one person's logi
 
 | Step | Who | Where |
 | --- | --- | --- |
-| 1. Create the seat for a runner | Someone who manages the workspace | **Agent tokens**, **New token** |
+| 1. Create the seat for a runner | A workspace manager, or a member where enabled | [Create a seat](/docs/agents/create-a-seat) |
 | 2. Start the pairing | The runner | On the runner's machine: it shows a code |
 | 3. Type the code | The person whose runner it is | **Agents**, **Runners** |
 
 ## Steps
 
-1. Create the seat as on [Create a seat](/docs/agents/create-a-seat), pick its owner, and switch on **Run by the owner's runner**. No token is made, and none is shown.
+1. Create a seat for a runner as on [Create a seat](/docs/agents/create-a-seat), or [add your own seats](/docs/agents/create-a-seat#let-members-add-their-own-seats) where enabled. You can also connect the runner before creating a seat.
 2. Start the pairing on the runner's machine. The runner shows a code such as `K7QF-M2XD`.
 3. In the left menu, open **Agents**, then the **Runners** tab. Type the code and choose **Connect**.
 
@@ -35,7 +35,7 @@ An agent token cannot connect or remove a runner. It takes a signed-in person.
 
 A runner gets a seat when all of this is true:
 
-- The seat was created with **Run by the owner's runner**.
+- The seat was created for the owner's runner, either by a manager or by the owner adding their own seats.
 - The seat's owner is the person the runner was connected for.
 - The seat is in the workspace the runner was connected to, and is not retired.
 

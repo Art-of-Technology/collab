@@ -136,11 +136,16 @@ function page({ user = 'alice', view = { workspace: { id: 'ws', slug: 'team' }, 
     } },
     '@/lib/agents-page': { usesHandoffs: async workspaceId => { assert.equal(workspaceId, 'ws'); return handoffs; },
       readRunnersTab: async (userId, workspaceId) => { calls.push('runners'); assert.deepEqual([userId, workspaceId], ['alice', 'team']); return view && { workspace: view.workspace, people: [{ id: 'alice', name: 'Alice' }] }; },
-      readSeats: async (userId, workspaceId) => { calls.push('seats'); assert.deepEqual([userId, workspaceId], ['alice', 'team']); return view; } },
+      readSeats: async (userId, workspaceId) => { calls.push('seats'); assert.deepEqual([userId, workspaceId], ['alice', 'team']); return view && { projects: [], ...view }; } },
     '@/lib/agent-floor': { readAgentFloor: async (userId, workspaceId) => { calls.push('floor'); assert.deepEqual([userId, workspaceId], ['alice', 'team']); return view && { workspace: { ...view.workspace, name: 'Team' } }; } },
     '@/components/agents/AgentsTabs': tabs,
     '@/components/agents/AgentSeatsView': load('src/components/agents/AgentSeatsView.tsx', { 'react/jsx-runtime': jsx, 'next/link': link,
-      '@/components/ui/button': { Button: ({ children }) => children }, '@/components/agents/AgentsTabs': tabs }),
+      '@/components/ui/button': { Button: ({ children }) => children }, '@/components/agents/AgentsTabs': tabs,
+      '@/components/agents/AgentOwnSeats': load('src/components/agents/AgentOwnSeats.tsx', { react: React, 'react/jsx-runtime': jsx, 'next/navigation': { useRouter: () => ({}) },
+        '@/components/ui/alert-dialog': Object.fromEntries(['AlertDialog', 'AlertDialogAction', 'AlertDialogCancel', 'AlertDialogContent', 'AlertDialogDescription', 'AlertDialogFooter', 'AlertDialogHeader', 'AlertDialogTitle'].map(name => [name, Empty])),
+        '@/components/ui/button': { Button: ({ children, variant: _variant, onClick: _click, ...props }) => React.createElement('button', props, children) },
+        '@/components/ui/checkbox': { Checkbox: ({ onCheckedChange: _change, ...props }) => React.createElement('input', { type: 'checkbox', readOnly: true, ...props }) },
+        '@/hooks/use-toast': { useToast: () => ({}) } }) }),
     '@/components/agents/AgentRunnersView': { AgentRunnersView: props => React.createElement('section', null, `Runners of ${props.workspaceId} for ${props.me}, people: ${props.people.map(person => person.name)}`) },
     '@/components/agents/floor/OrganisationFloor': { OrganisationFloor: ({ initial }) => React.createElement('section', null, `Floor of ${initial.workspace.name}`) },
   }).default;
@@ -172,6 +177,39 @@ test('Seats tab: each seat with its role, project, owner, what it works on now a
   const lost = await page({ view: { workspace: { id: 'ws', slug: null }, seats: [{ ...seats[0], working: [{ ...seats[0].working[0], id: 'run-2', issueKey: 'CLB-12', title: 'Next' }, { ...seats[0].working[0], lost: true }] }] } }).open();
   assert.match(text(lost), /CLB-12 Next CLB-9 Being worked The run is lost: clear it on the issue&#x27;s Activity tab\. 1 /); assert.match(lost, /href="\/ws\/issues\/CLB-9"/);
   assert.match(await page({ view: { workspace: { id: 'ws', slug: 'team' }, seats: [] } }).open(), /No seats in the projects you can read/);
+});
+
+test('Seats tab: a member adds and removes their own seats per project, and who manages the workspace has the switch instead', async () => {
+  const project = { id: 'p1', slug: 'collab', name: 'Collab', membersMayAddSeats: false, mine: [], addable: true };
+  const open = (projects, manage = false, ...tab) => page({ manage, view: { workspace: { id: 'ws', slug: 'team' }, seats, projects } }).open(...tab);
+  // Switched off: the button is there, cannot be pressed, and says why.
+  const off = await open([project]);
+  assert.match(text(off), /Collab You have no seats in this project\. Your seats run on your own runner and your own allowance\. The project owner has not switched this on\. Add my seats to this project/);
+  assert.match(off, /<button disabled="">Add my seats to this project<\/button>/);
+  assert.doesNotMatch(off, /Remove my seats|Members may add/);
+  const on = await open([{ ...project, membersMayAddSeats: true }]);
+  assert.match(on, /<button>Add my seats to this project<\/button>/);
+  assert.doesNotMatch(on, /not switched this on|Remove my seats/);
+  // With a seat of some roles the missing ones can still be added, and what is there can be removed even while adding is off.
+  const some = await open([{ ...project, mine: ['reviewer'] }]);
+  assert.match(text(some), /Your seats in this project: reviewer \. The project owner has not switched this on\. Add my seats to this project Remove my seats/);
+  assert.match(some, /<button disabled="">Add my seats to this project<\/button><button>Remove my seats<\/button>/);
+  const all = await open([{ ...project, mine: ['developer', 'reviewer', 'security'] }]);
+  assert.match(text(all), /Your seats in this project: developer, reviewer, security \. Remove my seats/);
+  assert.doesNotMatch(all, /Add my seats|not switched this on/);
+  // A project that takes no new seats (it went back to handoffs, or was archived) still lets a member remove theirs, and offers nothing else.
+  const closed = [{ ...project, name: 'Closed', addable: false, membersMayAddSeats: true, mine: ['developer'] }];
+  assert.match(text(await open(closed)), /Closed Your seats in this project: developer \. Remove my seats/);
+  assert.doesNotMatch(await open(closed), /Add my seats|not switched this on/);
+  assert.doesNotMatch(await open(closed, true), /Closed|Members may add/);
+  // Who manages the workspace gets the switch per project, as it stands, and none of a member's buttons.
+  const managed = await open([{ ...project, membersMayAddSeats: true }, { ...project, id: 'p2', name: 'Other' }], true);
+  assert.match(managed, /Collab<\/p><\/div><div[^>]*><input type="checkbox"[^>]*id="members-add-seats-p1"[^>]*checked=""[^>]*\/><label for="members-add-seats-p1">Members may add their own seats to this project<\/label>/);
+  assert.doesNotMatch(managed.match(/<input[^>]*id="members-add-seats-p2"[^>]*>/)[0], /checked/);
+  assert.doesNotMatch(managed, /Add my seats|Remove my seats|You have no seats/);
+  // Nothing of it on the Inbox tab, and nothing at all where no project uses seats.
+  assert.doesNotMatch(await open([project], false, 'inbox'), /Add my seats/);
+  assert.doesNotMatch(await page().open(), /Add my seats|Members may add|Your seats/);
 });
 
 test('Runners tab: any member of the workspace opens it, and a seat with no runner says so on the Seats tab', async () => {

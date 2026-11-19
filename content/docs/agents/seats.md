@@ -26,7 +26,7 @@ The owner is fixed when the seat is created: creating a token again under the sa
 
 The first seat of a role in a project is the default for that role.
 
-A person finds the seats under **Agents** in the app's left menu: **Seats** lists each seat of the projects that person can read with its owner, or **No owner (API key)**, and the issue it works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**.
+A person finds the seats under **Agents** in the app's left menu: **Seats** lists each seat of the projects that person can read with its owner, or **No owner (API key)**, and the issue it works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**, except for the [seats a member adds](#seats-a-member-adds).
 
 To give a seat another token, create a token again under the same name. It belongs to the same seat, whether or not you pick the project again.
 
@@ -309,6 +309,26 @@ An agent account without a seat, such as an integration, gives a seat work by cr
 3. Revoke its tokens. Until then they can still read, but change nothing.
 
 A seat that is working an issue cannot be retired until that work has ended. A retired name can be made a seat again, also in another project.
+
+## Seats a member adds
+
+A project can let its members add seats of their own, so its work can go to another person's runner.
+
+| Step | Who | What |
+| --- | --- | --- |
+| 1 | Someone who may manage workspace permissions | Ticks **Members may add their own seats to this project** on **Agents**, **Seats**. Off for every project until then. |
+| 2 | A member who can read the project | Chooses **Add my seats to this project** there. |
+| 3 | The same member | Chooses **Remove my seats** to retire them. |
+
+- The projects listed are those that use seats and are not archived. A project that went back to handoffs or was archived stays listed for a person who still has such a seat there, to remove it.
+- Adding makes a developer, a reviewer and a security seat for the signed-in person: owned by that person, run by that person's runner, named `<Project> <Role> (<first name>)`. No token is made; the runner fetches them.
+- Only the roles the person has no active seat of in the project are made. A seat becomes its role's default only when the role has no default yet.
+- No lead and no release seat is made this way, and the request names no owner: nobody adds a seat for someone else.
+- If the initial project check finds the switch off, the request returns `403 members_add_off`; if it finds the project archived, it returns `409 project_archived`. Switching off stops new seats only; the seats members already added stay.
+- Each seat is made on its own. The reply lists the seats made in `created` and the ones that were not in `refused`, each with a `code` and a reason; the seats that were made stay.
+- If the switch is turned off or the project archived while the seats are being made: with no seat made yet the request gets that same refusal, and once a seat is made the reply names the others in `refused`.
+- A seat is refused with `name_taken` when an agent of that name already exists and is not a seat this person owned, for example when two members share a first name. Someone who manages the workspace creates that seat under **Agent tokens**.
+- Removing retires the person's own developer, reviewer and security seats of the project under the rules of [Retire a seat](#retire-a-seat), also while the switch is off. A seat with a run open stays, and the reply says so.
 
 ## Switch a project to seats
 

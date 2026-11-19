@@ -3,6 +3,7 @@ import { postWorkspaceAccessWhere } from '@/lib/post-access';
 import { issueAccessWhere, issueReadAccessWhere } from '@/lib/issue-finder';
 import { inboxOf, type InboxItem } from '@/lib/agent-runs';
 import { fetchedBy } from '@/lib/agent-runners';
+import { MEMBER_ROLES } from '@/lib/agent-seats';
 
 /**
  * True while a project of the workspace still works with handoffs: the Agents page lists "Handoffs (old)" until
@@ -29,8 +30,8 @@ export async function readRunnersTab(userId: string, workspaceIdOrSlug: string) 
 
 /**
  * The seats a person may see: those of the projects the person can read, each with the issues it has a run open on and
- * the issues that wait for it, which is the seat's own inbox as the seat reads it. Null when the workspace is not
- * the person's. It changes nothing.
+ * the issues that wait for it, which is the seat's own inbox as the seat reads it. With them the projects that use
+ * seats, for the person's own seats there. Null when the workspace is not the person's. It changes nothing.
  */
 export async function readSeats(userId: string, workspaceIdOrSlug: string) {
   const workspace = await prisma.workspace.findFirst({ where: postWorkspaceAccessWhere(userId, workspaceIdOrSlug), select: { id: true, slug: true } });
@@ -57,8 +58,18 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
   // A seat a runner runs works only while a runner holds a usable token for it: `expired` is a seat whose runner
   // stayed away long enough for the last token it fetched to run out.
   const fetched = await fetchedBy(prisma, rows.filter(seat => seat.byRunner).map(seat => seat.userId));
+  // The projects that use seats, each with its owner's switch and the roles the person already has a seat of there.
+  // A project that stopped using seats or was archived stays listed while the person has such a seat, to remove it.
+  const own = { ownerId: userId, retiredAt: null, role: { in: [...MEMBER_ROLES] } };
+  const projects = await prisma.project.findMany({
+    where: { workspaceId: workspace.id, ...issueAccessWhere(userId), OR: [{ agentMode: 'seats', OR: [{ isArchived: null }, { isArchived: false }] }, { agentSeats: { some: own } }] }, orderBy: { name: 'asc' },
+    select: { id: true, slug: true, name: true, membersMayAddSeats: true, agentMode: true, isArchived: true, agentSeats: { where: own, orderBy: { role: 'asc' }, select: { role: true } } },
+  });
   return {
     workspace,
+    projects: projects.map(({ agentSeats, agentMode, isArchived, ...project }) => ({ ...project, mine: [...new Set(agentSeats.map(seat => seat.role))],
+      // Where seats can be added at all: the switch and the Add button are offered only there.
+      addable: agentMode === 'seats' && !isArchived })),
     seats: rows.map(({ userId: account, runs, project, projectId: _project, byRunner: runner, owner, ...seat }, index) => ({
       ...seat, project: project.name, noRunner: runner && !fetched.has(account),
       // The person whose sign-in runs the seat; null when no person's subscription pays for it.
