@@ -237,6 +237,10 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
       body: JSON.stringify({ workspaceId, projectId: level.projectId, parentId: openFolderId, name }),
     }));
     setAsking(null);
+    if (at.location === navigation.current) {
+      setSelectedFile(null);
+      setSelectedNoteId(created.id as string);
+    }
     if (location !== navigation.current) return;
     const fresh = await readFolders(level.projectId);
     if (location !== navigation.current) return;
@@ -263,11 +267,6 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
         setNotes(fresh.notes);
         setMoreNotes(fresh.notes.length === 500);
       }
-    }
-    // Something else may have been chosen meanwhile: the new Note does not take its place.
-    if (at.location === navigation.current) {
-      setSelectedFile(null);
-      setSelectedNoteId(created.id as string);
     }
   };
 
@@ -397,9 +396,14 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
       />
       {moreNotes && <Button variant="ghost" disabled={busy} onClick={() => void write(async () => {
         const mine = reading.current;
-        const next = await readItems(level, openFolderId, notes.length);
+        const refreshed: NoteItem[] = [];
+        let next: { notes: NoteItem[]; files: FileItem[] };
+        do {
+          next = await readItems(level, openFolderId, refreshed.length);
+          refreshed.push(...next.notes);
+        } while (next.notes.length === 500 && refreshed.length <= notes.length);
         if (mine !== reading.current) return;
-        setNotes(current => [...current, ...next.notes]);
+        setNotes(refreshed);
         setMoreNotes(next.notes.length === 500);
       })}>Load more notes</Button>}
       </div>

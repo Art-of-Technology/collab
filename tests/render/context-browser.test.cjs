@@ -248,6 +248,45 @@ test('starting blank from the template picker opens the new note dialog', async 
   await React.act(async () => root.render(null));
 });
 
+test('a created note opens even when refreshing its list fails', async () => {
+  for (const template of [false, true]) {
+    let reads = 0;
+    routes = {
+      'GET /api/context/folders': () => ({ folders }),
+      'GET /api/context/items': () => ++reads === 1 ? { notes: [], files: [] } : new Error('List unavailable'),
+      'POST /api/notes/templates/decision/use': () => ({ title: 'Made', content: '', defaultType: 'GENERAL', templateId: null }),
+      'POST /api/notes': () => ({ id: 'Made' }),
+    };
+    await React.act(async () => root.render(h(ContextBrowser, { workspaceId: 'w', workspaceSlug: 'weezboo', projects: [] })));
+    await settle();
+    await React.act(async () => { [...document.querySelectorAll('[data-menu]')].find(row => row.textContent === (template ? 'Note from template' : 'Note')).click(); });
+    await click(template ? 'Use template' : 'Confirm');
+    await settle();
+    assert.equal(document.querySelector('[data-note-pane]').dataset.notePane, 'Made');
+    assert.equal(document.querySelector('[role="alert"]').textContent, 'List unavailable');
+    await React.act(async () => root.render(null));
+  }
+});
+
+test('loading more after a rename uses the current server order', async () => {
+  let rows = Array.from({ length: 501 }, (_, i) => note(`Note ${String(i).padStart(3, '0')}`));
+  routes = {
+    'GET /api/context/folders': () => ({ folders: [] }),
+    'GET /api/context/items': query => ({ notes: rows.slice(Number(query.get('offset') || 0), Number(query.get('offset') || 0) + 500), files: [] }),
+  };
+  await React.act(async () => root.render(h(ContextBrowser, { workspaceId: 'w', workspaceSlug: 'weezboo', projects: [] })));
+  await settle();
+  await click('Note 000');
+  rows = [...rows.slice(1), note('Note 000', { title: 'Renamed', type: 'DECISION' })];
+  await click('Save as Renamed');
+  await click('Load more notes');
+  await settle();
+  assert.equal(list().length, 501);
+  assert.equal(list().filter(row => row.startsWith('Renamed')).length, 1);
+  assert.ok(list().some(row => row.startsWith('Note 500')));
+  await React.act(async () => root.render(null));
+});
+
 test('a late note write changes the list it belongs to and leaves a later choice open', async () => {
   let finishCreate, finishDelete;
   let rows = [note('First'), note('Second')];
