@@ -237,10 +237,6 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
       body: JSON.stringify({ workspaceId, projectId: level.projectId, parentId: openFolderId, name }),
     }));
     setAsking(null);
-    if (at.location === navigation.current) {
-      setSelectedFile(null);
-      setSelectedNoteId(created.id as string);
-    }
     if (location !== navigation.current) return;
     const fresh = await readFolders(level.projectId);
     if (location !== navigation.current) return;
@@ -259,6 +255,10 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
       }),
     }));
     setAsking(null);
+    if (at.location === navigation.current) {
+      setSelectedFile(null);
+      setSelectedNoteId(created.id as string);
+    }
     // Another place may have been opened while the Note was made: its list is not this one's. Here the
     // list is read again rather than added to, so it stays in the order "Load more" counts from.
     if (at.place === reading.current) {
