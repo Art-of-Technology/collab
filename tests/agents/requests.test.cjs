@@ -56,7 +56,15 @@ test('requests: one seat asks another, in its own project or in another one', as
   let beforeIssueGuard;
   class ForgeProjectWriteError extends Error {}
   const guard = async () => { if (forge) throw new ForgeProjectWriteError('Use the Forge board'); };
-  const deps = { zod, 'next/server': response, '@/lib/prisma': { prisma }, '@/lib/apps/auth-middleware': middleware, '@/lib/agent-seats': seats, '@/lib/issue-assignee': assignee,
+  const deps = {
+    '@/lib/redis': { publishEvent: async (channel, event, timeoutMs) => {
+      assert.equal(channel, 'workspace:w:events');
+      assert.equal(event.type, 'issue.comments.changed');
+      assert.equal(event.workspaceId, 'w');
+      assert.equal(timeoutMs, 1000);
+      assert.ok(await raw.issueComment.count({ where: { issueId: event.issueId } }), 'publish follows a persisted comment');
+      return true;
+    } }, zod, 'next/server': response, '@/lib/prisma': { prisma }, '@/lib/apps/auth-middleware': middleware, '@/lib/agent-seats': seats, '@/lib/issue-assignee': assignee,
     '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': response, './agent-handoffs': handoffs }, globals),
     '@/lib/forge/legacy-write-guard': { ForgeProjectWriteError, assertLegacyIssueWriteAllowed: async () => { await guard(); await beforeIssueGuard?.(); }, assertLegacyProjectWriteAllowed: guard },
     '@/lib/issue-finder': {}, '@/lib/permissions': {}, '@/lib/agent-tokens': tokens, '@/lib/issue-templates': templates,
