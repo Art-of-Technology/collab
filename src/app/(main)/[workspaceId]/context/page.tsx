@@ -7,7 +7,7 @@ import { ContextBrowser } from "@/components/context/ContextBrowser";
 
 /**
  * Context: the folders, Notes and files of this workspace and of its projects. The address carries
- * which level and which folder are open, so a folder can be linked to and opened again later.
+ * which level, which folder and which Note are open, so each can be linked to and opened again later.
  */
 export default function ContextPage() {
   const { currentWorkspace, isLoading } = useWorkspace();
@@ -27,5 +27,7 @@ export default function ContextPage() {
     projects={projects.map(project => ({ id: project.id, name: project.name }))}
     initialProjectId={query.get("project")}
     initialFolderId={query.get("folder")}
+    initialView={query.get("view")}
+    initialNoteId={query.get("note")}
   />;
 }

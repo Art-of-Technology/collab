@@ -25,7 +25,7 @@ function fixture(subject = { id: 'alice', email: 'bob@example.test' }, beforePro
     'next/link': { default: 'Link' }, 'lucide-react': { ChevronLeft: 'ChevronLeft', FileText: 'FileText', Plus: 'Plus' },
     '@/components/ui/skeleton': { Skeleton: 'Skeleton' }, '@/components/ui/button': { Button: 'Button' },
   };
-  for (const name of ['providers/SidebarProvider', 'layout/LayoutWithSidebar', 'layout/PageHeader', 'notes/ProjectNotesList']) deps[`@/components/${name}`] = { default: name.split('/').at(-1) };
+  for (const name of ['providers/SidebarProvider', 'layout/LayoutWithSidebar', 'layout/PageHeader']) deps[`@/components/${name}`] = { default: name.split('/').at(-1) };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, { console });
   deps['@/lib/url-utils'] = load('src/lib/url-utils.ts');
   deps['@/lib/slug-resolvers'] = load('src/lib/slug-resolvers.ts', deps, { console });
@@ -34,7 +34,6 @@ function fixture(subject = { id: 'alice', email: 'bob@example.test' }, beforePro
   return { spaces, users, projects, reads,
     layout: workspaceId => layout({ children: 'protected-child', params: Promise.resolve({ workspaceId }) }),
     notes: (workspaceId, projectSlug = 'project') => notes.default({ params: Promise.resolve({ workspaceId, projectSlug }) }),
-    metadata: () => notes.generateMetadata({ params: Promise.resolve({ workspaceId: 'joined', projectSlug: 'project' }) }),
   };
 }
 const redirectTo = location => error => error.location === location;
@@ -66,17 +65,11 @@ test('layout preserves owner/active-member slug and ID paths but denies foreign/
   await assert.rejects(f.layout('missing'), redirectTo('/welcome'));
 });
 
-test('Notes landing renders current subject and own/active project on slug and real ID paths', async () => {
+test('Notes landing sends an own/active project to its level in Context on slug and real ID paths', async () => {
   const f = fixture();
   for (const space of f.spaces.filter(row => ['own', 'joined'].includes(row.slug))) for (const selector of [space.slug, space.id]) {
-    const tree = await f.notes(selector); const list = find(tree, 'ProjectNotesList');
-    assert.equal(list.props.currentUserId, 'alice'); assert.equal(list.props.projectId, `p-${space.slug}`);
-    assert.equal(list.props.workspaceSlug, space.slug);
-    const header = find(tree, 'PageHeader'); assert.equal(header.props.title, 'Project Context');
-    assert.equal(header.props.subtitle, `Documentation and context for Project ${space.slug}`);
-    assert.ok(JSON.stringify(tree).includes(`/${selector}/projects/project/notes/memory`));
+    await assert.rejects(f.notes(selector), redirectTo(`/${space.slug}/context?project=p-${space.slug}`));
   }
-  assert.equal((await f.metadata()).title, 'Context - project');
 });
 
 test('Notes landing rejects inactive/foreign membership before project payload, including role-only admin', async () => {

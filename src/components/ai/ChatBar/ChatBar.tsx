@@ -136,7 +136,7 @@ export default function ChatBar() {
     { id: "nav-views", label: "Go to Views", icon: <Eye className="h-3.5 w-3.5" />, action: () => router.push(getWorkspacePath("/views")) },
     { id: "nav-agents", label: "Go to Agents", icon: <Bot className="h-3.5 w-3.5" />, action: () => router.push(getWorkspacePath("/agents")) },
     { id: "nav-timeline", label: "Go to Timeline", icon: <Clock className="h-3.5 w-3.5" />, action: () => router.push(getWorkspacePath("/timeline")) },
-    { id: "nav-context", label: "Go to Context", icon: <FileText className="h-3.5 w-3.5" />, action: () => router.push(getWorkspacePath("/notes")) },
+    { id: "nav-context", label: "Go to Context", icon: <FileText className="h-3.5 w-3.5" />, action: () => router.push(getWorkspacePath("/context")) },
     { id: "nav-features", label: "Feature Requests", icon: <Lightbulb className="h-3.5 w-3.5" />, action: () => router.push(getWorkspacePath("/features")) },
     { id: "nav-docs", label: "Go to Docs", icon: <BookOpen className="h-3.5 w-3.5" />, action: () => router.push("/docs") },
     { id: "copy-url", label: "Copy current URL", icon: <Copy className="h-3.5 w-3.5" />, action: () => { navigator.clipboard.writeText(window.location.href); toast({ title: "Copied", description: "URL copied to clipboard" }); } },

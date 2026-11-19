@@ -575,7 +575,7 @@ export function CommandMenu({
             <span className="text-sm">Go to Timeline</span>
           </CommandItem>
           <CommandItem
-            onSelect={() => navigateTo(getWorkspacePath("/notes"))}
+            onSelect={() => navigateTo(getWorkspacePath("/context"))}
             className={cn(
               "text-gray-300 flex items-center gap-2 cursor-pointer transition-all duration-200 rounded-lg",
               "hover:bg-white/10 hover:text-white",
