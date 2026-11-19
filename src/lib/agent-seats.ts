@@ -32,6 +32,8 @@ interface SeatInput {
   byRunner?: boolean;
   /** A member adding their own seat: only while the project's switch is on, and never under a name that was someone else's agent. */
   own?: boolean;
+  /** With `own`: the names of the seats this request makes in the same form. One that is someone else's agent refuses this seat too. */
+  together?: string[];
 }
 
 /**
@@ -77,6 +79,15 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
     // The name is derived, not chosen, so it can meet an agent that is not this member's. Only a seat the member owned comes back.
     if (existing ? existing.ownerId !== input.ownerId : await tx.appToken.count({ where: { userId: account.id } })) {
       throw new HandoffError('name_taken', `An agent named ${account.name ?? input.name} already exists in this workspace. Ask someone who manages the workspace to create this seat`, 409);
+    }
+    // A member's seats share one form of name, so the form is free only when every name in it is: decided here, on settled rows.
+    const others = input.together?.length ? await tx.user.findMany({ where: { id: { not: account.id }, name: { in: input.together, mode: 'insensitive' } },
+      select: { id: true, name: true, agentSeat: { select: { workspaceId: true, ownerId: true } } } }) : [];
+    for (const other of others) {
+      if (other.agentSeat ? other.agentSeat.workspaceId === input.workspaceId && other.agentSeat.ownerId !== input.ownerId
+        : await tx.appToken.count({ where: { userId: other.id, workspaceId: input.workspaceId } })) {
+        throw new HandoffError('name_taken', `An agent named ${other.name} already exists in this workspace. Ask someone who manages the workspace to create this seat`, 409);
+      }
     }
   }
   const same = !!existing && !existing.retiredAt && existing.projectId === input.projectId && existing.role === input.role;

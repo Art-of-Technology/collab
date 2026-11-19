@@ -61,7 +61,8 @@ Projects that use seats and are not archived are listed. If you still have your 
 - Only the roles you have no active seat of are made. A role that already has a default seat keeps it.
 - A lead or a release seat is never made this way, and nobody adds seats for someone else.
 - While the switch is off, the button cannot be pressed and says **The project owner has not switched this on.**
-- If an agent with one of those names already exists and is not your own retired seat, that seat may be refused. This can happen when a colleague has the same first name. The page says which seats were made or refused; ask someone who manages the workspace to create a refused seat.
+- If a colleague with your first name already has one of those names, all your seats get your last initial instead, like `Collab Developer (Deniz K.)`. If that is taken too, they get your full name. The colleague's seats keep their names.
+- A seat is refused only when your full name is taken as well, or when your name has no last name to add. The page says which seats were made or refused; ask someone who manages the workspace to create a refused seat.
 - Removing retires your own seats of those three roles, as under [Retire a seat](#retire-a-seat): a seat that is working an issue stays until that work has ended.
 
 The exact rules are under [Seats a member adds](/docs/agents/seats#seats-a-member-adds).

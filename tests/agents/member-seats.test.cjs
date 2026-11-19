@@ -5,6 +5,8 @@ const { seatsDatabase } = require('./seats-db.cjs');
 
 // Two members share the first name Bob; the stranger is in no workspace.
 const owner = 'cowner00001', deniz = 'cdeniz00001', bob = 'cbob0000001', bobToo = 'cbob0000002', uma = 'cuma0000001', lale = 'clale000001', named = 'cnamed00001', stranger = 'cstranger01';
+// More people called Deniz, two of them with the same full name and one with no last name; two called Ece; two called Ada.
+const kara = 'cdeniz00002', kurt = 'cdeniz00003', kurtToo = 'cdeniz00004', mono = 'cdeniz00005', ece = 'cece0000001', eceToo = 'cece0000002', ada = 'cada0000001', adaToo = 'cada0000002';
 const P = 'cprojectp001', OLD = 'cprojecto001';
 const scopes = ['issues:read', 'issues:write', 'user:read'];
 
@@ -13,10 +15,11 @@ after(() => db?.stop());
 
 test('a member adds their own seats to a project, once its owner has switched that on', async t => {
   db = await seatsDatabase(async prisma => {
-    await prisma.user.createMany({ data: [[owner, 'Cem Owner'], [deniz, 'Deniz Kaya'], [bob, 'Bob Stone'], [bobToo, 'Bob Other'], [uma, 'Uma Late'], [lale, 'Lale Race'], [named, '@deniz kaya'], [stranger, 'Sam Stranger']]
+    await prisma.user.createMany({ data: [[owner, 'Cem Owner'], [deniz, 'Deniz Kaya'], [bob, 'Bob Stone'], [bobToo, 'Bob Other'], [uma, 'Uma Late'], [lale, 'Lale Race'], [named, '@deniz kaya'], [stranger, 'Sam Stranger'],
+      [kara, 'Deniz Kara'], [kurt, 'Deniz  Kurt'], [kurtToo, 'Deniz Kurt'], [mono, 'Deniz'], [ece, 'Ece First'], [eceToo, 'Ece aydin'], [ada, 'Ada Stone'], [adaToo, 'Ada Moss']]
       .map(([id, name]) => ({ id, name, email: `${id}@example.test` })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
-    await prisma.workspaceMember.createMany({ data: [deniz, bob, bobToo, uma, lale, named].map(userId => ({ workspaceId: 'w', userId })) });
+    await prisma.workspaceMember.createMany({ data: [deniz, bob, bobToo, uma, lale, named, kara, kurt, kurtToo, mono, ece, eceToo, ada, adaToo].map(userId => ({ workspaceId: 'w', userId })) });
     for (const [id, name, issuePrefix, isArchived] of [[P, 'Collab', 'CLB', false], [OLD, 'Old', 'OLD', true]]) {
       await prisma.project.create({ data: { id, workspaceId: 'w', name, slug: issuePrefix.toLowerCase(), issuePrefix, isArchived } });
       await prisma.projectStatus.createMany({ data: ['to_do', 'in_progress', 'done'].map((status, order) => ({ id: `${id}-${status}`, projectId: id, name: status,
@@ -147,21 +150,21 @@ test('a member adds their own seats to a project, once its owner has switched th
     assert.deepEqual((await rows({ isDefault: true })).map(seat => seat.name), ['Collab Developer', 'Collab Lead', 'Collab Reviewer', 'Collab Security (Deniz)']);
   });
 
-  await t.test('a name an agent of someone else already has is refused, that agent stays as it was, and the reply says which seats were made', async () => {
-    const [status, body] = await add(bobToo);
-    // Bob's reviewer seat has another name, so only that role's derived name is free for the other Bob.
-    assert.deepEqual([status, body.created, body.refused.map(seat => [seat.name, seat.code])],
-      [201, ['Collab Reviewer (Bob)'], [['Collab Developer (Bob)', 'name_taken'], ['Collab Security (Bob)', 'name_taken']]]);
-    assert.match(body.refused[0].reason, /An agent named Collab Developer \(Bob\) already exists/);
-    assert.deepEqual(await names({ ownerId: bobToo }), ['Collab Reviewer (Bob)']);
-    // Bob has a reviewer seat under another name. That the derived name is someone else's by now is nothing to refuse: he has the role.
-    await refuses(seats.createSeat({ workspaceId: 'w', actorId: bob, projectId: P, role: 'reviewer', ownerId: bob, name: 'Collab Reviewer (Bob)', expiresInDays: 30, byRunner: true, own: true }), 'own_seat_exists', 409);
+  await t.test('a second member with the same first name gets the last initial on every seat, and the first member\'s seats stay as they were', async () => {
+    const seen = await rows({ ownerId: bob }), accountsNow = await prisma.user.count();
+    // Bob's reviewer seat has another name, so "Collab Reviewer (Bob)" is free. The form is still one for all three.
+    assert.deepEqual(await add(bobToo), [201, { created: ['Collab Developer (Bob O.)', 'Collab Reviewer (Bob O.)', 'Collab Security (Bob O.)'], refused: [] }]);
+    assert.deepEqual(await names({ ownerId: bobToo }), ['Collab Developer (Bob O.)', 'Collab Reviewer (Bob O.)', 'Collab Security (Bob O.)']);
+    assert.deepEqual(await rows({ ownerId: bob }), seen);
+    assert.equal(await prisma.user.count(), accountsNow + 3, 'the form that was taken leaves no agent account behind');
+    // Bob has a reviewer seat under another name. That the derived name is someone else's is nothing to refuse: he has the role.
+    await refuses(seats.createSeat({ workspaceId: 'w', actorId: bob, projectId: P, role: 'reviewer', ownerId: bob, name: 'Collab Reviewer (Bob O.)', expiresInDays: 30, byRunner: true, own: true }), 'own_seat_exists', 409);
     assert.deepEqual(await names({ ownerId: bob }), ['Collab Developer (Bob)', 'Bob reviews', 'Collab Security (Bob)']);
-    // A token that is not a seat holds a name too.
-    const token = await tokens.createAgentToken({ workspaceId: 'w', actorId: owner, name: 'Collab Developer (Uma)', access: 'write', expiresInDays: 30 });
-    const late = (await add(uma))[1];
-    assert.deepEqual([late.created, late.refused.map(seat => [seat.name, seat.code])], [['Collab Reviewer (Uma)', 'Collab Security (Uma)'], [['Collab Developer (Uma)', 'name_taken']]]);
-    assert.equal(await prisma.agentSeat.count({ where: { user: { name: 'Collab Developer (Uma)' } } }), 0, 'the token is still a token that is not a seat');
+    // A token that is not a seat holds a name too, and the name it holds is the last one made: no seat gets the first form.
+    const token = await tokens.createAgentToken({ workspaceId: 'w', actorId: owner, name: 'Collab Security (Uma)', access: 'write', expiresInDays: 30 });
+    assert.deepEqual((await add(uma))[1], { created: ['Collab Developer (Uma L.)', 'Collab Reviewer (Uma L.)', 'Collab Security (Uma L.)'], refused: [] });
+    assert.equal(await prisma.user.count({ where: { name: { in: ['Collab Developer (Uma)', 'Collab Reviewer (Uma)'] } } }), 0);
+    assert.equal(await prisma.agentSeat.count({ where: { user: { name: 'Collab Security (Uma)' } } }), 0, 'the token is still a token that is not a seat');
     assert.ok(token.token);
   });
 
@@ -244,7 +247,7 @@ test('a member adds their own seats to a project, once its owner has switched th
     assert.equal((await prisma.issue.findUniqueOrThrow({ where: { id: waiting.id } })).assigneeId, null);
     assert.equal((await prisma.issue.findUniqueOrThrow({ where: { id: working.id } })).assigneeId, developer.userId);
     // The security default went with its seat, so the role's requests go to the oldest seat that is left.
-    assert.deepEqual((await rows({ role: 'security' })).map(seat => [seat.name, seat.isDefault]), [['Collab Security (Bob)', true], ['Collab Security (Uma)', false]]);
+    assert.deepEqual((await rows({ role: 'security' })).map(seat => [seat.name, seat.isDefault]), [['Collab Security (Bob O.)', false], ['Collab Security (Bob)', true], ['Collab Security (Uma L.)', false]]);
 
     await prisma.agentRun.update({ where: { id: run.id }, data: { state: 'finished', endedAt: new Date() } });
     assert.deepEqual((await remove(deniz))[1], { removed: ['Collab Developer (Deniz)'], kept: [] });
@@ -270,9 +273,9 @@ test('a member adds their own seats to a project, once its owner has switched th
   await t.test('seats a member removed come back under the same names, and switching off stops adding but not removing', async () => {
     assert.deepEqual((await add(deniz))[1], { created: ['Collab Developer (Deniz)', 'Collab Reviewer (Deniz)', 'Collab Security (Deniz)'], refused: [] });
     assert.equal(await prisma.agentSeat.count({ where: { ownerId: deniz } }), 3, 'the same three rows, in use again');
-    // Bob's seats are retired, so the other Bob now meets names that were someone else's: still refused.
-    const again = (await add(bobToo))[1];
-    assert.deepEqual([again.created, again.refused.map(seat => seat.code)], [[], ['name_taken', 'name_taken']]);
+    // Bob's seats are retired and their names are still his: the other Bob's seats come back with the initial.
+    assert.equal((await remove(bobToo))[1].removed.length, 3);
+    assert.deepEqual((await add(bobToo))[1], { created: ['Collab Developer (Bob O.)', 'Collab Reviewer (Bob O.)', 'Collab Security (Bob O.)'], refused: [] });
 
     assert.deepEqual((await allow(owner, false))[1].membersMayAddSeats, false);
     assert.equal((await add(bob))[1].code, 'members_add_off');
@@ -282,5 +285,48 @@ test('a member adds their own seats to a project, once its owner has switched th
     await refuses(seats.createSeat({ workspaceId: 'w', actorId: bob, projectId: P, role: 'developer', ownerId: bob, name: 'Collab Developer (Bob)', expiresInDays: 30, byRunner: true, own: true }), 'members_add_off', 403);
     assert.deepEqual(await names({ ownerId: deniz }), ['Collab Developer (Deniz)', 'Collab Reviewer (Deniz)', 'Collab Security (Deniz)'], 'the seats already added stay');
     assert.equal((await remove(deniz))[1].removed.length, 3);
+  });
+
+  await t.test('a taken first name gives the last initial, a taken initial the full name, and after that the seat is refused', async () => {
+    await allow(owner, true);
+    await add(deniz);
+    const first = await prisma.agentSeat.findMany({ where: { ownerId: deniz }, orderBy: { role: 'asc' } });
+    assert.deepEqual(first.map(seat => [seat.name, seat.retiredAt]), [['Collab Developer (Deniz)', null], ['Collab Reviewer (Deniz)', null], ['Collab Security (Deniz)', null]]);
+    const all = label => ['Developer', 'Reviewer', 'Security'].map(role => `Collab ${role} (${label})`);
+
+    assert.deepEqual((await add(kara))[1], { created: all('Deniz K.'), refused: [] });
+    // The initial is Deniz Kara's by now, so the next Deniz K. gets the full name, with one space between its words.
+    assert.deepEqual((await add(kurt))[1], { created: all('Deniz Kurt'), refused: [] });
+    // Nothing is left to try for a fourth with that full name, or for someone with no last name: refused as before.
+    const accountsNow = await prisma.user.count();
+    const fourth = (await add(kurtToo))[1];
+    assert.deepEqual([fourth.created, fourth.refused.map(seat => [seat.name, seat.code])], [[], all('Deniz Kurt').map(name => [name, 'name_taken'])]);
+    assert.match(fourth.refused[0].reason, /An agent named Collab Developer \(Deniz Kurt\) already exists/);
+    const single = (await add(mono))[1];
+    assert.deepEqual([single.created, single.refused.map(seat => [seat.name, seat.code])], [[], all('Deniz').map(name => [name, 'name_taken'])]);
+    assert.equal(await prisma.agentSeat.count({ where: { ownerId: { in: [kurtToo, mono] } } }), 0);
+    assert.equal(await prisma.user.count(), accountsNow, 'no agent account is left behind by a refusal');
+    // Nobody's seat was renamed or given to someone else on the way.
+    assert.deepEqual(await prisma.agentSeat.findMany({ where: { ownerId: deniz }, orderBy: { role: 'asc' } }), first);
+    assert.deepEqual([await names({ ownerId: kara }), await names({ ownerId: kurt })], [all('Deniz K.'), all('Deniz Kurt')]);
+  });
+
+  await t.test('one taken name moves all of a member\'s seats to the next form, also when it is the last one made and is written in other letters', async () => {
+    await made('collab security (ECE)', 'security', ece);
+    assert.deepEqual((await add(eceToo))[1], { created: ['Collab Developer (Ece A.)', 'Collab Reviewer (Ece A.)', 'Collab Security (Ece A.)'], refused: [] });
+    assert.equal(await prisma.user.count({ where: { name: { in: ['Collab Developer (Ece)', 'Collab Reviewer (Ece)'] } } }), 0);
+    assert.deepEqual(await names({ ownerId: ece }), ['collab security (ECE)']);
+  });
+
+  await t.test('two members with the same first name who add at the same moment get different names, each in one form', async () => {
+    const setup = deps['@/lib/agent-seat-setup'];
+    const replies = JSON.parse(JSON.stringify(await Promise.all([ada, adaToo].map(userId => setup.addMySeats({ workspaceId: 'w', userId, projectId: P })))));
+    assert.deepEqual(replies.map(reply => reply.refused), [[], []]);
+    const labels = replies.map(reply => reply.created.map(name => name.match(/\((.*)\)$/)[1]));
+    // Whoever wrote first has the first name alone; the other one has the initial, on all three seats.
+    assert.ok(labels.every(mine => mine.length === 3 && new Set(mine).size === 1), JSON.stringify(labels));
+    assert.deepEqual(labels.map(mine => mine[0]).sort(), ['Ada', labels[0][0] === 'Ada' ? 'Ada M.' : 'Ada S.'].sort());
+    for (const [index, userId] of [ada, adaToo].entries()) assert.deepEqual(await names({ ownerId: userId }), replies[index].created);
+    assert.equal(await prisma.user.count({ where: { name: { startsWith: 'Collab ', contains: '(Ada' } } }), 6);
   });
 });
