@@ -58,7 +58,11 @@ async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account
     if (!project.membersMayAddSeats) throw new HandoffError('members_add_off', 'The project owner has not switched this on.', 403);
     // The name is derived, not chosen, so it can meet an agent that is not this member's. Only a seat the member owned comes back.
     if (existing ? existing.ownerId !== input.ownerId : await tx.appToken.count({ where: { userId: account.id } })) {
-      throw new HandoffError('name_taken', `An agent named ${account.name ?? input.name} already exists in this workspace. Ask someone who manages the workspace to create your seats`, 409);
+      throw new HandoffError('name_taken', `An agent named ${account.name ?? input.name} already exists in this workspace. Ask someone who manages the workspace to create this seat`, 409);
+    }
+    // A seat of this role the member was given in the meantime, under any name, is enough: decided here, on settled rows.
+    if (await tx.agentSeat.count({ where: { projectId: input.projectId, role: input.role, ownerId: input.ownerId, retiredAt: null, userId: { not: account.id } } })) {
+      throw new HandoffError('own_seat_exists', `You already have a ${input.role} seat in this project`, 409);
     }
   }
   const same = !!existing && !existing.retiredAt && existing.projectId === input.projectId && existing.role === input.role;
@@ -235,9 +239,10 @@ export async function recordSeatHandoff(tx: Prisma.TransactionClient, context: C
  * finished issues keep its name. The tokens its runner fetched are revoked; a token made by hand stays until
  * revoked, but writes nothing any more.
  */
-export async function retireSeat(input: { workspaceId: string; actorId: string; seatId: string; ownerId?: string }) {
-  // With `ownerId`, only that person's seat: a seat made again for someone else in the meantime is not found.
-  const where = { id: input.seatId, workspaceId: input.workspaceId, retiredAt: null, ...(input.ownerId && { ownerId: input.ownerId }) };
+export async function retireSeat(input: { workspaceId: string; actorId: string; seatId: string; only?: Prisma.AgentSeatWhereInput }) {
+  // With `only`, the seat must still match it when it is read under its lock: a seat made again for someone else, in
+  // another project or in another role in the meantime is not found.
+  const where = { ...input.only, id: input.seatId, workspaceId: input.workspaceId, retiredAt: null };
   return prisma.$transaction(async tx => {
     const found = await tx.agentSeat.findFirst({ where, select: { projectId: true } });
     if (!found) throw new HandoffError('not_found', 'Seat not found', 404);

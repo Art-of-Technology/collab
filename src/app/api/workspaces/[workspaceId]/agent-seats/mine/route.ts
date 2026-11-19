@@ -26,7 +26,8 @@ async function own(context: Params, input: unknown, act: typeof addMySeats | typ
 }
 
 // POST /api/workspaces/[workspaceId]/agent-seats/mine - the signed-in person adds their own developer, reviewer and
-// security seat to a project whose owner switched that on. Answers with the names of the seats it made.
+// security seat to a project whose owner switched that on. Answers with the seats it made and the seats it could not
+// make, each with the reason.
 export async function POST(request: NextRequest, context: Params) {
   return own(context, await request.json().catch(() => null), addMySeats, 201);
 }

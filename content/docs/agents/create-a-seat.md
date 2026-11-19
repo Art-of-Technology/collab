@@ -61,6 +61,7 @@ The projects listed there are the ones that use seats.
 - Only the roles you have no seat of are made. A role that already has a default seat keeps it.
 - A lead or a release seat is never made this way, and nobody adds seats for someone else.
 - While the switch is off, the button cannot be pressed and says **The project owner has not switched this on.**
+- If an agent with one of those names already exists, for example because a colleague has the same first name, that seat is not made and the page says so. Ask someone who manages the workspace to create it.
 - Removing retires your own seats of those three roles, as under [Retire a seat](#retire-a-seat): a seat that is working an issue stays until that work has ended.
 
 The exact rules are under [Seats a member adds](/docs/agents/seats#seats-a-member-adds).

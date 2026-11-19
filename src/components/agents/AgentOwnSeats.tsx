@@ -45,16 +45,20 @@ export function AgentOwnSeats({ workspaceId, projects, canManage }: Props) {
     () => ({ title: membersMayAddSeats ? `Members may add their own seats to ${project.name}` : `Members can no longer add seats to ${project.name}`,
       ...(!membersMayAddSeats && { description: 'The seats they already added stay.' }) }));
   const add = (project: Project) => call(`${api}/agent-seats/mine`, { method: 'POST', body: JSON.stringify({ projectId: project.id }) },
-    (body: { created?: string[] }) => ({ title: 'Your seats were added', description: `${body.created?.join(', ')}. They work once your runner is connected.` }));
+    (body: { created?: string[]; refused?: { name: string; reason: string }[] }) => ({ title: body.refused?.length ? 'Not every seat was added' : 'Your seats were added',
+      description: [body.created?.length && `Added: ${body.created.join(', ')}. They work once your runner is connected.`,
+        ...(body.refused ?? []).map(seat => `${seat.name} was not added: ${seat.reason.replace(/\.$/, '')}.`)].filter(Boolean).join(' ') }));
   const remove = (project: Project) => call(`${api}/agent-seats/mine?projectId=${encodeURIComponent(project.id)}`, { method: 'DELETE' },
     (body: { removed?: string[]; kept?: { name: string; reason: string }[] }) => ({ title: body.kept?.length ? 'Not every seat was removed' : 'Your seats were removed',
-      description: [body.removed?.length && `Removed: ${body.removed.join(', ')}.`, ...(body.kept ?? []).map(seat => `${seat.name} stays: ${seat.reason}.`)].filter(Boolean).join(' ') }));
+      description: [body.removed?.length && `Removed: ${body.removed.join(', ')}.`, ...(body.kept ?? []).map(seat => `${seat.name} stays: ${seat.reason.replace(/\.$/, '')}.`)].filter(Boolean).join(' ') }));
 
-  if (!projects.length) return null;
+  // The switch is only for a project that seats can be added to; a person's own seats are shown wherever they are.
+  const rows = canManage ? projects.filter(project => project.addable) : projects;
+  if (!rows.length) return null;
   return <section aria-label={canManage ? "Members' own seats" : 'Your seats'} className="divide-y rounded-lg border text-sm">
-    {projects.map(project => {
+    {rows.map(project => {
       const id = `members-add-seats-${project.id}`;
-      const missing = project.mine.length < 3;
+      const missing = project.addable && project.mine.length < 3;
       // Every row has the same controls, so each is a group named by its project.
       return <div key={project.id} role="group" aria-labelledby={`${id}-name`} className="flex flex-wrap items-center justify-between gap-3 p-3">
         <div className="min-w-0 space-y-1">

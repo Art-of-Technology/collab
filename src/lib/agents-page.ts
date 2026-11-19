@@ -59,14 +59,17 @@ export async function readSeats(userId: string, workspaceIdOrSlug: string) {
   // stayed away long enough for the last token it fetched to run out.
   const fetched = await fetchedBy(prisma, rows.filter(seat => seat.byRunner).map(seat => seat.userId));
   // The projects that use seats, each with its owner's switch and the roles the person already has a seat of there.
+  // A project that stopped using seats or was archived stays listed while the person has such a seat, to remove it.
+  const own = { ownerId: userId, retiredAt: null, role: { in: [...MEMBER_ROLES] } };
   const projects = await prisma.project.findMany({
-    where: { workspaceId: workspace.id, agentMode: 'seats', OR: [{ isArchived: null }, { isArchived: false }] }, orderBy: { name: 'asc' },
-    select: { id: true, slug: true, name: true, membersMayAddSeats: true,
-      agentSeats: { where: { ownerId: userId, retiredAt: null, role: { in: [...MEMBER_ROLES] } }, orderBy: { role: 'asc' }, select: { role: true } } },
+    where: { workspaceId: workspace.id, OR: [{ agentMode: 'seats', OR: [{ isArchived: null }, { isArchived: false }] }, { agentSeats: { some: own } }] }, orderBy: { name: 'asc' },
+    select: { id: true, slug: true, name: true, membersMayAddSeats: true, agentMode: true, isArchived: true, agentSeats: { where: own, orderBy: { role: 'asc' }, select: { role: true } } },
   });
   return {
     workspace,
-    projects: projects.map(({ agentSeats, ...project }) => ({ ...project, mine: [...new Set(agentSeats.map(seat => seat.role))] })),
+    projects: projects.map(({ agentSeats, agentMode, isArchived, ...project }) => ({ ...project, mine: [...new Set(agentSeats.map(seat => seat.role))],
+      // Where seats can be added at all: the switch and the Add button are offered only there.
+      addable: agentMode === 'seats' && !isArchived })),
     seats: rows.map(({ userId: account, runs, project, projectId: _project, byRunner: runner, owner, ...seat }, index) => ({
       ...seat, project: project.name, noRunner: runner && !fetched.has(account),
       // The person whose sign-in runs the seat; null when no person's subscription pays for it.

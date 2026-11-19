@@ -180,7 +180,7 @@ test('Seats tab: each seat with its role, project, owner, what it works on now a
 });
 
 test('Seats tab: a member adds and removes their own seats per project, and who manages the workspace has the switch instead', async () => {
-  const project = { id: 'p1', slug: 'collab', name: 'Collab', membersMayAddSeats: false, mine: [] };
+  const project = { id: 'p1', slug: 'collab', name: 'Collab', membersMayAddSeats: false, mine: [], addable: true };
   const open = (projects, manage = false, ...tab) => page({ manage, view: { workspace: { id: 'ws', slug: 'team' }, seats, projects } }).open(...tab);
   // Switched off: the button is there, cannot be pressed, and says why.
   const off = await open([project]);
@@ -197,6 +197,11 @@ test('Seats tab: a member adds and removes their own seats per project, and who 
   const all = await open([{ ...project, mine: ['developer', 'reviewer', 'security'] }]);
   assert.match(text(all), /Your seats in this project: developer, reviewer, security \. Remove my seats/);
   assert.doesNotMatch(all, /Add my seats|not switched this on/);
+  // A project that takes no new seats (it went back to handoffs, or was archived) still lets a member remove theirs, and offers nothing else.
+  const closed = [{ ...project, name: 'Closed', addable: false, membersMayAddSeats: true, mine: ['developer'] }];
+  assert.match(text(await open(closed)), /Closed Your seats in this project: developer \. Remove my seats/);
+  assert.doesNotMatch(await open(closed), /Add my seats|not switched this on/);
+  assert.doesNotMatch(await open(closed, true), /Closed|Members may add/);
   // Who manages the workspace gets the switch per project, as it stands, and none of a member's buttons.
   const managed = await open([{ ...project, membersMayAddSeats: true }, { ...project, id: 'p2', name: 'Other' }], true);
   assert.match(managed, /Collab<\/p><\/div><div[^>]*><input type="checkbox"[^>]*id="members-add-seats-p1"[^>]*checked=""[^>]*\/><label for="members-add-seats-p1">Members may add their own seats to this project<\/label>/);
