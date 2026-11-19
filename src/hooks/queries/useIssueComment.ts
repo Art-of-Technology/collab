@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import { subscribeWorkspaceEvents } from '@/lib/workspace-event-source';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { 
@@ -22,18 +24,40 @@ export const issueCommentKeys = {
 /**
  * Hook to fetch issue comments
  */
-export function useIssueComments(issueId: string, initialComments?: IssueComment[]) {
+export function useIssueComments(issueId: string, initialComments?: IssueComment[], workspaceId?: string) {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!workspaceId || !issueId) return;
+    return subscribeWorkspaceEvents(workspaceId, (event) => {
+      // Ready is sent after subscription, including reconnects: catch up on missed events.
+      if (event?.type === 'realtime.ready' ||
+          (event?.type === 'issue.comments.changed' && event.workspaceId === workspaceId &&
+            (event.issueId === issueId || event.issueKey === issueId))) {
+        void queryClient.invalidateQueries({ queryKey: issueCommentKeys.list(issueId) });
+      }
+    });
+  }, [workspaceId, issueId, queryClient]);
+
   return useQuery({
     queryKey: issueCommentKeys.list(issueId),
-    queryFn: async () => {
-      const response = await fetch(`/api/issues/${issueId}/comments`);
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/issues/${issueId}/comments`, { signal, cache: 'no-store' });
       if (!response.ok) {
         throw new Error("Failed to fetch comments");
       }
       return response.json() as Promise<IssueComment[]>;
     },
     enabled: !!issueId,
-    // The issue payload already carries its comments; seed the cache so opening an issue skips the extra request.
+    // The issue payload/cache can predate comments posted elsewhere. Always verify
+    // on opening a thread, even when SSE is absent or already connected.
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    // Recover from missed events or unavailable Redis; inactive tabs do not poll.
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    // Show supplied comments immediately while HTTP verifies the current list.
     ...(initialComments && initialComments.length > 0 ? { initialData: initialComments } : {}),
   });
 }

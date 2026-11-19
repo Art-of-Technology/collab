@@ -1,3 +1,4 @@
+import { publishEvent } from '@/lib/redis';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -84,6 +85,7 @@ export async function POST(
         }
       });
       
+      await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id });
       return NextResponse.json({ 
         status: "removed",
         message: "Like removed",
@@ -126,6 +128,7 @@ export async function POST(
       }
     });
 
+    await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id });
     return NextResponse.json({
       status: "added",
       message: "Like added",

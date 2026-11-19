@@ -24,7 +24,8 @@ test('app handlers deny bound issue writes before mutation while allowing unconn
     issueRelation: { findUnique: async () => ({ id: 'relation', sourceIssueId: issues[1].id, targetIssueId: issues[0].id }), delete: mutate },
   };
   const guard = load('src/lib/forge/legacy-write-guard.ts', { 'server-only': {}, '@/lib/prisma': { prisma: db, issueTrashPrisma: db }, './reader': { readForgeBindings: async () => { bindingReads++; return [{ projectId: 'c000000000000000000000003', workspaceId: 'workspace' }]; } } });
-  const deps = { 'next/server': { NextResponse }, zod, '@/lib/prisma': { prisma: db }, '@/lib/forge/legacy-write-guard': guard,
+  const deps = {
+    '@/lib/redis': { publishEvent: async () => { throw new Error('Denied comment write must not publish'); } }, 'next/server': { NextResponse }, zod, '@/lib/prisma': { prisma: db }, '@/lib/forge/legacy-write-guard': guard,
     '@/lib/apps/auth-middleware': { withAppAuth: handler => handler }, '@/lib/event-bus': {} };
   const base = 'src/app/api/apps/auth/issues/[issueIdOrKey]/';
   const routes = [

@@ -3,50 +3,13 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
+import { subscribeWorkspaceEvents } from '@/lib/workspace-event-source';
 import { issueKeys } from '@/hooks/queries/useIssues';
 
 export interface RealtimeOptions {
   workspaceId?: string;
   boardId?: string;
   viewId?: string;
-}
-
-// Singleton connection manager per workspace to avoid duplicate SSE connections
-type WorkspaceConnection = {
-  source: EventSource;
-  refCount: number;
-  listeners: Set<(data: any) => void>;
-};
-
-const workspaceConnections: Record<string, WorkspaceConnection> = {};
-
-function getOrCreateWorkspaceConnection(workspaceId: string): WorkspaceConnection {
-  let conn = workspaceConnections[workspaceId];
-  if (conn) return conn;
-
-  const url = `/api/realtime/workspace/${workspaceId}/stream`;
-  const source = new EventSource(url, { withCredentials: true });
-  conn = {
-    source,
-    refCount: 0,
-    listeners: new Set(),
-  };
-
-  source.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      conn.listeners.forEach((cb) => cb(data));
-    } catch {
-      // ignore
-    }
-  };
-
-  source.onerror = () => {
-    // Allow the browser to manage reconnection
-  };
-
-  workspaceConnections[workspaceId] = conn;
-  return conn;
 }
 
 // Global drag operations tracking to share across hook instances
@@ -131,9 +94,6 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
 
   useEffect(() => {
     if (!workspaceId) return;
-
-    const conn = getOrCreateWorkspaceConnection(workspaceId);
-    conn.refCount += 1;
 
     const handleEvent = (data: any) => {
       try {
@@ -291,7 +251,7 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
       }
     };
 
-    conn.listeners.add(handleEvent);
+    const unsubscribe = subscribeWorkspaceEvents(workspaceId, handleEvent);
 
     return () => {
       // Clear any pending position update timeouts
@@ -307,12 +267,7 @@ export function useRealtimeWorkspaceEvents(options: RealtimeOptions, suppressInv
       latestSequences.current.clear();
       recentDragOperations.current.clear();
       
-      conn.listeners.delete(handleEvent);
-      conn.refCount -= 1;
-      if (conn.refCount <= 0) {
-        try { conn.source.close(); } catch {}
-        delete workspaceConnections[workspaceId];
-      }
+      unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, boardId, viewId]);

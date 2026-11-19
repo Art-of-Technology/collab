@@ -139,3 +139,12 @@ test('cancellation suppresses pending delivery and skips queued authorization', 
     f.state.firstViewWait.resolve();
   }
 });
+
+test('comment change events require current issue access', async () => {
+  const f = fixture(), reader = await stream(f);
+  const event = { type: 'issue.comments.changed', workspaceId: 'space', issueId: 'one' };
+  await delivered(f, reader, event, true);
+  f.rows[0].project = f.hiddenProject;
+  await delivered(f, reader, event, false);
+  await reader.cancel();
+});
