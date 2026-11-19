@@ -43,3 +43,19 @@ test('closing during an in-flight autosave writes the latest edit last', async (
   await React.act(async () => { finishFirst(); await new Promise(resolve => setTimeout(resolve, 0)); });
   assert.deepEqual(writes, ['First', 'Latest']);
 });
+
+test('reverting during an in-flight autosave saves the original value last', async () => {
+  writes.length = 0;
+  const root = createRoot(document.getElementById('root'));
+  function Editor() {
+    form = useNoteForm({ mode: 'edit', noteId: 'note', workspaceId: 'workspace' }).form;
+    return null;
+  }
+  await React.act(async () => { root.render(React.createElement(Editor)); });
+  await React.act(async () => { form.setValue('title', 'First'); });
+  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 850)); });
+  await React.act(async () => { form.setValue('title', 'Original'); });
+  await React.act(async () => { root.unmount(); });
+  await React.act(async () => { finishFirst(); await new Promise(resolve => setTimeout(resolve, 0)); });
+  assert.deepEqual(writes, ['First', 'Original']);
+});

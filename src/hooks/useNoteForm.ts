@@ -189,6 +189,7 @@ export function useNoteForm({
   onSavedRef.current = onSaved;
   const pendingAutosaveRef = useRef<(() => void) | null>(null);
   const autosaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const queuedValuesRef = useRef<string | null>(null);
   const createdNoteIdRef = useRef<string | null>(noteId || null);
   const autosaveErrorToastShownRef = useRef(false);
   const isInitializedRef = useRef(false);
@@ -429,6 +430,7 @@ export function useNoteForm({
   }, [mode, noteId, toast, onSuccess]);
 
   const autosave = useCallback((values: NoteFormValues) => {
+    queuedValuesRef.current = serializeValues(values);
     autosaveQueueRef.current = autosaveQueueRef.current.then(() => saveNote(values));
     return autosaveQueueRef.current;
   }, [saveNote]);
@@ -454,7 +456,7 @@ export function useNoteForm({
   useEffect(() => {
     // Skip if not initialized or values haven't changed
     if (!isInitializedRef.current) return;
-    if (currentFormValues === lastSavedValues) return;
+    if (currentFormValues === lastSavedValues && (queuedValuesRef.current === null || currentFormValues === queuedValuesRef.current)) return;
     if (!latestValuesRef.current) return;
 
     // Skip autosave for secret note types - require explicit save for security
@@ -487,7 +489,7 @@ export function useNoteForm({
           return;
         }
         const serialized = serializeValues(latestValuesRef.current);
-        if (serialized !== lastSavedValues) {
+        if (serialized !== lastSavedValues || (queuedValuesRef.current !== null && serialized !== queuedValuesRef.current)) {
           autosave(latestValuesRef.current);
         }
       }

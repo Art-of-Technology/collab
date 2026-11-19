@@ -159,6 +159,28 @@ test('creating a folder does not take over a location opened while the request i
 const note = (id, fields = {}) => ({ id, title: id, type: 'GENERAL', updatedAt: '2026-11-17T09:00:00Z', isPinned: false, ...fields });
 const click = text => React.act(async () => { [...document.querySelectorAll('button')].find(row => row.textContent.startsWith(text)).click(); });
 
+test('an older initial read cannot restore a deleted note', async () => {
+  let finishInitial;
+  let reads = 0;
+  routes = {
+    'GET /api/context/folders': () => ({ folders: [] }),
+    'GET /api/context/items': () => ++reads === 1
+      ? new Promise(resolve => { finishInitial = resolve; })
+      : { notes: [note('Other')], files: [] },
+    'DELETE /api/notes/First': () => ({ ok: true }),
+  };
+  await React.act(async () => root.render(h(ContextBrowser, {
+    workspaceId: 'w', workspaceSlug: 'weezboo', projects: [], initialNoteId: 'First',
+  })));
+  await click('Delete');
+  await settle();
+  await React.act(async () => { finishInitial({ notes: [note('First'), note('Other')], files: [] }); });
+  await settle();
+  assert.ok(!list().some(row => row.startsWith('First')));
+  assert.ok(list().some(row => row.startsWith('Other')));
+  await React.act(async () => root.render(null));
+});
+
 test('a Note opens beside the list on this page, its address can be opened again, and closing it stays here', async () => {
   routes = {
     'GET /api/context/folders': () => ({ folders }),

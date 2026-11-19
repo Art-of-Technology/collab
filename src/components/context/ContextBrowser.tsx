@@ -106,9 +106,13 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   // What the page is showing. Only the newest read is drawn, so opening one folder while another is
   // still being read never leaves the slower answer on the page. A failed read says so.
   const reading = useRef(0);
+  const notesRead = useRef(0);
+  const pendingShow = useRef<number | null>(null);
   const levelRead = useRef<string | undefined>(undefined);
   const show = useCallback(async (next: Level & { folderId: string | null }) => {
     const mine = ++reading.current;
+    const notesVersion = ++notesRead.current;
+    pendingShow.current = mine;
     setError(null);
     setSelectedFile(null);
     // What was read for another folder is not this one's: nothing is listed until this read answers,
@@ -135,12 +139,16 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
       if (next.folderId) {
         setExpanded(current => new Set([...current, rootKey(next.projectId), ...above.map(folderKey)]));
       }
-      setNotes(items.notes);
-      setMoreNotes(items.notes.length === 500);
+      if (notesVersion === notesRead.current) {
+        setNotes(items.notes);
+        setMoreNotes(items.notes.length === 500);
+      }
       setFiles(items.files);
     } catch (failure) {
       if (mine !== reading.current) return;
       setError(failure instanceof Error ? failure.message : 'This folder could not be read');
+    } finally {
+      if (pendingShow.current === mine) pendingShow.current = null;
     }
   }, [readFolders, readItems]);
 
@@ -267,8 +275,9 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   // have been opened meanwhile: its list is not this one's.
   const rereadNotes = async (place: number) => {
     if (place !== reading.current) return;
+    const version = ++notesRead.current;
     const fresh = await readItems(level, openFolderId);
-    if (place !== reading.current) return;
+    if (place !== reading.current || version !== notesRead.current) return;
     setNotes(fresh.notes);
     setMoreNotes(fresh.notes.length === 500);
   };
@@ -307,15 +316,24 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
     // The pinned list holds pinned Notes alone: one that is unpinned there leaves it, and comes back
     // when it is pinned again from its pane, which stays open.
     if (level.view === 'pinned') return rereadNotes(place);
-    if (place === reading.current) setNotes(current => current.map(note => (note.id === id ? { ...note, isPinned: pin } : note)));
+    if (place === reading.current) {
+      if (pendingShow.current === place) return rereadNotes(place);
+      notesRead.current++;
+      setNotes(current => current.map(note => (note.id === id ? { ...note, isPinned: pin } : note)));
+    }
   });
 
   const deleteNote = (id: string) => write(async () => {
     const place = reading.current;
     await readJson(await fetch(`/api/notes/${id}`, { method: 'DELETE' }));
     // The Note leaves the list it was deleted from, and its pane closes only if it is still the one open.
-    if (place === reading.current) setNotes(current => current.filter(note => note.id !== id));
+    const refresh = place === reading.current && pendingShow.current === place;
+    if (place === reading.current) {
+      notesRead.current++;
+      setNotes(current => current.filter(note => note.id !== id));
+    }
     setSelectedNoteId(current => (current === id ? null : current));
+    if (refresh) await rereadNotes(place);
   });
 
   const uploadFile = (chosen: File | null) => {
@@ -401,13 +419,14 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
       />
       {moreNotes && <Button variant="ghost" disabled={busy} onClick={() => void write(async () => {
         const mine = reading.current;
+        const version = ++notesRead.current;
         const refreshed: NoteItem[] = [];
         let next: { notes: NoteItem[]; files: FileItem[] };
         do {
           next = await readItems(level, openFolderId, refreshed.length);
           refreshed.push(...next.notes);
         } while (next.notes.length === 500 && refreshed.length <= notes.length);
-        if (mine !== reading.current) return;
+        if (mine !== reading.current || version !== notesRead.current) return;
         setNotes(refreshed);
         setMoreNotes(next.notes.length === 500);
       })}>Load more notes</Button>}
