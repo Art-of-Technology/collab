@@ -257,8 +257,8 @@ R.lead=d=>{const devs=rank('developer'),next=T.stories.find(s=>!s.to);
     ${T.note?`<p class="note"><b>The lead's comment:</b> ${esc(T.note)}</p>`:''}</div></div>`)};
 ACT['t-assign']=()=>{const st=T.stories.find(s=>!s.to);if(!st)return;const p=leadPick();
   if(!p){T.note=`${st.k} waits: no developer seat can start work now.`;render();return}
-  st.to=p.s.name;T.held[p.s.id]=(T.held[p.s.id]||0)+1;P[p.s.owner].open++;T.note=`${st.k} to ${p.s.name}: ${p.why}.`;render()};
-ACT['t-reset']=()=>{T=T0();P.cem.open=3;P.bob.open=0;render()};
+  st.to=p.s.name;st.owner=p.s.owner;T.held[p.s.id]=(T.held[p.s.id]||0)+1;P[p.s.owner].open++;T.note=`${st.k} to ${p.s.name}: ${p.why}.`;render()};
+ACT['t-reset']=()=>{T.stories.forEach(s=>{if(s.owner)P[s.owner].open--});T=T0();render()};
 
 /* ---------- screen 4: requests ---------- */
 let Q=[];
@@ -271,8 +271,8 @@ R.req=d=>{const list=r=>rank(r).map((s,i)=>`<div class="lrow" style="cursor:defa
    <div class="card"><b>Reviewer seats</b>${list('reviewer')}<b style="display:block;margin-top:12px">Security seats</b>${list('security')}</div>
    <div class="card"><b>CLB-801 · the developer asks</b><div class="row" style="margin:8px 0"><button class="btn pri" data-act="q-ask" data-v="reviewer">Ask for a review</button><button class="btn" data-act="q-ask" data-v="security">Ask for a security check</button><button class="btn ghost" data-act="q-reset">Clear</button></div>
     ${Q.length?Q.map(q=>`<div class="lrow" style="cursor:default"><span class="muted">${q.k}</span><span style="flex:1;min-width:0">${q.what} for CLB-801<br><span class="muted small">Collab sent it to <b style="color:var(--ink)">${esc(q.to)}</b>: ${esc(q.why)}</span></span><span class="chip">sample</span></div>`).join(''):'<p class="muted small">No request yet. Press a button.</p>'}</div></div>`)};
-ACT['q-ask']=b=>{const role=b.dataset.v,p=placeReq(role);Q.push({k:'CLB-'+(820+Q.length),what:role==='reviewer'?'Review':'Security check',to:p.s.name,why:p.why});P[p.s.owner].open++;render()};
-ACT['q-reset']=()=>{Q=[];P.cem.open=3;P.bob.open=T.stories.filter(s=>s.to&&/Bob/.test(s.to)).length;render()};
+ACT['q-ask']=b=>{const role=b.dataset.v,p=placeReq(role);Q.push({k:'CLB-'+(820+Q.length),what:role==='reviewer'?'Review':'Security check',to:p.s.name,owner:p.s.owner,why:p.why});P[p.s.owner].open++;render()};
+ACT['q-reset']=()=>{Q.forEach(q=>P[q.owner].open--);Q=[];render()};
 
 /* ---------- screen 5: a run shows whose allowance ---------- */
 const RUNS=[{id:1,k:'CLB-801',seat:'Collab Developer (Bob)',o:'bob',prog:'Claude Code',out:'in review',at:'14:02',min:38,done:'Runner reports room per seat with its heartbeat.'},
