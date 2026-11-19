@@ -50,7 +50,7 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
       assert.equal(event.type, 'issue.comments.changed');
       assert.equal(event.workspaceId, 'w');
       assert.equal(timeoutMs, 1000);
-      assert.ok(await raw.issueComment.count({ where: { issueId: event.issueId } }), 'publish follows a persisted comment');
+      assert.ok(await prisma.issueComment.count({ where: { issueId: event.issueId } }), 'publish follows a persisted comment');
       return true;
     } }, zod, '@prisma/client': require('@prisma/client'), 'next/server': { NextResponse: Response },
     '@/lib/prisma': { prisma, issueTrashPrisma: prisma }, '@/lib/issue-finder': finder, '@/lib/issue-assignee': assignee, '@/lib/agent-seats': seats,
