@@ -14,6 +14,7 @@ import {
   useUpdateIssueComment, 
   useDeleteIssueComment 
 } from "@/hooks/queries/useIssueComment";
+import { flattenCommentIds } from "../utils/commentArrivals";
 import type { CommentItemProps } from "../types/comment";
 import { CommentActions } from "./CommentActions";
 import { CommentReplyForm } from "./CommentReplyForm";
@@ -24,6 +25,7 @@ export function CommentItem({
   currentUserId,
   onReply,
   level = 0,
+  highlightedIds,
 }: CommentItemProps) {
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [repliesCollapsed, setRepliesCollapsed] = useState(false);
@@ -36,6 +38,15 @@ export function CommentItem({
   const toggleLikeMutation = useToggleIssueCommentLike();
   const updateCommentMutation = useUpdateIssueComment();
   const deleteCommentMutation = useDeleteIssueComment();
+
+  const hasIncomingReply = useMemo(() =>
+    Array.from(flattenCommentIds(comment.replies || []).keys()).some(id => highlightedIds?.has(id)),
+    [comment.replies, highlightedIds]);
+  const [previousIncomingReply, setPreviousIncomingReply] = useState(hasIncomingReply);
+  if (hasIncomingReply !== previousIncomingReply) {
+    setPreviousIncomingReply(hasIncomingReply);
+    if (hasIncomingReply) setRepliesCollapsed(false);
+  }
 
   const handleReplyClick = () => {
     setShowReplyForm(!showReplyForm);
@@ -140,8 +151,8 @@ export function CommentItem({
   };
 
   return (
-    <div className={`${level > 0 ? "ml-4 border-l border-collab-600 pl-3" : ""}`}>
-      <div className="group flex gap-2 py-1.5 hover:bg-collab-950 rounded-md px-1">
+    <div data-comment-id={comment.id} className={`scroll-mt-20 ${level > 0 ? "ml-4 border-l border-collab-600 pl-3" : ""}`}>
+      <div className={`group flex gap-2 py-1.5 hover:bg-collab-950 rounded-md px-1 ${highlightedIds?.has(comment.id) ? "comment-arrival-highlight" : ""}`}>
         <div className="flex-shrink-0">
           <CustomAvatar user={comment.author} size="xs" />
         </div>
@@ -227,6 +238,7 @@ export function CommentItem({
                   currentUserId={currentUserId}
                   onReply={onReply}
                   level={level + 1}
+                  highlightedIds={highlightedIds}
                 />
               ))}
             </div>

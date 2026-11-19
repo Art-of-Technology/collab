@@ -38,6 +38,7 @@ export interface CommentItemProps {
   currentUserId?: string;
   onReply: (parentId: string) => void;
   level?: number;
+  highlightedIds?: ReadonlySet<string>;
 }
 
 export interface CommentFormProps {
