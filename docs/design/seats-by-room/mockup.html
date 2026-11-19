@@ -164,7 +164,6 @@ let SEATS=[
 const ROLES=['lead','developer','reviewer','security'];
 /* The one figure of a seat: null = unknown, 0 = cannot start now. */
 function eff(owner){const p=P[owner];
-  if(p.state==='none')return{v:null,why:STATE.none};
   if(p.state!=='on')return{v:0,why:STATE[p.state]};
   if(!G.fresh)return{v:null,why:'no number newer than 15 minutes'};
   if(p.room<=0)return{v:0,why:'allowance used up'};

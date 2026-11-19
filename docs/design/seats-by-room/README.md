@@ -11,7 +11,7 @@ One figure per seat: the percent of allowance left, against the runner's hold-ba
 | Shown as | When |
 | --- | --- |
 | A bar and "60% room · next run on Claude Code" | The runner reported a figure in the last 15 minutes |
-| "no room" with the reason | The runner is offline, paused, has a full disk, or the allowance is used up |
+| "no room" with the reason | No runner is connected, the runner is offline, paused, has a full disk, or the allowance is used up |
 | "unknown" with the reason | No figure, or one older than 15 minutes. Work is then placed as it was before this epic |
 
 ## How it works
@@ -48,7 +48,7 @@ The "Try it" box belongs to the mockup, not to the product.
 
 ## Requests (CLB-778)
 
-Collab places a request on the seat of the role with the most room and says which seat got it and why. When no seat of the role has a fresh figure with room, it goes to the default seat, as before, unless Collab knows the default seat cannot start (its runner is offline, paused or full): then it goes to the next seat whose figure is unknown. When every seat of the role is known to have no room, it waits at the default seat.
+Collab places a request on the seat of the role with the most room and says which seat got it and why. When no seat of the role has a fresh figure with room, it goes to the default seat, as before, unless Collab knows the default seat cannot start (no runner is connected, or its runner is offline, paused or full): then it goes to the next seat whose figure is unknown. When every seat of the role is known to have no room, it waits at the default seat.
 
 ![Requests placed by room](06-requests.png)
 
