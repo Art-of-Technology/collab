@@ -75,6 +75,7 @@ function fixture() {
     } },
   });
   const dependencies = {
+    '@/lib/redis': { publishEvent: async (_channel, event) => { assert.equal(event.issueId, 'legacy'); return true; } },
     '@/lib/forge/legacy-write-guard': guard,
     '@/lib/prisma': { prisma, issueTrashPrisma: prisma },
     '@/lib/session': { getCurrentUser: async () => ({ id: 'actor' }) },

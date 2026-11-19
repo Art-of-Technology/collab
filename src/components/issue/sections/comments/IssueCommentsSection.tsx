@@ -18,13 +18,12 @@ export function IssueCommentsSection({
   autofocus = false
 }: IssueCommentsSectionProps) {
   const { data: currentUser } = useCurrentUser();
-  const { data: comments = [], isLoading } = useIssueComments(issueId, initialComments);
+  const { data: comments = [], isLoading, isError, refetch, isFetching } = useIssueComments(issueId, initialComments, workspaceId);
   const addCommentMutation = useAddIssueComment();
 
   const organizedComments = useMemo(() => {
-    const commentsToUse = comments.length > 0 ? comments : initialComments;
-    return organizeCommentsIntoTree(commentsToUse);
-  }, [comments, initialComments]);
+    return organizeCommentsIntoTree(comments);
+  }, [comments]);
 
   const handleAddComment = useCallback(async (content: string) => {
     await addCommentMutation.mutateAsync({
@@ -43,9 +42,17 @@ export function IssueCommentsSection({
 
   return (
     <div className="space-y-3">
+      {isError && (
+        <div role="alert" className="text-sm text-muted-foreground">
+          Could not load the latest comments.{' '}
+          <button type="button" className="underline" disabled={isFetching} onClick={() => void refetch()}>
+            Try again
+          </button>
+        </div>
+      )}
       {/* Comments list */}
       {organizedComments.length === 0 ? (
-        <EmptyCommentsState />
+        isError ? null : <EmptyCommentsState />
       ) : (
         <div className="space-y-0.5">
           {organizedComments.map((comment) => (

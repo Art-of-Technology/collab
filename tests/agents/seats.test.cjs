@@ -44,7 +44,15 @@ test('agent seats: one project, one role, and only the writes a seat is given', 
   const middleware = load('src/lib/apps/auth-middleware.ts', { crypto: require('node:crypto'), 'next/server': { NextResponse: Response },
     '@/lib/apps/crypto': crypto, '@/lib/oauth-scopes': load('src/lib/oauth-scopes.ts'), '@/lib/post-access': load('src/lib/post-access.ts'),
     '@/lib/auth-error-diagnostics': load('src/lib/auth-error-diagnostics.ts'), '@/lib/prisma': { prisma } }, globals);
-  const deps = { zod, '@prisma/client': require('@prisma/client'), 'next/server': { NextResponse: Response },
+  const deps = {
+    '@/lib/redis': { publishEvent: async (channel, event, timeoutMs) => {
+      assert.equal(channel, 'workspace:w:events');
+      assert.equal(event.type, 'issue.comments.changed');
+      assert.equal(event.workspaceId, 'w');
+      assert.equal(timeoutMs, 1000);
+      assert.ok(await prisma.issueComment.count({ where: { issueId: event.issueId } }), 'publish follows a persisted comment');
+      return true;
+    } }, zod, '@prisma/client': require('@prisma/client'), 'next/server': { NextResponse: Response },
     '@/lib/prisma': { prisma, issueTrashPrisma: prisma }, '@/lib/issue-finder': finder, '@/lib/issue-assignee': assignee, '@/lib/agent-seats': seats,
     '@/lib/agent-handoffs': handoffs, '@/lib/agent-handoff-http': load('src/lib/agent-handoff-http.ts', { zod, 'next/server': { NextResponse: Response }, './agent-handoffs': handoffs }, globals),
     '@/lib/permissions': { Permission: {}, canActOnOwnContent: () => true, checkUserPermission: async () => ({ hasPermission: true }),

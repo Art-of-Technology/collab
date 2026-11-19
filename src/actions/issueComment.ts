@@ -1,5 +1,6 @@
 'use server';
 
+import { publishEvent } from '@/lib/redis';
 import { assertLegacyIssueWriteAllowed } from '@/lib/forge/legacy-write-guard';
 
 import { getServerSession } from '@/lib/request-session';
@@ -110,6 +111,8 @@ export async function toggleIssueCommentLike(issueId: string, commentId: string)
       }
     });
 
+    await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id }, 1000);
+
     // Revalidate the issue page
     revalidatePath(`/issues/${issueId}`);
     
@@ -200,6 +203,8 @@ export async function updateIssueComment(issueId: string, commentId: string, dat
         },
       },
     });
+
+    await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id }, 1000);
 
     // Revalidate the issue page
     revalidatePath(`/issues/${issueId}`);
@@ -301,6 +306,8 @@ export async function deleteIssueComment(issueId: string, commentId: string) {
         deletedId: commentId
       };
     }
+
+    await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id }, 1000);
 
     // Revalidate the issue page
     revalidatePath(`/issues/${issueId}`);
