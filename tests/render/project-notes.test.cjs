@@ -34,6 +34,7 @@ test('the board Project notes link renders its destination for a member', { time
     config.resolve.alias = {
       'next-auth$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/auth$': ${JSON.stringify(join(fixture, 'data.js'))},
+      '@/lib/session$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/prisma$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/slug-resolvers$': ${JSON.stringify(join(fixture, 'data.js'))},
       '@/lib/forge/board$': ${JSON.stringify(join(fixture, 'data.js'))},
@@ -45,6 +46,8 @@ test('the board Project notes link renders its destination for a member', { time
   write('data.js', `
     export const authConfig = {};
     export const getServerSession = async () => ({ user: { id: 'member', email: 'member@example.test' } });
+    export const getAuthSession = getServerSession;
+    export const getCurrentUser = async () => ({ id: 'member', email: 'member@example.test' });
     export const resolveWorkspaceSlug = async () => 'workspace';
     export const prisma = {
       workspace: { findFirst: async () => ({ id: 'workspace', slug: 'test' }) },

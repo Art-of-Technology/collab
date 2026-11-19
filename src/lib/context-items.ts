@@ -38,7 +38,11 @@ const viewWhere = (userId: string): Record<ContextView, Prisma.NoteWhereInput> =
 /** A Note's title is written in the editor, so it is given back as the text a reader sees. */
 async function notes(userId: string, where: Prisma.NoteWhereInput, offset: number) {
   const rows = await prisma.note.findMany({
-    where: { AND: [noteAccessWhere(userId), where] },
+    where: { AND: [noteAccessWhere(userId), where, { OR: [
+      { authorId: userId },
+      { scope: { in: ['WORKSPACE', 'PROJECT', 'PUBLIC'] } },
+      { sharedWith: { some: { userId } } },
+    ] }] },
     select: NOTE_FIELDS,
     orderBy: [{ title: 'asc' }, { id: 'asc' }],
     take: MAX_CONTEXT_ITEMS,

@@ -39,7 +39,7 @@ const { ContextBrowser } = load('src/components/context/ContextBrowser.tsx', {
   '@/components/ui/input-dialog': { InputDialog: ({ open, onConfirm }) => open ? h('button', { onClick: () => onConfirm('New folder') }, 'Confirm') : null },
   '@/components/context/ContextFilePreview': { ContextFilePreview: () => null },
   '@/components/context/ContextNotePane': { ContextNotePane: ({ noteId, pinned, onClose, onDelete }) => h('div', null, h('button', { 'data-note-pane': noteId, 'data-pinned': String(pinned), onClick: onClose }, 'Close'), h('button', { onClick: onDelete }, 'Delete')) },
-  '@/components/notes/TemplatePickerDialog': { TemplatePickerDialog: ({ open, onSelectTemplate }) => open ? h('button', { onClick: () => onSelectTemplate({ id: 'decision' }, 'Use Postgres') }, 'Use template') : null },
+  '@/components/notes/TemplatePickerDialog': { TemplatePickerDialog: ({ open, onSelectTemplate, onStartBlank, onOpenChange }) => open ? h(React.Fragment, null, h('button', { onClick: () => onSelectTemplate({ id: 'decision' }, 'Use Postgres') }, 'Use template'), h('button', { onClick: () => { onStartBlank(); onOpenChange(false); } }, 'Start blank')) : null },
   '@/components/ui/select': {
     Select: ({ value, onValueChange, children }) => h('select', { 'aria-label': 'Note type', value, onChange: event => onValueChange(event.target.value) }, children),
     SelectTrigger: () => null, SelectValue: () => null, SelectContent: pass,
@@ -223,6 +223,22 @@ test('a Note from a template is filled in by the server and made where the page 
   assert.deepEqual([sent.title, sent.content, sent.type, sent.folderId, sent.scope], ['ADR 7: Use Postgres', '<p>Why</p>', 'DECISION', 'ideas', 'WORKSPACE']);
   assert.equal(document.querySelector('[data-note-pane]').dataset.notePane, 'adr');
   assert.ok(list().some(row => row.startsWith('ADR 7: Use Postgres')));
+  await React.act(async () => root.render(null));
+});
+
+test('starting blank from the template picker opens the new note dialog', async () => {
+  routes = {
+    'GET /api/context/folders': () => ({ folders }),
+    'GET /api/context/items': () => ({ notes: [], files: [] }),
+    'POST /api/notes': () => ({ id: 'blank', type: 'GENERAL', updatedAt: '2026-11-17T09:00:00Z' }),
+  };
+  await React.act(async () => root.render(h(ContextBrowser, { workspaceId: 'w', workspaceSlug: 'weezboo', projects: [] })));
+  await settle();
+  await React.act(async () => { [...document.querySelectorAll('[data-menu]')].find(row => row.textContent === 'Note from template').click(); });
+  await click('Start blank');
+  await click('Confirm');
+  await settle();
+  assert.equal(document.querySelector('[data-note-pane]').dataset.notePane, 'blank');
   await React.act(async () => root.render(null));
 });
 

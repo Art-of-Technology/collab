@@ -421,7 +421,7 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
       validate={value => (value.trim() ? undefined : 'A title is required')}
     />
     <TemplatePickerDialog
-      open={asking === 'template'} onOpenChange={open => setAsking(open ? 'template' : null)}
+      open={asking === 'template'} onOpenChange={open => setAsking(current => open ? 'template' : current === 'template' ? null : current)}
       workspaceId={workspaceId} projectId={level.projectId}
       onSelectTemplate={(template, title) => void createFromTemplate(template.id, title)}
       onStartBlank={() => setAsking('note')}

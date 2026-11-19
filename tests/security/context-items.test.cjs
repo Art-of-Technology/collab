@@ -183,3 +183,13 @@ test('the pinned, personal and shared lists hold what the reader may read there,
   assert.equal((await f.call('?workspace=joined&view=everything')).status, 400);
   assert.equal((await f.call('?workspace=foreign&view=personal')).status, 404);
 });
+
+test('a workspace owner cannot see another author’s private pinned note', async () => {
+  const f = fixture('bob');
+  f.addNote('private', { authorId: 'alice', scope: 'PERSONAL', isPinned: true });
+  f.addNote('shared', { authorId: 'alice', scope: 'PERSONAL', isPinned: true, sharedWith: [{ userId: 'bob' }] });
+  f.addNote('workspace', { authorId: 'alice', isPinned: true });
+  const result = await f.call('?workspace=joined&view=pinned');
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body.notes.map(note => note.id).sort(), ['shared', 'workspace']);
+});
