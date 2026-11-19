@@ -271,7 +271,19 @@ export async function getWorkspaceInstallations(workspaceId: string) {
       }));
 
     // Combine regular installations with system app "installations"
-    return [...installations, ...systemAppInstallations];
+    const all = [...installations, ...systemAppInstallations];
+
+    // The app page 404s unless the app is published, and has nothing to embed without an entrypoint.
+    const versions = await prisma.appVersion.findMany({
+      where: { appId: { in: all.map(inst => inst.app.id) }, app: { status: 'PUBLISHED' } },
+      orderBy: { createdAt: 'desc' },
+      distinct: ['appId'],
+      select: { appId: true, manifest: true }
+    });
+    const withPage = new Set(versions
+      .filter(v => (v.manifest as { entrypoint_url?: string } | null)?.entrypoint_url)
+      .map(v => v.appId));
+    return all.map(inst => ({ ...inst, app: { ...inst.app, hasPage: withPage.has(inst.app.id) } }));
 
   } catch (error) {
     console.error('Error fetching installations:', error);

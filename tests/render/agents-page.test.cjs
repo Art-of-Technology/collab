@@ -63,7 +63,7 @@ test('the collapsed menu shows one Agents icon with the number', () => {
 });
 
 test('sidebar highlights only the current workspace section and matching item', () => {
-  const data = { views: [{ id: 'v', slug: 'report', name: 'Report', isFavorite: true }], apps: [{ id: 'a', app: { slug: 'tool', name: 'Tool' } }] };
+  const data = { views: [{ id: 'v', slug: 'report', name: 'Report', isFavorite: true }], apps: [{ id: 'a', app: { slug: 'tool', name: 'Tool', hasPage: true } }] };
   const render = (pathname, isCollapsed = false) => renderToStaticMarkup(React.createElement(sidebar(0, data), { pathname, isCollapsed }));
   const active = (html, href) => {
     const link = [...html.matchAll(new RegExp(`<a\\s[^>]*href="${href}"[^>]*class="[^"]*"[^>]*>`, 'g'))].at(-1);
