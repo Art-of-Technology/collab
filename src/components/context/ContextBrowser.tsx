@@ -259,15 +259,18 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
       setSelectedFile(null);
       setSelectedNoteId(created.id as string);
     }
-    // Another place may have been opened while the Note was made: its list is not this one's. Here the
-    // list is read again rather than added to, so it stays in the order "Load more" counts from.
-    if (at.place === reading.current) {
-      const fresh = await readItems(level, openFolderId);
-      if (at.place === reading.current) {
-        setNotes(fresh.notes);
-        setMoreNotes(fresh.notes.length === 500);
-      }
-    }
+    await rereadNotes(at.place);
+  };
+
+  // The list is read again from its start rather than changed by hand wherever the server's order or
+  // its contents may have moved, so it stays in the order "Load more" counts from. Another place may
+  // have been opened meanwhile: its list is not this one's.
+  const rereadNotes = async (place: number) => {
+    if (place !== reading.current) return;
+    const fresh = await readItems(level, openFolderId);
+    if (place !== reading.current) return;
+    setNotes(fresh.notes);
+    setMoreNotes(fresh.notes.length === 500);
   };
 
   /** Where the page stands when a write starts: which place is listed, and what was last chosen. */
@@ -296,13 +299,14 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
     setNotes(current => current.map(note => (note.id === id ? { ...note, ...saved } : note)));
 
   const pinNote = (id: string, pin: boolean) => write(async () => {
+    const place = reading.current;
     await readJson(await fetch(`/api/notes/${id}/pin`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }),
     }));
-    // The pinned list holds pinned Notes alone, so one that is unpinned there leaves it.
-    setNotes(current => (level.view === 'pinned' && !pin
-      ? current.filter(note => note.id !== id)
-      : current.map(note => (note.id === id ? { ...note, isPinned: pin } : note))));
+    // The pinned list holds pinned Notes alone: one that is unpinned there leaves it, and comes back
+    // when it is pinned again from its pane, which stays open.
+    if (level.view === 'pinned') return rereadNotes(place);
+    setNotes(current => current.map(note => (note.id === id ? { ...note, isPinned: pin } : note)));
   });
 
   const deleteNote = (id: string) => write(async () => {

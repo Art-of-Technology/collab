@@ -336,24 +336,35 @@ test('a vanished note type does not hide the remaining notes', async () => {
   await React.act(async () => root.render(null));
 });
 
-test('what the editor saves is what the list says, and an unpinned Note leaves the pinned list', async () => {
+test('what the editor saves is what the list says, and the pinned list follows a Note pinned from its pane', async () => {
   let reads = 0;
+  let pinned = [note('Plan', { isPinned: true }), note('Other', { isPinned: true })];
   routes = {
     'GET /api/context/folders': () => ({ folders }),
-    'GET /api/context/items': () => { reads++; return { notes: [note('Plan', { isPinned: true }), note('Other', { isPinned: true })], files: [] }; },
-    'POST /api/notes/Plan/pin': () => ({ success: true, isPinned: false }),
+    'GET /api/context/items': () => { reads++; return { notes: pinned, files: [] }; },
+    'POST /api/notes/Plan/pin': () => {
+      const pin = JSON.parse(posted['POST /api/notes/Plan/pin']).pin;
+      pinned = pin ? [note('Other', { isPinned: true }), note('Plan', { isPinned: true })] : [note('Other', { isPinned: true })];
+      return { success: true, isPinned: pin };
+    },
   };
   await React.act(async () => root.render(h(ContextBrowser, { workspaceId: 'w', workspaceSlug: 'weezboo', projects: [], initialView: 'pinned' })));
   await settle();
   await click('Plan');
-  // A save renames the row at once: the list is not read again for it, on Close either.
+  // A save renames the row at once: the list is not read again for it.
   await click('Save as Renamed');
   assert.ok(list().includes('RenamedNote · decision · pinned'));
+  assert.equal(reads, 1);
+  // Unpinned, the Note leaves the list while its pane stays open; pinned again from there, it is back.
   await click('Unpin');
   await settle();
   assert.deepEqual(list(), ['OtherNote · general · pinned']);
+  assert.equal(document.querySelector('[data-note-pane]').dataset.notePane, 'Plan');
+  await React.act(async () => { [...document.querySelectorAll('button')].find(row => row.textContent === 'Pin').click(); });
+  await settle();
+  assert.deepEqual(list(), ['OtherNote · general · pinned', 'PlanNote · general · pinned']);
   await click('Close');
   await settle();
-  assert.equal(reads, 1);
+  assert.equal(reads, 3);
   await React.act(async () => root.render(null));
 });

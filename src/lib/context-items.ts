@@ -35,7 +35,13 @@ const viewWhere = (userId: string): Record<ContextView, Prisma.NoteWhereInput> =
   shared: { OR: [{ sharedWith: { some: { userId } } }, { scope: 'SHARED', authorId: userId }] },
 });
 
-/** A Note's title is written in the editor, so it is given back as the text a reader sees. */
+/**
+ * A Note's title is written in the editor, so it is given back as the text a reader sees.
+ *
+ * A list holds what the notes list always held: the reader's own Notes, the Notes of a workspace or a
+ * project, and the Notes shared with the reader by name. An administrator may open another member's
+ * personal Note that is not restricted, but it is not listed for them, here or in the pinned list.
+ */
 async function notes(userId: string, where: Prisma.NoteWhereInput, offset: number) {
   const rows = await prisma.note.findMany({
     where: { AND: [noteAccessWhere(userId), where, { OR: [

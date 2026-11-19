@@ -544,6 +544,7 @@ export function useNoteForm({
       }
 
       const result = await response.json();
+      if (mode === "edit") onSavedRef.current?.({ title: values.title, type: values.type });
 
       toast({
         title: "Success",
