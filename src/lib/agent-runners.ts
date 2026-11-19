@@ -15,6 +15,8 @@ const PAIRING_CAP = 50;
 export const RUNNER_TOKEN_DAYS = 30;
 /** With this many days or fewer left, a fetched token is renewed: the runner's next ask carries a new one as well. */
 export const RUNNER_RENEW_DAYS = 7;
+/** What a runner says about itself. Anything but `working` means its seats have no room. */
+export const RUNNER_STATES = ['working', 'paused', 'disk_full'] as const;
 // No 0, O, 1, I, L or U: the code is read off one screen and typed into another.
 const ALPHABET = 'ABCDEFGHJKMNPQRSTVWXYZ23456789';
 
@@ -220,9 +222,16 @@ export async function revokeProjectRunnerTokens(tx: Prisma.TransactionClient, wo
  * again. A token ends when the runner uses the one that replaces it (src/lib/apps/auth-middleware.ts), or when a
  * second newer one is made: answers can arrive late or out of order, and a renewal the runner never picks up must
  * leave the old token working to its own expiry, so a runner has at most two usable tokens for a seat. A stored token
- * is never decrypted to be sent again. The credential does nothing else.
+ * is never decrypted to be sent again.
+ *
+ * The ask may carry a `report` (CLB-774): the runner's own state, and per seat the room it has left and the program it
+ * would run next. A figure is stored, with the time it arrived, only for a seat this ask lists; any other seat's id is
+ * answered under `refused` and nothing is stored for it, so a seat retired since the runner's last ask does not cost
+ * the runner its answer. An ask without a report stores nothing and is answered as before. The credential does nothing
+ * else.
  */
-export async function fetchSeats(credential: string, have: string[]) {
+export async function fetchSeats(credential: string, have: string[],
+  report: { state?: typeof RUNNER_STATES[number]; rooms?: { seat: string; room: number; program: string }[] } = {}) {
   const refused = () => new HandoffError('runner_refused', 'This runner credential is not accepted', 401);
   const now = new Date();
   const runner = await prisma.agentRunner.findUnique({ where: { credentialHash: hash(credential) } });
@@ -238,6 +247,13 @@ export async function fetchSeats(credential: string, have: string[]) {
 
   const seats = await prisma.agentSeat.findMany({ where: { workspaceId, ownerId, byRunner: true, retiredAt: null, project: { OR: [{ isArchived: null }, { isArchived: false }] } }, orderBy: { createdAt: 'asc' },
     select: { id: true, userId: true, name: true, role: true, project: { select: { id: true, name: true, issuePrefix: true } } } });
+  if (report.state && report.state !== runner.state) await prisma.agentRunner.updateMany({ where: { id: runner.id }, data: { state: report.state } });
+  const notStored: string[] = [];
+  for (const { seat: id, room, program } of report.rooms ?? []) {
+    // The seat's own row decides again, so a seat retired or given away since the list was read takes no figure.
+    if (!seats.some(seat => seat.id === id) || !(await prisma.agentSeat.updateMany({ where: { id, workspaceId, ownerId, byRunner: true, retiredAt: null },
+      data: { room, roomProgram: program, roomAt: now } })).count) notStored.push(id);
+  }
   const held = seats.length ? await prisma.appToken.findMany({ where: { runnerId: runner.id, userId: { in: seats.map(seat => seat.userId) }, isRevoked: false, tokenExpiresAt: { gt: now } },
     orderBy: { createdAt: 'desc' }, select: { id: true, userId: true, tokenExpiresAt: true, createdAt: true } }) : [];
   const renewFrom = new Date(now.getTime() + RUNNER_RENEW_DAYS * 86_400_000);
@@ -282,5 +298,5 @@ export async function fetchSeats(credential: string, have: string[]) {
       answer.push({ ...holding, problem: error.code });
     }
   }
-  return { runner: { id: runner.id, name: runner.name, workspaceId, ownerId }, seats: answer };
+  return { runner: { id: runner.id, name: runner.name, workspaceId, ownerId }, seats: answer, ...(notStored.length > 0 && { refused: notStored }) };
 }

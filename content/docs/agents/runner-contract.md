@@ -327,6 +327,8 @@ Collab applies no rate limit of its own to these calls beyond `request_cap`.
 | Pairing code | Works once, for 15 minutes |
 | Token fetched by a runner | 30 days |
 | Renewed from | 7 days before it runs out |
+| Room figure counts as unknown | 15 minutes after it arrived |
+| Runner counts as offline | 10 minutes without a `seats` call |
 
 `collab seat run` reads the inbox every 5 seconds when it is empty and renews every 15 seconds.
 
@@ -345,7 +347,7 @@ A runner can get its seats' tokens from Collab instead of having them entered by
 | Call | Carries | Does |
 | --- | --- | --- |
 | `POST /api/runner/pair` | Nothing | Starts a pairing: answers with the runner's credential and a code to show. |
-| `POST /api/runner/seats` | The runner credential | Lists the runner's seats, with a token for each seat whose token the runner does not hold or whose token is in its last week. |
+| `POST /api/runner/seats` | The runner credential | Lists the runner's seats, with a token for each seat whose token the runner does not hold or whose token is in its last week. Can also [report room](#report-room). |
 | `POST /api/runner/goodbye` | The runner credential | Says the runner is going: its tokens are revoked at once and its credential stops working. |
 
 1. Call `pair` once. Keep the credential in a file only the runner's user can read. Show the code to the person.
@@ -353,7 +355,8 @@ A runner can get its seats' tokens from Collab instead of having them entered by
 3. Keep each token you are given. Send the ids of the tokens you hold as `have` on every call: `{"have":[]}` only while you hold none, because every new token costs the server work.
 4. When an answer carries a token for a seat you already have one for, that is a renewal: start using the new one. The token it replaces ends on your first request with the new one.
 5. When a seat is no longer in the answer, stop running it and delete its token.
-6. Before the machine is deleted on purpose, call `goodbye` as the last act.
+6. To report room, add `state` and `rooms` to the same call: see [Report room](#report-room).
+7. Before the machine is deleted on purpose, call `goodbye` as the last act.
 
 ```sh
 curl -X POST -H "Content-Type: application/json" -d '{"name":"seat-runner on build-1"}' https://collab.example.com/api/runner/pair
@@ -382,8 +385,51 @@ curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" -H "Content-Type: app
 | `tokenId`, `expiresAt` | The token to use for the seat: the newest one you said you hold, or the new one. |
 | `token` | Present only when the token is new. It is sent once and never again. |
 | `problem` | Present when no token could be made this time, beside whatever token you already hold. Ask again later. `paused` means the seat's agent is switched off or removed: asking never switches it on again, a person does. |
+| `refused` | Beside `runner` and `seats`, and only when you sent a room figure for a seat that is not yours: the ids of those seats. See [Report room](#report-room). |
 
 A seat for which you hold no usable token gets a new one. With three overlapping asks, the first answer can arrive last with a revoked token. If a retained token is refused, ask again with what you hold to get a new one. If an answer or file is lost, ask again with what you hold.
+
+### Report room
+
+Room is the percent of allowance a seat has left on the program it would run next. A runner can send it with the `seats` call it already makes, so no extra call is needed.
+
+```json
+{
+  "have": ["cmw..."],
+  "state": "working",
+  "rooms": [
+    { "seat": "cmw...", "room": 60, "program": "Claude Code" }
+  ]
+}
+```
+
+| Field | Type | What it is |
+| --- | --- | --- |
+| `state` | `working`, `paused` or `disk_full` | How the runner itself is. Collab keeps it until you send another, so send it with every call. |
+| `rooms` | list, up to 1000 entries | One entry per seat you report for. A seat appears at most once. |
+| `seat` | text | The seat's `id`, as the answer of this call lists it. |
+| `room` | whole number, 0 to 100 | Percent of allowance left, after your own hold-back. `0` means used up. |
+| `program` | text, up to 64 characters, printable ASCII | The name of the program the seat would run next, such as `Claude Code`. |
+
+Both `state` and `rooms` are optional. In an entry of `rooms`, all three fields are required.
+
+- **Only percentages and program names are sent.** No login, account, plan or billing detail is ever sent, and any other key is refused.
+- Collab stores a figure with the time it arrived, by its own clock. Send the figures with every call: a figure older than 15 minutes counts as unknown.
+- A call without `state` and `rooms` changes nothing that is stored and is answered exactly as before.
+- A value outside the table is `400 invalid_request`. Nothing of that call is stored and no seats are answered.
+- A figure for a seat that this call's answer does not list is not stored. The call is still answered, and the answer names those seats' ids under `refused`. That happens when a seat was retired since your last call: stop running it, as in step 5.
+
+What Collab makes of it:
+
+| A seat reads as | When |
+| --- | --- |
+| A number | Its figure is newer than 15 minutes and above 0, and its runner called within the last 10 minutes and did not say `paused` or `disk_full`. |
+| No room | Its runner said `paused` or `disk_full`, or has not called for 10 minutes, or no runner is connected for the seat's person, or the figure is `0`. |
+| Unknown | No figure was sent, or it is older than 15 minutes, or the seat is run by hand. |
+
+A runner that never sent a `state` counts as working. What a runner says about itself comes before the figure: the seat of a paused runner has no room, however new its figure is.
+
+Collab stores the figure today. It does not show it or place work by it yet, so reporting changes nothing else.
 
 ### Renewal
 
@@ -419,7 +465,7 @@ curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" https://collab.exampl
 - A machine that is lost says nothing. Expiry is the backstop for that: its tokens stop within 30 days.
 - A runner that comes back pairs again and is connected again.
 
-A runner credential does nothing else. It reads no issue and writes nothing, and every other call refuses it.
+A runner credential does nothing else. It reads no issue and writes nothing but its own state and its seats' room, and every other call refuses it.
 
 ## A person's own sessions
 

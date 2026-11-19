@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_STATUS_ORDER } from '@/constants/project-statuses';
 import { NOT_DONE } from '@/lib/agent-runs';
-import { ASSIGN_CAP, countSeatHandoff, HandoffError, requireSeat, seatHandoffCapReached, seatWriteGuard } from '@/lib/agent-seats';
+import { ASSIGN_CAP, countSeatHandoff, HandoffError, IDLE_MS, requireSeat, seatHandoffCapReached, seatWriteGuard } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { emitIssueCreated } from '@/lib/event-bus';
@@ -15,8 +15,6 @@ import { getWorkspaceTemplates } from '@/lib/issue-template-store';
 
 /** Open requests one project may have in another. */
 export const REQUEST_CAP = 5;
-/** A release seat that has not read its inbox for this long is taken to be away. */
-const IDLE_MS = 10 * 60_000;
 /** Per request role: the seat role that takes it, and the label people know it by. */
 const REQUESTS = {
   developer: { seat: 'developer', label: null },

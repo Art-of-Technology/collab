@@ -14,6 +14,10 @@ export const SEAT_ROLES = ['developer', 'reviewer', 'release', 'security', 'lead
 export const ASSIGN_CAP = 5;
 /** Open issues one seat may hold from its project's lead seat. */
 export const LEAD_CAP = 3;
+/** A release seat that has not read its inbox for this long is taken to be away, and so is a runner that has not asked for its seats. */
+export const IDLE_MS = 10 * 60_000;
+/** A room figure older than this says nothing any more. */
+export const ROOM_FRESH_MS = 15 * 60_000;
 /** The issues that are not in a status of the done group. */
 export const NOT_DONE = { OR: [{ statusId: null }, { projectStatus: { OR: [{ category: { not: 'done' } }, { category: null, isFinal: false }] } }] };
 /** The open issues a seat holds because the lead gave them to it: the lead's hand is on the row that made the seat the assignee. */
@@ -117,6 +121,32 @@ export async function requireSeat(db: DB, context: Pick<AppAuthContext, 'user'>)
   const seat = await seatFor(db, context);
   if (!seat) throw new HandoffError('seat_required', 'This call needs a seat token', 403);
   return seat;
+}
+
+/** What a read of a seat's room gives: a number, no room, or unknown. The last two say why. */
+export type SeatRoom = { kind: 'room'; room: number; program: string | null; at: Date } | { kind: 'no_room' | 'unknown'; reason: string };
+
+/**
+ * A seat's room, for everything that shows it or places work by it. `runner` is the runner of the seat's person: the
+ * one admitted for the seat's owner in the seat's workspace and not removed, or null when there is none. A number
+ * needs a figure newer than `ROOM_FRESH_MS` and above 0, from a runner that asked within `IDLE_MS` and did not say it
+ * is paused or full; a runner that never reported a state counts as working. What the runner says about itself comes
+ * before the figure: a paused runner's seat has no room however fresh its figure is. Unknown means "place the work as
+ * before": a seat run by hand, a seat nothing was reported for, and a figure that is too old.
+ */
+export function seatRoom(seat: { byRunner: boolean; room: number | null; roomProgram: string | null; roomAt: Date | null },
+  runner: { state: string | null; lastSeenAt: Date | null } | null, now = new Date()): SeatRoom {
+  const none = (reason: string): SeatRoom => ({ kind: 'no_room', reason }), unknown = (reason: string): SeatRoom => ({ kind: 'unknown', reason });
+  if (!seat.byRunner) return unknown('the seat is run by hand');
+  if (!runner) return none('no runner is connected');
+  if (!(runner.lastSeenAt && runner.lastSeenAt.getTime() > now.getTime() - IDLE_MS)) return none('the runner is offline');
+  if (runner.state && runner.state !== 'working') {
+    return none(runner.state === 'paused' ? 'the runner is paused' : runner.state === 'disk_full' ? "the runner's disk is full" : 'the runner is not working');
+  }
+  if (seat.room === null || !seat.roomAt) return unknown('no figure was reported');
+  if (seat.roomAt.getTime() <= now.getTime() - ROOM_FRESH_MS) return unknown(`the figure is older than ${ROOM_FRESH_MS / 60_000} minutes`);
+  if (seat.room <= 0) return none('the allowance is used up');
+  return { kind: 'room', room: seat.room, program: seat.roomProgram, at: seat.roomAt };
 }
 
 /**
