@@ -6,7 +6,7 @@ const { seatsDatabase } = require('./seats-db.cjs');
 // Two members share the first name Bob; the stranger is in no workspace.
 const owner = 'cowner00001', deniz = 'cdeniz00001', bob = 'cbob0000001', bobToo = 'cbob0000002', uma = 'cuma0000001', lale = 'clale000001', named = 'cnamed00001', stranger = 'cstranger01';
 // More people called Deniz, two of them with the same full name and one with no last name; two called Ece; two called Ada.
-const kara = 'cdeniz00002', kurt = 'cdeniz00003', kurtToo = 'cdeniz00004', mono = 'cdeniz00005', ece = 'cece0000001', eceToo = 'cece0000002', ada = 'cada0000001', adaToo = 'cada0000002';
+const nil = 'cnil0000001', person = 'cperson0001', kara = 'cdeniz00002', kurt = 'cdeniz00003', kurtToo = 'cdeniz00004', mono = 'cdeniz00005', ece = 'cece0000001', eceToo = 'cece0000002', ada = 'cada0000001', adaToo = 'cada0000002';
 const P = 'cprojectp001', OLD = 'cprojecto001';
 const scopes = ['issues:read', 'issues:write', 'user:read'];
 
@@ -16,10 +16,10 @@ after(() => db?.stop());
 test('a member adds their own seats to a project, once its owner has switched that on', async t => {
   db = await seatsDatabase(async prisma => {
     await prisma.user.createMany({ data: [[owner, 'Cem Owner'], [deniz, 'Deniz Kaya'], [bob, 'Bob Stone'], [bobToo, 'Bob Other'], [uma, 'Uma Late'], [lale, 'Lale Race'], [named, '@deniz kaya'], [stranger, 'Sam Stranger'],
-      [kara, 'Deniz Kara'], [kurt, 'Deniz  Kurt'], [kurtToo, 'Deniz Kurt'], [mono, 'Deniz'], [ece, 'Ece First'], [eceToo, 'Ece aydin'], [ada, 'Ada Stone'], [adaToo, 'Ada Moss']]
+      [kara, 'Deniz Kara'], [kurt, 'Deniz  Kurt'], [kurtToo, 'Deniz Kurt'], [mono, 'Deniz'], [ece, 'Ece First'], [eceToo, 'Ece aydin'], [ada, 'Ada Stone'], [adaToo, 'Ada Moss'], [nil, 'Nil Tan'], [person, 'collab security (nil)']]
       .map(([id, name]) => ({ id, name, email: `${id}@example.test` })) });
     await prisma.workspace.create({ data: { id: 'w', name: 'w', slug: 'w', ownerId: owner } });
-    await prisma.workspaceMember.createMany({ data: [deniz, bob, bobToo, uma, lale, named, kara, kurt, kurtToo, mono, ece, eceToo, ada, adaToo].map(userId => ({ workspaceId: 'w', userId })) });
+    await prisma.workspaceMember.createMany({ data: [deniz, bob, bobToo, uma, lale, named, kara, kurt, kurtToo, mono, ece, eceToo, ada, adaToo, nil, person].map(userId => ({ workspaceId: 'w', userId })) });
     for (const [id, name, issuePrefix, isArchived] of [[P, 'Collab', 'CLB', false], [OLD, 'Old', 'OLD', true]]) {
       await prisma.project.create({ data: { id, workspaceId: 'w', name, slug: issuePrefix.toLowerCase(), issuePrefix, isArchived } });
       await prisma.projectStatus.createMany({ data: ['to_do', 'in_progress', 'done'].map((status, order) => ({ id: `${id}-${status}`, projectId: id, name: status,
@@ -316,6 +316,9 @@ test('a member adds their own seats to a project, once its owner has switched th
     assert.deepEqual((await add(eceToo))[1], { created: ['Collab Developer (Ece A.)', 'Collab Reviewer (Ece A.)', 'Collab Security (Ece A.)'], refused: [] });
     assert.equal(await prisma.user.count({ where: { name: { in: ['Collab Developer (Ece)', 'Collab Reviewer (Ece)'] } } }), 0);
     assert.deepEqual(await names({ ownerId: ece }), ['collab security (ECE)']);
+    // A person is not an agent, whatever their name and whatever other app they gave a token to: the first form is free.
+    await prisma.appToken.create({ data: { workspaceId: 'w', userId: person, accessToken: 'another-app', scopes: [] } });
+    assert.deepEqual((await add(nil))[1], { created: ['Collab Developer (Nil)', 'Collab Reviewer (Nil)', 'Collab Security (Nil)'], refused: [] });
   });
 
   await t.test('two members with the same first name who add at the same moment get different names, each in one form', async () => {
