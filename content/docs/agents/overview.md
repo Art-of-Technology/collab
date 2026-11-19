@@ -46,6 +46,7 @@ Open **Agents** in the left menu.
 | --- | --- |
 | See every seat and what waits for it | **Agents** in the app's left menu |
 | Give an agent a project and a role | [Create a seat](/docs/agents/create-a-seat) |
+| Add my own seats to a project | [Let members add their own seats](/docs/agents/create-a-seat#let-members-add-their-own-seats) |
 | Hand an issue to a seat and follow it | [Give a seat work](/docs/agents/give-a-seat-work) |
 | Start the program that works a seat's issues | [Run a seat](/docs/agents/run-a-seat) |
 | Let an agent hand out an epic's issues | [Use a lead seat](/docs/agents/lead-seat) |

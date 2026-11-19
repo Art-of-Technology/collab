@@ -10,6 +10,8 @@ type DB = Prisma.TransactionClient | typeof prisma;
 type Caller = Pick<AppAuthContext, 'user' | 'app' | 'workspace'>;
 
 export const SEAT_ROLES = ['developer', 'reviewer', 'release', 'security', 'lead'] as const;
+/** The seats a member adds for themselves, and removes again. Never a lead or a release seat. */
+export const MEMBER_ROLES = ['developer', 'reviewer', 'security'] as const;
 /** Issues one agent account that is not a seat may hand to seats per UTC day. */
 export const ASSIGN_CAP = 5;
 /** Open issues one seat may hold from its project's lead seat. */
@@ -24,6 +26,8 @@ interface SeatInput {
   name: string; expiresInDays: number; isDefault?: boolean;
   /** The seat is run by its owner's runner, which fetches its tokens: none is made here, and none is shown to anyone. */
   byRunner?: boolean;
+  /** A member adding their own seat: only while the project's switch is on, and never under a name that was someone else's agent. */
+  own?: boolean;
 }
 
 /**
@@ -46,10 +50,17 @@ export async function createSeat(input: SeatInput) {
 async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account: { id: string; name: string | null }) {
   // One seat change at a time per project, so "the first of its role is the default" and "one release seat" are decided on settled rows.
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${input.projectId}`}))`;
-  if (!await tx.project.findFirst({ where: { id: input.projectId, workspaceId: input.workspaceId }, select: { id: true } })) {
-    throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
-  }
+  const project = await tx.project.findFirst({ where: { id: input.projectId, workspaceId: input.workspaceId }, select: { membersAddSeats: true } });
+  if (!project) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
   const existing = await tx.agentSeat.findUnique({ where: { userId: account.id } });
+  if (input.own) {
+    // Read under the project's lock, which changing the switch takes too.
+    if (!project.membersAddSeats) throw new HandoffError('members_add_off', 'The project owner has not switched this on.', 403);
+    // The name is derived, not chosen, so it can meet an agent that is not this member's. Only a seat the member owned comes back.
+    if (existing ? existing.ownerId !== input.ownerId : await tx.appToken.count({ where: { userId: account.id } })) {
+      throw new HandoffError('name_taken', `An agent named ${account.name ?? input.name} already exists in this workspace. Ask someone who manages the workspace to create your seats`, 409);
+    }
+  }
   const same = !!existing && !existing.retiredAt && existing.projectId === input.projectId && existing.role === input.role;
   if (existing && !existing.retiredAt && !same) {
     throw new HandoffError('seat_exists', `${existing.name} is already a ${existing.role} seat; retire it before giving the name another project or role`, 409);
@@ -224,8 +235,9 @@ export async function recordSeatHandoff(tx: Prisma.TransactionClient, context: C
  * finished issues keep its name. The tokens its runner fetched are revoked; a token made by hand stays until
  * revoked, but writes nothing any more.
  */
-export async function retireSeat(input: { workspaceId: string; actorId: string; seatId: string }) {
-  const where = { id: input.seatId, workspaceId: input.workspaceId, retiredAt: null };
+export async function retireSeat(input: { workspaceId: string; actorId: string; seatId: string; ownerId?: string }) {
+  // With `ownerId`, only that person's seat: a seat made again for someone else in the meantime is not found.
+  const where = { id: input.seatId, workspaceId: input.workspaceId, retiredAt: null, ...(input.ownerId && { ownerId: input.ownerId }) };
   return prisma.$transaction(async tx => {
     const found = await tx.agentSeat.findFirst({ where, select: { projectId: true } });
     if (!found) throw new HandoffError('not_found', 'Seat not found', 404);

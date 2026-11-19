@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { HandoffError } from '@/lib/agent-handoffs';
 import { agentModeState, setAgentMode } from '@/lib/agent-mode';
 import { RUNNER_TOKEN_DAYS, runnerSeats } from '@/lib/agent-runners';
-import { createSeat } from '@/lib/agent-seats';
+import { MEMBER_ROLES, createSeat, retireSeat } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
+import { issueAccessWhere } from '@/lib/issue-finder';
 import { Permission, checkUserPermission } from '@/lib/permissions';
 
 export { HandoffError };
@@ -110,4 +111,50 @@ export async function setupSeats(context: Caller, projectRef: string, input: z.i
     // Each seat with whether a runner has fetched its token yet. The token itself is never part of this.
     seats: await runnerSeats(prisma, projectId),
   };
+}
+
+type Own = { workspaceId: string; userId: string; projectId: string };
+
+/**
+ * A person adds their own seats to a project they can see, in one step: a developer, a reviewer and a security seat
+ * that they own, run by their own runner, named "<Project> <Role> (<first name>)". Refused unless the project's
+ * owner switched it on (`members_add_off`). Only the roles the person has no seat of are made, and none takes a
+ * role's default from a seat that has it. There is no owner to name here: the seats are the caller's.
+ */
+export async function addMySeats({ workspaceId, userId, projectId }: Own) {
+  const project = await prisma.project.findFirst({ where: { id: projectId, workspaceId, ...issueAccessWhere(userId) }, select: { name: true, isArchived: true } });
+  if (!project) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
+  if (project.isArchived) throw new HandoffError('project_archived', STOPS.project_archived, 409);
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true, email: true } });
+  const first = (me.name?.trim() || me.email || userId).split(/[\s@]/)[0].slice(0, 30);
+  const mine = await prisma.agentSeat.findMany({ where: { projectId, ownerId: userId, retiredAt: null }, select: { role: true } });
+  const created: string[] = [];
+  for (const role of MEMBER_ROLES.filter(role => !mine.some(seat => seat.role === role))) {
+    const made = await createSeat({ workspaceId, actorId: userId, projectId, role, ownerId: userId, name: `${seatName(project.name, role)} (${first})`,
+      expiresInDays: RUNNER_TOKEN_DAYS, byRunner: true, own: true });
+    if (made.error) throw new HandoffError(made.error, `The ${role} seat could not be created (${made.error}); the seats made before it stay`, 409);
+    created.push(made.seat.name);
+  }
+  return { created };
+}
+
+/**
+ * A person removes their own developer, reviewer and security seats of a project, whether or not adding is switched
+ * on. Each is retired as any seat is: its open issues are unassigned, and a seat with a run open stays and is named
+ * in `kept` with the reason.
+ */
+export async function removeMySeats({ workspaceId, userId, projectId }: Own) {
+  const seats = await prisma.agentSeat.findMany({ where: { workspaceId, projectId, ownerId: userId, retiredAt: null, role: { in: [...MEMBER_ROLES] } },
+    orderBy: [{ role: 'asc' }, { name: 'asc' }], select: { id: true, name: true } });
+  const removed: string[] = [], kept: { name: string; reason: string }[] = [];
+  for (const seat of seats) {
+    try {
+      await retireSeat({ workspaceId, actorId: userId, seatId: seat.id, ownerId: userId });
+      removed.push(seat.name);
+    } catch (error) {
+      if (!(error instanceof HandoffError)) throw error;
+      kept.push({ name: seat.name, reason: error.message });
+    }
+  }
+  return { removed, kept };
 }
