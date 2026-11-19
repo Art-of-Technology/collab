@@ -47,21 +47,30 @@ export async function createSeat(input: SeatInput) {
   return { seat, token: secret ? { ...token, token: secret } : null };
 }
 
+export async function lockMemberSeatProject(tx: Prisma.TransactionClient, workspaceId: string, projectId: string) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${projectId}`}))`;
+  await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${projectId} AND "workspaceId" = ${workspaceId} FOR SHARE`;
+  const project = await tx.project.findFirst({ where: { id: projectId, workspaceId }, select: { isArchived: true, membersMayAddSeats: true } });
+  if (!project) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
+  if (project.isArchived) throw new HandoffError('project_archived', 'This project is archived: an archived project keeps no seat token a runner fetched. Unarchive it first', 409);
+  if (!project.membersMayAddSeats) throw new HandoffError('members_add_off', 'The project owner has not switched this on.', 403);
+}
+
 async function writeSeat(tx: Prisma.TransactionClient, input: SeatInput, account: { id: string; name: string | null }) {
   // One seat change at a time per project, so "the first of its role is the default" and "one release seat" are decided on settled rows.
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${input.projectId}`}))`;
-  const project = await tx.project.findFirst({ where: { id: input.projectId, workspaceId: input.workspaceId }, select: { membersMayAddSeats: true } });
-  if (!project) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
+  if (input.own) await lockMemberSeatProject(tx, input.workspaceId, input.projectId);
+  else {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${input.projectId}`}))`;
+    if (!await tx.project.findFirst({ where: { id: input.projectId, workspaceId: input.workspaceId }, select: { id: true } })) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
+  }
   const existing = await tx.agentSeat.findUnique({ where: { userId: account.id } });
   if (input.own) {
-    // Read under the project's lock, which changing the switch takes too.
-    if (!project.membersMayAddSeats) throw new HandoffError('members_add_off', 'The project owner has not switched this on.', 403);
     // The name is derived, not chosen, so it can meet an agent that is not this member's. Only a seat the member owned comes back.
     if (existing ? existing.ownerId !== input.ownerId : await tx.appToken.count({ where: { userId: account.id } })) {
       throw new HandoffError('name_taken', `An agent named ${account.name ?? input.name} already exists in this workspace. Ask someone who manages the workspace to create this seat`, 409);
     }
     // A seat of this role the member was given in the meantime, under any name, is enough: decided here, on settled rows.
-    if (await tx.agentSeat.count({ where: { projectId: input.projectId, role: input.role, ownerId: input.ownerId, retiredAt: null, userId: { not: account.id } } })) {
+    if (await tx.agentSeat.count({ where: { projectId: input.projectId, role: input.role, ownerId: input.ownerId, retiredAt: null } })) {
       throw new HandoffError('own_seat_exists', `You already have a ${input.role} seat in this project`, 409);
     }
   }

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { HandoffError } from '@/lib/agent-handoffs';
 import { agentModeState, setAgentMode } from '@/lib/agent-mode';
 import { RUNNER_TOKEN_DAYS, runnerSeats } from '@/lib/agent-runners';
-import { MEMBER_ROLES, createSeat, retireSeat } from '@/lib/agent-seats';
+import { MEMBER_ROLES, createSeat, lockMemberSeatProject, retireSeat } from '@/lib/agent-seats';
 import { AGENT_APP_SLUG } from '@/lib/agent-tokens';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { issueAccessWhere } from '@/lib/issue-finder';
@@ -124,11 +124,9 @@ type Own = { workspaceId: string; userId: string; projectId: string };
  * reason, and the others stay.
  */
 export async function addMySeats({ workspaceId, userId, projectId }: Own) {
-  const project = await prisma.project.findFirst({ where: { id: projectId, workspaceId, ...issueAccessWhere(userId) }, select: { name: true, isArchived: true, membersMayAddSeats: true } });
+  const project = await prisma.project.findFirst({ where: { id: projectId, workspaceId, ...issueAccessWhere(userId) }, select: { name: true } });
   if (!project) throw new HandoffError('project_not_found', 'Project not found in this workspace', 404);
-  if (project.isArchived) throw new HandoffError('project_archived', STOPS.project_archived, 409);
-  // Also read where each seat is written, under the project's lock; here it refuses a press that would make nothing.
-  if (!project.membersMayAddSeats) throw new HandoffError('members_add_off', 'The project owner has not switched this on.', 403);
+  await prisma.$transaction(tx => lockMemberSeatProject(tx, workspaceId, projectId));
   const me = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true, email: true } });
   const first = (me.name?.trim() || me.email || userId).split(/[\s@]/)[0];
   const mine = await prisma.agentSeat.findMany({ where: { projectId, ownerId: userId, retiredAt: null }, select: { role: true } });

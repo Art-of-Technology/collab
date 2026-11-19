@@ -115,6 +115,8 @@ test('a member adds their own seats to a project, once its owner has switched th
     // Pressing again makes nothing.
     assert.deepEqual(await add(deniz), [201, { created: [], refused: [] }]);
     assert.equal(await prisma.agentSeat.count({ where: { ownerId: deniz } }), 3);
+    await refuses(seats.createSeat({ workspaceId: 'w', actorId: deniz, projectId: P, role: 'developer', ownerId: deniz,
+      name: 'Collab Developer (Deniz)', expiresInDays: 30, byRunner: true, own: true }), 'own_seat_exists', 409);
   });
 
   await t.test('a member cannot add seats for someone else', async () => {
@@ -158,6 +160,45 @@ test('a member adds their own seats to a project, once its owner has switched th
     await prisma.project.update({ where: { id: OLD }, data: { membersMayAddSeats: true } });
     assert.deepEqual((await add(deniz, OLD)).map(part => part.code ?? part), [409, 'project_archived']);
     assert.equal(await prisma.agentSeat.count({ where: { OR: [{ ownerId: stranger }, { projectId: OLD }] } }), 0);
+  });
+
+  await t.test('an archive committed while a seat is being made stops the seat', async () => {
+    let release, ready;
+    const held = new Promise(resolve => { release = resolve; });
+    const started = new Promise(resolve => { ready = resolve; });
+    const archive = prisma.$transaction(async tx => {
+      await tx.project.update({ where: { id: P }, data: { isArchived: true } });
+      ready();
+      await held;
+    });
+    await started;
+    const attempt = seats.createSeat({ workspaceId: 'w', actorId: deniz, projectId: P, role: 'developer', ownerId: deniz,
+      name: 'Archive race', expiresInDays: 30, byRunner: true, own: true }).then(() => null, error => error);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    release();
+    await archive;
+    assert.equal((await attempt)?.code, 'project_archived');
+    assert.equal(await prisma.agentSeat.count({ where: { name: 'Archive race' } }), 0);
+    await prisma.project.update({ where: { id: P }, data: { isArchived: false } });
+  });
+
+  await t.test('a switch-off committed during an add with no missing roles refuses it', async () => {
+    let release, ready;
+    const held = new Promise(resolve => { release = resolve; });
+    const started = new Promise(resolve => { ready = resolve; });
+    const switching = prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${P}`}))`;
+      await tx.project.update({ where: { id: P }, data: { membersMayAddSeats: false } });
+      ready();
+      await held;
+    });
+    await started;
+    const attempt = add(deniz);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    release();
+    await switching;
+    assert.deepEqual((await attempt).map(part => part.code ?? part), [403, 'members_add_off']);
+    await prisma.project.update({ where: { id: P }, data: { membersMayAddSeats: true } });
   });
 
   await t.test('the member removes their own seats; a seat with a run open stays, and an open issue is given back', async () => {
