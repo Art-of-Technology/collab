@@ -71,8 +71,8 @@ test('sidebar highlights only the current workspace section and matching item', 
     const classes = link[0].match(/class="([^"]*)"/)[1].split(/\s+/);
     return classes.includes('bg-collab-800') && classes.includes('text-white');
   };
-  // Context is the folder page, and a Note's own page under /notes is still part of it.
-  for (const [path, selected] of [['projects/timeline', 'projects'], ['dashboard/detail', 'dashboard'], ['timeline/detail', 'timeline'], ['context', 'context'], ['notes/detail', 'context'], ['features/detail', 'features']]) {
+  // Context is the folder page; a Note opens inside it, so nothing under /notes lights the menu.
+  for (const [path, selected] of [['projects/timeline', 'projects'], ['dashboard/detail', 'dashboard'], ['timeline/detail', 'timeline'], ['context', 'context'], ['features/detail', 'features']]) {
     for (const collapsed of [false, true]) {
       const html = render(`/weezboo/${path}`, collapsed);
       for (const section of ['dashboard', 'timeline', 'context', 'features']) assert.equal(active(html, `/weezboo/${section}`), section === selected, `${path}: ${section}`);

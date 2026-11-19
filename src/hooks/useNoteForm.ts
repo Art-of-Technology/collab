@@ -120,6 +120,8 @@ interface UseNoteFormOptions {
   projectId?: string;
   mode: "create" | "edit";
   onSuccess?: (noteId: string) => void;
+  /** Told what an edit saved, each time one is saved: the page around the editor may list the Note. */
+  onSaved?: (saved: { title: string; type: string }) => void;
   defaultType?: NoteType;
   defaultScope?: NoteScope;
   // Template-related props
@@ -157,6 +159,7 @@ export function useNoteForm({
   projectId,
   mode,
   onSuccess,
+  onSaved,
   defaultType = NoteType.GENERAL,
   defaultScope = NoteScope.PERSONAL,
   initialTitle,
@@ -181,6 +184,12 @@ export function useNoteForm({
 
   // Refs for tracking
   const latestValuesRef = useRef<NoteFormValues | null>(null);
+  // Kept in a ref so that a new callback on each render does not restart the autosave timer.
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
+  const pendingAutosaveRef = useRef<(() => void) | null>(null);
+  const autosaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const queuedValuesRef = useRef<string | null>(null);
   const createdNoteIdRef = useRef<string | null>(noteId || null);
   const autosaveErrorToastShownRef = useRef(false);
   const isInitializedRef = useRef(false);
@@ -311,7 +320,7 @@ export function useNoteForm({
   }, [mode, noteId, fetchNote]);
 
   // Autosave function (direct API call similar to issue detail)
-  const autosave = useCallback(async (values: NoteFormValues) => {
+  const saveNote = useCallback(async (values: NoteFormValues) => {
     // Don't save if title is empty
     if (!values.title?.trim()) {
       return;
@@ -392,6 +401,7 @@ export function useNoteForm({
         throw new Error(errorData.error || "Failed to save note");
       }
 
+      onSavedRef.current?.({ title: values.title, type: values.type });
       const serialized = serializeValues(values);
       setLastSavedValues(serialized);
       setLastSaved(new Date());
@@ -419,6 +429,12 @@ export function useNoteForm({
     }
   }, [mode, noteId, toast, onSuccess]);
 
+  const autosave = useCallback((values: NoteFormValues) => {
+    queuedValuesRef.current = serializeValues(values);
+    autosaveQueueRef.current = autosaveQueueRef.current.then(() => saveNote(values));
+    return autosaveQueueRef.current;
+  }, [saveNote]);
+
   // Watch form changes and update state (single subscription)
   useEffect(() => {
     const subscription = form.watch((values) => {
@@ -434,11 +450,13 @@ export function useNoteForm({
     return () => subscription.unsubscribe();
   }, [form]);
 
+  useEffect(() => () => { pendingAutosaveRef.current?.(); }, []);
+
   // Debounced autosave - proper pattern matching issue detail modal
   useEffect(() => {
     // Skip if not initialized or values haven't changed
     if (!isInitializedRef.current) return;
-    if (currentFormValues === lastSavedValues) return;
+    if (currentFormValues === lastSavedValues && (queuedValuesRef.current === null || currentFormValues === queuedValuesRef.current)) return;
     if (!latestValuesRef.current) return;
 
     // Skip autosave for secret note types - require explicit save for security
@@ -447,13 +465,19 @@ export function useNoteForm({
     }
 
     // Set up debounced autosave (800ms after last change)
-    const handle = setTimeout(() => {
+    const savePending = () => {
+      pendingAutosaveRef.current = null;
       if (latestValuesRef.current) {
-        autosave(latestValuesRef.current);
+        void autosave(latestValuesRef.current);
       }
-    }, 800);
+    };
+    pendingAutosaveRef.current = savePending;
+    const handle = setTimeout(savePending, 800);
 
-    return () => clearTimeout(handle);
+    return () => {
+      clearTimeout(handle);
+      pendingAutosaveRef.current = null;
+    };
   }, [currentFormValues, lastSavedValues, autosave]);
 
   // Flush autosave on tab hide or before unload for reliability
@@ -465,7 +489,7 @@ export function useNoteForm({
           return;
         }
         const serialized = serializeValues(latestValuesRef.current);
-        if (serialized !== lastSavedValues) {
+        if (serialized !== lastSavedValues || (queuedValuesRef.current !== null && serialized !== queuedValuesRef.current)) {
           autosave(latestValuesRef.current);
         }
       }
@@ -528,6 +552,7 @@ export function useNoteForm({
       }
 
       const result = await response.json();
+      if (mode === "edit") onSavedRef.current?.({ title: values.title, type: values.type });
 
       toast({
         title: "Success",

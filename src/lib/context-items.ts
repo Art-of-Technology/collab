@@ -1,8 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { noteAccessWhere } from '@/lib/secrets/access';
+import { noteAccessWhere, noteWorkspaceWhere } from '@/lib/secrets/access';
 import { stripHtmlToPlainText } from '@/lib/html-sanitizer';
-import { optionalId, resolveContextLevel } from '@/lib/context-folders';
+import { ContextFolderError, optionalId, resolveContextLevel } from '@/lib/context-folders';
 import { listContextFiles } from '@/lib/context-files';
 
 /**
@@ -18,13 +18,37 @@ import { listContextFiles } from '@/lib/context-files';
 export const MAX_CONTEXT_ITEMS = 500;
 
 const NOTE_FIELDS = {
-  id: true, title: true, type: true, updatedAt: true, isAiContext: true,
+  id: true, title: true, type: true, updatedAt: true, isAiContext: true, isPinned: true,
 } satisfies Prisma.NoteSelect;
 
-/** A Note's title is written in the editor, so it is given back as the text a reader sees. */
+/**
+ * The lists of a workspace that are not a level: they hold no folders, and a Note is in one because
+ * of who wrote it, who it was shared with or whether it is pinned, wherever it is kept.
+ */
+export const CONTEXT_VIEWS = ['pinned', 'personal', 'shared'] as const;
+export type ContextView = typeof CONTEXT_VIEWS[number];
+
+const viewWhere = (userId: string): Record<ContextView, Prisma.NoteWhereInput> => ({
+  pinned: { isPinned: true },
+  personal: { scope: 'PERSONAL', authorId: userId },
+  // Shared with the reader by name, and what the reader shared that way: neither is listed in a level.
+  shared: { OR: [{ sharedWith: { some: { userId } } }, { scope: 'SHARED', authorId: userId }] },
+});
+
+/**
+ * A Note's title is written in the editor, so it is given back as the text a reader sees.
+ *
+ * A list holds what the notes list always held: the reader's own Notes, the Notes of a workspace or a
+ * project, and the Notes shared with the reader by name. An administrator may open another member's
+ * personal Note that is not restricted, but it is not listed for them, here or in the pinned list.
+ */
 async function notes(userId: string, where: Prisma.NoteWhereInput, offset: number) {
   const rows = await prisma.note.findMany({
-    where: { AND: [noteAccessWhere(userId), where] },
+    where: { AND: [noteAccessWhere(userId), where, { OR: [
+      { authorId: userId },
+      { scope: { in: ['WORKSPACE', 'PROJECT', 'PUBLIC'] } },
+      { sharedWith: { some: { userId } } },
+    ] }] },
     select: NOTE_FIELDS,
     orderBy: [{ title: 'asc' }, { id: 'asc' }],
     take: MAX_CONTEXT_ITEMS,
@@ -33,9 +57,17 @@ async function notes(userId: string, where: Prisma.NoteWhereInput, offset: numbe
   return rows.map(row => ({ ...row, title: stripHtmlToPlainText(row.title).slice(0, 300) }));
 }
 
-export async function listContextItems(userId: string, input: { workspaceId: unknown; projectId: unknown; folderId: unknown; offset?: number }) {
+export async function listContextItems(userId: string, input: { workspaceId: unknown; projectId: unknown; folderId: unknown; view?: unknown; offset?: number }) {
   const folderId = optionalId(input.folderId, 'A folder');
   const offset = input.offset ?? 0;
+  if (input.view) {
+    const view = CONTEXT_VIEWS.find(name => name === input.view);
+    if (!view) throw new ContextFolderError(400, 'Unknown list');
+    const { workspaceId } = await resolveContextLevel(userId, input.workspaceId, null);
+    // A Note written in no workspace at all is its writer's wherever they are, as the notes list had it.
+    const here: Prisma.NoteWhereInput = { OR: [noteWorkspaceWhere(workspaceId), { workspaceId: null, projectId: null }] };
+    return { folderId: null, notes: await notes(userId, { AND: [viewWhere(userId)[view], here] }, offset), files: [] };
+  }
   if (folderId) {
     const { files } = await listContextFiles(userId, { folderId });
     return { folderId, notes: await notes(userId, { folderId }, offset), files };

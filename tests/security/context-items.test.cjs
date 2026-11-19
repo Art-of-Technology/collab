@@ -160,3 +160,36 @@ test('notes beyond the first page are reachable', async () => {
   assert.deepEqual(next.body.notes.map(note => note.id), ['note-500']);
   assert.equal((await f.call('?workspace=joined&offset=-1')).status, 400);
 });
+
+test('the pinned, personal and shared lists hold what the reader may read there, wherever it is kept', async () => {
+  const f = fixture();
+  f.addFolder('ideation');
+  f.addNote('mine', { scope: 'PERSONAL', authorId: 'alice' });
+  f.addNote('nowhere', { scope: 'PERSONAL', authorId: 'alice', workspaceId: null });
+  f.addNote('bobs-own', { scope: 'PERSONAL', authorId: 'bob', isRestricted: true });
+  f.addNote('for-alice', { scope: 'SHARED', sharedWith: [{ userId: 'alice' }] });
+  f.addNote('from-alice', { scope: 'SHARED', authorId: 'alice', sharedWith: [{ userId: 'bob' }] });
+  f.addNote('for-carol', { scope: 'SHARED', isRestricted: true, sharedWith: [{ userId: 'carol' }] });
+  f.addNote('pinned-here', { isPinned: true, folderId: 'ideation' });
+  f.addNote('pinned-in-project', { isPinned: true, scope: 'PROJECT', workspaceId: null, projectId: 'project' });
+  f.addNote('pinned-elsewhere', { isPinned: true, workspaceId: 'foreign' });
+  f.addNote('loose');
+
+  const ids = async view => (await f.call(`?workspace=joined&view=${view}`)).body.notes.map(note => note.id).sort();
+  assert.deepEqual(await ids('personal'), ['mine', 'nowhere']);
+  assert.deepEqual(await ids('shared'), ['for-alice', 'from-alice']);
+  assert.deepEqual(await ids('pinned'), ['pinned-here', 'pinned-in-project']);
+  // A list is one of the three, and it is a workspace's: neither a made-up one nor a stranger's answers.
+  assert.equal((await f.call('?workspace=joined&view=everything')).status, 400);
+  assert.equal((await f.call('?workspace=foreign&view=personal')).status, 404);
+});
+
+test('a workspace owner cannot see another author’s private pinned note', async () => {
+  const f = fixture('bob');
+  f.addNote('private', { authorId: 'alice', scope: 'PERSONAL', isPinned: true });
+  f.addNote('shared', { authorId: 'alice', scope: 'PERSONAL', isPinned: true, sharedWith: [{ userId: 'bob' }] });
+  f.addNote('workspace', { authorId: 'alice', isPinned: true });
+  const result = await f.call('?workspace=joined&view=pinned');
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body.notes.map(note => note.id).sort(), ['shared', 'workspace']);
+});

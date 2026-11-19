@@ -55,6 +55,8 @@ interface NoteFormEditorProps {
     projectId?: string;
     mode: "create" | "edit";
     onSuccess?: (noteId: string) => void;
+    /** Told what an edit saved, each time one is saved. */
+    onSaved?: (saved: { title: string; type: string }) => void;
     onCancel?: () => void;
     showCancelButton?: boolean;
     defaultType?: NoteType;
@@ -102,6 +104,7 @@ export function NoteFormEditor({
     projectId: initialProjectId,
     mode,
     onSuccess,
+    onSaved,
     onCancel,
     defaultType = NoteType.GENERAL,
     defaultScope = NoteScope.PERSONAL,
@@ -120,6 +123,7 @@ export function NoteFormEditor({
         projectId: initialProjectId,
         mode,
         onSuccess,
+        onSaved,
         defaultType,
         defaultScope,
         initialTitle,
@@ -355,9 +359,10 @@ export function NoteFormEditor({
                 {/* Toolbar - organized in logical groups */}
                 <div className="rounded-2xl bg-collab-800 border border-collab-700 overflow-hidden">
                     {/* Main toolbar row */}
-                    <div className="flex items-center gap-3 p-4">
+                    {/* The editor sits in Context's pane, which is narrow: the row wraps rather than being cut off. */}
+                    <div className="flex flex-wrap items-center gap-3 p-4">
                         {/* Left: Metadata selectors */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             {/* Type Selector */}
                             <FormField
                                 control={form.control}
@@ -526,7 +531,7 @@ export function NoteFormEditor({
                         <div className="flex-1" />
 
                         {/* Right: Actions */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             {/* Share button */}
                             {mode === "edit" && noteId && isOwner && watchScope === NoteScope.PERSONAL && (
                                 <ShareNoteDialog
