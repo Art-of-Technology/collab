@@ -245,7 +245,7 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
   });
 
   // A Note is created where the page is standing and then opened beside the list, in its editor.
-  const postNote = async (fields: { title: string; content?: string; type?: string; templateId?: string | null }, at: { location: number; place: number }) => {
+  const postNote = async (fields: { title: string; content?: string; rawSecretContent?: string; type?: string; templateId?: string | null }, at: { location: number; place: number }) => {
     const created = await readJson(await fetch('/api/notes', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -285,7 +285,8 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workspaceId, projectId: level.projectId, title }),
     }));
-    await postNote({ title: filled.title, content: filled.content, type: filled.defaultType, templateId: filled.templateId }, at);
+    // A secret kind of Note keeps its text sealed, apart from `content`, which the server drops for it.
+    await postNote({ title: filled.title, content: filled.content, rawSecretContent: filled.content, type: filled.defaultType, templateId: filled.templateId }, at);
   });
 
   const closeNote = () => {
@@ -306,7 +307,7 @@ export function ContextBrowser({ workspaceId, workspaceSlug, projects, initialPr
     // The pinned list holds pinned Notes alone: one that is unpinned there leaves it, and comes back
     // when it is pinned again from its pane, which stays open.
     if (level.view === 'pinned') return rereadNotes(place);
-    setNotes(current => current.map(note => (note.id === id ? { ...note, isPinned: pin } : note)));
+    if (place === reading.current) setNotes(current => current.map(note => (note.id === id ? { ...note, isPinned: pin } : note)));
   });
 
   const deleteNote = (id: string) => write(async () => {

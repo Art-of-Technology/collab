@@ -227,6 +227,8 @@ test('a Note from a template is filled in by the server and made where the page 
   await settle();
   const sent = JSON.parse(posted['POST /api/notes']);
   assert.deepEqual([sent.title, sent.content, sent.type, sent.folderId, sent.scope], ['ADR 7: Use Postgres', '<p>Why</p>', 'DECISION', 'ideas', 'WORKSPACE']);
+  // The same text goes as the sealed text too, which is all the server keeps of a secret kind of Note.
+  assert.equal(sent.rawSecretContent, '<p>Why</p>');
   assert.equal(document.querySelector('[data-note-pane]').dataset.notePane, 'adr');
   assert.ok(list().some(row => row.startsWith('ADR 7: Use Postgres')));
   await React.act(async () => root.render(null));
