@@ -24,9 +24,11 @@ Each runner reports room to Collab. Collab hands the lead the developer seats wi
 
 Approved layout: **grouped by person**. One card per person with the runner's name, one room bar and that person's seats as role chips. The default seat of a role is marked.
 
+The screenshot below shows the switch after the owner has enabled it.
+
 ![Agents page grouped by person](02-agents-by-person.png)
 
-The owner's switch "Members may add their own seats to this project" is off by default. A member without seats sees one button:
+The owner's switch "Members may add their own seats to this project" is off by default. After the owner enables it, a member without seats sees one button:
 
 ![A member before adding seats](03-agents-member-before-adding.png)
 

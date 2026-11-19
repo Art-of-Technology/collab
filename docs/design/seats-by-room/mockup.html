@@ -151,7 +151,7 @@ const STATE={on:'',offline:'runner offline',paused:'runner paused',disk:'runner 
 const P={cem:{name:'Cem',room:6,next:'Codex',state:'on',open:3,runner:"Cem's space"},
          bob:{name:'Bob',room:60,next:'Claude Code',state:'on',open:0,runner:"Bob's space"},
          deniz:{name:'Deniz',room:85,next:'Claude Code',state:'none',open:0,runner:"Deniz's Mac"}};
-const G={fresh:true,viewer:'cem',membersMayAdd:true};
+const G={fresh:true,viewer:'cem',membersMayAdd:false};
 let SEATS=[
  {id:'lead',name:'Collab Lead',role:'lead',owner:'cem'},
  {id:'d1',name:'Collab Developer',role:'developer',owner:'cem',def:true},
@@ -211,7 +211,7 @@ ACT['h-step']=b=>{H.step=+b.dataset.v>0?(H.step+1)%STEPS.length:Math.max(0,H.ste
 const mine=()=>SEATS.filter(s=>s.owner===G.viewer);
 function personCard(o){const p=P[o],seats=SEATS.filter(s=>s.owner===o);if(!seats.length)return'';
   return `<div class="card"><div class="row" style="justify-content:space-between"><b>${p.name}</b><span class="muted small">${p.state==='none'?'no runner':p.runner}</span></div>
-   <div style="margin:8px 0">${bar(o)}</div>
+   <div style="margin:8px 0">${G.viewer==='cem'||o===G.viewer?bar(o):'<span class="muted small">Room private</span>'}</div>
    <div class="row">${seats.map(s=>`<span class="chip" title="${esc(s.name)}">${s.role}${s.def?' · default':''}</span>`).join('')}</div>
    ${o===G.viewer&&p.state==='none'?`<div class="row" style="margin-top:10px"><button class="btn pri" data-act="a-connect">Connect my runner (sample)</button></div>`:''}
    ${o===G.viewer&&o!=='cem'?`<div class="row" style="margin-top:8px"><button class="btn ghost" data-act="a-remove">Remove my seats</button></div>`:''}</div>`}
@@ -222,7 +222,7 @@ R.agents=d=>{const isOwner=G.viewer==='cem',has=mine().length>0;
   const add=!isOwner&&!has?`<div class="banner"><div class="row" style="justify-content:space-between"><span>You have no seats in this project. Your seats run on your own runner and your own allowance.</span><button class="btn pri" data-act="a-add" ${G.membersMayAdd?'':'disabled'}>Add my seats to this project</button></div>${G.membersMayAdd?'':'<p class="err" style="margin-top:6px">The project owner has not switched this on.</p>'}</div>`:'';
   const body=S.lay.agents==='A'
    ?`<div class="cards">${['cem','bob','deniz'].map(personCard).join('')}</div>`
-   :`<div class="tw"><table class="t"><thead><tr><th>Role</th><th>Seat</th><th>Owner</th><th>Room</th></tr></thead><tbody>${ROLES.map(r=>rank(r).map((s,i)=>`<tr><td>${i===0?roleChip(r):''}</td><td>${esc(s.name)}${s.def?' <span class="chip">default</span>':''}</td><td>${P[s.owner].name}</td><td>${bar(s.owner)}</td></tr>`).join('')).join('')}</tbody></table></div>`;
+   :`<div class="tw"><table class="t"><thead><tr><th>Role</th><th>Seat</th><th>Owner</th><th>Room</th></tr></thead><tbody>${ROLES.map(r=>(isOwner?rank(r):SEATS.filter(s=>s.role===r)).map((s,i)=>`<tr><td>${i===0?roleChip(r):''}</td><td>${esc(s.name)}${s.def?' <span class="chip">default</span>':''}</td><td>${P[s.owner].name}</td><td>${isOwner||s.owner===G.viewer?bar(s.owner):'<span class="muted small">Room private</span>'}</td></tr>`).join('')).join('')}</tbody></table></div>`;
   return frame(d,head+ownerRow+add+body+`<p class="muted small" style="margin-top:12px">Room is reported by each runner. Only the owner and the lead see other people's numbers; Deniz sees her own.</p>`)};
 ACT['a-view']=b=>{G.viewer=b.dataset.v;render()};
 ACT['a-add']=()=>{['developer','reviewer','security'].forEach((r,i)=>SEATS.push({id:'z'+i,name:`Collab ${r[0].toUpperCase()+r.slice(1)} (Deniz)`,role:r,owner:'deniz',sample:true}));render()};
