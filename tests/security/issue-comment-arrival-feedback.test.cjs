@@ -54,8 +54,8 @@ async function fixture(t, { reducedMotion = false, blockedAudio = false } = {}) 
     setTimeout: (fn, ms) => { assert.equal(ms, 800); timers.set(++next, fn); return next; },
     clearTimeout: id => timers.delete(id),
   });
-  function Harness({ issue = 'i', comments, ready }) {
-    output = useCommentArrivalFeedback(issue, comments, ready, 'me');
+  function Harness({ issue = 'i', comments, ready, viewer = 'me' }) {
+    output = useCommentArrivalFeedback(issue, comments, ready, viewer);
     return h('div', { ref: output.containerRef }, comments.map(c => h('div', {
       key: c.id, 'data-comment-id': c.id,
       ref: element => {
@@ -147,4 +147,24 @@ test('incoming replies expand collapsed ancestors and stay open after the highli
   await render([c('existing-reply'), c('new-reply')], []);
   assert.ok(document.querySelector('[data-comment-id="new-reply"]'));
   assert.equal(document.querySelector('.comment-arrival-highlight'), null);
+});
+
+
+test('arrivals wait for viewer identity, then announce remote comments and keep own comments silent', async t => {
+  const f = await fixture(t);
+  await f.render({ comments: [comment('existing')], ready: true, viewer: null });
+  const comments = [comment('existing'), comment('remote'), comment('own', 'me')];
+  await f.render({ comments, ready: true, viewer: null });
+  await f.frame();
+  assert.equal(f.state.plays, 0);
+  assert.deepEqual(f.state.ids, []);
+  await f.render({ comments, ready: true, viewer: 'me' });
+  await f.frame();
+  assert.deepEqual(f.state.ids, ['remote']);
+  assert.equal(f.state.plays, 1);
+  assert.equal(f.state.scrolls[0].id, 'remote');
+  await f.expire();
+  await f.render({ comments: [...comments], ready: true, viewer: 'me' });
+  await f.frame();
+  assert.equal(f.state.plays, 1);
 });

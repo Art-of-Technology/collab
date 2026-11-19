@@ -31,6 +31,8 @@ export function useCommentArrivalFeedback(issueId: string, comments: IssueCommen
       history.current = new Set(flattenCommentIds(comments).keys());
       return;
     }
+    // Keep arrivals pending until we can distinguish remote comments from our own.
+    if (!currentUserId) return;
     const incoming = findCommentArrivals(history.current, comments, currentUserId);
     if (incoming.length) {
       announcedIssue.current = issueId;
