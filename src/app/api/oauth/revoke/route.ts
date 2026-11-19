@@ -137,11 +137,13 @@ async function revokeTokenFromInstallations(
   try {
     const tokenField = tokenType === 'access' ? 'accessToken' : 'refreshToken';
 
-    // Find tokens for this specific app that are not revoked
+    // Find tokens for this specific app that are not revoked.
+    // accessToken is a required column, so only the refresh search filters out empty values:
+    // Prisma rejects `{ not: null }` on a required field.
     const tokens = await prisma.appToken.findMany({
       where: {
         isRevoked: false,
-        [tokenField]: { not: null },
+        ...(tokenType === 'refresh' ? { refreshToken: { not: null } } : {}),
         OR: [
           { installation: { appId } },
           { installationId: null, appId, app: { isSystemApp: true } }
