@@ -413,7 +413,7 @@ Room is the percent of allowance a seat has left on the program it would run nex
 
 Both `state` and `rooms` are optional. In an entry of `rooms`, all three fields are required.
 
-- **Only percentages and program names are sent.** No login, account, plan or billing detail is ever sent, and any other key is refused.
+- **Send only percentages and program names.** Do not send login, account, plan or billing details; any other key is refused.
 - Collab stores a figure with the time it arrived, by its own clock. Send the figures with every call: a figure at least 15 minutes old counts as unknown.
 - A call without `state` and `rooms` stores no state and no figure, and is answered exactly as before.
 - A value outside the table is `400 invalid_request`, and a body over 64 KiB is `413 body_too_large`. Nothing of that call is stored and no seats are answered.
@@ -467,7 +467,7 @@ curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" https://collab.exampl
 - A machine that is lost says nothing. Expiry is the backstop for that: its tokens stop within 30 days.
 - A runner that comes back pairs again and is connected again.
 
-A runner credential does nothing else. It reads no issue, every other call refuses it, and all it writes is its own state and its seats' room.
+A runner credential reads no issue, and every other call refuses it. The runner can also report its own state and its seats' room.
 
 ## A person's own sessions
 
