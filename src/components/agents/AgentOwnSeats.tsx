@@ -45,7 +45,7 @@ export function AgentOwnSeats({ workspaceId, projects, canManage }: Props) {
     () => ({ title: membersMayAddSeats ? `Members may add their own seats to ${project.name}` : `Members can no longer add seats to ${project.name}`,
       ...(!membersMayAddSeats && { description: 'The seats they already added stay.' }) }));
   const add = (project: Project) => call(`${api}/agent-seats/mine`, { method: 'POST', body: JSON.stringify({ projectId: project.id }) },
-    (body: { created?: string[]; refused?: { name: string; reason: string }[] }) => ({ title: body.refused?.length ? 'Not every seat was added' : 'Your seats were added',
+    (body: { created?: string[]; refused?: { name: string; reason: string }[] }) => ({ title: !body.refused?.length ? 'Your seats were added' : body.created?.length ? 'Not every seat was added' : 'Your seats were not added',
       description: [body.created?.length && `Added: ${body.created.join(', ')}. They work once your runner is connected.`,
         ...(body.refused ?? []).map(seat => `${seat.name} was not added: ${seat.reason.replace(/\.$/, '')}.`)].filter(Boolean).join(' ') }));
   const remove = (project: Project) => call(`${api}/agent-seats/mine?projectId=${encodeURIComponent(project.id)}`, { method: 'DELETE' },
