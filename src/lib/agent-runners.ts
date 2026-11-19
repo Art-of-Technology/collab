@@ -227,8 +227,8 @@ export async function revokeProjectRunnerTokens(tx: Prisma.TransactionClient, wo
  * The ask may carry a `report` (CLB-774): the runner's own state, and per seat the room it has left and the program it
  * would run next. A figure is stored, with the time it arrived, only for a seat this ask lists; any other seat's id is
  * answered under `refused` and nothing is stored for it, so a seat retired since the runner's last ask does not cost
- * the runner its answer. An ask without a report stores nothing and is answered as before. The credential does nothing
- * else.
+ * the runner its answer. An ask without a report makes no report writes and is answered as before. The credential
+ * does nothing else.
  */
 export async function fetchSeats(credential: string, have: string[],
   report: { state?: typeof RUNNER_STATES[number]; rooms?: { seat: string; room: number; program: string }[] } = {}) {
