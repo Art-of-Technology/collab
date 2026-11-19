@@ -102,3 +102,27 @@ test('agent/API comments publish the same workspace event as browser comments', 
   assert.equal(result.status, 201);
   assert.deepEqual(order, ['write', 'activity', 'publish']);
 });
+
+for (const phase of ['connect', 'publish', 'reject', 'success']) {
+  test(`bounded Redis publication handles ${phase} without holding a saved comment response`, async () => {
+    let timer, cleared = 0;
+    const client = {
+      isOpen: phase !== 'connect', on() {},
+      connect: () => new Promise(() => {}),
+      publish: async () => {
+        if (phase === 'publish') return new Promise(() => {});
+        if (phase === 'reject') throw new Error('Redis unavailable');
+      },
+    };
+    const { publishEvent } = load('src/lib/redis.ts', { redis: { createClient: () => client } }, {
+      process: { env: { REDIS_URL: 'redis://test.invalid', NODE_ENV: 'test' } },
+      console: { warn() {}, error() {} },
+      setTimeout: (callback, ms) => { assert.equal(ms, 1000); timer = callback; return 1; },
+      clearTimeout: () => { cleared++; },
+    });
+    const result = publishEvent('workspace:w:events', { type: 'issue.comments.changed' }, 1000);
+    if (phase === 'connect' || phase === 'publish') timer();
+    assert.equal(await result, phase === 'success');
+    assert.equal(cleared, 1);
+  });
+}

@@ -228,7 +228,7 @@ export const POST = withAppAuth(
         },
       });
 
-      await publishEvent(`workspace:${context.workspace.id}:events`, { type: 'issue.comments.changed', workspaceId: context.workspace.id, issueId: issue.id });
+      await publishEvent(`workspace:${context.workspace.id}:events`, { type: 'issue.comments.changed', workspaceId: context.workspace.id, issueId: issue.id }, 1000);
       return NextResponse.json(comment, { status: 201 });
     } catch (error) {
       if (error instanceof HandoffError) return NextResponse.json({ error: error.code, error_description: error.message }, { status: error.status });

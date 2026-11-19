@@ -85,7 +85,7 @@ export async function POST(
         }
       });
       
-      await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id });
+      await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id }, 1000);
       return NextResponse.json({ 
         status: "removed",
         message: "Like removed",
@@ -128,7 +128,7 @@ export async function POST(
       }
     });
 
-    await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id });
+    await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id }, 1000);
     return NextResponse.json({
       status: "added",
       message: "Like added",

@@ -154,7 +154,7 @@ export async function POST(
       console.error("[ISSUE_COMMENTS_POST_NOTIFY]", notificationError);
     }
 
-    await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id });
+    await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id }, 1000);
     return NextResponse.json(comment, { status: 201 });
   } catch (error) {
     if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });

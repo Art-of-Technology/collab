@@ -32,7 +32,7 @@ export function useIssueComments(issueId: string, initialComments?: IssueComment
       // Ready is sent after subscription, including reconnects: catch up on missed events.
       if (event?.type === 'realtime.ready' ||
           (event?.type === 'issue.comments.changed' && event.workspaceId === workspaceId &&
-            (event.issueId === issueId || event.issueKey === issueId))) {
+            event.issueId === issueId)) {
         void queryClient.invalidateQueries({ queryKey: issueCommentKeys.list(issueId) });
       }
     });

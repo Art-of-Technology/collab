@@ -69,7 +69,7 @@ export async function PUT(
       },
     });
 
-    await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id });
+    await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id }, 1000);
     return NextResponse.json(updatedComment);
   } catch (error) {
     if (error instanceof ForgeProjectWriteError) return NextResponse.json({ error: error.message }, { status: 409 });
@@ -142,7 +142,7 @@ export async function DELETE(
         },
       });
 
-      await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id });
+      await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id }, 1000);
       return NextResponse.json({ 
         message: "Comment marked as deleted",
         comment: deletedComment
@@ -153,7 +153,7 @@ export async function DELETE(
         where: { id: commentId },
       });
 
-      await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id });
+      await publishEvent(`workspace:${issue.workspaceId}:events`, { type: 'issue.comments.changed', workspaceId: issue.workspaceId, issueId: issue.id }, 1000);
       return NextResponse.json({ 
         message: "Comment deleted successfully",
         deletedId: commentId

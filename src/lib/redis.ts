@@ -44,16 +44,30 @@ export async function getRedisSubscriber(): Promise<RedisClientType | null> {
   return sub;
 }
 
-export async function publishEvent(channel: string, message: any): Promise<boolean> {
+// Callers that have already persisted a write can bound notification latency.
+// A timeout only drops live delivery; readers still recover via HTTP polling.
+export async function publishEvent(channel: string, message: any, timeoutMs?: number): Promise<boolean> {
+  const publish = async () => {
+    try {
+      const client = await getRedisClient();
+      if (!client) return false;
+      const payload = typeof message === 'string' ? message : JSON.stringify(message);
+      await client.publish(channel, payload);
+      return true;
+    } catch (err) {
+      console.warn('Redis publish failed', err);
+      return false;
+    }
+  };
+  if (timeoutMs === undefined) return publish();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const client = await getRedisClient();
-    if (!client) return false;
-    const payload = typeof message === 'string' ? message : JSON.stringify(message);
-    await client.publish(channel, payload);
-    return true;
-  } catch (err) {
-    console.warn('Redis publish failed', err);
-    return false;
+    return await Promise.race([
+      publish(),
+      new Promise<boolean>(resolve => { timeout = setTimeout(() => resolve(false), timeoutMs); }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 }
 
