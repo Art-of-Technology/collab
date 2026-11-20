@@ -44,12 +44,26 @@ function fixture(options={}){
  const spaces=structuredClone(workspaces);const projects=spaces.map(workspace=>({id:workspace.id,name:workspace.id,slug:workspace.id,workspaceId:workspace.id,workspace,color:'#fff',description:'description',createdAt:now,updatedAt:now}));
  const target=projects.find(x=>x.id===(options.target||'joined')),foreign=projects.find(x=>x.id==='foreign');const sibling={...target,id:'sibling'};projects.push(sibling);
  if (options.role) target.workspace.members.find(m => m.userId === actor.id).role = options.role;
- const statuses=[{id:'todo',name:'todo',displayName:'Todo',color:'#fff',isFinal:false,isActive:true,projectId:target.id,project:target},{id:'done',name:'done',displayName:'Done',color:'#000',isFinal:true,isActive:true,projectId:target.id,project:target}];
+ const statuses=[{id:'todo',name:'todo',displayName:'Todo',color:'#fff',isFinal:false,isActive:true,category:null,projectId:target.id,project:target},{id:'done',name:'done',displayName:'Done',color:'#000',isFinal:true,isActive:true,projectId:target.id,project:target}];
  const hiddenStatus={...statuses[0],id:'foreign-status',projectId:'foreign',project:foreign};
  const issue=(id,overrides={})=>({id,title:id,issueKey:id,projectId:target.id,project:target,workspaceId:target.workspaceId,workspace:target.workspace,deletedAt:null,statusId:'todo',projectStatus:statuses[0],dueDate:date(-2),updatedAt:date(-1),priority:'MEDIUM',assigneeId:null,assignee:null,parent:null,targetRelations:[],...overrides});
  const hidden=issue('foreign-parent',{projectId:'foreign',project:foreign,workspaceId:'foreign',workspace:foreign.workspace});
  const visibleParent=issue('visible-parent');
  const issues=[issue('overdue',{parent:hidden,targetRelations:[{relationType:'BLOCKS',sourceIssue:hidden},{relationType:'BLOCKS',sourceIssue:visibleParent}]}),issue('upcoming',{dueDate:date(1),parent:visibleParent}),issue('completed',{statusId:'done',projectStatus:statuses[1]}),issue('undated',{dueDate:null}),issue('foreign-workspace',{workspaceId:'foreign',workspace:foreign.workspace}),issue('foreign-status',{statusId:hiddenStatus.id,projectStatus:hiddenStatus})];
+ const activity = [];
+ if (options.overviewHistory) {
+  const blockedStatus = { ...statuses[0], id:'blocked', category:'blocked' };
+  statuses.push(blockedStatus);
+  const completed = issues.find(row => row.id === 'completed');
+  completed.finishedAt = date(-4);
+  issues.push(issue('blocked', { statusId: 'blocked', projectStatus: blockedStatus }));
+  const transition = (itemId, newStatus, createdAt, seat) => ({
+   itemId, itemType: 'ISSUE', workspaceId: target.workspaceId, projectId: target.id,
+   action: 'STATUS_CHANGED', oldStatusId: 'todo', oldStatus: statuses[0], newStatus, createdAt,
+   user: { agentSeat: seat ? { workspaceId: target.workspaceId } : null },
+  });
+  activity.push(transition('completed', statuses[1], date(-4), true), transition('blocked', blockedStatus, date(-6), false));
+ }
  if (options.large) {
   for (let i=0;i<11;i++) issues.push(issue(`extra-overdue-${i}`), issue(`extra-upcoming-${i}`,{dueDate:date(1)}));
   issues.push(issue('trashed-overdue',{deletedAt:now}), issue('trashed-upcoming',{dueDate:date(1),deletedAt:now}));
@@ -75,7 +89,7 @@ function fixture(options={}){
  target.workspace.agentRuns=runs;
  const db={projectBaseline:{findFirst:async()=>null},agentRun:{count:async args=>query(runs,args).length},
  workspace:{findFirst:async args=>query(spaces,args)[0]??null},
- issueActivity:{findMany:async()=>[]},user:{findUnique:async()=>options.deleted?null:actor},project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
+ issueActivity:{findMany:async args=>query(activity,args)},user:{findUnique:async()=>options.deleted?null:actor},project:{findUnique:async({where,...shape})=>project(projects.find(p=>matches(p,where)),shape)||null,findFirst:async({where,...shape})=>{const value=project(projects.find(p=>matches(p,where)),shape)||null;if(value&&options.revokeLookup)revoke();return value;}},workspaceMember:{findFirst:async({where})=>{const p=projects.find(x=>x.workspaceId===where.workspaceId);const userId=options.staleEmail?'bob':'alice';return p?.workspace.members.find(m=>m.userId===userId&&m.status)|| (userId==='bob'&&p?.id==='foreign'?{userId:'bob',status:true}:null);}},projectStatus:{findMany:async args=>{reads.push('statuses');return query(statuses,args);}},issue:{
  findMany:async args=>{reads.push('issues');return query(issues,args);},count:async args=>{reads.push('count');return query(issues,args).length;},groupBy:async args=>{reads.push('group');if(options.dbError)throw new Error('private-database-detail');const groups={};for(const x of query(issues,args))groups[x.statusId]=(groups[x.statusId]||0)+1;return Object.entries(groups).map(([statusId,id])=>({statusId,_count:{id}}));}},
  repository:{findFirst:async args=>{reads.push('repository');const value=query(options.noRepository?[]:[repo],args)[0]||null;if(value&&options.revokeRepository)revoke();return value;}},
  gitConnection:{findMany:async args=>{reads.push('gitConnections');return query(connections,args);}},
@@ -142,4 +156,12 @@ test('project overview returns scoped spend only to workspace owners and active 
   assert.doesNotMatch(JSON.stringify(result.body), /estimatedUSD|chargedUSD/);
   if (expected === undefined) assert.doesNotMatch(JSON.stringify(result.body), /17\.25/);
  }
+});
+
+test('Overview attributes recorded closures to seats and reports the age of a blocked status', async () => {
+ const result = await fixture({ overviewHistory: true }).call();
+ assert.equal(result.status, 200);
+ assert.equal(result.body.overview.closedByAgents, 1);
+ assert.equal(result.body.overview.closedByAgentsPercent, 100);
+ assert.equal(result.body.overview.blocked.find(issue => issue.id === 'blocked').blockedDays, 6);
 });

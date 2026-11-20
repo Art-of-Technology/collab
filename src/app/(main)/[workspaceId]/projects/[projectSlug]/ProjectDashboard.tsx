@@ -75,7 +75,8 @@ function ProjectOverview({
       label: `${milestone.issueKey ?? milestone.title} is forecast ${days(milestone.driftDays)} after its baseline`,
     })),
     ...blocked.map(issue => ({
-      href: issueLink(issue), key: issue.id, color: 'bg-red-400', label: `${issue.issueKey ?? issue.title} is blocked`,
+      href: issueLink(issue), key: issue.id, color: 'bg-red-400', label: issue.blockedDays > 0 ? `${issue.issueKey ?? issue.title} has been blocked for ${days(issue.blockedDays)}`
+        : `${issue.issueKey ?? issue.title} is blocked`,
     })),
     ...(unplanned.length ? [{
       href: workLink, key: workLink, color: 'bg-collab-400',
@@ -174,7 +175,7 @@ function ProjectOverview({
           ] as const).map(([heading, tab]) => (
             <Card key={tab} className={cn(cardStyle, 'p-3')}>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-[13px] font-semibold text-collab-400">{heading}</h2>
+                <h2 className="text-[13px] font-semibold">{heading}</h2>
                 <Button variant="outline" asChild className={cn(controlStyle, 'bg-transparent')}>
                   <Link href={`${base}?tab=${tab.toLowerCase()}`}>Open {tab} →</Link>
                 </Button>

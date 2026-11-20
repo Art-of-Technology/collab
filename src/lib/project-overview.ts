@@ -131,7 +131,8 @@ export async function loadProjectOverview(projectId: string, workspaceId: string
               AND: [issueReadAccessWhere(userId), { OR: [{ statusId: null }, { projectStatus: { isFinal: false } }] }],
             },
           },
-          select: { id: true },
+          select: { createdAt: true },
+          orderBy: { createdAt: 'asc' },
           take: 1,
         },
       },
@@ -155,31 +156,48 @@ export async function loadProjectOverview(projectId: string, workspaceId: string
   ]);
   const overview = calculateProjectOverview(issues, baseline?.createdAt ?? null, now);
   const closed = issues.filter(issue => issue.type !== 'MILESTONE' && isDone(issue));
-  const transitions = closed.length ? await prisma.issueActivity.findMany({
+  const blocked = issues.filter(issue => !isDone(issue) &&
+    (issue.projectStatus?.category === 'blocked' || issue.targetRelations.length > 0));
+  const blockedInStatus = blocked.filter(issue => issue.projectStatus?.category === 'blocked');
+  const statusChanges = closed.length || blockedInStatus.length ? await prisma.issueActivity.findMany({
     where: {
       workspaceId, projectId, itemType: 'ISSUE', action: 'STATUS_CHANGED',
-      itemId: { in: closed.map(issue => issue.id) },
-      newStatus: { project: projectWhere, isFinal: true },
-      OR: [{ oldStatusId: null }, { oldStatus: { project: projectWhere, isFinal: false } }],
+      OR: [
+        {
+          itemId: { in: closed.map(issue => issue.id) },
+          newStatus: { project: projectWhere, isFinal: true },
+          OR: [{ oldStatusId: null }, { oldStatus: { project: projectWhere, isFinal: false } }],
+        },
+        {
+          itemId: { in: blockedInStatus.map(issue => issue.id) },
+          newStatus: { project: projectWhere, isFinal: false, category: 'blocked' },
+          OR: [{ oldStatusId: null }, { oldStatus: { project: projectWhere, OR: [{ category: null }, { category: { not: 'blocked' } }] } }],
+        },
+      ],
     },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     select: { itemId: true, createdAt: true, user: { select: { agentSeat: { select: { workspaceId: true } } } } },
   }) : [];
-  const finishTimes = new Map(closed.map(issue => [issue.id, issue.finishedAt]));
-  const closers = new Map<string, boolean>();
-  for (const transition of transitions) {
-    const finishedAt = finishTimes.get(transition.itemId);
-    // An older transition cannot explain the latest closure. In a transaction the event
-    // timestamp can precede the trigger's statement timestamp.
-    if (!finishedAt || day(transition.createdAt) < day(finishedAt) || closers.has(transition.itemId)) continue;
-    closers.set(transition.itemId, transition.user.agentSeat?.workspaceId === workspaceId);
+  const latestChange = new Map<string, (typeof statusChanges)[number]>();
+  for (const change of statusChanges) {
+    if (!latestChange.has(change.itemId)) latestChange.set(change.itemId, change);
   }
-  const closedByAgents = [...closers.values()].filter(Boolean).length;
+  const closedByAgents = closed.filter(issue => {
+    const change = latestChange.get(issue.id);
+    // Event timestamps from a transaction can precede the finish trigger's
+    // statement timestamp, so compare the recorded calendar dates.
+    return change && issue.finishedAt && day(change.createdAt) >= day(issue.finishedAt) &&
+      change.user.agentSeat?.workspaceId === workspaceId;
+  }).length;
 
   return {
     ...overview,
-    blocked: issues.filter(issue => !isDone(issue) &&
-      (issue.projectStatus?.category === 'blocked' || issue.targetRelations.length > 0)).map(issueRef),
+    blocked: blocked.map(issue => {
+      const sinceStatus = latestChange.get(issue.id)?.createdAt ?? now;
+      const sinceRelation = issue.targetRelations[0]?.createdAt ?? now;
+      const elapsed = day(now) - Math.min(day(sinceStatus), day(sinceRelation));
+      return { ...issueRef(issue), blockedDays: Math.max(0, elapsed) };
+    }),
     closedByAgents, closedByAgentsPercent: percent(closedByAgents, closed.length),
     runCount,
     ...(billing ? { agentSpendUsd: sumReportedRunCosts(billing.agentRuns) } : {}),
