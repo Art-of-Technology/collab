@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { HandoffError, LEAD_CAP, NOT_DONE, byRoom, fromLead, noRoomDue, seatFor, seatWriteGuard, seatsWithRoom } from '@/lib/agent-seats';
+import { HandoffError, LEAD_CAP, NOT_DONE, STARTED_MOVE_MS, byRoom, fromLead, noRoomDue, seatFor, seatWriteGuard, seatsWithRoom } from '@/lib/agent-seats';
 import { repositoryStateForSeat, repositoryOfIssue } from '@/lib/agent-repository';
 import type { AppAuthContext } from '@/lib/apps/auth-middleware';
 import { assertLegacyIssueWriteAllowed, ForgeProjectWriteError } from '@/lib/forge/legacy-write-guard';
@@ -17,6 +17,7 @@ export const CHILD_IDLE_MS = 2 * 60 * 60_000;
 /** The states of a run whose session is taken to be alive. */
 const LIVE = ['running', 'waiting'];
 type Caller = Pick<AppAuthContext, 'user' | 'workspace'>;
+type DB = Prisma.TransactionClient | typeof prisma;
 const PRIORITIES = ['urgent', 'high', 'medium', 'low'];
 /** Inbox order: issues to resume, in review with something new, blocked with something new, then the rest. */
 const ORDER: Record<string, number> = { resume: 0, in_review: 1, blocked: 2 };
@@ -24,8 +25,11 @@ const ORDER: Record<string, number> = { resume: 0, in_review: 1, blocked: 2 };
 export interface InboxItem {
   issueId: string; issueKey: string | null; title: string; priority: string; category: string;
   reason: 'resume' | 'review_returned' | 'reply' | 'blocker_resolved' | 'child_done' | 'child_blocked' | 'child_idle' | 'child_no_room' | 'assigned'; lastRunAt: string | null;
-  /** With `child_no_room`: the child issues to move, each with the seat it sits on and why that seat has no room. */
-  noRoom?: { issueKey: string | null; seat: string; reason: string }[];
+  /**
+   * With `child_no_room`: the child issues to move, each with the seat it sits on and why that seat has no room, and for
+   * a child a run has started on the pull request its last run pushed (CLB-809).
+   */
+  noRoom?: { issueKey: string | null; seat: string; reason: string; pullRequest?: string }[];
 }
 
 type Status = { category: string | null; isFinal: boolean } | null;
@@ -43,8 +47,9 @@ const statusSelect = { select: { category: true, isFinal: true } } as const;
  * offered only when something happened after its reference time: the end of that run, or without one the
  * time it was last assigned to the caller. For a lead seat whose last run on an issue finished blocked, what happened
  * to the issue's children since that run started counts too: one reached done, one's run finished blocked, one
- * has sat with a seat for `CHILD_IDLE_MS` without a run, or one that no run ever started on sits on a developer seat
- * that has had no room for `NO_ROOM_MOVE_MS` while another developer seat could take it (`child_no_room`, CLB-780).
+ * has sat with a seat for `CHILD_IDLE_MS` without a run, or one sits on a developer seat that has had no room while another
+ * developer seat could take it (`child_no_room`): for `NO_ROOM_MOVE_MS` when no run ever started on it (CLB-780), for
+ * `STARTED_MOVE_MS` when its seat's inbox offers it for its next run and its last run pushed its work (`waitsPushed`, CLB-809).
  */
 export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }> {
   await markLost(context.workspace.id);
@@ -99,7 +104,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
 
   // Only a lead waits for children, so nobody else pays for this read.
   const children = seat?.role === 'lead' && waiting.length ? await prisma.issue.findMany({ where: { parentId: { in: waiting }, projectId: seat.projectId }, select: {
-    parentId: true, issueKey: true, agentRequestRole: true, createdAt: true, updatedAt: true, assigneeId: true, projectStatus: statusSelect,
+    id: true, parentId: true, issueKey: true, agentRequestRole: true, createdAt: true, updatedAt: true, assigneeId: true, projectStatus: statusSelect,
     assignee: { select: { agentSeat: { select: { id: true, role: true } } } },
     helpers: { select: { userId: true, assignedAt: true, approvedAt: true, approvedBy: true } },
     agentRuns: { orderBy: { startedAt: 'desc' }, take: 1, select: { outcome: true, startedAt: true, endedAt: true } },
@@ -107,27 +112,32 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   const now = Date.now();
 
   // CLB-780. Developer work is the lead's to move, and only what the lead may move is offered: a child the lead itself
-  // placed, on a developer seat, on which no run ever started. Its seat has had no room for long enough, and another
-  // developer seat has a number and is under its limit of issues from the lead: otherwise there is nowhere to move it.
-  const unstarted = children.filter(child => !isDone(child) && !child.agentRequestRole && !child.agentRuns.length && child.assignee?.agentSeat?.role === 'developer'
+  // placed, on a developer seat. Its seat has had no room for long enough, and another developer seat has a number and
+  // is under its limit of issues from the lead: otherwise there is nowhere to move it. A child a run has started on
+  // waits longer and moves only between runs, from what its last run pushed (CLB-809).
+  const placed = children.filter(child => !isDone(child) && !child.agentRequestRole && child.assignee?.agentSeat?.role === 'developer'
     && child.helpers.some(row => row.userId === child.assigneeId && row.approvedBy === me));
-  const full = new Map<string, { seat: string; reason: string; due: Date }>();
-  if (seat && unstarted.length) {
+  const full = new Map<string, { seat: string; reason: string; due: Date | null; started: { due: Date | null; pushed: Map<string, Pushed> } | null }>();
+  if (seat && placed.length) {
     const developers = await seatsWithRoom(prisma, seat.projectId, 'developer', new Date(now));
     let free = false;
     for (const developer of developers) {
       if (!free && developer.room.kind === 'room') free = await prisma.issue.count({ where: fromLead(seat.projectId, me, developer.userId) }) < LEAD_CAP;
     }
     for (const developer of free ? developers : []) {
-      if (developer.room.kind !== 'no_room' || !unstarted.some(child => child.assigneeId === developer.userId)) continue;
-      const due = await noRoomDue(prisma, developer, new Date(now));
-      if (due && due.getTime() <= now) full.set(developer.userId, { seat: developer.name, reason: developer.room.reason, due });
+      const held = placed.filter(child => child.assigneeId === developer.userId);
+      if (developer.room.kind !== 'no_room' || !held.length) continue;
+      const started = held.some(child => child.agentRuns.length)
+        ? { due: await noRoomDue(prisma, developer, new Date(now), STARTED_MOVE_MS), pushed: await waitsPushed(workspaceId, seat.projectId, developer) } : null;
+      full.set(developer.userId, { seat: developer.name, reason: developer.room.reason, due: await noRoomDue(prisma, developer, new Date(now)), started });
     }
   }
   // Once per spell without room: the moment the seat had had none for long enough is after the lead last looked.
-  const noRoomOf = (issueId: string, ranBlocked: Date | null) => unstarted.flatMap(child => {
+  const noRoomOf = (issueId: string, ranBlocked: Date | null) => placed.flatMap(child => {
     const held = ranBlocked && child.parentId === issueId ? full.get(child.assigneeId!) : undefined;
-    return held && held.due > ranBlocked! ? [{ issueKey: child.issueKey, seat: held.seat, reason: held.reason }] : [];
+    const pushed = child.agentRuns.length ? held?.started?.pushed.get(child.id) : undefined;
+    const due = child.agentRuns.length ? pushed && held?.started?.due : held?.due;
+    return held && due && due.getTime() <= now && due > ranBlocked! ? [{ issueKey: child.issueKey, seat: held.seat, reason: held.reason, ...(pushed && { pullRequest: pushed.pullRequest }) }] : [];
   });
 
   const reasonFor = ({ issue, stands, since, ranBlocked }: typeof candidates[number]): InboxItem['reason'] | null => {
@@ -175,6 +185,38 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
       || a.issue.createdAt.getTime() - b.issue.createdAt.getTime())
     .map(({ issue, last, category, reason, ranBlocked }) => ({ issueId: issue.id, issueKey: issue.issueKey, title: issue.title, priority: issue.priority,
       category, reason, lastRunAt: last?.endedAt?.toISOString() ?? null, ...(reason === 'child_no_room' && { noRoom: noRoomOf(issue.id, ranBlocked) }) })) };
+}
+
+export type Pushed = { runId: string; pullRequest: string; headCommit: string };
+
+/**
+ * CLB-809: whether the last run on an issue pushed its work, from what that run recorded and nothing else: it finished,
+ * and its finish gave the pull request and the full commit it was left at (`exitFacts`). A pull request exists only for a
+ * pushed branch. Null for an issue no run has started on, one with a run open, and one whose last run stopped, was lost,
+ * or finished without a pull request: Collab cannot tell that anything was pushed, and nothing moves.
+ */
+export async function pushedWork(db: DB, issueId: string): Promise<Pushed | null> {
+  // One run at most is open per issue, and no run starts while it is, so an open run is always the latest.
+  const last = await db.agentRun.findFirst({ where: { issueId }, orderBy: { startedAt: 'desc' }, select: { id: true, state: true } });
+  if (last?.state !== 'finished') return null;
+  const entry = await db.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issueId, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
+  const facts = JSON.parse(entry?.details ?? '{}');
+  return facts.runId === last.id && typeof facts.pullRequest === 'string' && typeof facts.headCommit === 'string'
+    ? { runId: last.id, pullRequest: facts.pullRequest, headCommit: facts.headCommit } : null;
+}
+
+/**
+ * CLB-809: the issues a run has started on that may leave a seat between runs, each with what its last run pushed. An
+ * issue qualifies when the seat's inbox offers it for its next run (to resume, a review came back, a reply, a blocker
+ * resolved), so none with a run open and none that waits for a person or another issue, and when `pushedWork` has it.
+ */
+export async function waitsPushed(workspaceId: string, projectId: string, seat: { userId: string; role: string }) {
+  const pushed = new Map<string, Pushed>();
+  for (const item of (await inboxOf(workspaceId, seat.userId, { projectId, role: seat.role })).items) {
+    const work = item.lastRunAt && await pushedWork(prisma, item.issueId);
+    if (work) pushed.set(item.issueId, work);
+  }
+  return pushed;
 }
 
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -514,14 +556,15 @@ const toRef = (issue: Ref) => ({ id: issue.id, issueKey: issue.issueKey, title: 
  * lists them, each with its assignee and how its last run ended; when the issue is a lead seat's, the project's other
  * seats come with it, each with the open issues it holds from the lead, and the limit. The lead itself gets each seat's
  * owner, room and the owner's open runs too, and the seats of one role in the order to prefer (`byRoom`); room is its
- * owner's figure, so no other reader is given it or the order that would say it. A run that ended without a note moves nothing:
+ * owner's figure, so no other reader is given it or the order that would say it. When the last run that finished was
+ * another account's, `movedFrom` names that seat, what its last run pushed and what to do before anything else (CLB-809). A run that ended without a note moves nothing:
  * what was said since the last note is still what the next session lacks. A read like any other: every token that
  * reads the workspace's issues gets it.
  */
 export async function runContext(context: Caller, issueIdOrKey: string) {
   const issue = await prisma.issue.findFirst({ where: { workspaceId: context.workspace.id, OR: [{ id: issueIdOrKey }, { issueKey: issueIdOrKey }] }, select: {
     ...REF, description: true, type: true, priority: true, assigneeId: true,
-    agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { id: true, note: true, endedAt: true } },
+    agentRuns: { where: { state: 'finished' }, orderBy: { endedAt: 'desc' }, take: 1, select: { id: true, note: true, endedAt: true, userId: true, seat: { select: { name: true } } } },
     sourceRelations: { where: { targetIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, targetIssue: { select: REF } } },
     targetRelations: { where: { sourceIssue: { workspaceId: context.workspace.id } }, select: { relationType: true, sourceIssue: { select: REF } } },
     // shortcut: the first 100 children, oldest first; page them when an epic outgrows that.
@@ -539,6 +582,15 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
   // The checked facts of that run's note are where finishing wrote them: in its entry on the timeline.
   const entry = last && await prisma.issueActivity.findFirst({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'AGENT_RUN_FINISHED' }, orderBy: { createdAt: 'desc' }, select: { details: true } });
   const facts = JSON.parse(entry?.details ?? '{}');
+  // CLB-809: the last finished run was another account's, so the issue came here from another seat. A runner that never
+  // had the issue starts from its pushed branch; one that had it before starts from what it holds, so the session brings
+  // the pushed work in first.
+  const pushed = last && last.userId !== issue.assigneeId ? await pushedWork(prisma, issue.id) : null;
+  const [, repo, number] = pushed?.pullRequest.match(/^(.+)#(\d+)$/) ?? [];
+  // Collab records no branch with a run: the name is the pull request's, where Collab has the pull request from its connected repository.
+  const branch = repo ? (await prisma.pullRequest.findFirst({ where: { githubPrId: Number(number), repository: { fullName: { equals: repo, mode: 'insensitive' } } },
+    select: { headBranchName: true } }))?.headBranchName ?? null : null;
+  const from = last?.seat?.name ?? 'another account';
   const commentsSince = await prisma.issueComment.findMany({ where: { issueId: issue.id, ...(last?.endedAt && { createdAt: { gt: last.endedAt } }) },
     orderBy: { createdAt: 'asc' }, select: { id: true, content: true, createdAt: true, parentId: true, author: { select: { id: true, name: true } } } });
   const others = [
@@ -561,6 +613,10 @@ export async function runContext(context: Caller, issueIdOrKey: string) {
     repository: await repositoryOfIssue(prisma, issue.projectId, issue.assigneeId),
     lastExitNote: last?.note ?? null,
     lastExitFacts: last ? Object.fromEntries(FACTS.map(name => [name, facts.runId === last.id && typeof facts[name] === 'string' ? facts[name] : null])) : null,
+    movedFrom: last && last.userId !== issue.assigneeId ? { seat: last.seat?.name ?? null, pullRequest: pushed?.pullRequest ?? null, headCommit: pushed?.headCommit ?? null, branch,
+      first: pushed ? `This issue was moved here from ${from}. Before anything else: git fetch origin, then git merge ${branch ? `origin/${branch}` : pushed.headCommit}`
+        + ` (the branch of ${pushed.pullRequest}, left at ${pushed.headCommit}). Continue from there and from the last exit note. What ${from} did not push is not part of the work any more.`
+        : `This issue was moved here from ${from}, and its last run recorded no pull request: Collab cannot tell what was pushed. Read the last exit note and find the issue's branch before you change anything.` } : null,
     commentsSince,
     blockers: others.filter(other => other.blocksMe).map(other => toRef(other.issue)),
     requests: others.filter(other => other.issue.agentRequestRole).map(other => {

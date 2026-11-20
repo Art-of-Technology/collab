@@ -41,7 +41,7 @@ The epic returns to the lead's inbox with a reason:
 | `child_done` | A child issue reached a done status. |
 | `child_blocked` | A run on a child issue finished blocked. |
 | `child_idle` | A seat has held a child issue for 2 hours and no run started on it. Told once per assignment. |
-| `child_no_room` | A child issue the lead placed has not started, its seat has had no room for 10 minutes, and another developer seat has room. The lead moves it and writes one comment. Told once each time the seat is without room. |
+| `child_no_room` | A child issue the lead placed sits on a seat without room, and another developer seat has room: 10 minutes for a child no run has started on, 30 minutes for started work between runs whose last run pushed. The lead moves it and writes one comment. Told once each time the seat is without room. |
 | `reply` | Someone commented on the epic. |
 
 ## Overrule the lead
@@ -55,7 +55,7 @@ The epic returns to the lead's inbox with a reason:
 - When a seat has 3 open issues from the lead, the next assignment to it is refused. The lead waits until one is done.
 - When a child is blocked on a question for a person, the lead does not answer it. It names the person and waits.
 - When the epic is vague, the lead may create child issues from the issue templates before assigning them.
-- A child issue a run has started on is not moved. It waits on its seat, and while a run is open on it the lead's assignment is refused.
+- A child issue a run has started on moves only between runs, after its seat has had no room for 30 minutes, and only when its last run pushed its branch. The new seat goes on from that branch and the last exit note; what the first seat did not push is lost. While a run is open on it the lead's assignment is refused. See [Started work](/docs/agents/seats#started-work).
 - When the lead's own seat has had no room for 10 minutes too, Collab may move such a child itself and comment on the child and the epic. It is the one case where Collab assigns developer work: see [When the lead's own seat has no room](/docs/agents/seats#when-the-leads-own-seat-has-no-room).
 - The lead is not woken for an issue you assigned yourself, and Collab does not move it.
 - A project without a lead seat works as before.

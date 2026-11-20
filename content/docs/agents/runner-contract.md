@@ -259,6 +259,7 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `repository` | The repository of the issue's project, as [above](#the-repository), or `null`: the read answers what that issue's checkout answers, and a project that works none out returns `null` in the context (an ambiguous checkout is refused). |
 | `lastExitNote` | The note of the last run that finished, or `null`. |
 | `lastExitFacts` | `null` if no run finished; otherwise `pullRequest`, `headCommit` and `nextStep`, each `null` when the last finished run supplied none. |
+| `movedFrom` | `null`, unless the last run that finished was another seat's. Then `seat`, the `pullRequest`, `headCommit` and `branch` (or `null`) to continue from, and `first`: what the session does before anything else. See [Started work](/docs/agents/seats#started-work). |
 | `commentsSince` | The comments made after that run ended, oldest first: `id`, `content`, `createdAt`, `parentId` and `author` with `id` and `name`. All comments when no run has finished. |
 | `blockers` | The issues linked as blocking this one. |
 | `requests` | The requests linked to this issue. |
@@ -338,6 +339,7 @@ Collab applies no rate limit of its own to these calls beyond `request_cap`.
 | Room figure counts as unknown | 15 minutes after it arrived |
 | Runner counts as offline | 10 minutes without a `seats` call |
 | Eligible work no run has started on can move | 10 minutes without room |
+| Started work can move, between runs, when its last run pushed | 30 minutes without room |
 
 `collab seat run` reads the inbox every 5 seconds when it is empty and renews every 15 seconds.
 
