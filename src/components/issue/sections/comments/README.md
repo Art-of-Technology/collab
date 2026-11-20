@@ -80,3 +80,5 @@ All hooks have been moved to centralized location `@/hooks/queries/useIssueComme
 - Real-time collaboration indicators
 - Comment search and filtering
 - Markdown shortcuts support
+
+Incoming sound playback errors are visible in the comment section: browser autoplay rejection offers **Enable sound**, other failures offer **Retry sound**, and **Test sound** plays the supplied clip directly from a user gesture. Successful playback clears the error. Initial loads and own comments remain silent; testing sound is explicit.

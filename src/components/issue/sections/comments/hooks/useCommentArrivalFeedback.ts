@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { IssueComment } from '../types/comment';
 import { commentNeedsScroll, findCommentArrivals, flattenCommentIds } from '../utils/commentArrivals';
 
@@ -11,17 +11,46 @@ export function useCommentArrivalFeedback(issueId: string, comments: IssueCommen
   const history = useRef<Set<string> | null>(null);
   const announcedIssue = useRef<string | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
+  const playbackAttempt = useRef({ value: 0 });
+  const [soundError, setSoundError] = useState<'blocked' | 'unavailable' | null>(null);
   const [highlightedIds, setHighlightedIds] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
+    const attempts = playbackAttempt.current;
     history.current = null;
     announcedIssue.current = null;
     setHighlightedIds(new Set());
+    setSoundError(null);
     return () => {
+      attempts.value++;
       audio.current?.pause();
       audio.current = null;
     };
   }, [issueId]);
+
+  // Called directly by the button as well as by arrivals. Keeping play() inside
+  // the click handler lets the browser grant playback on this same audio element.
+  const playSound = useCallback(() => {
+    const attempt = ++playbackAttempt.current.value;
+    const failed = (error: unknown) => {
+      if (attempt !== playbackAttempt.current.value) return;
+      const name = (error as { name?: string } | null)?.name;
+      if (name === 'AbortError') return;
+      setSoundError(name === 'NotAllowedError' ? 'blocked' : 'unavailable');
+    };
+    try {
+      audio.current ??= new Audio('/sounds/new-comment.mp3');
+      // A failed media resource stays in an error state until explicitly reloaded.
+      if (audio.current.error) audio.current.load();
+      audio.current.volume = 0.35;
+      audio.current.currentTime = 0;
+      void audio.current.play().then(() => {
+        if (attempt === playbackAttempt.current.value) setSoundError(null);
+      }).catch(failed);
+    } catch (error) {
+      failed(error);
+    }
+  }, []);
 
   useEffect(() => {
     // Establish a silent baseline after the first successful HTTP load, not from
@@ -53,20 +82,15 @@ export function useCommentArrivalFeedback(issueId: string, comments: IssueCommen
           behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
         });
       }
-      // Autoplay restrictions or an unavailable sound must never break comment reads.
-      try {
-        audio.current ??= new Audio('/sounds/new-comment.mp3');
-        audio.current.volume = 0.35;
-        audio.current.currentTime = 0;
-        void audio.current.play().catch(() => {});
-      } catch { /* Audio is optional when the browser does not permit playback. */ }
+      // Playback failure is recoverable without interrupting comments or highlighting.
+      playSound();
       timer = setTimeout(() => setHighlightedIds(new Set()), HIGHLIGHT_MS);
     });
     return () => {
       cancelAnimationFrame(frame);
       if (timer !== undefined) clearTimeout(timer);
     };
-  }, [highlightedIds, issueId]);
+  }, [highlightedIds, issueId, playSound]);
 
-  return { containerRef, highlightedIds };
+  return { containerRef, highlightedIds, soundError, playSound };
 }

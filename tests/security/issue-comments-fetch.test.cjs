@@ -121,12 +121,13 @@ test('comment section renders loading, authoritative empty results, and retryabl
   const React = require('react');
   const { renderToStaticMarkup } = require('react-dom/server');
   let state;
+  let soundError = null;
   const { IssueCommentsSection } = load('src/components/issue/sections/comments/IssueCommentsSection.tsx', {
     'react/jsx-runtime': require('react/jsx-runtime'),
     react: { useMemo: fn => fn(), useCallback: fn => fn },
     '@/hooks/queries/useUser': { useCurrentUser: () => ({ data: { id: 'user' } }) },
     '@/hooks/queries/useIssueComment': { useIssueComments: () => state, useAddIssueComment: () => ({}) },
-    './hooks/useCommentArrivalFeedback': { useCommentArrivalFeedback: () => ({ containerRef: { current: null }, highlightedIds: new Set() }) },
+    './hooks/useCommentArrivalFeedback': { useCommentArrivalFeedback: () => ({ containerRef: { current: null }, highlightedIds: new Set(), soundError, playSound() {} }) },
     './utils/commentHelpers': { organizeCommentsIntoTree: comments => comments },
     './components/CommentItem': { CommentItem: ({ comment }) => React.createElement('p', {}, comment.content) },
     './components/CommentForm': { CommentForm: () => React.createElement('textarea', { 'aria-label': 'New comment' }) },
@@ -138,6 +139,15 @@ test('comment section renders loading, authoritative empty results, and retryabl
   assert.match(render(), /Loading comments/);
   state = { data: [], isLoading: false };
   assert.match(render(), /No comments/);
+  assert.match(render(), /<button[^>]*>Test sound<\/button>/);
+  soundError = 'blocked';
+  assert.match(render(), /Your browser blocked comment sound/);
+  assert.match(render(), /<button[^>]*>Enable sound<\/button>/);
+  soundError = 'unavailable';
+  assert.match(render(), /Comment sound could not play/);
+  assert.match(render(), /Retry sound/);
+  assert.match(render(), /<button[^>]*>Retry sound<\/button>/);
+  soundError = null;
   assert.doesNotMatch(render(), /STALE/);
   state = { isLoading: false, isError: true, refetch() {} };
   assert.match(render(), /role="alert"/);
