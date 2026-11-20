@@ -215,6 +215,18 @@ test('started work moves between runs once its seat has had no room for 30 minut
     const named = (await context(revBob, started)).movedFrom;
     assert.equal(named.branch, `seat/${started.issueKey}`);
     assert.ok(named.first.includes(`git fetch origin, then git merge origin/seat/${started.issueKey} (the branch of ${started.pullRequest}, left at ${HEAD})`), named.first);
+    for (const [provider, baseUrl] of [['gitlab', 'https://gitlab.com'], ['github', 'https://github.enterprise.test']]) {
+      const collision = await raw.gitConnection.create({ data: { projectId: A, provider, baseUrl, externalId: provider, repositoryPath: `acme/${A}`,
+        name: A, url: `${baseUrl}/acme/${A}` } });
+      for (const repositoryId of [repository.id, collision.id]) {
+        await raw.agentSeat.update({ where: { id: revBob.id }, data: { repositoryId } });
+        const ambiguous = (await context(revBob, started)).movedFrom;
+        assert.equal(ambiguous.branch, null);
+        assert.match(ambiguous.first, /Do not merge anything: finish the run blocked and ask a person/);
+      }
+      await raw.agentSeat.update({ where: { id: revBob.id }, data: { repositoryId: null } });
+      await raw.gitConnection.delete({ where: { id: collision.id } });
+    }
     const checkout = await start(revBob, started, 'handoff-checkout');
     assert.equal((await context(revBob, started)).movedFrom.pullRequest, started.pullRequest, 'checkout retains the previous finished run facts');
     await raw.agentRun.update({ where: { id: checkout }, data: { state: 'stopped', endedAt: new Date() } });
@@ -226,7 +238,7 @@ test('started work moves between runs once its seat has had no room for 30 minut
     const original = finish.details;
     await raw.issueActivity.update({ where: { id: finish.id }, data: { details: JSON.stringify({ ...JSON.parse(original), pullRequest: 'private/repo#999' }) } });
     assert.equal((await context(revBob, started)).movedFrom.branch, null, 'another project cannot disclose its branch');
-    assert.match((await context(revBob, started)).movedFrom.first, new RegExp(`pushed to private/repo .*not to acme/${A}, which this seat works in\\. Do not merge anything`),
+    assert.match((await context(revBob, started)).movedFrom.first, /cannot be safely matched to the repository this seat works in\. Do not merge anything/,
       'a pull request of another repository than the seat works in is not merged');
     await raw.issueActivity.update({ where: { id: finish.id }, data: { details: original } });
     await raw.agentRun.delete({ where: { id: checkout } });
