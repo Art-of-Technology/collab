@@ -40,7 +40,7 @@ function fixture(options = {}) {
       getActivity: async () => { calls.push(['remoteActivity']); return activity; },
     },
   };
-  const route = load('src/app/api/projects/[projectId]/git-connections/route.ts', deps, { URL, Date });
+  const route = load('src/app/api/projects/[projectId]/git-connections/route.ts', deps, { URL, Date, process: { env: {} } });
   const request = body => ({ url: 'https://collab.test/api/projects/project/git-connections', headers: new Headers({ origin: options.foreignOrigin ? 'https://evil.test' : 'https://collab.test' }), json: async () => body });
   const context = { params: Promise.resolve({ projectId: options.otherProject ? 'foreign' : 'project' }) };
   return { calls, writes, saved, stored, post: body => route.POST(request(body), context), get: () => route.GET(request({}), context) };

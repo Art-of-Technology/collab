@@ -48,7 +48,7 @@ export async function POST(request: NextRequest, context: Context) {
     const { projectId } = await context.params;
     const scope = await access(projectId); if (scope.error) return scope.error;
     // Requests arrive from the project UI; a foreign origin must never spend stored credentials.
-    if (request.headers.get('origin') !== new URL(request.url).origin) return respond({ error: 'Invalid request origin' }, 403);
+    if (request.headers.get('origin') !== new URL(process.env.NEXTAUTH_URL || request.url).origin) return respond({ error: 'Invalid request origin' }, 403);
     const body = inputSchema.parse(await request.json());
     if (body.action === 'list') return respond(await listRepositories(resolveInstance(body.provider, body.baseUrl), body.credentials, body.page, body.workspace));
     if (body.action === 'disconnect' || body.action === 'refresh') {
