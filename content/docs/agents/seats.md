@@ -226,7 +226,7 @@ Equal standing: the seat whose owner has the fewest open runs comes first, then 
 | --- | --- | --- |
 | One has the most room | That seat. | `most room` |
 | Several share the most room | Of those, the seat whose owner has the fewest open runs, then the default seat, then the older seat. | `equal room, fewer open runs`, `equal room and open runs: the default seat first`, or `equal room and open runs: the older seat first` |
-| A seat has a number, and another seat's runner works but has sent no figure | Both count as the most room: the owner with the fewest open runs, then the default seat. | `a working runner with no figure counts as the most room, fewer open runs` |
+| At least one seat has a number, and another seat's runner works but has no fresh figure | The highest-numbered seats and the working runner's unknown seat count as having the most room: the owner with the fewest open runs, then the default seat, then the older seat. | `a working runner with no figure counts as the most room, fewer open runs`, `a working runner with no figure counts as the most room; equal open runs: the default seat first`, or `a working runner with no figure counts as the most room; equal open runs: the older seat first` |
 | None has a number, and the default seat is unknown | The default seat, as before. | `no fresh figure: the default seat` |
 | None has a number, the default seat has no room, and another seat is unknown | The first seat whose room is unknown. | `no fresh figure and the default seat cannot start: the next seat whose figure is unknown` |
 | All have no room | The default seat, with `"warning": "seat_idle"`. It waits there. | `no seat can start now: it waits at the default seat` |
