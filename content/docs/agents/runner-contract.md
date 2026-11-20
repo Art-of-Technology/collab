@@ -259,12 +259,12 @@ Needs `issues:read`. The session reads this first. Any token that can read the w
 | `repository` | The repository of the issue's project, as [above](#the-repository), or `null`: the read answers what that issue's checkout answers, and a project that works none out returns `null` in the context (an ambiguous checkout is refused). |
 | `lastExitNote` | The note of the last run that finished, or `null`. |
 | `lastExitFacts` | `null` if no run finished; otherwise `pullRequest`, `headCommit` and `nextStep`, each `null` when the last finished run supplied none. |
-| `movedFrom` | `null`, unless the last run that finished was another seat's. Then `seat`, the `pullRequest`, `headCommit` and `branch` (or `null`) to continue from, and `first`: what the session does before anything else. See [Started work](/docs/agents/seats#started-work). |
+| `movedFrom` | `null`, unless the last run that finished was another account's than the assignee. Then `seat`, `pullRequest`, `headCommit` and `branch` may each be `null`, and `first` says what the session does before anything else. When the run recorded a pull request and commit, `first` says to fetch and merge the branch, or the commit if the branch is unknown. Otherwise it says to find the branch. See [Started work](/docs/agents/seats#started-work). |
 | `commentsSince` | The comments made after that run ended, oldest first: `id`, `content`, `createdAt`, `parentId` and `author` with `id` and `name`. All comments when no run has finished. |
 | `blockers` | The issues linked as blocking this one. |
 | `requests` | The requests linked to this issue. |
 | `requestFor` | When the issue is itself a request: the issues it was filed for. |
-| `children` | Only when the issue has child issues: up to 100, oldest first. Each has the keys below, and `assigneeId`, `assignee` (the name) and `lastRun`: `null`, `running`, `stopped` or the outcome of its last run. |
+| `children` | Only when the issue has child issues: up to 100, oldest first. Each has the keys below, and `assigneeId`, `assignee` (the name) and `lastRun`: `null`, `running`, `stopped` or the outcome of its last run. When the lead seat itself reads, each also has `movedOff`, the user IDs of seats the child was moved off. |
 | `lead` | Only when the issue is assigned to a lead seat: `cap`, and `seats`, the project's other seats, each with `userId`, `name`, `role` and `openFromLead`. For the lead seat itself, each also has `owner`, `room` and `openRuns`, and the seats of a role are ordered [by room](/docs/agents/seats#what-the-lead-is-given). |
 | `commands` | `collab` commands that fetch the rest and end the session's work. |
 
@@ -442,7 +442,7 @@ What Collab makes of it:
 
 A runner that never sent a `state` counts as working. What a runner says about itself comes before the figure: the seat of a paused runner has no room, however new its figure is.
 
-Eligible work no run has started on can move after a seat has had no room: see [When a seat has had no room for 10 minutes](/docs/agents/seats#when-a-seat-has-had-no-room-for-10-minutes). Keep sending `state` and the figures with every call, also while you are paused or at your cap.
+Eligible work can move after a seat has had no room: see [When a seat has had no room for 10 minutes](/docs/agents/seats#when-a-seat-has-had-no-room-for-10-minutes). Keep sending `state` and the figures with every call, also while you are paused or at your cap.
 
 Collab places work by the figure: see [Placed by room](/docs/agents/seats#placed-by-room). It shows the figure under **Agents**, **Seats**, to the seat's owner and to whoever may manage workspace permissions: see [Room on the Seats tab](/docs/agents/overview#room-on-the-seats-tab).
 
