@@ -273,6 +273,9 @@ test('room: a runner reports room for its seats, and a read gives a number, no r
     };
     const current = await runnerOf(person);
     const sent = { have, state: 'working', rooms: [{ seat: dev.id, room: 12, program: 'Codex' }] };
+    const [, unchanged] = await duringRead(() => prisma.agentSeat.update({ where: { id: dev.id }, data: { lastSeenAt: new Date() } }), sent);
+    assert.equal(unchanged.refused, undefined);
+    assert.equal((await row(dev.id)).room, 12);
     assert.equal((await duringRead(() => prisma.agentRunner.update({ where: { id: current.id }, data: { state: 'paused' } }), sent))[0], 200);
     assert.equal((await runnerOf(person)).state, 'working');
 

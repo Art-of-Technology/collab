@@ -58,7 +58,11 @@ async function end(tx: Prisma.TransactionClient, workspaceId: string, actorId: s
   const now = new Date();
   const [ended] = await tx.agentRunner.updateManyAndReturn({ where: { id: runner.id, removedAt: null }, data: { removedAt: now }, select: { ownerId: true } });
   if (!ended) return 0;
-  if (ended.ownerId) await tx.agentSeat.updateMany({ where: { workspaceId, ownerId: ended.ownerId, roomAt: { not: null } }, data: { room: null, roomProgram: null, roomAt: null } });
+  if (ended.ownerId) {
+    const projects = await tx.agentSeat.findMany({ where: { workspaceId, ownerId: ended.ownerId }, distinct: ['projectId'], orderBy: { projectId: 'asc' }, select: { projectId: true } });
+    for (const { projectId } of projects) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${projectId}`}))`;
+    await tx.agentSeat.updateMany({ where: { workspaceId, ownerId: ended.ownerId, roomAt: { not: null } }, data: { room: null, roomProgram: null, roomAt: null } });
+  }
   const revoked = await tx.appToken.updateManyAndReturn({ where: { runnerId: runner.id, isRevoked: false }, data: { isRevoked: true, revokedAt: now }, select: { id: true } });
   await tx.appAuditLog.create({ data: { workspaceId, actorId, action: 'agent_runner.removed',
     details: { runnerId: runner.id, name: runner.name, reason, revokedTokens: revoked.map(token => token.id) } } });
@@ -253,9 +257,10 @@ export async function fetchSeats(credential: string, have: string[],
 
   // The seats that are this runner's to run. A figure is stored under the same conditions, stated again on the seat's row.
   const mine = { workspaceId, ownerId, byRunner: true, retiredAt: null, project: { OR: [{ isArchived: null }, { isArchived: false }] } };
-  const versions = report.rooms?.length ? await prisma.$queryRaw<{ id: string; version: string }[]>`
-    SELECT "id", xmin::text AS "version" FROM "AgentSeat"
-    WHERE "workspaceId" = ${workspaceId} AND "ownerId" = ${ownerId} AND "id" = ANY(${report.rooms.map(room => room.seat)})` : [];
+  const retirements = report.rooms?.length ? await prisma.$queryRaw<{ id: string; count: bigint }[]>`
+    SELECT "details"->>'seatId' AS "id", count(*) AS "count" FROM "AppAuditLog"
+    WHERE "workspaceId" = ${workspaceId} AND "action" = 'agent_seat.retired' AND "details"->>'seatId' = ANY(${report.rooms.map(room => room.seat)})
+    GROUP BY "details"->>'seatId'` : [];
   const seats = await prisma.agentSeat.findMany({ where: mine, orderBy: { createdAt: 'asc' },
     select: { id: true, userId: true, name: true, role: true, project: { select: { id: true, name: true, issuePrefix: true } } } });
   const notStored: string[] = [];
@@ -266,9 +271,13 @@ export async function fetchSeats(credential: string, have: string[],
     await tx.$queryRaw`SELECT "id" FROM "WorkspaceMember" WHERE "userId" = ${ownerId} AND "workspaceId" = ${workspaceId} FOR SHARE`;
     if (!await tx.workspace.findFirst({ where: inWorkspace(workspaceId, ownerId), select: { id: true } })) throw refused();
     if (report.state) await tx.agentRunner.update({ where: { id: runner.id }, data: { state: report.state } });
+    for (const projectId of [...new Set(seats.filter(seat => report.rooms?.some(room => room.seat === seat.id)).map(seat => seat.project.id))].sort()) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${projectId}`}))`;
+    }
     for (const { seat: id, room, program } of report.rooms ?? []) {
-      const version = versions.find(seat => seat.id === id)?.version;
-      if (!version || !seats.some(seat => seat.id === id) || !(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${id} AND xmin::text = ${version} FOR UPDATE`).length || !(await tx.agentSeat.updateMany({ where: { id, ...mine },
+      const [{ count }] = await tx.$queryRaw<{ count: bigint }[]>`SELECT count(*) AS "count" FROM "AppAuditLog"
+        WHERE "workspaceId" = ${workspaceId} AND "action" = 'agent_seat.retired' AND "details"->>'seatId' = ${id}`;
+      if (count !== (retirements.find(seat => seat.id === id)?.count ?? 0n) || !seats.some(seat => seat.id === id) || !(await tx.agentSeat.updateMany({ where: { id, ...mine },
         data: { room, roomProgram: program, roomAt: now } })).count) notStored.push(id);
     }
   });
