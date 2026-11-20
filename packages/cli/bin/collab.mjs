@@ -375,6 +375,8 @@ async function main() {
     if (options['dry-run'] || !options.yes) return { dryRun: Boolean(options['dry-run']), applied: false, preview };
     await new Promise((resolve, reject) => process.stderr.write(JSON.stringify({ setupPreview: preview }) + '\n', error => error ? reject(error) : resolve()));
   }
+  // A preview says how much would be sent, never the file itself: a screenshot does not belong in a transcript.
+  if (options['dry-run'] && attachmentBytes) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), body: { ...payload, contentBase64: `(${attachmentBytes.length} bytes, not shown)` } };
   if (options['dry-run']) return { dryRun: true, method: spec.method, url: selected.base + apiPath(), body: payload };
   if (spec.seatRun) {
     if (!rest?.length) throw new CliError('required_field', 'Name the program to start after --, for example: collab seat run -- claude -p PROMPT');

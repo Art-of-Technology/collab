@@ -2683,6 +2683,14 @@ test('issues attach sends a file as base64 with its name, and refuses what it ca
   assert.equal(unnamed.error?.error, 'required_field');
   assert.equal(f.calls.length, beforeUnnamed);
 
+  // A preview sends nothing and shows how much it would send, not the file.
+  const before = f.calls.length;
+  const preview = await f.run(['issues', 'attach', 'APP-1', '--file', file, '--dry-run', '--workspace', 'w']);
+  assert.equal(preview.code, 0, preview.stderr);
+  assert.equal(f.calls.length, before);
+  assert.equal(preview.stdout.includes(png.toString('base64')), false);
+  assert.match(preview.stdout, /13 bytes, not shown/);
+
   // Nothing is sent for a file that is missing, empty or over the stated limit, or when no file is named.
   const calls = f.calls.length;
   const empty = path.join(directory, 'empty.png'), large = path.join(directory, 'large.bin');
