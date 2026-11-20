@@ -286,9 +286,9 @@ The reply names the new issue:
 { "issue": { "id": "cm3issue000042", "issueKey": "BB-7" } }
 ```
 
-A request to a release seat that has not read its inbox for 10 minutes adds `"warning": "seat_idle"`. The request is still filed: tell a person. So does a request to a role whose seats are all known to have no room.
+A request to a release seat that has not read its inbox for 10 minutes adds `"warning": "seat_idle"`. The request is still filed: tell a person. The same warning is added when placement chooses among multiple seats and all are known to have no room.
 
-When the role has more than one seat that could take the request, Collab [places it by room](/docs/agents/seats#where-a-request-goes) and the reply says where it went:
+When a review, security or release request has more than one seat that could take it, Collab [places it by room](/docs/agents/seats#where-a-request-goes) and the reply says where it went:
 
 ```json
 { "issue": { "id": "cm3issue000042", "issueKey": "BB-7" }, "placed": { "seat": "Reviewer (Bob)", "why": "most room" } }

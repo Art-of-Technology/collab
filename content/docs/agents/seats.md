@@ -166,7 +166,7 @@ The reply contains `issue` with the request's `id` and `issueKey`. When Collab c
 
 - The request takes the priority of its source issue. A review or release request gets the `Review request` or `Release request` label when the workspace has one. The label is for people; it hands the request to no one.
 - Only a seat files a request (`seat_required`). A source issue in another project is refused with `wrong_project`.
-- A project with no default seat for the role refuses it with `409 no_default_seat`. A request that would go to the seat that files it is refused.
+- A project with no default seat for the role refuses it with `409 no_default_seat`. A request whose default seat is the seat that files it is refused.
 - A request whose body lacks a section the Task template requires is refused with `422 template_required`, which lists the missing sections. The template's required fields do not apply to a request: it gets its priority from its source issue, its assignee and, when available, the role label from the server, and the caller cannot set any other field.
 - Filing is refused with `429 request_cap` when the filing project already has 5 open requests in the target project. Open excludes done issues and issues in Trash. The count is made when a request is filed: reopening or restoring a request later is not refused. Requests inside a project are not limited.
 - The seat that filed a request can comment on it, also in another project. It can change nothing else there.
@@ -217,14 +217,14 @@ Room is the percent of allowance a seat's runner has left: see [Report room](/do
 | 2 | Seats whose room is unknown. |
 | 3 | Seats with no room. |
 
-Equal standing: the seat whose owner has the fewest open runs comes first, then the role's default seat, then the older seat. An owner's open runs are counted over all of that person's seats in the workspace.
+Equal standing: the seat whose owner has the fewest open runs comes first, then the role's default seat, then the older seat. When every seat is unknown, the original order stands. An owner's open runs are counted over all of that person's seats in the workspace; a seat without an owner counts its own runs.
 
 ### Where a request goes
 
 | The seats of the role | The request goes to | `why` in the reply |
 | --- | --- | --- |
 | One has the most room | That seat. | `most room` |
-| Several share the most room | Of those, the seat whose owner has the fewest open runs, then the default seat. | `equal room, fewer open runs`, or `equal room and open runs: the default seat first` |
+| Several share the most room | Of those, the seat whose owner has the fewest open runs, then the default seat, then the older seat. | `equal room, fewer open runs`, `equal room and open runs: the default seat first`, or `equal room and open runs: the older seat first` |
 | None has a number, and the default seat is unknown | The default seat, as before. | `no fresh figure: the default seat` |
 | None has a number, and the default seat has no room | The first seat whose room is unknown. | `no fresh figure and the default seat cannot start: the next seat whose figure is unknown` |
 | All have no room | The default seat, with `"warning": "seat_idle"`. It waits there. | `no seat can start now: it waits at the default seat` |
