@@ -50,9 +50,10 @@ test('milestones, repeated baselines and finish dates use the project issue writ
     assert.deepEqual((await fresh(id)).finishedAt, ['web', 'agent', 'app', 'final-to-final'].includes(id) ? entry : null, id);
   }
 
+  let actorId = userId;
   const deps = {
     '@/lib/prisma': { prisma }, 'next/server': { NextResponse: Response }, zod: require('zod'),
-    '@/lib/session': { getCurrentUser: async () => ({ id: userId }) },
+    '@/lib/session': { getCurrentUser: async () => ({ id: actorId }) },
     '@/lib/event-bus': { emitIssueCreated: async () => {}, emitIssueUpdated: async () => {} },
     '@/lib/redis': { publishEvent: async () => {} }, '@/utils/mentions': { extractMentionUserIds: () => [] },
     '@/lib/notification-service': {},
@@ -82,6 +83,7 @@ test('milestones, repeated baselines and finish dates use the project issue writ
 
   const target = await issue('cfixtureissue', { status: 'todo' });
   const launch = await issue('cfixturemilestone', { type: 'MILESTONE', startDate: entry, dueDate: later });
+  const notMilestone = await issue('cfixturenotmilestone');
   const other = await issue('cfixtureforeign', { type: 'MILESTONE', projectId: foreignProject, statusId: null });
   const trashed = await issue('cfixturetrashed', { type: 'MILESTONE', deletedAt: entry, dueDate: entry });
   const listed = await milestones.GET(request('GET'), projectParams);
@@ -91,22 +93,25 @@ test('milestones, repeated baselines and finish dates use the project issue writ
     assert.equal((await put(target.id, { milestoneId: launch.id })).status, 200);
     assert.equal((await fresh(target.id)).milestoneId, launch.id);
     assert.equal((await put(launch.id, { type: 'TASK' })).status, 400);
-    for (const invalid of [target.id, other.id, trashed.id]) {
+    for (const invalid of [target.id, notMilestone.id, other.id, trashed.id]) {
       assert.equal((await put(target.id, { milestoneId: invalid })).status, 400);
       assert.equal((await fresh(target.id)).milestoneId, launch.id);
     }
     assert.equal((await put(target.id, { milestoneId: null })).status, 200);
     assert.equal((await fresh(target.id)).milestoneId, null);
+    let completed;
     for (const status of ['done', 'closed', 'todo']) {
       assert.equal((await put(target.id, { status })).status, 200);
       const finishedAt = (await fresh(target.id)).finishedAt;
-      if (status === 'done') assert.ok(finishedAt instanceof Date);
-      else if (status === 'closed') assert.ok(finishedAt instanceof Date);
+      if (status === 'done') {
+        assert.ok(finishedAt instanceof Date);
+        completed = finishedAt;
+      } else if (status === 'closed') assert.deepEqual(finishedAt, completed);
       else assert.equal(finishedAt, null);
     }
   }
 
-  for (const invalid of [target.id, other.id, trashed.id]) {
+  for (const invalid of [target.id, notMilestone.id, other.id, trashed.id]) {
     assert.equal((await apps.POST(request('POST', { title: 'New', projectId, milestoneId: invalid }))).status, 400);
   }
   const created = await apps.POST(request('POST', { title: 'New', projectId, milestoneId: launch.id }));
@@ -115,6 +120,9 @@ test('milestones, repeated baselines and finish dates use the project issue writ
   assert.deepEqual((await filtered.json()).issues.map(row => row.title), ['New']);
 
   const setBaseline = () => baseline.POST(request('POST'), projectParams);
+  actorId = 'unrelated-user';
+  assert.equal((await setBaseline()).status, 404);
+  actorId = userId;
   assert.equal((await setBaseline()).status, 201);
   assert.equal((await webPut(launch.id, { startDate: null, dueDate: entry })).status, 200);
   assert.equal((await setBaseline()).status, 201);
