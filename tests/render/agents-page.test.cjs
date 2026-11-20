@@ -118,10 +118,11 @@ test('"Handoffs (old)" is a tab only while a project still uses handoffs', () =>
 });
 
 const seats = [
-  { id: 'seat-dev', name: 'Collab Developer', role: 'developer', isDefault: true, project: 'Collab', owner: 'Cem',
+  { id: 'seat-dev', name: 'Collab Developer', role: 'developer', isDefault: true, project: 'Collab', owner: 'Cem', ownerId: 'cem', runner: 'Cem\'s space',
+    room: { kind: 'room', room: 60, program: 'Claude Code', at: new Date('2026-11-16T10:00:00.000Z') },
     working: [{ id: 'run-1', issueId: 'i9', issueKey: 'CLB-9', title: 'Being worked', since: '2026-11-16T10:00:00.000Z', lost: false }],
     waiting: [{ issueId: 'i1', issueKey: 'CLB-1', title: '<b>First</b>', priority: 'high', category: 'todo', reason: 'resume', lastRunAt: null }] },
-  { id: 'seat-rel', name: 'Collab Release', role: 'release', isDefault: true, project: 'Collab', owner: null, working: [], waiting: [] },
+  { id: 'seat-rel', name: 'Collab Release', role: 'release', isDefault: true, project: 'Collab', owner: null, ownerId: null, runner: null, room: null, working: [], waiting: [] },
 ];
 function page({ user = 'alice', view = { workspace: { id: 'ws', slug: 'team' }, seats }, handoffs = false, manage = false } = {}) {
   const calls = [];
@@ -131,12 +132,9 @@ function page({ user = 'alice', view = { workspace: { id: 'ws', slug: 'team' }, 
     'next/navigation': { redirect: path => { throw new Error(`redirect:${path}`); }, notFound: () => { throw new Error('404'); } },
     '@/lib/request-session': { getServerSession: async () => user ? { user: { id: user } } : null },
     '@/lib/auth': { authOptions: {} },
-    '@/lib/permissions': { Permission: { MANAGE_WORKSPACE_PERMISSIONS: 'manage' }, checkUserPermission: async (userId, workspaceId, permission) => {
-      assert.deepEqual([userId, workspaceId, permission], ['alice', 'ws', 'manage']); return { hasPermission: manage };
-    } },
     '@/lib/agents-page': { usesHandoffs: async workspaceId => { assert.equal(workspaceId, 'ws'); return handoffs; },
       readRunnersTab: async (userId, workspaceId) => { calls.push('runners'); assert.deepEqual([userId, workspaceId], ['alice', 'team']); return view && { workspace: view.workspace, people: [{ id: 'alice', name: 'Alice' }] }; },
-      readSeats: async (userId, workspaceId) => { calls.push('seats'); assert.deepEqual([userId, workspaceId], ['alice', 'team']); return view && { projects: [], ...view }; } },
+      readSeats: async (userId, workspaceId) => { calls.push('seats'); assert.deepEqual([userId, workspaceId], ['alice', 'team']); return view && { projects: [], canManage: manage, ...view }; } },
     '@/lib/agent-floor': { readAgentFloor: async (userId, workspaceId) => { calls.push('floor'); assert.deepEqual([userId, workspaceId], ['alice', 'team']); return view && { workspace: { ...view.workspace, name: 'Team' } }; } },
     '@/components/agents/AgentsTabs': tabs,
     '@/components/agents/AgentSeatsView': load('src/components/agents/AgentSeatsView.tsx', { 'react/jsx-runtime': jsx, 'next/link': link,
@@ -162,12 +160,13 @@ test('the Agents page reads nothing for a visitor, a stranger to the workspace o
   const anonymous = page({ user: null }); await assert.rejects(anonymous.open('floor'), /redirect:\/login/); assert.deepEqual(anonymous.calls, []);
 });
 
-test('Seats tab: each seat with its role, project, owner, what it works on now and how many issues wait', async () => {
+test('Seats tab: a card per person with the runner and the room, and each seat with its role, project, what it works on now and how many issues wait', async () => {
   const html = await page().open();
   assert.match(html, /<a[^>]*aria-current="page"[^>]*>Seats<\/a>/);
-  // A seat with an owner runs on that person's sign-in; one without says so, so nobody takes it for a seat someone pays for.
-  assert.match(text(html), /Seat Role Project Owner Works on now Waiting/);
-  assert.match(text(html), /Collab Developer Default for its role developer Collab Cem CLB-9 Being worked 1 Collab Release Default for its role release Collab No owner \(API key\) Nothing 0/);
+  // A person's seats run on that person's sign-in; seats without an owner say so, so nobody takes them for seats someone pays for.
+  assert.match(text(html), /Cem Cem&#x27;s space 60% room next run on Claude Code Seat Project Works on now Waiting developer · default Collab Developer Collab CLB-9 Being worked 1 /);
+  assert.match(text(html), /No owner \(API key\) no runner Room private Seat Project Works on now Waiting release · default Collab Release Collab Nothing 0 /);
+  assert.match(html, /<section aria-label="Cem"[^>]*>.*<section aria-label="No owner \(API key\)"/s);
   assert.match(html, /href="\/team\/issues\/CLB-9"/);
   assert.match(html, /<a[^>]*href="\/team\/agents\/inbox#seat-seat-dev"[^>]*>1<\/a>/);
   // Creating and retiring stays under Settings, and only who may do it is led there.
@@ -177,6 +176,50 @@ test('Seats tab: each seat with its role, project, owner, what it works on now a
   const lost = await page({ view: { workspace: { id: 'ws', slug: null }, seats: [{ ...seats[0], working: [{ ...seats[0].working[0], id: 'run-2', issueKey: 'CLB-12', title: 'Next' }, { ...seats[0].working[0], lost: true }] }] } }).open();
   assert.match(text(lost), /CLB-12 Next CLB-9 Being worked The run is lost: clear it on the issue&#x27;s Activity tab\. 1 /); assert.match(lost, /href="\/ws\/issues\/CLB-9"/);
   assert.match(await page({ view: { workspace: { id: 'ws', slug: 'team' }, seats: [] } }).open(), /No seats in the projects you can read/);
+});
+
+test('Seats tab: room is a bar with its words, "no room" or "unknown" with the reason, per seat where a person\'s seats differ, and private where it was withheld', async () => {
+  const seat = (id, owner, room, more = {}) => ({ id, name: `Seat ${id}`, role: 'developer', isDefault: false, project: 'Collab', owner, ownerId: owner && owner.toLowerCase(),
+    runner: owner && `${owner}'s space`, room, working: [], waiting: [], ...more });
+  const number = (room, program = 'Claude Code') => ({ kind: 'room', room, program, at: new Date('2026-11-16T10:00:00.000Z') });
+  const open = (list, manage = true) => page({ manage, view: { workspace: { id: 'ws', slug: 'team' }, seats: list } }).open();
+  const card = (html, name) => html.match(new RegExp(`<section aria-label="${name}".*?</section>`, 's'))[0];
+
+  // One figure for all of a person's seats: one bar under the name, none on the seats. People are in the order of their names.
+  const html = await open([seat('b1', 'Bob', number(60)), seat('a1', 'Ada', number(6, 'Codex')), seat('b2', 'Bob', number(60), { role: 'reviewer', isDefault: true }),
+    seat('c1', 'Cy', number(20, null)), seat('d1', 'Dee', { kind: 'no_room', reason: 'the runner is paused' }), seat('e1', 'Eve', { kind: 'unknown', reason: 'no figure was reported' }, { runner: null })]);
+  assert.deepEqual([...html.matchAll(/<section aria-label="([^"]+)"/g)].map(match => match[1]), ['Ada', 'Bob', 'Cy', 'Dee', 'Eve']);
+  const bob = card(html, 'Bob');
+  assert.match(text(bob), /Bob Bob&#x27;s space 60% room next run on Claude Code Seat Project Works on now Waiting developer Seat b1 Collab Nothing 0 reviewer · default Seat b2 Collab Nothing 0 /);
+  // The bar is a picture with its words as the label, as wide as the room, green from 30, amber from 10, red below.
+  assert.equal(bob.match(/role="img"/g).length, 1);
+  assert.match(bob, /<span role="img" aria-label="60 percent room, next run on Claude Code"[^>]*><span[^>]*><span class="[^"]*bg-emerald-500" style="width:60%">/);
+  assert.match(card(html, 'Ada'), /aria-label="6 percent room, next run on Codex"[^>]*><span[^>]*><span class="[^"]*bg-red-500" style="width:6%">/);
+  // A figure without a program says the percent alone.
+  assert.match(card(html, 'Cy'), /aria-label="20 percent room"[^>]*><span[^>]*><span class="[^"]*bg-amber-500" style="width:20%">.*?20% room<\/span><\/span>/s);
+  // No room: an empty bar and why. Unknown: the word and why, with no bar at all.
+  assert.match(card(html, 'Dee'), /aria-label="no room, the runner is paused"[^>]*><span[^>]*><span class="[^"]*" style="width:0%">/);
+  assert.match(text(card(html, 'Dee')), /Dee Dee&#x27;s space no room the runner is paused Seat /);
+  assert.match(text(card(html, 'Eve')), /Eve no runner unknown no figure was reported Seat /);
+  assert.doesNotMatch(card(html, 'Eve'), /role="img"|style="width/);
+  assert.match(text(html), /Each runner reports it\. You see every person&#x27;s room; a member sees their own\./);
+
+  // Seats of one person that read differently: no bar for the person, the figure on each seat.
+  const mixed = await open([seat('m1', 'Mia', number(60)), seat('m2', 'Mia', number(60, 'Codex')), seat('m3', 'Mia', { kind: 'no_room', reason: 'the allowance is used up' }),
+    seat('m4', 'Mia', { kind: 'unknown', reason: 'the seat is run by hand' })]);
+  assert.match(text(mixed), /Mia Mia&#x27;s space These seats do not have the same room: each shows its own\. Seat Project Works on now Waiting developer Seat m1 60% room next run on Claude Code Collab Nothing 0 developer Seat m2 60% room next run on Codex Collab Nothing 0 developer Seat m3 no room the allowance is used up Collab Nothing 0 developer Seat m4 unknown the seat is run by hand Collab /);
+  assert.deepEqual([...mixed.matchAll(/aria-label="([^"]*room[^"]*)"/g)].map(match => match[1]), ['60 percent room, next run on Claude Code', '60 percent room, next run on Codex', 'no room, the allowance is used up']);
+  // The same number at another time is the same figure.
+  assert.equal((await open([seat('s1', 'Sam', number(60)), seat('s2', 'Sam', { ...number(60), at: new Date('2026-11-16T10:05:00.000Z') })])).match(/role="img"/g).length, 1);
+
+  // A member: their own figure, and "Room private" for everyone whose room the server withheld; the seats themselves stay.
+  const member = await open([seat('b1', 'Bob', null), seat('d1', 'Deniz', { kind: 'no_room', reason: 'no runner is connected' }, { runner: null }), seat('n1', null, null)], false);
+  assert.match(text(card(member, 'Bob')), /Bob Bob&#x27;s space Room private Seat Project Works on now Waiting developer Seat b1 Collab Nothing 0 /);
+  assert.doesNotMatch(card(member, 'Bob'), /role="img"|% room|unknown/);
+  assert.match(text(card(member, 'Deniz')), /Deniz no runner no room no runner is connected Seat /);
+  assert.match(text(member), /No owner \(API key\) no runner Room private .*You see your own room; other people&#x27;s is private\./);
+  // Nothing of it on the Inbox tab.
+  assert.doesNotMatch(await page({ manage: true }).open('inbox'), /% room|Room private|role="img"/);
 });
 
 test('Seats tab: a member adds and removes their own seats per project, and who manages the workspace has the switch instead', async () => {
