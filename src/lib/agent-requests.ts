@@ -193,7 +193,7 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
  * placed again by the rule every request is placed by, and only on a seat with a number: with none, with the figure
  * unknown, or inside the time, it waits where it is. It never returns to a seat it was moved off. The timeline says
  * from which seat and why, and names no figure. Started means a run exists on the issue, whatever became of it.
- * The caller answers the inbox whether or not this fails.
+ * Nothing is moved in a Forge-connected project. The caller answers the inbox whether or not this fails.
  */
 export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'workspace'>) {
   const reader = await seatFor(prisma, context);
@@ -206,7 +206,8 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
   const now = new Date();
   const seats = await seatsWithRoom(prisma, reader.projectId, reader.role, now);
   if (!seats.some(seat => seat.room.kind === 'room')) return;
-  await assertLegacyProjectWriteAllowed(reader.projectId);
+  // A Forge-connected project's issues change through its Forge board: nothing is moved there, and that is no failure.
+  if (await assertLegacyProjectWriteAllowed(reader.projectId).then(() => false, error => { if (error instanceof ForgeProjectWriteError) return true; throw error; })) return;
   const dues = new Map<string, Date | null>();
   for (const request of waiting) {
     const from = seats.find(seat => seat.userId === request.assigneeId);
@@ -214,7 +215,6 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
     if (!dues.has(from.id)) dues.set(from.id, await noRoomDue(prisma, from, now));
     const due = dues.get(from.id);
     if (!due || due > now) continue;
-    const why = `${from.name} had no room for ${NO_ROOM_MOVE_MS / 60_000} minutes (${from.room.reason})`;
     const updated = await prisma.$transaction(async tx => {
       const left = (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, select: { details: true } }))
         .map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
@@ -229,10 +229,18 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${request.id} FOR UPDATE`;
       const issue = await tx.issue.findFirst({ where: { ...unstarted, id: request.id, assigneeId: from.userId }, select: { id: true, workspaceId: true, projectId: true, reporterId: true } });
       if (!issue) return;
+      // What was read before the locks chose the seats; whether it still holds is read again behind them. A seat that
+      // got room back while this waited keeps its work, and a seat that lost its room is given none: the next read looks again.
+      const at = new Date(), current = await seatsWithRoom(tx, reader.projectId, reader.role, at);
+      const source = current.find(seat => seat.id === from.id);
+      if (source?.room.kind !== 'no_room' || current.find(seat => seat.id === to.id)?.room.kind !== 'room') return;
+      const since = await noRoomDue(tx, source, at);
+      if (!since || since > at) return;
+      const why = `${from.name} had no room for ${NO_ROOM_MOVE_MS / 60_000} minutes (${source.room.reason})`;
       await assertAssignable(tx, { ...issue, agentRequestRole: role }, to.userId);
       const updated = await tx.issue.update({ where: { id: issue.id }, data: { assigneeId: to.userId } });
       // The row that makes a seat the assignee goes with the request, stamped now: the new seat's inbox counts from it.
-      const row = { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: now, approvedAt: now, approvedBy: issue.reporterId } as const;
+      const row = { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: at, approvedAt: at, approvedBy: issue.reporterId } as const;
       await tx.issueAssignee.deleteMany({ where: { issueId: issue.id, userId: from.userId } });
       await tx.issueAssignee.upsert({ where: { issueId_userId: { issueId: issue.id, userId: to.userId } }, create: { issueId: issue.id, userId: to.userId, ...row }, update: row });
       // Under the name of whoever filed the request, as its placing is: Collab has no account of its own.

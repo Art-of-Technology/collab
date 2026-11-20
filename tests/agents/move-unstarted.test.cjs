@@ -243,6 +243,42 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
     await settle();
   });
 
+  await t.test('a report handled later ends up later, whatever a clock said, and room is read again behind the locks', async () => {
+    const kept = await request(revCem);
+    await report(bob, 60);
+    await report(cem, 0);
+    // The row that opened the spell carries a time ahead of this server's clock, as another server's clock could have left it.
+    const ahead = new Date(Date.now() + 5_000);
+    await raw.appAuditLog.updateMany({ where: { actorId: revCem.userId, action: 'agent_seat.no_room', createdAt: { gt: ago(1) } }, data: { createdAt: ahead } });
+    await report(cem, 50);
+    const rows = await raw.appAuditLog.findMany({ where: { actorId: revCem.userId, action: { in: SPELL } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 2 });
+    assert.deepEqual(rows.map(row => row.action), ['agent_seat.room_back', 'agent_seat.no_room'], 'the report that gave it room is the last word');
+    assert.ok(rows[0].createdAt > ahead);
+    await passes(cem, 11);
+    await report(cem, 0);
+    assert.deepEqual(await inbox(revBob), [], 'the spell that ended does not come back');
+
+    // The seat gets room back while the move waits for the request: nothing moves on what was read before.
+    await passes(cem, 11);
+    let release;
+    const held = raw.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${kept.id} FOR UPDATE`;
+      await new Promise(resolve => { release = resolve; });
+    });
+    while (!release) await new Promise(resolve => setImmediate(resolve));
+    let answered = false;
+    const reading = items(revBob).finally(() => { answered = true; });
+    // Nothing is slept through: the database says when the read waits for the request's row.
+    while (!answered && !(await raw.$queryRaw`SELECT 1 AS waiting FROM pg_stat_activity WHERE wait_event_type = 'Lock'`).length);
+    assert.equal(answered, false, 'the read waits for the request');
+    await report(cem, 50);
+    release(); await held;
+    assert.deepEqual(await reading, []);
+    assert.equal(await holder(kept), revCem.userId);
+    assert.deepEqual(await moves(kept), []);
+    await settle();
+  });
+
   await t.test('nothing moves while the figure is unknown, or while no other seat of the role has a number', async () => {
     const waits = await request(revCem);
     await report(bob, 60);
@@ -420,5 +456,15 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
     await report(cem, 80);
     assert.deepEqual(await inbox(lead), []);
     assert.equal(await holder(first), devDeniz.userId);
+
+    // A run that starts between the wake and the lead's assignment keeps its seat.
+    const late = await child();
+    run = await start(lead, epic);
+    assert.equal(await give(lead.token, late, devCem.userId), 200);
+    await start(devCem, late);
+    const refused = await send(item.PATCH, lead.token, 'PATCH', { body: { assigneeId: devDeniz.userId }, params: { issueIdOrKey: late.issueKey } });
+    assert.deepEqual([refused.status, refused.body.error], [409, 'already_running']);
+    assert.equal(await holder(late), devCem.userId);
+    await finish(lead, run, 'blocked');
   });
 });

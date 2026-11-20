@@ -212,14 +212,14 @@ export const saysNoRoom = (seat: { room: number | null; roomAt: Date | null }, s
  */
 export async function markNoRoom(tx: Prisma.TransactionClient, workspaceId: string, seats: { id: string; userId: string; before: boolean; after: boolean }[], now: Date) {
   if (!seats.length) return;
-  const last = await tx.$queryRaw<{ actorId: string; action: string }[]>`SELECT DISTINCT ON ("actorId") "actorId", "action" FROM "AppAuditLog"
-    WHERE "actorId" = ANY(${seats.map(seat => seat.userId)}) AND "action" IN (${NO_ROOM}, ${ROOM_BACK}) ORDER BY "actorId", "createdAt" DESC, "id" DESC`;
-  const open = new Set(last.filter(row => row.action === NO_ROOM).map(row => row.actorId));
+  const last = new Map((await tx.$queryRaw<{ actorId: string; action: string; createdAt: Date }[]>`SELECT DISTINCT ON ("actorId") "actorId", "action", "createdAt" FROM "AppAuditLog"
+    WHERE "actorId" = ANY(${seats.map(seat => seat.userId)}) AND "action" IN (${NO_ROOM}, ${ROOM_BACK}) ORDER BY "actorId", "createdAt" DESC, "id" DESC`).map(row => [row.actorId, row]));
   const rows = seats.flatMap(seat => {
-    const spell = open.has(seat.userId);
+    const latest = last.get(seat.userId), spell = latest?.action === NO_ROOM;
     const action = seat.after ? (!spell || !seat.before) && NO_ROOM : spell && ROOM_BACK;
-    // Stamped with the report's own time, not the transaction's start: it is the time the figure beside it carries.
-    return action ? [{ workspaceId, actorId: seat.userId, action, details: { seatId: seat.id }, createdAt: now }] : [];
+    // Stamped with the report's own time, which the caller takes once it holds the runner's row, and always after the
+    // seat's last row: the rows are read back in the order of their times, so a report handled later is later, whatever a clock said.
+    return action ? [{ workspaceId, actorId: seat.userId, action, details: { seatId: seat.id }, createdAt: new Date(Math.max(now.getTime(), (latest?.createdAt.getTime() ?? 0) + 1)) }] : [];
   });
   if (rows.length) await tx.appAuditLog.createMany({ data: rows });
 }
@@ -321,7 +321,8 @@ export async function assertTokenMayAssign(db: DB, context: Caller, assigneeId: 
  * issue, which must be serializable, so two placements that each fit the limit cannot both get in. It does nothing and
  * returns null for a caller that is not a lead seat. A lead gives an issue of its project to another seat of that
  * project, when the issue has no assignee and no lead has placed it before, or when the lead's own placement is still
- * the one in effect. Anything else was decided by someone else and stands (`assign_by_person`). The placement is on
+ * the one in effect. Anything else was decided by someone else and stands (`assign_by_person`), and an issue a run is open on keeps its
+ * seat (`already_running`). The placement is on
  * the issue's timeline under the lead's name. It returns the seat for the caller's two checks after its update, where
  * the status the request sets is known: the issue is not done (`seat_scope`), and the seat holds at most `LEAD_CAP`
  * open issues from the lead (`lead_cap`).
@@ -341,6 +342,10 @@ export async function leadPlaces(tx: Prisma.TransactionClient, context: Pick<App
   const current = await tx.issue.findUniqueOrThrow({ where: { id: issue.id }, select: { assigneeId: true, helpers: { where: { approvedBy: me }, select: { userId: true } } } });
   const free = current.assigneeId ? current.helpers.some(row => row.userId === current.assigneeId)
     : !await tx.issueActivity.count({ where: { itemType: 'ISSUE', itemId: issue.id, action: 'LEAD_ASSIGNED' } });
+  // Work under a run keeps its seat (CLB-780): a run may have started since the lead read that none had.
+  if (current.assigneeId && await tx.agentRun.count({ where: { issueId: issue.id, endedAt: null } })) {
+    throw new HandoffError('already_running', 'A run is open on this issue: it keeps its seat until the run has ended', 409);
+  }
   if (!free) throw new HandoffError('assign_by_person', 'Someone else decided who has this issue, or took it from the seat the lead gave it to: that stands, and a person assigns it', 403);
   await tx.issueActivity.create({ data: { action: 'LEAD_ASSIGNED', itemType: 'ISSUE', itemId: issue.id, userId: me, workspaceId: issue.workspaceId, projectId: issue.projectId,
     fieldName: 'assignee', oldValue: current.assigneeId ?? '', newValue: to, details: JSON.stringify({ seatId: lead.id, toSeatId: seat.id, to: seat.name }) } });
