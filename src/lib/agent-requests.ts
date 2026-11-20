@@ -201,7 +201,7 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
   if (!reader || !role) return;
   const unstarted = { projectId: reader.projectId, agentRequestRole: role, agentRuns: { none: {} }, ...NOT_DONE };
   const waiting = await prisma.issue.findMany({ where: { ...unstarted, workspaceId: context.workspace.id, assigneeId: { not: null } }, orderBy: { createdAt: 'asc' },
-    select: { id: true, assigneeId: true, reporterId: true } });
+    select: { id: true, assigneeId: true, createdAt: true } });
   if (!waiting.length) return;
   const now = new Date();
   const seats = await seatsWithRoom(prisma, reader.projectId, reader.role, now);
@@ -216,10 +216,14 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
     const due = dues.get(from.id);
     if (!due || due > now) continue;
     const updated = await prisma.$transaction(async tx => {
-      const left = (await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, select: { details: true } }))
-        .map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
+      const placements = await tx.issueActivity.findMany({ where: { itemType: 'ISSUE', itemId: request.id, action: 'REQUEST_PLACED' }, select: { details: true, userId: true } });
+      const initial = placements.find(entry => !JSON.parse(entry.details ?? '{}').fromSeatId);
+      const relation = initial ? null : await tx.issueRelation.findFirst({ where: { sourceIssueId: request.id, createdAt: request.createdAt }, select: { createdBy: true } });
+      const filer = initial?.userId ?? relation?.createdBy;
+      if (!filer) return;
+      const left = placements.map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
       // As when it was filed: never the seat that asked.
-      const others = seats.filter(seat => seat.id !== from.id && seat.userId !== request.reporterId && !left.includes(seat.id));
+      const others = seats.filter(seat => seat.id !== from.id && seat.userId !== filer && !left.includes(seat.id));
       const to = others.length ? placeRequest([from, ...others], from).seat : from;
       if (to.room.kind !== 'room') return;
       // The seat's row, then the issue's: the order a checkout and a retirement take them in. Whichever of a checkout
@@ -227,7 +231,7 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       if (!(await tx.$queryRaw<unknown[]>`SELECT 1 FROM "AgentSeat" WHERE "id" = ${to.id} AND "projectId" = ${reader.projectId} AND "role" = ${reader.role}
         AND "ownerId" IS NOT DISTINCT FROM ${to.ownerId} AND "retiredAt" IS NULL FOR SHARE`).length) return;
       await tx.$queryRaw`SELECT "id" FROM "Issue" WHERE "id" = ${request.id} FOR UPDATE`;
-      const issue = await tx.issue.findFirst({ where: { ...unstarted, id: request.id, assigneeId: from.userId }, select: { id: true, workspaceId: true, projectId: true, reporterId: true } });
+      const issue = await tx.issue.findFirst({ where: { ...unstarted, id: request.id, assigneeId: from.userId }, select: { id: true, workspaceId: true, projectId: true } });
       if (!issue) return;
       // What was read before the locks chose the seats; whether it still holds is read again behind them. A seat that
       // got room back while this waited keeps its work, and a seat that lost its room is given none: the next read looks again.
@@ -240,11 +244,11 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       await assertAssignable(tx, { ...issue, agentRequestRole: role }, to.userId);
       const updated = await tx.issue.update({ where: { id: issue.id }, data: { assigneeId: to.userId } });
       // The row that makes a seat the assignee goes with the request, stamped now: the new seat's inbox counts from it.
-      const row = { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: at, approvedAt: at, approvedBy: issue.reporterId } as const;
+      const row = { role: 'ASSIGNEE', status: 'APPROVED', assignedAt: at, approvedAt: at, approvedBy: filer } as const;
       await tx.issueAssignee.deleteMany({ where: { issueId: issue.id, userId: from.userId } });
       await tx.issueAssignee.upsert({ where: { issueId_userId: { issueId: issue.id, userId: to.userId } }, create: { issueId: issue.id, userId: to.userId, ...row }, update: row });
       // Under the name of whoever filed the request, as its placing is: Collab has no account of its own.
-      await tx.issueActivity.create({ data: { action: 'REQUEST_PLACED', itemType: 'ISSUE', itemId: issue.id, userId: issue.reporterId ?? to.userId, workspaceId: issue.workspaceId,
+      await tx.issueActivity.create({ data: { action: 'REQUEST_PLACED', itemType: 'ISSUE', itemId: issue.id, userId: filer, workspaceId: issue.workspaceId,
         projectId: issue.projectId, fieldName: 'assignee', oldValue: from.userId, newValue: to.userId,
         details: JSON.stringify({ fromSeatId: from.id, from: from.name, toSeatId: to.id, to: to.name, why }) } });
       return updated;

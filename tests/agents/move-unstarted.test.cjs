@@ -146,9 +146,9 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
   const source = await issue();
   await personGives(source, devDeniz.userId);
   /** A request as a seat files it, at a moment when `on` is where Collab places it: its owner has the most room. */
-  const request = async (on, role = 'review') => {
+  const request = async (on, role = 'review', filer = devDeniz) => {
     for (const person of [cem, bob, deniz]) await report(person, person === on.ownerId ? 90 : 20);
-    const reply = await send(requests.POST, devDeniz.token, 'POST', { body: { role, title: `A ${role} request`, body: 'What is asked.', fromIssue: source.issueKey } });
+    const reply = await send(requests.POST, filer.token, 'POST', { body: { role, title: `A ${role} request`, body: 'What is asked.', fromIssue: source.issueKey } });
     assert.equal(reply.status, 200, JSON.stringify(reply.body));
     const made = await raw.issue.findUniqueOrThrow({ where: { id: reply.body.issue.id } });
     assert.equal(made.assigneeId, on.userId, 'the request starts on the seat under test');
@@ -159,6 +159,20 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
     await raw.agentRun.updateMany({ where: { endedAt: null }, data: { endedAt: new Date(), state: 'stopped' } });
     await raw.issue.updateMany({ where: { agentRequestRole: { not: null } }, data: { statusId: `${A}-done` } });
   };
+
+  await t.test('a changed or cleared reporter cannot receive or take credit for a filed request', async () => {
+    for (const [reporterId, removePlacement] of [[owner, false], [null, true]]) {
+      const target = await request(revCem, 'review', revDeniz);
+      if (removePlacement) await raw.issueActivity.deleteMany({ where: { itemId: target.id, action: 'REQUEST_PLACED' } });
+      await raw.issue.update({ where: { id: target.id }, data: { reporterId } });
+      await report(bob, 60); await report(deniz, 90); await report(cem, 0); await passes(cem, 11);
+      await inbox(revBob);
+      assert.equal(await holder(target), revBob.userId);
+      assert.equal((await moves(target))[0].userId, revDeniz.userId);
+      assert.equal((await raw.issueAssignee.findUniqueOrThrow({ where: { issueId_userId: { issueId: target.id, userId: revBob.userId } } })).approvedBy, revDeniz.userId);
+      await settle();
+    }
+  });
 
   let moved;
   await t.test('Collab places a request again, on the seat with room, once its seat has had no room for 10 minutes', async () => {
