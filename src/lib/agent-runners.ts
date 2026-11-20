@@ -229,11 +229,13 @@ export async function revokeProjectRunnerTokens(tx: Prisma.TransactionClient, wo
  * would run next. A figure is stored, with the time it arrived, only for a seat this ask lists; any other seat's id is
  * answered under `refused` and nothing is stored for it, so a seat retired since the runner's last ask does not cost
  * the runner its answer. A report also opens or ends each seat's spell without room (`markNoRoom` in
- * src/lib/agent-seats.ts), which is how Collab later knows for how long a seat has had none (CLB-780). An ask without
- * a report makes no report writes and is answered as before. The credential does nothing else.
+ * src/lib/agent-seats.ts), which is how Collab later knows for how long a seat has had none (CLB-780). A report may
+ * also name, under `ended`, the program each run of these seats used (CLB-779); the first program stored for a run
+ * stays, and a run that is not of a seat this ask lists, or does not exist, is answered under `refusedRuns`. An ask
+ * without a report makes no report writes and is answered as before. The credential does nothing else.
  */
 export async function fetchSeats(credential: string, have: string[],
-  report: { state?: typeof RUNNER_STATES[number]; rooms?: { seat: string; room: number; program: string }[] } = {}) {
+  report: { state?: typeof RUNNER_STATES[number]; rooms?: { seat: string; room: number; program: string }[]; ended?: { run: string; program: string }[] } = {}) {
   const refused = () => new HandoffError('runner_refused', 'This runner credential is not accepted', 401);
   const now = new Date();
   const runner = await prisma.agentRunner.findUnique({ where: { credentialHash: hash(credential) } });
@@ -251,10 +253,10 @@ export async function fetchSeats(credential: string, have: string[],
   const mine = { workspaceId, ownerId, byRunner: true, retiredAt: null, project: { OR: [{ isArchived: null }, { isArchived: false }] } };
   const seats = await prisma.agentSeat.findMany({ where: mine, orderBy: { createdAt: 'asc' },
     select: { id: true, userId: true, name: true, role: true, project: { select: { id: true, name: true, issuePrefix: true } } } });
-  const notStored: string[] = [];
+  const notStored: string[] = [], runsNotStored: string[] = [];
   // The runner and its person are asked again on their rows, as for a token: a runner removed or replaced, or a
   // person switched off, since this ask began stores nothing.
-  if (report.state || report.rooms?.length) await prisma.$transaction(async tx => {
+  if (report.state || report.rooms?.length || report.ended?.length) await prisma.$transaction(async tx => {
     // The state is read on the row this holds: reports of one runner come one at a time, so "until now" is what the one before left.
     const [held] = await tx.$queryRaw<{ state: string | null }[]>`SELECT "state" FROM "AgentRunner" WHERE "id" = ${runner.id} AND "removedAt" IS NULL FOR UPDATE`;
     if (!held) throw refused();
@@ -267,6 +269,12 @@ export async function fetchSeats(credential: string, have: string[],
     for (const { seat: id, room, program } of report.rooms ?? []) {
       if (!seats.some(seat => seat.id === id) || !(await tx.agentSeat.updateMany({ where: { id, ...mine },
         data: { room, roomProgram: program, roomAt: at } })).count) notStored.push(id);
+    }
+    // The program a run used (CLB-779), for a run of a seat this ask lists, under the same conditions. The first value stays.
+    const ours = { seatId: { in: seats.map(seat => seat.id) }, seat: mine };
+    for (const { run: id, program } of report.ended ?? []) {
+      if (!(await tx.agentRun.updateMany({ where: { id, ...ours, program: null }, data: { program } })).count
+        && !await tx.agentRun.count({ where: { id, ...ours } })) runsNotStored.push(id);
     }
     // Since when a seat has had no room is what moves its work (CLB-780): each seat's spell is kept in step with what was just said.
     await markNoRoom(tx, workspaceId, until.map(seat => {
@@ -319,5 +327,6 @@ export async function fetchSeats(credential: string, have: string[],
       answer.push({ ...holding, problem: error.code });
     }
   }
-  return { runner: { id: runner.id, name: runner.name, workspaceId, ownerId }, seats: answer, ...(notStored.length > 0 && { refused: notStored }) };
+  return { runner: { id: runner.id, name: runner.name, workspaceId, ownerId }, seats: answer, ...(notStored.length > 0 && { refused: notStored }),
+    ...(runsNotStored.length > 0 && { refusedRuns: runsNotStored }) };
 }

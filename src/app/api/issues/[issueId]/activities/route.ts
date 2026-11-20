@@ -102,11 +102,25 @@ export async function GET(
       take: limit,
     });
 
+    // Whose allowance each run used (CLB-779): the first name of its seat's owner and the program its runner reported.
+    // A run whose seat has no owner (an API-key seat) or no seat (a person's own run) shows none.
+    const parsed = activities.map(activity => ({ activity, details: activity.details ? JSON.parse(activity.details) : null }));
+    const isRun = (action: string) => action === 'AGENT_RUN_FINISHED' || action === 'AGENT_RUN_LOST';
+    const runIds = parsed.filter(({ activity, details }) => isRun(activity.action) && typeof details?.runId === 'string').map(({ details }) => details.runId as string);
+    const runs = runIds.length ? await prisma.agentRun.findMany({ where: { id: { in: runIds }, issueId },
+      select: { id: true, program: true, seat: { select: { owner: { select: { name: true } } } } } }) : [];
+    const allowanceOf = (runId: unknown) => {
+      const run = runs.find(found => found.id === runId);
+      const owner = run?.seat?.owner?.name?.trim().split(/\s+/)[0];
+      return run && owner ? { owner, program: run.program } : null;
+    };
+
     // Transform to expected format
-    const formattedActivities = activities.map((activity) => ({
+    const formattedActivities = parsed.map(({ activity, details }) => ({
       id: activity.id,
       action: activity.action,
-      details: activity.details ? JSON.parse(activity.details) : null,
+      details,
+      ...(isRun(activity.action) && { allowance: allowanceOf(details?.runId) }),
       createdAt: activity.createdAt.toISOString(),
       fieldName: activity.fieldName,
       oldValue: activity.oldValue,

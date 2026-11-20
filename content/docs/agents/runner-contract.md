@@ -395,6 +395,7 @@ curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" -H "Content-Type: app
 | `token` | Present only when the token is new. It is sent once and never again. |
 | `problem` | Present when no token could be made this time, beside whatever token you already hold. Ask again later. `paused` means the seat's agent is switched off or removed: asking never switches it on again, a person does. |
 | `refused` | Beside `runner` and `seats`, when any reported figures were not stored: the ids of those seats. See [Report room](#report-room). |
+| `refusedRuns` | Beside `runner` and `seats`, when any runs under `ended` were not stored: the ids of those runs. See [Report the program a run used](#report-the-program-a-run-used). |
 
 A seat for which you hold no usable token gets a new one. With three overlapping asks, the first answer can arrive last with a revoked token. If a retained token is refused, ask again with what you hold to get a new one. If an answer or file is lost, ask again with what you hold.
 
@@ -417,7 +418,7 @@ Room is the percent of allowance a seat has left on the program it would run nex
 | `state` | `working`, `paused` or `disk_full` | How the runner itself is. Collab keeps it until you send another, so send it with every call. |
 | `rooms` | list, up to 1000 entries | One entry per seat you report for. A seat appears at most once. The body as a whole stays within 64 KiB, which long names reach before 1000 entries. |
 | `seat` | text, 1 to 128 characters | The seat's `id`, as the answer of this call lists it. |
-| `room` | whole number, 0 to 100 | Percent of allowance left, after your own hold-back. `0` means used up. |
+| `room` | whole number, 0 to 100 | Percent of allowance left, after your own hold-back. `0` means no room: the allowance is used up, or the seat cannot run now for a reason of your own (switched off, paused, or no program signed in). Collab reads it as "its runner reports no room". |
 | `program` | text, 1 to 64 printable ASCII characters after trimming | The name of the program the seat would run next, such as `Claude Code`. Collab stores the trimmed name. |
 
 Both `state` and `rooms` are optional. In an entry of `rooms`, all three fields are required.
@@ -442,6 +443,30 @@ A runner that never sent a `state` counts as working. What a runner says about i
 Eligible work no run has started on can move after a seat has had no room: see [When a seat has had no room for 10 minutes](/docs/agents/seats#when-a-seat-has-had-no-room-for-10-minutes). Keep sending `state` and the figures with every call, also while you are paused or at your cap.
 
 Collab places work by the figure: see [Placed by room](/docs/agents/seats#placed-by-room). It shows the figure under **Agents**, **Seats**, to the seat's owner and to whoever may manage workspace permissions: see [Room on the Seats tab](/docs/agents/overview#room-on-the-seats-tab).
+
+### Report the program a run used
+
+The issue shows, beside each run, whose allowance it used and on which program. Send the program with the same `seats` call, once a run has ended:
+
+```json
+{
+  "have": ["cmw..."],
+  "ended": [
+    { "run": "cmw...", "program": "Codex" }
+  ]
+}
+```
+
+| Field | Type | What it is |
+| --- | --- | --- |
+| `ended` | list, up to 100 entries | One entry per run that ended since your last call that was answered with `200`. A run appears at most once. Optional. |
+| `run` | text, 1 to 128 characters | The run's `id`, as `checkout` answered it. |
+| `program` | text, 1 to 64 printable ASCII characters after trimming | The program the run used, the same names as in `rooms`. |
+
+- In an entry, both fields are required. A value outside the table is `400 invalid_request`, and nothing of that call is stored.
+- A run is stored only when it is a run of a seat this call's answer lists. The first program stored for a run stays: a later entry for the same run is ignored, not an error.
+- A run that is not of your seats, or does not exist, is not stored. The call is still answered `200`, and the answer names those runs' ids under `refusedRuns`. Every such run reads the same.
+- A call without `ended` is answered exactly as before.
 
 ### Renewal
 

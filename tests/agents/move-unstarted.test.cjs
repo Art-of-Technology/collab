@@ -253,10 +253,10 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
 
     const [entry, ...more] = await moves(moved);
     assert.deepEqual(more, []);
-    assert.deepEqual(entry.details, { fromSeatId: revCem.id, from: 'rev-cem', toSeatId: revBob.id, to: 'rev-bob', why: 'rev-cem had no room for 10 minutes (the allowance is used up)' });
+    assert.deepEqual(entry.details, { fromSeatId: revCem.id, from: 'rev-cem', toSeatId: revBob.id, to: 'rev-bob', why: 'rev-cem had no room for 10 minutes (its runner reports no room)' });
     assert.deepEqual([entry.userId, entry.oldValue, entry.newValue], [devDeniz.userId, revCem.userId, revBob.userId], 'under the name of the seat that filed it');
     const line = getActionText({ ...entry, user: { name: 'dev-deniz' } });
-    assert.equal(line, 'Collab moved this request from rev-cem to rev-bob: rev-cem had no room for 10 minutes (the allowance is used up)');
+    assert.equal(line, 'Collab moved this request from rev-cem to rev-bob: rev-cem had no room for 10 minutes (its runner reports no room)');
     assert.ok(!/\d\s*%/.test(line), 'no percentage: room is its owner\'s to see');
     // The row that makes a seat the assignee went with the request.
     assert.deepEqual((await raw.issueAssignee.findMany({ where: { issueId: moved.id } })).map(row => [row.userId, row.approvedBy]), [[revBob.userId, devDeniz.userId]]);
@@ -486,7 +486,7 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
     assert.deepEqual(others, []);
     assert.deepEqual([woken.issueKey, woken.reason], [epic.issueKey, 'child_no_room']);
     // Which issue, on which seat, and why. Not the child a run started on, and not the one a person assigned: the lead may move neither.
-    assert.deepEqual(woken.noRoom, [{ issueKey: first.issueKey, seat: 'dev-cem', reason: 'the allowance is used up' }]);
+    assert.deepEqual(woken.noRoom, [{ issueKey: first.issueKey, seat: 'dev-cem', reason: 'its runner reports no room' }]);
     // The Agents page shows the reason to whoever may see the seat, and not whose seat is full.
     const shown = (await page.readSeats(owner, 'w')).seats.find(found => found.name === 'lead').waiting;
     assert.deepEqual(shown.map(entry => [entry.issueKey, entry.reason, 'noRoom' in entry]), [[epic.issueKey, 'child_no_room', false]]);

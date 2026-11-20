@@ -10,7 +10,7 @@ const base = { react: React, 'react/jsx-runtime': require('react/jsx-runtime'), 
 const { commentHtml } = load('src/lib/comment-html.ts', { 'isomorphic-dompurify': { default: require('isomorphic-dompurify') }, marked: require('marked') });
 const helpers = load('src/components/issue/sections/activity/utils/activityHelpers.ts');
 const { ActivityItem } = load('src/components/issue/sections/activity/components/ActivityItem.tsx', { ...base,
-  '@/lib/comment-html': { commentHtml }, '@/components/ui/custom-avatar': { CustomAvatar: () => null }, './ActivityIcon': { ActivityIcon: () => null },
+  '@/lib/comment-html': { commentHtml }, '@/components/ui/custom-avatar': { CustomAvatar: () => null }, '@/components/ui/badge': { Badge: ({ children }) => React.createElement('span', { 'data-chip': '' }, children) }, './ActivityIcon': { ActivityIcon: () => null },
   './ActivityChangeDetails': { ActivityChangeDetails: () => null }, '../utils/activityHelpers': helpers });
 const { OpenRun } = load('src/components/issue/sections/activity/components/OpenRun.tsx', { ...base,
   '@/components/ui/button': { Button: ({ children, onClick }) => React.createElement('button', { onClick }, children) } }, { fetch: (...call) => global.fetch(...call) });
@@ -37,6 +37,15 @@ test('the timeline shows an exit note under the run that left it, as handoff not
   assert.ok(!finished.includes('Pull request') && !finished.includes('Next:'), finished);
   // A handoff's note keeps its own label.
   assert.ok((await entry('AGENT_PROGRESS', { agent: { name: 'navy' }, content: 'Half way' })).includes('Handoff detailsHalf way'));
+});
+
+test('beside each run: whose allowance it used and on which program, the name alone without a program, nothing without an owner', async () => {
+  const chip = allowance => shown(React.createElement(ActivityItem, { activity: { id: 'a1', action: 'AGENT_RUN_FINISHED', details: { runId: 'r1', outcome: 'done' },
+    allowance, createdAt: '2026-11-15T10:00:00.000Z', user } }), async () => [...document.querySelectorAll('[data-chip]')].map(found => found.textContent));
+  assert.deepEqual(await chip({ owner: 'Bob', program: 'Claude Code' }), ['Bob\'s allowance · Claude Code']);
+  assert.deepEqual(await chip({ owner: 'Cem', program: null }), ['Cem\'s allowance']);
+  assert.deepEqual(await chip(null), []);
+  assert.deepEqual(await chip(undefined), []);
 });
 
 test('an assignment by a lead seat is on the timeline under the lead\'s name and names the seat', async () => {

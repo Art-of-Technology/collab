@@ -201,7 +201,7 @@ export function seatRoom(seat: { byRunner: boolean; room: number | null; roomPro
   }
   if (seat.room === null || !seat.roomAt) return unknown('no figure was reported');
   if (seat.roomAt.getTime() <= now.getTime() - ROOM_FRESH_MS) return unknown(`the figure is older than ${ROOM_FRESH_MS / 60_000} minutes`);
-  if (seat.room <= 0) return none('the allowance is used up');
+  if (seat.room <= 0) return none('its runner reports no room');
   return { kind: 'room', room: seat.room, program: seat.roomProgram, at: seat.roomAt };
 }
 

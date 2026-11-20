@@ -201,7 +201,7 @@ test('the Agents page reads the seats a person may see, what each works on and w
     const same = { kind: 'room', room: 61, program: 'OwnerProgram', at: early.toISOString() };
     const theirs = { 'm-dev': { kind: 'room', room: 7, program: 'MemberProgram', at },
       // A fresh figure of 0 is no room, and so is every seat of a person without a runner, whatever was stored for it.
-      'm-rev': { kind: 'no_room', reason: 'the allowance is used up' } };
+      'm-rev': { kind: 'no_room', reason: 'its runner reports no room' } };
     assert.deepEqual(await rooms(owner), { 'o-dev': same, 'o-rev': same, ...theirs,
       'x-dev': { kind: 'no_room', reason: 'no runner is connected' }, 'x-old': { kind: 'no_room', reason: 'no runner is connected' }, 'n-dev': { kind: 'no_room', reason: 'no runner is connected' } });
     // The runner's name is on every person's card, and it is the person's own runner.
