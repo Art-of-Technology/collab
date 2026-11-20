@@ -208,6 +208,23 @@ test('place by room: the lead is given seats in order of room, and a request goe
     }
   });
 
+  await t.test('a third tied unknown seat changes the reason in the timeline', async () => {
+    await raw.project.update({ where: { id: A }, data: { agentMode: 'seats' } });
+    await rooms({ room: 60 }, { room: 60 }, {});
+    await openRun(dev3);
+    const level = 'a working runner with no figure counts as the most room';
+    for (const [extraRun, reason] of [[false, `${level}; equal open runs: the default seat first`], [true, `${level}, fewer open runs`]]) {
+      if (extraRun) await openRun(dev2);
+      const labelled = await issue();
+      await raw.$transaction(tx => lib.labelRequests(tx, owner, labelled, [{ id: 'review-label', name: 'Review request' }]));
+      const made = await raw.issue.findFirstOrThrow({ where: { agentRequestRole: 'review', sourceRelations: { some: { targetIssueId: labelled.id } } }, include: { assignee: true } });
+      const activity = await raw.issueActivity.findFirstOrThrow({ where: { itemId: made.id, action: 'REQUEST_PLACED' } });
+      assert.equal(made.assignee.name, 'rev-cem');
+      assert.equal(JSON.parse(activity.details).why, reason);
+    }
+    await endRuns();
+  });
+
   await t.test('no seat with a number: the default seat, unless Collab knows it has no room', async () => {
     await rooms(stale, stale, {});
     await openRun(rev1);

@@ -87,6 +87,15 @@ test('room: a runner reports room for its seats, and a read gives a number, no r
     assert.equal((await runnerOf(person)).state, null);
     // The runner is seen and reports nothing: its seats are unknown, which is today's behaviour.
     assert.deepEqual(await read(dev.id), ['unknown', 'no figure was reported']);
+    const found = await prisma.agentSeat.findUniqueOrThrow({ where: { id: dev.id } });
+    const seen = await runnerOf(person);
+    for (const figure of [{ room: null, roomAt: null }, { room: 50, roomAt: new Date(Date.now() - 16 * MINUTE) }]) {
+      for (const state of [null, 'working']) {
+        const result = seats.seatRoom({ ...found, ...figure }, { ...seen, state });
+        assert.equal(result.kind, 'unknown');
+        assert.equal(result.live, state === 'working' ? true : undefined);
+      }
+    }
   });
 
   await t.test('a figure is stored with the time it arrived, and reads as a number', async () => {

@@ -201,8 +201,8 @@ export function seatRoom(seat: { byRunner: boolean; room: number | null; roomPro
   if (runner.state && runner.state !== 'working') {
     return none(runner.state === 'paused' ? 'the runner is paused' : runner.state === 'disk_full' ? "the runner's disk is full" : 'the runner is not working');
   }
-  if (seat.room === null || !seat.roomAt) return { kind: 'unknown', reason: 'no figure was reported', live: true };
-  if (seat.roomAt.getTime() <= now.getTime() - ROOM_FRESH_MS) return { kind: 'unknown', reason: `the figure is older than ${ROOM_FRESH_MS / 60_000} minutes`, live: true };
+  if (seat.room === null || !seat.roomAt) return { ...unknown('no figure was reported'), ...(runner.state === 'working' && { live: true as const }) };
+  if (seat.roomAt.getTime() <= now.getTime() - ROOM_FRESH_MS) return { ...unknown(`the figure is older than ${ROOM_FRESH_MS / 60_000} minutes`), ...(runner.state === 'working' && { live: true as const }) };
   if (seat.room <= 0) return none('its runner reports no room');
   return { kind: 'room', room: seat.room, program: seat.roomProgram, at: seat.roomAt };
 }

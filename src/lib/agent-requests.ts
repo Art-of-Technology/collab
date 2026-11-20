@@ -101,7 +101,7 @@ function placeRequest<T extends { room: SeatRoom; openRuns: number; isDefault: b
     // Level with the most room: the same number, or a working runner that has sent no figure (see `byRoom`).
     const level = ({ room }: T) => room.kind === 'room' ? room.room === best.room : room.kind === 'unknown' && !!room.live;
     if (!level(next)) return { seat: top, why: 'most room' };
-    const numbers = top.room.kind === 'room' && next.room.kind === 'room', first = top.isDefault ? 'the default seat first' : 'the older seat first';
+    const numbers = !order.some(seat => level(seat) && seat.room.kind === 'unknown'), first = top.isDefault ? 'the default seat first' : 'the older seat first';
     const equal = numbers ? 'equal room' : 'a working runner with no figure counts as the most room';
     return { seat: top, why: top.openRuns < next.openRuns ? `${equal}, fewer open runs` : numbers ? `equal room and open runs: ${first}` : `${equal}; equal open runs: ${first}` };
   }
