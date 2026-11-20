@@ -335,7 +335,7 @@ Collab applies no rate limit of its own to these calls beyond `request_cap`.
 | Renewed from | 7 days before it runs out |
 | Room figure counts as unknown | 15 minutes after it arrived |
 | Runner counts as offline | 10 minutes without a `seats` call |
-| Work no run has started on leaves a seat | 10 minutes without room |
+| Eligible work no run has started on can move | 10 minutes without room |
 
 `collab seat run` reads the inbox every 5 seconds when it is empty and renews every 15 seconds.
 
@@ -433,11 +433,11 @@ What Collab makes of it:
 | --- | --- |
 | A number | Its figure is newer than 15 minutes and above 0, and its runner called within the last 10 minutes and did not say `paused` or `disk_full`. |
 | No room | No runner is connected for the seat's person, or the runner has not called for 10 minutes (offline), or it said `paused` or `disk_full`, or the seat's fresh figure is `0`. |
-| Unknown | The seat is run by hand, or its runner is there and working but no figure was sent, or the figure is at least 15 minutes old. |
+| Unknown | The seat is run by hand, or its runner is connected, online and working but no figure was sent or the figure is at least 15 minutes old. |
 
 A runner that never sent a `state` counts as working. What a runner says about itself comes before the figure: the seat of a paused runner has no room, however new its figure is.
 
-Collab notes the first call that says a seat has no room. After 10 minutes of that, work no run has started on leaves the seat: see [When a seat has had no room for 10 minutes](/docs/agents/seats#when-a-seat-has-had-no-room-for-10-minutes). So keep sending `state` and the figures with every call, also while you are paused or at your cap.
+Collab notes the first call that says a seat has no room. After 10 minutes, eligible work no run has started on can move: see [When a seat has had no room for 10 minutes](/docs/agents/seats#when-a-seat-has-had-no-room-for-10-minutes). Keep sending `state` and the figures with every call, also while you are paused or at your cap.
 
 Collab places work by the figure: see [Placed by room](/docs/agents/seats#placed-by-room). It does not show the figure on a page yet.
 

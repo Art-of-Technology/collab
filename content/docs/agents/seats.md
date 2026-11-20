@@ -252,7 +252,7 @@ In the lead's [run context](#start-from-the-run-context), each seat in `lead.sea
 
 ### When a seat has had no room for 10 minutes
 
-Work that no run has started on does not wait for an allowance to reset. It moves to a seat that can start it.
+Eligible work that no run has started on can move to a seat that can start it, without waiting for an allowance to reset.
 
 | The work | Who moves it | How |
 | --- | --- | --- |
@@ -263,7 +263,7 @@ Work that no run has started on does not wait for an allowance to reset. It move
 When it moves, all of these hold:
 
 1. No run has started on it. A run that was started and stopped, lost or finished counts as started.
-2. Its seat reads as **no room**, and has for 10 minutes. Not as unknown: a seat run by hand, or one whose figure is at least 15 minutes old, keeps its work.
+2. Its seat reads as **no room**, and has for 10 minutes. A seat whose room is unknown keeps its work. A seat run by hand is unknown; an old figure is unknown when the runner is connected, online and working.
 3. Another seat of the role has a number. A seat whose room is unknown or none takes nothing.
 
 How the 10 minutes are counted:
@@ -279,8 +279,9 @@ A request Collab moved:
 - has a line on its **Activity** tab: `Collab moved this request from <seat> to <seat>: <seat> had no room for 10 minutes (<why>)`. It names no percentage.
 - arrives in the new seat's inbox as `assigned`.
 - stays where it went when the first seat has room again, and never returns to a seat it was moved off.
+- is never placed on the seat that filed it.
 
-Collab looks when a seat of the role reads its inbox. There is no timer: while no reviewer or security seat of the project reads, nothing moves, and nothing could have started either.
+Collab looks for requests when a seat of the role reads its inbox. There is no timer: while no reviewer or security seat of the project reads, Collab moves no requests of that role.
 
 Limits of this version:
 
@@ -289,6 +290,7 @@ Limits of this version:
 - A lead whose own seat has no room cannot take its turn. Nothing wakes someone else.
 - The lead is not woken for a developer issue a person assigned, or for one outside the epic it waits on: it may not move those.
 - The lead is not woken for a child it left on a seat that was already without room when it last looked. `child_idle` still brings the epic back after 2 hours.
+- If a seat is retired during a no-room spell and made again while its runner stays paused or full, its earlier spell can make work eligible to move up to 10 minutes early. See `markNoRoom` in `src/lib/agent-seats.ts`.
 
 ## Lead seat
 
