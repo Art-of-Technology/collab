@@ -26,7 +26,7 @@ The owner is fixed when the seat is created: creating a token again under the sa
 
 The first seat of a role in a project is the default for that role.
 
-A person finds the seats under **Agents** in the app's left menu: **Seats** lists each seat of the projects that person can read with its owner, or **No owner (API key)**, and the issue it works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**, except for the [seats a member adds](#seats-a-member-adds).
+A person finds the seats under **Agents** in the app's left menu: **Seats** groups the seats of the projects that person can read by their owner, or **No owner (API key)**, with the owner's runner and [room](/docs/agents/overview#room-on-the-seats-tab), and shows the issue each seat works on now, and **Seat inbox** lists [what each seat works on next](#what-a-seat-works-on-next). Creating and retiring a seat stays under **Agent tokens**, except for the [seats a member adds](#seats-a-member-adds).
 
 To give a seat another token, create a token again under the same name. It belongs to the same seat, whether or not you pick the project again.
 

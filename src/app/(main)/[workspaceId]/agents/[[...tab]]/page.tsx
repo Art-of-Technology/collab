@@ -1,7 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from '@/lib/request-session';
 import { authOptions } from '@/lib/auth';
-import { checkUserPermission, Permission } from '@/lib/permissions';
 import { readRunnersTab, readSeats, usesHandoffs } from '@/lib/agents-page';
 import { readAgentFloor } from '@/lib/agent-floor';
 import { AgentSeatsView } from '@/components/agents/AgentSeatsView';
@@ -39,9 +38,5 @@ export default async function AgentsPage({ params }: { params: Promise<{ workspa
   if (tab !== 'seats' && tab !== 'inbox') notFound();
   const view = await readSeats(session.user.id, workspaceId);
   if (!view) notFound();
-  const [handoffs, manage] = await Promise.all([
-    usesHandoffs(view.workspace.id),
-    checkUserPermission(session.user.id, view.workspace.id, Permission.MANAGE_WORKSPACE_PERMISSIONS),
-  ]);
-  return <AgentSeatsView {...view} tab={tab} handoffs={handoffs} canManage={manage.hasPermission} />;
+  return <AgentSeatsView {...view} tab={tab} handoffs={await usesHandoffs(view.workspace.id)} />;
 }
