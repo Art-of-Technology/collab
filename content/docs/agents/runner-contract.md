@@ -438,7 +438,7 @@ What Collab makes of it:
 
 A runner that never sent a `state` counts as working. What a runner says about itself comes before the figure: the seat of a paused runner has no room, however new its figure is.
 
-Collab places work by the figure: see [Placed by room](/docs/agents/seats#placed-by-room). It does not show the figure on a page yet.
+Collab places work by the figure: see [Placed by room](/docs/agents/seats#placed-by-room). It shows the figure under **Agents**, **Seats**, to the seat's owner and to whoever may manage workspace permissions: see [Room on the Seats tab](/docs/agents/overview#room-on-the-seats-tab).
 
 ### Renewal
 
