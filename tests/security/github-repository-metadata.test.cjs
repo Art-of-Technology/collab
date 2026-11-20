@@ -3,6 +3,8 @@ const crypto = require('node:crypto');
 function select(row, shape) { if (!shape || !row) return row; return Object.fromEntries(Object.entries(shape).filter(([,v]) => v).map(([k,v]) => [k, v === true ? row[k] : select(row[k], v.select)])); }
 function fixture(options = {}) {
   const effects = [], logs = [];
+  const record = (...args) => logs.push(args);
+  const repositoryConsole = { debug: record, info: record, log: record, warn: record, error: record };
   const actor = { id: 'alice', email: 'alice@example.test', createdAt: new Date(), updatedAt: new Date() };
   const projects = workspaces.map((workspace, i) => ({ id: workspace.id, name: 'project-' + workspace.id, workspace, repository: options.attached ? { id: 'attached' } : null }));
   const connections = projects.map((project, i) => ({ id: 'connection-' + i, githubRepoId: String(i + 1), project, accessToken: 'encrypted-secret', webhookSecret: 'webhook-secret' }));
@@ -35,11 +37,16 @@ function fixture(options = {}) {
     },
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status || 200, headers: new Headers(init.headers) }) } },
   };
-  if (options.providerStatus) deps['@/lib/github/oauth-config'].getUserRepositories = load('src/lib/github/oauth-config.ts', {}, { URLSearchParams, process: { env: {} }, Error, console: { log() {}, error() {} }, fetch: async () => ({ ok: false, status: options.providerStatus, statusText: 'Provider error' }) }).getUserRepositories;
+  if (options.providerFetch || options.providerStatus) {
+    deps['@/lib/github/oauth-config'].getUserRepositories = load('src/lib/github/oauth-config.ts', {}, {
+      URLSearchParams, process: { env: {} }, Error, console: repositoryConsole,
+      fetch: options.providerFetch ?? (async () => ({ ok: false, status: options.providerStatus, statusText: 'Provider error' })),
+    }).getUserRepositories;
+  }
   deps['@/lib/github/access'] = load('src/lib/github/access.ts', deps);
   const globals = { URL, Error, crypto, process: { env: { NEXTAUTH_URL: options.local ? 'http://localhost:3000' : 'https://collab.example' } }, console: { log() {}, warn() {}, error: (...args) => logs.push(args) }, fetch: async url => { effects.push(['fetch']); return { ok: true, json: async () => url.includes('/branches') ? [{ name: 'main', commit: { sha: 'sha' }, protected: true }] : url.includes('/commits') ? [{ sha: 'sha', commit: { message: 'initial', author: { name: 'A', email: 'a@example.test', date: '2026-01-01' } } }] : [] }; } };
   deps['@/lib/session'] = load('src/lib/session.ts', deps, globals);
-  const list = load('src/app/api/github/oauth/repositories/route.ts', deps, globals).GET;
+  const list = load('src/app/api/github/oauth/repositories/route.ts', deps, { ...globals, console: repositoryConsole }).GET;
   const connect = load('src/app/api/github/oauth/connect/route.ts', deps, globals).POST;
   const manual = load('src/app/api/github/repositories/route.ts', deps, globals).POST;
   return { effects, logs, list: (query, signal = new AbortController().signal) => list({ url: 'https://collab.example/api/github/oauth/repositories' + (query || ''), signal }), connect: (projectId = 'own', manualMode = false) => (manualMode ? manual : connect)({ json: async () => ({ projectId, repositoryId: 99, githubRepoId: 99, owner: 'org', name: 'repo', accessToken: 'manual-token' }) }) };
@@ -61,6 +68,22 @@ test('search reads every provider page, so it finds a repository the picker has 
   const r = await f.list('?page=1&search=NEEDLE');
   assert.equal(r.body.repositories.map(x => x.name).join(), 'needle'); assert.equal(r.body.hasMore, false);
   assert.deepEqual(f.effects.filter(e => e[0] === 'list'), Array.from({ length: 10 }, (_, i) => ['list', 'token', i + 1, 100, 'updated']));
+});
+test('repository picker search stays quiet on success', async () => {
+  const repository = {
+    id: 1, name: 'needle', full_name: 'example/needle', description: null,
+    owner: { login: 'example' }, private: true, permissions: { admin: true },
+  };
+  const f = fixture({ providerFetch: async url => ({
+    ok: true,
+    json: async () => new URL(url).searchParams.get('page') === '3' ? [repository] : [],
+    headers: new Headers(),
+  }) });
+
+  const response = await f.list('?search=needle');
+  assert.equal(response.status, 200);
+  assert.equal(response.body.repositories.map(row => row.full_name).join(), 'example/needle');
+  assert.equal(f.logs.length, 0);
 });
 test('search asks for its ten provider pages at once, not one after another', async () => {
   let release; const gate = new Promise(resolve => { release = resolve; });
@@ -111,5 +134,7 @@ test('rejected GitHub token prompts reconnection while other provider errors rem
   const rejected = await fixture({ providerStatus: 401 }).list();
   assert.equal(rejected.status, 401);
   assert.match(rejected.body.error, /reconnect/i);
-  assert.equal((await fixture({ providerStatus: 500 }).list()).status, 500);
+  const failing = fixture({ providerStatus: 500 });
+  assert.equal((await failing.list('?search=needle')).status, 500);
+  assert.equal(failing.logs.length, 1);
 });
