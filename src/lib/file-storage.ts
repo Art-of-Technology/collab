@@ -76,6 +76,7 @@ async function send(method: 'PUT' | 'GET' | 'DELETE', key: string, failure: File
   const url = new URL(`${config.endpoint}/${config.bucket}/${key}`);
   const payloadHash = sha256(body ?? '');
   let last: number | 'unreachable' = 'unreachable';
+  let uncertain = false;
   for (const wait of RETRY_WAITS_MS) {
     if (wait) await new Promise(resolve => setTimeout(resolve, wait));
     try {
@@ -85,17 +86,19 @@ async function send(method: 'PUT' | 'GET' | 'DELETE', key: string, failure: File
       });
       if (response.ok) return response;
       last = response.status;
+      if (response.status >= 500) uncertain = true;
       // A shared response stream can leave cancellation pending until its other reader finishes.
       void response.body?.cancel().catch(() => {});
       // Only a store that is away is worth asking again; a refusal stays a refusal.
       if (response.status < 500) break;
     } catch {
       last = 'unreachable';
+      uncertain = true;
     }
   }
   // Storage failures can name hosts and keys, so the log says what happened, not where.
   console.error('file_storage_request_failed', { method, status: last });
-  throw new FileStorageError(failure, last === 'unreachable' || last >= 500);
+  throw new FileStorageError(failure, uncertain);
 }
 
 /** Stores the bytes under a name this server makes up, and returns that name. */

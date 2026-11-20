@@ -99,3 +99,24 @@ test('a refused write is not followed by a delete: nothing was stored', async ()
   await new Promise(resolve => setTimeout(resolve, 30));
   assert.deepEqual(requests, ['PUT']);
 });
+
+test('an uncertain write is deleted even if a retry is refused', async () => {
+  for (const first of ['unreachable', 503]) {
+    const requests = [];
+    const storage = load('src/lib/file-storage.ts', { 'node:crypto': require('node:crypto') }, {
+      URL, setTimeout: resolve => resolve(), console: { error() {} },
+      process: { env: { FILE_STORAGE_ENDPOINT: 'https://s3.test', FILE_STORAGE_BUCKET: 'bucket', FILE_STORAGE_ACCESS_KEY: 'key', FILE_STORAGE_SECRET_KEY: 'secret' } },
+      fetch: async (url, { method }) => {
+        requests.push(`${method} ${new URL(url).pathname}`);
+        if (requests.length === 1) {
+          if (first === 'unreachable') throw new Error('connection reset');
+          return new Response(null, { status: first });
+        }
+        return new Response(null, { status: method === 'PUT' ? 403 : 204 });
+      },
+    });
+    await assert.rejects(storage.storeObject('context', Buffer.from('bytes')), error => error.reason === 'write_failed' && error.uncertain === true);
+    const path = requests[0].slice(4);
+    assert.deepEqual(requests, [`PUT ${path}`, `PUT ${path}`, `DELETE ${path}`]);
+  }
+});
