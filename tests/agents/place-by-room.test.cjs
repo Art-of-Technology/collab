@@ -257,6 +257,16 @@ test('place by room: the lead is given seats in order of room, and a request goe
     });
     assert.equal(await assigned(raced), 'rev-bob', 'the next seat by room, not the one that was retired');
     await raw.agentSeat.update({ where: { id: rev3.id }, data: { retiredAt: null } });
+    // As an issue edit runs it, serializable, the seats are read as they were when the edit began: a seat retired since
+    // then is a lost race the edit reports, never a request for a retired seat.
+    const late = await issue(), before = await raw.issue.count({ where: { agentRequestRole: 'review' } });
+    await assert.rejects(raw.$transaction(async tx => {
+      await tx.issue.findUniqueOrThrow({ where: { id: late.id } });
+      await raw.agentSeat.update({ where: { id: rev3.id }, data: { retiredAt: new Date() } });
+      await lib.labelRequests(tx, owner, late, label);
+    }, { isolationLevel: 'Serializable' }), error => error.code === 'P2010' && error.meta?.code === '40001');
+    assert.equal(await raw.issue.count({ where: { agentRequestRole: 'review' } }), before);
+    await raw.agentSeat.update({ where: { id: rev3.id }, data: { retiredAt: null } });
   });
 
   await t.test('a request asked for by label is placed the same way', async () => {

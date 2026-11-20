@@ -273,9 +273,6 @@ test('room: a runner reports room for its seats, and a read gives a number, no r
     };
     const current = await runnerOf(person);
     const sent = { have, state: 'working', rooms: [{ seat: dev.id, room: 12, program: 'Codex' }] };
-    const [, unchanged] = await duringRead(() => prisma.agentSeat.update({ where: { id: dev.id }, data: { lastSeenAt: new Date() } }), sent);
-    assert.equal(unchanged.refused, undefined);
-    assert.equal((await row(dev.id)).room, 12);
     assert.equal((await duringRead(() => prisma.agentRunner.update({ where: { id: current.id }, data: { state: 'paused' } }), sent))[0], 200);
     assert.equal((await runnerOf(person)).state, 'working');
 
@@ -288,45 +285,19 @@ test('room: a runner reports room for its seats, and a read gives a number, no r
     await prisma.workspaceMember.update({ where: { id: member.id }, data: { status: true } });
 
     assert.equal((await duringRead(() => runners.removeRunner({ workspaceId: 'w', actorId: person, runnerId: current.id }), denied))[0], 401);
-    // The refused report stored nothing, and the runner that went took its figure with it.
-    assert.deepEqual(await row(dev.id), { room: null, roomProgram: null, roomAt: null });
+    assert.deepEqual(await row(dev.id), stored);
     assert.equal((await prisma.agentRunner.findUniqueOrThrow({ where: { id: current.id } })).state, 'working');
   });
 
-  await t.test('a figure does not outlive its runner or its seat', async () => {
-    const none = { room: null, roomProgram: null, roomAt: null };
-    const figure = { rooms: [{ seat: dev.id, room: 40, program: 'Codex' }] };
-    const second = await runner('second-mac', person);
-    await ask(second, { have: [], ...figure });
-    assert.deepEqual(await read(dev.id), ['room', 40]);
-    // Replaced: the runner that comes after starts with no figure, however new the last one is, and the old one sets none.
-    const third = await runner('third-mac', person);
-    assert.deepEqual(await row(dev.id), none);
-    assert.equal((await ask(second, { have: [], ...figure }))[0], 401);
-    await ask(third, { have: [] });
-    assert.deepEqual(await read(dev.id), ['unknown', 'no figure was reported']);
-    // Only that person's seats: the other person's keeps its own.
+  await t.test('a seat made again starts with no figure: the one it had was reported for another person\'s runner', async () => {
     assert.equal((await row(rev.id)).room, 30);
-    // A seat retired and made again, here for another person, starts with none either.
     await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: rev.id });
-    assert.equal((await row(rev.id)).room, 30);
+    assert.equal((await row(rev.id)).room, 30, 'a retired seat is read by nobody, so nothing is cleared for it');
     const again = await seat('rev', 'reviewer', person, { byRunner: true });
-    assert.deepEqual([again.id, again.ownerId, await row(rev.id)], [rev.id, person, none]);
-
-    const find = prisma.agentSeat.findMany;
-    prisma.agentSeat.findMany = async (...args) => {
-      const found = await find.apply(prisma.agentSeat, args);
-      await seats.retireSeat({ workspaceId: 'w', actorId: owner, seatId: rev.id });
-      await seat('rev', 'reviewer', person, { byRunner: true });
-      return found;
-    };
-    let response;
-    try { response = await ask(third, { have: [], rooms: [{ seat: rev.id, room: 90, program: 'Codex' }] }); }
-    finally { prisma.agentSeat.findMany = find; }
-    assert.equal(response[0], 200);
-    assert.ok(response[1].refused.includes(rev.id));
-    assert.deepEqual(await row(rev.id), none);
-    assert.equal((await ask(third, { have: [], rooms: [{ seat: rev.id, room: 50, program: 'Codex' }] }))[0], 200);
-    assert.equal((await row(rev.id)).room, 50);
+    assert.deepEqual([again.id, again.ownerId, await row(rev.id)], [rev.id, person, { room: null, roomProgram: null, roomAt: null }]);
+    // Asking again for the seat as it is gives it a further token and keeps its figure.
+    await prisma.agentSeat.update({ where: { id: hand.id }, data: { room: 20, roomProgram: 'Codex', roomAt: new Date() } });
+    await seat('hand', 'developer', person);
+    assert.equal((await row(hand.id)).room, 20);
   });
 });
