@@ -64,8 +64,8 @@ export async function seatInbox(context: Caller): Promise<{ items: InboxItem[] }
 }
 
 /** The read of `seatInbox` alone. It marks no run lost and records no sign of life, so a person's page can ask it for a seat. */
-export async function inboxOf(workspaceId: string, me: string, seat: { projectId: string; role: string } | null): Promise<{ items: InboxItem[] }> {
-  const issues = await prisma.issue.findMany({
+export async function inboxOf(workspaceId: string, me: string, seat: { projectId: string; role: string } | null, db: DB = prisma): Promise<{ items: InboxItem[] }> {
+  const issues = await db.issue.findMany({
     where: {
       workspaceId, assigneeId: me, ...(seat && { projectId: seat.projectId }), ...NOT_DONE,
     },
@@ -79,7 +79,7 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   // A run that finished done leaves the issue to its status, so a reopened issue is offered again. A project with no
   // status in the done group cannot show done: there the run says it, until the issue is assigned again.
   const finished = [...new Set(issues.filter(issue => issue.agentRuns[0]?.outcome === 'done').map(issue => issue.projectId))];
-  const showsDone = new Set((finished.length ? await prisma.projectStatus.findMany({ where: { projectId: { in: finished }, isActive: true,
+  const showsDone = new Set((finished.length ? await db.projectStatus.findMany({ where: { projectId: { in: finished }, isActive: true,
     OR: [{ category: 'done' }, { category: null, isFinal: true }] }, select: { projectId: true }, distinct: ['projectId'] }) : []).map(status => status.projectId));
   const candidates = issues.flatMap(issue => {
     const last = issue.agentRuns[0];
@@ -96,14 +96,14 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
   const waiting = candidates.filter(({ stands }) => stands === 'in_review' || stands === 'blocked').map(({ issue }) => issue.id);
   const replies = { where: { authorId: { not: me } }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } as const;
   const linked = { select: { agentRequestRole: true, reporterId: true, updatedAt: true, projectStatus: statusSelect, comments: replies } } as const;
-  const details = new Map((waiting.length ? await prisma.issue.findMany({ where: { id: { in: waiting } }, select: {
+  const details = new Map((waiting.length ? await db.issue.findMany({ where: { id: { in: waiting } }, select: {
     id: true, comments: replies,
     sourceRelations: { select: { relationType: true, targetIssue: linked } },
     targetRelations: { select: { relationType: true, sourceIssue: linked } },
   } }) : []).map(detail => [detail.id, detail]));
 
   // Only a lead waits for children, so nobody else pays for this read.
-  const children = seat?.role === 'lead' && waiting.length ? await prisma.issue.findMany({ where: { parentId: { in: waiting }, projectId: seat.projectId }, select: {
+  const children = seat?.role === 'lead' && waiting.length ? await db.issue.findMany({ where: { parentId: { in: waiting }, projectId: seat.projectId }, select: {
     id: true, parentId: true, issueKey: true, agentRequestRole: true, createdAt: true, updatedAt: true, assigneeId: true, projectStatus: statusSelect,
     assignee: { select: { agentSeat: { select: { id: true, role: true } } } },
     helpers: { select: { userId: true, assignedAt: true, approvedAt: true, approvedBy: true } },
@@ -119,17 +119,17 @@ export async function inboxOf(workspaceId: string, me: string, seat: { projectId
     && child.helpers.some(row => row.userId === child.assigneeId && row.approvedBy === me));
   const full = new Map<string, { seat: string; reason: string; due: Date | null; started: { due: Date | null; pushed: Map<string, Pushed> } | null }>();
   if (seat && placed.length) {
-    const developers = await seatsWithRoom(prisma, seat.projectId, 'developer', new Date(now));
+    const developers = await seatsWithRoom(db, seat.projectId, 'developer', new Date(now));
     let free = false;
     for (const developer of developers) {
-      if (!free && developer.room.kind === 'room') free = await prisma.issue.count({ where: fromLead(seat.projectId, me, developer.userId) }) < LEAD_CAP;
+      if (!free && developer.room.kind === 'room') free = await db.issue.count({ where: fromLead(seat.projectId, me, developer.userId) }) < LEAD_CAP;
     }
     for (const developer of free ? developers : []) {
       const held = placed.filter(child => child.assigneeId === developer.userId);
       if (developer.room.kind !== 'no_room' || !held.length) continue;
       const started = held.some(child => child.agentRuns.length)
-        ? { due: await noRoomDue(prisma, developer, new Date(now), STARTED_MOVE_MS), pushed: await waitsPushed(workspaceId, seat.projectId, developer) } : null;
-      full.set(developer.userId, { seat: developer.name, reason: developer.room.reason, due: await noRoomDue(prisma, developer, new Date(now)), started });
+        ? { due: await noRoomDue(db, developer, new Date(now), STARTED_MOVE_MS), pushed: await waitsPushed(workspaceId, seat.projectId, developer, db) } : null;
+      full.set(developer.userId, { seat: developer.name, reason: developer.room.reason, due: await noRoomDue(db, developer, new Date(now)), started });
     }
   }
   // Once per spell without room: the moment the seat had had none for long enough is after the lead last looked.
@@ -212,10 +212,10 @@ export async function pushedWork(db: DB, issueId: string): Promise<Pushed | null
  * issue qualifies when the seat's inbox offers it for its next run (to resume, a review came back, a reply, a blocker
  * resolved), so none with a run open and none that waits for a person or another issue, and when `pushedWork` has it.
  */
-export async function waitsPushed(workspaceId: string, projectId: string, seat: { userId: string; role: string }) {
+export async function waitsPushed(workspaceId: string, projectId: string, seat: { userId: string; role: string }, db: DB = prisma) {
   const pushed = new Map<string, Pushed>();
-  for (const item of (await inboxOf(workspaceId, seat.userId, { projectId, role: seat.role })).items) {
-    const work = item.lastRunAt && await pushedWork(prisma, item.issueId);
+  for (const item of (await inboxOf(workspaceId, seat.userId, { projectId, role: seat.role }, db)).items) {
+    const work = item.lastRunAt && await pushedWork(db, item.issueId);
     if (work) pushed.set(item.issueId, work);
   }
   return pushed;

@@ -1,6 +1,6 @@
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { Prisma } = require('@prisma/client');
+const { Prisma, PrismaClient } = require('@prisma/client');
 const { load } = require('../security/helpers.cjs');
 const { seatsDatabase } = require('./seats-db.cjs');
 
@@ -173,6 +173,14 @@ test('started work moves between runs once its seat has had no room for 30 minut
 
   await t.test('a started request moves after 30 minutes, not 10, while an unstarted one still moves after 10, and the timeline says from where the work goes on', async () => {
     const started = await startedRequest();
+    const single = new PrismaClient({ datasources: { db: { url: `${db.url}&connection_limit=1&pool_timeout=1` } } });
+    try {
+      const limitedRuns = load('src/lib/agent-runs.ts', { ...deps, '@/lib/prisma': { prisma: single } }, { Date });
+      const offered = await single.$transaction(tx => limitedRuns.waitsPushed('w', A, revCem, tx));
+      assert.equal(offered.get(started.id)?.pullRequest, started.pullRequest);
+    } finally {
+      await single.$disconnect();
+    }
     const unstarted = await request();
     await cemFull(11);
     await inbox(revBob);

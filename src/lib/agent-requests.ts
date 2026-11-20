@@ -191,7 +191,7 @@ async function writeRequest(tx: Prisma.TransactionClient, input: { workspaceId: 
  */
 const asDecided = async (tx: Prisma.TransactionClient, issue: { id: string; workspaceId: string; projectId: string }, pushed: Pushed | undefined,
   from: { userId: string; role: string }) => pushed
-  ? (await pushedWork(tx, issue.id))?.runId === pushed.runId && (await waitsPushed(issue.workspaceId, issue.projectId, from)).has(issue.id)
+  ? (await pushedWork(tx, issue.id))?.runId === pushed.runId && (await waitsPushed(issue.workspaceId, issue.projectId, from, tx)).has(issue.id)
   : !await tx.agentRun.count({ where: { issueId: issue.id } });
 /** What the timeline says of started work that moved: it goes on from the branch its last run pushed. */
 const continues = (pushed: Pushed | undefined) => pushed ? `; the work continues from the branch its last run pushed (${pushed.pullRequest})` : '';
