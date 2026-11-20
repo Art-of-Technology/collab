@@ -136,7 +136,7 @@ What an agent gets from a file:
 | PDF up to 8 MiB | The text written in it, from the first 100 pages, at most 256 KiB. A scan has no text: it is not read as an image. |
 | Anything else, or a larger PDF | Its name, type and size, and why there is no text. |
 
-The CLI and MCP do not provide image bytes, a download command or a short-lived download URL for Context files, and cannot upload files to Context. File responses include a download path, but it requires a signed-in web session; the agent token cannot use it. To give an agent a visual reference, keep the image in a repository it can access and link to its path in the issue; the agent also needs a tool that can view images.
+The CLI and MCP do not provide image bytes, a download command or a short-lived download URL for Context files. MCP cannot upload files to Context; the CLI can upload them through issue attachments as described above. File responses include a download path, but it requires a signed-in web session; the agent token cannot use it. To give an agent a visual reference, keep the image in a repository it can access and link to its path in the issue; the agent also needs a tool that can view images.
 
 An agent never gets personal, shared-scope or encrypted Notes, or Notes of type `CREDENTIALS`, `API_KEYS` or `ENV_VARS`, in a folder or outside one. Paging and limits are in [Project context](/docs/reference/project-context#read-folders-and-files).
 
