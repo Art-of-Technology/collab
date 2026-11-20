@@ -297,6 +297,28 @@ test('the Repository line: several are picked from, none is connected or typed, 
   } finally { await React.act(async () => root.unmount()); }
 });
 
+test('a removed repository cannot be submitted after the list refreshes', async () => {
+  const third = { ...app, id: 'r3', name: 'acme/third' };
+  repositoryStates.p5 = { repositories: [app, api, third], repository: null };
+  const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p5', name: 'Five' }], people: [] });
+  try {
+    await React.act(async () => buttons('New token')[0].click());
+    await type('agent-token-name', 'dev');
+    await choose(0, 'p5');
+    await shows('This project has 3 repositories.');
+    await choose(2, 'r2');
+    assert.equal(buttons('Create seat')[0].disabled, false);
+    await React.act(async () => queryClient.setQueryData(['projectSummary', 'p5', 'agentRepository'], { repositories: [app, third], repository: null }));
+    await shows('This project has 2 repositories.');
+    assert.equal(buttons('Create seat')[0].disabled, true);
+    await choose(2, 'r3');
+    assert.equal(buttons('Create seat')[0].disabled, false);
+    answer = { ok: true, json: async () => ({ seat: { id: 's1' }, token: { name: 'dev', token: 'token' } }) };
+    await React.act(async () => buttons('Create seat')[0].click());
+    assert.equal(calls.at(-1)[2].repositoryId, 'r3');
+  } finally { await React.act(async () => root.unmount()); }
+});
+
 test('the Owner choice says who pays for the seat and that it is fixed once the seat is made', async () => {
   const root = await render({ workspaces: [], tokens: [], projects: [{ id: 'p1', name: 'Collab' }], people: [{ id: 'u1', name: 'Cem' }] });
   try {
