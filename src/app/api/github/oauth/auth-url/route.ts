@@ -16,15 +16,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid project state' }, { status: 400 });
     }
     const projectId = input.startsWith('project:') ? input.slice(8) : null;
-    const returnToSeat = searchParams.get('returnTo') === 'seat';
-    if (searchParams.getAll('returnTo').length > 1 || (searchParams.has('returnTo') && (!returnToSeat || !projectId))) {
-      return NextResponse.json({ error: 'Invalid return destination' }, { status: 400 });
-    }
     if (projectId && !await prisma.project.findFirst({
       where: { id: projectId, workspace: postWorkspaceAccessWhere(actor.id) }, select: { id: true },
     })) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 
-    const { state, cookie } = createGitHubOAuthState(actor.id, projectId, returnToSeat);
+    const { state, cookie } = createGitHubOAuthState(actor.id, projectId);
     const response = NextResponse.json({ authUrl: getGitHubAuthUrl(state), state }, { headers: { 'Cache-Control': 'no-store' } });
     response.cookies.set(GITHUB_OAUTH_COOKIE, cookie, GITHUB_OAUTH_COOKIE_OPTIONS);
     return response;
