@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Four ideas: UI mockup</title>
+<style>
+:root{--c950:#070708;--c900:#101011;--c800:#171719;--c700:#1f1f22;--c600:#27272b;--c500:#75757a;--c400:#9c9ca1;--c50:#fafafa;
+  --blue:#3b82f6;--blue-soft:rgba(59,130,246,.16);--ok:#34d399;--ok-soft:rgba(52,211,153,.14);--warn:#fbbf24;--warn-soft:rgba(251,191,36,.13);--bad:#f87171;
+  --glass:rgba(255,255,255,.03);--line:rgba(255,255,255,.09);--r:10px;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+html{background:var(--c900)}
+body{margin:0;background:var(--c900);color:var(--c50);font:15px/1.5 "Geist",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+h1,h2,h3,p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px 80px}
+.top{position:sticky;top:0;z-index:5;background:rgba(16,16,17,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .in{max-width:1180px;margin:0 auto;padding:12px 20px 10px}
+.top h1{font-size:17px;font-weight:600}
+.top .note{font-size:13px;color:var(--c400)}
+.nav{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.nav button{background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;color:var(--c400)}
+.nav button[aria-selected="true"]{background:var(--blue-soft);border-color:var(--blue);color:var(--c50)}
+.nav button .n{opacity:.6;margin-right:5px}
+.screen[hidden]{display:none}
+.lead{padding:26px 0 14px}
+.kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--c400)}
+.lead h2{font-size:26px;font-weight:600;margin:2px 0 4px}
+.lead .sub{color:var(--c400);max-width:70ch}
+.terms{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.term{border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:13px;background:var(--glass)}
+.term b{font-weight:600}.term span{color:var(--c400)}
+.optbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 6px}
+.optbar .lbl{font-size:13px;color:var(--c400);margin-right:4px}
+.optbar button{border:1px solid var(--line);background:var(--c800);border-radius:8px;padding:7px 12px;font-size:14px}
+.optbar button[aria-selected="true"]{border-color:var(--blue);background:var(--blue-soft)}
+.rec{font-size:11px;background:var(--ok-soft);color:var(--ok);border-radius:999px;padding:1px 8px;margin-left:6px;white-space:nowrap}
+.why{font-size:14px;color:var(--c400);margin-bottom:12px}.why b{color:var(--ok);font-weight:600}
+.frame{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--c900);box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.fbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--c950);border-bottom:1px solid var(--line);font-size:12px;color:var(--c400)}
+.fbar i{width:9px;height:9px;border-radius:50%;background:var(--c600);display:inline-block}
+.fbar .url{margin-left:8px;background:var(--c800);border-radius:6px;padding:2px 10px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app{display:grid;grid-template-columns:150px minmax(0,1fr);min-height:440px}
+.side{background:var(--c950);border-right:1px solid var(--line);padding:12px 8px;font-size:13px}
+.side .ws{font-weight:600;padding:4px 8px 10px}
+.side div.it{padding:6px 8px;border-radius:7px;color:var(--c400)}
+.side div.it.on{background:var(--c700);color:var(--c50)}
+.main{padding:16px;min-width:0;font-size:14px}
+.main h3{font-size:16px;font-weight:600}
+.muted{color:var(--c400)}.small{font-size:13px}
+.btn{border:1px solid var(--line);background:var(--c800);border-radius:8px;padding:6px 12px;font-size:13px}
+.btn:hover{background:var(--c700)}
+.btn.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{display:inline-block;font-size:11px;border-radius:999px;padding:1px 8px;border:1px solid var(--line);color:var(--c400);white-space:nowrap}
+.chip.blue{border-color:transparent;background:var(--blue-soft);color:#93c5fd}
+.chip.ok{border-color:transparent;background:var(--ok-soft);color:var(--ok)}
+.chip.warn{border-color:transparent;background:var(--warn-soft);color:var(--warn)}
+.card{border:1px solid var(--line);background:var(--c800);border-radius:var(--r);padding:12px}
+.banner{border-radius:8px;padding:8px 12px;font-size:13px;margin:8px 0}
+.banner.ok{background:var(--ok-soft);color:#a7f3d0}.banner.warn{background:var(--warn-soft);color:#fde68a}.banner.blue{background:var(--blue-soft);color:#bfdbfe}
+input[type=text],select,textarea{background:var(--c950);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:14px;width:100%;max-width:100%}
+textarea{resize:vertical}
+.f{display:grid;gap:4px;font-size:13px;color:var(--c400);margin-bottom:10px}
+.ico{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linejoin:round;stroke-linecap:round}
+/* figure */
+.fig{border:1px solid var(--line);border-radius:12px;background:var(--c800);padding:14px}
+.fig svg{width:100%;height:auto;display:block}
+.fig text{font-size:13px;fill:var(--c50)}
+.fig .box{fill:rgba(255,255,255,.02);stroke:rgba(255,255,255,.14)}
+.fig .rowr{fill:var(--c900);stroke:rgba(255,255,255,.12)}
+.fig .w .rowr{stroke:var(--warn);fill:var(--warn-soft)}
+.fig .new .rowr{stroke:var(--ok);fill:var(--ok-soft)}
+.fig .edge line,.fig .edge path{stroke:var(--c400);stroke-width:1.5;fill:none}
+.fig .edge polygon{fill:var(--c400)}
+.fig .edge text,.fig .cap{fill:var(--c400);font-size:12px}
+.fig .on .rowr{stroke:var(--blue);fill:var(--blue-soft);stroke-width:2}
+.fig .edge.on line,.fig .edge.on path{stroke:var(--blue);stroke-width:2.5}.fig .edge.on polygon{fill:var(--blue)}.fig .edge.on text{fill:#bfdbfe}
+.fig .ttl{font-weight:600;font-size:14px}
+.stepper{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;margin-top:12px}
+.stepper .txt{font-size:16px}.stepper .txt b{color:#93c5fd}
+/* drive */
+.drive{display:grid;gap:12px}
+.drive.A{grid-template-columns:200px minmax(0,1fr)}
+.drive.A.has{grid-template-columns:190px minmax(0,1fr) minmax(0,260px)}
+.tree{border-right:1px solid var(--line);padding-right:8px}
+.trow,.lrow{display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:transparent;border:0;border-radius:7px;padding:6px 8px;font-size:13px;min-width:0}
+.trow span,.lrow .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trow:hover,.lrow:hover{background:var(--c700)}
+.trow.cur{background:var(--c700)}.lrow.sel{background:var(--blue-soft)}
+.lrow{border-bottom:1px solid var(--line);border-radius:0;padding:9px 8px}
+.lrow .nm{flex:1}.lrow .kd{font-size:12px;color:var(--c400);white-space:nowrap}
+.car{width:10px;display:inline-block;color:var(--c400);flex:none}
+.crumbs{display:flex;flex-wrap:wrap;gap:2px;align-items:center;font-size:13px}
+.crumbs button{background:transparent;border:0;padding:2px 5px;border-radius:5px;color:var(--c400)}
+.crumbs button:last-of-type{color:var(--c50);font-weight:600}
+.tool{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;margin-bottom:8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.fcard{display:grid;gap:6px;justify-items:start;text-align:left;border:1px solid var(--line);background:var(--c800);border-radius:var(--r);padding:12px;font-size:13px;min-width:0}
+.fcard .ico{width:24px;height:24px}.fcard.sel{border-color:var(--blue)}
+.fcard .nm{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prev{border:1px solid var(--line);border-radius:var(--r);background:var(--c800);padding:12px;font-size:13px;min-width:0}
+.prev .ph{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}
+.prev table{border-collapse:collapse;width:100%}.prev td{border:1px solid var(--line);padding:4px 8px}
+.page{background:#f4f4f5;border-radius:6px;padding:14px;display:grid;gap:7px}.page i{display:block;height:6px;border-radius:3px;background:#c4c4c8}
+.empty{color:var(--c400);padding:16px 8px;font-size:13px}
+/* grill */
+.ghead{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;margin-bottom:10px}
+.counts{font-size:13px;color:var(--c400)}
+.qrow{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);padding:10px 8px;font-size:14px;min-width:0}
+.qrow:hover{background:var(--c700)}.qrow.on{background:var(--c700)}
+.qrow .qt{flex:1;min-width:0}
+.split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:14px}
+.thread{padding:10px 8px 14px;display:grid;gap:8px}
+.sug{background:var(--blue-soft);border-radius:8px;padding:8px 10px;font-size:13px}
+.msg{border-left:2px solid var(--line);padding:2px 10px;font-size:13px}.msg b{font-size:12px;color:var(--c400);font-weight:600}
+.msg.me{border-left-color:var(--blue)}.msg.draft{border-left-style:dashed}
+.sendbar{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;border-top:1px solid var(--line);margin-top:12px;padding-top:12px}
+.prog{height:6px;border-radius:3px;background:var(--c700);overflow:hidden}.prog i{display:block;height:100%;background:var(--blue)}
+.focus{max-width:640px;margin:0 auto}
+.err{color:var(--bad);font-size:13px}
+/* forms / seat */
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.seg{display:inline-flex;justify-self:start;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{background:transparent;border:0;padding:7px 14px;font-size:13px;color:var(--c400)}
+.seg button[aria-checked="true"]{background:var(--blue);color:#fff}
+.layer{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--c800);margin-bottom:8px}
+.layer .lh{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:600;margin-bottom:4px}
+.layer.lock{border-style:dashed}
+.layer p{font-size:13px;color:var(--c400)}
+pre.merged{white-space:pre-wrap;background:var(--c950);border:1px solid var(--line);border-radius:8px;padding:10px;font:12px/1.5 "Geist Mono",ui-monospace,Menlo,monospace;color:var(--c400);margin:8px 0 0}
+.rlist button{display:flex;justify-content:space-between;gap:6px;align-items:center;width:100%;text-align:left;background:transparent;border:0;border-radius:7px;padding:6px 8px;font-size:13px}
+.rlist button.on{background:var(--c700)}.rlist h4{margin:10px 8px 4px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--c400);font-weight:500}
+.stech{background:#f7f7f5;color:#18181b;border-radius:0}
+.stech .card{background:#fff;border-color:#e4e4e7}.stech .muted{color:#52525b}
+.stech input[type=text],.stech textarea{background:#fff;border-color:#d4d4d8;color:#18181b}
+.stech .btn{background:#fff;border-color:#d4d4d8;color:#18181b}.stech .ro{background:#f4f4f5;border:1px dashed #d4d4d8;border-radius:8px;padding:8px 10px}
+/* picks */
+.pick{margin-top:18px;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--c800)}
+.pick h3{font-size:15px;margin-bottom:8px}
+.pick label.o{display:flex;gap:8px;align-items:flex-start;padding:5px 0;font-size:14px}
+.pick .st{font-size:13px;color:var(--ok);margin-left:8px}
+.next{display:flex;justify-content:flex-end;margin-top:18px}
+table.props{width:100%;border-collapse:collapse;font-size:14px}
+table.props td{border-top:1px solid var(--line);padding:9px 8px;vertical-align:top}
+table.props td:first-child{color:var(--c400);white-space:nowrap}
+@media (max-width:860px){.app{grid-template-columns:minmax(0,1fr)}.side{display:none}.drive.A,.drive.A.has,.split,.two{grid-template-columns:minmax(0,1fr)}.tree{border-right:0;border-bottom:1px solid var(--line);padding-bottom:8px}.stepper{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<header class="top"><div class="in">
+  <h1>Four ideas: click-through mockup</h1>
+  <p class="note">Sample data. Nothing here is saved or sent to Collab. Click everything; pick an option under each screen; then press <b>Send to Agent</b>.</p>
+  <div class="nav" role="tablist" id="nav"></div>
+</div></header>
+<div class="wrap" id="screens"></div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const P={folder:'<path d="M2 4.5h4l1.5 1.5H14v6.5H2z"/>',note:'<path d="M4 2h6l2 2v10H4z"/><path d="M6 7h4M6 9.5h4"/>',png:'<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 11l3.5-3 2.5 2 2-1.5 4 3"/>',pdf:'<path d="M4 2h6l2 2v10H4z"/><path d="M6 11h4"/>',csv:'<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 7h12M6 3v10"/>',drive:'<path d="M6 2h4l4 7-2 4H4L2 9z"/>',lock:'<rect x="3.5" y="7" width="9" height="6.5" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/>',bin:'<path d="M4 2h6l2 2v10H4z"/>'};
+const ico=k=>`<svg class="ico" viewBox="0 0 16 16" aria-hidden="true">${P[k]||P.bin}</svg>`;
+
+const SCREENS=[
+ {id:'how',idea:'All four ideas',title:'How it works',sub:'Collab owns the work and the setup. stech owns the run. The runner asks, Collab answers. Collab never calls stech.',
+  terms:[['Seat','one agent, one role'],['Runner','always-on program that starts sessions'],['Run','one fresh session on one issue']]},
+ {id:'ctx',idea:'Idea 2',title:'Context as a drive',sub:'Folders, notes and files, at workspace and project level. A linked Google Drive folder is a read-only copy.',
+  terms:[['Context','what people and agents read'],['Drive folder','copied in, edited only in Drive']],
+  opts:[['A','Tree + list'],['B','Card grid'],['C','One nested list']],rec:'A',why:'You always see where you are, and it is the shape Drive and Finder taught everyone.',side:'Context',url:'collab.weez.boo/weezboo/context',
+  ask:'Which layout for Context?'},
+ {id:'grill',idea:'Idea 2',title:'Grill an idea',sub:'The Planner asks every question at once, one thread each. Follow-ups stay inside their thread. One button sends your answers.',
+  terms:[['Grilling session','an issue for the Planner seat'],['Topic','the chip on each question'],['Settled','you and the Planner agree']],
+  opts:[['A','All questions in a list'],['B','One question at a time'],['C','List left, thread right']],rec:'C',why:'The list keeps the whole picture and the count; the right side holds one thread, so a long follow-up never pushes the other questions away.',side:'Issues',url:'collab.weez.boo/weezboo/issues/IDEA-4',
+  ask:'Which layout for a grilling session?'},
+ {id:'seat',idea:'Ideas 1 and 4',title:'Create a seat',sub:'Pick a role from the catalogue and a scope. The repository is never typed: it comes from the project.',
+  terms:[['Scope','one project, or the whole workspace'],['Role catalogue','built-in roles plus your own']],
+  opts:[['A','Scope as a switch'],['B','Scope inside the project list']],rec:'A',why:'A workspace seat reaches every project, so the scope should be a choice you cannot miss, not one entry in a dropdown.',side:'Agents',url:'collab.weez.boo/weezboo/agents/seats/new',
+  ask:'How should the scope be chosen?'},
+ {id:'roles',idea:'Idea 4',title:'Roles and layers',sub:'Our rules come first and cannot be removed. Your organisation adds to them. A seat adds its own on top.',
+  terms:[['Layer 1','the platform (ours)'],['Layer 2','your organisation'],['Layer 3','one seat']],
+  opts:[['A','Layers stacked on one page'],['B','One tab per layer']],rec:'A',why:'You read top to bottom exactly what a seat receives, the locked part included.',side:'Settings',url:'collab.weez.boo/weezboo/settings/roles',
+  ask:'How should the layers be shown?'},
+ {id:'conn',idea:'Ideas 1 and 2',title:'Connect a runner, connect Google Drive',sub:'Two connections. Both start in Collab. Neither lets Collab be controlled from outside.',
+  terms:[['Pairing code','what a runner shows; you approve it'],['Read-only','Collab never writes to Drive']],side:'Settings',url:'collab.weez.boo/weezboo/settings/connections'},
+ {id:'stech',idea:'Ideas 1 and 4',title:'stech’s Seat runner page, after',sub:'stech keeps what belongs to the run: logins, hours, limits. The repository box and the instructions box are gone.',
+  terms:[['Read-only','shown here, changed in Collab']]},
+ {id:'open',idea:'Before I file anything',title:'Open points',sub:'Six things I proposed that you have not ruled on. Say OK or what to change, then send.'}
+];
+const S={scr:0,lay:{ctx:'A',grill:'C',seat:'A',roles:'A'},queued:{}};
+
+/* ---------- shell ---------- */
+function shell(){
+  $('#nav').innerHTML=SCREENS.map((d,i)=>`<button role="tab" data-act="go" data-i="${i}" aria-selected="${i===S.scr}"><span class="n">${i+1}</span>${d.title}</button>`).join('');
+  $('#screens').innerHTML=SCREENS.map((d,i)=>`<section class="screen" id="scr-${d.id}" ${i===S.scr?'':'hidden'}>
+    <div class="lead"><p class="kicker">${d.idea} · screen ${i+1} of ${SCREENS.length}</p><h2>${d.title}</h2><p class="sub">${d.sub}</p>
+      ${d.terms?`<div class="terms">${d.terms.map(t=>`<span class="term"><b>${t[0]}</b> <span>= ${t[1]}</span></span>`).join('')}</div>`:''}</div>
+    <div data-opt="${d.id}"></div><div data-dyn="${d.id}"></div>
+    ${d.opts?pickForm(d):''}
+    <div class="next">${i<SCREENS.length-1?`<button class="btn pri" data-act="go" data-i="${i+1}">Next: ${SCREENS[i+1].title} →</button>`:''}</div>
+  </section>`).join('');
+}
+function pickForm(d){return `<form class="pick" data-lavish-question="layout-${d.id}" data-pick="${d.id}"><h3>Your pick: ${d.ask}</h3>
+  ${d.opts.map(o=>`<label class="o"><input type="radio" name="pick-${d.id}" value="${o[0]}: ${o[1]}"> <span><b>${o[0]}</b> ${o[1]}${o[0]===d.rec?'<span class="rec">my pick</span>':''}</span></label>`).join('')}
+  <label class="f" style="margin-top:8px">Anything to change on this screen? (optional)<input type="text" name="note" placeholder="For example: make the preview wider"></label>
+  <div class="row"><button class="btn pri" type="submit">Queue this answer</button><span class="st" role="status" data-st="${d.id}"></span></div></form>`}
+function frame(d,inner){return `<div class="frame"><div class="fbar"><i></i><i></i><i></i><span class="url">${d.url}</span></div><div class="app"><nav class="side" aria-label="Collab menu (mock)"><div class="ws">weezboo</div>${['Issues','Context','Agents','Settings'].map(n=>`<div class="it ${n===d.side?'on':''}">${n}</div>`).join('')}</nav><div class="main">${inner}</div></div></div>`}
+function render(){
+  const d=SCREENS[S.scr];
+  document.querySelectorAll('.screen').forEach((el,i)=>el.hidden=i!==S.scr);
+  document.querySelectorAll('#nav button').forEach((b,i)=>b.setAttribute('aria-selected',i===S.scr));
+  const o=$(`[data-opt="${d.id}"]`);
+  o.innerHTML=d.opts?`<div class="optbar" role="tablist" aria-label="Layout options"><span class="lbl">Layout:</span>${d.opts.map(x=>`<button role="tab" data-act="lay" data-k="${d.id}" data-v="${x[0]}" aria-selected="${S.lay[d.id]===x[0]}"><b>${x[0]}</b> ${x[1]}${x[0]===d.rec?'<span class="rec">my pick</span>':''}</button>`).join('')}</div><p class="why"><b>Why ${d.rec}:</b> ${d.why}</p>`:'';
+  $(`[data-dyn="${d.id}"]`).innerHTML=R[d.id](d);
+}
+const R={},ACT={};
+ACT.go=b=>{S.scr=+b.dataset.i;render();window.scrollTo(0,0)};
+ACT.lay=b=>{S.lay[b.dataset.k]=b.dataset.v;render()};
+
+/* ---------- 1 how it works ---------- */
+const H={mode:'after',flow:'run',step:0};
+const MAP={
+ today:{collab:[['c-context','Notes (a flat list)'],['c-seats','Seats: one project each'],['c-repo','Project → repositories (not sent)'],['c-issue','Issue → run']],
+   stech:[['s-runner','Runner (always on)'],['s-repo','Repository address: typed per seat','w'],['s-instr','Seat instructions: typed here','w'],['s-roles','Role prompts: inside the code','w'],['s-keeps','Logins, hours, limits']],
+   edges:[['e-ask','asks: next issue?','l'],['e-answer','answers: the issue','r'],['e-result','result + note','l']]},
+ after:{collab:[['c-context','Context: folders, notes, files','new'],['c-roles','Role catalogue + 3 layers','new'],['c-seats','Seats: project or workspace','new'],['c-repo','Project → repositories'],['c-issue','Issue → run → question threads','new']],
+   stech:[['s-runner','Runner (always on)'],['s-warm','Warm copy of each repository','new'],['s-session','Fresh session per issue'],['s-keeps','Logins, hours, limits']],
+   edges:[['e-ask','asks: next issue?','l'],['e-answer','issue + repo + instructions','r'],['e-result','result + note','l']]}};
+const FLOWS={
+ run:[[['s-runner','e-ask','c-seats'],'The runner asks Collab: is there an issue for one of my seats?'],
+      [['c-issue','c-repo','c-roles','e-answer'],'Collab answers with the issue, its repository and the instructions in three layers.'],
+      [['s-warm'],'The runner copies the repository from its warm copy. No download, packages already there.'],
+      [['s-session','c-context'],'A fresh session starts and reads the issue and the Context it needs.'],
+      [['s-session'],'The session does the work and writes its result to a file.'],
+      [['e-result','c-issue'],'The runner hands the result in. The issue moves to done, in review or blocked.']],
+ grill:[[['g0'],'You write an idea as a note in an Ideation folder.'],
+      [['g1'],'You press “Grill this”. Collab creates an issue for the Planner seat.'],
+      [['g2'],'The Planner posts every question at once, one thread each, with a topic and a suggested answer.'],
+      [['g3'],'You answer inside each thread, or ask it to explain. Follow-ups stay in that thread.'],
+      [['g4'],'One button sends all your answers. The Planner wakes once.'],
+      [['g5'],'When every thread is settled, the Planner writes “Decisions” and “Plan” into the idea’s folder.'],
+      [['g6'],'You approve the plan and pick a project. The Planner creates the epic and its issues.']]};
+function mapSVG(mode){const m=MAP[mode],rows=Math.max(m.collab.length,m.stech.length),hgt=70+rows*46+34;
+  const col=(x,w,title,list)=>`<rect class="box" x="${x}" y="8" width="${w}" height="${hgt-44}" rx="12"/><text class="ttl" x="${x+14}" y="34">${title}</text>`+list.map((r,i)=>`<g id="${r[0]}" class="${r[2]||''}"><title>${r[1]}</title><rect class="rowr" x="${x+12}" y="${50+i*46}" width="${w-24}" height="36" rx="8"/><text x="${x+24}" y="${73+i*46}">${r[1]}</text></g>`).join('');
+  const edge=(e,i)=>{const y=96+i*60,l=e[2]==='l';return `<g id="${e[0]}" class="edge"><title>${e[1]}</title><text x="460" y="${y-8}" text-anchor="middle">${e[1]}</text><line x1="${l?548:372}" y1="${y}" x2="${l?384:536}" y2="${y}"/><polygon points="${l?'372,'+y+' 386,'+(y-6)+' 386,'+(y+6):'548,'+y+' 534,'+(y-6)+' 534,'+(y+6)}"/></g>`};
+  return `<svg viewBox="0 0 920 ${hgt}" role="img" aria-label="System map, ${mode}">${col(8,352,'COLLAB · owns the work'+(mode==='after'?' and the setup':''),m.collab)}${col(560,352,'STECH · owns the run',m.stech)}${m.edges.map(edge).join('')}<text class="cap" x="460" y="${hgt-10}" text-anchor="middle">Collab never calls stech. It only answers what the runner asks.</text></svg>`}
+function grillSVG(){const n=[['Idea note'],['“Grill this”'],['Planner asks','all questions'],['You answer','in threads'],['Send answers'],['Decisions +','Plan notes'],['Approve plan','→ issues']];
+  return `<svg viewBox="0 0 920 150" role="img" aria-label="How an idea gets grilled">${n.map((t,i)=>{const x=6+i*131;return `<g id="g${i}"><title>${t.join(' ')}</title><rect class="rowr" x="${x}" y="30" width="116" height="48" rx="10"/>${t.map((s,j)=>`<text x="${x+58}" y="${t.length===1?59:50+j*17}" text-anchor="middle">${s}</text>`).join('')}</g>`+(i<6?`<g class="edge"><line x1="${x+118}" y1="54" x2="${x+127}" y2="54"/><polygon points="${x+131},54 ${x+124},50 ${x+124},58"/></g>`:'')}).join('')}
+    <g class="edge"><path d="M588 80 C588 122 457 122 457 84"/><polygon points="457,80 452,90 462,90"/><text x="522" y="136" text-anchor="middle">follow-ups stay in their thread</text></g></svg>`}
+R.how=()=>{const today=H.mode==='today',fl=FLOWS[H.flow],st=fl[H.step];
+  const head=`<div class="row" style="margin-bottom:10px"><div class="seg" role="radiogroup" aria-label="Today or after"><button role="radio" data-act="h-mode" data-v="today" aria-checked="${today}">Today</button><button role="radio" data-act="h-mode" data-v="after" aria-checked="${!today}">After</button></div>
+    ${today?'':`<div class="seg" role="radiogroup" aria-label="Which flow"><button role="radio" data-act="h-flow" data-v="run" aria-checked="${H.flow==='run'}">One run</button><button role="radio" data-act="h-flow" data-v="grill" aria-checked="${H.flow==='grill'}">Grilling an idea</button></div>`}</div>`;
+  if(today)return head+`<div class="fig">${mapSVG('today')}</div><div class="banner warn">Amber = setup that sits on the wrong side today. You type the repository and the instructions on stech, and the role prompts are inside stech’s code.</div><div class="row"><button class="btn pri" data-act="h-mode" data-v="after">Show me after →</button></div>`;
+  return head+`<div class="fig" id="howfig">${H.flow==='run'?mapSVG('after'):grillSVG()}</div>
+    <div class="stepper"><p class="txt"><b>Step ${H.step+1} of ${fl.length}.</b> ${st[1]}</p><div class="row"><button class="btn" data-act="h-step" data-v="-1" ${H.step===0?'disabled':''}>← Back</button><button class="btn pri" data-act="h-step" data-v="1">${H.step===fl.length-1?'Start again':'Next step →'}</button></div></div>
+    ${H.flow==='run'?'<div class="banner ok">Green = new or moved to this side. stech keeps logins, hours and limits; it loses the repository box and the prompt boxes.</div>':''}`};
+function howLight(){if(H.mode!=='after')return;FLOWS[H.flow][H.step][0].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.add('on')})}
+ACT['h-mode']=b=>{H.mode=b.dataset.v;H.step=0;render()};
+ACT['h-flow']=b=>{H.flow=b.dataset.v;H.step=0;render()};
+ACT['h-step']=b=>{const n=FLOWS[H.flow].length;H.step=+b.dataset.v>0?(H.step+1)%n:Math.max(0,H.step-1);render()};
+
+/* ---------- 2 context ---------- */
+const TREE={id:'root',name:'Context',kind:'folder',children:[
+ {id:'ws',name:'Workspace',kind:'folder',children:[
+   {id:'ws-idea',name:'Ideation',kind:'folder',children:[
+     {id:'n1',name:'Voice notes on issues',kind:'note',text:'Let people record a short voice note on an issue instead of typing.\n\nWhy: half my ideas arrive while I am walking.'},
+     {id:'f1',name:'sketch.png',kind:'png'},{id:'f2',name:'market-research.pdf',kind:'pdf'}]},
+   {id:'ws-brand',name:'Brand',kind:'folder',children:[]}]},
+ {id:'pj',name:'Project: Collab',kind:'folder',children:[
+   {id:'pj-idea',name:'Ideation',kind:'folder',children:[]},
+   {id:'pj-arch',name:'Architecture',kind:'folder',children:[{id:'n2',name:'System map',kind:'note',text:'Collab owns the work. stech owns the run.'},{id:'f3',name:'costs.csv',kind:'csv'}]},
+   {id:'pj-drive',name:'Ideas (Google Drive)',kind:'folder',ro:1,children:[{id:'g1',name:'Plan',kind:'gdoc',ro:1},{id:'g2',name:'Costs',kind:'gsheet',ro:1}]}]}]};
+const C={cur:'ws-idea',sel:null,exp:new Set(['root','ws','ws-idea','pj']),adding:null,seq:0};
+function walk(n,fn,p=null){fn(n,p);(n.children||[]).forEach(c=>walk(c,fn,n))}
+function byId(id){let r;walk(TREE,n=>{if(n.id===id)r=n});return r}
+function parentOf(id){let r=null;walk(TREE,(n,p)=>{if(n.id===id)r=p});return r}
+function pathTo(id){const out=[];let n=byId(id);while(n){out.unshift(n);n=parentOf(n.id)}return out}
+const KIND={folder:'Folder',note:'Note',png:'Image',pdf:'PDF',csv:'Table',gdoc:'Google Doc',gsheet:'Google Sheet',bin:'File'};
+const iconOf=n=>n.kind==='folder'?(n.ro?'drive':'folder'):n.kind==='gdoc'?'note':n.kind==='gsheet'?'csv':n.kind;
+const kindLabel=n=>(n.kind==='folder'&&n.ro?'Drive folder':KIND[n.kind])+(n.ro?' · read-only':'');
+function crumbs(){return `<div class="crumbs" aria-label="Where you are">${pathTo(C.cur).map((n,i,a)=>`<button data-act="ctx-open" data-id="${n.id}">${esc(n.name)}</button>${i<a.length-1?'<span class="muted">/</span>':''}`).join('')}</div>`}
+function newUI(){const f=byId(C.cur);
+  if(f.ro)return `<span class="chip warn">Read-only copy. Add files in Google Drive.</span>`;
+  if(!C.adding)return `<button class="btn pri" data-act="ctx-new" data-v="menu">+ New</button>`;
+  if(C.adding==='menu')return `<div class="row"><button class="btn" data-act="ctx-new" data-v="folder">Folder</button><button class="btn" data-act="ctx-new" data-v="note">Note</button><button class="btn" data-act="ctx-new" data-v="file">Upload file</button><button class="btn ghost" data-act="ctx-new" data-v="">Cancel</button></div>`;
+  const def={folder:'New folder',note:'New note',file:'budget.csv'}[C.adding];
+  return `<div class="row"><input type="text" id="ctx-name" value="${def}" aria-label="Name" style="width:190px"><button class="btn pri" data-act="ctx-add">${C.adding==='file'?'Upload (sample)':'Add'}</button><button class="btn ghost" data-act="ctx-new" data-v="">Cancel</button></div>`}
+function prevUI(){const it=byId(C.sel);if(!it)return'';
+  const tbl=`<table><tr><td>Item</td><td>Monthly</td></tr><tr><td>Hosting</td><td>£120</td></tr><tr><td>Storage</td><td>£18</td></tr><tr><td>Total</td><td>£138</td></tr></table>`;
+  const body={note:`<p style="white-space:pre-wrap">${esc(it.text||'Empty note.')}</p>`,
+    png:`<svg viewBox="0 0 240 130" style="width:100%;background:#f4f4f5;border-radius:6px" role="img" aria-label="Sketch preview"><rect x="20" y="20" width="80" height="50" rx="6" fill="none" stroke="#52525b" stroke-width="2"/><circle cx="170" cy="45" r="24" fill="none" stroke="#52525b" stroke-width="2"/><path d="M100 45h46M30 100c40-20 90 20 180-6" fill="none" stroke="#52525b" stroke-width="2"/></svg>`,
+    pdf:`<div class="page" aria-label="PDF page preview"><i style="width:60%"></i><i></i><i></i><i style="width:85%"></i><i></i><i style="width:40%"></i></div><p class="muted small" style="margin-top:6px">Page 1 of 12. Agents read its text.</p>`,
+    csv:tbl,gsheet:tbl,gdoc:`<p>Plan for Q1: ship folders first, then grilling, then the Drive copy.</p>`,bin:`<p class="muted">No preview for this type. It downloads.</p>`}[it.kind];
+  return `<aside class="prev" aria-label="Preview"><div class="ph"><b>${esc(it.name)}</b><button class="btn ghost" data-act="ctx-sel" data-id="">Close</button></div>${it.ro?'<div class="banner warn">Copy from Google Drive. Edit it in Drive; Collab refreshes the copy.</div>':''}${body}<p class="muted small" style="margin-top:8px">${kindLabel(it)}</p></aside>`}
+function ctxA(){const tree=(n,d)=>n.kind!=='folder'?'':`<button class="trow ${C.cur===n.id?'cur':''}" role="treeitem" aria-expanded="${C.exp.has(n.id)}" style="padding-left:${6+d*13}px" data-act="ctx-open" data-id="${n.id}"><span class="car">${n.children.some(c=>c.kind==='folder')?(C.exp.has(n.id)?'▾':'▸'):''}</span>${ico(iconOf(n))}<span>${esc(n.name)}</span></button>`+(C.exp.has(n.id)?n.children.map(c=>tree(c,d+1)).join(''):'');
+  const f=byId(C.cur);
+  return `<div class="drive A ${C.sel?'has':''}"><div class="tree" role="tree" aria-label="Folders">${TREE.children.map(c=>tree(c,0)).join('')}</div>
+    <div><div class="tool">${crumbs()}${newUI()}</div>${f.children.length?f.children.map(c=>`<button class="lrow ${C.sel===c.id?'sel':''}" data-act="${c.kind==='folder'?'ctx-open':'ctx-sel'}" data-id="${c.id}">${ico(iconOf(c))}<span class="nm">${esc(c.name)}</span><span class="kd">${kindLabel(c)}</span></button>`).join(''):'<p class="empty">Empty folder. Use “+ New”.</p>'}</div>${prevUI()}</div>`}
+function ctxB(){const f=byId(C.cur);
+  return `<div class="tool">${crumbs()}${newUI()}</div><div class="cards">${f.children.map(c=>`<button class="fcard ${C.sel===c.id?'sel':''}" data-act="${c.kind==='folder'?'ctx-open':'ctx-sel'}" data-id="${c.id}">${ico(iconOf(c))}<span class="nm">${esc(c.name)}</span><span class="muted small">${kindLabel(c)}</span></button>`).join('')||'<p class="empty">Empty folder. Use “+ New”.</p>'}</div><div style="margin-top:12px">${prevUI()}</div>`}
+function ctxC(){const row=(n,d)=>n.kind==='folder'
+    ?`<button class="lrow ${C.cur===n.id?'sel':''}" style="padding-left:${8+d*18}px" data-act="ctx-open" data-id="${n.id}" aria-expanded="${C.exp.has(n.id)}"><span class="car">${C.exp.has(n.id)?'▾':'▸'}</span>${ico(iconOf(n))}<span class="nm">${esc(n.name)}</span><span class="kd">${kindLabel(n)}</span></button>`+(C.exp.has(n.id)?(n.children.map(c=>row(c,d+1)).join('')||`<p class="empty" style="padding-left:${26+d*18}px">Empty.</p>`):'')
+    :`<button class="lrow ${C.sel===n.id?'sel':''}" style="padding-left:${26+d*18}px" data-act="ctx-sel" data-id="${n.id}">${ico(iconOf(n))}<span class="nm">${esc(n.name)}</span><span class="kd">${kindLabel(n)}</span></button>`+(C.sel===n.id?`<div style="padding:8px 8px 8px ${26+d*18}px">${prevUI()}</div>`:'');
+  return `<div class="tool"><span class="muted small">New items go into: <b>${esc(byId(C.cur).name)}</b></span>${newUI()}</div>${TREE.children.map(c=>row(c,0)).join('')}`}
+R.ctx=d=>frame(d,`<h3 style="margin-bottom:10px">Context</h3>`+({A:ctxA,B:ctxB,C:ctxC}[S.lay.ctx])());
+ACT['ctx-open']=b=>{const id=b.dataset.id;if(C.cur===id&&C.exp.has(id)&&S.lay.ctx!=='B')C.exp.delete(id);else C.exp.add(id);C.cur=id;C.adding=null;pathTo(id).forEach(n=>{if(n.id!==id)C.exp.add(n.id)});render()};
+ACT['ctx-sel']=b=>{C.sel=b.dataset.id||null;render()};
+ACT['ctx-new']=b=>{C.adding=b.dataset.v||null;render();const i=$('#ctx-name');if(i){i.focus();i.select()}};
+ACT['ctx-add']=()=>{const name=($('#ctx-name').value||'').trim();if(!name)return;const f=byId(C.cur),id='x'+(++C.seq);
+  if(C.adding==='folder')f.children.push({id,name,kind:'folder',children:[]});
+  else if(C.adding==='note'){f.children.push({id,name,kind:'note',text:'Empty note.'});C.sel=id}
+  else{const e=(name.split('.').pop()||'').toLowerCase();f.children.push({id,name,kind:/png|jpe?g|gif|webp/.test(e)?'png':e==='pdf'?'pdf':/csv|xlsx?/.test(e)?'csv':'bin'});C.sel=id}
+  C.exp.add(f.id);C.adding=null;render()};
+
+/* ---------- 3 grill ---------- */
+const QS=()=>[
+ {id:'q1',topic:'Users',q:'Who records voice notes: people only, or agents too?',sug:'People only in the first version.',exp:'Agents write text already. A voice note only helps someone who would rather speak than type.',status:'settled',thread:[{w:'You',t:'People only.'},{w:'Planner',t:'Settled: people only in the first version.'}]},
+ {id:'q2',topic:'Scope',q:'What is the smallest version worth shipping?',sug:'Record, attach to an issue, play back. No transcript.',exp:'Smallest means: what could you use tomorrow? Recording and playing back already replaces typing. A transcript is useful but can come later without changing the first part.',status:'open',thread:[]},
+ {id:'q3',topic:'Cost',q:'Where are the audio files stored, and is there a size limit?',sug:'Same storage as images, 5 minutes at most.',exp:'Audio is larger than text. Without a limit one long recording can cost more to store than a month of notes.',status:'open',thread:[]},
+ {id:'q4',topic:'Risk',q:'What happens to a voice note when its issue is deleted?',sug:'It goes to Trash with the issue.',exp:'If the file outlived its issue, a recording could stay readable after you thought you had removed it.',status:'open',thread:[]},
+ {id:'q5',topic:'Technical debt',q:'The upload route only takes images and video. Extend it, or add a second one?',sug:'Extend it: one upload path for every file type.',exp:'Two upload paths mean two places to check size, type and access. Extending the one you have keeps those checks in one place.',status:'open',thread:[]},
+ {id:'q6',topic:'Scope',q:'Should the Planner and other seats be able to read a voice note?',sug:'Not in the first version, because there is no transcript.',exp:'Seats read text. Without a transcript a seat would only know that a recording exists, not what it says.',status:'open',thread:[]}];
+const LHINT={'Ideation':'who is it for, why now, what is the smallest version','Technical debt':'what does leaving it cost, what breaks if we change it, in which order','Feature':'who uses it, what is out of scope, how do we know it worked','Research':'what question are we answering, what would change our mind'};
+let G;function gReset(){G={stage:'idea',label:'Ideation',open:'q2',filter:'All',busy:false,sentOnce:false,focus:1,picking:false,project:'Collab Project',err:'',qs:QS()}}gReset();
+const drafts=()=>G.qs.filter(q=>q.status==='draft');
+const shown=()=>G.qs.filter(q=>G.filter==='All'||q.topic===G.filter);
+const stChip=q=>q.status==='settled'?'<span class="chip ok">settled</span>':q.status==='draft'?'<span class="chip warn">answered · not sent</span>':'<span class="chip">open</span>';
+function threadUI(q){return `<div class="thread" aria-label="Thread for ${q.id}"><p class="sug"><b>Planner suggests:</b> ${q.sug}</p>
+  ${q.thread.map(m=>`<div class="msg ${m.w==='You'?'me':''}"><b>${m.w}</b><p>${esc(m.t)}</p></div>`).join('')}
+  ${q.status==='settled'?'':q.status==='draft'?`<div class="msg me draft"><b>You · not sent yet</b><p>${esc(q.draft)}</p></div><div class="row"><button class="btn ghost" data-act="g-edit" data-id="${q.id}">Change answer</button></div>`
+   :`<textarea id="ans-${q.id}" rows="2" placeholder="Your answer…" aria-label="Your answer to: ${esc(q.q)}"></textarea>${G.err===q.id?'<p class="err">Type an answer, or use the suggestion.</p>':''}<div class="row"><button class="btn pri" data-act="g-save" data-id="${q.id}">Save answer</button><button class="btn" data-act="g-use" data-id="${q.id}">Use the suggestion</button><button class="btn ghost" data-act="g-explain" data-id="${q.id}">Ask to explain</button></div>`}</div>`}
+const qrow=(q,on)=>`<button class="qrow ${on?'on':''}" data-act="g-open" data-id="${q.id}" aria-expanded="${on}"><span class="chip blue">${q.topic}</span><span class="qt">${q.q}</span>${stChip(q)}</button>`;
+function gBody(){const list=shown(),L=S.lay.grill;
+  if(!list.length)return '<p class="empty">No question has this topic.</p>';
+  if(L==='A')return list.map(q=>qrow(q,G.open===q.id)+(G.open===q.id?threadUI(q):'')).join('');
+  if(L==='B'){const i=Math.min(G.focus,list.length-1),q=list[i];return `<div class="focus"><div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="small muted">Question ${i+1} of ${list.length}</span>${stChip(q)}</div><div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="${list.length}" aria-valuenow="${i+1}"><i style="width:${(i+1)/list.length*100}%"></i></div><p style="font-size:18px;margin:14px 0 4px"><span class="chip blue">${q.topic}</span> ${q.q}</p>${threadUI(q)}<div class="row" style="justify-content:space-between"><button class="btn" data-act="g-foc" data-v="-1" ${i===0?'disabled':''}>← Previous</button><button class="btn" data-act="g-foc" data-v="1" ${i===list.length-1?'disabled':''}>Next question →</button></div></div>`}
+  const cur=list.find(q=>q.id===G.open)||list[0];
+  return `<div class="split"><div>${list.map(q=>qrow(q,cur.id===q.id)).join('')}</div><div class="card"><p style="font-size:16px"><span class="chip blue">${cur.topic}</span> ${cur.q}</p>${threadUI(cur)}</div></div>`}
+R.grill=d=>{const lab=`<select aria-label="Label for this session" data-bind="g-label" style="width:auto">${Object.keys(LHINT).map(l=>`<option ${l===G.label?'selected':''}>${l}</option>`).join('')}</select>`;
+  if(G.stage==='idea')return frame({...d,side:'Context',url:'collab.weez.boo/weezboo/context/ideation/voice-notes'},`<div class="crumbs"><button disabled>Workspace</button><span class="muted">/</span><button disabled>Ideation</button><span class="muted">/</span><button disabled>Voice notes on issues</button></div>
+    <div class="card" style="margin:10px 0"><h3>Voice notes on issues</h3><p class="muted" style="margin-top:6px">Let people record a short voice note on an issue instead of typing. Why: half my ideas arrive while I am walking.</p></div>
+    <div class="row"><span class="small muted">Label:</span>${lab}<button class="btn pri" data-act="g-start">Grill this</button></div><p class="small muted" style="margin-top:8px">The label tells the Planner what to ask about. ${G.label}: ${LHINT[G.label]}.</p>`);
+  const n=drafts().length,c=s=>G.qs.filter(q=>q.status===s).length,topics=['All',...new Set(G.qs.map(q=>q.topic))];
+  let top='';
+  if(G.stage==='done')top=`<div class="banner ok"><b>Every question is settled.</b> The Planner wrote two notes into Workspace / Ideation: <span class="chip ok">Voice notes: Decisions</span> <span class="chip ok">Voice notes: Plan</span></div>${G.picking?`<div class="row" style="margin-bottom:10px"><span class="small muted">Which project gets the issues?</span><select data-bind="g-project" aria-label="Project" style="width:auto"><option>Collab Project</option><option>stech</option><option>Seatlense</option></select><button class="btn pri" data-act="g-create">Create epic and issues</button></div>`:`<div class="row" style="margin-bottom:10px"><button class="btn pri" data-act="g-approve">Approve plan</button><span class="small muted">Nothing is created until you approve.</span></div>`}`;
+  if(G.stage==='approved')top=`<div class="banner ok"><b>Created in ${esc(G.project)} (sample):</b> 1 epic and 5 issues, unassigned. Assign the epic to the Lead seat and it hands the issues out.</div>`;
+  return frame(d,`<div class="ghead"><div><h3>IDEA-4 · Voice notes on issues</h3><p class="counts"><span class="chip">${G.label}</span> ${c('open')} open · ${c('draft')} answered · ${c('settled')} settled</p></div><div class="row"><span class="small muted">Topic:</span>${topics.map(t=>`<button class="btn ${G.filter===t?'pri':'ghost'}" data-act="g-filter" data-v="${t}" aria-pressed="${G.filter===t}">${t}</button>`).join('')}</div></div>
+    ${top}${G.busy?`<div class="banner blue" role="status">The Planner woke once and is reading ${G.busy} answer${G.busy>1?'s':''}…</div>`:''}${gBody()}
+    <div class="sendbar"><button class="btn ghost" data-act="g-reset">Start this demo again</button><div class="row"><span class="small muted">${n?'Saved answers wait here until you send them.':'Save an answer to send it.'}</span><button class="btn pri" data-act="g-send" ${n&&!G.busy?'':'disabled'}>Send answers (${n})</button></div></div>`)};
+const gq=id=>G.qs.find(q=>q.id===id);
+ACT['g-start']=()=>{G.stage='session';render()};
+ACT['g-reset']=()=>{gReset();render()};
+ACT['g-open']=b=>{G.open=(S.lay.grill==='A'&&G.open===b.dataset.id)?null:b.dataset.id;G.err='';render()};
+ACT['g-filter']=b=>{G.filter=b.dataset.v;G.focus=0;render()};
+ACT['g-foc']=b=>{G.focus=Math.max(0,Math.min(shown().length-1,Math.min(G.focus,shown().length-1)+ +b.dataset.v));render()};
+ACT['g-save']=b=>{const q=gq(b.dataset.id),v=($('#ans-'+q.id).value||'').trim();if(!v){G.err=q.id;render();return}G.err='';q.draft=v;q.status='draft';render()};
+ACT['g-use']=b=>{const q=gq(b.dataset.id);q.draft=q.sug;q.status='draft';G.err='';render()};
+ACT['g-edit']=b=>{const q=gq(b.dataset.id);q.status='open';render();const t=$('#ans-'+q.id);if(t){t.value=q.draft;t.focus()}};
+ACT['g-explain']=b=>{const q=gq(b.dataset.id);q.thread.push({w:'You',t:q.asked?'Shorter, please.':'Can you explain this one?'},{w:'Planner',t:q.asked?'In one line: '+q.sug:q.exp});q.asked=true;render()};
+ACT['g-send']=()=>{const ds=drafts();if(!ds.length)return;G.busy=ds.length;render();setTimeout(()=>{ds.forEach(q=>{q.thread.push({w:'You',t:q.draft});
+    if(q.id==='q3'&&!G.sentOnce){q.thread.push({w:'Planner',t:'Follow-up: 5 minutes at which quality? I suggest 64 kbps mono, about 2.4 MB per note.'});q.sug='64 kbps mono, about 2.4 MB for 5 minutes.';q.status='open';G.open='q3'}
+    else{q.thread.push({w:'Planner',t:'Settled.'});q.status='settled'}});
+  G.sentOnce=true;G.busy=false;if(G.qs.every(q=>q.status==='settled'))G.stage='done';if(SCREENS[S.scr].id==='grill')render()},1300)};
+ACT['g-approve']=()=>{G.picking=true;render()};
+ACT['g-create']=()=>{G.stage='approved';render()};
+
+/* ---------- 4 seat ---------- */
+const ROLES=[
+ {id:'developer',name:'Developer',takes:'Ordinary issues',repo:'yes',p:'You are a Developer seat. Work only the issue you were given. Write a failing test first, keep the change small, open one pull request, and end with a note that says what changed and how you checked it.'},
+ {id:'reviewer',name:'Reviewer',takes:'Review requests',repo:'yes',p:'You are a Reviewer seat. Read the change the request names. Report defects with file and line, most serious first. Change no code.'},
+ {id:'release',name:'Release',takes:'Release requests',repo:'yes',one:1,p:'You are the Release seat. Deploy what is merged, run the checks afterwards and stop at the first failed check. Write no product code.'},
+ {id:'security',name:'Security',takes:'Security requests',repo:'read',p:'You are a Security seat. Read the change and change nothing. End with a verdict, passed or failed, and what you reviewed.'},
+ {id:'lead',name:'Lead',takes:'Epics',repo:'no',p:'You are the Lead seat. Decide which seat works which child issue and assign it. Do none of the work yourself.'},
+ {id:'planner',name:'Planner',takes:'Grilling sessions',repo:'no',nw:1,p:'You are a Planner seat. Ask every question at once, one thread each, with a topic and your suggested answer. When all are settled, write Decisions and a Plan. Create issues only after the plan is approved.'},
+ {id:'docs',name:'Documentation Manager',takes:'Docs requests',repo:'yes',nw:1,p:'You are a Documentation Manager seat. Update the docs pages a change touches. Picture or table first, short steps, detail at the end.'},
+ {id:'changelog',name:'Changelog Manager',takes:'Changelog requests',repo:'yes',nw:1,p:'You are a Changelog Manager seat. Draft the entry for what was released, in plain words. A person publishes it. You never publish.'},
+ {id:'architect',name:'Software Architect',takes:'Design requests',repo:'read',nw:1,p:'You are a Software Architect seat. Read the repository and write a design note with a diagram and the trade-offs. Change no code.'}];
+const CUSTOM=[{id:'qa',name:'QA Tester',base:'developer',text:'Test the change the way a user would. Write down every step you clicked and what you saw.'}];
+const role=id=>ROLES.find(r=>r.id===id)||CUSTOM.find(r=>r.id===id);
+const baseOf=r=>r.base?role(r.base):r;
+const PROJ={collab:{name:'Collab Project',repos:['Art-of-Technology/collab']},shop:{name:'Shop',repos:['acme/shop-web','acme/shop-api']},orbit:{name:'Orbit',repos:[]}};
+let T;function tReset(){T={name:'Dev-1',role:'developer',scope:'project',project:'collab',repo:'',typing:false,addr:'',created:false}}tReset();
+function repoLine(){const r=role(T.role),b=baseOf(r),ws=T.scope==='workspace',pj=PROJ[T.project];
+  if(b.repo==='no')return {ok:1,html:`<span class="chip ok">No repository needed</span> A ${esc(r.name)} decides and writes; it changes no code.`};
+  if(ws&&b.one)return {ok:0,html:`<span class="chip warn">Not possible</span> Release stays one per project, because a deploy belongs to one project. Choose “One project”.`};
+  if(ws)return {ok:1,html:`<span class="chip ok">From each issue</span> A workspace seat gets the repository of the project its issue is in, run by run.`};
+  if(pj.repos.length===1)return {ok:1,html:`<span class="chip ok">From the project</span> <b>${pj.repos[0]}</b>. Nothing to pick, nothing to type.`};
+  if(pj.repos.length>1)return {ok:1,html:`<label class="f" style="margin:0">This project has ${pj.repos.length} repositories. Which one does this seat work in?<select data-bind="t-repo">${pj.repos.map(x=>`<option ${x===T.repo?'selected':''}>${x}</option>`).join('')}</select></label>`};
+  if(T.addr)return {ok:1,html:`<span class="chip ok">Saved on the project</span> <b>${esc(T.addr)}</b>`};
+  return {ok:0,html:`<span class="chip warn">No repository on this project</span><div class="row" style="margin-top:8px"><button class="btn" data-act="t-gh">Connect GitHub</button><button class="btn" data-act="t-type">Type an address</button></div>${T.typing?`<div class="row" style="margin-top:8px"><input type="text" id="t-addr" placeholder="https://github.com/org/repo" aria-label="Repository address" style="width:260px"><button class="btn pri" data-act="t-save">Save on the project</button></div>`:''}`}}
+R.seat=d=>{const A=S.lay.seat==='A',ws=T.scope==='workspace',rl=repoLine(),r=role(T.role);
+  const projSel=`<select data-bind="t-project" aria-label="Project">${Object.entries(PROJ).map(([k,p])=>`<option value="${k}" ${!ws&&T.project===k?'selected':''}>${p.name}</option>`).join('')}${A?'':`<option value="*" ${ws?'selected':''}>All projects (workspace seat)</option>`}</select>`;
+  const scope=A?`<div class="f"><span>Scope</span><div class="seg" role="radiogroup" aria-label="Scope"><button role="radio" data-act="t-scope" data-v="project" aria-checked="${!ws}">One project</button><button role="radio" data-act="t-scope" data-v="workspace" aria-checked="${ws}">Whole workspace</button></div></div>${ws?'<div class="banner warn">This seat can be assigned issues from every project in the workspace. Only people who manage workspace permissions can create it.</div>':`<label class="f">Project${projSel}</label>`}`
+    :`<label class="f">Project${projSel}</label>${ws?'<div class="banner warn">“All projects” makes this a workspace seat: it can be assigned issues from every project.</div>':''}`;
+  const form=`<h3 style="margin-bottom:12px">New seat</h3><label class="f">Name<input type="text" data-bind="t-name" value="${esc(T.name)}"></label>
+    <label class="f">Role<select data-bind="t-role"><optgroup label="Built-in">${ROLES.map(x=>`<option value="${x.id}" ${x.id===T.role?'selected':''}>${x.name}${x.nw?' (new)':''}</option>`).join('')}</optgroup><optgroup label="Your organisation">${CUSTOM.map(x=>`<option value="${x.id}" ${x.id===T.role?'selected':''}>${esc(x.name)}</option>`).join('')}</optgroup></select></label>${scope}
+    <div class="f"><span>Repository</span><div class="card" style="font-size:13px;color:var(--c50)">${rl.html}</div></div>
+    <div class="row"><button class="btn pri" data-act="t-create" ${rl.ok?'':'disabled'}>Create seat</button><button class="btn ghost" data-act="t-reset">Reset</button></div>
+    ${T.created?`<div class="banner ok" role="status"><b>Seat “${esc(T.name)}” created (sample).</b> Its runner fetches the token, so there is nothing to copy. It only works issues someone assigns to it.</div>`:''}`;
+  const sum=`<div class="card"><p class="kicker" style="margin-bottom:8px">What this seat is</p><table class="props"><tr><td>Role</td><td><b>${esc(r.name)}</b>${r.base?` · behaves like ${role(r.base).name}`:''}</td></tr><tr><td>Takes</td><td>${baseOf(r).takes}</td></tr><tr><td>Scope</td><td>${ws?'Whole workspace: issues from any project':'One project: '+PROJ[T.project].name}</td></tr><tr><td>Work arrives</td><td>By assignment only</td></tr><tr><td>Instructions</td><td>${r.base?'4':'3'} layers, set in Collab</td></tr></table></div>`;
+  return frame(d,`<div class="two"><div>${form}</div><div>${sum}</div></div>`)};
+ACT['t-scope']=b=>{T.scope=b.dataset.v;T.created=false;render()};
+ACT['t-type']=()=>{T.typing=true;render();$('#t-addr').focus()};
+ACT['t-gh']=()=>{T.addr='github.com/acme/orbit (connected)';render()};
+ACT['t-save']=()=>{const v=($('#t-addr').value||'').trim();if(v){T.addr=v;T.typing=false;render()}};
+ACT['t-create']=()=>{T.created=true;render()};
+ACT['t-reset']=()=>{tReset();render()};
+
+/* ---------- 5 roles ---------- */
+const O={role:'developer',tab:1,adding:false,merged:false,saved:false,org:{developer:'We use Bun and TypeScript. British English. Never force-push.'},seat:'You own the billing module.'};
+function layers(r){const b=baseOf(r),org=O.org[b.id]||'';
+  const L=[{n:1,t:`Platform: ${b.name} rules`,lock:1,body:`<p>${b.p}</p><p class="small" style="margin-top:4px">Written by us. The same for every organisation. Cannot be removed or edited here.</p>`},
+    {n:2,t:'Your organisation',body:`<textarea rows="2" data-bind="o-org" aria-label="Organisation additions for ${b.name}" placeholder="What every ${b.name} seat in your organisation should also know">${esc(org)}</textarea><div class="row" style="margin-top:6px"><button class="btn" data-act="o-save">Save</button>${O.saved?'<span class="chip ok" role="status">Saved (sample)</span>':''}</div>`}];
+  if(r.base)L.push({n:3,t:`Role: ${r.name}`,body:`<p>${esc(r.text)}</p>`});
+  L.push({n:L.length+1,t:'One seat',body:`<p>Set on each seat’s own page. Example: “${esc(O.seat)}”</p>`});return L}
+R.roles=d=>{const r=role(O.role),L=layers(r),A=S.lay.roles==='A';
+  const list=`<div class="rlist"><h4>Built-in</h4>${ROLES.map(x=>`<button class="${x.id===O.role?'on':''}" data-act="o-role" data-id="${x.id}"><span>${x.name}</span>${x.nw?'<span class="chip ok">new</span>':''}</button>`).join('')}<h4>Your organisation</h4>${CUSTOM.map(x=>`<button class="${x.id===O.role?'on':''}" data-act="o-role" data-id="${x.id}"><span>${esc(x.name)}</span><span class="chip">like ${role(x.base).name}</span></button>`).join('')}<div style="padding:8px"><button class="btn" data-act="o-new">+ New role</button></div></div>`;
+  const lay=l=>`<div class="layer ${l.lock?'lock':''}"><div class="lh"><span class="chip blue">Layer ${l.n}</span>${l.lock?ico('lock'):''}<span>${esc(l.t)}</span></div>${l.body}</div>`;
+  let right;
+  if(O.adding)right=`<h3 style="margin-bottom:10px">New role</h3><label class="f">Name<input type="text" id="o-name" placeholder="For example: Support Triage"></label><label class="f">Behaves like<select id="o-base">${ROLES.map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}</select></label><label class="f">Instructions<textarea id="o-text" rows="3" placeholder="What this role does and how"></textarea></label>${O.err?'<p class="err">Give the role a name and instructions.</p>':''}<div class="row"><button class="btn pri" data-act="o-add">Add role</button><button class="btn ghost" data-act="o-cancel">Cancel</button></div><p class="small muted" style="margin-top:8px">It gets our rules for the role it behaves like, underneath its own.</p>`;
+  else{const tab=Math.min(O.tab,L.length);
+    right=`<div class="row" style="justify-content:space-between;margin-bottom:10px"><h3>${esc(r.name)}</h3><span class="small muted">Takes: ${baseOf(r).takes} · Repository: ${{yes:'yes',read:'read-only',no:'none'}[baseOf(r).repo]}</span></div>
+     ${A?L.map(lay).join(''):`<div class="row" role="tablist" style="margin-bottom:8px">${L.map(l=>`<button class="btn ${l.n===tab?'pri':''}" role="tab" aria-selected="${l.n===tab}" data-act="o-tab" data-v="${l.n}">Layer ${l.n}</button>`).join('')}</div>${lay(L[tab-1])}`}
+     <div class="row"><button class="btn" data-act="o-merged">${O.merged?'Hide':'Show'} what a run receives</button></div>
+     ${O.merged?`<pre class="merged">1 PLATFORM\n${baseOf(r).p}\n\n2 ORGANISATION\n${esc(O.org[baseOf(r).id]||'(nothing added)')}\n${r.base?`\n3 ROLE: ${esc(r.name)}\n${esc(r.text)}\n`:''}\n${r.base?4:3} SEAT\n${esc(O.seat)}\n\n+ the runner adds only: how to hand in the result.</pre>`:''}`}
+  return frame(d,`<div class="drive A"><div class="tree">${list}</div><div>${right}</div></div>`)};
+ACT['o-role']=b=>{O.role=b.dataset.id;O.adding=false;O.saved=false;O.tab=1;render()};
+ACT['o-tab']=b=>{O.tab=+b.dataset.v;render()};
+ACT['o-save']=()=>{O.saved=true;render()};
+ACT['o-merged']=()=>{O.merged=!O.merged;render()};
+ACT['o-new']=()=>{O.adding=true;O.err=false;render();$('#o-name').focus()};
+ACT['o-cancel']=()=>{O.adding=false;render()};
+ACT['o-add']=()=>{const name=$('#o-name').value.trim(),text=$('#o-text').value.trim(),base=$('#o-base').value;if(!name||!text){O.err=true;const keep=[name,text,base];render();$('#o-name').value=keep[0];$('#o-text').value=keep[1];$('#o-base').value=keep[2];return}
+  const id='c'+CUSTOM.length;CUSTOM.push({id,name,base,text});O.role=id;O.adding=false;O.tab=1;render()};
+
+/* ---------- 6 connections ---------- */
+const K={run:'idle',code:'',drive:'idle',folder:'',target:'Workspace / Ideation',n:0,err:false};
+R.conn=d=>{
+  const runner=K.run==='ok'?`<div class="banner ok" role="status"><b>Connected:</b> “Cem’s space” · stech runner · asks Collab every few seconds.</div><p class="small muted">Collab never calls it. Remove it here and it gets no more work.</p><div class="row" style="margin-top:8px"><button class="btn ghost" data-act="k-run" data-v="idle">Remove (sample)</button></div>`
+   :K.run==='code'?`<p class="small muted" style="margin-bottom:8px">Your runner shows a code when it starts. For this mockup the code is <b>K7Q-2MX</b>.</p><div class="row"><input type="text" id="k-code" placeholder="Code from the runner" aria-label="Pairing code" style="width:190px"><button class="btn pri" data-act="k-approve">Approve</button><button class="btn ghost" data-act="k-run" data-v="idle">Cancel</button></div>${K.err?'<p class="err">Type the code the runner shows.</p>':''}`
+   :`<p class="small muted" style="margin-bottom:8px">Any runner that speaks Collab’s public contract: stech’s, the CLI, or your own.</p><button class="btn pri" data-act="k-run" data-v="code">Connect a runner</button>`;
+  const drive=K.drive==='linked'?`<div class="banner ok" role="status"><b>Linked:</b> Drive folder “${esc(K.folder)}” → Context “${esc(K.target)}” · read-only · last copied ${K.n?K.n+' refresh'+(K.n>1?'es':'')+' ago: just now':'just now'}.</div><div class="row"><button class="btn" data-act="k-refresh">Refresh now</button><button class="btn ghost" data-act="k-drive" data-v="idle">Disconnect (sample)</button></div><p class="small muted" style="margin-top:8px">Collab also refreshes on a timer. After a disconnect the copies stay and are marked as old.</p>`
+   :K.drive==='target'?`<label class="f">Show “${esc(K.folder)}” inside which Context folder?<select id="k-target"><option>Workspace / Ideation</option><option>Workspace / Brand</option><option>Project: Collab</option></select></label><div class="row"><button class="btn pri" data-act="k-link">Link folder</button><button class="btn ghost" data-act="k-drive" data-v="idle">Cancel</button></div>`
+   :K.drive==='pick'?`<p class="small muted" style="margin-bottom:8px">Pick a Drive folder:</p><div class="row">${['Ideas','Brand assets','Finance'].map(f=>`<button class="btn" data-act="k-folder" data-v="${f}">${ico('drive')} ${f}</button>`).join('')}</div>`
+   :K.drive==='consent'?`<div class="card" style="background:var(--c950)"><p><b>Google asks:</b> allow Collab to <b>see and download</b> files you choose?</p><p class="small muted">Read-only. Collab cannot change or delete anything in your Drive.</p><div class="row" style="margin-top:8px"><button class="btn pri" data-act="k-drive" data-v="pick">Allow (sample)</button><button class="btn ghost" data-act="k-drive" data-v="idle">Cancel</button></div></div>`
+   :`<p class="small muted" style="margin-bottom:8px">Bring a Drive folder into Context as a read-only copy. Edit in Drive; read in Collab.</p><button class="btn pri" data-act="k-drive" data-v="consent">Connect Google Drive</button>`;
+  return frame(d,`<h3 style="margin-bottom:12px">Connections</h3><div class="two"><div class="card"><div class="row" style="margin-bottom:8px"><b>Runners</b><span class="chip">idea 1</span></div>${runner}</div><div class="card"><div class="row" style="margin-bottom:8px">${ico('drive')}<b>Google Drive</b><span class="chip">idea 2</span></div>${drive}</div></div>`)};
+ACT['k-run']=b=>{K.run=b.dataset.v;K.err=false;render();const i=$('#k-code');if(i)i.focus()};
+ACT['k-approve']=()=>{if(!$('#k-code').value.trim()){K.err=true;render();return}K.run='ok';render()};
+ACT['k-drive']=b=>{K.drive=b.dataset.v;K.n=0;render()};
+ACT['k-folder']=b=>{K.folder=b.dataset.v;K.drive='target';render()};
+ACT['k-link']=()=>{K.target=$('#k-target').value;K.drive='linked';render()};
+ACT['k-refresh']=()=>{K.n++;render()};
+
+/* ---------- 7 stech ---------- */
+const X={mode:'after'};
+R.stech=()=>{const t=X.mode==='today';
+  return `<div class="row" style="margin-bottom:10px"><div class="seg" role="radiogroup" aria-label="Today or after"><button role="radio" data-act="x-mode" data-v="today" aria-checked="${t}">Today</button><button role="radio" data-act="x-mode" data-v="after" aria-checked="${!t}">After</button></div><span class="small muted">Same fields as the real page; stech’s colours are approximated.</span></div>
+  <div class="frame"><div class="fbar"><i></i><i></i><i></i><span class="url">stech.com/settings/seat-runner</span></div><div class="main stech">
+    <h3 style="margin-bottom:10px">Seat runner</h3><div class="card"><div class="row" style="justify-content:space-between"><b>Dev-1 · developer</b><span class="muted small">running CLB-512</span></div>
+    <div style="display:grid;gap:10px;margin-top:10px">
+    ${t?`<label class="f" style="color:#52525b;margin:0">Repository<div class="row"><input type="text" value="https://github.com/Art-of-Technology/collab" style="width:320px"><button class="btn" data-act="x-noop">Save repository</button></div></label>
+        <label class="f" style="color:#52525b;margin:0">Instructions for this seat<textarea rows="2">You own the billing module.</textarea><div class="row"><button class="btn" data-act="x-noop">Save instructions</button></div></label>`
+      :`<div><span class="muted small">Repository</span><div class="ro"><b>github.com/Art-of-Technology/collab</b> <span class="muted small">· set in Collab, sent with each issue</span></div></div>
+        <div><span class="muted small">Instructions</span><div class="ro">Set in Collab: platform, organisation and seat layers. <span class="muted small">Nothing to type here.</span></div></div>`}
+    <div class="row"><button class="btn" data-act="x-noop">Pause</button><button class="btn" data-act="x-noop">Run now</button><span class="muted small">Longest run: 120 minutes · Hours: Mon to Fri 08:00 to 20:00</span></div></div></div>
+    <p class="muted small" style="margin-top:10px">${t?'Two things typed here that Collab already knows or should own.':'What stays on stech: who is signed in, when a seat may run, how long, and the limits.'}</p></div></div>`};
+ACT['x-mode']=b=>{X.mode=b.dataset.v;render()};
+ACT['x-noop']=()=>{};
+
+/* ---------- 8 open points ---------- */
+const PROPS=[['P1','Where an organisation idea’s grilling session lives','An issue needs a project. Each workspace gets one built-in project “Organisation”, created the first time an organisation idea is grilled. The epic still goes to the project you pick at “Approve plan”.'],
+ ['P2','Changelog Manager','Writes drafts only. A person publishes.'],
+ ['P3','Order for removing stech’s two boxes','Collab ships first, each seat’s repository and instructions are copied into Collab, then the boxes go. No seat stops running in between.'],
+ ['P4','Who can create a workspace seat','Only people who manage workspace permissions. “One project” stays the default.'],
+ ['P5','Trying the four new roles','One extra task: run each on one real issue and write down the result.'],
+ ['P6','Milestone dates','27 Nov, 4 Dec, 11 Dec, 18 Dec 2026 and 15 Jan 2027. These are my guesses.']];
+R.open=()=>`<form class="pick" style="margin-top:0" data-lavish-question="open-points" data-props="1"><table class="props">${PROPS.map(p=>`<tr><td><b>${p[0]}</b></td><td><b>${p[1]}</b><br><span class="muted">${p[2]}</span></td><td style="min-width:150px"><select name="${p[0]}" aria-label="${p[0]} decision"><option value="OK">OK as proposed</option><option value="Change">Change it</option></select><input type="text" name="${p[0]}-note" placeholder="What to change" aria-label="${p[0]} what to change" style="margin-top:6px"></td></tr>`).join('')}</table>
+   <div class="row" style="margin-top:12px"><button class="btn pri" type="submit">Queue these 6 answers</button><span class="st" role="status" data-st="open"></span></div></form>
+   <div class="banner blue" style="margin-top:16px"><b>When you are done:</b> press <b>Send to Agent</b> in the Lavish bar. Only then do I create the milestones, issues and notes in Collab, with your picks written in.</div>`;
+
+/* ---------- events ---------- */
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||b.disabled)return;const fn=ACT[b.dataset.act];if(fn){fn(b);howLight()}});
+const BIND={'g-label':v=>{G.label=v;render()},'g-project':v=>{G.project=v},'t-name':v=>{T.name=v},'t-role':v=>{T.role=v;T.created=false;render()},
+  't-project':v=>{if(v==='*'){T.scope='workspace'}else{T.scope='project';T.project=v;T.repo='';T.addr='';T.typing=false}T.created=false;render()},'t-repo':v=>{T.repo=v},'o-org':v=>{O.org[baseOf(role(O.role)).id]=v;O.saved=false}};
+document.addEventListener('change',e=>{const k=e.target.dataset&&e.target.dataset.bind;if(k&&BIND[k])BIND[k](e.target.value)});
+document.addEventListener('input',e=>{const k=e.target.dataset&&e.target.dataset.bind;if((k==='t-name'||k==='o-org')&&BIND[k])BIND[k](e.target.value)});
+function queue(prompt,opts,st){const ok=!!(window.lavish&&window.lavish.queuePrompt);if(ok)window.lavish.queuePrompt(prompt,opts);st.textContent=ok?'Queued. Press “Send to Agent” when you are done.':'Selected. Open this page through Lavish to send it.'}
+document.addEventListener('submit',e=>{const f=e.target;e.preventDefault();
+  if(f.dataset.pick){const id=f.dataset.pick,d=SCREENS.find(s=>s.id===id),fd=new FormData(f),v=fd.get('pick-'+id),note=(fd.get('note')||'').trim(),st=$(`[data-st="${id}"]`);
+    if(!v&&!note){st.textContent='Pick an option first.';return}
+    queue(`${d.title}: ${v?'use layout '+v:'no layout picked'}${note?'. Change: '+note:''}`,{tag:'choice',text:`${d.title}: ${v||'note only'}`,element:f,queueKey:'layout-'+id,data:{screen:id,answer:v,note}},st)}
+  if(f.dataset.props){const fd=new FormData(f),items=PROPS.map(p=>({id:p[0],label:p[1],decision:fd.get(p[0]),note:(fd.get(p[0]+'-note')||'').trim()}));
+    queue('Open points: '+items.map(i=>`${i.id} ${i.decision}${i.note?' ('+i.note+')':''}`).join('; ')+'. Account for every one of P1 to P6.',{tag:'tracked-batch',text:'Open points P1 to P6',element:f,queueKey:'open-points',data:{items}},$('[data-st="open"]'))}});
+shell();render();howLight();
+</script>
+</body>
+</html>
