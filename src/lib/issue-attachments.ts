@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { ContextFolderError, createContextFolder } from '@/lib/context-folders';
-import { uploadContextFile } from '@/lib/context-files';
+import { fileName, uploadContextFile } from '@/lib/context-files';
 import { contextPreviewKind } from '@/lib/context-file-preview';
 
 /**
@@ -25,7 +25,11 @@ function decoded(value: unknown): Uint8Array {
   if (value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
     throw new ContextFolderError(400, 'contentBase64 must be standard base64');
   }
-  return Buffer.from(value, 'base64');
+  const bytes = Buffer.from(value, 'base64');
+  if (bytes.toString('base64') !== value) throw new ContextFolderError(400, 'contentBase64 must be standard base64');
+  if (bytes.byteLength > MAX_ATTACHMENT_BYTES) throw new ContextFolderError(413, `An attachment is at most ${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MB`);
+  if (!bytes.byteLength) throw new ContextFolderError(400, 'This file is empty');
+  return bytes;
 }
 
 /** The project's one folder for attachments: the oldest live one of that name at the top, made on first use. */
@@ -42,8 +46,9 @@ export async function attachToIssue(
   userId: string, issue: { workspaceId: string; projectId: string }, input: { name?: unknown; contentBase64?: unknown },
 ) {
   const bytes = decoded(input.contentBase64);
+  const name = fileName(input.name);
   const folder = await attachmentsFolder(userId, issue);
-  const file = await uploadContextFile(userId, { folderId: folder.id, name: input.name, bytes });
+  const file = await uploadContextFile(userId, { folderId: folder.id, name, bytes });
   // The name becomes link text, so nothing in it may close the link or start a line of its own.
   const label = file.name.replace(/[\[\]\\\r\n]/g, ' ').trim() || 'file';
   const markdown = contextPreviewKind(file) === 'image'

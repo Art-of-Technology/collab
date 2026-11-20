@@ -198,7 +198,7 @@ async function main() {
   if (args.length !== parameters.length || args.some(a => !/^[a-zA-Z0-9_-]+$/.test(a))) throw new CliError('invalid_identifier', `Expected ${parameters.length} ID/key argument(s); only letters, digits, underscores and hyphens allowed.`);
   const textFiles = ['content', 'description', 'body', 'note'].filter(key => Object.hasOwn(spec.fields, key));
   // --project is declared only by a command that reads a project; elsewhere it used to be dropped without a word.
-  allowed(options, [...globals.filter(key => key !== 'project' || spec.query.projectId || spec.defaultProject), ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...Object.keys(spec.localOptions || {}).map(flagName), ...(Object.keys(spec.fields).length ? ['input'] : []), ...textFiles.map(key => `${key}-file`), ...(spec.method === 'DELETE' || spec.setupPreview ? ['yes'] : []), ...(spec.seatRun ? [] : ['dry-run']), ...(spec.pagination ? ['all'] : [])]);
+  allowed(options, [...globals.filter(key => key !== 'project' || spec.query.projectId || spec.defaultProject), ...Object.keys(spec.fields).map(flagName), ...Object.keys(spec.query).map(flagName), ...(spec.wait ? ['wait-seconds'] : []), ...Object.keys(spec.localOptions || {}).map(flagName), ...(Object.keys(spec.fields).length && name !== 'issues attach' ? ['input'] : []), ...textFiles.map(key => `${key}-file`), ...(spec.method === 'DELETE' || spec.setupPreview ? ['yes'] : []), ...(spec.seatRun ? [] : ['dry-run']), ...(spec.pagination ? ['all'] : [])]);
   if (spec.method === 'DELETE' && !options.yes && !(spec.deletePreview && options['dry-run'])) throw new CliError('confirmation_required', 'Deletion requires --yes.');
   if (spec.requiredQuery?.includes('projectId') && options.project && options['project-id'] && options.project !== options['project-id']) {
     throw new CliError('conflicting_project', '--project and --project-id must identify the same project.');
@@ -221,13 +221,12 @@ async function main() {
     if (Object.hasOwn(body, key)) throw new CliError('invalid_input', 'Text file field is duplicated.');
     body[key] = await boundedInput(options[`${key}-file`]);
   }
-  if (name === 'issues attach' && options.file !== undefined) {
-    if (Object.hasOwn(body, 'contentBase64')) throw new CliError('invalid_input', 'Give the file with --file or with --content-base64, not both.');
-    let bytes;
-    try { bytes = await boundedBytes(options.file, 5 * 1024 * 1024, 'A file to attach is limited to 5 MiB.'); }
+  let attachmentBytes;
+  if (name === 'issues attach') {
+    if (options.file === undefined) throw new CliError('required_field', 'Missing required --file.');
+    try { attachmentBytes = await boundedBytes(options.file, 5 * 1024 * 1024, 'A file to attach is limited to 5 MiB.'); }
     catch (error) { if (error instanceof CliError) throw error; throw new CliError('invalid_input', 'The file given with --file could not be read.'); }
-    if (!bytes.length) throw new CliError('invalid_input', 'The file given with --file is empty.');
-    body.contentBase64 = bytes.toString('base64');
+    if (!attachmentBytes.length) throw new CliError('invalid_input', 'The file given with --file is empty.');
     if (body.name === undefined && options.file !== '-') body.name = path.basename(options.file);
   }
   if (['handoffs send', 'transfers offer', 'reviews request'].includes(name) && body.requestId !== undefined &&
@@ -238,6 +237,7 @@ async function main() {
     const type = spec.fields[key];
     if (value !== null && !(type === 'array' ? Array.isArray(value) && value.every(v => typeof v === 'string') : type === 'integer' ? Number.isSafeInteger(value) : typeof value === type)) throw new CliError('invalid_input', 'A JSON field has the wrong type.');
   }
+  if (attachmentBytes) body.contentBase64 = attachmentBytes.toString('base64');
   if (name.startsWith('notes ')) {
     if (body.type && ['ENV_VARS', 'API_KEYS', 'CREDENTIALS'].includes(body.type)) throw new CliError('unsupported_note_type', 'This CLI manages project context, not secret documents.');
     if (body.scope && !['WORKSPACE', 'PROJECT', 'PUBLIC'].includes(body.scope)) throw new CliError('unsupported_note_scope', 'Use WORKSPACE, PROJECT or PUBLIC for shared Notes.');

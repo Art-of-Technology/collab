@@ -2683,7 +2683,8 @@ test('issues attach sends a file as base64 with its name, and refuses what it ca
     [['--file', empty], 'invalid_input'],
     [['--file', large], 'input_too_large'],
     [['--name', 'overview.png'], 'required_field'],
-    [['--file', file, '--content-base64', 'AAAA'], 'invalid_input'],
+    [['--file', file, '--content-base64', 'AAAA'], 'unknown_flag'],
+    [['--input', file], 'unknown_flag'],
   ]) {
     const refused = await f.run(['issues', 'attach', 'APP-1', ...args, '--workspace', 'w']);
     assert.equal(refused.error?.error, error, JSON.stringify(args.slice(0, 1)));

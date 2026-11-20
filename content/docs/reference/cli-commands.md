@@ -1031,9 +1031,8 @@ ID is the issue ID or key (such as APP-123).
 
 | Flag | Type | Details |
 | --- | --- | --- |
-| `--name` | string | required |
-| `--content-base64` | string | required |
-| `--file` | string |  |
+| `--name` | string | required for stdin |
+| `--file` | string | required |
 
 ## comments
 

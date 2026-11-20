@@ -128,14 +128,19 @@ test('an agent attaches a file to an issue', async t => {
 
   await t.test('what is not a file, or is too large, is refused and stores nothing', async () => {
     const before = stored.size, rows = await prisma.contextFile.count();
+    const folders = await prisma.contextFolder.count({ where: { projectId: B } });
     const tooLarge = await attach(personToken, inA.issueKey, { name: 'big.bin', contentBase64: 'A'.repeat(Math.ceil(5 * 1024 * 1024 / 3) * 4 + 4) });
     assert.deepEqual([tooLarge.status, tooLarge.body.error], [413, 'too_large']);
+    const boundary = await attach(personToken, inB.issueKey, { name: 'big.bin', contentBase64: 'A'.repeat(Math.ceil(5 * 1024 * 1024 / 3) * 4) });
+    assert.equal(boundary.status, 413);
     for (const body of [{ name: 'x.png' }, { name: 'x.png', contentBase64: '' }, { name: 'x.png', contentBase64: 'not base64!' },
-      { name: 'x.png', contentBase64: 'abc' }, { contentBase64: b64(PNG) }, { name: '../', contentBase64: b64(PNG) }, 'not json', '[]']) {
-      const refused = await attach(personToken, inA.issueKey, body);
+      { name: 'x.png', contentBase64: 'abc' }, { name: 'x.png', contentBase64: 'AB==' }, { name: 'x.png', contentBase64: 'AAB=' },
+      { contentBase64: b64(PNG) }, { name: '../', contentBase64: b64(PNG) }, 'not json', '[]']) {
+      const refused = await attach(personToken, inB.issueKey, body);
       assert.deepEqual([refused.status, refused.body.error], [400, 'invalid_request'], JSON.stringify(body).slice(0, 60));
     }
     assert.equal(stored.size, before);
     assert.equal(await prisma.contextFile.count(), rows);
+    assert.equal(await prisma.contextFolder.count({ where: { projectId: B } }), folders);
   });
 });

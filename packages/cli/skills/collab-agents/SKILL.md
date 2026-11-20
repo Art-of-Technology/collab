@@ -44,8 +44,7 @@ lease renewed while you live. Your run is in the environment: `COLLAB_ISSUE_KEY`
 
 2. Do the work, in your project only. A seat cannot write to another project's issues
    (`wrong_project`) and cannot change who an issue is assigned to (`seat_scope`).
-   Record progress as comments on the issue. To show a screenshot or pass a file, attach it and put the
-   reply's `markdown` line in your comment (CLI 0.15.0): `collab issues attach "$COLLAB_ISSUE_KEY" --file shot.png`.
+   Record progress as comments on the issue.
 3. When you need a review, a release, a security review, or work from another project, file a request.
    Never hand work over in a direct message or a handoff.
 
