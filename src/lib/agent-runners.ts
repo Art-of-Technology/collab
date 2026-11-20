@@ -277,7 +277,7 @@ export async function fetchSeats(credential: string, have: string[],
     for (const { seat: id, room, program } of report.rooms ?? []) {
       const [{ count }] = await tx.$queryRaw<{ count: bigint }[]>`SELECT count(*) AS "count" FROM "AppAuditLog"
         WHERE "workspaceId" = ${workspaceId} AND "action" = 'agent_seat.retired' AND "details"->>'seatId' = ${id}`;
-      if (count !== (retirements.find(seat => seat.id === id)?.count ?? 0n) || !seats.some(seat => seat.id === id) || !(await tx.agentSeat.updateMany({ where: { id, ...mine },
+      if (count !== (retirements.find(seat => seat.id === id)?.count ?? BigInt(0)) || !seats.some(seat => seat.id === id) || !(await tx.agentSeat.updateMany({ where: { id, ...mine },
         data: { room, roomProgram: program, roomAt: now } })).count) notStored.push(id);
     }
   });
