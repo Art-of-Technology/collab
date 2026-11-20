@@ -199,9 +199,6 @@ export async function labelRequests(tx: Prisma.TransactionClient, me: string, is
     }
     if (await tx.issue.count({ where: { projectId: issue.projectId, agentRequestRole: role,
       sourceRelations: { some: { targetIssueId: issue.id, relationType: { in: ['RELATES_TO', 'BLOCKS'] } } }, ...NOT_DONE } })) continue;
-    // The rows of the role's seats, any of which may get the request, not the project's seat lock that `fileRequest`
-    // takes before it locks its source issue: this transaction already holds the issue, and the other order could
-    // deadlock with it. Retiring a seat waits for its row.
     await tx.$queryRaw`SELECT "id" FROM "AgentSeat" WHERE "projectId" = ${issue.projectId} AND "role" = ${kind.seat} AND "retiredAt" IS NULL ORDER BY "id" FOR SHARE`;
     // shortcut: an issue edit is serializable, so it does not see an issue the same token created for a seat after the edit
     // began; in that instant the count can end one over the cap. A counter row per account closes it if that matters.

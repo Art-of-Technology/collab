@@ -350,6 +350,7 @@ export const PATCH = withAppAuth(
       // Update issue
       let placedByLead = false;
       const updatedIssue = await prisma.$transaction(async tx => {
+        if (updateData.labels !== undefined) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${existingIssue.projectId}`}))`;
         let leadTarget: { name: string } | null = null;
         const currentAssignee = updateData.assigneeId ? await tx.issue.findUniqueOrThrow({
           where: { id: existingIssue.id }, select: { id: true, workspaceId: true, projectId: true, agentRequestRole: true, assigneeId: true },

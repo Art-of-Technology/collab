@@ -172,7 +172,7 @@ export type SeatRoom = { kind: 'room'; room: number; program: string | null; at:
  * before": a seat run by hand, a seat nothing was reported for, and a figure that is too old.
  */
 export function seatRoom(seat: { byRunner: boolean; room: number | null; roomProgram: string | null; roomAt: Date | null },
-  runner: { state: string | null; lastSeenAt: Date | null } | null, now = new Date()): SeatRoom {
+  runner: { state: string | null; lastSeenAt: Date | null; admittedAt?: Date | null } | null, now = new Date()): SeatRoom {
   const none = (reason: string): SeatRoom => ({ kind: 'no_room', reason }), unknown = (reason: string): SeatRoom => ({ kind: 'unknown', reason });
   if (!seat.byRunner) return unknown('the seat is run by hand');
   if (!runner) return none('no runner is connected');
@@ -180,7 +180,7 @@ export function seatRoom(seat: { byRunner: boolean; room: number | null; roomPro
   if (runner.state && runner.state !== 'working') {
     return none(runner.state === 'paused' ? 'the runner is paused' : runner.state === 'disk_full' ? "the runner's disk is full" : 'the runner is not working');
   }
-  if (seat.room === null || !seat.roomAt) return unknown('no figure was reported');
+  if (seat.room === null || !seat.roomAt || (runner.admittedAt && seat.roomAt <= runner.admittedAt)) return unknown('no figure was reported');
   if (seat.roomAt.getTime() <= now.getTime() - ROOM_FRESH_MS) return unknown(`the figure is older than ${ROOM_FRESH_MS / 60_000} minutes`);
   if (seat.room <= 0) return none('the allowance is used up');
   return { kind: 'room', room: seat.room, program: seat.roomProgram, at: seat.roomAt };
@@ -197,7 +197,7 @@ export async function seatsWithRoom(db: DB, projectId: string, role?: string, no
       room: true, roomProgram: true, roomAt: true, owner: { select: { id: true, name: true } } } });
   if (!seats.length) return [];
   const { workspaceId } = seats[0], owners = seats.flatMap(seat => seat.ownerId ?? []);
-  const runners = await db.agentRunner.findMany({ where: { workspaceId, ownerId: { in: owners }, removedAt: null }, select: { ownerId: true, state: true, lastSeenAt: true } });
+  const runners = await db.agentRunner.findMany({ where: { workspaceId, ownerId: { in: owners }, removedAt: null }, select: { ownerId: true, state: true, lastSeenAt: true, admittedAt: true } });
   const open = await db.agentRun.findMany({ where: { workspaceId, endedAt: null, seat: { OR: [{ ownerId: { in: owners } }, { id: { in: seats.map(seat => seat.id) } }] } },
     select: { seatId: true, seat: { select: { ownerId: true } } } });
   return seats.map(({ room, roomProgram, roomAt, ...seat }) => ({ ...seat,

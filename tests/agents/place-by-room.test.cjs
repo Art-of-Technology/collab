@@ -99,6 +99,13 @@ test('place by room: the lead is given seats in order of room, and a request goe
   };
   const names = (list, role) => list.filter(entry => entry.role === role).map(entry => entry.name);
 
+  await t.test('a replacement runner cannot inherit the previous runner’s figure', async () => {
+    await rooms({ room: 90 }, { room: 50 }, { room: 30 });
+    await raw.agentRunner.updateMany({ where: { ownerId: cem }, data: { admittedAt: new Date() } });
+    const list = (await listed()).filter(entry => entry.role === 'developer');
+    assert.deepEqual(list.map(entry => [entry.name, entry.room.kind]), [['dev-bob', 'room'], ['dev-deniz', 'room'], ['dev-cem', 'unknown']]);
+  });
+
   await t.test('the lead: different room puts the most room first, and every field that was there stays', async () => {
     await rooms({ room: 6 }, { room: 60 }, { room: 85 });
     const list = await listed();

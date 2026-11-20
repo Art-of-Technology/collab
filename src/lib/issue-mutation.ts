@@ -91,6 +91,7 @@ export async function updateIssue(userId: string, issueId: string, input: unknow
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      if (labelIds) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${body.projectId ?? existingIssue.projectId}`}))`;
       const current = await tx.issue.findFirst({
         where: {
           id: existingIssue.id, workspaceId: existingIssue.workspaceId,

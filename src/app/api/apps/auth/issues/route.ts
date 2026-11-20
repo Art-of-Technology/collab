@@ -254,6 +254,7 @@ export const POST = withAppAuth(
       // An agent token over its daily cap of issues for seats still files the issue; it waits unassigned for a person.
       let capped = false;
       const newIssue = await prisma.$transaction(async (tx) => {
+        if (issueData.labels?.length) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${issueData.projectId}`}))`;
         if (issueData.labels?.length) await lockSeatHandoffCap(tx, context.user.id);
         capped = !!issueData.assigneeId && await assignCapReached(tx, context, issueData.assigneeId);
         const assigneeId = capped ? undefined : issueData.assigneeId;

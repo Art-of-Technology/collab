@@ -232,6 +232,7 @@ export async function POST(request: NextRequest) {
     if (parentId) await assertLegacyIssueWriteAllowed(parentId);
 
     const created = await prisma.$transaction(async (tx) => {
+      if (labels.length) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-seat:${projectId}`}))`;
       const issueKey = await allocateIssueKey(tx, projectId);
 
       // Find the ProjectStatus for the given status and project
