@@ -370,6 +370,18 @@ test('work no run has started on leaves a seat that has had no room for 10 minut
     await settle();
   });
 
+  await t.test('a move needs a real figure: a seat that only stands level with one is passed over for the seat that has it', async () => {
+    const waits = await request(revCem);
+    await report(bob, 60); await report(deniz, 60);
+    await report(cem, 0); await passes(cem, 11);
+    // Deniz's runner works but its figure went stale, and Bob has a run open: for new work her seat would win the tie.
+    await stale(deniz);
+    await raw.agentRun.create({ data: { workspaceId: 'w', issueId: (await issue()).id, seatId: devBob.id, userId: devBob.userId, runner: 'test', generation: 'busy' } });
+    assert.deepEqual(await inbox(revDeniz), [], 'not to the seat without a figure');
+    assert.equal(await holder(waits), revBob.userId, 'the seat with the figure gets it');
+    await settle();
+  });
+
   await t.test('a paused runner, an offline runner and no runner each count as no room', async () => {
     const why = async target => (await moves(target)).at(-1)?.details.why;
     const paused = await request(revCem);

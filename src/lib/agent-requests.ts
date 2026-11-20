@@ -89,17 +89,21 @@ export async function fileRequest(context: Pick<AppAuthContext, 'user' | 'worksp
 
 /**
  * Which of a role's seats a request goes to, and why. `seats` hold the default seat, `fallback`, and at least one other.
- * The seat with the most room; equal room, the owner with the fewest open runs, then the default seat. With no number
+ * The seat with the most room; equal room, the owner with the fewest open runs, then the default seat. A seat whose
+ * runner works but has sent no figure counts as the most room while another seat has a number. With no number
  * among them it is the default seat, as before room, unless Collab knows that seat has no room: then the first seat
  * whose room is unknown. When every seat is known to have no room the request waits at the default seat, `full`.
  * The reason names no figure: room is its owner's to see, and a request's timeline is read by the whole project.
  */
 function placeRequest<T extends { room: SeatRoom; openRuns: number; isDefault: boolean }>(seats: T[], fallback: T): { seat: T; why: string; full?: true } {
-  const order = byRoom(seats), [top, next] = order;
-  if (top.room.kind === 'room') {
-    const tied = next.room.kind === 'room' && next.room.room === top.room.room;
-    return { seat: top, why: !tied ? 'most room' : top.openRuns < next.openRuns ? 'equal room, fewer open runs'
-      : `equal room and open runs: ${top.isDefault ? 'the default seat first' : 'the older seat first'}` };
+  const order = byRoom(seats), [top, next] = order, best = order.find(seat => seat.room.kind === 'room')?.room;
+  if (best?.kind === 'room') {
+    // Level with the most room: the same number, or a working runner that has sent no figure (see `byRoom`).
+    const level = ({ room }: T) => room.kind === 'room' ? room.room === best.room : room.kind === 'unknown' && !!room.live;
+    if (!level(next)) return { seat: top, why: 'most room' };
+    const numbers = top.room.kind === 'room' && next.room.kind === 'room', first = top.isDefault ? 'the default seat first' : 'the older seat first';
+    const equal = numbers ? 'equal room' : 'a working runner with no figure counts as the most room';
+    return { seat: top, why: top.openRuns < next.openRuns ? `${equal}, fewer open runs` : numbers ? `equal room and open runs: ${first}` : `${equal}; equal open runs: ${first}` };
   }
   const unknown = order.find(seat => seat.room.kind === 'unknown');
   if (!unknown) return { seat: fallback, why: 'no seat can start now: it waits at the default seat', full: true };
@@ -227,7 +231,9 @@ export async function moveUnstarted(context: Pick<AppAuthContext, 'user' | 'work
       const left = placements.map(entry => JSON.parse(entry.details ?? '{}').fromSeatId);
       // As when it was filed: never the seat that asked.
       const others = seats.filter(seat => seat.id !== from.id && !filers.includes(seat.userId) && !left.includes(seat.id));
-      const to = others.length ? placeRequest([from, ...others], from).seat : from;
+      // A move needs a real figure: a seat that only stands level with one is not a target.
+      const numbered = others.filter(seat => seat.room.kind === 'room');
+      const to = numbered.length ? placeRequest([from, ...numbered], from).seat : from;
       if (to.room.kind !== 'room') return;
       // The seat's row, then the issue's: the order a checkout and a retirement take them in. Whichever of a checkout
       // and this gets the issue first decides: the other reads what it left, a run or another assignee, and gives way.
