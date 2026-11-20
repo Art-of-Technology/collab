@@ -43,12 +43,11 @@ export async function GET(request: NextRequest) {
     let hasMore = false;
     if (search) {
       // shortcut: a search reads at most 1,000 repositories (10 pages of 100); use GitHub's search API if an account has more
-      for (let searchPage = 1; searchPage <= 10; searchPage++) {
-        request.signal.throwIfAborted();
-        const result = await getUserRepositories(accessToken, searchPage, 100, sort, request.signal);
-        repositories.push(...result.repositories);
-        if (!result.hasMore) break;
-      }
+      // All ten pages at once: one after another took 16 s for an account with 800 repositories.
+      const pages = await Promise.all(Array.from({ length: 10 }, (_, index) =>
+        getUserRepositories(accessToken, index + 1, 100, sort, request.signal)
+      ));
+      repositories = pages.flatMap(result => result.repositories);
     } else {
       ({ repositories, hasMore } = await getUserRepositories(accessToken, page, 30, sort, request.signal));
     }
