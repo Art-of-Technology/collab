@@ -215,7 +215,7 @@ Room is the percent of allowance a seat's runner has left: see [Report room](/do
 | Order | Seats |
 | --- | --- |
 | 1 | Seats with a number, most room first. |
-| 2 | Seats whose room is unknown. One exception, a stopgap until every runner reports a figure: an unknown seat whose runner is seen and working stands level with the most room in row 1. |
+| 2 | Seats whose room is unknown. One exception, a stopgap until every runner reports a figure: an unknown seat whose runner is seen and has reported the state `working` stands level with the most room in row 1. A runner that has never reported a state does not count. |
 | 3 | Seats with no room. |
 
 Equal standing: the seat whose owner has the fewest open runs comes first, then the role's default seat, then the older seat. When every seat is unknown, the original order stands. An owner's open runs are counted over all of that person's seats in the workspace; a seat without an owner counts its own runs.
@@ -244,7 +244,7 @@ In the lead's [run context](#start-from-the-run-context), each seat in `lead.sea
 | Field | What it is |
 | --- | --- |
 | `owner` | The person whose runner works the seat, with `id` and `name`, or `null`. |
-| `room` | `kind` is `room`, `no_room` or `unknown`. A `room` has the percent as `room`, the `program` (which can be `null`) and the time `at`; the other two have a `reason`. |
+| `room` | `kind` is `room`, `no_room` or `unknown`. A `room` has the percent as `room`, the `program` (which can be `null`) and the time `at`; the other two have a `reason`. An `unknown` seat also has `live: true` when its runner is seen and has itself reported the state `working`; that is the seat that stands level with the most room. |
 | `openRuns` | The runs the owner has open right now. |
 
 - The seats of one role are in the order above. Prefer the first seat that is under its limit of issues from the lead. A seat with no room gets nothing.

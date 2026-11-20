@@ -128,7 +128,7 @@ Which seat gets the next issue. `lead.seats` lists the seats of a role with the 
 | The seat's `room.kind` | What you do |
 | --- | --- |
 | `room` | Prefer the first seat that is under its limit: `openFromLead` below `lead.cap`. |
-| `unknown` | It comes after the seats with a number, unless its runner is working: then it stands level with the most room (see below). Use it when no seat ahead of it is under its limit. |
+| `unknown` | It comes after the seats with a number, unless its runner has reported that it is working (the seat's `room` then has `live: true`): then it stands level with the most room (see below). Use it when no seat ahead of it is under its limit. |
 | `no_room` | Give it nothing. |
 
 - When every seat is `unknown`, the order is the one from before room: the oldest seat first. Assign as you did then.
