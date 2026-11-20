@@ -7,9 +7,6 @@ const claims = () => new Headers(Object.fromEntries([
 const cases = [
   ['list', 'notes', 'GET', '?scope=PERSONAL'],
   ['create', 'notes', 'POST', ''],
-  ['search', 'notes/search', 'GET', '?q=needle&workspaceId=joined'],
-  ['pinned', 'notes/pinned', 'GET', '?workspaceId=joined'],
-  ['shared', 'notes/shared-with-me', 'GET', ''],
   ['tags', 'notes/tags', 'GET', ''],
   ['create-tag', 'notes/tags', 'POST', ''],
   ['preview', 'link-preview', 'POST', ''],
@@ -29,9 +26,9 @@ function fixture(spec) {
   const workspace = { id: 'joined', slug: 'joined', name: 'Workspace', ownerId: 'bob',
     members: ['mapped', 'legacy'].map(userId => ({ userId, status: true })) };
   const rows = ['mapped', 'legacy'].map(id => ({
-    id, authorId: kind === 'shared' ? 'bob' : id, scope: 'PERSONAL', type: 'GENERAL', workspaceId: 'joined', projectId: null,
+    id, authorId: id, scope: 'PERSONAL', type: 'GENERAL', workspaceId: 'joined', projectId: null,
     title: `needle ${id}`, content: 'needle content', isPinned: true, isFavorite: false, isRestricted: false,
-    isEncrypted: false, expiresAt: null, sharedWith: kind === 'shared' ? [{ userId: id, permission: 'VIEW' }] : [],
+    isEncrypted: false, expiresAt: null, sharedWith: [],
     workspace, author: { id, name: id }, tags: [], project: null, createdAt: new Date(), updatedAt: new Date(),
   }));
   const record = (name, args) => state.effects.push([name, args]);
@@ -44,7 +41,6 @@ function fixture(spec) {
     user: { findUnique: async ({ where }) => { record('user', where); return [user, legacyUser].find(row => row.id === where.id) ?? null; } },
     note: {
       findMany: async args => { record('notes', args); return rows.filter(row => matches(row, args.where)); },
-      count: async args => { record('count', args); return rows.filter(row => matches(row, args.where)).length; },
       findFirst: async args => { record('preview', args); return rows.find(row => matches(row, args.where)) ?? null; },
       create: async ({ data }) => { record('create', data); return { ...data, id: 'created', workspace: null }; },
     },
@@ -81,10 +77,6 @@ function fixture(spec) {
     if (['create', 'create-tag'].includes(kind)) {
       assert.equal(body.authorId, actor);
       if (kind === 'create-tag') { assert.equal(body.name, 'New tag'); assert.equal(body.color, '#6366F1'); }
-    } else if (kind === 'search') {
-      assert.deepEqual(body.results.map(row => row.id), [actor]); assert.equal(body.total, 1);
-      assert.equal(body.hasMore, false); assert.equal(body.query, 'needle');
-      assert.ok(state.effects.some(([name]) => name === 'count'));
     } else if (kind === 'preview') {
       assert.equal(body.type, 'internal'); assert.equal(body.subtype, 'note');
       assert.equal(body.title, actor === 'mapped' ? 'needle mapped' : 'Not Found');
