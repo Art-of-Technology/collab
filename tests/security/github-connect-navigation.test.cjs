@@ -11,7 +11,7 @@ function fixture({ ok = true, error, callbackError } = {}) {
   let stateSlot = 0;
   const deps = {
     '@tanstack/react-query': { useQueryClient: () => ({ invalidateQueries: async () => {} }) },
-    react: { useState: value => [stateSlot++ === 0 ? false : value, () => {}], useEffect: effect => effects.push(effect) },
+    react: { useState: value => [stateSlot++ === 0 ? false : value, () => {}], useRef: value => ({ current: value }), useEffect: effect => effects.push(effect) },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     '@/components/issues/IssueTrash': { IssueTrash: () => 'Issue Trash' },
     '@/components/agents/AgentModeSettings': { AgentModeSettings: () => 'Agent mode' },
@@ -70,6 +70,11 @@ async function settingsFixture(query, connected = false, responseStatus, reposit
     history: { state: null, replaceState: (_, __, url) => { window.location.href = String(url); } },
   };
   const react = {
+    useRef(initial) {
+      const slots = current, index = cursor++;
+      if (!(index in slots)) slots[index] = { current: initial };
+      return slots[index];
+    },
     useState(initial) {
       const slots = current, index = cursor++;
       if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
