@@ -404,7 +404,7 @@ The reply contains the finished `run` and `statusUnmapped`.
 - A finish is accepted from the session that holds the run, while the run is running or waiting and the issue is still assigned to the caller. Otherwise it gets `409 run_fenced` and changes neither the run nor the issue. If the generation matches and the run had not finished, the note is kept on the timeline as a late exit note.
 - A release seat can finish the other release requests of one release with the same call: `"alsoFinish": ["<key>", ...]`, at most 20, with outcome `done`. Each must be assigned to the seat, in a to do status and without an open run. Each gets a finished run with the same note. If one cannot be finished, the whole finish is refused and nothing changes; `409 already_running` names an issue that has a run.
 
-The issue's **Activity** tab shows the open run above the timeline: who is working the issue and since when. Beside each finished or lost run, the timeline shows whose allowance it used: the first name of the seat's owner and the program its runner reported under `ended` (see [the runner contract](/docs/agents/runner-contract#report-the-program-a-run-used)), such as **Bob's allowance · Codex**. Without a reported program it shows the name alone; a seat without an owner shows none.
+The issue's **Activity** tab shows the open run above the timeline: who is working the issue and since when. See [Give a seat work](/docs/agents/give-a-seat-work) for how finished and lost runs appear on the timeline.
 
 ## Other agent tokens
 

@@ -395,7 +395,7 @@ curl -X POST -H "Authorization: Bearer $RUNNER_CREDENTIAL" -H "Content-Type: app
 | `token` | Present only when the token is new. It is sent once and never again. |
 | `problem` | Present when no token could be made this time, beside whatever token you already hold. Ask again later. `paused` means the seat's agent is switched off or removed: asking never switches it on again, a person does. |
 | `refused` | Beside `runner` and `seats`, when any reported figures were not stored: the ids of those seats. See [Report room](#report-room). |
-| `refusedRuns` | Beside `runner` and `seats`, when any runs under `ended` were not stored: the ids of those runs. See [Report the program a run used](#report-the-program-a-run-used). |
+| `refusedRuns` | Beside `runner` and `seats`, when any runs under `ended` were not eligible: the ids of those runs. See [Report the program a run used](#report-the-program-a-run-used). |
 
 A seat for which you hold no usable token gets a new one. With three overlapping asks, the first answer can arrive last with a revoked token. If a retained token is refused, ask again with what you hold to get a new one. If an answer or file is lost, ask again with what you hold.
 
@@ -446,7 +446,7 @@ Collab places work by the figure: see [Placed by room](/docs/agents/seats#placed
 
 ### Report the program a run used
 
-The issue shows, beside each run, whose allowance it used and on which program. Send the program with the same `seats` call, once a run has ended:
+The issue can show whose allowance a finished or lost run used and its program: see [Give a seat work](/docs/agents/give-a-seat-work). Send the program with the same `seats` call, once a run has ended:
 
 ```json
 {
@@ -463,7 +463,7 @@ The issue shows, beside each run, whose allowance it used and on which program. 
 | `run` | text, 1 to 128 characters | The run's `id`, as `checkout` answered it. |
 | `program` | text, 1 to 64 printable ASCII characters after trimming | The program the run used, the same names as in `rooms`. |
 
-- In an entry, both fields are required. A value outside the table is `400 invalid_request`, and nothing of that call is stored.
+- In an entry, both fields are required and no other fields are allowed. A value outside the table is `400 invalid_request`, and nothing of that call is stored.
 - A run is stored only when it is a run of a seat this call's answer lists. The first program stored for a run stays: a later entry for the same run is ignored, not an error.
 - A run that is not of your seats, or does not exist, is not stored. The call is still answered `200`, and the answer names those runs' ids under `refusedRuns`. Every such run reads the same.
 - A call without `ended` is answered exactly as before.
